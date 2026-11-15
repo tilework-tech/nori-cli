@@ -1,0 +1,9 @@
+{
+  "nested_fresh_attempts": 10,
+  "nested_additional_errors": 0,
+  "ordinary_direct_attempts": 15,
+  "ordinary_additional_errors": 0,
+  "streaming_parent_attempts": 5,
+  "streaming_additional_errors": 0,
+  "positive_initial_flows": 3
+}

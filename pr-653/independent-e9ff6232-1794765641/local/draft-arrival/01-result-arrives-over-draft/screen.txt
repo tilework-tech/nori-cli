@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/e1-verification/local/draft-arrival/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+• Child 85836028-622b-44e3-94d6-0367dae9ee9c (mock-model) · parent 6f1ed75b-cdf8-4c3a-ac7d-f9c3e0731589 (mock-model)
+· running
+
+• Child 85836028-622b-44e3-94d6-0367dae9ee9c (mock-model) · parent 6f1ed75b-cdf8-4c3a-ac7d-f9c3e0731589 (mock-model)
+· completed
+E1 parent-or-same-kind answer
+
+
+› [Nori delegation result]
+  Child session 85836028-622b-44e3-94d6-0367dae9ee9c (mock-model) for parent session 6f1ed75b-cdf8-4c3a-ac7d-
+  f9c3e0731589 (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+
+• Delegation continuation received: [Nori delegation result]
+  Child session 85836028-622b-44e3-94d6-0367dae9ee9c (mock-model) for parent session 6f1ed75b-cdf8-4c3a-ac7d-
+  f9c3e0731589 (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+  1 ready
+
+
+› DRAFT_STAYS_WHILE_RESULT_ARRIVES
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

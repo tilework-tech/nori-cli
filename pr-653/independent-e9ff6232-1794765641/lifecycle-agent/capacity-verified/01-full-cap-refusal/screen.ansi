@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m~/org/workspace/cli/.local/e1-verification/lifecycle-agent/capacity-verified/project[2m · [0m[39m[49mAgent approvals
+[2m  Agent        [0m[39m[49mMock ACP
+
+[2m• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mE1 CAP ROOT
+
+
+[2m• [0m[39m[49mE1 parent-or-same-kind answer
+
+[2m• [0m[39m[49mChild b6f2c839-65b4-4218-972a-94c8d2f1cde6 (mock-model) · parent a4c529af-6f4d-47e3-af10-6b9d4d835cf7 (mock-model)
+· running
+
+[38;5;3m⚠ Child session b6f2c839-65b4-4218-972a-94c8d2f1cde6 (mock-model) of parent session a4c529af-6f4d-47e3-af10-6b9d4d835cf7
+[39m  [38;5;3m(mock-model) needs your answer. Switch to the child with Alt+Down.
+
+[38;5;1m■ Delegation failed: 2 sessions are already running; close one before delegating
+
+[39m  [38;5;6m● [1m[39m(parent a4c529af) mock:…[0m[39m[49m is waiting on you[2m · approve: E1-cap-holder · alt + down to jump
+[0m[39m[49m  [2m1 waiting on you · 1 ready
+
+
+[0;1m[39m[49m›[0m[39m[49m [2m$ for skill listing[0m[39m[49m
+
+                                                                                                [38;5;3m⎇ verify/e1-653-e9ff6232

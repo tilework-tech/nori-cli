@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model-alt · 73f4af00-8d11-44ba-aec8-23c144aeb929 · waiting on you
+
+ › You
+ mock:request-permission:CHILD-ONLY-ANSWER
+
+ attached mock answer
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Permission · Execute shell command
+ › 1  Allow
+   2  Reject
+ ↑↓ choose · enter answer · number selects an option
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

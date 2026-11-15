@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · 5c56204d-2593-4555-be2b-72662d064bc5 · ready
+
+
+ Delegation continuation received: [Nori delegation result]
+ Child session 58e59ce3-a33d-4e08-8fc8-a7574c136b7c (mock-model) for parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model): Completed
+ attached mock answer
+
+ Child 1cd30d9c-6a28-4ce7-a9b0-91ca3375cd23 (mock-model-alt) · parent 5c56204d-2593-4555-be2b-72662d064bc5 (mock-model)
+ · awaiting approval
+
+ Child 1cd30d9c-6a28-4ce7-a9b0-91ca3375cd23 (mock-model-alt) · parent 5c56204d-2593-4555-be2b-72662d064bc5 (mock-model)
+ · declined
+ The user declined this delegation.
+
+ › You
+ [Nori delegation result]
+ Child session 1cd30d9c-6a28-4ce7-a9b0-91ca3375cd23 (mock-model-alt) for parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model): Declined
+ The user declined this delegation.
+
+ Delegation continuation received: [Nori delegation result]
+ Child session 1cd30d9c-6a28-4ce7-a9b0-91ca3375cd23 (mock-model-alt) for parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model): Declined
+ The user declined this delegation.
+
+ Child 73f4af00-8d11-44ba-aec8-23c144aeb929 (mock-model-alt) · parent 5c56204d-2593-4555-be2b-72662d064bc5 (mock-model)
+ · awaiting approval
+
+ Child 73f4af00-8d11-44ba-aec8-23c144aeb929 (mock-model-alt) · parent 5c56204d-2593-4555-be2b-72662d064bc5 (mock-model)
+ · running
+
+ Child session 73f4af00-8d11-44ba-aec8-23c144aeb929 (mock-model-alt) of parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model) needs your answer. Switch to the child with Alt+Down.
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

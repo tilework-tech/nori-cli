@@ -1,0 +1,37 @@
+[
+  {
+    "direction": "request",
+    "message": {
+      "jsonrpc": "2.0",
+      "id": 64,
+      "method": "_nori/session/respond",
+      "params": {
+        "session_id": "73f4af00-8d11-44ba-aec8-23c144aeb929",
+        "request_id": "aec342ff-5992-43e6-b193-3b20479bfb8c",
+        "response": {
+          "outcome": {
+            "outcome": "selected",
+            "optionId": "allow"
+          }
+        }
+      }
+    }
+  },
+  {
+    "direction": "request",
+    "message": {
+      "jsonrpc": "2.0",
+      "id": 218,
+      "method": "_nori/session/prompt",
+      "params": {
+        "session_id": "5c56204d-2593-4555-be2b-72662d064bc5",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "PARENT-DRAFT-MUST-STAY-HERE"
+          }
+        ]
+      }
+    }
+  }
+]

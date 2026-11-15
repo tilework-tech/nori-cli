@@ -1,0 +1,40 @@
+  aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+  reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+  Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+  ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+  g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+  ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+  aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+  reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+  Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+  ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+  g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+  ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+  aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+  reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+  Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+  ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+  g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+  ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+  aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+  reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+  Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+  ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+  g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+  ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+  aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+  reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+  Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+  ..Streaming...Streaming...Streaming...Streaming...Streaming...
+
+• Delegation continuation received: [Nori delegation result]
+  Child session f154261d-c367-4f6d-888e-0c53881ac35a (mock-model) for parent session 7c2bfa11-5327-48f7-b380-
+  55b2f7fba14f (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+  1 ready
+
+
+› $ for skill listing
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

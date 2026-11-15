@@ -1,0 +1,9 @@
+ID                                    AGENT             STATUS               AGE  TITLE
+5c56204d-2593-4555-be2b-72662d064bc5  mock-model        ready                 4m  Parent attached identity
+58e59ce3-a33d-4e08-8fc8-a7574c136b7c  mock-model        closed                3m  ↳ (parent 5c56204d-2593-4555-be2b-72662d064bc5) Same agent immediate child
+73f4af00-8d11-44ba-aec8-23c144aeb929  mock-model-alt    closed                3m  ↳ (parent 5c56204d-2593-4555-be2b-72662d064bc5) mock:request-permission:CHILD-ONLY-ANSWER
+1758578c-174b-4c7b-ba9c-9e5caf87a091  mock-model        closed                2m  ↳ (parent 5c56204d-2593-4555-be2b-72662d064bc5) mock:request-permission:FRESH-BEFORE-LIST-REFRES
+90d2cce0-8d10-464f-98d2-0e4c59a70119  mock-model        closed                1m  ↳ (parent 5c56204d-2593-4555-be2b-72662d064bc5) mock:request-permission:FRESH-CHILD
+e2b685b0-3a42-40ec-ba7c-beb5b3166594  mock-model        closed               33s  ↳ (parent 5c56204d-2593-4555-be2b-72662d064bc5) mock:request-permission:FRESH2
+503e47c4-5abd-4c7a-afa6-26a378014c21  mock-model        closed               27s  ↳ (parent 5c56204d-2593-4555-be2b-72662d064bc5) mock:request-permission:DRAFT2
+fb65ef7f-07e2-4aba-af4a-6119b06b8e40  mock-model        waiting on you        0s  ↳ (parent 5c56204d-2593-4555-be2b-72662d064bc5) mock:request-permission:LONG TITLE fixed metadata columns must stay in place while this deliberately long task truncates

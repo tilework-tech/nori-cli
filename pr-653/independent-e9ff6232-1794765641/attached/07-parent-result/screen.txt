@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · 5c56204d-2593-4555-be2b-72662d064bc5 · ready
+
+ Child session 1cd30d9c-6a28-4ce7-a9b0-91ca3375cd23 (mock-model-alt) for parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model): Declined
+ The user declined this delegation.
+
+ Delegation continuation received: [Nori delegation result]
+ Child session 1cd30d9c-6a28-4ce7-a9b0-91ca3375cd23 (mock-model-alt) for parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model): Declined
+ The user declined this delegation.
+
+ Child 73f4af00-8d11-44ba-aec8-23c144aeb929 (mock-model-alt) · parent 5c56204d-2593-4555-be2b-72662d064bc5 (mock-model)
+ · awaiting approval
+
+ Child 73f4af00-8d11-44ba-aec8-23c144aeb929 (mock-model-alt) · parent 5c56204d-2593-4555-be2b-72662d064bc5 (mock-model)
+ · running
+
+ Child session 73f4af00-8d11-44ba-aec8-23c144aeb929 (mock-model-alt) of parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model) needs your answer. Switch to the child with Alt+Down.
+
+ Child 73f4af00-8d11-44ba-aec8-23c144aeb929 (mock-model-alt) · parent 5c56204d-2593-4555-be2b-72662d064bc5 (mock-model)
+ · completed
+ attached mock answerPermission granted with option: allow
+
+ › You
+ [Nori delegation result]
+ Child session 73f4af00-8d11-44ba-aec8-23c144aeb929 (mock-model-alt) for parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model): Completed
+ attached mock answerPermission granted with option: allow
+
+ Delegation continuation received: [Nori delegation result]
+ Child session 73f4af00-8d11-44ba-aec8-23c144aeb929 (mock-model-alt) for parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model): Completed
+ attached mock answerPermission granted with option: allow
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

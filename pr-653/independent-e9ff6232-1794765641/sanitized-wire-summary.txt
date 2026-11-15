@@ -1,0 +1,39 @@
+SCENARIO basic
+1794764568722 pid=55379 prompt: E1 LOCAL PARENT
+1794764569613 pid=55617 prompt: SAME KIND CHILD
+1794764569676 pid=55379 prompt: [Nori delegation result]
+Child session 418b21ce-77a6-42f1-bb41-e2797f09eaa0 (mock-model) for parent session a037cef4-7aa1-43bb-bdab-68e0a6f02af2 (mock-model): Completed
+E1 parent-or-same-kind answer
+1794764611912 pid=55379 prompt: [Nori delegation result]
+Child session bc003d27-daea-4ff6-a483-9ef0381674f1 (mock-model-alt) for parent session a037cef4-7aa1-43bb-bdab-68e0a6f02af2 (mock-model): Declined
+The user declined this delegation.
+1794764623302 pid=61543 prompt: mock:request-permission:E1-child-write
+1794764623318 pid=61543 permission request id=0fb49531-9d60-412d-b1af-7361e1c54e80 session=0
+1794764744489 pid=61543 reply id=0fb49531-9d60-412d-b1af-7361e1c54e80: {"outcome": {"outcome": "selected", "optionId": "allow"}}
+1794764744556 pid=55379 prompt: [Nori delegation result]
+Child session fd1e007b-36b6-426e-8aa1-47544996929c (mock-model-alt) for parent session a037cef4-7aa1-43bb-bdab-68e0a6f02af2 (mock-model): Completed
+E1 alternate child answerPermission granted with option: allow
+SCENARIO crash
+1794764597575 pid=57826 prompt: E1 CRASH ROOT
+1794764598501 pid=58072 prompt: mock:request-permission:E1-surviving-child
+1794764598505 pid=58072 permission request id=a090d159-0809-433f-8773-7ceb40820734 session=0
+1794764599404 pid=57826 prompt: mock:exit-during-prompt
+1794764609381 pid=58072 reply id=a090d159-0809-433f-8773-7ceb40820734: {"outcome": {"outcome": "selected", "optionId": "allow"}}
+1794764627717 pid=62167 prompt: [Nori delegation result]
+Child session 160e205f-a392-4414-9725-b19cca1ce1d4 (mock-model) for parent session b8957d30-b1de-443f-8bf0-9824078329d7 (mock-model): Completed
+E1 parent-or-same-kind answerPermission granted with option: allow
+1794764684947 pid=70022 prompt: mock:exit-during-prompt
+1794764685258 pid=62167 prompt: [Nori delegation result]
+Child session 507b15ff-a596-4043-a14c-0bfc0295067b (mock-model) for parent session b8957d30-b1de-443f-8bf0-9824078329d7 (mock-model): Failed
+RequestFailure { request_id: Some(Str("1a319beb-3186-40fa-b3fc-eee4ba007cf0")), message: "Agent process exited unexpectedly (exit code 17).\nMock agent: initialize\nMock agent: advertising HTTP MCP capability\nMock agent: new_session id=0\nMock agent: prompt\nMock agent: exiting during prompt", kind: Fatal }
+1794764695591 pid=62167 prompt: ROOT STILL USABLE
+SCENARIO queued
+1794764640730 pid=64211 prompt: E1 QUEUED ROOT
+1794764641641 pid=64211 prompt: mock:stream-until-cancel
+1794764678986 pid=69196 prompt: QUEUED_CHILD_PAYLOAD
+1794764712266 pid=74975 prompt: [Nori delegation result]
+Child session f154261d-c367-4f6d-888e-0c53881ac35a (mock-model) for parent session 7c2bfa11-5327-48f7-b380-55b2f7fba14f (mock-model): Completed
+E1 parent-or-same-kind answer
+SCENARIO single-off
+1794764642283 pid=64411 prompt: E1 SINGLE SESSION NORMAL
+1794764701266 pid=64411 prompt: E1 SINGLE CONTINUES

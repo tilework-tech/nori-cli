@@ -1,0 +1,40 @@
+
+
+
+• Resuming this session on a new agent process...
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/e1-verification/local/crash/project · Agent approvals
+  Agent        Mock ACP · Mock Default Model · Medium
+
+
+› E1 CRASH ROOT
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• E1 parent-or-same-kind answer
+
+
+› mock:exit-during-prompt
+
+
+
+› [Nori delegation result]
+  Child session 160e205f-a392-4414-9725-b19cca1ce1d4 (mock-model) for parent session b8957d30-b1de-443f-8bf0-
+  9824078329d7 (mock-model): Completed
+  E1 parent-or-same-kind answerPermission granted with option: allow
+
+
+• Delegation continuation received: [Nori delegation result]
+  Child session 160e205f-a392-4414-9725-b19cca1ce1d4 (mock-model) for parent session b8957d30-b1de-443f-8bf0-
+  9824078329d7 (mock-model): Completed
+  E1 parent-or-same-kind answerPermission granted with option: allow
+
+  1 ready
+
+
+› / for slash command menu
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

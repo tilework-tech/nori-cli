@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · e2b685b0-3a42-40ec-ba7c-beb5b3166594 · waiting on you
+
+ › You
+ mock:request-permission:FRESH2
+
+ attached mock answer
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Permission · Execute shell command
+ › 1  Allow
+   2  Reject
+ ↑↓ choose · enter answer · number selects an option
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

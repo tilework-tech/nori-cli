@@ -1,0 +1,40 @@
+[1m Nori host  [0m[38;5;2m[49mCONTROLLING[39m
+[2m mock-model · 5c56204d-2593-4555-be2b-72662d064bc5 · ready[0m[39m[49m
+
+
+  [1mSessions 8[0m[39m[49m
+
+   [1m [0m[39m[49m [1mID[0m[39m[49m        [1mAGENT[0m[39m[49m           [1mSTATUS[0m[39m[49m            [1mAGE[0m[39m[49m    [1mTITLE[0m[39m[49m
+  [38;5;2m▏ [39m 5c56204d  mock-model      ready             4m     (current) Parent attached identity                           [38;5;2m▕[39m
+     58e59ce3  mock-model      closed            3m     ↳ (parent 5c56204d) Same agent immediate child
+     73f4af00  mock-model-alt  closed            3m     ↳ (parent 5c56204d) mock:request-permission:CHI…
+     1758578c  mock-model      closed            2m     ↳ (parent 5c56204d) mock:request-permission:FRE…
+     90d2cce0  mock-model      closed            1m     ↳ (parent 5c56204d) mock:request-permission:FRE…
+     e2b685b0  mock-model      closed            33s    ↳ (parent 5c56204d) mock:request-permission:FRE…
+     503e47c4  mock-model      closed            27s    ↳ (parent 5c56204d) mock:request-permission:DRA…
+     fb65ef7f  mock-model      waiting on you    0s     ↳ (parent 5c56204d) mock:request-permission:LON…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  [38;5;2m↑↓[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mopen  [38;5;2mctrl+r[39m [38;5;8mresume  [38;5;2mctrl+f[39m [38;5;8msearch  [38;5;2mesc[39m [38;5;8mback[39m
+
+
+[1m›[0m[39m[49m [2mSend a prompt[0m[39m[49m
+
+   [1malt+s[0m[39m[49m sessions    [1malt+down[0m[39m[49m next waiting    [1malt+t[0m[39m[49m take control    [1mctrl+d[0m[39m[49m detach    [1m/delegate[0m[39m[49m delegate task

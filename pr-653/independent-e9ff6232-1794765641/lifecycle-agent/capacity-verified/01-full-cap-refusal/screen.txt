@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/e1-verification/lifecycle-agent/capacity-verified/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› E1 CAP ROOT
+
+
+• E1 parent-or-same-kind answer
+
+• Child b6f2c839-65b4-4218-972a-94c8d2f1cde6 (mock-model) · parent a4c529af-6f4d-47e3-af10-6b9d4d835cf7 (mock-model)
+· running
+
+⚠ Child session b6f2c839-65b4-4218-972a-94c8d2f1cde6 (mock-model) of parent session a4c529af-6f4d-47e3-af10-6b9d4d835cf7
+  (mock-model) needs your answer. Switch to the child with Alt+Down.
+
+■ Delegation failed: 2 sessions are already running; close one before delegating
+
+  ● (parent a4c529af) mock:… is waiting on you · approve: E1-cap-holder · alt + down to jump
+  1 waiting on you · 1 ready
+
+
+› $ for skill listing
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

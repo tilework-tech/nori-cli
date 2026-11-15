@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› mock:request-permission:E1-surviving-child
+
+
+• E1 parent-or-same-kind answer
+
+• Permission: Allow Execute shell command
+
+• Permission granted with option: allow
+
+  1 failed
+
+
+› ! for shell commands
+
+
+
+
+

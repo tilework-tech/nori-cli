@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/e1-verification/lifecycle-agent/close/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› E1 CLOSE ROOT
+
+
+• E1 parent-or-same-kind answer
+
+• Child 41aae8c3-ca30-409e-a3a1-1659ccc2d485 (mock-model) · parent 73ec865b-8415-4f14-b71b-d42998a90489 (mock-model)
+· running
+
+  1 working · 2 ready
+
+  Sessions 3 · 1 working · 2 ready  tab: waiting only · type to search
+
+  All  waiting on you
+
+    Session                                                                   Agent           Status
+  › ⠋ E1 CLOSE ROOT (current)                                                 Mock ACP        working
+    E1 parent-or-same-kind answer
+    └─ ○ (parent 73ec865b) mock:delegate mock-model mock:stream-until-cancel  Mock ACP        ready · new
+       …"agent":"mock-model","task":"mock:stream-until-cancel","status":"running","depth":2,"result":null}}
+       └─ ⠋ (parent 41aae8c3) mock:stream-until-cancel                        Mock ACP        working
+          …...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+
+  ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close
+

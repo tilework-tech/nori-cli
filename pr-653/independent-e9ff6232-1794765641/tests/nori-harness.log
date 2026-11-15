@@ -1,0 +1,640 @@
+ Downloading crates ...
+  Downloaded pretty_assertions v1.4.1
+  Downloaded filetime v0.2.27
+  Downloaded serial_test_derive v3.2.0
+  Downloaded tokio-test v0.4.4
+  Downloaded sdd v3.0.10
+  Downloaded serial_test v3.2.0
+  Downloaded yansi v1.0.1
+  Downloaded scc v2.4.0
+   Compiling smallvec v1.15.1
+   Compiling indexmap v2.12.0
+   Compiling parking_lot_core v0.9.11
+   Compiling parking_lot v0.12.4
+   Compiling num-traits v0.2.19
+   Compiling mio v1.2.4
+   Compiling tokio v1.51.6
+   Compiling rustix v1.0.8
+   Compiling serde_json v1.0.145
+   Compiling polling v3.11.0
+   Compiling async-io v2.6.0
+   Compiling icu_normalizer v2.1.1
+   Compiling tokio-util v0.7.16
+   Compiling rustls v0.23.46
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.0.3
+   Compiling h2 v0.4.16
+   Compiling chrono v0.4.42
+   Compiling hyper v1.7.0
+   Compiling uuid v1.18.1
+   Compiling num-integer v0.1.46
+   Compiling hyper-util v0.1.16
+   Compiling rand v0.8.5
+   Compiling url v2.5.4
+   Compiling tower v0.5.2
+   Compiling memchr v2.7.5
+   Compiling regex-automata v0.4.13
+   Compiling schemars v1.0.4
+   Compiling num-bigint v0.4.6
+   Compiling tokio-rustls v0.26.2
+   Compiling num-rational v0.4.2
+   Compiling hyper-rustls v0.27.7
+   Compiling tower-http v0.6.11
+   Compiling num-iter v0.1.45
+   Compiling num-complex v0.4.6
+   Compiling derive_more-impl v2.0.1
+   Compiling num v0.4.3
+   Compiling zbus v4.4.0
+   Compiling async-signal v0.2.13
+   Compiling rustix v0.38.44
+   Compiling tungstenite v0.26.2
+   Compiling schemars v0.8.22
+   Compiling async-process v2.5.0
+   Compiling reqwest v0.12.24
+   Compiling secret-service v4.0.0
+   Compiling serde_with v3.21.0
+   Compiling derive_more v2.0.1
+   Compiling ts-rs v11.0.1
+   Compiling rustls-platform-verifier v0.7.0
+   Compiling tokio-stream v0.1.17
+   Compiling linux-raw-sys v0.4.15
+   Compiling agent-client-protocol-schema v0.14.0
+   Compiling oauth2 v5.0.0
+   Compiling keyring v3.6.3
+   Compiling reqwest v0.13.4
+   Compiling process-wrap v10.0.1
+   Compiling rmcp-macros v3.10.0
+   Compiling tokio-tungstenite v0.26.2
+   Compiling regex v1.12.2
+   Compiling either v1.15.0
+   Compiling rmcp v3.10.0
+   Compiling axum v0.8.4
+   Compiling futures-concurrency v7.7.1
+   Compiling which v6.0.3
+   Compiling codex-keyring-store v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/keyring-store)
+   Compiling toml_edit v0.23.7
+   Compiling mcp-types v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/mcp-types)
+   Compiling matchers v0.2.0
+   Compiling tree-sitter v0.25.10
+   Compiling webbrowser v1.2.2
+   Compiling agent-client-protocol v0.15.1
+   Compiling time v0.3.47
+   Compiling nori-config v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/nori-config)
+   Compiling codex-rmcp-client v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/rmcp-client)
+   Compiling tracing-subscriber v0.3.20
+   Compiling zbus v5.12.0
+   Compiling nori-protocol v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/nori-protocol)
+   Compiling tempfile v3.23.0
+   Compiling sdd v3.0.10
+   Compiling scc v2.4.0
+   Compiling nori-acp-host v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/acp-host)
+   Compiling notify-rust v4.11.7
+   Compiling tracing-appender v0.2.3
+   Compiling codex-git v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/utils/git)
+   Compiling serial_test_derive v3.2.0
+   Compiling yansi v1.0.1
+   Compiling pretty_assertions v1.4.1
+   Compiling serial_test v3.2.0
+   Compiling tokio-test v0.4.4
+   Compiling filetime v0.2.27
+   Compiling nori-harness v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/harness)
+    Finished `test` profile [unoptimized] target(s) in 2m 40s
+     Running unittests src/lib.rs (target/debug/deps/nori_harness-50b61b1ab8d2467f)
+
+running 328 tests
+test auto_worktree::tests::test_can_create_worktree_in_normal_repo ... ok
+test auto_worktree::tests::test_can_create_worktree_outside_git_repo ... ok
+test auto_worktree::tests::test_can_create_worktree_inside_linked_worktree ... ok
+test auto_worktree::tests::test_rename_auto_worktree_branch_renames_branch_only ... ok
+test auto_worktree::tests::test_setup_auto_worktree_fails_outside_git_repo ... ok
+test backend::browser_profile::tests::persistent_creates_dir_under_nori_home ... ok
+test backend::browser_profile::tests::system_dir_distinguishes_chrome_from_chromium_on_linux ... ok
+test backend::browser_profile::tests::throwaway_creates_an_existing_temp_dir ... ok
+test backend::browser_session::tests::extract_cdp_port_from_ws_url ... ok
+test backend::browser_session::tests::extract_cdp_port_returns_none_for_invalid_url ... ok
+test backend::browser_session::tests::parse_cdp_ws_url_extracts_url_from_chrome_stderr ... ok
+test backend::browser_session::tests::parse_cdp_ws_url_returns_none_for_unrelated_output ... ok
+test backend::goal_ext::tests::capability_absent_meta_is_none ... ok
+test backend::goal_ext::tests::capability_ignores_unknown_actions ... ok
+test backend::goal_ext::tests::capability_parses_full_codex_advertisement ... ok
+test backend::goal_ext::tests::capability_parses_minimal_claude_advertisement ... ok
+test backend::goal_ext::tests::capability_rejects_unsupported_version ... ok
+test backend::goal_ext::tests::capability_requires_extension_method_prefix ... ok
+test backend::goal_ext::tests::capability_requires_set_and_clear ... ok
+test backend::goal_ext::tests::mirror_blocked_ignores_snapshots_and_clears ... ok
+test backend::goal_ext::tests::mirror_cleared_drops_goal ... ok
+test backend::goal_ext::tests::mirror_does_not_hijack_foreign_goal ... ok
+test backend::goal_ext::tests::mirror_empty_objective_is_skipped ... ok
+test backend::goal_ext::tests::mirror_identical_snapshot_is_unchanged ... ok
+test backend::goal_ext::tests::mirror_marks_ext_driven_and_agent_clear_reopens ... ok
+test backend::goal_ext::tests::mirror_new_objective_replaces_goal ... ok
+test backend::goal_ext::tests::mirror_new_snapshot_creates_goal ... ok
+test backend::goal_ext::tests::mirror_status_change_keeps_goal_identity ... ok
+test backend::goal_ext::tests::snapshot_missing_goal_key_is_none ... ok
+test backend::goal_ext::tests::snapshot_null_goal_is_cleared ... ok
+test backend::goal_ext::tests::snapshot_parses_each_status ... ok
+test backend::goal_ext::tests::snapshot_unknown_status_is_skipped ... ok
+test backend::nori_client_mcp::tests::create_goal_creates_active_goal_and_emits_event ... ok
+test backend::nori_client_mcp::tests::create_goal_rejects_existing_goal ... ok
+test backend::nori_client_mcp::tests::get_goal_returns_null_without_goal ... ok
+test backend::nori_client_mcp::tests::get_info_advertises_nori_client_surface ... ok
+test backend::nori_client_mcp::tests::goal_command_disabled_without_nori_client_or_goal_extension ... ok
+test backend::nori_client_mcp::tests::goal_command_enabled_by_goal_extension_without_nori_client ... ok
+test auto_worktree::tests::test_setup_auto_worktree_creates_worktree ... ok
+test backend::nori_client_mcp::tests::real_mcp_client_discovers_context_resources_over_http ... ok
+test backend::nori_client_mcp::tests::real_mcp_client_discovers_workflow_prompts_over_http ... ok
+test backend::nori_client_mcp::tests::update_goal_marks_goal_blocked ... ok
+test backend::nori_client_mcp::tests::update_goal_marks_goal_complete ... ok
+test backend::nori_client_mcp::tests::update_goal_reports_missing_goal ... ok
+test backend::session_reducer::tests::available_commands_update_accepted_in_any_phase ... ok
+test backend::session_reducer::tests::cancel_marks_active_tools_cancelled ... ok
+test backend::session_reducer::tests::cancel_sets_cancelling_but_does_not_end_turn ... ok
+test backend::session_reducer::tests::cancelled_does_not_drain_queue ... ok
+test backend::session_reducer::tests::cancelled_prompt_response_completes_turn ... ok
+test backend::session_reducer::tests::config_option_update_is_accepted_while_idle_and_emits_info_event ... ok
+test backend::session_reducer::tests::current_mode_update_is_accepted_while_idle_and_emits_info_event ... ok
+test backend::session_reducer::tests::double_cancel_is_noop ... ok
+test backend::session_reducer::tests::end_turn_drains_queue ... ok
+test backend::session_reducer::tests::inbound_event_kind_labels_prompt_response ... ok
+test backend::session_reducer::tests::known_nori_status_updates_do_not_affect_an_owned_prompt ... ok
+test backend::session_reducer::tests::load_does_not_drain_queue ... ok
+test backend::session_reducer::tests::load_transitions_idle_to_loading_and_back ... ok
+test backend::session_reducer::tests::mixed_agent_and_thought_chunks_preserve_transcript_order ... ok
+test backend::session_reducer::tests::multiple_chunks_assembled_into_one_transcript_entry ... ok
+test backend::session_reducer::tests::nori_status_bounds_unowned_activity_without_claiming_the_turn ... ok
+test backend::session_reducer::tests::notification_while_idle_warns_and_remains_unowned ... ok
+test backend::session_reducer::tests::open_messages_finalized_into_transcript_on_completion ... ok
+test backend::session_reducer::tests::orphan_warning_is_emitted_only_once_per_burst ... ok
+test backend::session_reducer::tests::orphan_warning_resets_when_a_new_prompt_starts ... ok
+test backend::session_reducer::tests::permission_during_prompt_is_resolved_on_cancel ... ok
+test backend::session_reducer::tests::permission_request_while_idle_emits_warning ... ok
+test backend::session_reducer::tests::prompt_failed_carries_failure_disposition_onto_completion ... ok
+test backend::session_reducer::tests::prompt_failed_while_cancelling_transitions_to_idle_with_cancelled_stop_reason ... ok
+test backend::session_reducer::tests::prompt_response_transitions_to_idle ... ok
+test backend::session_reducer::tests::prompt_submit_from_idle_transitions_to_prompt ... ok
+test backend::session_reducer::tests::prompt_submit_while_active_queues ... ok
+test backend::session_reducer::tests::queued_goal_continuation_is_hidden_from_user_queue_and_transcript ... ok
+test backend::session_reducer::tests::request_scoped_cancel_only_cancels_the_matching_turn ... ok
+test backend::session_reducer::tests::session_info_update_is_accepted_while_idle_and_emits_info_event ... ok
+test backend::session_reducer::tests::session_phase_label_labels_known_phases ... ok
+test backend::session_reducer::tests::tool_call_gets_owner_request_id ... ok
+test backend::session_reducer::tests::unknown_nori_status_remains_visible_session_metadata ... ok
+test backend::session_reducer::tests::usage_update_is_accepted_while_idle_and_emits_info_event ... ok
+test backend::thread_goal::tests::clearing_goal_reports_whether_goal_existed ... ok
+test backend::thread_goal::tests::continuation_prompt_only_exists_for_active_goals ... ok
+test backend::thread_goal::tests::paused_time_does_not_accumulate_until_resumed ... ok
+test backend::thread_goal::tests::prompt_context_includes_current_goal_snapshot ... ok
+test backend::thread_goal::tests::rehydrated_goal_usage_checkpoint_survives_future_usage_updates ... ok
+test backend::thread_goal::tests::rehydrates_latest_goal_from_replay_events ... ok
+test backend::thread_goal::tests::rehydration_respects_latest_clear_event ... ok
+test backend::thread_goal::tests::resume_notice_exists_for_resumable_stopped_goals ... ok
+test backend::thread_goal::tests::resume_notice_for_non_mcp_surfaces_unavailable_for_in_play_goals ... ok
+test backend::thread_goal::tests::setting_objective_creates_active_goal ... ok
+test backend::thread_goal::tests::updating_status_preserves_objective_and_accumulates_active_time ... ok
+test backend::thread_goal::tests::usage_updates_accumulate_across_context_window_resets ... ok
+test backend::thread_goal::tests::usage_updates_count_tokens_since_goal_started ... ok
+test backend::transcript::tests::client_events_to_replay_client_events_buffers_user_deltas_and_preserves_info_updates ... ok
+test backend::transcript::tests::client_events_to_replay_client_events_preserves_goal_clears ... ok
+test backend::transcript::tests::client_events_to_replay_client_events_preserves_goal_updates ... ok
+test backend::transcript::tests::client_events_to_replay_client_events_preserves_mixed_message_delta_order ... ok
+test backend::transcript::tests::transcript_replay_client_events_preserve_user_assistant_and_tool_snapshot ... ok
+test backend::transcript::tests::transcript_to_replay_client_events_preserves_session_update_info ... ok
+test backend::transcript::tests::v3_replay_preserves_user_turns_between_raw_acp_notifications ... ok
+test backend::transcript::tests::v3_replay_uses_canonical_raw_user_chunks_without_synthesizing_a_duplicate ... ok
+test backend::transcript::tests::v3_summary_includes_raw_acp_assistant_text ... ok
+test backend::nori_client_mcp::tests::real_mcp_client_round_trips_over_http ... ok
+test bash::tests::accepts_multiple_commands_with_allowed_operators ... ok
+test bash::tests::accepts_numbers_as_words ... ok
+test backend::user_shell::tests::user_shell_command_emits_typed_lifecycle ... ok
+test bash::tests::extracts_double_and_single_quoted_strings ... ok
+test bash::tests::accepts_single_simple_command ... ok
+test bash::tests::parse_zsh_lc_plain_commands ... ok
+test bash::tests::rejects_command_and_process_substitutions_and_expansions ... ok
+test bash::tests::rejects_parentheses_and_subshells ... ok
+test bash::tests::rejects_redirections_and_unsupported_operators ... ok
+test bash::tests::rejects_trailing_operator_parse_error ... ok
+test bash::tests::rejects_variable_assignment_prefix ... ok
+test custom_prompts::tests::discovers_and_sorts_files ... ok
+test custom_prompts::tests::discovers_symlinked_md_files ... ok
+test custom_prompts::tests::empty_when_dir_missing ... ok
+test custom_prompts::tests::discovers_script_files_alongside_markdown ... ok
+test custom_prompts::tests::excludes_builtins ... ok
+test custom_prompts::tests::execute_script_passes_positional_args ... ok
+test custom_prompts::tests::execute_script_captures_stdout ... ok
+test custom_prompts::tests::execute_script_returns_empty_string_on_no_output ... ok
+test custom_prompts::tests::execute_script_returns_error_on_nonzero_exit ... ok
+test custom_prompts::tests::parse_frontmatter_preserves_body_newlines ... ok
+test custom_prompts::tests::parses_frontmatter_and_strips_from_body ... ok
+test custom_prompts::tests::script_prompts_have_empty_content_at_discovery ... ok
+test custom_prompts::tests::skips_non_utf8_files ... ok
+test hooks::tests::execute_hooks_captures_failure ... ok
+test hooks::tests::execute_hooks_continues_after_failure ... ok
+test hooks::tests::execute_hooks_env_vars_include_tool_info ... ok
+test hooks::tests::execute_hooks_handles_missing_script ... ok
+test hooks::tests::execute_hooks_passes_env_vars_to_scripts ... ok
+test custom_prompts::tests::execute_script_times_out ... ok
+test hooks::tests::execute_hooks_runs_in_order ... ok
+test hooks::tests::execute_hooks_runs_successful_script ... ok
+test hooks::tests::execute_hooks_respects_timeout ... ok
+test hooks::tests::execute_hooks_with_prefixed_output_parses_correctly ... ok
+test hooks::tests::fire_and_forget_hooks_execute_in_background ... ok
+test hooks::tests::fire_and_forget_hooks_pass_env_vars ... ok
+test hooks::tests::fire_and_forget_returns_none_for_empty_hooks ... ok
+test hooks::tests::parse_hook_output_context_prefix ... ok
+test hooks::tests::parse_hook_output_empty_after_prefix ... ok
+test hooks::tests::parse_hook_output_error_prefix ... ok
+test hooks::tests::parse_hook_output_mixed_lines ... ok
+test hooks::tests::parse_hook_output_output_prefix ... ok
+test hooks::tests::parse_hook_output_plain_lines_become_log ... ok
+test hooks::tests::parse_hook_output_skips_blank_lines ... ok
+test hooks::tests::parse_hook_output_warn_prefix ... ok
+test message_history::tests::test_append_entry_creates_history_file ... ok
+test message_history::tests::test_append_entry_with_persistence_none_does_nothing ... ok
+test hooks::tests::execute_hooks_uses_python_interpreter ... ok
+test message_history::tests::test_file_permissions_are_0600 ... ok
+test message_history::tests::test_append_multiple_entries ... ok
+test message_history::tests::test_lookup_reads_history_entries ... ok
+test message_history::tests::test_lookup_returns_none_for_invalid_offset ... ok
+test message_history::tests::test_search_entries_deduplicates_by_text ... ok
+test message_history::tests::test_search_entries_respects_max_results ... ok
+test message_history::tests::test_search_entries_returns_all_entries_newest_first ... ok
+test message_history::tests::test_search_entries_returns_empty_for_missing_file ... ok
+test normalized::tests::codex_edit_with_changes_type_add_becomes_create ... ok
+test normalized::tests::codex_edit_with_changes_type_delete_becomes_delete ... ok
+test normalized::tests::codex_edit_with_move_path_becomes_move ... ok
+test normalized::tests::codex_edit_with_null_move_path_stays_edit ... ok
+test normalized::tests::normalizer_converts_available_commands_update ... ok
+test normalized::tests::normalizer_converts_config_option_update ... ok
+test normalized::tests::normalizer_converts_current_mode_update ... ok
+test normalized::tests::normalizer_converts_empty_available_commands_update ... ok
+test normalized::tests::normalizer_converts_session_info_update ... ok
+test message_history::tests::test_history_metadata_counts_entries ... ok
+test normalized::tests::normalizer_converts_user_message_chunk ... ok
+test normalized::tests::normalizer_converts_usage_update ... ok
+test normalized::tests::normalizer_does_not_synthesize_edit_invocation_from_location ... ok
+test normalized::tests::normalizer_emits_plan_snapshot_from_plan_update ... ok
+test normalized::tests::normalizer_emits_reasoning_message_delta_from_agent_thought_chunk ... ok
+test normalized::tests::normalizer_emits_snapshot_for_unknown_tool_call_update ... ok
+test normalized::tests::normalizer_extracts_codex_execute_command_from_command_array ... ok
+test normalized::tests::normalizer_extracts_codex_list_files_from_parsed_command ... ok
+test normalized::tests::normalizer_extracts_codex_read_path_from_later_parsed_command_entry ... ok
+test normalized::tests::normalizer_extracts_codex_read_path_from_parsed_command ... ok
+test normalized::tests::normalizer_emits_answer_message_delta_from_agent_message_chunk ... ok
+test normalized::tests::normalizer_extracts_codex_search_from_parsed_command ... ok
+test normalized::tests::normalizer_extracts_delete_file_operation ... ok
+test normalized::tests::normalizer_extracts_execute_invocation_and_output_text ... ok
+test normalized::tests::normalizer_extracts_generic_tool_invocation_for_fetch ... ok
+test normalized::tests::normalizer_extracts_move_file_operation ... ok
+test normalized::tests::normalizer_extracts_read_invocation_path ... ok
+test normalized::tests::normalizer_merges_placeholder_tool_call_with_refined_update ... ok
+test normalized::tests::normalizer_extracts_codex_search_from_later_parsed_command_entry ... ok
+test normalized::tests::normalizer_preserves_non_shell_command_arrays ... ok
+test normalized::tests::normalizer_sanitizes_title_preserves_command_parens_without_description ... ok
+test normalized::tests::normalizer_sanitizes_title_stripping_cwd_and_description ... ok
+test normalized::tests::normalizer_sanitizes_title_stripping_cwd_only ... ok
+test normalized::tests::normalizer_synthesizes_read_invocation_from_location_when_no_raw_input ... ok
+test normalized::tests::normalizer_synthesizes_search_invocation_from_location_when_no_raw_input ... ok
+test normalized::tests::normalizer_title_without_brackets_passes_through ... ok
+test powershell::tests::extracts_basic_powershell_command ... ok
+test powershell::tests::extracts_lowercase_flags ... ok
+test powershell::tests::extracts_full_path_powershell_command ... ok
+test powershell::tests::extracts_with_noprofile_and_alias ... ok
+test runtime::resume_tests::same_id_resume_persists_authoritative_native_load_history_once ... ok
+test runtime::resume_tests::same_id_resume_preserves_history_metadata_and_isolates_the_previous_writer ... ok
+test runtime::tests::first_prompt_callback_fires_once_across_cloned_handles ... ok
+test runtime::tests::set_session_config_option_returns_refreshed_config_snapshot ... ok
+test session_event_fanout::tests::an_overflowing_subscriber_is_dropped_and_its_receiver_closes ... ok
+test session_event_fanout::tests::subscribers_receive_ordered_events_without_disturbing_the_primary ... ok
+test session_manager::registry::tests::a_child_needs_a_parent_that_is_registered ... ok
+test session_manager::registry::tests::a_family_is_closed_only_when_every_member_is ... ok
+test session_manager::registry::tests::a_family_is_waiting_on_you_when_any_member_does ... ok
+test session_manager::registry::tests::a_finished_turn_drops_requests_nobody_answered ... ok
+test session_manager::registry::tests::a_fork_moves_the_agent_process_to_a_new_child_conversation ... ok
+test session_manager::registry::tests::a_live_session_cannot_be_registered_as_a_second_incarnation ... ok
+test session_manager::registry::tests::a_resumed_session_keeps_its_identity_order_children_and_sequence ... ok
+test session_manager::registry::tests::a_stream_that_closes_without_an_end_event_is_a_failure ... ok
+test session_manager::registry::tests::a_waiting_request_outranks_a_failed_member ... ok
+test session_manager::registry::tests::after_a_resume_the_old_ids_lead_to_the_replacement ... ok
+test session_manager::registry::tests::an_answer_that_arrives_before_its_request_is_announced_after_it ... ok
+test session_manager::registry::tests::an_answered_request_is_announced_once_in_sequence ... ok
+test session_manager::registry::tests::an_unused_reservation_gives_its_slot_back ... ok
+test session_manager::registry::tests::closing_a_forked_parent_reaches_the_child_that_took_its_process ... ok
+test session_manager::registry::tests::closing_admission_refuses_new_sessions ... ok
+test session_manager::registry::tests::envelopes_number_each_conversation_from_one_without_gaps ... ok
+test session_manager::registry::tests::family_rollup_prefers_attention_over_progress ... ok
+test session_manager::registry::tests::one_dead_agent_process_fails_only_its_own_session ... ok
+test session_manager::registry::tests::requests_are_answered_per_session ... ok
+test session_manager::registry::tests::session_started_fills_in_the_record ... ok
+test session_manager::registry::tests::stale_process_events_and_eof_cannot_change_a_resumed_session ... ok
+test session_manager::registry::tests::status_follows_start_turns_and_permission_requests ... ok
+test session_manager::registry::tests::the_cap_refuses_extra_sessions_until_one_ends ... ok
+test session_manager::registry::tests::the_end_reason_decides_between_failed_and_closed ... ok
+test session_manager::registry::tests::the_record_lists_open_requests_in_the_order_they_arrived ... ok
+test shell::detect_shell_type_tests::test_detect_shell_type ... ok
+test shell::tests::can_run_on_shell_test ... ok
+test shell::tests::detects_bash ... ok
+test shell::tests::detects_powershell_as_default ... ok
+test shell::tests::detects_sh ... ok
+test shell::tests::finds_poweshell ... ok
+test shell::tests::test_current_shell_detects_zsh ... ok
+test tracing_setup::tests::test_default_log_level_is_valid_env_filter ... ok
+test tracing_setup::tests::test_default_log_level_returns_expected_value ... ok
+test tracing_setup::tests::test_rust_log_env_filter_parsing ... ok
+test transcript::loader::tests::count_user_turns_counts_only_user_messages ... ok
+test runtime::resume_tests::same_id_resume_publishes_a_complete_transcript_before_restoration_events ... ok
+test transcript::loader::tests::find_session_metadata_by_id_returns_none_for_missing_session ... ok
+test transcript::loader::tests::find_session_metadata_for_cwd_reads_only_session_meta ... ok
+test transcript::loader::tests::load_first_user_preview_stops_before_later_invalid_bytes ... ok
+test transcript::loader::tests::test_find_sessions_for_cwd ... ok
+test transcript::loader::tests::test_list_projects_empty ... ok
+test transcript::loader::tests::find_session_metadata_by_id_finds_sessions_across_projects ... ok
+test transcript::loader::tests::test_list_sessions_empty_project ... ok
+test transcript::loader::tests::test_list_projects_with_sessions ... ok
+test transcript::loader::tests::test_load_session_meta ... ok
+test transcript::loader::tests::test_load_transcript ... ok
+test transcript::loader::tests::test_list_sessions_for_project ... ok
+test transcript::loader::tests::test_load_transcript_skips_unknown_entry_types ... ok
+test transcript::loader::tests::test_load_transcript_with_only_unknown_entries ... ok
+test transcript::project::unit_tests::test_compute_hash_deterministic ... ok
+test transcript::project::unit_tests::test_compute_hash_different_inputs ... ok
+test transcript::project::unit_tests::test_extract_repo_name ... ok
+test transcript::project::unit_tests::test_normalize_git_url_https ... ok
+test transcript::project::unit_tests::test_normalize_git_url_no_suffix ... ok
+test transcript::project::unit_tests::test_normalize_git_url_ssh ... ok
+test transcript::loader::tests::test_load_transcript_fails_on_corrupt_first_line ... ok
+test transcript::recorder::tests::test_transcript_recorder_creates_directory_structure ... ok
+test transcript::recorder::tests::test_transcript_recorder_records_user_message ... ok
+test transcript::recorder::tests::test_transcript_recorder_writes_session_meta ... ok
+test transcript::tests::project_tests::test_compute_project_id_git_repo_with_remote ... ok
+test transcript::tests::project_tests::test_compute_project_id_different_repos_different_ids ... ok
+test transcript::tests::project_tests::test_compute_project_id_non_git_directory ... ok
+test transcript::tests::project_tests::test_compute_project_id_git_repo_without_remote ... ok
+test transcript::tests::project_tests::test_compute_project_id_same_repo_different_subdirectory ... ok
+test transcript::tests::project_tests::test_compute_project_id_same_remote_same_id ... ok
+test transcript::tests::project_tests::test_project_id_deterministic ... ok
+test transcript::tests::types_tests::session_event_entry_round_trips_raw_acp_notification_at_schema_v3 ... ok
+test transcript::tests::types_tests::test_assistant_entry_serialization ... ok
+test transcript::tests::types_tests::test_client_event_entry_serialization ... ok
+test transcript::tests::types_tests::test_patch_apply_entry_serialization ... ok
+test transcript::tests::types_tests::test_patch_apply_with_error ... ok
+test transcript::tests::types_tests::test_session_meta_entry_serialization ... ok
+test transcript::tests::types_tests::test_session_meta_without_git ... ok
+test transcript::tests::types_tests::test_tool_call_entry_serialization ... ok
+test transcript::tests::types_tests::test_tool_result_entry_serialization ... ok
+test transcript::tests::types_tests::test_tool_result_truncated ... ok
+test transcript::tests::types_tests::test_transcript_line_deserialization_from_jsonl ... ok
+test transcript::tests::types_tests::test_transcript_line_new_creates_timestamp ... ok
+test transcript::tests::types_tests::test_transcript_line_serialization ... ok
+test transcript::tests::types_tests::test_user_entry_serialization ... ok
+test transcript::tests::types_tests::test_user_entry_with_attachments ... ok
+test transcript::types::tests::assistant_entry_deserializes_agent_field ... ok
+test transcript::types::tests::assistant_entry_serializes_agent_field ... ok
+test transcript::types::tests::session_meta_entry_deserializes_acp_session_id ... ok
+test transcript::types::tests::session_meta_entry_deserializes_agent_field ... ok
+test transcript::types::tests::session_meta_entry_deserializes_without_acp_session_id ... ok
+test transcript::types::tests::session_meta_entry_omits_acp_session_id_when_none ... ok
+test transcript::types::tests::session_meta_entry_serializes_acp_session_id ... ok
+test transcript::types::tests::session_meta_entry_serializes_agent_field ... ok
+test transcript_discovery::tests::test_find_transcript_by_shell_search_finds_file_in_nested_directories ... ok
+test transcript::tests::project_tests::test_compute_project_id_ssh_and_https_same_id ... ok
+test transcript_discovery::tests::test_find_transcript_by_shell_search_picks_most_recent_on_multiple_matches ... ok
+test transcript_discovery::tests::test_find_transcript_by_shell_search_finds_matching_file_in_flat_directory ... ok
+test transcript_discovery::tests::test_find_transcript_by_shell_search_searches_both_jsonl_and_json ... ok
+test transcript_discovery::tests::test_normalize_message_distinguishes_prompts_with_shared_prefix ... ok
+test transcript_discovery::tests::test_normalize_message_for_matching_trims_and_truncates ... ok
+test transcript_discovery::tests::test_normalized_message_matches_transcript_with_whitespace ... ok
+test transcript_discovery::tests::test_parse_claude_tokens_deduplicates_by_message_id ... ok
+test transcript_discovery::tests::test_parse_claude_tokens_handles_entries_without_message_id ... ok
+test transcript_discovery::tests::test_parse_claude_tokens_includes_cache_creation_in_input ... ok
+test transcript_discovery::tests::test_parse_claude_tokens_last_context_tokens_from_last_main_chain_message ... ok
+test transcript_discovery::tests::test_parse_claude_tokens_last_context_tokens_skips_api_errors ... ok
+test transcript_discovery::tests::test_parse_claude_tokens_last_context_tokens_skips_sidechains ... ok
+test transcript_discovery::tests::test_parse_claude_tokens_last_context_uses_final_streaming_delta ... ok
+test transcript_discovery::tests::test_parse_claude_tokens_uses_last_entry_per_message_id_for_streaming ... ok
+test transcript_discovery::tests::test_parse_claude_total_tokens ... ok
+test transcript_discovery::tests::test_parse_claude_total_tokens_empty_file ... ok
+test transcript_discovery::tests::test_parse_codex_tokens_extracts_last_context_tokens_from_last_token_usage ... ok
+test transcript_discovery::tests::test_parse_codex_tokens_gold_standard_real_session ... ok
+test transcript_discovery::tests::test_parse_codex_tokens_has_no_last_context_tokens ... ok
+test transcript_discovery::tests::test_parse_codex_tokens_uses_last_event_for_last_context_tokens ... ok
+test transcript_discovery::tests::test_parse_codex_total_tokens ... ok
+test transcript_discovery::tests::test_parse_gemini_tokens_has_no_last_context_tokens ... ok
+test transcript_discovery::tests::test_parse_gemini_total_tokens ... ok
+test transcript_discovery::tests::test_parse_transcript_subagents_extracts_codex_spawn_agent_arguments ... ok
+test transcript_discovery::tests::test_parse_transcript_subagents_extracts_nested_agent_input ... ok
+test transcript_discovery::tests::test_find_transcript_by_shell_search_returns_none_without_match ... ok
+test transcript_discovery::tests::test_parse_transcript_subagents_ignores_internal_agent_ids ... ok
+test transcript_discovery::tests::test_parse_transcript_subagents_keeps_camel_case_agent_type ... ok
+test transcript_discovery::tests::test_parse_transcript_total_tokens_dispatches_correctly ... ok
+test user_notification::tests::test_awaiting_approval_notification ... ok
+test user_notification::tests::test_idle_notification ... ok
+test user_notification::tests::test_truncate_handles_multibyte_unicode ... ok
+test user_notification::tests::test_user_notification ... ok
+
+test result: ok. 328 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.32s
+
+     Running tests/context_timeline.rs (target/debug/deps/context_timeline-52846850800c1a98)
+
+running 19 tests
+test cancellation_and_terminal_failures_close_each_prompt_once ... ok
+test boundaries_capture_latest_readings_without_late_rewrites ... ok
+test compaction_decrease_and_capacity_changes_reset_attribution ... ok
+test compaction_without_a_fresh_reading_leaves_current_context_unknown ... ok
+test equal_usage_is_zero_growth_only_when_the_agent_sent_a_fresh_reading ... ok
+test historical_evidence_reconstructs_timeline_without_entering_conversation_records ... ok
+test compact_session_swap_accepts_new_session_usage_live_and_after_reload ... ok
+test missing_start_history_is_explicit_without_inventing_a_turn ... ok
+test profile::profile_fixture_preserves_checkpoints_and_emits_content_free_snapshot_timing ... ok
+test profile::profile_load_reduce_and_live_snapshot ... ignored, manual context profiling; generates large real transcripts and launches mock ACP
+test live_saved_forked_and_repeatedly_resumed_history_share_original_checkpoints ... ok
+test raw_error_and_disconnect_each_close_an_active_prompt ... ok
+test raw_fork_response_changes_usage_identity_without_requiring_a_persistent_fork_event ... ok
+test replay_and_foreign_sessions_do_not_create_new_observations_or_turns ... ok
+test queued_prompt_starts_once_with_its_wire_request_id_after_previous_end ... ok
+test resuming_a_crash_truncated_prompt_marks_its_end_unknown ... ok
+test segments_represent_baseline_and_observed_turn_growth ... ok
+test starting_a_replacement_session_keeps_history_but_resets_old_context ... ok
+test resuming_legacy_messages_keeps_unknown_checkpoint_history_after_reload ... ok
+
+test result: ok. 18 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.76s
+
+     Running tests/delegation.rs (target/debug/deps/delegation-64d8cb2740f1528a)
+
+running 20 tests
+test actual_agent_mcp_request_starts_child_and_nested_results_finish_once ... ok
+test approval_racing_parent_close_cannot_leave_a_running_child ... ok
+test cancelling_child_reports_cancelled_to_parent ... ok
+test child_crash_returns_failure_without_failing_parent ... ok
+test child_permission_belongs_to_child_and_family_reports_waiting ... ok
+test closing_crashed_parent_still_cancels_child ... ok
+test closing_parent_cancels_running_descendants_and_pending_approvals ... ok
+test child_result_waits_in_busy_parent_queue ... ok
+test competing_children_share_the_same_session_cap ... ok
+test crashed_parent_preserves_child_and_result_reaches_stable_resume ... ok
+test depth_two_is_allowed_and_depth_three_is_rejected ... ok
+test different_kind_waits_for_approval_and_decline_never_launches ... ok
+test flag_off_agent_cannot_invoke_delegate_over_mcp ... ok
+test flag_off_rejects_delegation_without_starting_child ... ok
+test forking_a_child_preserves_delegation_depth ... ok
+test only_requesting_parent_can_resolve_and_concurrent_approval_starts_one_child ... ok
+test result_is_automatically_submitted_as_attributed_parent_input ... ok
+test fork_migrates_running_children_and_pending_approval_to_new_parent ... ok
+test result_queued_before_parent_crash_is_redelivered_after_resume ... ok
+test same_kind_starts_immediately_and_retains_child_history_after_releasing_slot ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.40s
+
+     Running tests/goal_ext_bridge.rs (target/debug/deps/goal_ext_bridge-057614d05c4cf096)
+
+running 2 tests
+test goal_extension_clear_round_trips ... ok
+test goal_extension_drives_goal_and_suppresses_harness_continuation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/managed_remote.rs (target/debug/deps/managed_remote-4d0c8cf389fbb87f)
+
+running 9 tests
+test default_target_follows_selection_and_explicit_target_wins ... ok
+test delegation_remote_decline_and_duplicate_approval_never_spawn_a_child ... ok
+test delegation_remote_admission_approval_and_child_events_keep_their_identity ... ok
+test invalid_cursors_are_errors_and_overflow_drops_only_subscriber ... ok
+test malformed_requests_and_unknown_targets_do_not_drive_any_session ... ok
+test managed_endpoint_is_opt_in_and_requires_initialize_first ... ok
+test selection_filters_events_and_permissions_survive_disconnect ... ok
+test websocket_two_sessions_reconnect_without_lost_or_duplicate_envelopes ... ok
+test websocket_subscription_and_precrash_cursor_follow_the_same_id_after_resume ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+
+     Running tests/native_compact_and_branch.rs (target/debug/deps/native_compact_and_branch-f64d4139c340f2c4)
+
+running 5 tests
+test branch_forks_active_session ... ok
+test branch_leaves_session_intact_when_fork_rpc_fails ... ok
+test branch_unsupported_agent_errors ... ok
+test compact_without_native_support_swaps_and_injects_summary ... ok
+test native_compact_forwards_without_swapping_session ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/prepared_agent_lifecycle.rs (target/debug/deps/prepared_agent_lifecycle-10158d5e7c437ddf)
+
+running 11 tests
+test activation_refreshes_mutable_policy_without_replacing_the_connection ... ok
+test advertised_session_list_failure_is_not_treated_as_unsupported ... ok
+test agent_without_session_list_is_prepared_before_new_session ... ok
+test automatic_remote_control_load_failure_never_starts_a_replacement_session ... ok
+test dropping_prepared_agent_reaps_its_process ... ok
+test listed_agent_is_activated_on_the_same_connection ... ok
+test listed_agent_loads_on_the_same_connection ... ok
+test marked_nori_remote_control_agent_loads_its_active_session_immediately ... ok
+test refresh_rejects_spawn_fixed_changes_without_destroying_the_prepared_agent ... ok
+test shutting_down_prepared_agent_promptly_reaps_an_eof_ignoring_child ... ok
+test unsupported_or_malformed_remote_control_metadata_keeps_the_normal_lifecycle ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+     Running tests/remote_host.rs (target/debug/deps/remote_host-f0900091aec6a10b)
+
+running 16 tests
+test attaching_started_replacement_preserves_current_until_commit ... ok
+test a_stale_detach_does_not_break_the_replacement_subscription ... ok
+test delegated_permission_requests_reach_the_remote_controller_for_remote_turns ... ok
+test dropped_prompt_registration_does_not_wedge_a_reconnected_controller ... ok
+test immediate_remote_cancel_waits_for_remote_turn_registration ... ok
+test load_session_replays_the_previous_turn_from_the_transcript ... ok
+test local_prompt_broadcasts_a_complete_observer_turn_without_a_foreign_response ... ok
+test local_prompt_cancellation_still_ends_the_observer_turn ... ok
+test local_prompt_failure_still_ends_the_observer_turn ... ok
+test outward_session_id_is_the_conversation_id_not_the_downstream_id ... ok
+test remote_cancel_does_not_cancel_a_local_turn ... ok
+test remote_cancel_still_cancels_a_remote_owned_turn ... ok
+test remote_host_rewrites_and_forwards_every_original_user_content_block ... ok
+test remote_prompt_is_rejected_while_a_local_turn_is_active ... ok
+test remote_prompt_streams_rewritten_updates_then_the_response ... ok
+test unknown_session_ids_are_rejected ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.90s
+
+     Running tests/session_event_boundary.rs (target/debug/deps/session_event_boundary-bd0c2308eccd7465)
+
+running 26 tests
+test active_prompt_broadcasts_original_content_once_before_agent_output ... ok
+test child_loss_correlates_request_failure_with_the_active_wire_prompt ... ok
+test close_returns_directly_then_ends_the_public_session_as_closed ... ok
+test delegated_permission_round_trips_as_raw_acp_with_the_same_request_id ... ok
+test failed_load_preserves_response_order_and_separates_replay_sources ... ok
+test failed_load_without_transcript_does_not_start_a_replacement_session ... ok
+test http_mcp_agent_receives_goal_routing_context_once_without_fallback_guidance ... ok
+test initialize_error_remains_raw_without_a_nori_failure_mirror ... ok
+test list_sessions_error_remains_raw_without_a_nori_failure_mirror ... ok
+test load_replay_user_message_notifications_remain_on_the_public_boundary ... ok
+test matching_unowned_user_message_during_an_active_prompt_is_not_suppressed ... ok
+test new_session_error_remains_raw_without_a_nori_failure_mirror ... ok
+test non_mcp_agent_receives_full_cli_fallback_context_once ... ok
+test out_of_catalog_default_model_is_injected_at_spawn ... ok
+test out_of_catalog_default_model_is_injected_when_resuming ... ok
+test prompt_error_emits_a_correlated_classified_request_failure ... ok
+test ordered_prompt_content_reaches_the_acp_agent_unchanged ... ok
+test public_boundary_preserves_bootstrap_and_prompt_acp_envelopes ... ok
+test rejected_config_option_error_is_not_mirrored_on_public_boundary ... ok
+test resume_error_remains_raw_without_a_nori_failure_mirror ... ok
+test setup_notifications_precede_session_start ... ok
+test shutdown_interrupts_a_hung_connection_attempt ... ok
+test typed_session_list_query_also_preserves_the_raw_acp_response ... ok
+test resumed_load_preserves_bootstrap_response_and_brackets_raw_replay ... ok
+test unowned_user_message_during_an_active_prompt_is_not_suppressed ... ok
+test unowned_user_message_notifications_remain_on_the_public_boundary ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.36s
+
+     Running tests/session_manager.rs (target/debug/deps/session_manager-f49bb5651fdcc6fc)
+
+running 14 tests
+test a_subscriber_that_falls_behind_is_disconnected_while_the_session_continues ... ok
+test a_session_keeps_its_conversation_id_as_its_transcript_id ... ok
+test an_agent_killed_mid_turn_fails_only_its_session_which_can_be_resumed ... ok
+test an_answer_from_another_client_is_announced_to_every_follower ... ok
+test closing_at_the_cap_frees_the_slot_before_returning ... ok
+test closing_by_the_failed_id_after_a_resume_closes_the_resumed_session ... ok
+test concurrent_resumes_admit_only_one_replacement_for_the_same_id ... ok
+test free_slots_count_down_on_start_and_come_back_on_close ... ok
+test only_failed_sessions_can_be_resumed ... ok
+test repeated_failed_resumes_keep_identity_family_order_and_history ... ok
+test shutdown_closes_every_session_and_refuses_new_ones ... ok
+test the_cap_refuses_a_session_beyond_the_limit ... ok
+test failed_resume_loads_the_original_acp_id_when_supported ... ok
+test two_sessions_on_two_agent_processes_interleave_turns ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.46s
+
+     Running tests/tracing_test.rs (target/debug/deps/tracing_test-7d53dde5b8cd060a)
+
+running 1 test
+test test_rolling_file_tracing_comprehensive ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/transcript_fork.rs (target/debug/deps/transcript_fork-e416aa625f064ed9)
+
+running 1 test
+test branch_forks_transcript_and_freezes_parent ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/transcript_public_boundary.rs (target/debug/deps/transcript_public_boundary-3504b58f902f8c9b)
+
+running 1 test
+test v2_storage_decodes_to_a_schema_independent_public_projection ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests nori_harness
+
+running 2 tests
+test harness/src/tracing_setup.rs - tracing_setup::init_file_tracing (line 120) - compile ... ok
+test harness/src/tracing_setup.rs - tracing_setup::init_rolling_file_tracing (line 52) - compile ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

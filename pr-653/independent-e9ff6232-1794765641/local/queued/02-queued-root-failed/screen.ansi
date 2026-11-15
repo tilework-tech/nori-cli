@@ -1,0 +1,40 @@
+[2m• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mE1 QUEUED ROOT
+
+
+[2m• [0m[39m[49mE1 parent-or-same-kind answer
+
+
+[1;2m› [0m[39m[49mmock:stream-until-cancel
+
+
+[2m• [0m[39m[49mChild f154261d-c367-4f6d-888e-0c53881ac35a (mock-model) · parent 7c2bfa11-5327-48f7-b380-55b2f7fba14f (mock-model)
+· running
+
+[2m• [0m[39m[49mChild f154261d-c367-4f6d-888e-0c53881ac35a (mock-model) · parent 7c2bfa11-5327-48f7-b380-55b2f7fba14f (mock-model)
+· completed
+E1 parent-or-same-kind answer
+
+[38;5;1m■ ACP agent command channel closed
+
+■ Agent process exited unexpectedly.
+Mock agent: initialize
+Mock agent: advertising HTTP MCP capability
+Mock agent: new_session id=0
+Mock agent: prompt
+Mock agent: prompt
+
+[39m  [2m1 failed
+
+  ↳ [3m[Nori delegation result]
+[0m[39m[49m    [2;3mChild session f154261d-c367-4f6d-888e-0c53881ac35a (mock-model) for parent session 7c2bfa11-5327-48f7-b380-
+[0m[39m[49m    [2;3m55b2f7fba14f (mock-model): Completed
+    …
+[0;2m[39m[49m    alt + ↑ edit
+
+
+[0;1m[39m[49m›[0m[39m[49m [2m$ for skill listing
+
+[0m[39m[49m                                                                                                [38;5;3m⎇ verify/e1-653-e9ff6232

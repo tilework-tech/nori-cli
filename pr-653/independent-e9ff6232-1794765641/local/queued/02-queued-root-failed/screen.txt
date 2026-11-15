@@ -1,0 +1,40 @@
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› E1 QUEUED ROOT
+
+
+• E1 parent-or-same-kind answer
+
+
+› mock:stream-until-cancel
+
+
+• Child f154261d-c367-4f6d-888e-0c53881ac35a (mock-model) · parent 7c2bfa11-5327-48f7-b380-55b2f7fba14f (mock-model)
+· running
+
+• Child f154261d-c367-4f6d-888e-0c53881ac35a (mock-model) · parent 7c2bfa11-5327-48f7-b380-55b2f7fba14f (mock-model)
+· completed
+E1 parent-or-same-kind answer
+
+■ ACP agent command channel closed
+
+■ Agent process exited unexpectedly.
+Mock agent: initialize
+Mock agent: advertising HTTP MCP capability
+Mock agent: new_session id=0
+Mock agent: prompt
+Mock agent: prompt
+
+  1 failed
+
+  ↳ [Nori delegation result]
+    Child session f154261d-c367-4f6d-888e-0c53881ac35a (mock-model) for parent session 7c2bfa11-5327-48f7-b380-
+    55b2f7fba14f (mock-model): Completed
+    …
+    alt + ↑ edit
+
+
+› $ for skill listing
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

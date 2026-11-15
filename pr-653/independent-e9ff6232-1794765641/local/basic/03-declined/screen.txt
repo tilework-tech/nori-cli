@@ -1,0 +1,40 @@
+· completed
+E1 parent-or-same-kind answer
+
+
+› [Nori delegation result]
+  Child session 418b21ce-77a6-42f1-bb41-e2797f09eaa0 (mock-model) for parent session a037cef4-7aa1-43bb-bdab-
+  68e0a6f02af2 (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+
+• Delegation continuation received: [Nori delegation result]
+  Child session 418b21ce-77a6-42f1-bb41-e2797f09eaa0 (mock-model) for parent session a037cef4-7aa1-43bb-bdab-
+  68e0a6f02af2 (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+• Child bc003d27-daea-4ff6-a483-9ef0381674f1 (mock-model-alt) · parent a037cef4-7aa1-43bb-bdab-68e0a6f02af2 (mock-model)
+· awaiting approval
+
+• Child bc003d27-daea-4ff6-a483-9ef0381674f1 (mock-model-alt) · parent a037cef4-7aa1-43bb-bdab-68e0a6f02af2 (mock-model)
+· declined
+The user declined this delegation.
+
+
+› [Nori delegation result]
+  Child session bc003d27-daea-4ff6-a483-9ef0381674f1 (mock-model-alt) for parent session a037cef4-7aa1-43bb-bdab-
+  68e0a6f02af2 (mock-model): Declined
+  The user declined this delegation.
+
+
+• Delegation continuation received: [Nori delegation result]
+  Child session bc003d27-daea-4ff6-a483-9ef0381674f1 (mock-model-alt) for parent session a037cef4-7aa1-43bb-bdab-
+  68e0a6f02af2 (mock-model): Declined
+  The user declined this delegation.
+
+  1 ready
+
+
+› @ for file mentions
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

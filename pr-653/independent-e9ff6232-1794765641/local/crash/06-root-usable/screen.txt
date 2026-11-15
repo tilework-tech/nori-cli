@@ -1,0 +1,40 @@
+  9824078329d7 (mock-model): Completed
+  E1 parent-or-same-kind answerPermission granted with option: allow
+
+• Child 507b15ff-a596-4043-a14c-0bfc0295067b (mock-model) · parent b8957d30-b1de-443f-8bf0-9824078329d7 (mock-model)
+· running
+
+• Child 507b15ff-a596-4043-a14c-0bfc0295067b (mock-model) · parent b8957d30-b1de-443f-8bf0-9824078329d7 (mock-model)
+· failed
+RequestFailure { request_id: Some(Str("1a319beb-3186-40fa-b3fc-eee4ba007cf0")), message: "Agent process exited
+unexpectedly (exit code 17).\nMock agent: initialize\nMock agent: advertising HTTP MCP capability\nMock agent:
+new_session id=0\nMock agent: prompt\nMock agent: exiting during prompt", kind: Fatal }
+
+
+› [Nori delegation result]
+  Child session 507b15ff-a596-4043-a14c-0bfc0295067b (mock-model) for parent session b8957d30-b1de-443f-8bf0-
+  9824078329d7 (mock-model): Failed
+  RequestFailure { request_id: Some(Str("1a319beb-3186-40fa-b3fc-eee4ba007cf0")), message: "Agent process exited
+  unexpectedly (exit code 17).\nMock agent: initialize\nMock agent: advertising HTTP MCP capability\nMock agent:
+  new_session id=0\nMock agent: prompt\nMock agent: exiting during prompt", kind: Fatal }
+
+
+• Delegation continuation received: [Nori delegation result]
+  Child session 507b15ff-a596-4043-a14c-0bfc0295067b (mock-model) for parent session b8957d30-b1de-443f-8bf0-
+  9824078329d7 (mock-model): Failed
+  RequestFailure { request_id: Some(Str("1a319beb-3186-40fa-b3fc-eee4ba007cf0")), message: "Agent process exited
+  unexpectedly (exit code 17).\nMock agent: initialize\nMock agent: advertising HTTP MCP capability\nMock agent:
+  new_session id=0\nMock agent: prompt\nMock agent: exiting during prompt", kind: Fatal }
+
+
+› ROOT STILL USABLE
+
+
+• E1 parent-or-same-kind answer
+
+  1 failed · 1 ready
+
+
+› / for slash command menu
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

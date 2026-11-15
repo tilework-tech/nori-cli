@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› mock:delegate mock-model mock:stream-until-cancel
+
+
+• Child 1069d157-0b74-4268-bd5f-2bb8400136af (mock-model) · parent 41aae8c3-ca30-409e-a3a1-1659ccc2d485 (mock-model)
+· running
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• {"delegation":{"request_id":"6d5ee97f-feed-444b-bae2-7ab64d7e31e2","parent_id":"41aae8c3-ca30-409e-a3a1-
+  1659ccc2d485","child_id":"1069d157-0b74-4268-bd5f-2bb8400136af","parent_agent":"mock-model","agent":"mock-
+  model","task":"mock:stream-until-cancel","status":"running","depth":2,"result":null}}
+
+• Child 1069d157-0b74-4268-bd5f-2bb8400136af (mock-model) · parent 41aae8c3-ca30-409e-a3a1-1659ccc2d485 (mock-model)
+· cancelled
+Session closed by the user
+
+  Sessions 3  tab: waiting only · type to search
+
+  All  waiting on you
+
+    Session                                                                   Agent           Status
+    · E1 CLOSE ROOT                                                           Mock ACP        closed
+    closed
+  › └─ · (parent 73ec865b) mock:delegate mock-model mock:stream-u… (current)  Mock ACP        closed
+       closed
+       └─ · (parent 41aae8c3) mock:stream-until-cancel                        Mock ACP        closed
+          closed
+
+  ↑↓ move  enter open  ctrl+d remove  tab waiting on you  esc close
+

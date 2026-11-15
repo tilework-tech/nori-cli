@@ -1,0 +1,40 @@
+
+
+› [Nori delegation result]
+  Child session b6f2c839-65b4-4218-972a-94c8d2f1cde6 (mock-model) for parent session a4c529af-6f4d-47e3-af10-
+  6b9d4d835cf7 (mock-model): Completed
+  E1 parent-or-same-kind answerPermission granted with option: allow
+
+
+• Delegation continuation received: [Nori delegation result]
+  Child session b6f2c839-65b4-4218-972a-94c8d2f1cde6 (mock-model) for parent session a4c529af-6f4d-47e3-af10-
+  6b9d4d835cf7 (mock-model): Completed
+  E1 parent-or-same-kind answerPermission granted with option: allow
+
+• Child 68f8893e-3459-46b9-8d42-24bc0dbdd9fa (mock-model) · parent a4c529af-6f4d-47e3-af10-6b9d4d835cf7 (mock-model)
+· running
+
+• Child 68f8893e-3459-46b9-8d42-24bc0dbdd9fa (mock-model) · parent a4c529af-6f4d-47e3-af10-6b9d4d835cf7 (mock-model)
+· completed
+E1 parent-or-same-kind answer
+
+■ ACP agent command channel closed
+
+
+› [Nori delegation result]
+  Child session 68f8893e-3459-46b9-8d42-24bc0dbdd9fa (mock-model) for parent session a4c529af-6f4d-47e3-af10-
+  6b9d4d835cf7 (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+
+• Delegation continuation received: [Nori delegation result]
+  Child session 68f8893e-3459-46b9-8d42-24bc0dbdd9fa (mock-model) for parent session a4c529af-6f4d-47e3-af10-
+  6b9d4d835cf7 (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+  1 ready
+
+
+› $ for skill listing
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP Alt options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› mock:request-permission:verified-child-command
+
+
+• E1 alternate child answer
+
+• Permission: Allow Execute shell command
+
+• Permission granted with option: allow
+
+  1 ready
+
+
+› $ for skill listing
+
+                                                                                                ⎇ verify/e1-653-e9ff6232
+
+
+

@@ -1,0 +1,482 @@
+   Compiling typenum v1.18.0
+   Compiling syn v2.0.104
+   Compiling cc v1.4.4
+   Compiling ring v0.17.14
+   Compiling generic-array v0.14.7
+   Compiling thiserror-impl v1.0.69
+   Compiling ioctl-rs v0.1.6
+   Compiling getrandom v0.2.16
+   Compiling serial-core v0.4.0
+   Compiling termios v0.2.2
+   Compiling rustix v1.0.8
+   Compiling serial-unix v0.4.0
+   Compiling thiserror v1.0.69
+   Compiling crypto-common v0.1.6
+   Compiling block-buffer v0.10.4
+   Compiling vte_generate_state_changes v0.1.2
+   Compiling rustls v0.23.46
+   Compiling linux-raw-sys v0.9.4
+   Compiling serde_core v1.0.228
+   Compiling miniz_oxide v0.8.9
+   Compiling rustls-webpki v0.103.16
+   Compiling nix v0.25.1
+   Compiling vte v0.11.1
+   Compiling digest v0.10.7
+   Compiling filedescriptor v0.8.3
+   Compiling serial v0.4.0
+   Compiling aho-corasick v1.1.3
+   Compiling thiserror-impl v2.0.17
+   Compiling serde_json v1.0.145
+   Compiling regex-automata v0.4.13
+   Compiling portable-pty v0.8.1
+   Compiling vt100 v0.15.2
+   Compiling ureq-proto v0.6.0
+   Compiling tempfile v3.23.0
+   Compiling sha1 v0.10.6
+   Compiling thiserror v2.0.17
+   Compiling flate2 v1.1.2
+   Compiling ureq v3.3.0
+   Compiling tungstenite v0.26.2
+   Compiling regex v1.12.2
+   Compiling tui-pty-e2e v0.1.0 (/home/sprite/org/workspace/cli/nori-rs/tui-pty-e2e)
+warning: method `wait_for_child_exit` is never used
+   --> tui-pty-e2e/tests/cloud_mode.rs:146:8
+    |
+ 41 | impl FakeHandroll {
+    | ----------------- method in this implementation
+...
+146 |     fn wait_for_child_exit(&self, pid: u32, timeout: Duration) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `tui-pty-e2e` (test "cloud_mode") generated 1 warning
+    Finished `test` profile [unoptimized] target(s) in 18.32s
+     Running unittests src/lib.rs (target/debug/deps/tui_pty_e2e-9da369b995bac10a)
+
+running 11 tests
+test emulator::tests::erase_scrollback_drops_history_and_keeps_the_screen ... ok
+test emulator::tests::an_erase_split_across_reads_still_applies ... ok
+test emulator::tests::history_keeps_lines_scrolled_off_the_screen ... ok
+test tests::normalizes_canonical_macos_temp_directories ... ok
+test tests::test_normalize_platform_temp_directories ... ok
+test tests::test_normalize_prompt_capability_placeholders ... ok
+test tests::test_normalize_acp_error_messages ... ok
+test tests::test_normalize_version_and_skillset ... ok
+test tests::test_normalize_worked_for_line ... ok
+test tests::test_strip_git_stats_from_footer ... ok
+test tests::test_normalize_wrapped_skillset_init_header ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/acp_exit_cleanup.rs (target/debug/deps/acp_exit_cleanup-4c715feedce5711a)
+
+running 4 tests
+test test_acp_agent_cleanup_on_exit_command ... ok
+test test_acp_agent_cleanup_on_ctrl_c ... ok
+test test_local_quit_does_not_wait_one_second_for_eof_ignoring_agent ... ok
+test test_acp_agent_cleanup_on_quit_command ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.10s
+
+     Running tests/acp_file_operations.rs (target/debug/deps/acp_file_operations-fb08c4f9e462f727)
+
+running 8 tests
+test test_acp_create_file_with_parent_dirs ... ok
+test test_acp_create_new_file ... ok
+test test_acp_file_write_snapshot ... ignored
+test test_acp_edit_existing_file ... ok
+test test_acp_multiple_file_writes ... ok
+test test_acp_write_outside_workspace_denied ... ok
+test test_acp_write_system_path_denied ... ok
+test test_acp_write_to_tmp_allowed ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 17.54s
+
+     Running tests/acp_mcp_command.rs (target/debug/deps/acp_mcp_command-e973e6568e55030d)
+
+running 2 tests
+test test_mcp_command_no_servers_opens_picker ... ok
+test test_mcp_command_opens_picker_with_servers ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.48s
+
+     Running tests/acp_message_draining.rs (target/debug/deps/acp_message_draining-ec34d6de1b58c981)
+
+running 6 tests
+test test_interactive_debug_draining ... ignored
+test test_long_response_appears_immediately ... ok
+test test_delayed_streaming_response ... ok
+test test_single_prompt_response_appears_immediately ... ok
+test test_tool_call_response_draining ... ok
+test test_two_prompts_responses_not_off_by_one ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 13.53s
+
+     Running tests/acp_mode.rs (target/debug/deps/acp_mode-54eecc86d25ff527)
+
+running 6 tests
+test test_acp_approval_request_displayed_in_tui ... ok
+test test_acp_approval_full_flow ... ok
+test test_acp_mode_startup_snapshot ... ignored
+test test_acp_mode_prompt_response_flow ... ok
+test test_acp_mode_startup_with_mock_agent ... ok
+test test_acp_write_text_file ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 13.29s
+
+     Running tests/acp_prompt_errors.rs (target/debug/deps/acp_prompt_errors-dcbb74e53e1c2bfc)
+
+running 2 tests
+test test_acp_prompt_failure_tui_remains_responsive ... ok
+test test_acp_prompt_failure_shows_error_to_user ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.38s
+
+     Running tests/acp_resume_session_list.rs (target/debug/deps/acp_resume_session_list-ae92cdc496bfc6e2)
+
+running 1 test
+test resume_picker_lists_agent_sessions_when_session_list_supported ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.53s
+
+     Running tests/acp_runaway_search.rs (target/debug/deps/acp_runaway_search-a3dc4603bd327259)
+
+running 1 test
+test test_runaway_search_transcript_preserves_the_raw_acp_tool_stream ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.24s
+
+     Running tests/acp_tool_calls.rs (target/debug/deps/acp_tool_calls-f54d167b82851b76)
+
+running 10 tests
+test test_acp_tool_call_completion_rendered_in_tui ... ok
+test test_acp_generic_tool_call_shows_resolved_name ... ok
+test test_acp_tool_call_rendered_in_tui ... ok
+test test_acp_tool_call_no_duplicate_messages ... ok
+test test_acp_tool_call_snapshot ... ok
+test test_exploring_cell_flushed_immediately_without_agent_text ... ok
+test test_multi_call_exploring_cells_with_out_of_order_completion ... ok
+test test_no_orphan_tool_cells_from_cascade_deferral ... ok
+test test_stuck_tool_calls_dont_block_agent_message ... ok
+test test_tool_calls_during_final_stream_not_shown_after ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 26.87s
+
+     Running tests/agent_switching.rs (target/debug/deps/agent_switching-552a969e6b12af3f)
+
+running 17 tests
+test test_acp_agent_subprocess_spawned ... ok
+test test_acp_agent_switch_via_model_picker ... ok
+test test_acp_cleanup_outside_prompt_turn ... ok
+test test_agent_candidate_activation_failure_keeps_current_session_promptable ... ok
+test test_agent_candidate_cancel_keeps_current_session_promptable ... ok
+test test_agent_command_shows_available_agents ... ok
+test test_agent_picker_no_switch_during_streaming ... ok
+test test_agent_picker_shows_five_agents_in_debug_build ... ok
+test test_agent_switch_activates_prepared_candidate ... ok
+test test_agent_candidate_preparation_timeout_keeps_current_session_promptable ... ok
+test test_agent_switch_message_flow_mock_to_mock_alt ... ok
+test test_connecting_status_during_slow_agent_startup ... ok
+test test_different_agents_different_subprocesses ... ok
+test test_model_command_shows_disabled_in_acp_mode ... ok
+test test_slash_popup_shows_current_agent_in_description ... ok
+test test_slash_popup_shows_current_approval_mode_in_description ... ok
+test test_startup_activation_reuses_prepared_subprocess ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 56.01s
+
+     Running tests/analytics.rs (target/debug/deps/analytics-27d2aaca453ef3ba)
+
+running 2 tests
+test cloud_prompt_reports_cloud_mode_after_the_agent_connects ... ok
+test interactive_prompt_reports_authenticated_agent_session ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.08s
+
+     Running tests/browser_command.rs (target/debug/deps/browser_command-25abe48c92b56fa6)
+
+running 1 test
+test browser_command_agent_modifies_page ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cloud_mode.rs (target/debug/deps/cloud_mode-55e0b608ddbf72ac)
+
+running 24 tests
+test test_cloud_close_returns_to_the_picker ... ok
+test test_cloud_close_beside_another_session_lists_it_as_closed ... ok
+test test_cloud_create_new_error_shows_message_and_detail_without_json_noise ... ok
+test test_cloud_create_new_shows_connection_progress_and_blocks_early_submit ... ok
+test test_cloud_entry_picker_create_new_starts_fresh_session ... ok
+test test_cloud_entry_picker_resume_row_reattaches_live ... ok
+test test_cloud_list_failure_does_not_claim_a_new_session ... ok
+test test_cloud_mode_boots_into_session_picker_without_claiming ... ok
+test test_cloud_mode_bypasses_local_onboarding_and_trust ... ok
+test test_cloud_mode_bypasses_per_session_skillset_picker ... ok
+test test_cloud_mode_child_death_mid_session_surfaces_error ... ok
+test test_cloud_mode_ignores_automatic_worktree ... ok
+test test_cloud_mode_overrides_agent_flag ... ok
+test test_cloud_mode_requires_handroll_binary ... ok
+test test_cloud_mode_passes_broker_url_from_config ... ok
+test test_cloud_mode_round_trips_prompt_through_handroll ... ok
+test test_cloud_mode_sends_eof_detach_to_handroll_on_exit ... ok
+test test_cloud_mode_surfaces_auth_error_from_child_stderr ... ok
+test test_cloud_mode_writes_local_transcript ... ok
+test test_cloud_new_reuses_in_flight_entry_preparation ... ok
+test test_cloud_quit_exits_fast_even_if_child_ignores_eof ... ok
+test test_cloud_sessions_share_the_session_list ... ok
+test test_cloud_start_new_preserves_the_deferred_positional_prompt ... ok
+test test_plain_nori_does_not_boot_into_the_agent_session_picker ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 55.29s
+
+     Running tests/context.rs (target/debug/deps/context-4b6c0cef1156a93c)
+
+running 4 tests
+test context_command_renders_agent_reported_usage ... ok
+test context_can_inspect_an_unfinished_turn_without_interrupting_it ... ok
+test context_command_renders_unknown_usage_without_prompting_the_agent ... ok
+test context_grid_alternates_turn_segments_without_adding_a_prompt ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.37s
+
+     Running tests/context_instructions.rs (target/debug/deps/context_instructions-f8f0b294677110c6)
+
+running 1 test
+test repeated_context_with_real_claude_instructions_is_prompt_and_reads_edits ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.49s
+
+     Running tests/delegation.rs (target/debug/deps/delegation-512b214fecf91da0)
+
+running 4 tests
+test delegation_is_unavailable_without_multi_session ... ok
+test declining_different_kind_does_not_start_child ... ok
+test different_kind_child_needs_start_and_its_permission_stays_in_child ... ok
+test same_kind_child_starts_and_returns_without_approval_or_exiting_terminal ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.68s
+
+     Running tests/exit_statistics.rs (target/debug/deps/exit_statistics-c6daa0f400bb5626)
+
+running 2 tests
+test test_exit_message_displays_on_slash_exit ... ok
+test test_exit_message_displays_on_ctrl_d ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.59s
+
+     Running tests/host_attach.rs (target/debug/deps/host_attach-1ca970268abc7593)
+
+running 10 tests
+test delegated_child_in_host_list_preserves_metadata_columns_and_can_be_opened ... ok
+test detach_and_named_reattach_keep_the_session_history_and_host_alive ... ok
+test dropped_tcp_connection_shows_reconnecting_and_replays_missed_output_once ... ok
+test host_list_truncates_tty_title_without_losing_piped_title ... ok
+test host_starts_without_a_terminal_session_and_stops_explicitly ... ok
+test same_port_host_restart_stops_reconnecting_and_explains_session_loss ... ok
+test two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt ... ok
+test silently_blackholed_connection_shows_reconnecting_and_replays_missed_output_once ... ok
+test watcher_cannot_answer_a_permission_request_but_controller_can ... ok
+test watcher_cannot_delegate_a_child ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 57.41s
+
+     Running tests/input_handling.rs (target/debug/deps/input_handling-b65847d4c20bd6d1)
+
+running 5 tests
+test test_backspace ... ok
+test test_arrows ... ok
+test test_ctrl_c_clears_input ... ok
+test test_history_navigation_multiple_messages ... ok
+test test_history_navigation_up_down ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.20s
+
+     Running tests/live_acp.rs (target/debug/deps/live_acp-e969328fb08a57f8)
+
+running 2 tests
+test test_claude_acp_live_response ... ignored
+test test_gemini_acp_live_response ... ignored
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/live_custom_agent.rs (target/debug/deps/live_custom_agent-7ffbe3fe5df00dbe)
+
+running 2 tests
+test test_elizacp_custom_agent_display_name ... ignored
+test test_elizacp_custom_agent_startup_and_response ... ignored
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/markdown_table.rs (target/debug/deps/markdown_table-7fe2df18fbfbc395)
+
+running 1 test
+test test_streamed_markdown_table_renders_as_a_grid ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.33s
+
+     Running tests/multi_session.rs (target/debug/deps/multi_session-ad3e252f7fcf4a47)
+
+running 8 tests
+test jump_timing_on_a_long_history ... ignored, measurement, takes minutes
+test new_keeps_the_previous_session_running_behind_the_new_one ... ok
+test a_burst_of_moves_lands_on_the_last_target ... ok
+test one_session_shows_no_status_line ... ok
+test session_keys_do_nothing_without_the_flag ... ok
+test session_moves_follow_the_bindings_in_config ... ok
+test session_moves_reprint_only_the_target_and_keep_unsent_input ... ok
+test status_line_counts_sessions_by_status ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 22.35s
+
+     Running tests/nori_footer.rs (target/debug/deps/nori_footer-d7b68ef32f67d90b)
+
+running 6 tests
+test test_footer_displays_git_branch ... ok
+test test_default_idle_footer_has_no_metadata_clutter ... ok
+test test_footer_full_startup_with_all_info ... ok
+test test_footer_vertical_layout_from_config ... ok
+test test_footer_with_segments_disabled ... ok
+test test_footer_without_git_repo ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.57s
+
+     Running tests/prepared_startup.rs (target/debug/deps/prepared_startup-47a8ab9a9491ebce)
+
+running 12 tests
+test agent_without_session_list_activates_a_session_on_startup ... ok
+kill: (129189): No such process
+kill: (129189): No such process
+test exit_reaps_in_flight_preparation ... ok
+test ordinary_agent_prepares_before_running_a_positional_prompt ... ok
+test first_prompt_waits_for_preparation_then_activates_once ... ok
+test policy_change_is_applied_to_the_active_session ... ok
+test positional_prompt_activates_after_preparation_exactly_once ... ok
+test remote_adapter_activates_a_session_on_startup ... ok
+test slash_new_reuses_in_flight_preparation ... ok
+test slash_resume_reuses_in_flight_preparation_catalog ... ok
+test slash_resume_uses_resume_capability_on_the_prepared_connection ... ok
+kill: (129808): No such process
+kill: (129808): No such process
+test primary_preparation_timeout_reaps_the_child_without_activating ... ok
+test startup_activates_and_local_status_renders ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 39.63s
+
+     Running tests/prompt_flow.rs (target/debug/deps/prompt_flow-7e894361d7413757)
+
+running 3 tests
+test test_multiline_input ... ok
+test test_submit_prompt_custom_response ... ok
+test test_submit_prompt_default_response ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.47s
+
+     Running tests/remote_control.rs (target/debug/deps/remote_control-f6c8230ae7b85099)
+
+running 1 test
+test startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_owner ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.92s
+
+     Running tests/session_lifecycle.rs (target/debug/deps/session_lifecycle-f518ba6b8c3c0acf)
+
+running 17 tests
+test a_long_title_keeps_the_request_line_on_one_row ... ok
+test a_new_session_starts_beside_a_busy_one_and_takes_the_next_prompt ... ok
+test a_loop_in_the_background_stays_in_its_own_row ... ok
+test a_request_answered_by_remote_control_clears_the_approval_in_the_tui ... ok
+test a_restarted_session_keeps_its_title ... ok
+test a_same_process_head_fork_is_allowed_at_the_cap_but_a_transcript_fork_is_not ... ok
+test at_the_cap_a_new_session_is_refused_with_how_to_close_one ... ok
+test at_the_cap_a_transcript_fork_preserves_the_current_session ... ok
+test at_the_cap_resume_preserves_the_current_session_and_explains_how_to_make_room ... ok
+test close_command_closes_the_session_on_screen_and_shows_the_next ... ok
+test closing_a_busy_session_asks_for_a_second_press ... ok
+test ctrl_d_in_the_list_closes_a_session_and_frees_its_slot ... ok
+test ctrl_r_preserves_session_identity_and_its_remote_subscription ... ok
+test legacy_remote_control_follows_the_session_on_screen ... ok
+test managed_remote_endpoint_requires_multi_session ... ok
+test preparing_another_agent_leaves_no_line_in_the_old_session ... ok
+test restarting_a_failed_parent_keeps_its_child_under_the_replacement ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 62.01s
+
+     Running tests/session_list.rs (target/debug/deps/session_list-18e647b8282f64ff)
+
+running 10 tests
+test a_focused_terminal_gets_no_notification ... ok
+test a_background_request_is_named_and_one_key_jumps_to_it_for_an_answer ... ok
+test a_fork_is_listed_under_its_parent_and_its_request_marks_the_parent ... ok
+test an_agent_that_dies_fails_only_its_session_which_can_be_resumed ... ok
+test an_unfocused_terminal_is_notified_when_a_background_session_is_waiting_on_you ... ok
+test enter_in_the_list_jumps_to_that_session ... ok
+test left_with_text_in_the_prompt_moves_the_cursor_instead_of_opening_the_list ... ok
+test left_on_an_empty_prompt_lists_sessions_with_status_and_preview ... ok
+test session_list_is_absent_without_the_flag ... ok
+test tab_shows_only_sessions_waiting_on_you_and_typing_filters ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 38.32s
+
+     Running tests/session_transcripts.rs (target/debug/deps/session_transcripts-d61223a6420bc022)
+
+running 1 test
+test resume_after_new_shows_each_turn_once ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.64s
+
+     Running tests/startup.rs (target/debug/deps/startup-4a1a9b557625fc17)
+
+running 12 tests
+test skillset_per_session_activates_after_selection ... ok
+test model_command_works_before_first_prompt ... ok
+test startup_activates_session_without_input ... ok
+test test_poll_does_not_block_when_no_data ... ok
+test test_runs_in_temp_directory_by_default ... ok
+test test_startup_error_for_unregistered_model ... ok
+test test_startup_hides_install_hint_when_nori_installed ... ok
+test test_startup_shows_nori_banner ... ok
+test test_startup_shows_welcome ... ok
+test test_startup_with_dimensions ... ok
+test test_trust_directory_saves_to_config ... ok
+test test_trust_screen_is_skipped_with_default_config ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 28.43s
+
+     Running tests/startup_draft.rs (target/debug/deps/startup_draft-5a9017068795976a)
+
+running 1 test
+test startup_preserves_draft_cursor_across_activation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.43s
+
+     Running tests/streaming.rs (target/debug/deps/streaming-ae1fe90a3aacec6b)
+
+running 5 tests
+test test_ctrl_c_cancels_streaming ... ok
+test test_escape_cancels_streaming ... ok
+test test_prompt_still_streams_after_interrupt ... ok
+test test_prompt_submitted_during_cancelling_is_not_lost ... ok
+test test_submit_text ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.44s
+
+     Running tests/transcript_persistence.rs (target/debug/deps/transcript_persistence-45707d27104bcc82)
+
+running 6 tests
+test test_project_metadata_created ... ok
+test test_multiple_sessions_same_project ... ok
+test test_resume_viewonly_shows_transcript ... ok
+test test_session_meta_fields ... ok
+test test_transcript_contains_assistant_message ... ok
+test test_transcript_created_on_session ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.50s
+
+   Doc-tests tui_pty_e2e
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

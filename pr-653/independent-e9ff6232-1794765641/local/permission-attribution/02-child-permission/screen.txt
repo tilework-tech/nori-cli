@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP Alt options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› mock:request-permission:verified-child-command
+
+
+• E1 alternate child answer
+
+  1 waiting on you · 1 ready
+
+
+  Would you like to allow execute: Execute shell command?
+
+  Execute shell command
+  Command: verified-child-command
+  verified-child-command
+
+› 1. Allow (y)
+  2. Reject (esc)
+
+  Press enter to confirm or esc to cancel

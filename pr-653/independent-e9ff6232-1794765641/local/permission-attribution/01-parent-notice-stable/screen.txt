@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/e1-verification/local/permission-attribution/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› PERMISSION PARENT
+
+
+• E1 parent-or-same-kind answer
+
+• Child e5573c3a-f9fc-49bf-ab99-d09783558b60 (mock-model-alt) · parent 831beaea-7a00-496f-9713-6c8ecc48cd40 (mock-model)
+· awaiting approval
+
+• Child e5573c3a-f9fc-49bf-ab99-d09783558b60 (mock-model-alt) · parent 831beaea-7a00-496f-9713-6c8ecc48cd40 (mock-model)
+· running
+
+⚠ Child session e5573c3a-f9fc-49bf-ab99-d09783558b60 (mock-model-alt) of parent session 831beaea-7a00-496f-9713-
+  6c8ecc48cd40 (mock-model) needs your answer. Switch to the child with Alt+Down.
+
+  ● (parent 831beaea) mock:… is waiting on you · approve: verified-child-com… · alt + down to jump
+  1 waiting on you · 1 ready
+
+
+› @ for file mentions
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

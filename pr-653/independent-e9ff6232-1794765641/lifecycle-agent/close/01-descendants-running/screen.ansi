@@ -1,0 +1,39 @@
+
+
+
+
+
+
+
+
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m~/org/workspace/cli/.local/e1-verification/lifecycle-agent/close/project[2m · [0m[39m[49mAgent approvals
+[2m  Agent        [0m[39m[49mMock ACP
+
+[2m• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mE1 CLOSE ROOT
+
+
+[2m• [0m[39m[49mE1 parent-or-same-kind answer
+
+[2m• [0m[39m[49mChild 41aae8c3-ca30-409e-a3a1-1659ccc2d485 (mock-model) · parent 73ec865b-8415-4f14-b71b-d42998a90489 (mock-model)
+· running
+
+  [2m1 working · 2 ready
+
+[0m[39m[49m  [1mSessions 3 · 1 working · 2 ready[0;2m[39m[49m  tab: waiting only · type to search
+
+[0m[39m[49m  [1mAll[0m[39m[49m  [38;5;8mwaiting on you
+
+[39m  [1m [0m[39m[49m [1mSession[0m[39m[49m                                                                   [1mAgent[0m[39m[49m           [1mStatus
+[0m[39m[49m  [38;5;2m›[39m ⠋ E1 CLOSE ROOT (current)                                                 Mock ACP        working
+    [38;5;8mE1 parent-or-same-kind answer
+[39m    └─ ○ (parent 73ec865b) mock:delegate mock-model mock:stream-until-cancel  Mock ACP        ready · new
+    [38;5;8m   …"agent":"mock-model","task":"mock:stream-until-cancel","status":"running","depth":2,"result":null}}
+[39m       └─ ⠋ (parent 41aae8c3) mock:stream-until-cancel                        Mock ACP        working
+    [38;5;8m      …...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+
+[39m  [38;5;2m↑↓[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mopen  [38;5;2mctrl+d[39m [38;5;8mclose  [38;5;2mtab[39m [38;5;8mwaiting on you  [38;5;2mesc[39m [38;5;8mclose

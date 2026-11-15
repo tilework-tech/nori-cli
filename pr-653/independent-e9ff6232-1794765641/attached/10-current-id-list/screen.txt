@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · 5c56204d-2593-4555-be2b-72662d064bc5 · ready
+
+
+  Sessions 8
+
+     ID        AGENT           STATUS            AGE    TITLE
+  ▏  5c56204d  mock-model      ready             4m     (current) Parent attached identity                           ▕
+     58e59ce3  mock-model      closed            3m     ↳ (parent 5c56204d) Same agent immediate child
+     73f4af00  mock-model-alt  closed            3m     ↳ (parent 5c56204d) mock:request-permission:CHI…
+     1758578c  mock-model      closed            2m     ↳ (parent 5c56204d) mock:request-permission:FRE…
+     90d2cce0  mock-model      closed            1m     ↳ (parent 5c56204d) mock:request-permission:FRE…
+     e2b685b0  mock-model      closed            33s    ↳ (parent 5c56204d) mock:request-permission:FRE…
+     503e47c4  mock-model      closed            27s    ↳ (parent 5c56204d) mock:request-permission:DRA…
+     fb65ef7f  mock-model      waiting on you    0s     ↳ (parent 5c56204d) mock:request-permission:LON…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

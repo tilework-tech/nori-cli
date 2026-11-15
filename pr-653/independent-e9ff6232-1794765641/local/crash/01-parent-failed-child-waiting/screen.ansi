@@ -1,0 +1,40 @@
+
+
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m~/org/workspace/cli/.local/e1-verification/local/crash/project[2m · [0m[39m[49mAgent approvals
+[2m  Agent        [0m[39m[49mMock ACP
+
+[2m• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mE1 CRASH ROOT
+
+
+[2m• [0m[39m[49mE1 parent-or-same-kind answer
+
+[2m• [0m[39m[49mChild 160e205f-a392-4414-9725-b19cca1ce1d4 (mock-model) · parent b8957d30-b1de-443f-8bf0-9824078329d7 (mock-model)
+· running
+
+[38;5;3m⚠ Child session 160e205f-a392-4414-9725-b19cca1ce1d4 (mock-model) of parent session b8957d30-b1de-443f-8bf0-9824078329d7
+[39m  [38;5;3m(mock-model) needs your answer. Switch to the child with Alt+Down.
+
+
+[1;2m[39m› [0m[39m[49mmock:exit-during-prompt
+
+
+[38;5;1m■ Agent process exited unexpectedly (exit code 17).
+Mock agent: initialize
+Mock agent: advertising HTTP MCP capability
+Mock agent: new_session id=0
+Mock agent: prompt
+Mock agent: prompt
+Mock agent: exiting during prompt
+
+[39m  [38;5;6m● [1m[39m(parent b8957d30) mock:…[0m[39m[49m is waiting on you[2m · approve: E1-surviving-child · alt + down to jump
+[0m[39m[49m  [2m1 waiting on you · 1 failed
+
+
+[0;1m[39m[49m›[0m[39m[49m [2m$ for skill listing
+
+[0m[39m[49m                                                                                                [38;5;3m⎇ verify/e1-653-e9ff6232

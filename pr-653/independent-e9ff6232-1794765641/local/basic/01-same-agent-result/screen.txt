@@ -1,0 +1,40 @@
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/e1-verification/local/basic/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› E1 LOCAL PARENT
+
+
+• E1 parent-or-same-kind answer
+
+• Child 418b21ce-77a6-42f1-bb41-e2797f09eaa0 (mock-model) · parent a037cef4-7aa1-43bb-bdab-68e0a6f02af2 (mock-model)
+· running
+
+• Child 418b21ce-77a6-42f1-bb41-e2797f09eaa0 (mock-model) · parent a037cef4-7aa1-43bb-bdab-68e0a6f02af2 (mock-model)
+· completed
+E1 parent-or-same-kind answer
+
+
+› [Nori delegation result]
+  Child session 418b21ce-77a6-42f1-bb41-e2797f09eaa0 (mock-model) for parent session a037cef4-7aa1-43bb-bdab-
+  68e0a6f02af2 (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+
+• Delegation continuation received: [Nori delegation result]
+  Child session 418b21ce-77a6-42f1-bb41-e2797f09eaa0 (mock-model) for parent session a037cef4-7aa1-43bb-bdab-
+  68e0a6f02af2 (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+  1 ready
+
+
+› @ for file mentions
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

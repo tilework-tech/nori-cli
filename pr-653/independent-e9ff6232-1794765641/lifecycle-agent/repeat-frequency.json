@@ -1,0 +1,52 @@
+[
+  {
+    "run": 1,
+    "spurious_error": false,
+    "continuation": true
+  },
+  {
+    "run": 2,
+    "spurious_error": false,
+    "continuation": true
+  },
+  {
+    "run": 3,
+    "spurious_error": false,
+    "continuation": true
+  },
+  {
+    "run": 4,
+    "spurious_error": false,
+    "continuation": true
+  },
+  {
+    "run": 5,
+    "spurious_error": false,
+    "continuation": true
+  },
+  {
+    "run": 6,
+    "spurious_error": false,
+    "continuation": true
+  },
+  {
+    "run": 7,
+    "spurious_error": false,
+    "continuation": true
+  },
+  {
+    "run": 8,
+    "spurious_error": false,
+    "continuation": true
+  },
+  {
+    "run": 9,
+    "spurious_error": false,
+    "continuation": true
+  },
+  {
+    "run": 10,
+    "spurious_error": false,
+    "continuation": true
+  }
+]

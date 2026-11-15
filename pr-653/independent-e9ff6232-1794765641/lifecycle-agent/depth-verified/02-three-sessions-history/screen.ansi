@@ -1,0 +1,39 @@
+· completed
+Delegation continuation received: [Nori delegation result]
+Child session e6b993e9-6a4c-4f8d-86aa-2b3a046be5a2 (mock-model) for parent session 98ae7fca-4540-4156-92b1-2881e86edaba
+(mock-model): Completed
+E1 parent-or-same-kind answer
+
+
+[1;2m› [0m[39m[49m[Nori delegation result]
+  Child session 98ae7fca-4540-4156-92b1-2881e86edaba (mock-model) for parent session 2715245d-5720-400c-acc8-
+  d671b3c470d6 (mock-model): Completed
+  Delegation continuation received: [Nori delegation result]
+  Child session e6b993e9-6a4c-4f8d-86aa-2b3a046be5a2 (mock-model) for parent session 98ae7fca-4540-4156-92b1-
+  2881e86edaba (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+
+[2m• [0m[39m[49mDelegation continuation received: [Nori delegation result]
+  Child session 98ae7fca-4540-4156-92b1-2881e86edaba (mock-model) for parent session 2715245d-5720-400c-acc8-
+  d671b3c470d6 (mock-model): Completed
+  Delegation continuation received: [Nori delegation result]
+  Child session e6b993e9-6a4c-4f8d-86aa-2b3a046be5a2 (mock-model) for parent session 98ae7fca-4540-4156-92b1-
+  2881e86edaba (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+  [2m1 ready
+
+[0m[39m[49m  [1mSessions 3 · 1 ready[0;2m[39m[49m  tab: waiting only · type to search
+
+[0m[39m[49m  [1mAll[0m[39m[49m  [38;5;8mwaiting on you
+
+[39m  [1m [0m[39m[49m [1mSession[0m[39m[49m                                                                   [1mAgent[0m[39m[49m           [1mStatus
+[0m[39m[49m  [38;5;2m›[39m ○ E1 DEPTH ROOT (current)                                                 Mock ACP        ready
+    [38;5;8mE1 parent-or-same-kind answer
+[39m    [38;5;8m└─ · (parent 2715245d) mock:delegate mock-model DEPTH_TWO_LEAF[39m            Mock ACP        [38;5;8mclosed
+[39m    [38;5;8m   closed
+[39m    [38;5;8m   └─ · (parent 98ae7fca) DEPTH_TWO_LEAF[39m                                  Mock ACP        [38;5;8mclosed
+[39m    [38;5;8m      closed
+
+[39m  [38;5;2m↑↓[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mopen  [38;5;2mctrl+d[39m [38;5;8mclose  [38;5;2mtab[39m [38;5;8mwaiting on you  [38;5;2mesc[39m [38;5;8mclose

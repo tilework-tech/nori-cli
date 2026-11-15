@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m~/org/workspace/cli/.local/e1-verification/local/permission-attribution/project[2m · [0m[39m[49mAgent approvals
+[2m  Agent        [0m[39m[49mMock ACP
+
+[2m• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mPERMISSION PARENT
+
+
+[2m• [0m[39m[49mE1 parent-or-same-kind answer
+
+[2m• [0m[39m[49mChild e5573c3a-f9fc-49bf-ab99-d09783558b60 (mock-model-alt) · parent 831beaea-7a00-496f-9713-6c8ecc48cd40 (mock-model)
+· awaiting approval
+
+[2m• [0m[39m[49mChild e5573c3a-f9fc-49bf-ab99-d09783558b60 (mock-model-alt) · parent 831beaea-7a00-496f-9713-6c8ecc48cd40 (mock-model)
+· running
+
+[38;5;3m⚠ Child session e5573c3a-f9fc-49bf-ab99-d09783558b60 (mock-model-alt) of parent session 831beaea-7a00-496f-9713-
+[39m  [38;5;3m6c8ecc48cd40 (mock-model) needs your answer. Switch to the child with Alt+Down.
+
+[39m  [38;5;6m● [1m[39m(parent 831beaea) mock:…[0m[39m[49m is waiting on you[2m · approve: verified-child-com… · alt + down to jump
+[0m[39m[49m  [2m1 waiting on you · 1 ready
+
+
+[0;1m[39m[49m›[0m[39m[49m [2m@ for file mentions
+
+[0m[39m[49m                                                                                                [38;5;3m⎇ verify/e1-653-e9ff6232

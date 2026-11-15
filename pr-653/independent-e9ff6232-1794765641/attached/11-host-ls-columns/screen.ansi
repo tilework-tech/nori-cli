@@ -1,0 +1,39 @@
+ID                                    AGENT             STATUS               AGE  TITLE
+5c56204d-2593-4555-be2b-72662d064bc5  mock-model        [32mready           [39m      4m  Parent attached identity
+58e59ce3-a33d-4e08-8fc8-a7574c136b7c  mock-model        [2mclosed          [0m[39m[49m      3m  ↳ (parent 5c56204d) Same agent immedi…
+73f4af00-8d11-44ba-aec8-23c144aeb929  mock-model-alt    [2mclosed          [0m[39m[49m      3m  ↳ (parent 5c56204d) mock:request-perm…
+1758578c-174b-4c7b-ba9c-9e5caf87a091  mock-model        [2mclosed          [0m[39m[49m      2m  ↳ (parent 5c56204d) mock:request-perm…
+90d2cce0-8d10-464f-98d2-0e4c59a70119  mock-model        [2mclosed          [0m[39m[49m      1m  ↳ (parent 5c56204d) mock:request-perm…
+e2b685b0-3a42-40ec-ba7c-beb5b3166594  mock-model        [2mclosed          [0m[39m[49m     36s  ↳ (parent 5c56204d) mock:request-perm…
+503e47c4-5abd-4c7a-afa6-26a378014c21  mock-model        [2mclosed          [0m[39m[49m     30s  ↳ (parent 5c56204d) mock:request-perm…
+fb65ef7f-07e2-4aba-af4a-6119b06b8e40  mock-model        [33mwaiting on you  [39m      3s  ↳ (parent 5c56204d) mock:request-perm…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

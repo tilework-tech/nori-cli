@@ -1,0 +1,6 @@
+{
+  "cargo_pid": 93811,
+  "state": "Z",
+  "wait_exit_code": 0,
+  "note": "Suite wrapper exited 143 while cargo continued as an orphan. Cargo completed with exit 0; all target and doc-test summaries are present."
+}

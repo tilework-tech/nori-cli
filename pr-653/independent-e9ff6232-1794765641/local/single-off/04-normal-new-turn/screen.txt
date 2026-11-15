@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/e1-verification/local/single-off/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› E1 SINGLE SESSION NORMAL
+
+
+• E1 parent-or-same-kind answer
+
+• Unrecognized command '/delegate'. Type "/" for a list of supported commands.
+
+• Unrecognized command '/delegate'. Type "/" for a list of supported commands.
+
+
+› E1 SINGLE CONTINUES
+
+
+• E1 parent-or-same-kind answer
+
+
+› ? for shortcuts
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

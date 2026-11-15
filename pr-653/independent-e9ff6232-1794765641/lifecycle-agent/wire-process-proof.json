@@ -1,0 +1,91 @@
+{
+  "depth-verified": [
+    {
+      "pid": 58575,
+      "state_after_cleanup": "Z",
+      "prompts": [
+        "E1 DEPTH ROOT",
+        "[Nori delegation result]\nChild session 98ae7fca-4540-4156-92b1-2881e86edaba (mock-model) for parent session 2715245d-5720-400c-acc8-d671b3c470d6 (mock-model): Completed\nDelegation continuation received: [Nori delegation result]\nChild session e6b993e9-6a4c-4f8d-86aa-2b3a046be5a2 (mock-model) for parent session 98ae7fca-4540-4156-92b1-2881e86edaba (mock-model): Completed\nE1 parent-or-same-kind answer",
+        "[Nori delegation result]\nChild session 2a749d80-9c95-45aa-ab0c-238d22513464 (mock-model) for parent session 2715245d-5720-400c-acc8-d671b3c470d6 (mock-model): Completed\nDelegation continuation received: [Nori delegation result]\nChild session 30a1b5e0-5bc9-482b-bf41-47fd46a44b6a (mock-model) for parent session 2a749d80-9c95-45aa-ab0c-238d22513464 (mock-model): Completed\ndelegation depth limit is 2 levels below the top session"
+      ]
+    },
+    {
+      "pid": 58961,
+      "state_after_cleanup": "gone",
+      "prompts": [
+        "mock:delegate mock-model DEPTH_TWO_LEAF",
+        "[Nori delegation result]\nChild session e6b993e9-6a4c-4f8d-86aa-2b3a046be5a2 (mock-model) for parent session 98ae7fca-4540-4156-92b1-2881e86edaba (mock-model): Completed\nE1 parent-or-same-kind answer"
+      ]
+    },
+    {
+      "pid": 59018,
+      "state_after_cleanup": "gone",
+      "prompts": [
+        "DEPTH_TWO_LEAF"
+      ]
+    },
+    {
+      "pid": 61977,
+      "state_after_cleanup": "gone",
+      "prompts": [
+        "mock:delegate mock-model mock:delegate mock-model DEPTH_THREE_REFUSED",
+        "[Nori delegation result]\nChild session 30a1b5e0-5bc9-482b-bf41-47fd46a44b6a (mock-model) for parent session 2a749d80-9c95-45aa-ab0c-238d22513464 (mock-model): Completed\ndelegation depth limit is 2 levels below the top session"
+      ]
+    },
+    {
+      "pid": 62037,
+      "state_after_cleanup": "gone",
+      "prompts": [
+        "mock:delegate mock-model DEPTH_THREE_REFUSED"
+      ]
+    }
+  ],
+  "capacity-verified": [
+    {
+      "pid": 71736,
+      "state_after_cleanup": "Z",
+      "prompts": [
+        "E1 CAP ROOT",
+        "[Nori delegation result]\nChild session b6f2c839-65b4-4218-972a-94c8d2f1cde6 (mock-model) for parent session a4c529af-6f4d-47e3-af10-6b9d4d835cf7 (mock-model): Completed\nE1 parent-or-same-kind answerPermission granted with option: allow",
+        "[Nori delegation result]\nChild session 68f8893e-3459-46b9-8d42-24bc0dbdd9fa (mock-model) for parent session a4c529af-6f4d-47e3-af10-6b9d4d835cf7 (mock-model): Completed\nE1 parent-or-same-kind answer"
+      ]
+    },
+    {
+      "pid": 72298,
+      "state_after_cleanup": "gone",
+      "prompts": [
+        "mock:request-permission:E1-cap-holder"
+      ]
+    },
+    {
+      "pid": 75011,
+      "state_after_cleanup": "gone",
+      "prompts": [
+        "CAP_REUSED_AFTER_COMPLETION"
+      ]
+    }
+  ],
+  "close": [
+    {
+      "pid": 80532,
+      "state_after_cleanup": "gone",
+      "prompts": [
+        "E1 CLOSE ROOT"
+      ]
+    },
+    {
+      "pid": 80721,
+      "state_after_cleanup": "gone",
+      "prompts": [
+        "mock:delegate mock-model mock:stream-until-cancel"
+      ]
+    },
+    {
+      "pid": 80745,
+      "state_after_cleanup": "gone",
+      "prompts": [
+        "mock:stream-until-cancel"
+      ]
+    }
+  ]
+}

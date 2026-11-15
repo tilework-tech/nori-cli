@@ -1,0 +1,39 @@
+  6b9d4d835cf7 (mock-model): Completed
+  E1 parent-or-same-kind answerPermission granted with option: allow
+
+[2m• [0m[39m[49mChild 68f8893e-3459-46b9-8d42-24bc0dbdd9fa (mock-model) · parent a4c529af-6f4d-47e3-af10-6b9d4d835cf7 (mock-model)
+· running
+
+[2m• [0m[39m[49mChild 68f8893e-3459-46b9-8d42-24bc0dbdd9fa (mock-model) · parent a4c529af-6f4d-47e3-af10-6b9d4d835cf7 (mock-model)
+· completed
+E1 parent-or-same-kind answer
+
+[38;5;1m■ ACP agent command channel closed
+
+
+[1;2m[39m› [0m[39m[49m[Nori delegation result]
+  Child session 68f8893e-3459-46b9-8d42-24bc0dbdd9fa (mock-model) for parent session a4c529af-6f4d-47e3-af10-
+  6b9d4d835cf7 (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+
+[2m• [0m[39m[49mDelegation continuation received: [Nori delegation result]
+  Child session 68f8893e-3459-46b9-8d42-24bc0dbdd9fa (mock-model) for parent session a4c529af-6f4d-47e3-af10-
+  6b9d4d835cf7 (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+  [2m1 ready
+
+[0m[39m[49m  [1mSessions 3 · 1 ready[0;2m[39m[49m  tab: waiting only · type to search
+
+[0m[39m[49m  [1mAll[0m[39m[49m  [38;5;8mwaiting on you
+
+[39m  [1m [0m[39m[49m [1mSession[0m[39m[49m                                                                   [1mAgent[0m[39m[49m           [1mStatus
+[0m[39m[49m  [38;5;2m›[39m ○ E1 CAP ROOT (current)                                                   Mock ACP        ready
+    [38;5;8mE1 parent-or-same-kind answer
+[39m    [38;5;8m├─ · (parent a4c529af) mock:request-permission:E1-cap-holder[39m              Mock ACP        [38;5;8mclosed
+[39m    [38;5;8m│  closed
+[39m    [38;5;8m└─ · (parent a4c529af) CAP_REUSED_AFTER_COMPLETION[39m                        Mock ACP        [38;5;8mclosed
+[39m    [38;5;8m   closed
+
+[39m  [38;5;2m↑↓[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mopen  [38;5;2mctrl+d[39m [38;5;8mclose  [38;5;2mtab[39m [38;5;8mwaiting on you  [38;5;2mesc[39m [38;5;8mclose

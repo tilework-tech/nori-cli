@@ -1,0 +1,40 @@
+  d671b3c470d6 (mock-model): Completed
+  Delegation continuation received: [Nori delegation result]
+  Child session e6b993e9-6a4c-4f8d-86aa-2b3a046be5a2 (mock-model) for parent session 98ae7fca-4540-4156-92b1-
+  2881e86edaba (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+• Child 2a749d80-9c95-45aa-ab0c-238d22513464 (mock-model) · parent 2715245d-5720-400c-acc8-d671b3c470d6 (mock-model)
+· running
+
+• Child 2a749d80-9c95-45aa-ab0c-238d22513464 (mock-model) · parent 2715245d-5720-400c-acc8-d671b3c470d6 (mock-model)
+· completed
+Delegation continuation received: [Nori delegation result]
+Child session 30a1b5e0-5bc9-482b-bf41-47fd46a44b6a (mock-model) for parent session 2a749d80-9c95-45aa-ab0c-238d22513464
+(mock-model): Completed
+delegation depth limit is 2 levels below the top session
+
+
+› [Nori delegation result]
+  Child session 2a749d80-9c95-45aa-ab0c-238d22513464 (mock-model) for parent session 2715245d-5720-400c-acc8-
+  d671b3c470d6 (mock-model): Completed
+  Delegation continuation received: [Nori delegation result]
+  Child session 30a1b5e0-5bc9-482b-bf41-47fd46a44b6a (mock-model) for parent session 2a749d80-9c95-45aa-ab0c-
+  238d22513464 (mock-model): Completed
+  delegation depth limit is 2 levels below the top session
+
+
+• Delegation continuation received: [Nori delegation result]
+  Child session 2a749d80-9c95-45aa-ab0c-238d22513464 (mock-model) for parent session 2715245d-5720-400c-acc8-
+  d671b3c470d6 (mock-model): Completed
+  Delegation continuation received: [Nori delegation result]
+  Child session 30a1b5e0-5bc9-482b-bf41-47fd46a44b6a (mock-model) for parent session 2a749d80-9c95-45aa-ab0c-
+  238d22513464 (mock-model): Completed
+  delegation depth limit is 2 levels below the top session
+
+  1 ready
+
+
+› $ for skill listing
+
+                                                                                                ⎇ verify/e1-653-e9ff6232

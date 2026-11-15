@@ -1,0 +1,40 @@
+ Nori host  DISCONNECTED · ctrl+d to detach
+ mock-model · 5c56204d-2593-4555-be2b-72662d064bc5 · ready
+
+
+ Child session 503e47c4-5abd-4c7a-afa6-26a378014c21 (mock-model) of parent session 5c56204d-2593-4555-be2b-72662d064bc5
+ (mock-model) needs your answer. Switch to the child with Alt+Down.
+
+ › You
+ PARENT-DRAFT-MUST-STAY-HERE
+
+ attached mock answer
+
+ Child 503e47c4-5abd-4c7a-afa6-26a378014c21 (mock-model) · parent 5c56204d-2593-4555-be2b-72662d064bc5 (mock-model)
+ · completed
+ attached mock answerPermission granted with option: allow
+
+ › You
+ [Nori delegation result]
+ Child session 503e47c4-5abd-4c7a-afa6-26a378014c21 (mock-model) for parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model): Completed
+ attached mock answerPermission granted with option: allow
+
+ Delegation continuation received: [Nori delegation result]
+ Child session 503e47c4-5abd-4c7a-afa6-26a378014c21 (mock-model) for parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model): Completed
+ attached mock answerPermission granted with option: allow
+
+ Child fb65ef7f-07e2-4aba-af4a-6119b06b8e40 (mock-model) · parent 5c56204d-2593-4555-be2b-72662d064bc5 (mock-model)
+ · running
+
+ Child session fb65ef7f-07e2-4aba-af4a-6119b06b8e40 (mock-model) of parent session 5c56204d-2593-4555-be2b-72662d064bc5
+ (mock-model) needs your answer. Switch to the child with Alt+Down.
+
+ Connection lost. Reconnecting… WebSocket protocol error: Connection reset without closing handshake
+
+ Host restarted; sessions were lost. Re-run nori attach.
+
+› DRAFT-SURVIVES-HOST-RESTART
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

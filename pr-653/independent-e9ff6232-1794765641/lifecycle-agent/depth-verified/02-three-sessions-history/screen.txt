@@ -1,0 +1,40 @@
+· completed
+Delegation continuation received: [Nori delegation result]
+Child session e6b993e9-6a4c-4f8d-86aa-2b3a046be5a2 (mock-model) for parent session 98ae7fca-4540-4156-92b1-2881e86edaba
+(mock-model): Completed
+E1 parent-or-same-kind answer
+
+
+› [Nori delegation result]
+  Child session 98ae7fca-4540-4156-92b1-2881e86edaba (mock-model) for parent session 2715245d-5720-400c-acc8-
+  d671b3c470d6 (mock-model): Completed
+  Delegation continuation received: [Nori delegation result]
+  Child session e6b993e9-6a4c-4f8d-86aa-2b3a046be5a2 (mock-model) for parent session 98ae7fca-4540-4156-92b1-
+  2881e86edaba (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+
+• Delegation continuation received: [Nori delegation result]
+  Child session 98ae7fca-4540-4156-92b1-2881e86edaba (mock-model) for parent session 2715245d-5720-400c-acc8-
+  d671b3c470d6 (mock-model): Completed
+  Delegation continuation received: [Nori delegation result]
+  Child session e6b993e9-6a4c-4f8d-86aa-2b3a046be5a2 (mock-model) for parent session 98ae7fca-4540-4156-92b1-
+  2881e86edaba (mock-model): Completed
+  E1 parent-or-same-kind answer
+
+  1 ready
+
+  Sessions 3 · 1 ready  tab: waiting only · type to search
+
+  All  waiting on you
+
+    Session                                                                   Agent           Status
+  › ○ E1 DEPTH ROOT (current)                                                 Mock ACP        ready
+    E1 parent-or-same-kind answer
+    └─ · (parent 2715245d) mock:delegate mock-model DEPTH_TWO_LEAF            Mock ACP        closed
+       closed
+       └─ · (parent 98ae7fca) DEPTH_TWO_LEAF                                  Mock ACP        closed
+          closed
+
+  ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close
+

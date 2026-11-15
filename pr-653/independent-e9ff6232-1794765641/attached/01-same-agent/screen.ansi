@@ -1,0 +1,40 @@
+[1m Nori host  [0m[38;5;2m[49mCONTROLLING[39m
+[2m mock-model · 5c56204d-2593-4555-be2b-72662d064bc5 · ready
+
+[0m[39m[49m [1m› You[0m[39m[49m
+ Parent attached identity
+
+ attached mock answer
+
+ [38;5;6mChild 58e59ce3-a33d-4e08-8fc8-a7574c136b7c (mock-model) · parent 5c56204d-2593-4555-be2b-72662d064bc5 (mock-model)
+[39m [38;5;6m· running
+
+[39m [38;5;6mChild 58e59ce3-a33d-4e08-8fc8-a7574c136b7c (mock-model) · parent 5c56204d-2593-4555-be2b-72662d064bc5 (mock-model)
+[39m [38;5;6m· completed
+[39m [38;5;6mattached mock answer
+
+[39m [1m› You
+[0m[39m[49m [Nori delegation result]
+ Child session 58e59ce3-a33d-4e08-8fc8-a7574c136b7c (mock-model) for parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model): Completed
+ attached mock answer
+
+ Delegation continuation received: [Nori delegation result]
+ Child session 58e59ce3-a33d-4e08-8fc8-a7574c136b7c (mock-model) for parent session 5c56204d-2593-4555-be2b-
+ 72662d064bc5 (mock-model): Completed
+ attached mock answer
+
+
+
+
+
+
+
+
+
+
+
+
+[1m›[0m[39m[49m [2mSend a prompt[0m[39m[49m
+
+   [1malt+s[0m[39m[49m sessions    [1malt+down[0m[39m[49m next waiting    [1malt+t[0m[39m[49m take control    [1mctrl+d[0m[39m[49m detach    [1m/delegate[0m[39m[49m delegate task
