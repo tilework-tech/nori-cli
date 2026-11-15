@@ -789,7 +789,11 @@ fn host_list_truncates_tty_title_without_losing_piped_title() {
         .lines()
         .find(|line| line.contains(&id))
         .expect("session row");
-    assert!(row.trim_end().ends_with('…'), "{screen}");
+    assert!(row.contains("Long title") && row.contains('…'), "{screen}");
+    assert!(
+        row.trim_end().ends_with("ID column"),
+        "a cut title keeps its end: {screen}"
+    );
     assert!(!screen.contains("continuation text"), "{screen}");
 }
 

@@ -12,16 +12,32 @@ const CHILD_LINE_PREFIX: &str = "Child session: ";
 /// What a session without a title or task is called.
 pub const UNTITLED_SESSION_NAME: &str = "new session";
 
+/// The first non-empty line of a session's task or title, whole.
+pub fn session_full_name(text: &str) -> Option<String> {
+    text.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_owned)
+}
+
 /// A short readable name for a session, taken from the first non-empty line of
-/// its task or title.
+/// its task or title. A long line keeps its start and end, so sessions whose
+/// names share a long prefix still read apart.
 pub fn session_display_name(text: &str) -> Option<String> {
-    let line = text.lines().map(str::trim).find(|line| !line.is_empty())?;
-    let limit = usize::try_from(NAME_CHARS).unwrap_or_default();
-    if line.chars().count() <= limit {
-        return Some(line.to_owned());
+    session_full_name(text).map(|line| shorten_name(&line, NAME_CHARS))
+}
+
+/// `name` in at most `limit` characters, cut in the middle with `…`.
+pub fn shorten_name(name: &str, limit: i32) -> String {
+    let limit = usize::try_from(limit).unwrap_or_default();
+    let count = name.chars().count();
+    if count <= limit {
+        return name.to_owned();
     }
-    let cut: String = line.chars().take(limit - 1).collect();
-    Some(format!("{}…", cut.trim_end()))
+    let room = limit.saturating_sub(1);
+    let head: String = name.chars().take(room.div_ceil(2)).collect();
+    let tail: String = name.chars().skip(count - room / 2).collect();
+    format!("{}…{}", head.trim_end(), tail.trim_start())
 }
 
 /// The readable name of a delegated child.
@@ -50,7 +66,7 @@ pub fn delegation_result_prompt(delegation: &Delegation) -> String {
     let header = format!(
         "{DELEGATION_RESULT_HEADER} from {} · {} · {}",
         delegation.agent,
-        delegation_child_name(delegation),
+        session_full_name(&delegation.task).unwrap_or_else(|| UNTITLED_SESSION_NAME.to_owned()),
         delegation_status_word(delegation.status),
     );
     let result = delegation.result.as_deref().unwrap_or_default();
@@ -77,6 +93,29 @@ pub fn delegation_result_summary(prompt: &str) -> Option<&str> {
     ));
     (declined || lines.next()?.starts_with(CHILD_LINE_PREFIX)).then_some(summary)
 }
+
+/// The parts of a result prompt's readable summary line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DelegationResultParts<'a> {
+    pub agent: &'a str,
+    pub name: &'a str,
+    pub status: &'a str,
+}
+
+/// The agent, child name and status a result prompt names, or `None` for
+/// other text.
+pub fn delegation_result_parts(prompt: &str) -> Option<DelegationResultParts<'_>> {
+    let rest = delegation_result_summary(prompt)?.strip_prefix("from ")?;
+    let (agent, rest) = rest.split_once(PARTS_SEPARATOR)?;
+    let (name, status) = rest.rsplit_once(PARTS_SEPARATOR)?;
+    Some(DelegationResultParts {
+        agent,
+        name,
+        status,
+    })
+}
+
+const PARTS_SEPARATOR: &str = " · ";
 
 #[cfg(test)]
 mod tests {
@@ -143,6 +182,53 @@ mod tests {
             None
         );
         assert_eq!(delegation_result_summary("Review the parser"), None);
+    }
+
+    #[test]
+    fn long_names_keep_their_start_and_end_so_shared_prefixes_stay_apart() {
+        let parent =
+            session_display_name("shared prefix for the parser review: parent side").unwrap();
+        let child = session_display_name(
+            "shared prefix for the parser review: child side mock:request-permission:z",
+        )
+        .unwrap();
+        assert!(parent.chars().count() <= 40, "{parent}");
+        assert!(child.chars().count() <= 40, "{child}");
+        assert!(parent.starts_with("shared prefix"), "{parent}");
+        assert!(parent.ends_with("parent side"), "{parent}");
+        assert!(child.ends_with("permission:z"), "{child}");
+        assert_eq!(
+            session_display_name("Review the parser").as_deref(),
+            Some("Review the parser")
+        );
+    }
+
+    #[test]
+    fn a_result_header_names_the_child_by_its_whole_task_line() {
+        let task = "mock:request-permission:review-the-lexer-tokens and the parser too";
+        let prompt = delegation_result_prompt(&delegation(
+            DelegationStatus::Completed,
+            task,
+            Some("Looks good."),
+        ));
+        let parts = delegation_result_parts(&prompt).expect("a result prompt");
+        assert_eq!(parts.agent, "codex");
+        assert_eq!(parts.name, task);
+        assert_eq!(parts.status, "done");
+        let dotted = delegation_result_prompt(&delegation(
+            DelegationStatus::Failed,
+            "lint · then test",
+            Some("Agent process exited unexpectedly."),
+        ));
+        assert_eq!(
+            delegation_result_parts(&dotted),
+            Some(DelegationResultParts {
+                agent: "codex",
+                name: "lint · then test",
+                status: "failed",
+            })
+        );
+        assert_eq!(delegation_result_parts("Review the parser"), None);
     }
 
     #[test]

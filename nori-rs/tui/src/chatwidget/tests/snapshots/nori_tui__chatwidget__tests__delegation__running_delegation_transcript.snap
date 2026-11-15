@@ -2,7 +2,7 @@
 source: tui/src/chatwidget/tests/delegation.rs
 expression: transcript
 ---
-↳ mock-model delegated to mock-model-alt · Write snapshot tests for TreeRow · working
+↳ mock-model delegated to mock-model-alt · Write snapshot tests for TreeRow · started
   brief Write snapshot tests for TreeRow
         Cover depths 0 to 3. Do not touch picker.rs.
   child session 00000000-0000-0000-0000-000000000002

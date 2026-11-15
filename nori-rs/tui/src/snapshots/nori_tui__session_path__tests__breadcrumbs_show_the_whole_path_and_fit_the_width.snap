@@ -1,24 +1,24 @@
 ---
 source: tui/src/session_path.rs
-expression: "render(&[(\"three levels\", 120, breadcrumb_line(&three, KEY, 120)),\n(\"three levels\", 78, breadcrumb_line(&three, KEY, 78)),\n(\"shared prefix\", 120, breadcrumb_line(&shared, KEY, 120)),\n(\"shared prefix\", 78, breadcrumb_line(&shared, KEY, 78)),\n(\"long names\", 118, breadcrumb_line(&long, KEY, 118)),\n(\"long names\", 78, breadcrumb_line(&long, KEY, 78)),\n(\"long names\", 40, breadcrumb_line(&long, KEY, 40)),])"
+expression: "render(&[(\"three levels\", 120, breadcrumb_line(&three, \"\", KEY, 120)),\n(\"three levels\", 78, breadcrumb_line(&three, \"\", KEY, 78)),\n(\"shared prefix\", 120, breadcrumb_line(&shared, \"\", KEY, 120)),\n(\"shared prefix\", 78, breadcrumb_line(&shared, \"\", KEY, 78)),\n(\"long names\", 118, breadcrumb_line(&long, \"\", KEY, 118)),\n(\"long names\", 78, breadcrumb_line(&long, \"\", KEY, 78)),\n(\"long names\", 40, breadcrumb_line(&long, \"\", KEY, 40)),])"
 ---
 three levels @120
 claude-code · Ship tree-row picker › codex · Port picker › pi · Write snapshot tests · alt + up to parent
 
 three levels @78
-claude-code · Ship tree-row p… › … › pi · Write snapshot… · alt + up to parent
+claude-code · Ship…icker › … › pi · Write snapshot tests · alt + up to parent
 
 shared prefix @120
-mock-model · mock:delegate mock-model inspect… › mock-model-alt · mock:delegate mock-model inspect… · alt + up to parent
+mock-model · mock:del…e parser › mock-model-alt · mock:delegate mock-model inspect the parser again · alt + up to parent
 
 shared prefix @78
-mock-model · mock:delega… › mock-model-alt · mock:delega… · alt + up to parent
+mock:delegate…t the parser › mock:delegate mock-model inspect the parser again
 
 long names @118
-mock-model · A parent sessio… › mock-model-alt · A child with a… › mock-model · A grandchild wh… · alt + up to parent
+mock-model · A parent…e indeed › … › mock-model · A grandchild whose title is also very long here · alt + up to parent
 
 long names @78
-mock-model · A parent se… › … › mock-model · A grandchil… · alt + up to parent
+A parent ses…itle indeed › … › A grandchild whose title is also very long here
 
 long names @40
-A par… › … › A gra… · alt + up to parent
+A…d › … › A grandchild w…very long here

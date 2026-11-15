@@ -114,11 +114,12 @@ pub(super) fn render(
     composer.render_ref(input, buf);
 }
 
-/// A readable name for a listed session.
+/// A listed session's name, whole: the lines that show it fit it to the
+/// terminal width.
 fn row_name(row: &super::state::SessionRow) -> String {
     row.title
         .as_deref()
-        .and_then(nori_protocol::session_display_name)
+        .and_then(nori_protocol::session_full_name)
         .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.to_string())
 }
 
@@ -133,15 +134,14 @@ fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
     let Some(current) = row(id) else {
         return Line::from(format!(" session · {id}").dim());
     };
-    let status = format!(" · {}", crate::session_status::status_label(current.status));
-    if current.delegating_parent().and_then(row).is_none() {
-        return Line::from(vec![
-            " ".into(),
-            format!("{} · ", current.agent).dim(),
-            row_name(current).bold(),
-            status.dim(),
-        ]);
-    }
+    let top_level = current.delegating_parent().and_then(row).is_none();
+    // A top-level session speaks for its family, as in the session lists.
+    let shown = if top_level {
+        current.family_status.unwrap_or(current.status)
+    } else {
+        current.status
+    };
+    let status = format!(" · {}", crate::session_status::status_label(shown));
     let mut path = vec![current];
     while let Some(parent) = path
         .last()
@@ -159,16 +159,13 @@ fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
             name: row_name(row),
         })
         .collect();
-    let key = if state.parent_binding.is_none() {
+    let key = if top_level || state.parent_binding.is_none() {
         String::new()
     } else {
         format!(" · {} parent", state.parent_binding.as_str())
     };
-    let mut line = crate::session_path::breadcrumb_line(
-        &path,
-        &format!("{status}{key}"),
-        width.saturating_sub(1),
-    );
+    let mut line =
+        crate::session_path::breadcrumb_line(&path, &status, &key, width.saturating_sub(1));
     line.spans.insert(0, " ".into());
     line
 }
@@ -264,14 +261,16 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
                 stream: MessageStream::User,
                 text,
                 ..
-            } if nori_protocol::delegation_result_summary(text).is_some() => {
-                let summary = nori_protocol::delegation_result_summary(text).unwrap_or_default();
-                lines.push(Line::from(vec![
-                    "› ".bold(),
-                    "delegation result ".dim(),
-                    summary.to_owned().into(),
-                    " · delivered to this session".dim(),
-                ]));
+            } if nori_protocol::delegation_result_parts(text).is_some() => {
+                let mut line = Line::from(vec!["› ".bold()]);
+                line.spans.extend(
+                    crate::delegation::delivered_result_spans(
+                        text,
+                        usize::from(history_area.width).saturating_sub(2),
+                    )
+                    .unwrap_or_default(),
+                );
+                lines.push(line);
             }
             Part::Message { stream, text, .. } => {
                 match stream {
@@ -313,6 +312,12 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
             Part::Notice(notice) => {
                 lines.extend(crate::wrapping::word_wrap_lines(
                     [Line::from(notice.clone().cyan())],
+                    usize::from(history_area.width),
+                ));
+            }
+            Part::Ended(message) => {
+                lines.extend(crate::wrapping::word_wrap_lines(
+                    [Line::from(state.end_notice(id, message.as_deref()).cyan())],
                     usize::from(history_area.width),
                 ));
             }

@@ -53,27 +53,33 @@ Path: @/nori-rs/tui/src/attach
   selected conversation or session list. Watchers receive the same content and
   permissions but must take control before sending mutations.
 - The identity line under the header shows the selected session as
-  `<agent> · <name> · <status>`, where the name is the session title through
-  `nori_protocol::session_display_name`, else
-  `nori_protocol::UNTITLED_SESSION_NAME`. Inside a delegated child (a row
-  whose `source` is `session`; forks get no breadcrumb) whose parent is
-  listed, it becomes the full-path breadcrumb from the top-level session,
-  built by the shared [`session_path::breadcrumb_line`](../session_path.rs)
-  with the tail ` · <status> · <parent_session key> parent` (Alt+Up by
-  default). The walk follows listed delegating parents and stops at a repeat.
+  `<agent> · <name> · <status>`, where the name is the title's whole first
+  line through `nori_protocol::session_full_name`, else
+  `nori_protocol::UNTITLED_SESSION_NAME`. A top-level session shows its
+  `family_status` when present, as in the session lists. Inside a delegated
+  child (a row whose `source` is `session`; forks get no breadcrumb) whose
+  parent is listed, it becomes the full-path breadcrumb from the top-level
+  session with its own status and the key ` · <parent_session key> parent`
+  (Alt+Up by default). Both forms go through the shared
+  [`session_path::breadcrumb_line`](../session_path.rs) (a top-level session
+  is a one-step path without a key), so long names are fitted to the width:
+  the key gives way before the current name is cut, and names are cut in the
+  middle. The walk follows listed delegating parents and stops at a repeat.
 - A waiting line (the row under the identity line) names the next session,
   other than the selected one, whose own status is `waiting on you`: under its
   parent when the parent is listed, with `(+N more)` and the jump key
   (`AttachState.jump_binding`, set from the configured `next_waiting_session`
   binding). It uses the shared `session_path::waiting_line` without request
-  text, and the row stays empty when nothing waits.
+  text, passing whole names that it cuts in the middle by width, and the row
+  stays empty when nothing waits.
 - The session list is tree-ordered: [AttachState](state.rs) runs the listed
   `(session_id, parent)` pairs through the shared picker `tree_order` and gives
   each item its depth, and the picker is built with `tree_column("title")`.
   Tree guides and the `(current)` badge therefore sit inside TITLE while ID,
   AGENT, STATUS, and AGE stay aligned at every depth. Status words take the
   shared `session_status::status_tone` colors (waiting on you amber, working
-  cyan, ready green, failed red; starting, closed, and done muted). A row at
+  cyan, ready green, failed red, done in the default color; starting and
+  closed muted). A row at
   depth 0 shows the host's `family_status` when present, so a parent reads
   `waiting on you` while anything under it does; older hosts omit the field
   and the row shows its own status. A row without a title reads
@@ -93,12 +99,19 @@ Path: @/nori-rs/tui/src/attach
   empty `DelegationHints` and shows no key hints. An `awaiting_approval` change
   adds no part; the approval prompt covers it.
 - Child permissions stay in the child's conversation. The configured
-  `next_waiting_session` binding (Alt+Down by default) navigates there. If the
-  cached list has no waiting target, a connected terminal retains the navigation
-  action while refreshing the list, then selects a newly discovered waiting
-  session from the response. Later input or navigation, list errors, and
-  disconnection cancel that pending action. The response also requires an empty
-  composer, including after paste, so a draft begun in the parent stays there.
+  `next_waiting_session` binding (Alt+Down by default) navigates there, even
+  with a draft in the composer, as in the local TUI. With nothing waiting in
+  the cached list, a draft lets the key pass to the composer; an empty
+  composer on a connected terminal retains the navigation action while
+  refreshing the list, then selects a newly discovered waiting session from
+  the response. Later input or navigation, list errors, and disconnection
+  cancel that pending action, and the response jumps only if the composer is
+  still empty, including after paste.
+- Unsent drafts are kept per session. Every switch (next waiting, parent,
+  picker Enter, and the session `/new` creates) goes through
+  `Runtime::open_session`, which parks the composer text with the session it
+  was typed in and restores the target's own draft, so text never follows the
+  user into another session. Drafts live only in this terminal's memory.
   Parent notices name the child and parent readably (see the
   [harness](../../../harness/docs.md#delegation-between-managed-sessions)).
   The `parent_session` binding moves the selection from a delegated child
@@ -106,9 +119,18 @@ Path: @/nori-rs/tui/src/attach
   cached list, closing the list and resubscribing; elsewhere it does nothing.
   Results return through the parent's ordinary event stream without a terminal
   review step. The echoed result prompt (a user message that
-  `nori_protocol::delegation_result_summary` recognizes) renders as one
-  `› delegation result <summary> · delivered to this session` line, since the
-  result block already shows the text.
+  `nori_protocol::delegation_result_parts` recognizes) renders as one
+  `› delegation result from <agent> · <name> · <status> · delivered to this
+  session` line through the shared `delegation::delivered_result_spans`
+  (the delivered suffix gives way first, then the name is cut in the middle),
+  since the result block already shows the text.
+- A session end is stored as `Part::Ended` with the host's message, and its
+  line is worded at draw time from the row's current status, because the host
+  may report `done` after the end event. A host message is shown as sent.
+  Otherwise a delegated child reads `This child finished its task · <parent
+  key> to its parent` when done and `This child session ended · …` otherwise
+  (just a period when the key is unbound); a top-level session reads
+  `Session ended. Use /new to start another session.`
 
 ### Things to Know
 

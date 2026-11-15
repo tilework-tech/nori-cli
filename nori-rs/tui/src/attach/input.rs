@@ -23,10 +23,11 @@ impl Runtime {
         if key.code == KeyCode::Char('d') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return false;
         }
-        if self.composer.is_empty()
-            && crate::nori::hotkey_match::matches_binding(&self.next_waiting_binding, &key)
+        // A draft stays with its session, so the jump never loses it. With
+        // nothing waiting, a typed draft keeps the key for the composer.
+        if crate::nori::hotkey_match::matches_binding(&self.next_waiting_binding, &key)
+            && (self.next_waiting_session(self.composer.is_empty()) || self.composer.is_empty())
         {
-            self.next_waiting_session(true);
             return true;
         }
         if crate::nori::hotkey_match::matches_binding(&self.state.parent_binding, &key)
@@ -43,12 +44,7 @@ impl Runtime {
                 .iter()
                 .any(|row| row.session_id == parent)
         {
-            self.state.selected = Some(parent);
-            self.state.list_open = false;
-            self.state.scroll = 0;
-            self.state.notice = None;
-            self.state.replay_error = None;
-            self.subscribe_selected();
+            self.open_session(parent);
             return true;
         }
         if crate::nori::hotkey_match::matches_binding(&self.session_list_binding, &key) {
@@ -137,7 +133,8 @@ impl Runtime {
         true
     }
 
-    pub(super) fn next_waiting_session(&mut self, refresh_if_missing: bool) {
+    /// Returns whether a waiting session was brought on screen.
+    pub(super) fn next_waiting_session(&mut self, refresh_if_missing: bool) -> bool {
         let rows = &self.state.sessions;
         let start = rows
             .iter()
@@ -151,16 +148,14 @@ impl Runtime {
             })
             .map(|row| row.session_id.clone());
         if let Some(id) = target {
-            self.state.selected = Some(id);
-            self.state.list_open = false;
-            self.state.scroll = 0;
-            self.state.notice = None;
-            self.state.replay_error = None;
-            self.subscribe_selected();
-        } else if refresh_if_missing && self.state.connected {
+            self.open_session(id);
+            return true;
+        }
+        if refresh_if_missing && self.state.connected {
             self.next_waiting_after_refresh = true;
             self.refresh_list();
         }
+        false
     }
 
     fn delegation_key(&mut self, key: KeyEvent) -> bool {
@@ -212,12 +207,7 @@ impl Runtime {
             _ => return false,
         };
         if let PickerOutcome::Selected(id) = self.state.picker.handle(action) {
-            self.state.selected = Some(id);
-            self.state.list_open = false;
-            self.state.scroll = 0;
-            self.state.notice = None;
-            self.state.replay_error = None;
-            self.subscribe_selected();
+            self.open_session(id);
         }
         true
     }

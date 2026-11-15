@@ -144,6 +144,14 @@ fn running_delegation_is_one_line_naming_child_agent_and_status() {
         transcript.contains("Cover depths 0 to 3. Do not touch picker.rs."),
         "the transcript view shows the whole brief: {transcript}"
     );
+    let card = screen
+        .lines()
+        .find(|line| line.contains("mock-model-alt"))
+        .unwrap_or_else(|| panic!("card missing: {screen}"));
+    assert!(
+        card.contains(" · started") && !card.contains("working"),
+        "a card keeps a word that stays true once the child moves on: {screen}"
+    );
     insta::assert_snapshot!("running_delegation_line", screen);
     insta::assert_snapshot!("running_delegation_transcript", transcript);
 }
@@ -288,6 +296,42 @@ fn delivered_result_reads_as_a_short_line_in_the_parent() {
     assert!(screen.contains("mock-model-alt"), "{screen}");
     assert!(transcript.contains("Found two bugs."), "{transcript}");
     insta::assert_snapshot!("delivered_delegation_result", screen);
+}
+
+#[test]
+fn a_delivered_result_fits_one_row_at_80_columns() {
+    let (mut chat, mut rx) = delegating_parent();
+    let task = "mock:request-permission:review-the-lexer-tokens";
+    chat.on_task_started();
+    chat.handle_client_event(crate::presentation::ClientEvent::MessageDelta(
+        crate::presentation::MessageDelta {
+            stream: crate::presentation::MessageStream::User,
+            delta: nori_protocol::delegation_result_prompt(
+                &serde_json::from_value::<nori_protocol::Delegation>(serde_json::json!({
+                    "request_id":"delegation-one","parent_id":PARENT,"child_id":CHILD,
+                    "parent_agent":"mock-model","agent":"mock-model-alt","task":task,
+                    "depth":1,"status":"completed","result":"Found two bugs."
+                }))
+                .unwrap(),
+            ),
+            message_id: Some("delegation-result".into()),
+        },
+    ));
+    chat.on_task_complete(Some("Thanks".into()));
+    let mut rows = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::InsertHistoryCell(cell) = event {
+            let text = lines_to_single_string(&cell.display_lines(78));
+            if text.contains("delegation result") {
+                rows = text.lines().map(str::trim_end).map(str::to_owned).collect();
+            }
+        }
+    }
+    let rows: Vec<String> = rows.into_iter().filter(|row| !row.is_empty()).collect();
+    assert_eq!(rows.len(), 1, "{rows:#?}");
+    assert!(rows[0].contains("mock:request"), "{}", rows[0]);
+    assert!(rows[0].contains("lexer-tokens"), "{}", rows[0]);
+    assert!(rows[0].contains("· done"), "{}", rows[0]);
 }
 
 #[test]

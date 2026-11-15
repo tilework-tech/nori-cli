@@ -110,11 +110,11 @@ pub(super) fn format_table(listing: &Value, width: Option<usize>, color: bool) -
             .filter(|_| depth == 0)
             .unwrap_or_else(|| row["status"].as_str().unwrap_or("-"));
         let status = status_key.replace('_', " ");
-        let title = format!("{guide}{}", clean("title"));
+        let name = clean("title");
         let title = if row["parent"].is_string() && width.is_none() {
-            format!("{title}  (parent {})", clean("parent"))
+            format!("{guide}{name}  (parent {})", clean("parent"))
         } else {
-            title
+            format!("{guide}{name}")
         };
         let seconds = row["age_seconds"].as_i64().unwrap_or(0).max(0);
         let age = if seconds < 60 {
@@ -137,9 +137,18 @@ pub(super) fn format_table(listing: &Value, width: Option<usize>, color: bool) -
             "{id:<id_cells$}  {agent:<agent_cells$}  {status:<status_cells$}  {age:>age_cells$}  "
         );
         let prefix_width = prefix.width();
+        // The tree guide stays whole; the name is cut in the middle so titles
+        // that share a long prefix still read apart.
         let title = width.map_or_else(
             || title.clone(),
-            |width| truncate(&title, width.saturating_sub(prefix_width)),
+            |width| {
+                let room = width.saturating_sub(prefix_width);
+                if room > guide.width() {
+                    format!("{guide}{}", truncate_middle(&name, room - guide.width()))
+                } else {
+                    truncate(&title, room)
+                }
+            },
         );
         let status = format!("{status:<status_cells$}");
         let status = if color {
@@ -148,6 +157,9 @@ pub(super) fn format_table(listing: &Value, width: Option<usize>, color: bool) -
                 "waiting_on_you" => status.yellow().to_string(),
                 "working" => status.cyan().to_string(),
                 "ready" => status.green().to_string(),
+                // A child that finished its task reads apart from one the
+                // user closed.
+                "done" => status,
                 _ => status.dimmed().to_string(),
             }
         } else {
@@ -182,6 +194,35 @@ fn truncate(value: &str, width: usize) -> String {
         end = next;
     }
     format!("{}…", &value[..end])
+}
+
+/// `value` in at most `width` cells, cut in the middle with `…` on grapheme
+/// boundaries.
+fn truncate_middle(value: &str, width: usize) -> String {
+    if value.width() <= width {
+        return value.into();
+    }
+    if width == 0 {
+        return String::new();
+    }
+    let room = width - 1;
+    let graphemes: Vec<&str> = value.graphemes(true).collect();
+    let mut head = String::new();
+    for grapheme in &graphemes {
+        if head.width() + grapheme.width() > room.div_ceil(2) {
+            break;
+        }
+        head.push_str(grapheme);
+    }
+    let mut tail: Vec<&str> = Vec::new();
+    for grapheme in graphemes.iter().rev() {
+        if head.width() + tail.concat().width() + grapheme.width() > room {
+            break;
+        }
+        tail.push(grapheme);
+    }
+    tail.reverse();
+    format!("{}…{}", head.trim_end(), tail.concat().trim_start())
 }
 
 #[cfg(test)]
@@ -455,6 +496,44 @@ mod tests {
                 codes_before(row, word).iter().any(|c| c == code),
                 "{word} uses color {code}: {colored:?}"
             );
+        }
+    }
+
+    #[test]
+    fn done_reads_apart_from_closed_which_stays_dim() {
+        let listing = json!({"sessions":[
+            {"session_id":"a","agent":"m","status":"done","title":"a"},
+            {"session_id":"b","agent":"m","status":"closed","title":"b"}
+        ]});
+        let colored = format_table(&listing, Some(120), true);
+        let rows = colored.lines().skip(1).collect::<Vec<_>>();
+        assert!(rows[0].contains("done"), "{colored:?}");
+        assert!(
+            !rows[0].contains("\u{1b}[2m"),
+            "done is not dimmed: {colored:?}"
+        );
+        assert!(
+            rows[1].contains("\u{1b}[2mclosed"),
+            "closed stays dim: {colored:?}"
+        );
+    }
+
+    #[test]
+    fn titles_sharing_a_long_prefix_keep_their_ends() {
+        let listing = json!({"sessions":[
+            {"session_id":"11111111-1111-1111-1111-111111111111","agent":"mock-model","status":"ready",
+             "title":"shared prefix for the parser review: parent side and a long tail of words"},
+            {"session_id":"22222222-2222-2222-2222-222222222222","agent":"mock-model","status":"ready",
+             "title":"shared prefix for the parser review: child side and a long tail of words z"}
+        ]});
+        let rendered = format_table(&listing, Some(80), false);
+        let rows = rendered.lines().skip(1).collect::<Vec<_>>();
+        assert!(rows[0].starts_with("11111111"), "{rendered}");
+        assert!(rows[0].trim_end().ends_with("of words"), "{rendered}");
+        assert!(rows[1].trim_end().ends_with("of words z"), "{rendered}");
+        for row in &rows {
+            assert!(row.width() <= 80, "{rendered}");
+            assert!(row.contains("shared pre"), "{rendered}");
         }
     }
 

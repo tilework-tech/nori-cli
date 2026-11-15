@@ -56,6 +56,8 @@ pub(super) enum Part {
     Plan(PlanSnapshot),
     Notice(String),
     Delegation(nori_protocol::Delegation),
+    /// Where the session ended, with the host's message when it sent one.
+    Ended(Option<String>),
 }
 
 pub(super) struct Permission {
@@ -198,6 +200,7 @@ impl AttachState {
                     .iter()
                     .map(|part| match part {
                         Part::Message { text, .. } | Part::Notice(text) => text.clone(),
+                        Part::Ended(message) => self.end_notice(id, message.as_deref()),
                         Part::Tool(tool) => tool.title.clone(),
                         Part::Delegation(delegation) => delegation_cell(delegation)
                             .display_lines(u16::MAX)
@@ -244,6 +247,30 @@ impl AttachState {
     pub fn prompt(&self, id: &str, text: &str) -> anyhow::Result<Value> {
         self.require_control()?;
         Ok(json!({"session_id":id,"prompt":[{"type":"text","text":text}]}))
+    }
+
+    /// The line that ends session `id`'s history. A delegated child points
+    /// back to its parent and says whether it finished its task; the words
+    /// follow the session's current status, which the host may report after
+    /// the end itself.
+    pub fn end_notice(&self, id: &str, message: Option<&str>) -> String {
+        if let Some(message) = message {
+            return message.to_owned();
+        }
+        let row = self.sessions.iter().find(|row| row.session_id == id);
+        let Some(row) = row.filter(|row| row.delegating_parent().is_some()) else {
+            return "Session ended. Use /new to start another session.".into();
+        };
+        let ending = if row.status == nori_protocol::SessionStatus::Done {
+            "This child finished its task"
+        } else {
+            "This child session ended"
+        };
+        if self.parent_binding.is_none() {
+            format!("{ending}.")
+        } else {
+            format!("{ending} · {} to its parent", self.parent_binding.as_str())
+        }
     }
 
     pub fn show_notice(&mut self, message: impl Into<String>) {
@@ -346,11 +373,7 @@ impl AttachState {
                     .retain(|permission| permission.request_id != resolved.request_id);
             }
             SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
-                conversation
-                    .parts
-                    .push(Part::Notice(ended.message.unwrap_or_else(|| {
-                        "Session ended. Use /new to start another session.".into()
-                    })));
+                conversation.parts.push(Part::Ended(ended.message));
                 conversation.permissions.clear();
                 conversation.message_boundary = true;
             }

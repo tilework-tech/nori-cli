@@ -648,7 +648,7 @@ fn child_view_shows_breadcrumb_and_alt_up_returns_to_parent() {
 }
 
 #[test]
-fn long_names_leave_room_for_the_parent_key_in_the_breadcrumb() {
+fn long_names_keep_the_current_name_whole_before_the_parent_key() {
     let state = {
         let mut state = AttachState {
             connected: true,
@@ -668,7 +668,12 @@ fn long_names_leave_room_for_the_parent_key_in_the_breadcrumb() {
         .lines()
         .find(|line| line.contains("›"))
         .unwrap_or_else(|| panic!("breadcrumb missing:\n{rendered}"));
-    assert!(breadcrumb.ends_with("alt+up parent"), "{rendered}");
+    assert!(
+        breadcrumb.contains("› Verify every link in the generated changelog · waiting on you")
+            || breadcrumb
+                .contains("› mock-model-alt · Verify every link in the generated changelog"),
+        "{rendered}"
+    );
 }
 
 #[test]
@@ -995,18 +1000,14 @@ fn a_grandchild_breadcrumb_shows_the_path_from_its_top_level_session() {
         let rendered = screen_at(&viewing("grandchild-session"), width);
         let breadcrumb = rendered
             .lines()
-            .find(|line| line.contains("alt+up parent"))
+            .find(|line| line.contains("› mock-model · Write"))
             .unwrap_or_else(|| panic!("breadcrumb missing:\n{rendered}"));
         assert!(
             breadcrumb.starts_with(" mock-model · Ship"),
             "@{width}: {rendered}"
         );
         assert!(
-            breadcrumb.contains("› mock-model · Write"),
-            "@{width}: {rendered}"
-        );
-        assert!(
-            breadcrumb.ends_with("alt+up parent"),
+            breadcrumb.contains("› mock-model · Write snapshot tests · waiting on you"),
             "@{width}: {rendered}"
         );
     }
@@ -1031,4 +1032,209 @@ fn an_untitled_session_is_called_new_session_not_an_id() {
         "{rendered}"
     );
     assert!(!rendered.contains("24444c0e"), "{rendered}");
+}
+
+fn key(
+    runtime: &mut super::runtime::Runtime,
+    code: crossterm::event::KeyCode,
+    modifiers: crossterm::event::KeyModifiers,
+) {
+    runtime.key(crossterm::event::KeyEvent::new(code, modifiers));
+}
+
+#[test]
+fn alt_down_with_a_draft_jumps_and_the_draft_waits_in_the_parent() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("root-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.role_changed("controller");
+    runtime.state.replace_sessions(family()).unwrap();
+    runtime.state.list_open = false;
+    runtime.composer.handle_paste("my draft".into());
+    key(&mut runtime, KeyCode::Down, KeyModifiers::ALT);
+    assert_eq!(
+        runtime.state.selected.as_deref(),
+        Some("grandchild-session")
+    );
+    assert!(
+        runtime.composer.is_empty(),
+        "the draft stays with the parent"
+    );
+    key(&mut runtime, KeyCode::Up, KeyModifiers::ALT);
+    key(&mut runtime, KeyCode::Up, KeyModifiers::ALT);
+    assert_eq!(runtime.state.selected.as_deref(), Some("root-session"));
+    while rx.try_recv().is_ok() {}
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
+    let prompt = rx.try_recv().unwrap();
+    assert_eq!(prompt["method"], "_nori/session/prompt");
+    assert_eq!(prompt["params"]["session_id"], "root-session");
+    assert_eq!(prompt["params"]["prompt"][0]["text"], "my draft");
+}
+
+#[test]
+fn a_top_level_header_shows_its_family_status() {
+    let rendered = screen(&viewing("root-session"));
+    assert!(
+        rendered.contains("mock-model · Ship tree-row picker · waiting on you"),
+        "{rendered}"
+    );
+}
+
+#[test]
+fn done_reads_apart_from_closed_in_the_session_list() {
+    let mut state = AttachState {
+        connected: true,
+        ..Default::default()
+    };
+    state
+        .replace_sessions(json!({"sessions":[
+            {"session_id":"done-session","agent":"mock-model","status":"done","title":"Finished child"},
+            {"session_id":"closed-session","agent":"mock-model","status":"closed","title":"Closed by you"}
+        ]}))
+        .unwrap();
+    state.list_open = true;
+    let area = ratatui::layout::Rect::new(0, 0, 90, 18);
+    let mut buffer = ratatui::buffer::Buffer::empty(area);
+    super::render::render(
+        &state,
+        &crate::ComposerInput::for_attachment(),
+        area,
+        &mut buffer,
+    );
+    let style_of = |title: &str, word: &str| {
+        (0..area.height)
+            .find_map(|y| {
+                let cells: Vec<&str> = (0..area.width).map(|x| buffer[(x, y)].symbol()).collect();
+                let row = cells.concat();
+                if !row.contains(title) {
+                    return None;
+                }
+                let x = (0..cells.len())
+                    .find(|x| cells[*x..].concat().starts_with(&format!("{word} ")))?;
+                Some(buffer[(u16::try_from(x).unwrap(), y)].style())
+            })
+            .unwrap_or_else(|| panic!("{word} on the {title} row"))
+    };
+    let done = style_of("Finished child", "done");
+    let closed = style_of("Closed by you", "closed");
+    assert_eq!(
+        closed.fg,
+        Some(ratatui::style::Color::DarkGray),
+        "closed stays muted: {closed:?}"
+    );
+    assert_ne!(done.fg, closed.fg, "done reads apart from closed: {done:?}");
+}
+
+#[test]
+fn a_finished_child_ends_by_pointing_back_to_its_parent() {
+    let mut state = viewing("child-session");
+    let mut sessions = family();
+    sessions["sessions"][1]["status"] = json!("done");
+    state.replace_sessions(sessions).unwrap();
+    state.list_open = false;
+    state
+        .apply(SessionEnvelope {
+            conversation_id: "child-session".into(),
+            agent: "mock-model-alt".into(),
+            seq: 1,
+            event: nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
+                nori_protocol::SessionEnded {
+                    reason: nori_protocol::SessionEndReason::Closed,
+                    message: None,
+                },
+            )),
+        })
+        .unwrap();
+    let rendered = screen(&state);
+    let end = rendered
+        .lines()
+        .find(|line| line.contains("finished"))
+        .unwrap_or_else(|| panic!("end line missing:\n{rendered}"));
+    assert!(end.contains("alt+up"), "{rendered}");
+    assert!(!rendered.contains("/new to start"), "{rendered}");
+    let mut sessions = family();
+    sessions["sessions"][1]["status"] = json!("closed");
+    state.replace_sessions(sessions).unwrap();
+    state.list_open = false;
+    let closed = screen(&state);
+    assert!(!closed.contains("finished"), "{closed}");
+    assert!(!closed.contains("/new to start"), "{closed}");
+}
+
+#[test]
+fn the_grandchild_name_stays_whole_at_80_columns() {
+    let mut state = AttachState {
+        connected: true,
+        selected: Some("grandchild-session".into()),
+        ..Default::default()
+    };
+    state
+        .replace_sessions(json!({"sessions":[
+            {"session_id":"root-session","agent":"mock-model","status":"ready","title":"mock:delegate mock-model mock:delegate mock-model mock:request-permission:x"},
+            {"session_id":"child-session","agent":"mock-model","status":"working","title":"mock:delegate mock-model mock:request-permission:x","parent":"root-session","source":"session"},
+            {"session_id":"grandchild-session","agent":"mock-model","status":"waiting_on_you","title":"mock:request-permission:x","parent":"child-session","source":"session"}
+        ]}))
+        .unwrap();
+    state.list_open = false;
+    let rendered = screen_at(&state, 80);
+    assert!(
+        rendered.contains("mock:request-permission:x · waiting on you"),
+        "{rendered}"
+    );
+    assert!(!rendered.contains("alt+up"), "{rendered}");
+    let wide = screen_at(&state, 120);
+    assert!(
+        wide.contains("mock:request-permission:x · waiting on you · alt+up parent"),
+        "{wide}"
+    );
+}
+
+#[test]
+fn a_delivered_result_fits_one_row_at_80_columns() {
+    use nori_protocol::acp::v1 as acp;
+    let mut state = AttachState {
+        connected: true,
+        selected: Some("parent-session".into()),
+        list_open: false,
+        ..Default::default()
+    };
+    let done: nori_protocol::Delegation = serde_json::from_value(json!({
+        "request_id":"delegation-one", "parent_id":"parent-session", "child_id":"child-session",
+        "parent_agent":"mock-model", "agent":"mock-model-alt",
+        "task":"mock:request-permission:review-the-lexer-tokens",
+        "status":"completed", "depth":1, "result":"Parser reviewed"
+    }))
+    .unwrap();
+    let chunk = acp::ContentChunk::new(acp::ContentBlock::Text(acp::TextContent::new(
+        nori_protocol::delegation_result_prompt(&done),
+    )))
+    .message_id("delivery");
+    state
+        .apply(SessionEnvelope {
+            conversation_id: "parent-session".into(),
+            agent: "mock-model".into(),
+            seq: 1,
+            event: nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                acp::AgentNotification::SessionNotification(acp::SessionNotification::new(
+                    "agent-session",
+                    acp::SessionUpdate::UserMessageChunk(chunk),
+                )),
+            )),
+        })
+        .unwrap();
+    let rendered = screen_at(&state, 80);
+    let lines: Vec<&str> = rendered.lines().collect();
+    let at = lines
+        .iter()
+        .position(|line| line.contains("delegation result"))
+        .unwrap_or_else(|| panic!("{rendered}"));
+    assert!(lines[at].contains("mock:request"), "{rendered}");
+    assert!(lines[at].contains("lexer-tokens · done"), "{rendered}");
+    let next = lines.get(at + 1).copied().unwrap_or_default();
+    assert!(
+        !next.starts_with("  ") || next.trim().is_empty(),
+        "the line wraps onto a second row: {rendered}"
+    );
 }

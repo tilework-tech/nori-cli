@@ -2,5 +2,5 @@
 source: tui/src/chatwidget/tests/delegation.rs
 expression: screen
 ---
-↳ mock-model delegated to mock-model-alt · Write snapshot tests for TreeRow · working
+↳ mock-model delegated to mock-model-alt · Write snapshot tests for TreeRow · started
   ctrl + t shows the brief

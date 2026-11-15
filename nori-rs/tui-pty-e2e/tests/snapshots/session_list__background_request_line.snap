@@ -8,7 +8,7 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 • alpha agent answer
 
-  ● mock:request-permission:rm -rf targe… is waiting on you · approve: rm -rf… (+1 more) · alt + down to jump
+  ● mock:request-permi…m -rf target/debug is waiting on you · approve: rm -rf… (+1 more) · alt + down to jump
   2 waiting on you · 1 ready
 
 › [DEFAULT_PROMPT]

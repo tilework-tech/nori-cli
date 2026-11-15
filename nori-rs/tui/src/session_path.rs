@@ -35,6 +35,35 @@ pub(crate) fn fit(text: &str, cells: usize) -> String {
     format!("{}…", kept.trim_end())
 }
 
+/// `text` cut to at most `cells` display cells, keeping its start and end
+/// around `…`, so names that share a long prefix still read apart.
+pub(crate) fn fit_name(text: &str, cells: usize) -> String {
+    if text.width() <= cells {
+        return text.to_string();
+    }
+    if cells == 0 {
+        return String::new();
+    }
+    let room = cells - 1;
+    let mut head = String::new();
+    for ch in text.chars() {
+        if head.width() + ch.to_string().width() > room.div_ceil(2) {
+            break;
+        }
+        head.push(ch);
+    }
+    let mut tail: Vec<char> = Vec::new();
+    for ch in text.chars().rev() {
+        let cells = ch.to_string().width();
+        if head.width() + tail.iter().collect::<String>().width() + cells > room {
+            break;
+        }
+        tail.push(ch);
+    }
+    let tail: String = tail.into_iter().rev().collect();
+    format!("{}…{}", head.trim_end(), tail.trim_start())
+}
+
 /// Share `room` cells between names, so a short name leaves its unused cells
 /// to the longer ones.
 fn share(names: &[&str], room: usize) -> Vec<usize> {
@@ -61,22 +90,40 @@ fn share(names: &[&str], room: usize) -> Vec<usize> {
     budgets
 }
 
-/// `root › … › current` with each session's agent, followed by `tail`
-/// (status words and the key back to the parent), in at most `width` cells.
-/// The top-level session and the current one always stay; sessions between
-/// them give way to `…` when the names would otherwise be cut short.
-pub(crate) fn breadcrumb_line(path: &[PathStep], tail: &str, width: u16) -> Line<'static> {
+/// The fewest cells a session other than the current one keeps before the
+/// key back to the parent gives way.
+const MIN_OTHER: usize = 8;
+/// The fewest cells any name keeps on a terminal too narrow for the rest.
+const MIN_NAME_CELLS: usize = 4;
+
+/// `root › … › current` with each session's agent, followed by `status` and
+/// `key` (the key back to the parent), in at most `width` cells.
+///
+/// The top-level session and the current one always stay. When space runs
+/// short, sessions between them give way to `…` first, then the key, then the
+/// agent labels, and the current session's name is cut last.
+pub(crate) fn breadcrumb_line(
+    path: &[PathStep],
+    status: &str,
+    key: &str,
+    width: u16,
+) -> Line<'static> {
     let width = usize::from(width);
-    let mut steps: Vec<Option<&PathStep>> = path.iter().map(Some).collect();
-    let mut with_agents = true;
-    let agent_label = |step: &PathStep, with_agents: bool| {
-        if with_agents {
-            format!("{} · ", step.agent)
-        } else {
-            String::new()
-        }
+    let whole: Vec<Option<&PathStep>> = path.iter().map(Some).collect();
+    let elided: Vec<Option<&PathStep>> = match path {
+        [root, .., current] if path.len() > 2 => vec![Some(root), None, Some(current)],
+        _ => whole.clone(),
     };
-    loop {
+    let with_status = format!("{status}{key}");
+    let layouts = [
+        (&whole, with_status.as_str(), true),
+        (&elided, with_status.as_str(), true),
+        (&whole, status, true),
+        (&elided, status, true),
+        (&elided, status, false),
+    ];
+    let last = layouts.len() - 1;
+    for (index, (steps, tail, with_agents)) in layouts.into_iter().enumerate() {
         let fixed = tail.width()
             + PATH_SEPARATOR.width() * steps.len().saturating_sub(1)
             + steps
@@ -93,22 +140,30 @@ pub(crate) fn breadcrumb_line(path: &[PathStep], tail: &str, width: u16) -> Line
             .map(|step| step.name.as_str())
             .collect();
         let room = width.saturating_sub(fixed);
-        let full = names.iter().map(|name| name.width()).sum::<usize>();
-        // Keep every session while each name keeps a readable start.
-        let elidable = steps.len() > 2 && steps[1].is_some();
-        if full > room && elidable && room / names.len().max(1) < 16 {
-            steps.splice(1..steps.len() - 1, [None]);
+        let floor = if index == last {
+            MIN_NAME_CELLS
+        } else {
+            MIN_OTHER
+        };
+        let budgets = share_current_last(&names, room, floor);
+        let fits = names
+            .iter()
+            .zip(&budgets)
+            .enumerate()
+            .all(|(at, (name, budget))| {
+                *budget
+                    >= if at + 1 == names.len() {
+                        name.width()
+                    } else {
+                        name.width().min(floor)
+                    }
+            });
+        if !fits && index != last {
             continue;
         }
-        // On a very narrow terminal the names matter more than the agents.
-        if full > room && with_agents && room / names.len().max(1) < 4 {
-            with_agents = false;
-            continue;
-        }
-        let budgets = share(&names, room);
         let mut spans: Vec<Span<'static>> = Vec::new();
         let mut named = 0;
-        let last = steps.len().saturating_sub(1);
+        let current = steps.len().saturating_sub(1);
         for (position, step) in steps.iter().enumerate() {
             if position > 0 {
                 spans.push(PATH_SEPARATOR.dim());
@@ -118,9 +173,9 @@ pub(crate) fn breadcrumb_line(path: &[PathStep], tail: &str, width: u16) -> Line
                     if with_agents {
                         spans.push(agent_label(step, true).dim());
                     }
-                    let name = fit(&step.name, budgets[named]);
+                    let name = fit_name(&step.name, budgets[named]);
                     named += 1;
-                    spans.push(if position == last {
+                    spans.push(if position == current {
                         name.bold()
                     } else {
                         name.into()
@@ -132,6 +187,32 @@ pub(crate) fn breadcrumb_line(path: &[PathStep], tail: &str, width: u16) -> Line
         spans.push(tail.to_string().dim());
         return clip(Line::from(spans), width);
     }
+    Line::default()
+}
+
+fn agent_label(step: &PathStep, with_agents: bool) -> String {
+    if with_agents {
+        format!("{} · ", step.agent)
+    } else {
+        String::new()
+    }
+}
+
+/// Share `room` cells so the last name (the current session) is cut last:
+/// every other name keeps up to `floor` cells, the current name takes what it
+/// needs from the rest, and the others share what it leaves.
+fn share_current_last(names: &[&str], room: usize, floor: usize) -> Vec<usize> {
+    let Some((current, others)) = names.split_last() else {
+        return Vec::new();
+    };
+    let reserved = others
+        .iter()
+        .map(|name| name.width().min(floor))
+        .sum::<usize>();
+    let current_budget = current.width().min(room.saturating_sub(reserved));
+    let mut budgets = share(others, room - current_budget);
+    budgets.push(current_budget);
+    budgets
 }
 
 /// `● parent › child is waiting on you · request (+N more) · key to jump`, in
@@ -185,7 +266,7 @@ pub(crate) fn waiting_line(
     let path_text = names
         .iter()
         .zip(budgets)
-        .map(|(name, budget)| fit(name, budget))
+        .map(|(name, budget)| fit_name(name, budget))
         .collect::<Vec<_>>()
         .join(PATH_SEPARATOR);
     spans.push(path_text.bold());
@@ -309,18 +390,78 @@ mod tests {
             ),
         ];
         insta::assert_snapshot!(render(&[
-            ("three levels", 120, breadcrumb_line(&three, KEY, 120)),
-            ("three levels", 78, breadcrumb_line(&three, KEY, 78)),
-            ("shared prefix", 120, breadcrumb_line(&shared, KEY, 120)),
-            ("shared prefix", 78, breadcrumb_line(&shared, KEY, 78)),
-            ("long names", 118, breadcrumb_line(&long, KEY, 118)),
-            ("long names", 78, breadcrumb_line(&long, KEY, 78)),
-            ("long names", 40, breadcrumb_line(&long, KEY, 40)),
+            ("three levels", 120, breadcrumb_line(&three, "", KEY, 120)),
+            ("three levels", 78, breadcrumb_line(&three, "", KEY, 78)),
+            ("shared prefix", 120, breadcrumb_line(&shared, "", KEY, 120)),
+            ("shared prefix", 78, breadcrumb_line(&shared, "", KEY, 78)),
+            ("long names", 118, breadcrumb_line(&long, "", KEY, 118)),
+            ("long names", 78, breadcrumb_line(&long, "", KEY, 78)),
+            ("long names", 40, breadcrumb_line(&long, "", KEY, 40)),
         ]));
     }
 
+    const SHARED_PARENT: &str = "shared prefix for the parser review: parent side";
+    const SHARED_CHILD: &str =
+        "shared prefix for the parser review: child side mock:request-permission:z";
+
     #[test]
-    fn a_breadcrumb_never_drops_its_root_its_current_session_or_the_key() {
+    fn names_sharing_a_long_prefix_stay_apart() {
+        let crumb = text(&breadcrumb_line(
+            &[
+                step("mock-model", SHARED_PARENT),
+                step("mock-model-alt", SHARED_CHILD),
+            ],
+            " · waiting on you",
+            " · alt+up parent",
+            120,
+        ));
+        assert!(crumb.contains("parent side"), "{crumb}");
+        assert!(crumb.contains("permission:z"), "{crumb}");
+        let waiting = text(&waiting_line(
+            &[SHARED_PARENT.to_string(), SHARED_CHILD.to_string()],
+            None,
+            0,
+            Some("alt + down"),
+            120,
+        ));
+        assert!(waiting.contains("parent side ›"), "{waiting}");
+        assert!(waiting.contains("permission:z is waiting"), "{waiting}");
+    }
+
+    #[test]
+    fn a_cut_name_keeps_its_start_and_end() {
+        assert_eq!(fit_name("Review the parser", 40), "Review the parser");
+        let cut = fit_name("shared prefix for the parser review: parent side", 20);
+        assert!(cut.width() <= 20, "{cut}");
+        assert!(cut.starts_with("shared"), "{cut}");
+        assert!(cut.ends_with("side"), "{cut}");
+        assert!(cut.contains('…'), "{cut}");
+    }
+
+    #[test]
+    fn the_key_gives_way_before_the_current_name_is_cut() {
+        let grandchild = [
+            step("mock-model", "mock:delegate mock-model mock:delegate mo"),
+            step("mock-model", "mock:delegate mock-model mock:request-pe"),
+            step("mock-model", "mock:request-permission:x"),
+        ];
+        let status = " · waiting on you";
+        let key = " · alt+up parent";
+        let narrow = text(&breadcrumb_line(&grandchild, status, key, 79));
+        assert!(
+            narrow.contains("mock:request-permission:x · waiting on you"),
+            "{narrow}"
+        );
+        assert!(!narrow.contains("alt+up"), "{narrow}");
+        let wide = text(&breadcrumb_line(&grandchild, status, key, 119));
+        assert!(
+            wide.ends_with("mock:request-permission:x · waiting on you · alt+up parent"),
+            "{wide}"
+        );
+    }
+
+    #[test]
+    fn a_breadcrumb_never_drops_its_root_or_its_current_session() {
         let long = [
             step(
                 "mock-model",
@@ -336,11 +477,15 @@ mod tests {
             ),
         ];
         for width in [118, 100, 78] {
-            let line = text(&breadcrumb_line(&long, KEY, width));
-            assert!(line.starts_with("mock-model · A "), "@{width}: {line}");
-            assert!(line.contains("› mock-model · A gran"), "@{width}: {line}");
-            assert!(line.ends_with(KEY), "@{width}: {line}");
+            let line = text(&breadcrumb_line(&long, "", KEY, width));
+            assert!(line.contains("A parent"), "@{width}: {line}");
+            assert!(
+                line.contains("› A gran") || line.contains("› mock-model · A gran"),
+                "@{width}: {line}"
+            );
         }
+        let wide = text(&breadcrumb_line(&long, "", KEY, 118));
+        assert!(wide.ends_with(KEY), "{wide}");
     }
 
     #[test]
@@ -422,8 +567,8 @@ mod tests {
         let alone = ["Spike transport".to_string()];
         for width in 0..=120 {
             let lines = [
-                breadcrumb_line(&long, KEY, width),
-                breadcrumb_line(&long[..1], KEY, width),
+                breadcrumb_line(&long, "", KEY, width),
+                breadcrumb_line(&long[..1], "", KEY, width),
                 waiting_line(
                     &names,
                     Some("cargo test --workspace"),

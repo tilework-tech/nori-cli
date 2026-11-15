@@ -55,6 +55,11 @@ impl ComposerInput {
         self.inner.is_empty()
     }
 
+    /// The current input text.
+    pub fn text(&self) -> String {
+        self.inner.current_text()
+    }
+
     /// Clear the input text.
     pub fn clear(&mut self) {
         self.inner.set_text_content(String::new());

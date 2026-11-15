@@ -18,15 +18,11 @@ use crate::session_status::status_word;
 
 /// Longest title shown for a session that has no summary yet.
 const TITLE_CHARS: i32 = 60;
+/// For lines that fit names to the terminal width themselves.
+const WHOLE_NAME: i32 = i32::MAX;
 
 fn cut(text: &str, limit: i32) -> String {
-    let limit = usize::try_from(limit).unwrap_or(0);
-    if text.chars().count() > limit {
-        let kept: String = text.chars().take(limit.saturating_sub(1)).collect();
-        format!("{kept}…")
-    } else {
-        text.to_string()
-    }
+    nori_protocol::shorten_name(text, limit)
 }
 
 /// One session as the overview sees it.
@@ -349,11 +345,11 @@ impl App {
             .collect();
         let first = waiting.first()?;
         let title = self
-            .session_title(first.generation, TITLE_CHARS)
+            .session_title(first.generation, WHOLE_NAME)
             .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.to_string());
         let mut path = Vec::new();
         if let Some(parent) = first.parent {
-            path.push(self.session_name(&parent, TITLE_CHARS));
+            path.push(self.session_name(&parent, WHOLE_NAME));
         }
         path.push(title);
         let request = self.session_previews.pending_request(first.generation);
@@ -381,7 +377,7 @@ impl App {
                 self.session_manager
                     .replay_info(id)
                     .and_then(|info| info.title)
-                    .and_then(|title| nori_protocol::session_display_name(&title))
+                    .and_then(|title| nori_protocol::session_full_name(&title))
                     .map(|title| cut(&title, limit))
             })
             .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.to_string())
@@ -404,7 +400,7 @@ impl App {
         let mut path = vec![crate::session_path::PathStep {
             agent: child.agent.clone(),
             name: self
-                .session_title(child.generation, TITLE_CHARS)
+                .session_title(child.generation, WHOLE_NAME)
                 .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.to_string()),
         }];
         let mut record = child
@@ -420,7 +416,7 @@ impl App {
             seen.push(parent);
             path.push(crate::session_path::PathStep {
                 agent: parent_record.agent.clone(),
-                name: self.session_name(&parent, TITLE_CHARS),
+                name: self.session_name(&parent, WHOLE_NAME),
             });
             record = Some(parent_record);
         }
@@ -433,6 +429,8 @@ impl App {
         } else {
             format!(" · {} to parent", binding.display_name())
         };
-        Some(crate::session_path::breadcrumb_line(&path, &tail, width))
+        Some(crate::session_path::breadcrumb_line(
+            &path, "", &tail, width,
+        ))
     }
 }

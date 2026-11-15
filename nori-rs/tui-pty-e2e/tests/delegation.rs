@@ -421,21 +421,19 @@ fn the_child_breadcrumb_fits_one_row_of_an_80_column_terminal() {
         .wait_for_text("Would you like to allow", TIMEOUT)
         .unwrap();
     session
-        .wait_for_text("to parent", TIMEOUT)
-        .expect("the child shows the way back to its parent");
+        .wait_for_text("breadcrumb › ", TIMEOUT)
+        .expect("the child shows where it sits under its parent");
     session.settle(Duration::from_millis(200));
     let screen = session.screen_contents();
     let breadcrumb = screen
         .lines()
-        .find(|line| line.contains("to parent"))
-        .unwrap_or_else(|| panic!("breadcrumb missing:\n{screen}"));
+        .find(|line| line.contains("parent task") && line.contains(" › "))
+        .unwrap_or_else(|| panic!("the breadcrumb is one row from the parent:\n{screen}"));
     assert!(
-        breadcrumb.contains("mock-model · parent task")
-            && breadcrumb.contains("› mock-model-alt · mock:req"),
-        "the breadcrumb is one row:\n{screen}"
-    );
-    assert!(
-        breadcrumb.trim_end().ends_with("alt + up to parent"),
-        "{screen}"
+        breadcrumb
+            .trim_end()
+            .ends_with("› mock:request-permission:write-child-file")
+            || breadcrumb.contains("write-child-file · alt + up to parent"),
+        "the current name stays whole; the key gives way first:\n{screen}"
     );
 }

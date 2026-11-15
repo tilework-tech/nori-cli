@@ -10,6 +10,7 @@ use nori_protocol::DelegationStatus;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
+use unicode_width::UnicodeWidthStr;
 
 use crate::history_cell::HistoryCell;
 
@@ -49,8 +50,17 @@ fn requester(delegation: &Delegation) -> String {
     }
 }
 
+/// A card keeps the word it was printed with, so a running child's card says
+/// it started rather than claiming it is still working.
 fn status_span(status: DelegationStatus) -> Span<'static> {
-    let word = nori_protocol::delegation_status_word(status);
+    let word = match status {
+        DelegationStatus::Running => "started",
+        DelegationStatus::AwaitingApproval
+        | DelegationStatus::Completed
+        | DelegationStatus::Failed
+        | DelegationStatus::Declined
+        | DelegationStatus::Cancelled => nori_protocol::delegation_status_word(status),
+    };
     match status {
         DelegationStatus::AwaitingApproval => {
             Span::styled(word, crate::style::component_theme().warning)
@@ -69,6 +79,36 @@ fn child_spans(delegation: &Delegation) -> Vec<Span<'static>> {
         " · ".dim(),
         nori_protocol::delegation_child_name(delegation).into(),
     ]
+}
+
+/// The collapsed line a delivered result prompt reads as, after its `› `
+/// marker, in at most `width` cells when it can: ` · delivered to this
+/// session` gives way first, then the child's name is cut in the middle.
+/// `None` for text that is not a result prompt.
+pub(crate) fn delivered_result_spans(message: &str, width: usize) -> Option<Vec<Span<'static>>> {
+    const DELIVERED: &str = " · delivered to this session";
+    const MIN_NAME: usize = 4;
+    let parts = nori_protocol::delegation_result_parts(message)?;
+    let lead = format!("from {} · ", parts.agent);
+    let status = format!(" · {}", parts.status);
+    let fixed = "delegation result ".width() + lead.width() + status.width();
+    let name_width = parts.name.width();
+    let (name, delivered) = if fixed + name_width + DELIVERED.width() <= width {
+        (parts.name.to_owned(), true)
+    } else {
+        let room = width.saturating_sub(fixed).max(MIN_NAME);
+        (crate::session_path::fit_name(parts.name, room), false)
+    };
+    let mut spans = vec![
+        "delegation result ".dim(),
+        lead.into(),
+        name.into(),
+        status.into(),
+    ];
+    if delivered {
+        spans.push(DELIVERED.dim());
+    }
+    Some(spans)
 }
 
 fn first_line(text: &str) -> &str {

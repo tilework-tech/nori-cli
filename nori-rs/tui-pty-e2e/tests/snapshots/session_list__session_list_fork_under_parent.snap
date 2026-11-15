@@ -8,7 +8,7 @@ expression: normalize_for_input_snapshot(screen)
 
 • alpha agent answer
 
-  ● parent question › mock:request-permission:rm -… is waiting on you · approve: rm -rf… · alt + down to jump
+  ● parent question › mock:request-p…f target/debug is waiting on you · approve: rm -rf… · alt + down to jump
   1 waiting on you · 1 ready
 
   Sessions 2 · 1 waiting on you · 1 ready  tab: waiting only · type to search
