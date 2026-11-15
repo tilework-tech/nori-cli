@@ -1,0 +1,40 @@
+bash-5.2$ cat /home/sprite/org/workspace/cli/.local/pr652/test-summary.txt
+D2 independent verification | b10c6121
+Cargo suites: --no-fail-fast, MOCK_ACP_AGENT_BIN set, 2 test threads
+
+SUITE                    PASS   FAIL IGNORE
+nori-acp-host             112      0      0
+nori-harness              432      0      1
+nori-tui                 1464      0      4
+nori-cli                   66      0      0
+tui-pty-e2e               191      0      9
+TOTAL                    2265      0     14
+
+Independent wire/lifecycle probes: 38 passed, 0 failed.
+Known cloud auth-error flake: passed this run.
+D1 Ctrl+R remote identity/subscription test: passed.
+Manual network: TCP drop 0.3s; silent loss 9.9s; replay exactly once.
+
+Findings: 0 blockers; 2 should-fix; 1 nit.
+Coverage limit: D2 public API cannot create child sessions.
+No product edits or merges.
+bash-5.2$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

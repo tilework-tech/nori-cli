@@ -1,0 +1,23 @@
+OK: Found 'RECONNECTING'
+/home/sprite/org/workspace/cli/.local/pr652/captures/drop-reconnecting/screen.txt
+/home/sprite/org/workspace/cli/.local/pr652/captures/drop-reconnecting/screen.png
+/home/sprite/org/workspace/cli/.local/pr652/captures/drop-reconnecting/metadata.json
+OK: Found 'NET missed drop'
+/home/sprite/org/workspace/cli/.local/pr652/captures/drop-recovered/screen.txt
+/home/sprite/org/workspace/cli/.local/pr652/captures/drop-recovered/screen.png
+/home/sprite/org/workspace/cli/.local/pr652/captures/drop-recovered/metadata.json
+PASS drop detected 0.31558880300053715
+OK: Found 'RECONNECTING'
+/home/sprite/org/workspace/cli/.local/pr652/captures/blackhole-reconnecting/screen.txt
+/home/sprite/org/workspace/cli/.local/pr652/captures/blackhole-reconnecting/screen.png
+/home/sprite/org/workspace/cli/.local/pr652/captures/blackhole-reconnecting/metadata.json
+OK: Found 'NET missed blackhole'
+/home/sprite/org/workspace/cli/.local/pr652/captures/blackhole-recovered/screen.txt
+/home/sprite/org/workspace/cli/.local/pr652/captures/blackhole-recovered/screen.png
+/home/sprite/org/workspace/cli/.local/pr652/captures/blackhole-recovered/metadata.json
+PASS blackhole detected 9.858041889999186
+OK: Found 'NET after recovery'
+/home/sprite/org/workspace/cli/.local/pr652/captures/network-resumed-prompt/screen.txt
+/home/sprite/org/workspace/cli/.local/pr652/captures/network-resumed-prompt/screen.png
+/home/sprite/org/workspace/cli/.local/pr652/captures/network-resumed-prompt/metadata.json
+PASS recovered socket can take control and prompt

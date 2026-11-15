@@ -1,0 +1,40 @@
+ Nori host  WATCHING · read-only · alt+t take control
+ mock-model · d400ca5d-ae0d-4fab-8805-2015254facad · ready
+
+ › You
+ D2 history one
+
+ D2 independent answer
+
+ Read-only: take control with alt+t before sending prompts or permission answers.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Read-only: take control with alt+t before sending prompts or permission answers.
+
+› D2 watcher must refuse
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

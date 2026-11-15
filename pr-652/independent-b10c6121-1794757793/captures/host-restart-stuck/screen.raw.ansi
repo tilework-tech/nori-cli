@@ -1,0 +1,40 @@
+[1m Nori host  [0m[38;5;6m[49mRECONNECTING · sessions continue on the host
+[2m[39m mock-model · f4050e7c-01be-4acc-97fb-afb9dd0643a7 · ready[0m[39m[49m
+
+ [1m› You[0m[39m[49m
+ NET baseline
+
+ D2 independent answer
+
+ [1m› You
+[0m[39m[49m NET missed drop
+
+ D2 independent answer
+
+ [1m› You[0m[39m[49m
+ NET missed blackhole
+
+ D2 independent answer
+
+ [38;5;6mControl moved to another terminal. You are now watching; alt+t takes control.
+[39m
+ [1m› You[0m[39m[49m
+ NET after recovery
+
+ D2 independent answer
+
+ [38;5;6mConnection lost. Reconnecting… WebSocket protocol error: Connection reset without closing handshake
+
+
+
+
+
+
+
+
+
+[38;5;1m Connection lost. Reconnecting… WebSocket protocol error: Connection reset without closing handshake
+
+[1m[39m›[0m[39m[49m [2mSend a prompt[0m[39m[49m
+
+   [1malt+s[0m[39m[49m sessions    [1malt+t[0m[39m[49m take control    [1mctrl+d[0m[39m[49m detach    [1m/new[0m[39m[49m new session

@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · b7487915-0ef3-442b-a3a1-06194581616b · ready
+
+ › You
+ D2 stable restart history
+
+ D2 independent answer
+
+ › You
+ mock:exit-during-prompt
+
+ › You
+ D2 after restart
+
+ D2 independent answer
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

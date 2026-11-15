@@ -1,0 +1,40 @@
+bash-5.2$ /home/sprite/org/workspace/cli/.local/pr652/interactive/run host ls
+ID                                    AGENT             STATUS               AGE  TITLE
+05839f76-496c-4d44-9713-1fa15f197602  mock-model        [2mclosed          [0m[39m[49m     10s  D2 final lifecycle
+bash-5.2$ /home/sprite/org/workspace/cli/.local/pr652/interactive/run host stop
+Host stopped.
+bash-5.2$ /home/sprite/org/workspace/cli/.local/pr652/interactive/run host ls
+Error: no host running; start one with `nori host`
+bash-5.2$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

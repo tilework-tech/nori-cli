@@ -1,0 +1,2 @@
+PASS drop: detected in 0.3s; prompt and answer replayed exactly once; answer count 1->2.
+PASS blackhole: detected in 9.9s; prompt and answer replayed exactly once; answer count 2->3.

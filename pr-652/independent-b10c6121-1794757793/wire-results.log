@@ -1,0 +1,45 @@
+PASS host starts detached Host started (pid 77844)  ws://127.0.0.1:39851/sessions
+Token: /home/sprite/org/workspace/cli/.local/pr652/wire-results/wire-home/host/token (owner-only)
+PASS duplicate start retains same PID and endpoint
+PASS token and host directory permissions
+PASS startup does not print token
+PASS auth missing HTTP 401
+PASS auth wrong HTTP 401
+PASS auth legacy-valid HTTP 404
+PASS auth legacy-missing HTTP 404
+PASS admin observe does not claim control
+PASS first interactive client controls
+PASS second client watches
+PASS third client watches
+PASS watcher prompt refused on wire {'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}
+PASS third client cannot new {'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}
+PASS third client cannot close {'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}
+PASS third client cannot cancel {'jsonrpc': '2.0', 'id': 5, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}
+PASS third client cannot resume {'jsonrpc': '2.0', 'id': 6, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}
+PASS B takes control during active turn
+PASS former controller sees watcher role mid-turn
+PASS former controller receives role notification
+PASS former controller cannot cancel admitted turn {'jsonrpc': '2.0', 'id': 6, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}
+PASS new controller can cancel former controller turn
+PASS watcher permission answer refused on wire {'jsonrpc': '2.0', 'id': 7, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}
+PASS permission remains pending after refused watcher answer
+PASS C takes control with permission pending
+PASS former controller cannot answer after permission takeover {'jsonrpc': '2.0', 'id': 7, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}
+PASS new controller resolves same pending permission
+PASS three clients receive contiguous nonduplicated envelope prefixes [27, 27, 27]
+PASS reconnect replays only strictly newer envelopes without gaps {'cursor': 27, 'replayed': [28, 29, 30, 31, 32, 33, 34]}
+PASS piped list flat headings and no ANSI ID                                    AGENT             STATUS               AGE  TITLE
+d32d0bf8-5b8f-454f-9f76-0f1777ae5bc8  mock-model        ready                 0s  mock:stream-until-cancel MIDTURN_A
+
+PASS last closed session leaves host running
+PASS kill9 stale state and lock recover Host started (pid 78018)  ws://127.0.0.1:37537/sessions
+Token: /home/sprite/org/workspace/cli/.local/pr652/wire-results/wire-home/host/token (owner-only)
+
+PASS host restart rotates token
+PASS host restart has empty in-memory registry
+PASS old token refused after host restart HTTP 401
+PASS explicit stop releases lock and removes discovery
+PASS occupied port startup fails without publishing state Error: host exited during startup (exit status: 1); check /home/sprite/org/workspace/cli/.local/pr652/wire-results/occupied-home/host/host.log
+
+PASS failed occupied-port startup leaves lock reusable
+{"passed": 38, "failed": 0}

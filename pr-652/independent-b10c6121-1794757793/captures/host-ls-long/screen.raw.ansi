@@ -1,0 +1,40 @@
+bash-5.2$ /home/sprite/org/workspace/cli/.local/pr652/interactive/run host ls
+ID                                    AGENT             STATUS               AGE  TITLE
+d400ca5d-ae0d-4fab-8805-2015254facad  mock-model        [32mready           [39m      3m  D2 history one
+b7487915-0ef3-442b-a3a1-06194581616b  mock-model        [32mready           [39m      1m  D2 stable restart history
+96d510d0-87d1-4240-8cf2-727298907af0  mock-model        [32mready           [39m      1m  D2 long title aligned columns should p
+reserve the entire title without putting continuation text into the ID column
+bash-5.2$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

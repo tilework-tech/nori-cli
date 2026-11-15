@@ -1,0 +1,40 @@
+ Nori host  WATCHING · read-only · alt+t take control
+ mock-model · f4050e7c-01be-4acc-97fb-afb9dd0643a7 · ready
+
+ › You
+ NET baseline
+
+ D2 independent answer
+
+ Connection lost. Reconnecting… WebSocket protocol error: Connection reset without closing handshake
+
+ › You
+ NET missed drop
+
+ D2 independent answer
+
+ Connection lost. Reconnecting… Host stopped responding
+
+ › You
+ NET missed blackhole
+
+ D2 independent answer
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

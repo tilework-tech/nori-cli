@@ -1,0 +1,263 @@
+[
+  {
+    "name": "host starts detached",
+    "passed": true,
+    "details": "Host started (pid 77844)  ws://127.0.0.1:39851/sessions\nToken: /home/sprite/org/workspace/cli/.local/pr652/wire-results/wire-home/host/token (owner-only)"
+  },
+  {
+    "name": "duplicate start retains same PID and endpoint",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "token and host directory permissions",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "startup does not print token",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "auth missing",
+    "passed": true,
+    "details": "HTTP 401"
+  },
+  {
+    "name": "auth wrong",
+    "passed": true,
+    "details": "HTTP 401"
+  },
+  {
+    "name": "auth legacy-valid",
+    "passed": true,
+    "details": "HTTP 404"
+  },
+  {
+    "name": "auth legacy-missing",
+    "passed": true,
+    "details": "HTTP 404"
+  },
+  {
+    "name": "admin observe does not claim control",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "first interactive client controls",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "second client watches",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "third client watches",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "watcher prompt refused on wire",
+    "passed": true,
+    "details": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+        "code": -32016,
+        "message": "watcher is read-only; take control before changing a session"
+      }
+    }
+  },
+  {
+    "name": "third client cannot new",
+    "passed": true,
+    "details": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+        "code": -32016,
+        "message": "watcher is read-only; take control before changing a session"
+      }
+    }
+  },
+  {
+    "name": "third client cannot close",
+    "passed": true,
+    "details": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "error": {
+        "code": -32016,
+        "message": "watcher is read-only; take control before changing a session"
+      }
+    }
+  },
+  {
+    "name": "third client cannot cancel",
+    "passed": true,
+    "details": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "error": {
+        "code": -32016,
+        "message": "watcher is read-only; take control before changing a session"
+      }
+    }
+  },
+  {
+    "name": "third client cannot resume",
+    "passed": true,
+    "details": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "error": {
+        "code": -32016,
+        "message": "watcher is read-only; take control before changing a session"
+      }
+    }
+  },
+  {
+    "name": "B takes control during active turn",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "former controller sees watcher role mid-turn",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "former controller receives role notification",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "former controller cannot cancel admitted turn",
+    "passed": true,
+    "details": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "error": {
+        "code": -32016,
+        "message": "watcher is read-only; take control before changing a session"
+      }
+    }
+  },
+  {
+    "name": "new controller can cancel former controller turn",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "watcher permission answer refused on wire",
+    "passed": true,
+    "details": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "error": {
+        "code": -32016,
+        "message": "watcher is read-only; take control before changing a session"
+      }
+    }
+  },
+  {
+    "name": "permission remains pending after refused watcher answer",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "C takes control with permission pending",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "former controller cannot answer after permission takeover",
+    "passed": true,
+    "details": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "error": {
+        "code": -32016,
+        "message": "watcher is read-only; take control before changing a session"
+      }
+    }
+  },
+  {
+    "name": "new controller resolves same pending permission",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "three clients receive contiguous nonduplicated envelope prefixes",
+    "passed": true,
+    "details": [
+      27,
+      27,
+      27
+    ]
+  },
+  {
+    "name": "reconnect replays only strictly newer envelopes without gaps",
+    "passed": true,
+    "details": {
+      "cursor": 27,
+      "replayed": [
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34
+      ]
+    }
+  },
+  {
+    "name": "piped list flat headings and no ANSI",
+    "passed": true,
+    "details": "ID                                    AGENT             STATUS               AGE  TITLE\nd32d0bf8-5b8f-454f-9f76-0f1777ae5bc8  mock-model        ready                 0s  mock:stream-until-cancel MIDTURN_A\n"
+  },
+  {
+    "name": "last closed session leaves host running",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "kill9 stale state and lock recover",
+    "passed": true,
+    "details": "Host started (pid 78018)  ws://127.0.0.1:37537/sessions\nToken: /home/sprite/org/workspace/cli/.local/pr652/wire-results/wire-home/host/token (owner-only)\n"
+  },
+  {
+    "name": "host restart rotates token",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "host restart has empty in-memory registry",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "old token refused after host restart",
+    "passed": true,
+    "details": "HTTP 401"
+  },
+  {
+    "name": "explicit stop releases lock and removes discovery",
+    "passed": true,
+    "details": ""
+  },
+  {
+    "name": "occupied port startup fails without publishing state",
+    "passed": true,
+    "details": "Error: host exited during startup (exit status: 1); check /home/sprite/org/workspace/cli/.local/pr652/wire-results/occupied-home/host/host.log\n"
+  },
+  {
+    "name": "failed occupied-port startup leaves lock reusable",
+    "passed": true,
+    "details": ""
+  }
+]

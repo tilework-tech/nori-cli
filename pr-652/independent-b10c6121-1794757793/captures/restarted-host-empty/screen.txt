@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ Sessions · /new starts a session · ctrl+d detaches
+
+ Sessions 0
+
+ No sessions yet. Type /new and press Enter.
+ The host keeps running when you detach.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · d400ca5d-ae0d-4fab-8805-2015254facad · ready
+
+ › You
+ D2 history one
+
+ D2 independent answer
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

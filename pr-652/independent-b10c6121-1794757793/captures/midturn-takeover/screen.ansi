@@ -1,0 +1,40 @@
+[1m Nori host  [0m[38;5;2m[49mCONTROLLING[39m
+[2m mock-model · d400ca5d-ae0d-4fab-8805-2015254facad · ready[0m[39m[49m
+
+
+ D2 independent answer
+
+ [38;5;6mRead-only: take control with alt+t before sending prompts or permission answers.
+[39m
+ [38;5;6mYou now control the host. Other terminals can keep watching.[39m
+
+ [1m› You[0m[39m[49m
+ mock:request-permission:echo D2 permission
+
+ D2 independent answer
+
+ [38;5;6mControl moved to another terminal. You are now watching; alt+t takes control.
+[39m
+ Permission granted with option: allow
+
+ [1m› You[0m[39m[49m
+ mock:stream-until-cancel
+
+ D2 independent
+ answerStreaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+ aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+ reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+
+ [38;5;6mYou now control the host. Other terminals can keep watching.[39m
+
+ Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+ ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+ g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+ ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+ aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+ reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+
+
+[1m›[0m[39m[49m [2mSend a prompt[0m[39m[49m
+
+   [1malt+s[0m[39m[49m sessions    [1malt+t[0m[39m[49m take control    [1mctrl+d[0m[39m[49m detach    [1m/new[0m[39m[49m new session

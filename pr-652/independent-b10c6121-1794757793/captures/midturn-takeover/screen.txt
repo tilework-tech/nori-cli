@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · d400ca5d-ae0d-4fab-8805-2015254facad · ready
+
+
+ D2 independent answer
+
+ Read-only: take control with alt+t before sending prompts or permission answers.
+
+ You now control the host. Other terminals can keep watching.
+
+ › You
+ mock:request-permission:echo D2 permission
+
+ D2 independent answer
+
+ Control moved to another terminal. You are now watching; alt+t takes control.
+
+ Permission granted with option: allow
+
+ › You
+ mock:stream-until-cancel
+
+ D2 independent
+ answerStreaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+ aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+ reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+
+ You now control the host. Other terminals can keep watching.
+
+ Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+ ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+ g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+ ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+ aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+ reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+
+
+› Send a prompt
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

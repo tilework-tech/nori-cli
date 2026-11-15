@@ -1,0 +1,133 @@
+   Compiling similar v2.7.0
+   Compiling predicates-core v1.0.9
+   Compiling doc-comment v0.3.3
+   Compiling codex-apply-patch v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/apply-patch)
+   Compiling codex-core v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/core)
+   Compiling codex-arg0 v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/arg0)
+   Compiling nori-exec v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/exec)
+   Compiling float-cmp v0.10.0
+   Compiling normalize-line-endings v0.3.0
+   Compiling termtree v0.5.1
+   Compiling difflib v0.4.0
+   Compiling codex-login v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/login)
+   Compiling nori-tui v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/tui)
+   Compiling assert_cmd v2.0.17
+   Compiling predicates v3.1.3
+   Compiling predicates-tree v1.0.12
+   Compiling wait-timeout v0.2.1
+   Compiling nori-cli v0.0.0 (/home/sprite/org/workspace/cli/nori-rs/cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.17s
+     Running unittests src/lib.rs (nori-rs/target/debug/deps/nori_cli-9c26302b84453338)
+
+running 7 tests
+test cloud::tests::cloud_agent_translates_broker_url_to_env ... ok
+test cloud::tests::cloud_agent_pins_handroll_cloud_acp ... ok
+test cloud::tests::dangling_env_override_is_an_error_not_a_fallback ... ok
+test cloud::tests::env_override_wins_over_path ... ok
+test cloud::tests::finds_handroll_on_path ... ok
+test cloud::tests::onboard_appends_the_cloud_acp_onboard_flag ... ok
+test cloud::tests::missing_binary_yields_actionable_install_error ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (nori-rs/target/debug/deps/nori-420404d57a6d1efb)
+
+running 29 tests
+test stdin_prompt::tests::a_blank_pipe_leaves_the_argument_untouched ... ok
+test stdin_prompt::tests::argument_leads_and_piped_stdin_follows_as_context ... ok
+test stdin_prompt::tests::carriage_returns_are_normalized ... ok
+test tests::cloud_merges_subcommand_flags_into_root ... ok
+test tests::binary_name_is_nori ... ok
+test tests::cloud_onboard_flag_parses_and_defaults_off ... ok
+test tests::cloud_preserves_root_level_flags ... ok
+test tests::completion_singular_treated_as_prompt ... ok
+test tests::completions_parsed_as_subcommand ... ok
+test tests::completions_requires_shell_argument ... ok
+test tests::completions_subcommand_in_help ... ok
+test tests::config_example_shows_agent_claude_code ... ok
+test tests::config_help_references_nori_path ... ok
+test tests::format_exit_messages_applies_color_when_enabled ... ok
+test tests::format_exit_messages_includes_resume_hint_without_color ... ok
+test tests::format_exit_messages_includes_resume_hint_without_token_usage ... ok
+test tests::format_exit_messages_skips_resume_hint_without_activity ... ok
+test tests::format_exit_messages_skips_zero_usage ... ok
+test tests::resume_all_flag_sets_show_all ... ok
+test tests::resume_merges_resume_scoped_interactive_flags ... ok
+test tests::resume_picker_logic_last ... ok
+test tests::resume_picker_logic_none_and_not_last ... ok
+test tests::resume_picker_logic_with_session_id ... ok
+test tests::skillsets_subcommand_captures_trailing_args ... ok
+test tests::skillsets_subcommand_is_recognized ... ok
+test tests::skillsets_subcommand_passes_help_flag_through ... ok
+test wsl_paths::tests::normalize_is_noop_on_unix_paths ... ok
+test wsl_paths::tests::win_to_wsl_basic ... ok
+test tests::completions_generates_valid_output_for_all_shells ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/analytics.rs (nori-rs/target/debug/deps/analytics-b21e6a6cbb4a47dd)
+
+running 4 tests
+test acp_facade_reports_activity_only_after_its_prompt_reaches_the_agent ... ok
+test exec_reports_one_authenticated_agent_session_without_changing_output ... ok
+test analytics_opt_out_and_ineligible_identities_emit_nothing ... ok
+test unavailable_analytics_never_changes_exec_output_or_exit ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.43s
+
+     Running tests/execpolicy.rs (nori-rs/target/debug/deps/execpolicy-524bcadab87fec5e)
+
+running 1 test
+test execpolicy_check_matches_expected_json ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/headless_exec.rs (nori-rs/target/debug/deps/headless_exec-84d6bbee979a28fd)
+
+running 18 tests
+test exec_acp_is_a_standard_facade_with_one_final_message_update ... ok
+test exec_acp_forwards_permission_requests_and_correlated_responses ... ok
+test exec_composes_the_argument_and_piped_stdin_when_asked ... ok
+test exec_fails_closed_without_waiting_for_an_approval ... ok
+test exec_managed_mode_preserves_standard_acp_prompt_behavior ... ok
+test exec_leaves_stdin_alone_when_given_a_prompt ... ok
+test exec_managed_preserves_standard_permission_answers ... ok
+test exec_managed_stream_tags_every_event_and_routes_two_sessions ... ok
+test exec_prints_only_the_final_agent_response ... ok
+test exec_reads_the_prompt_from_stdin ... ok
+test exec_reads_the_prompt_from_the_stdin_sentinel ... ok
+test exec_requires_a_prompt_from_some_source ... ok
+test exec_reports_agent_prompt_failures_on_stderr ... ok
+test exec_standard_prompt_after_extension_turn_excludes_old_output ... ok
+test exec_standard_prompt_completes_when_permission_is_answered_through_managed_protocol ... ok
+test print_rejects_a_subcommand ... ok
+test print_flag_is_an_alias_for_exec ... ok
+test print_rejects_images_it_cannot_attach ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+
+     Running tests/host_lifecycle.rs (nori-rs/target/debug/deps/host_lifecycle-2dd2c6bc77e7abf2)
+
+running 6 tests
+test attach_requires_multi_session_before_opening_terminal ... ok
+test host_can_be_stopped_even_if_configuration_was_broken_after_start ... ok
+test host_token_is_private_and_never_printed ... ok
+test detached_host_stays_alive_empty_and_stops_explicitly ... ok
+test token_symlink_is_refused_without_overwriting_target ... ok
+test occupied_port_fails_without_publishing_a_host ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+     Running tests/nori_harness_crate.rs (nori-rs/target/debug/deps/nori_harness_crate-c75c16fab8b91b35)
+
+running 1 test
+test nori_harness_crate_is_available_to_cli ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests nori_cli
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

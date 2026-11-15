@@ -1,0 +1,40 @@
+bash-5.2$ /home/sprite/org/workspace/cli/.local/pr652/interactive/run host --port 17420
+Host started (pid 78109)  ws://127.0.0.1:17420/sessions
+Token: /home/sprite/org/workspace/cli/.local/pr652/interactive/home/host/token (owner-only)
+bash-5.2$ /home/sprite/org/workspace/cli/.local/pr652/interactive/run host
+Host already running (pid 78109)  ws://127.0.0.1:17420/sessions
+bash-5.2$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

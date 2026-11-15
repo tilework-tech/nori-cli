@@ -1,0 +1,13 @@
+OK: Found 'Sessions 1'
+/home/sprite/org/workspace/cli/.local/pr652/captures/plain-attach-nonempty/screen.txt
+/home/sprite/org/workspace/cli/.local/pr652/captures/plain-attach-nonempty/screen.png
+/home/sprite/org/workspace/cli/.local/pr652/captures/plain-attach-nonempty/metadata.json
+OK: Found 'closed'
+/home/sprite/org/workspace/cli/.local/pr652/captures/last-session-closed/screen.txt
+/home/sprite/org/workspace/cli/.local/pr652/captures/last-session-closed/screen.png
+/home/sprite/org/workspace/cli/.local/pr652/captures/last-session-closed/metadata.json
+OK: Found 'Host stopped.'
+/home/sprite/org/workspace/cli/.local/pr652/captures/host-stop/screen.txt
+/home/sprite/org/workspace/cli/.local/pr652/captures/host-stop/screen.png
+/home/sprite/org/workspace/cli/.local/pr652/captures/host-stop/metadata.json
+PASS plain nonempty attach; close last session leaves host alive; host stop exits

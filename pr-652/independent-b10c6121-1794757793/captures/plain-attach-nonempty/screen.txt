@@ -1,0 +1,40 @@
+ Nori host  WATCHING · read-only · alt+t take control
+ Sessions · /new starts a session · ctrl+d detaches
+
+
+  Sessions 1
+
+     ID        AGENT           STATUS            AGE    TITLE
+  ▏  05839f76  mock-model      ready             3s     D2 final lifecycle                                           ▕
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

@@ -1,0 +1,44 @@
+SHOULD-FIX: original attachment remains RECONNECTING >35 seconds after same-port restart; old bearer gets HTTP401; new attachment shows Sessions 0. Old UI incorrectly says sessions continue on the host.
+Host started (pid 115229)  ws://127.0.0.1:17420/sessions
+Token: /home/sprite/org/workspace/cli/.local/pr652/interactive/home/host/token (owner-only)
+old-token HTTP 401
+ Nori host  RECONNECTING · sessions continue on the host
+ mock-model · f4050e7c-01be-4acc-97fb-afb9dd0643a7 · ready
+
+ › You
+ NET baseline
+
+ D2 independent answer
+
+ › You
+ NET missed drop
+
+ D2 independent answer
+
+ › You
+ NET missed blackhole
+
+ D2 independent answer
+
+ Control moved to another terminal. You are now watching; alt+t takes control.
+
+ › You
+ NET after recovery
+
+ D2 independent answer
+
+ Connection lost. Reconnecting… WebSocket protocol error: Connection reset without closing handshake
+
+
+
+
+
+
+
+
+
+ Connection lost. Reconnecting… WebSocket protocol error: Connection reset without closing handshake
+
+› Send a prompt
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

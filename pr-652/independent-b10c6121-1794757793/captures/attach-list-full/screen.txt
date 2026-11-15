@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · b7487915-0ef3-442b-a3a1-06194581616b · ready
+
+
+  Sessions 3
+
+     ID        AGENT           STATUS            AGE    TITLE
+     d400ca5d  mock-model      ready             3m     D2 history one
+  ▏   (curre…  mock-model      ready             1m     D2 stable restart history                                    ▕
+     96d510d0  mock-model      ready             1m     D2 long title aligned columns should preserve t…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

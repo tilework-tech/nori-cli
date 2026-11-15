@@ -1,0 +1,40 @@
+bash-5.2$ cat /home/sprite/org/workspace/cli/.local/pr652/auth-lifecycle.txt
+D2 independent real-process probes | b10c6121 | auth-lifecycle
+
+PASS host starts detached
+PASS duplicate start retains same PID and endpoint
+PASS startup does not print token
+PASS auth missing
+PASS auth wrong
+PASS auth legacy-valid
+PASS auth legacy-missing
+PASS piped list flat headings and no ANSI
+PASS last closed session leaves host running
+PASS kill9 stale state and lock recover
+PASS host restart rotates token
+PASS host restart has empty in-memory registry
+PASS old token refused after host restart
+PASS explicit stop releases lock and removes discovery
+PASS occupied port startup fails without publishing state
+PASS failed occupied-port startup leaves lock reusable
+bash-5.2$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,469 @@
+   Compiling syn v2.0.104
+   Compiling typenum v1.18.0
+   Compiling cc v1.4.4
+   Compiling ring v0.17.14
+   Compiling generic-array v0.14.7
+   Compiling thiserror-impl v1.0.69
+   Compiling getrandom v0.2.16
+   Compiling termios v0.2.2
+   Compiling serial-core v0.4.0
+   Compiling ioctl-rs v0.1.6
+   Compiling rustix v1.0.8
+   Compiling memchr v2.7.5
+   Compiling serial-unix v0.4.0
+   Compiling thiserror v1.0.69
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.6
+   Compiling vte_generate_state_changes v0.1.2
+   Compiling linux-raw-sys v0.9.4
+   Compiling rustls v0.23.46
+   Compiling vte v0.11.1
+   Compiling nix v0.25.1
+   Compiling rustls-webpki v0.103.16
+   Compiling serde_core v1.0.228
+   Compiling miniz_oxide v0.8.9
+   Compiling digest v0.10.7
+   Compiling filedescriptor v0.8.3
+   Compiling serial v0.4.0
+   Compiling aho-corasick v1.1.3
+   Compiling thiserror-impl v2.0.17
+   Compiling regex-automata v0.4.13
+   Compiling ureq-proto v0.6.0
+   Compiling portable-pty v0.8.1
+   Compiling serde_json v1.0.145
+   Compiling sha1 v0.10.6
+   Compiling vt100 v0.15.2
+   Compiling tempfile v3.23.0
+   Compiling thiserror v2.0.17
+   Compiling flate2 v1.1.2
+   Compiling tungstenite v0.26.2
+   Compiling ureq v3.3.0
+   Compiling regex v1.12.2
+   Compiling tui-pty-e2e v0.1.0 (/home/sprite/org/workspace/cli/nori-rs/tui-pty-e2e)
+warning: method `wait_for_child_exit` is never used
+   --> tui-pty-e2e/tests/cloud_mode.rs:146:8
+    |
+ 41 | impl FakeHandroll {
+    | ----------------- method in this implementation
+...
+146 |     fn wait_for_child_exit(&self, pid: u32, timeout: Duration) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `tui-pty-e2e` (test "cloud_mode") generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.04s
+     Running unittests src/lib.rs (nori-rs/target/debug/deps/tui_pty_e2e-07d82e85282b5aa1)
+
+running 11 tests
+test emulator::tests::an_erase_split_across_reads_still_applies ... ok
+test emulator::tests::erase_scrollback_drops_history_and_keeps_the_screen ... ok
+test emulator::tests::history_keeps_lines_scrolled_off_the_screen ... ok
+test tests::normalizes_canonical_macos_temp_directories ... ok
+test tests::test_normalize_acp_error_messages ... ok
+test tests::test_normalize_platform_temp_directories ... ok
+test tests::test_normalize_prompt_capability_placeholders ... ok
+test tests::test_normalize_worked_for_line ... ok
+test tests::test_normalize_version_and_skillset ... ok
+test tests::test_normalize_wrapped_skillset_init_header ... ok
+test tests::test_strip_git_stats_from_footer ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/acp_exit_cleanup.rs (nori-rs/target/debug/deps/acp_exit_cleanup-06f28de4b7e8f1fb)
+
+running 4 tests
+test test_acp_agent_cleanup_on_exit_command ... ok
+test test_acp_agent_cleanup_on_ctrl_c ... ok
+test test_local_quit_does_not_wait_one_second_for_eof_ignoring_agent ... ok
+test test_acp_agent_cleanup_on_quit_command ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.06s
+
+     Running tests/acp_file_operations.rs (nori-rs/target/debug/deps/acp_file_operations-e7630280dc226076)
+
+running 8 tests
+test test_acp_create_new_file ... ok
+test test_acp_create_file_with_parent_dirs ... ok
+test test_acp_file_write_snapshot ... ignored
+test test_acp_edit_existing_file ... ok
+test test_acp_multiple_file_writes ... ok
+test test_acp_write_outside_workspace_denied ... ok
+test test_acp_write_system_path_denied ... ok
+test test_acp_write_to_tmp_allowed ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 17.25s
+
+     Running tests/acp_mcp_command.rs (nori-rs/target/debug/deps/acp_mcp_command-1993c100810ca6af)
+
+running 2 tests
+test test_mcp_command_no_servers_opens_picker ... ok
+test test_mcp_command_opens_picker_with_servers ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.37s
+
+     Running tests/acp_message_draining.rs (nori-rs/target/debug/deps/acp_message_draining-7399bad36b092a15)
+
+running 6 tests
+test test_interactive_debug_draining ... ignored
+test test_long_response_appears_immediately ... ok
+test test_delayed_streaming_response ... ok
+test test_single_prompt_response_appears_immediately ... ok
+test test_tool_call_response_draining ... ok
+test test_two_prompts_responses_not_off_by_one ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 13.18s
+
+     Running tests/acp_mode.rs (nori-rs/target/debug/deps/acp_mode-f9a846870e10718b)
+
+running 6 tests
+test test_acp_approval_request_displayed_in_tui ... ok
+test test_acp_approval_full_flow ... ok
+test test_acp_mode_startup_snapshot ... ignored
+test test_acp_mode_prompt_response_flow ... ok
+test test_acp_mode_startup_with_mock_agent ... ok
+test test_acp_write_text_file ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 13.07s
+
+     Running tests/acp_prompt_errors.rs (nori-rs/target/debug/deps/acp_prompt_errors-4a94e1feecd13117)
+
+running 2 tests
+test test_acp_prompt_failure_tui_remains_responsive ... ok
+test test_acp_prompt_failure_shows_error_to_user ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.26s
+
+     Running tests/acp_resume_session_list.rs (nori-rs/target/debug/deps/acp_resume_session_list-463af142bd7b939b)
+
+running 1 test
+test resume_picker_lists_agent_sessions_when_session_list_supported ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.47s
+
+     Running tests/acp_runaway_search.rs (nori-rs/target/debug/deps/acp_runaway_search-fb80df54a83a17b8)
+
+running 1 test
+test test_runaway_search_transcript_preserves_the_raw_acp_tool_stream ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.12s
+
+     Running tests/acp_tool_calls.rs (nori-rs/target/debug/deps/acp_tool_calls-fdf98e78fc6e720b)
+
+running 10 tests
+test test_acp_tool_call_completion_rendered_in_tui ... ok
+test test_acp_generic_tool_call_shows_resolved_name ... ok
+test test_acp_tool_call_rendered_in_tui ... ok
+test test_acp_tool_call_no_duplicate_messages ... ok
+test test_acp_tool_call_snapshot ... ok
+test test_exploring_cell_flushed_immediately_without_agent_text ... ok
+test test_multi_call_exploring_cells_with_out_of_order_completion ... ok
+test test_no_orphan_tool_cells_from_cascade_deferral ... ok
+test test_stuck_tool_calls_dont_block_agent_message ... ok
+test test_tool_calls_during_final_stream_not_shown_after ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 26.53s
+
+     Running tests/agent_switching.rs (nori-rs/target/debug/deps/agent_switching-c158582aec70e2a9)
+
+running 17 tests
+test test_acp_agent_subprocess_spawned ... ok
+test test_acp_agent_switch_via_model_picker ... ok
+test test_acp_cleanup_outside_prompt_turn ... ok
+test test_agent_candidate_activation_failure_keeps_current_session_promptable ... ok
+test test_agent_candidate_cancel_keeps_current_session_promptable ... ok
+test test_agent_command_shows_available_agents ... ok
+test test_agent_picker_no_switch_during_streaming ... ok
+test test_agent_picker_shows_five_agents_in_debug_build ... ok
+test test_agent_switch_activates_prepared_candidate ... ok
+test test_agent_candidate_preparation_timeout_keeps_current_session_promptable ... ok
+test test_agent_switch_message_flow_mock_to_mock_alt ... ok
+test test_connecting_status_during_slow_agent_startup ... ok
+test test_different_agents_different_subprocesses ... ok
+test test_model_command_shows_disabled_in_acp_mode ... ok
+test test_slash_popup_shows_current_agent_in_description ... ok
+test test_startup_activation_reuses_prepared_subprocess ... ok
+test test_slash_popup_shows_current_approval_mode_in_description ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 55.42s
+
+     Running tests/analytics.rs (nori-rs/target/debug/deps/analytics-d8359b03a55d3d42)
+
+running 2 tests
+test cloud_prompt_reports_cloud_mode_after_the_agent_connects ... ok
+test interactive_prompt_reports_authenticated_agent_session ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.02s
+
+     Running tests/browser_command.rs (nori-rs/target/debug/deps/browser_command-6d47879cfdb06b6f)
+
+running 1 test
+test browser_command_agent_modifies_page ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cloud_mode.rs (nori-rs/target/debug/deps/cloud_mode-63f29126d3913dc4)
+
+running 24 tests
+test test_cloud_close_returns_to_the_picker ... ok
+test test_cloud_close_beside_another_session_lists_it_as_closed ... ok
+test test_cloud_create_new_error_shows_message_and_detail_without_json_noise ... ok
+test test_cloud_create_new_shows_connection_progress_and_blocks_early_submit ... ok
+test test_cloud_entry_picker_create_new_starts_fresh_session ... ok
+test test_cloud_entry_picker_resume_row_reattaches_live ... ok
+test test_cloud_list_failure_does_not_claim_a_new_session ... ok
+test test_cloud_mode_boots_into_session_picker_without_claiming ... ok
+test test_cloud_mode_bypasses_local_onboarding_and_trust ... ok
+test test_cloud_mode_bypasses_per_session_skillset_picker ... ok
+test test_cloud_mode_child_death_mid_session_surfaces_error ... ok
+test test_cloud_mode_ignores_automatic_worktree ... ok
+test test_cloud_mode_overrides_agent_flag ... ok
+test test_cloud_mode_requires_handroll_binary ... ok
+test test_cloud_mode_passes_broker_url_from_config ... ok
+test test_cloud_mode_round_trips_prompt_through_handroll ... ok
+test test_cloud_mode_sends_eof_detach_to_handroll_on_exit ... ok
+test test_cloud_mode_surfaces_auth_error_from_child_stderr ... ok
+test test_cloud_mode_writes_local_transcript ... ok
+test test_cloud_new_reuses_in_flight_entry_preparation ... ok
+test test_cloud_quit_exits_fast_even_if_child_ignores_eof ... ok
+test test_cloud_sessions_share_the_session_list ... ok
+test test_cloud_start_new_preserves_the_deferred_positional_prompt ... ok
+test test_plain_nori_does_not_boot_into_the_agent_session_picker ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 54.69s
+
+     Running tests/context.rs (nori-rs/target/debug/deps/context-dccb71e27c4dbe59)
+
+running 4 tests
+test context_command_renders_agent_reported_usage ... ok
+test context_can_inspect_an_unfinished_turn_without_interrupting_it ... ok
+test context_command_renders_unknown_usage_without_prompting_the_agent ... ok
+test context_grid_alternates_turn_segments_without_adding_a_prompt ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.00s
+
+     Running tests/context_instructions.rs (nori-rs/target/debug/deps/context_instructions-fca3190908e80c0c)
+
+running 1 test
+test repeated_context_with_real_claude_instructions_is_prompt_and_reads_edits ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.99s
+
+     Running tests/exit_statistics.rs (nori-rs/target/debug/deps/exit_statistics-822e5724e105f046)
+
+running 2 tests
+test test_exit_message_displays_on_slash_exit ... ok
+test test_exit_message_displays_on_ctrl_d ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.51s
+
+     Running tests/host_attach.rs (nori-rs/target/debug/deps/host_attach-6f92c1bc5f638738)
+
+running 6 tests
+test dropped_tcp_connection_shows_reconnecting_and_replays_missed_output_once ... ok
+test detach_and_named_reattach_keep_the_session_history_and_host_alive ... ok
+test host_starts_without_a_terminal_session_and_stops_explicitly ... ok
+test two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt ... ok
+test silently_blackholed_connection_shows_reconnecting_and_replays_missed_output_once ... ok
+test watcher_cannot_answer_a_permission_request_but_controller_can ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 39.61s
+
+     Running tests/input_handling.rs (nori-rs/target/debug/deps/input_handling-c533a2228a4deccc)
+
+running 5 tests
+test test_backspace ... ok
+test test_arrows ... ok
+test test_ctrl_c_clears_input ... ok
+test test_history_navigation_multiple_messages ... ok
+test test_history_navigation_up_down ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.06s
+
+     Running tests/live_acp.rs (nori-rs/target/debug/deps/live_acp-6f2b6895c4695e19)
+
+running 2 tests
+test test_claude_acp_live_response ... ignored
+test test_gemini_acp_live_response ... ignored
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/live_custom_agent.rs (nori-rs/target/debug/deps/live_custom_agent-f10331d59140843d)
+
+running 2 tests
+test test_elizacp_custom_agent_display_name ... ignored
+test test_elizacp_custom_agent_startup_and_response ... ignored
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/markdown_table.rs (nori-rs/target/debug/deps/markdown_table-071b689409a21621)
+
+running 1 test
+test test_streamed_markdown_table_renders_as_a_grid ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.25s
+
+     Running tests/multi_session.rs (nori-rs/target/debug/deps/multi_session-dd542dc1cf163e8d)
+
+running 8 tests
+test jump_timing_on_a_long_history ... ignored, measurement, takes minutes
+test new_keeps_the_previous_session_running_behind_the_new_one ... ok
+test a_burst_of_moves_lands_on_the_last_target ... ok
+test one_session_shows_no_status_line ... ok
+test session_keys_do_nothing_without_the_flag ... ok
+test session_moves_follow_the_bindings_in_config ... ok
+test session_moves_reprint_only_the_target_and_keep_unsent_input ... ok
+test status_line_counts_sessions_by_status ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 22.03s
+
+     Running tests/nori_footer.rs (nori-rs/target/debug/deps/nori_footer-808aed25d4daf460)
+
+running 6 tests
+test test_footer_displays_git_branch ... ok
+test test_default_idle_footer_has_no_metadata_clutter ... ok
+test test_footer_full_startup_with_all_info ... ok
+test test_footer_vertical_layout_from_config ... ok
+test test_footer_with_segments_disabled ... ok
+test test_footer_without_git_repo ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.47s
+
+     Running tests/prepared_startup.rs (nori-rs/target/debug/deps/prepared_startup-2a5d93edf75fa9bb)
+
+running 12 tests
+test agent_without_session_list_activates_a_session_on_startup ... ok
+kill: (130961): No such process
+kill: (130961): No such process
+test exit_reaps_in_flight_preparation ... ok
+test ordinary_agent_prepares_before_running_a_positional_prompt ... ok
+test first_prompt_waits_for_preparation_then_activates_once ... ok
+test policy_change_is_applied_to_the_active_session ... ok
+test positional_prompt_activates_after_preparation_exactly_once ... ok
+test remote_adapter_activates_a_session_on_startup ... ok
+test slash_new_reuses_in_flight_preparation ... ok
+test slash_resume_reuses_in_flight_preparation_catalog ... ok
+test slash_resume_uses_resume_capability_on_the_prepared_connection ... ok
+kill: (131560): No such process
+kill: (131560): No such process
+test primary_preparation_timeout_reaps_the_child_without_activating ... ok
+test startup_activates_and_local_status_renders ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 39.26s
+
+     Running tests/prompt_flow.rs (nori-rs/target/debug/deps/prompt_flow-5c6e6adb79a5f662)
+
+running 3 tests
+test test_multiline_input ... ok
+test test_submit_prompt_custom_response ... ok
+test test_submit_prompt_default_response ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.45s
+
+     Running tests/remote_control.rs (nori-rs/target/debug/deps/remote_control-0f054832c714f06e)
+
+running 1 test
+test startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_owner ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.88s
+
+     Running tests/session_lifecycle.rs (nori-rs/target/debug/deps/session_lifecycle-20754b35e0519aa7)
+
+running 17 tests
+test a_long_title_keeps_the_request_line_on_one_row ... ok
+test a_loop_in_the_background_stays_in_its_own_row ... ok
+test a_new_session_starts_beside_a_busy_one_and_takes_the_next_prompt ... ok
+test a_restarted_session_keeps_its_title ... ok
+test a_request_answered_by_remote_control_clears_the_approval_in_the_tui ... ok
+test a_same_process_head_fork_is_allowed_at_the_cap_but_a_transcript_fork_is_not ... ok
+test at_the_cap_a_new_session_is_refused_with_how_to_close_one ... ok
+test at_the_cap_a_transcript_fork_preserves_the_current_session ... ok
+test at_the_cap_resume_preserves_the_current_session_and_explains_how_to_make_room ... ok
+test closing_a_busy_session_asks_for_a_second_press ... ok
+test close_command_closes_the_session_on_screen_and_shows_the_next ... ok
+test ctrl_r_preserves_session_identity_and_its_remote_subscription ... ok
+test ctrl_d_in_the_list_closes_a_session_and_frees_its_slot ... ok
+test legacy_remote_control_follows_the_session_on_screen ... ok
+test managed_remote_endpoint_requires_multi_session ... ok
+test preparing_another_agent_leaves_no_line_in_the_old_session ... ok
+test restarting_a_failed_parent_keeps_its_child_under_the_replacement ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 59.78s
+
+     Running tests/session_list.rs (nori-rs/target/debug/deps/session_list-68c08d3681cf9bed)
+
+running 10 tests
+test a_focused_terminal_gets_no_notification ... ok
+test a_background_request_is_named_and_one_key_jumps_to_it_for_an_answer ... ok
+test a_fork_is_listed_under_its_parent_and_its_request_marks_the_parent ... ok
+test an_agent_that_dies_fails_only_its_session_which_can_be_resumed ... ok
+test an_unfocused_terminal_is_notified_when_a_background_session_is_waiting_on_you ... ok
+test enter_in_the_list_jumps_to_that_session ... ok
+test left_with_text_in_the_prompt_moves_the_cursor_instead_of_opening_the_list ... ok
+test left_on_an_empty_prompt_lists_sessions_with_status_and_preview ... ok
+test session_list_is_absent_without_the_flag ... ok
+test tab_shows_only_sessions_waiting_on_you_and_typing_filters ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 38.18s
+
+     Running tests/session_transcripts.rs (nori-rs/target/debug/deps/session_transcripts-06ffc0ae8ed08690)
+
+running 1 test
+test resume_after_new_shows_each_turn_once ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.57s
+
+     Running tests/startup.rs (nori-rs/target/debug/deps/startup-293e815dcc53dc57)
+
+running 12 tests
+test skillset_per_session_activates_after_selection ... ok
+test model_command_works_before_first_prompt ... ok
+test startup_activates_session_without_input ... ok
+test test_poll_does_not_block_when_no_data ... ok
+test test_runs_in_temp_directory_by_default ... ok
+test test_startup_error_for_unregistered_model ... ok
+test test_startup_hides_install_hint_when_nori_installed ... ok
+test test_startup_shows_nori_banner ... ok
+test test_startup_shows_welcome ... ok
+test test_startup_with_dimensions ... ok
+test test_trust_directory_saves_to_config ... ok
+test test_trust_screen_is_skipped_with_default_config ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 28.21s
+
+     Running tests/startup_draft.rs (nori-rs/target/debug/deps/startup_draft-0fb12bcc7dd8b2ab)
+
+running 1 test
+test startup_preserves_draft_cursor_across_activation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.35s
+
+     Running tests/streaming.rs (nori-rs/target/debug/deps/streaming-69ba0ff479046753)
+
+running 5 tests
+test test_ctrl_c_cancels_streaming ... ok
+test test_escape_cancels_streaming ... ok
+test test_prompt_still_streams_after_interrupt ... ok
+test test_prompt_submitted_during_cancelling_is_not_lost ... ok
+test test_submit_text ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.28s
+
+     Running tests/transcript_persistence.rs (nori-rs/target/debug/deps/transcript_persistence-c4088a3a10d0cfd1)
+
+running 6 tests
+test test_project_metadata_created ... ok
+test test_multiple_sessions_same_project ... ok
+test test_resume_viewonly_shows_transcript ... ok
+test test_session_meta_fields ... ok
+test test_transcript_contains_assistant_message ... ok
+test test_transcript_created_on_session ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.26s
+
+   Doc-tests tui_pty_e2e
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,5 @@
+nori-acp-host exit=0
+nori-tui exit=0
+nori-cli exit=0
+nori-harness-confirm exit=0
+tui-pty-e2e exit=0

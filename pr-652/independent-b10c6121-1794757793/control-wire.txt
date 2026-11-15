@@ -1,0 +1,24 @@
+D2 independent real-process probes | b10c6121 | control-wire
+
+PASS token and host directory permissions
+PASS admin observe does not claim control
+PASS first interactive client controls
+PASS second client watches
+PASS third client watches
+PASS watcher prompt refused on wire
+PASS third client cannot new
+PASS third client cannot close
+PASS third client cannot cancel
+PASS third client cannot resume
+PASS B takes control during active turn
+PASS former controller sees watcher role mid-turn
+PASS former controller receives role notification
+PASS former controller cannot cancel admitted turn
+PASS new controller can cancel former controller turn
+PASS watcher permission answer refused on wire
+PASS permission remains pending after refused watcher answer
+PASS C takes control with permission pending
+PASS former controller cannot answer after permission takeover
+PASS new controller resolves same pending permission
+PASS three clients receive contiguous nonduplicated envelope prefixes
+PASS reconnect replays only strictly newer envelopes without gaps
