@@ -223,6 +223,14 @@ impl ChatWidget {
         self.first_prompt_text.clone()
     }
 
+    /// What the session list calls this session before the agent sums it
+    /// up: the first prompt, else the task of a `/delegate` sent first.
+    pub(crate) fn first_input_title(&self) -> Option<String> {
+        self.first_prompt_text
+            .clone()
+            .or_else(|| self.first_delegated_task.clone())
+    }
+
     pub(crate) fn take_initial_input(&mut self) -> (Option<String>, Vec<PathBuf>) {
         let Some(UserMessage { text, image_paths }) = self.initial_user_message.take() else {
             return (None, Vec::new());

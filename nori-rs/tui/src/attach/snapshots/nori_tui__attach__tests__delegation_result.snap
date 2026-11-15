@@ -1,11 +1,12 @@
 ---
 source: tui/src/attach/tests.rs
+assertion_line: 548
 expression: rendered
 ---
  Nori host  WATCHING · read-only · alt+t take control
  session · parent-session
 
- ○ result from mock-model-alt · Review the parser · ready
+ ○ result from mock-model-alt · Review the parser · done
    ▏ Parser reviewed
    returns to mock-model on its own
 

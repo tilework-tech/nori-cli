@@ -1,5 +1,6 @@
 ---
 source: tui-pty-e2e/tests/session_list.rs
+assertion_line: 237
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 • Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
@@ -8,7 +9,7 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 • alpha agent answer
 
-  ● mock:request-permission… is waiting on you · approve: rm -rf target/debug (+1 more) · alt + down to jump
+  ● mock:request-permission:rm -rf targe… is waiting on you · approve: rm -rf… (+1 more) · alt + down to jump
   2 waiting on you · 1 ready
 
 › [DEFAULT_PROMPT]

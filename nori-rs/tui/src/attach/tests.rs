@@ -113,8 +113,16 @@ fn screen(state: &AttachState) -> String {
     screen_with_composer(state, &crate::ComposerInput::for_attachment())
 }
 
+fn screen_at(state: &AttachState, width: u16) -> String {
+    screen_sized(state, &crate::ComposerInput::for_attachment(), width)
+}
+
 fn screen_with_composer(state: &AttachState, composer: &crate::ComposerInput) -> String {
-    let area = ratatui::layout::Rect::new(0, 0, 90, 18);
+    screen_sized(state, composer, 90)
+}
+
+fn screen_sized(state: &AttachState, composer: &crate::ComposerInput, width: u16) -> String {
+    let area = ratatui::layout::Rect::new(0, 0, width, 18);
     let mut buffer = ratatui::buffer::Buffer::empty(area);
     super::render::render(state, composer, area, &mut buffer);
     (0..area.height)
@@ -585,6 +593,7 @@ fn session_tree_keeps_children_under_their_parent_with_aligned_columns() {
     let rendered = screen(&state);
     let titles: Vec<_> = rendered
         .lines()
+        .skip_while(|line| !line.contains("Sessions 5"))
         .filter_map(|line| {
             ["Ship", "Port", "Write", "Update", "Spike"]
                 .iter()
@@ -886,4 +895,136 @@ fn explicit_session_list_navigation_cancels_deferred_next_waiting() {
         rx.try_recv().is_err(),
         "refresh cannot override explicit navigation"
     );
+}
+
+fn family() -> serde_json::Value {
+    json!({"sessions":[
+        {"session_id":"root-session","agent":"mock-model","status":"ready","family_status":"waiting_on_you","title":"Ship tree-row picker","depth":0},
+        {"session_id":"child-session","agent":"mock-model-alt","status":"working","family_status":"waiting_on_you","title":"Port picker","parent":"root-session","depth":1,"source":"session"},
+        {"session_id":"grandchild-session","agent":"mock-model","status":"waiting_on_you","family_status":"waiting_on_you","title":"Write snapshot tests","parent":"child-session","depth":2,"source":"session"},
+        {"session_id":"other-session","agent":"mock-model","status":"ready","family_status":"ready","title":"Spike transport","depth":0}
+    ]})
+}
+
+fn viewing(selected: &str) -> AttachState {
+    let mut state = AttachState {
+        connected: true,
+        selected: Some(selected.into()),
+        ..Default::default()
+    };
+    state.replace_sessions(family()).unwrap();
+    state.list_open = false;
+    state
+}
+
+#[test]
+fn a_top_level_session_says_when_a_grandchild_waits_on_you() {
+    let rendered = screen(&viewing("root-session"));
+    let waiting = rendered
+        .lines()
+        .find(|line| line.contains("is waiting on you"))
+        .unwrap_or_else(|| panic!("waiting line missing:\n{rendered}"));
+    assert!(
+        waiting.contains("● Port picker › Write snapshot tests is waiting on you"),
+        "{rendered}"
+    );
+    assert!(
+        waiting.trim_end().ends_with("alt+down to jump"),
+        "{rendered}"
+    );
+    let mut state = viewing("root-session");
+    state.list_open = true;
+    let list = screen(&state);
+    let row = |title: &str| {
+        list.lines()
+            .skip_while(|line| !line.contains("Sessions 4"))
+            .find(|line| line.contains(title))
+            .unwrap_or_else(|| panic!("{title} row in:\n{list}"))
+            .to_string()
+    };
+    assert!(
+        row("Ship tree-row picker").contains("waiting on you"),
+        "{list}"
+    );
+    assert!(row("Port picker").contains("working"), "{list}");
+    assert!(row("Spike transport").contains("ready"), "{list}");
+}
+
+#[test]
+fn the_waiting_line_names_another_waiting_session_never_the_one_on_screen() {
+    let mut state = AttachState {
+        connected: true,
+        selected: Some("grandchild-session".into()),
+        ..Default::default()
+    };
+    let mut sessions = family();
+    sessions["sessions"][3]["status"] = json!("waiting_on_you");
+    sessions["sessions"][3]["family_status"] = json!("waiting_on_you");
+    state.replace_sessions(sessions).unwrap();
+    state.list_open = false;
+    let rendered = screen(&state);
+    let waiting = rendered
+        .lines()
+        .find(|line| line.contains("is waiting on you"))
+        .unwrap_or_else(|| panic!("waiting line missing:\n{rendered}"));
+    assert!(
+        waiting.contains("● Spike transport is waiting on you"),
+        "{rendered}"
+    );
+    assert!(!waiting.contains("Write snapshot tests"), "{rendered}");
+}
+
+#[test]
+fn a_grandchild_breadcrumb_shows_the_path_from_its_top_level_session() {
+    let rendered = screen_at(&viewing("grandchild-session"), 140);
+    let breadcrumb = rendered
+        .lines()
+        .find(|line| line.contains("›"))
+        .unwrap_or_else(|| panic!("breadcrumb missing:\n{rendered}"));
+    assert!(
+        breadcrumb.contains(
+            "mock-model · Ship tree-row picker › mock-model-alt · Port picker › mock-model · Write snapshot tests"
+        ),
+        "{rendered}"
+    );
+    for width in [100, 80] {
+        let rendered = screen_at(&viewing("grandchild-session"), width);
+        let breadcrumb = rendered
+            .lines()
+            .find(|line| line.contains("›"))
+            .unwrap_or_else(|| panic!("breadcrumb missing:\n{rendered}"));
+        assert!(
+            breadcrumb.starts_with(" mock-model · Ship"),
+            "@{width}: {rendered}"
+        );
+        assert!(
+            breadcrumb.contains("› mock-model · Write"),
+            "@{width}: {rendered}"
+        );
+        assert!(
+            breadcrumb.ends_with("alt+up parent"),
+            "@{width}: {rendered}"
+        );
+    }
+}
+
+#[test]
+fn an_untitled_session_is_called_new_session_not_an_id() {
+    let mut state = AttachState {
+        connected: true,
+        selected: Some("24444c0e-1111-2222-3333-444444444444".into()),
+        ..Default::default()
+    };
+    state
+        .replace_sessions(json!({"sessions":[
+            {"session_id":"24444c0e-1111-2222-3333-444444444444","agent":"mock-model","status":"ready","title":null}
+        ]}))
+        .unwrap();
+    state.list_open = false;
+    let rendered = screen(&state);
+    assert!(
+        rendered.contains("mock-model · new session · ready"),
+        "{rendered}"
+    );
+    assert!(!rendered.contains("24444c0e"), "{rendered}");
 }

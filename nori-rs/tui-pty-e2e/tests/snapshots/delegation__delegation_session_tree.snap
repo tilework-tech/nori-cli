@@ -1,5 +1,6 @@
 ---
 source: tui-pty-e2e/tests/delegation.rs
+assertion_line: 278
 expression: normalize_for_input_snapshot(list)
 ---
   Sessions 2 · 1 ready  tab: waiting only · type to search
@@ -7,9 +8,9 @@ expression: normalize_for_input_snapshot(list)
   All  waiting on you
 
     Session                                                                   Agent           Status
-  › ○ parent task identity (current)                                          Mock ACP        ready
+  › ○ parent task identity (current)                                          mock-model      ready
     Permission granted with option: allow
-    └─ · mock:request-permission:write-child-file                             Mock ACP Alt    closed
-       closed
+    └─ · mock:request-permission:write-child-file                             mock-model-alt  done
+       Permission granted with option: allow
 
   ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close

@@ -32,6 +32,7 @@ pub(super) struct Runtime {
 
 impl Runtime {
     pub fn set_next_waiting_binding(&mut self, binding: nori_config::HotkeyBinding) {
+        self.state.jump_binding = binding.clone();
         self.next_waiting_binding = binding;
         self.composer.set_hint_items(vec![
             (self.session_list_binding.as_str(), "sessions"),

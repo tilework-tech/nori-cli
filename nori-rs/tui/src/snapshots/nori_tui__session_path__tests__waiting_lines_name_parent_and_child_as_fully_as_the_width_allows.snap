@@ -1,0 +1,22 @@
+---
+source: tui/src/session_path.rs
+assertion_line: 326
+expression: "render(&[(\"child\", 118,\nwaiting_line(&child, request, 0, Some(\"alt + down\"), 118)),\n(\"child\", 78, waiting_line(&child, request, 0, Some(\"alt + down\"), 78)),\n(\"shared prefix\", 118,\nwaiting_line(&shared, request, 1, Some(\"alt + down\"), 118)),\n(\"shared prefix\", 78,\nwaiting_line(&shared, request, 1, Some(\"alt + down\"), 78)),\n(\"top level\", 78, waiting_line(&root, request, 0, Some(\"alt + down\"), 78)),\n(\"no key\", 78, waiting_line(&child, None, 0, None, 78)),])"
+---
+child @118
+● Ship tree-row picker › mock:request-permission:cargo tes… is waiting on you · cargo test --wor… · alt + down to jump
+
+child @78
+● Ship tree-row pi… › mock:request-per… is waiting on you · alt + down to jump
+
+shared prefix @118
+● mock:delegate mock-mo… › mock:delegate mock-mo… is waiting on you · cargo test --wor… (+1 more) · alt + down to jump
+
+shared prefix @78
+● mock:delega… › mock:delega… is waiting on you (+1 more) · alt + down to jump
+
+top level @78
+● Spike transport is waiting on you · cargo test --works… · alt + down to jump
+
+no key @78
+● Ship tree-row picker › mock:request-permission:cargo test… is waiting on you

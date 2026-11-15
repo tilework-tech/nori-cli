@@ -34,27 +34,37 @@ impl App {
             tui.frame_requester().schedule_frame();
             return true;
         }
-        if pressed(HotkeyAction::NextWaitingSession) && self.chat_widget.composer_is_empty() {
-            self.show_next_waiting_session();
-            tui.frame_requester().schedule_frame();
-            return true;
-        }
-        if pressed(HotkeyAction::ParentSession)
-            && let Some(parent) = self.on_screen_parent()
-            && let Some(target) = self
-                .session_facts()
-                .into_iter()
-                .find(|fact| fact.conversation_id == Some(parent))
-        {
-            self.show_session(target.generation);
-            tui.frame_requester().schedule_frame();
-            return true;
-        }
+        // A draft stays in its session's prompt, so the jump never loses it.
+        // With nothing waiting, a typed draft keeps the key for the composer.
+        let next_waiting = pressed(HotkeyAction::NextWaitingSession);
+        let parent_session = pressed(HotkeyAction::ParentSession);
         let direction = if pressed(HotkeyAction::PreviousSession) {
-            Direction::Previous
+            Some(Direction::Previous)
         } else if pressed(HotkeyAction::NextSession) {
-            Direction::Next
+            Some(Direction::Next)
         } else {
+            None
+        };
+        if next_waiting
+            && (self.show_next_waiting_session() || self.chat_widget.composer_is_empty())
+        {
+            tui.frame_requester().schedule_frame();
+            return true;
+        }
+        // Outside a delegated child there is no parent; the key does nothing.
+        if parent_session {
+            if let Some(parent) = self.on_screen_parent()
+                && let Some(target) = self
+                    .session_facts()
+                    .into_iter()
+                    .find(|fact| fact.conversation_id == Some(parent))
+            {
+                self.show_session(target.generation);
+                tui.frame_requester().schedule_frame();
+            }
+            return true;
+        }
+        let Some(direction) = direction else {
             return false;
         };
         self.step_session(direction);

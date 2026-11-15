@@ -40,6 +40,10 @@ pub(super) struct SessionRow {
     pub source: Option<String>,
     #[serde(default)]
     pub delegations: Vec<nori_protocol::Delegation>,
+    /// The status of the whole family under the top-level session: waiting
+    /// on you if any member is. Older hosts omit it.
+    #[serde(default)]
+    pub family_status: Option<SessionStatus>,
 }
 
 pub(super) enum Part {
@@ -86,6 +90,8 @@ pub(super) struct AttachState {
     pub scroll: usize,
     /// Key that moves from a delegated child to its parent.
     pub parent_binding: nori_config::HotkeyBinding,
+    /// Key that opens the next session waiting on the user.
+    pub jump_binding: nori_config::HotkeyBinding,
 }
 
 impl Default for AttachState {
@@ -116,6 +122,7 @@ impl Default for AttachState {
             replay_error: None,
             scroll: 0,
             parent_binding: nori_config::HotkeyConfig::default().parent_session,
+            jump_binding: nori_config::HotkeyConfig::default().next_waiting_session,
         }
     }
 }
@@ -152,12 +159,20 @@ impl AttachState {
                 } else {
                     format!("{}h", seconds / 3600)
                 };
-                let title = row.title.clone().unwrap_or_else(|| "New session".into());
+                let title = row
+                    .title
+                    .clone()
+                    .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.into());
+                // A top-level session speaks for its family.
+                let status = row
+                    .family_status
+                    .filter(|_| depth == 0)
+                    .unwrap_or(row.status);
                 PickerItem::new(row.session_id.clone(), "title", title)
                     .cell("id", row.session_id.chars().take(8).collect::<String>())
                     .cell("agent", row.agent.clone())
-                    .cell("status", crate::session_status::status_label(row.status))
-                    .cell_detail_tone("status", crate::session_status::status_tone(row.status))
+                    .cell("status", crate::session_status::status_label(status))
+                    .cell_detail_tone("status", crate::session_status::status_tone(status))
                     .cell("age", age)
                     .depth(depth)
                     .current(self.selected.as_ref() == Some(&row.session_id))

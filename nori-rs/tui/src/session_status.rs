@@ -41,6 +41,7 @@ pub(crate) fn status_label(status: SessionStatus) -> &'static str {
         SessionStatus::Ready => "ready",
         SessionStatus::Failed => "failed",
         SessionStatus::Closed => "closed",
+        SessionStatus::Done => "done",
     }
 }
 
@@ -54,7 +55,7 @@ pub(crate) fn status_tone(status: SessionStatus) -> nori_tui_components::DetailT
         SessionStatus::Working => DetailTone::Info,
         SessionStatus::Ready => DetailTone::Success,
         SessionStatus::Failed => DetailTone::Error,
-        SessionStatus::Closed | SessionStatus::Starting => DetailTone::Muted,
+        SessionStatus::Closed | SessionStatus::Done | SessionStatus::Starting => DetailTone::Muted,
     }
 }
 

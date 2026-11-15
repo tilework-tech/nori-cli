@@ -1,10 +1,11 @@
 ---
 source: tui/src/attach/tests.rs
+assertion_line: 571
 expression: rendered
 ---
  Nori host  WATCHING · read-only · alt+t take control
  mock-model · Parent task · ready
-
+ ● Parent task › Child task is waiting on you · alt+down to jump
 
   Sessions 2
 

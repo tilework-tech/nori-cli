@@ -138,7 +138,7 @@ impl SessionListView {
             return;
         }
         match row.status {
-            SessionStatus::Closed => {
+            SessionStatus::Closed | SessionStatus::Done => {
                 self.app_event_tx
                     .send(AppEvent::RemoveSession { generation });
             }
@@ -162,7 +162,7 @@ impl SessionListView {
     fn close_hint(&self) -> Option<KeyHint<'static>> {
         let row = self.selected_row().filter(|row| row.generation >= 0)?;
         Some(match row.status {
-            SessionStatus::Closed => KeyHint::new("ctrl+d", "remove"),
+            SessionStatus::Closed | SessionStatus::Done => KeyHint::new("ctrl+d", "remove"),
             _ if self.close_armed == Some(row.generation) => {
                 KeyHint::new("ctrl+d", "again to close")
             }
@@ -198,7 +198,7 @@ fn glyph(status: SessionStatus) -> &'static str {
         SessionStatus::Working => "⠋",
         SessionStatus::Ready => "○",
         SessionStatus::Failed => "✕",
-        SessionStatus::Closed => "·",
+        SessionStatus::Closed | SessionStatus::Done => "·",
         SessionStatus::Starting => "…",
     }
 }
@@ -223,7 +223,7 @@ fn items(rows: &[SessionRow]) -> Vec<PickerItem<SessionGeneration>> {
             if let Some(provider) = row.provider {
                 item = item.cell_tone(AGENT, provider);
             }
-            if row.status == SessionStatus::Closed {
+            if row.status.is_closed() {
                 item = item.cell_detail_tone(TITLE, DetailTone::Muted);
             }
             if row.family_status == SessionStatus::WaitingOnYou {

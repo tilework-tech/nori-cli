@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests/delegation.rs
+assertion_line: 290
 expression: screen
 ---
-› delegation result from mock-model-alt · Review the parser · completed · delivered to this session
+› delegation result from mock-model-alt · Review the parser · done · delivered to this session

@@ -1,10 +1,11 @@
 ---
 source: tui/src/attach/tests.rs
+assertion_line: 616
 expression: rendered
 ---
  Nori host  WATCHING · read-only · alt+t take control
  Sessions · /new starts a session · ctrl+d detaches
-
+ ● Ship tree picker › Port picker is waiting on you · alt+down to jump
 
   Sessions 5
 

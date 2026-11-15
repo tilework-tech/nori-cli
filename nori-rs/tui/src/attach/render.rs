@@ -9,7 +9,6 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
-use unicode_width::UnicodeWidthStr;
 
 use super::state::AttachState;
 use super::state::Part;
@@ -59,6 +58,9 @@ pub(super) fn render(
     }
     Line::from(header).render(Rect::new(area.x, area.y, area.width, 1), buf);
     identity_line(state, area.width).render(Rect::new(area.x, area.y + 1, area.width, 1), buf);
+    if let Some(line) = waiting_line(state, area.width) {
+        line.render(Rect::new(area.x, area.y + 2, area.width, 1), buf);
+    }
     let input = composer_area(state, composer, area);
     let notice_lines = notice_lines(state, area.width);
     let notice_height = u16::try_from(notice_lines.len())
@@ -112,8 +114,17 @@ pub(super) fn render(
     composer.render_ref(input, buf);
 }
 
+/// A readable name for a listed session.
+fn row_name(row: &super::state::SessionRow) -> String {
+    row.title
+        .as_deref()
+        .and_then(nori_protocol::session_display_name)
+        .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.to_string())
+}
+
 /// The selected session's agent, name, and status. Inside a delegated child
-/// it is a breadcrumb from the parent with the key that returns there.
+/// it is a breadcrumb from the top-level session, with the key that returns
+/// to the parent.
 fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
     let Some(id) = state.selected.as_ref() else {
         return Line::from(" Sessions · /new starts a session · ctrl+d detaches".dim());
@@ -122,57 +133,72 @@ fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
     let Some(current) = row(id) else {
         return Line::from(format!(" session · {id}").dim());
     };
-    let name = |row: &super::state::SessionRow| {
-        row.title
-            .as_deref()
-            .and_then(nori_protocol::session_display_name)
-            .unwrap_or_else(|| row.session_id.chars().take(8).collect())
-    };
     let status = format!(" · {}", crate::session_status::status_label(current.status));
-    let Some(parent) = current.delegating_parent().and_then(row) else {
+    if current.delegating_parent().and_then(row).is_none() {
         return Line::from(vec![
             " ".into(),
             format!("{} · ", current.agent).dim(),
-            name(current).bold(),
+            row_name(current).bold(),
             status.dim(),
         ]);
-    };
+    }
+    let mut path = vec![current];
+    while let Some(parent) = path
+        .last()
+        .and_then(|row| row.delegating_parent())
+        .and_then(row)
+        .filter(|parent| !path.iter().any(|seen| seen.session_id == parent.session_id))
+    {
+        path.push(parent);
+    }
+    let path: Vec<crate::session_path::PathStep> = path
+        .into_iter()
+        .rev()
+        .map(|row| crate::session_path::PathStep {
+            agent: row.agent.clone(),
+            name: row_name(row),
+        })
+        .collect();
     let key = if state.parent_binding.is_none() {
         String::new()
     } else {
         format!(" · {} parent", state.parent_binding.as_str())
     };
-    let parent_agent = format!("{} · ", parent.agent);
-    let child_agent = format!("{} · ", current.agent);
-    // The two names share whatever the agents, status, and parent key leave.
-    let fixed = [" ", &parent_agent, " › ", &child_agent, &status, &key]
+    let mut line = crate::session_path::breadcrumb_line(
+        &path,
+        &format!("{status}{key}"),
+        width.saturating_sub(1),
+    );
+    line.spans.insert(0, " ".into());
+    line
+}
+
+/// The next session, other than the one on screen, that waits on the user,
+/// named under its parent, with the key that jumps to it.
+fn waiting_line(state: &AttachState, width: u16) -> Option<Line<'static>> {
+    let row = |id: &str| state.sessions.iter().find(|row| row.session_id == id);
+    let waiting: Vec<&super::state::SessionRow> = state
+        .sessions
         .iter()
-        .map(|part| part.width())
-        .sum::<usize>();
-    let room = usize::from(width).saturating_sub(fixed) / 2;
-    let fit = |name: String| {
-        if name.width() <= room {
-            return name;
-        }
-        let mut kept = String::new();
-        for ch in name.chars() {
-            if kept.width() + ch.to_string().width() + 1 > room {
-                break;
-            }
-            kept.push(ch);
-        }
-        format!("{}…", kept.trim_end())
-    };
-    Line::from(vec![
-        " ".into(),
-        parent_agent.dim(),
-        fit(name(parent)).into(),
-        " › ".dim(),
-        child_agent.dim(),
-        fit(name(current)).bold(),
-        status.dim(),
-        key.dim(),
-    ])
+        .filter(|row| row.status == nori_protocol::SessionStatus::WaitingOnYou)
+        .filter(|row| state.selected.as_deref() != Some(row.session_id.as_str()))
+        .collect();
+    let first = waiting.first()?;
+    let mut path = Vec::new();
+    if let Some(parent) = first.parent.as_deref().and_then(row) {
+        path.push(row_name(parent));
+    }
+    path.push(row_name(first));
+    let key = (!state.jump_binding.is_none()).then(|| state.jump_binding.as_str().to_string());
+    let mut line = crate::session_path::waiting_line(
+        &path,
+        None,
+        waiting.len() - 1,
+        key.as_deref(),
+        width.saturating_sub(1),
+    );
+    line.spans.insert(0, " ".into());
+    Some(line)
 }
 
 fn notice_lines(state: &AttachState, width: u16) -> Vec<Line<'static>> {
