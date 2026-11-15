@@ -426,16 +426,22 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 .iter()
                 .map(|column| item.cells.get(&column.key).cloned().unwrap_or_default())
                 .collect::<Vec<_>>();
-            if !badges.is_empty()
-                && let Some(primary) = values.first_mut()
-            {
-                primary.push_str(" (");
-                primary.push_str(&badges);
-                primary.push(')');
-            }
             let (guide, description_guide) = &guides[start + row_offset];
             if let Some(primary) = values.first_mut() {
-                primary.insert_str(0, guide);
+                // Cut the title, not the badge, when the column is narrow.
+                let badge = if badges.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({badges})")
+                };
+                let room = usize::from(widths.first().copied().unwrap_or(0))
+                    .saturating_sub(guide.width() + badge.width());
+                let title = if badge.is_empty() {
+                    std::mem::take(primary)
+                } else {
+                    truncate(primary, room)
+                };
+                *primary = format!("{guide}{title}{badge}");
             }
             let row_area = Rect::new(
                 area.x,

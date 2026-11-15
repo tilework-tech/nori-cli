@@ -168,3 +168,28 @@ fn a_child_shown_without_its_parent_has_no_hanging_guide() {
     assert!(screen.contains("› Check fixtures"), "{screen}");
     assert!(!screen.contains("└─"), "{screen}");
 }
+
+#[test]
+fn a_badge_survives_when_a_long_title_is_cut() {
+    let columns = [
+        PickerColumn::flexible("title", "Session"),
+        PickerColumn::fixed("status", "Status", 16),
+    ];
+    let item = PickerItem::new(
+        "only".to_string(),
+        "title",
+        "session two question about the parser and its recovery",
+    )
+    .cell("status", "ready")
+    .current(true);
+    let state = PickerState::new("Sessions", columns, [item]);
+    let screen = render(&state, 60, 8, PickerDensity::Compact);
+    let row = screen
+        .lines()
+        .find(|line| line.contains("session two"))
+        .expect("the row is drawn");
+    assert!(
+        row.contains("(current)") && row.contains('…') && row.contains("ready"),
+        "{screen}"
+    );
+}
