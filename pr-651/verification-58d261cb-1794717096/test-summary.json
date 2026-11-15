@@ -1,0 +1,27 @@
+{
+  "requested_suites": {
+    "nori-harness": {
+      "passed": 423,
+      "ignored": 1
+    },
+    "nori-tui": {
+      "passed": 1451,
+      "ignored": 4
+    },
+    "tui-pty-e2e": {
+      "passed": 184,
+      "ignored": 9
+    }
+  },
+  "supplemental": {
+    "headless_exec": 18,
+    "nori-exec": 1,
+    "remote_ws": 22
+  },
+  "initial_fixture_failures": 3,
+  "unresolved_product_test_failures": 0,
+  "acceptance_gaps": [
+    "Ctrl+R creates a new conversation ID",
+    "New remote clients replace the previous controller"
+  ]
+}

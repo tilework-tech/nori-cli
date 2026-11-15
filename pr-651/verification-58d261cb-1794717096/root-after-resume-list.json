@@ -1,0 +1,50 @@
+{
+  "selected_session_id": "1c3d18ee-1516-45cb-92c1-26482128489b",
+  "sessions": [
+    {
+      "session_id": "5bd3bcbb-9c57-4865-95cf-4b8f1e03dfbd",
+      "agent": "mock-model",
+      "status": "ready",
+      "cwd": "/home/sprite/org/workspace/cli/.local/pr651-verification/root/pr651-root-main",
+      "parent": null,
+      "resumed_from": null,
+      "pending_requests": [],
+      "latest_seq": 25,
+      "first_available_seq": 1,
+      "age_seconds": 11,
+      "title": "ALPHA history before crash"
+    },
+    {
+      "session_id": "cd4103cf-6415-4b4e-9474-2f3bf944f44f",
+      "agent": "mock-model",
+      "status": "ready",
+      "cwd": "/home/sprite/org/workspace/cli/.local/pr651-verification/root/pr651-root-main",
+      "parent": null,
+      "resumed_from": null,
+      "pending_requests": [],
+      "latest_seq": 18,
+      "first_available_seq": 1,
+      "age_seconds": 8,
+      "title": "GAMMA newest session"
+    },
+    {
+      "session_id": "1c3d18ee-1516-45cb-92c1-26482128489b",
+      "agent": "mock-model",
+      "status": "ready",
+      "cwd": "/home/sprite/org/workspace/cli/.local/pr651-verification/root/pr651-root-main",
+      "parent": null,
+      "resumed_from": "9b5af48c-d986-46e7-bc43-908af27c08c9",
+      "pending_requests": [],
+      "latest_seq": 12,
+      "first_available_seq": 1,
+      "age_seconds": 0,
+      "title": "BETA second session"
+    }
+  ],
+  "replay_cursors": {
+    "9b5af48c-d986-46e7-bc43-908af27c08c9": 16,
+    "1c3d18ee-1516-45cb-92c1-26482128489b": 12,
+    "5bd3bcbb-9c57-4865-95cf-4b8f1e03dfbd": 25,
+    "cd4103cf-6415-4b4e-9474-2f3bf944f44f": 18
+  }
+}

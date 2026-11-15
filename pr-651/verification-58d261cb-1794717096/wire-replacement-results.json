@@ -1,0 +1,26 @@
+{
+  "status": "pass",
+  "checks": [
+    {
+      "predecessor": "replacement-1-managed",
+      "successor": "replacement-2-managed",
+      "closed": true,
+      "seconds_from_connect": 0.0011641979217529297,
+      "successor_usable": true
+    },
+    {
+      "predecessor": "replacement-2-managed",
+      "successor": "replacement-3-legacy",
+      "closed": true,
+      "seconds_from_connect": 0.0007038116455078125,
+      "successor_usable": true,
+      "prompt_response": {
+        "stopReason": "end_turn"
+      }
+    }
+  ],
+  "reconnect_proof_hashes_unchanged": {
+    "reconnect-reconstructed.json": "e2d640a004dff0e289d70a939c4388f8d6d068ab81b116ab1f9093871dc1f249",
+    "reconnect-reference.json": "e2d640a004dff0e289d70a939c4388f8d6d068ab81b116ab1f9093871dc1f249"
+  }
+}

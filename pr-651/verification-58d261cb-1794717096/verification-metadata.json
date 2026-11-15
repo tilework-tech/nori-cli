@@ -1,0 +1,13 @@
+{
+  "head": "58d261cbc421d927b77c2af146a7d83b748af628",
+  "base": "feat/multi-session-c-tui",
+  "runtime": "Linux Modal",
+  "rust": "1.90.0",
+  "build_jobs": 2,
+  "test_threads": 2,
+  "binary_sha256": {
+    "nori": "17c3fe165b186644be143dd34cfe4daea0b0b8013d639c35344c7fa20ec06711",
+    "mock_acp_agent": "f3e781e7b50645d46199d8ad58e003932f2cc63838f1678b1652a85a4f5ad40f"
+  },
+  "fixtures": "real local mock_acp_agent subprocesses; cloud mock Handroll adapter"
+}

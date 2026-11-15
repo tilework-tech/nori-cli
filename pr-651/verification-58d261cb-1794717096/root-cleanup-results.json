@@ -1,0 +1,26 @@
+[
+  {
+    "host": "main",
+    "tracked_pids": [
+      137215,
+      137376,
+      137733,
+      138649,
+      139385
+    ],
+    "live_survivors": {},
+    "zombies_excluded": [
+      137215
+    ]
+  },
+  {
+    "host": "cap",
+    "tracked_pids": [
+      131254,
+      131449,
+      134614
+    ],
+    "live_survivors": {},
+    "zombies_excluded": []
+  }
+]

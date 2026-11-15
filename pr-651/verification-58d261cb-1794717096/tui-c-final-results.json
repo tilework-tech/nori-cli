@@ -1,0 +1,35 @@
+{
+  "head": "58d261cbc421d927b77c2af146a7d83b748af628",
+  "cases": [
+    {
+      "case": "waiting double Ctrl+D, closed remove, last session, empty waiting filter",
+      "status": "PASS",
+      "detail": "Six .txt/.ansi captures under waiting/"
+    },
+    {
+      "case": "/agent while working",
+      "status": "PASS",
+      "detail": "Picker opens; alternate agent answers; alpha remains streaming"
+    },
+    {
+      "case": "loop config isolation",
+      "status": "PASS",
+      "detail": "Three background iterations stay in own row; home screen remains unchanged"
+    },
+    {
+      "case": "/resume while working",
+      "status": "PASS",
+      "detail": "Resume source selected; resumed session answers; original remains working"
+    },
+    {
+      "case": "cloud /close no stale starting",
+      "status": "PASS",
+      "detail": "Remaining session visible, released row closed, no starting/New session row"
+    }
+  ],
+  "harness_notes": [
+    "First resume attempt typed query without slash search activation and selected wrong row; corrected fixture passed.",
+    "First cloud attempt expected model-specific reply; cloud requires generic MOCK_AGENT_RESPONSE; corrected fixture passed."
+  ],
+  "product_findings": []
+}

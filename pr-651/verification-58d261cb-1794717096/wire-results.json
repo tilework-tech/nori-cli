@@ -1,0 +1,80 @@
+[
+  {
+    "check": "exec flag off",
+    "status": "pass",
+    "session": "0",
+    "result": {
+      "stopReason": "end_turn"
+    },
+    "notification_methods": [
+      "session/update"
+    ]
+  },
+  {
+    "check": "exec flag on",
+    "status": "pass",
+    "sessions": [
+      "41c3db2d-94eb-44aa-b66a-316537472c98",
+      "34fec346-69e0-4af5-a1a4-44ae507e0bbc",
+      "760fb815-9d15-4d2d-8ff6-66fe3f32abc7"
+    ],
+    "initial_envelopes": {
+      "41c3db2d-94eb-44aa-b66a-316537472c98": 12,
+      "34fec346-69e0-4af5-a1a4-44ae507e0bbc": 12,
+      "760fb815-9d15-4d2d-8ff6-66fe3f32abc7": 12
+    },
+    "duplicate_answer": {
+      "code": -32600,
+      "message": "no unanswered permission request with this session and request id"
+    },
+    "single_session_filter": true
+  },
+  {
+    "check": "WS hard TCP reset replay",
+    "status": "pass",
+    "cut_cursor": {
+      "87a10061-12ed-4711-9962-9807b7202019": 11
+    },
+    "total_envelopes": {
+      "87a10061-12ed-4711-9962-9807b7202019": 46
+    },
+    "raw_payload_equality": true
+  },
+  {
+    "check": "multiple clients",
+    "status": "pass",
+    "contract": "last connection wins across /sessions and /acp"
+  },
+  {
+    "check": "production 4096 expiry",
+    "status": "pass",
+    "row": {
+      "session_id": "20e7f48b-4efd-40be-84a3-fe20dd463e2a",
+      "agent": "mock-model",
+      "status": "ready",
+      "cwd": "/home/sprite/org/workspace/cli/.local/pr651-verification/wire/work",
+      "parent": null,
+      "resumed_from": null,
+      "pending_requests": [],
+      "latest_seq": 5010,
+      "first_available_seq": 915,
+      "age_seconds": 1,
+      "title": "overflow-production-journal"
+    },
+    "old_cursor": 4,
+    "error": {
+      "code": -32003,
+      "message": "cursor for session 20e7f48b-4efd-40be-84a3-fe20dd463e2a has expired; first available sequence is 915; list sessions to choose a newer cursor explicitly"
+    },
+    "valid_boundary_cursor": 914,
+    "retained_envelopes": 4096
+  },
+  {
+    "check": "WS flag off",
+    "status": "pass",
+    "managed_endpoint": 404,
+    "legacy_prompt": {
+      "stopReason": "end_turn"
+    }
+  }
+]

@@ -1,0 +1,41 @@
+[
+  {
+    "check": "3 session managed targeting",
+    "status": "pass",
+    "sessions": [
+      "5bd3bcbb-9c57-4865-95cf-4b8f1e03dfbd",
+      "9b5af48c-d986-46e7-bc43-908af27c08c9",
+      "cd4103cf-6415-4b4e-9474-2f3bf944f44f"
+    ],
+    "selected": "5bd3bcbb-9c57-4865-95cf-4b8f1e03dfbd",
+    "newest": "cd4103cf-6415-4b4e-9474-2f3bf944f44f"
+  },
+  {
+    "check": "legacy chosen session remains pinned, new connection follows screen",
+    "status": "pass",
+    "pinned": "5bd3bcbb-9c57-4865-95cf-4b8f1e03dfbd",
+    "new_default": "9b5af48c-d986-46e7-bc43-908af27c08c9"
+  },
+  {
+    "check": "Ctrl+R crash resume identity and history",
+    "status": "fail",
+    "old_id": "9b5af48c-d986-46e7-bc43-908af27c08c9",
+    "new_id": "1c3d18ee-1516-45cb-92c1-26482128489b",
+    "resumed_from": "9b5af48c-d986-46e7-bc43-908af27c08c9",
+    "history_retained": true,
+    "usable": true
+  },
+  {
+    "check": "managed answer clears visible approval",
+    "status": "pass",
+    "answer": {
+      "session_id": "1c3d18ee-1516-45cb-92c1-26482128489b",
+      "answered": true
+    }
+  },
+  {
+    "check": "close at cap then new repeatedly",
+    "status": "pass",
+    "iterations": 16
+  }
+]
