@@ -70,6 +70,8 @@ struct Entry {
     /// read a request from the harness directly, ahead of this registry.
     early_answers: Vec<RequestResolved>,
     ended: Option<SessionStatus>,
+    /// A delegated child whose task finished; closing it reads as done.
+    task_done: bool,
     /// The child that took over this session's agent process in a fork.
     forked_into: Option<ConversationId>,
     transcript_path: Option<PathBuf>,
@@ -90,6 +92,7 @@ impl Entry {
             delegation_approvals: std::collections::HashSet::new(),
             early_answers: Vec::new(),
             ended: None,
+            task_done: false,
             forked_into: None,
             transcript_path: None,
             acp_session_id: None,
@@ -112,7 +115,10 @@ impl Entry {
 
     fn end(&mut self, status: SessionStatus) {
         if self.ended.is_none() {
-            self.ended = Some(status);
+            self.ended = Some(match status {
+                SessionStatus::Closed if self.task_done => SessionStatus::Done,
+                other => other,
+            });
         }
         self.process = None;
         self.reservation = None;
@@ -466,6 +472,14 @@ impl Registry {
     }
 
     /// The live agent process of a session, if it still has one.
+    /// Mark a delegated child whose task finished, so closing it reads as
+    /// done rather than closed.
+    pub(crate) fn mark_task_done(&mut self, conversation_id: &ConversationId) {
+        if let Some(entry) = self.sessions.get_mut(conversation_id) {
+            entry.task_done = true;
+        }
+    }
+
     pub(crate) fn live_process(&self, conversation_id: &ConversationId) -> Option<AgentProcessId> {
         self.sessions.get(conversation_id)?.process
     }
@@ -535,7 +549,7 @@ impl Registry {
                 SessionStatus::Working => 2,
                 SessionStatus::Starting => 3,
                 SessionStatus::Ready => 4,
-                SessionStatus::Closed => 5,
+                SessionStatus::Closed | SessionStatus::Done => 5,
             })
     }
 }

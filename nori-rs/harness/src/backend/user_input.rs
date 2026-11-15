@@ -73,7 +73,8 @@ impl AcpBackend {
         // produce meaningful summaries.
         {
             let mut is_first = self.is_first_prompt.lock().await;
-            if *is_first {
+            // A child's result is not the user's own first prompt.
+            if *is_first && nori_protocol::delegation_result_summary(&display_text).is_none() {
                 *is_first = false;
                 let skip_summary = cfg!(debug_assertions) && self.agent_name.starts_with("mock-");
                 if !skip_summary && (self.prompt_summary_enabled || self.auto_worktree.is_enabled())

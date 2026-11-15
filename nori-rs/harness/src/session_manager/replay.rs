@@ -96,6 +96,14 @@ impl Journal {
             SessionEvent::Nori(NoriEvent::PromptSummaryUpdated(summary)) => {
                 history.title = Some(summary.summary.clone())
             }
+            // A session whose first input is `/delegate` is named by that task.
+            SessionEvent::Nori(NoriEvent::DelegationChanged(delegation))
+                if history.title.is_none()
+                    && delegation.origin == nori_protocol::DelegationOrigin::User
+                    && delegation.parent_id == envelope.conversation_id =>
+            {
+                history.title = nori_protocol::session_display_name(&delegation.task);
+            }
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::AgentNotification::SessionNotification(notification),
             )) => match &notification.update {
@@ -105,7 +113,9 @@ impl Journal {
                     }
                 }
                 acp::SessionUpdate::UserMessageChunk(chunk) if history.title.is_none() => {
-                    if let acp::ContentBlock::Text(text) = &chunk.content {
+                    if let acp::ContentBlock::Text(text) = &chunk.content
+                        && nori_protocol::delegation_result_summary(&text.text).is_none()
+                    {
                         history.title = Some(
                             text.text
                                 .lines()

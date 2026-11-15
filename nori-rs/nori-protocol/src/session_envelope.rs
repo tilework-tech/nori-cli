@@ -38,4 +38,14 @@ pub enum SessionStatus {
     Failed,
     /// The session was shut down, closed, or superseded by a fork.
     Closed,
+    /// A delegated child that finished its task; its history stays readable.
+    Done,
+}
+
+impl SessionStatus {
+    /// Whether the session ended normally: closed by the user or done with
+    /// its task. Its history stays readable; it takes no prompts.
+    pub fn is_closed(self) -> bool {
+        matches!(self, Self::Closed | Self::Done)
+    }
 }

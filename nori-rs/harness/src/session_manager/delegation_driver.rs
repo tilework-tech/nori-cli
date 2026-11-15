@@ -69,8 +69,12 @@ pub(super) fn wake(shared: &Arc<Shared>) {
             } else {
                 entry.last_result.clone()
             });
+            let completed = entry.value.status == DelegationStatus::Completed;
             changed.push(entry.value.clone());
             finished.push(child);
+            if completed {
+                state.registry.mark_task_done(&child);
+            }
         }
         for value in changed {
             state.publish_delegation(&value);
