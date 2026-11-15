@@ -1,12 +1,12 @@
 ---
 source: tui-components/src/picker/tree_tests.rs
-assertion_line: 49
+assertion_line: 69
 expression: "render(&family_picker(), 72, 18, PickerDensity::Compact)"
 ---
 "                                                                        "
 "                                                                        "
 "    Session                                           Status            "
-"  › Fix flaky login test                              needs you         "
+"  › Fix flaky login test                              waiting on you    "
 "    approve: rm -rf target/debug                                        "
 "    Port picker                                       working           "
 "    running: cargo build                                                "

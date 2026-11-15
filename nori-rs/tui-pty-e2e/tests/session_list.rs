@@ -83,7 +83,7 @@ fn three_sessions() -> TuiSession {
     session.settle(Duration::from_millis(200));
     session.send_key(Key::Alt(',')).unwrap();
     session
-        .wait_for_text("1 needs you", Duration::from_secs(8))
+        .wait_for_text("1 waiting on you", Duration::from_secs(8))
         .expect("the beta request should arrive in the background");
     start_new_session(&mut session);
     ask(&mut session, "gamma question", ALPHA_ANSWER);
@@ -103,7 +103,7 @@ fn left_on_an_empty_prompt_lists_sessions_with_status_and_preview() {
     for expected in [
         "alpha question",
         "approve: rm -rf target/debug",
-        "needs you",
+        "waiting on you",
         "gamma question",
         "(current)",
     ] {
@@ -218,7 +218,7 @@ fn a_background_request_is_named_and_one_key_jumps_to_it_for_an_answer() {
     session
         .wait_for(
             |screen| {
-                screen.contains("needs you · approve: rm -rf target/debug")
+                screen.contains("waiting on you · approve: rm -rf target/debug")
                     && screen.contains("(+1 more)")
                     && screen.contains("to jump")
             },
@@ -321,7 +321,7 @@ fn a_fork_is_listed_under_its_parent_and_its_request_marks_the_parent() {
     session.settle(Duration::from_millis(200));
     session.send_key(Key::Alt(',')).unwrap();
     session
-        .wait_for_text("1 needs you", Duration::from_secs(8))
+        .wait_for_text("1 waiting on you", Duration::from_secs(8))
         .expect("the child's request arrives while the parent is on screen");
 
     session.send_key(Key::Alt('s')).unwrap();
@@ -337,7 +337,7 @@ fn a_fork_is_listed_under_its_parent_and_its_request_marks_the_parent() {
         .find(|line| line.contains("parent question (current)"))
         .unwrap_or_else(|| panic!("parent row missing:\n{screen}"));
     assert!(
-        parent_row.contains("needs you"),
+        parent_row.contains("waiting on you"),
         "the child's request marks the parent row:\n{screen}"
     );
     insta::assert_snapshot!(
@@ -357,7 +357,7 @@ fn an_unfocused_terminal_is_notified_when_a_background_session_needs_you() {
     session.send_key(Key::Alt(',')).unwrap();
     session.send_key(Key::FocusOut).unwrap();
     session
-        .wait_for_text("1 needs you", Duration::from_secs(8))
+        .wait_for_text("1 waiting on you", Duration::from_secs(8))
         .expect("the request arrives in the background");
     session.settle(Duration::from_millis(500));
     let raw = String::from_utf8_lossy(session.raw_output()).to_string();
@@ -383,7 +383,7 @@ fn a_focused_terminal_gets_no_notification() {
     session.settle(Duration::from_millis(200));
     session.send_key(Key::Alt(',')).unwrap();
     session
-        .wait_for_text("1 needs you", Duration::from_secs(8))
+        .wait_for_text("1 waiting on you", Duration::from_secs(8))
         .expect("the request arrives in the background");
     session.settle(Duration::from_millis(500));
     let raw = String::from_utf8_lossy(session.raw_output()).to_string();

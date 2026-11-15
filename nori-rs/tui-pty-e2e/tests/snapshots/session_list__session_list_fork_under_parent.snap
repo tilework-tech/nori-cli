@@ -1,6 +1,6 @@
 ---
 source: tui-pty-e2e/tests/session_list.rs
-assertion_line: 346
+assertion_line: 343
 expression: normalize_for_input_snapshot(screen)
 ---
 • Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
@@ -9,17 +9,18 @@ expression: normalize_for_input_snapshot(screen)
 
 • alpha agent answer
 
-  ● mock:request-permission:rm -rf target/debug needs you · approve: rm -rf target/debug · alt + down to jump
-  1 needs you · 1 ready
+  ● mock:request-permission:rm -rf target/debug is waiting on you · approve: rm -rf target/debug · alt + down
+  to jump
+  1 waiting on you · 1 ready
 
-  Sessions 2 · 1 needs you · 1 ready  tab: waiting only · type to search
+  Sessions 2 · 1 waiting on you · 1 ready  tab: waiting only · type to search
 
   All  waiting on you
 
-    Session                                                                   Agent           Status
-  › ○ parent question (current)                                               Mock ACP        needs you
+    Session                                                                 Agent           Status
+  › ○ parent question (current)                                             Mock ACP        waiting on you
     alpha agent answer
-    └─ ● mock:request-permission:rm -rf target/debug                          Mock ACP        needs you
+    └─ ● mock:request-permission:rm -rf target/debug                        Mock ACP        waiting on you
        approve: rm -rf target/debug
 
   ↑↓ move  enter open  tab waiting on you  esc close

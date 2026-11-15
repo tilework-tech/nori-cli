@@ -14,7 +14,7 @@ use crate::app_event::SessionGeneration;
 
 /// The word for a session blocked on the user. Kept in one place so it can be
 /// renamed in one line.
-pub(crate) const NEEDS_YOU_LABEL: &str = "needs you";
+pub(crate) const WAITING_ON_YOU_LABEL: &str = "waiting on you";
 
 /// Name of the session-list filter that shows only sessions blocked on the
 /// user.
@@ -26,7 +26,7 @@ const NEW_SUFFIX: &str = " · new";
 
 /// Status in the order the status line lists it: what needs the user first.
 const SUMMARY_ORDER: [SessionStatus; 5] = [
-    SessionStatus::NeedsYou,
+    SessionStatus::WaitingOnYou,
     SessionStatus::Failed,
     SessionStatus::Working,
     SessionStatus::Starting,
@@ -37,7 +37,7 @@ pub(crate) fn status_label(status: SessionStatus) -> &'static str {
     match status {
         SessionStatus::Starting => "starting",
         SessionStatus::Working => "working",
-        SessionStatus::NeedsYou => NEEDS_YOU_LABEL,
+        SessionStatus::WaitingOnYou => WAITING_ON_YOU_LABEL,
         SessionStatus::Ready => "ready",
         SessionStatus::Failed => "failed",
         SessionStatus::Closed => "closed",
@@ -55,7 +55,7 @@ pub(crate) fn status_word(status: SessionStatus, unseen_finish: bool) -> String 
     }
 }
 
-/// Counts of sessions per status, such as `1 needs you · 2 working`.
+/// Counts of sessions per status, such as `1 waiting on you · 2 working`.
 /// Closed sessions are left out. Returns `None` when nothing is counted.
 pub(crate) fn status_summary(statuses: impl IntoIterator<Item = SessionStatus>) -> Option<String> {
     let statuses: Vec<SessionStatus> = statuses.into_iter().collect();
@@ -92,7 +92,7 @@ impl UnseenFinishes {
         }
         let was_busy = matches!(
             previous,
-            Some(SessionStatus::Working | SessionStatus::NeedsYou)
+            Some(SessionStatus::Working | SessionStatus::WaitingOnYou)
         );
         if was_busy && status == SessionStatus::Ready {
             self.unseen.insert(generation);
@@ -118,10 +118,10 @@ mod tests {
                 SessionStatus::Ready,
                 SessionStatus::Working,
                 SessionStatus::Closed,
-                SessionStatus::NeedsYou,
+                SessionStatus::WaitingOnYou,
                 SessionStatus::Working,
             ]),
-            Some("1 needs you · 2 working · 1 ready".to_string())
+            Some("1 waiting on you · 2 working · 1 ready".to_string())
         );
         assert_eq!(
             status_summary([SessionStatus::Working, SessionStatus::Ready]),

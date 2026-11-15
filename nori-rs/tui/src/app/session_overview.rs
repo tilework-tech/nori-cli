@@ -287,7 +287,7 @@ impl App {
         let waiting: Vec<SessionGeneration> = self
             .session_facts()
             .into_iter()
-            .filter(|fact| fact.status == SessionStatus::NeedsYou)
+            .filter(|fact| fact.status == SessionStatus::WaitingOnYou)
             .map(|fact| fact.generation)
             .collect();
         let current = self.chat_widget.session_generation();
@@ -305,7 +305,7 @@ impl App {
     fn background_request_line(&self, facts: &[SessionFacts]) -> Option<Line<'static>> {
         let waiting: Vec<&SessionFacts> = facts
             .iter()
-            .filter(|fact| !fact.on_screen && fact.status == SessionStatus::NeedsYou)
+            .filter(|fact| !fact.on_screen && fact.status == SessionStatus::WaitingOnYou)
             .collect();
         let first = waiting.first()?;
         let title = self
@@ -314,7 +314,7 @@ impl App {
         let mut spans = vec![
             "● ".yellow(),
             title.bold(),
-            format!(" {}", crate::session_status::NEEDS_YOU_LABEL).into(),
+            format!(" is {}", crate::session_status::WAITING_ON_YOU_LABEL).into(),
         ];
         if let Some(request) = self.session_previews.pending_request(first.generation) {
             spans.push(format!(" · {request}").dim());

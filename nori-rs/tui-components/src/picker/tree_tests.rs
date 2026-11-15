@@ -9,7 +9,7 @@ use ratatui::backend::TestBackend;
 fn family_picker() -> PickerState<String> {
     let columns = [
         PickerColumn::flexible("title", "Session"),
-        PickerColumn::fixed("status", "Status", 12),
+        PickerColumn::fixed("status", "Status", 16),
     ];
     let row = |key: &str, depth, status: &str, preview: &str| {
         PickerItem::new(key.to_string(), "title", key)
@@ -21,7 +21,7 @@ fn family_picker() -> PickerState<String> {
         row(
             "Fix flaky login test",
             0,
-            "needs you",
+            "waiting on you",
             "approve: rm -rf target/debug",
         ),
         row("Port picker", 0, "working", "running: cargo build"),

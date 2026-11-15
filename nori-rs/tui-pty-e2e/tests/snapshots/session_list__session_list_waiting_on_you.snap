@@ -7,15 +7,16 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 • alpha agent answer
 
-  ● mock:request-permission:rm -rf target/debug needs you · approve: rm -rf target/debug · alt + down to jump
-  1 needs you · 2 ready
+  ● mock:request-permission:rm -rf target/debug is waiting on you · approve: rm -rf target/debug · alt + down
+  to jump
+  1 waiting on you · 2 ready
 
-  Sessions 3 · 1 needs you · 2 ready  tab: all sessions · type to search
+  Sessions 3 · 1 waiting on you · 2 ready  tab: all sessions · type to search
 
   All  waiting on you
 
-    Session                                                                   Agent           Status
-  › ● mock:request-permission:rm -rf target/debug                             Mock ACP Alt    needs you
+    Session                                                                 Agent           Status
+  › ● mock:request-permission:rm -rf target/debug                           Mock ACP Alt    waiting on you
     approve: rm -rf target/debug
 
   ↑↓ move  enter open  tab waiting on you  esc close

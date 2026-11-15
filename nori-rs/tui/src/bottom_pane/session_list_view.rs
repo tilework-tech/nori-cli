@@ -75,7 +75,7 @@ impl SessionListView {
                 weight: 4,
             }),
             PickerColumn::fixed(AGENT, "Agent", 14).hide_below(48),
-            PickerColumn::fixed(STATUS, "Status", 13),
+            PickerColumn::fixed(STATUS, "Status", 16),
         ];
         let mut state = PickerState::new("Sessions", columns, items(&rows))
             .categories([WAITING_FILTER_LABEL])
@@ -139,7 +139,7 @@ impl SessionListView {
 
 fn glyph(status: SessionStatus) -> &'static str {
     match status {
-        SessionStatus::NeedsYou => "●",
+        SessionStatus::WaitingOnYou => "●",
         SessionStatus::Working => "⠋",
         SessionStatus::Ready => "○",
         SessionStatus::Failed => "✕",
@@ -150,7 +150,7 @@ fn glyph(status: SessionStatus) -> &'static str {
 
 fn tone(status: SessionStatus) -> DetailTone {
     match status {
-        SessionStatus::NeedsYou => DetailTone::Warning,
+        SessionStatus::WaitingOnYou => DetailTone::Warning,
         SessionStatus::Failed => DetailTone::Error,
         SessionStatus::Closed | SessionStatus::Starting => DetailTone::Muted,
         SessionStatus::Working | SessionStatus::Ready => DetailTone::Default,
@@ -177,7 +177,7 @@ fn items(rows: &[SessionRow]) -> Vec<PickerItem<SessionGeneration>> {
             if row.status == SessionStatus::Closed {
                 item = item.cell_detail_tone(TITLE, DetailTone::Muted);
             }
-            if row.family_status == SessionStatus::NeedsYou {
+            if row.family_status == SessionStatus::WaitingOnYou {
                 item = item.category(WAITING_FILTER_LABEL);
             }
             if let Some(preview) = &row.preview {

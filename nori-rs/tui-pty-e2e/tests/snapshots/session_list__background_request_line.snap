@@ -11,9 +11,9 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 • Preparing Mock ACP Alt…
 
-  ● mock:request-permission:rm -rf target/debug needs you · approve: rm -rf target/debug (+1 more) · alt +
-  down to jump
-  2 needs you · 1 ready
+  ● mock:request-permission:rm -rf target/debug is waiting on you · approve: rm -rf target/debug (+1 more) ·
+  alt + down to jump
+  2 waiting on you · 1 ready
 
 › [DEFAULT_PROMPT]
 
