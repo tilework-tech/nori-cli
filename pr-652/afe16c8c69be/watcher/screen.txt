@@ -1,0 +1,40 @@
+ Nori host  WATCHING · read-only · alt+t take control
+ mock-model · f80749f0-532c-41ff-91bd-21a602f8d69f · ready
+
+ › You
+ Show that this session survives terminal detach.
+
+ The background session is running. Both terminals see this answer.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

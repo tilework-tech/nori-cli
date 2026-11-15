@@ -1,0 +1,40 @@
+[1m Nori host  [0m[38;5;6m[49mWATCHING · read-only · alt+t take control[39m
+[2m mock-model · f80749f0-532c-41ff-91bd-21a602f8d69f · ready
+
+[0m[39m[49m [1m› You[0m[39m[49m
+ Show that this session survives terminal detach.
+
+ The background session is running. Both terminals see this answer.
+
+ [38;5;6mControl moved to another terminal. You are now watching; alt+t takes control.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[38;5;1m Control moved to another terminal. You are now watching; alt+t takes control.
+
+[1m[39m›[0m[39m[49m [2mSend a prompt
+
+[0m[39m[49m   [1malt+s[0m[39m[49m sessions    [1malt+t[0m[39m[49m take control    [1mctrl+d[0m[39m[49m detach    [1m/new[0m[39m[49m new session

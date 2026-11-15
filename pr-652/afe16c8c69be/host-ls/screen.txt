@@ -1,0 +1,40 @@
+$ nori host ls
+ID                                    AGENT             STATUS               AGE  TITLE
+f80749f0-532c-41ff-91bd-21a602f8d69f  mock-model        ready                 4m  Show that this session survives terminal detach.
+$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
