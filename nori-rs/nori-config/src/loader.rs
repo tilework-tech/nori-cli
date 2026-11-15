@@ -225,6 +225,10 @@ impl NoriConfig {
             hotkeys: super::types::HotkeyConfig::from_toml(&toml.tui.hotkeys),
             script_timeout: toml.tui.script_timeout.unwrap_or_default(),
             loop_count: toml.tui.loop_count,
+            max_sessions: toml
+                .tui
+                .max_sessions
+                .map_or(crate::types::DEFAULT_MAX_SESSIONS, |limit| limit.max(1)),
             skillset_per_session,
             file_manager: toml.tui.file_manager,
             pinned_plan_drawer: toml.tui.pinned_plan_drawer.unwrap_or(false),

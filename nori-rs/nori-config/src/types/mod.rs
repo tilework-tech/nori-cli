@@ -2017,6 +2017,9 @@ pub struct TuiConfigToml {
     /// `None` or absent means disabled.
     pub loop_count: Option<i32>,
 
+    /// Most sessions that may run at once with `[features] multi_session`.
+    pub max_sessions: Option<i32>,
+
     /// Automatically create a git worktree at session start.
     pub auto_worktree: Option<AutoWorktree>,
 
@@ -2151,6 +2154,9 @@ pub struct ProjectConfig {
     pub trust_level: Option<TrustLevel>,
 }
 
+/// Sessions allowed at once when `[tui] max_sessions` is not set.
+pub const DEFAULT_MAX_SESSIONS: i32 = 8;
+
 /// Resolved configuration with defaults applied
 #[derive(Debug, Clone)]
 pub struct NoriConfig {
@@ -2238,6 +2244,9 @@ pub struct NoriConfig {
     /// Number of times to re-run the first prompt in fresh sessions.
     /// `None` means disabled (default).
     pub loop_count: Option<i32>,
+
+    /// Most sessions that may run at once with `[features] multi_session`.
+    pub max_sessions: i32,
 
     /// Automatically create a git worktree at session start.
     pub auto_worktree: AutoWorktree,
@@ -2367,6 +2376,7 @@ impl Default for NoriConfig {
             hotkeys: HotkeyConfig::default(),
             script_timeout: ScriptTimeout::default(),
             loop_count: None,
+            max_sessions: DEFAULT_MAX_SESSIONS,
             auto_worktree: AutoWorktree::Off,
             skillset_per_session: false,
             file_manager: None,

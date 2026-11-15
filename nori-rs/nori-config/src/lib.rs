@@ -378,4 +378,15 @@ loop_count = 3
         let config = NoriConfig::default();
         assert_eq!(config.loop_count, None);
     }
+
+    #[test]
+    fn max_sessions_comes_from_the_tui_section_and_defaults_to_eight() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+        std::fs::write(&config_path, "[tui]\nmax_sessions = 3\n").unwrap();
+        let configured = NoriConfig::load_from_path(&config_path).unwrap();
+        std::fs::write(&config_path, "").unwrap();
+        let unset = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!((configured.max_sessions, unset.max_sessions), (3, 8));
+    }
 }

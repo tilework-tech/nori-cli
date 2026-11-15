@@ -38,7 +38,10 @@ one source of truth.
 
 `[features]` holds opt-in behavior flags, resolved to plain booleans on
 `NoriConfig`. `multi_session` (default `false`) lets the TUI hold several
-sessions and move between them; it is read once at startup. `[tui.hotkeys]`
+sessions and move between them; it is read once at startup. `[tui]
+max_sessions` resolves to `NoriConfig.max_sessions`, defaulting to
+`DEFAULT_MAX_SESSIONS` (eight) and clamped to at least one; the TUI passes it
+to the harness `SessionManager` as its capacity. `[tui.hotkeys]`
 resolves every `HotkeyAction` to a `HotkeyBinding`, with per-action defaults
 from `HotkeyAction::default_binding`. The session-move actions
 (`previous_session`, `next_session`, `next_waiting_session`,
