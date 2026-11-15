@@ -33,20 +33,20 @@ use rmcp::ServerHandler;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
-use rmcp::model::Content;
-use rmcp::model::GetPromptRequestParam;
-use rmcp::model::GetPromptResult;
+use rmcp::model::ContentBlock;
+use rmcp::model::GetPromptRequestParams;
+use rmcp::model::GetPromptResponse;
 use rmcp::model::Implementation;
-use rmcp::model::InitializeRequestParam;
+use rmcp::model::InitializeRequestParams;
 use rmcp::model::InitializeResult;
 use rmcp::model::ListPromptsResult;
 use rmcp::model::ListResourcesResult;
-use rmcp::model::PaginatedRequestParam;
+use rmcp::model::PaginatedRequestParams;
 use rmcp::model::ProtocolVersion;
-use rmcp::model::ReadResourceRequestParam;
-use rmcp::model::ReadResourceResult;
+use rmcp::model::ReadResourceRequestParams;
+use rmcp::model::ReadResourceResponse;
 use rmcp::model::ServerCapabilities;
-use rmcp::model::ServerInfo;
+use rmcp::model::ServerConfig;
 use rmcp::schemars;
 use rmcp::service::RequestContext;
 use rmcp::tool;
@@ -222,31 +222,38 @@ impl NoriClientService {
     }
 }
 
-#[tool_handler]
+#[tool_handler(router = self.tool_router)]
 impl ServerHandler for NoriClientService {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            protocol_version: ProtocolVersion::V_2024_11_05,
-            capabilities: ServerCapabilities::builder()
-                .enable_tools()
-                .enable_resources()
-                .enable_prompts()
-                .build(),
-            server_info: Implementation {
-                name: "nori-client".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                ..Default::default()
-            },
-            instructions: Some(format!(
+    fn supported_protocol_versions(&self) -> std::borrow::Cow<'static, [ProtocolVersion]> {
+        std::borrow::Cow::Borrowed(ProtocolVersion::known_up_to(&ProtocolVersion::V_2024_11_05))
+    }
+
+    async fn discover(
+        &self,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<rmcp::model::DiscoverResult, McpError> {
+        Err(McpError::method_not_found::<
+            rmcp::model::DiscoverRequestMethod,
+        >())
+    }
+
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder()
+            .enable_tools()
+            .enable_resources()
+            .enable_prompts()
+            .build())
+            .with_protocol_version(ProtocolVersion::V_2024_11_05)
+            .with_server_info(Implementation::new("nori-client", env!("CARGO_PKG_VERSION")))
+            .with_instructions(format!(
                 "Use nori-client resources and prompts for Nori CLI harness context; use tools only for Nori-owned live state.\n\n{}",
                 thread_goal::NORI_GOAL_CONTROL_INSTRUCTIONS
-            )),
-        }
+            ))
     }
 
     async fn list_resources(
         &self,
-        _request: Option<PaginatedRequestParam>,
+        _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListResourcesResult, McpError> {
         Ok(nori_client_context::list_resources())
@@ -254,15 +261,15 @@ impl ServerHandler for NoriClientService {
 
     async fn read_resource(
         &self,
-        request: ReadResourceRequestParam,
+        request: ReadResourceRequestParams,
         _context: RequestContext<RoleServer>,
-    ) -> Result<ReadResourceResult, McpError> {
-        nori_client_context::read_resource(request.uri)
+    ) -> Result<ReadResourceResponse, McpError> {
+        nori_client_context::read_resource(request.uri).map(Into::into)
     }
 
     async fn list_prompts(
         &self,
-        _request: Option<PaginatedRequestParam>,
+        _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListPromptsResult, McpError> {
         Ok(nori_client_context::list_prompts())
@@ -270,10 +277,10 @@ impl ServerHandler for NoriClientService {
 
     async fn get_prompt(
         &self,
-        request: GetPromptRequestParam,
+        request: GetPromptRequestParams,
         _context: RequestContext<RoleServer>,
-    ) -> Result<GetPromptResult, McpError> {
-        nori_client_context::get_prompt(request.name)
+    ) -> Result<GetPromptResponse, McpError> {
+        nori_client_context::get_prompt(request.name).map(Into::into)
     }
 
     /// Mark the agent connected on initialize. This flag is the sole gate that
@@ -282,7 +289,7 @@ impl ServerHandler for NoriClientService {
     /// never reach `update_goal`, so it must not be allowed to self-chain.
     async fn initialize(
         &self,
-        request: InitializeRequestParam,
+        request: InitializeRequestParams,
         context: RequestContext<RoleServer>,
     ) -> Result<InitializeResult, McpError> {
         let already_connected = self.shared.connected.swap(true, Ordering::Relaxed);
@@ -309,11 +316,11 @@ impl ServerHandler for NoriClientService {
 }
 
 fn tool_success(body: serde_json::Value) -> CallToolResult {
-    CallToolResult::success(vec![Content::text(body.to_string())])
+    CallToolResult::success(vec![ContentBlock::text(body.to_string())])
 }
 
 fn tool_error(message: impl Into<String>) -> CallToolResult {
-    CallToolResult::error(vec![Content::text(message.into())])
+    CallToolResult::error(vec![ContentBlock::text(message.into())])
 }
 
 fn goal_json(goal: thread_goal::ThreadGoalSnapshot) -> serde_json::Value {
@@ -359,11 +366,9 @@ impl NoriClientServer {
         let service = StreamableHttpService::new(
             move || Ok(NoriClientService::new(shared.clone())),
             Arc::new(LocalSessionManager::default()),
-            StreamableHttpServerConfig {
-                stateful_mode: false,
-                sse_keep_alive: None,
-                ..Default::default()
-            },
+            StreamableHttpServerConfig::default()
+                .with_legacy_session_mode(false)
+                .with_sse_keep_alive(None),
         );
         let router = axum::Router::new().nest_service("/mcp", service).layer(
             middleware::from_fn_with_state(expected_authorization, require_bearer_token),
@@ -747,7 +752,7 @@ mod tests {
     #[tokio::test]
     async fn real_mcp_client_round_trips_over_http() {
         use rmcp::ServiceExt;
-        use rmcp::model::CallToolRequestParam;
+        use rmcp::model::CallToolRequestParams;
 
         let connected = Arc::new(AtomicBool::new(false));
         let state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
@@ -776,10 +781,28 @@ mod tests {
             connected.load(Ordering::Relaxed),
             "initialize handshake must flip the connected gate"
         );
+        assert_eq!(
+            client
+                .peer()
+                .peer_info()
+                .expect("server info")
+                .protocol_version,
+            ProtocolVersion::V_2024_11_05,
+        );
+        let discovery = client
+            .discover(rmcp::model::RequestMetaObject::with_client_context(
+                ProtocolVersion::V_2024_11_05,
+                Implementation::new("nori-test", "1"),
+                rmcp::model::ClientCapabilities::default(),
+            ))
+            .await;
+        assert!(
+            matches!(discovery, Err(rmcp::service::ServiceError::McpError(error)) if error.code == rmcp::model::ErrorCode::METHOD_NOT_FOUND)
+        );
         let instructions = client
             .peer()
             .peer_info()
-            .and_then(|info| info.instructions.as_deref())
+            .and_then(|info| info.instructions.clone())
             .expect("initialized nori-client instructions");
         assert!(instructions.contains("Nori CLI is the authoritative owner of this goal state"));
         assert!(instructions.contains(
@@ -798,21 +821,20 @@ mod tests {
         assert!(tool_names.contains(&"update_goal"));
 
         let create = client
-            .call_tool(CallToolRequestParam {
-                name: "create_goal".into(),
-                arguments: serde_json::json!({ "objective": "Round-trip over real MCP" })
-                    .as_object()
-                    .cloned(),
-            })
+            .call_tool(
+                CallToolRequestParams::new("create_goal").with_arguments(
+                    serde_json::json!({ "objective": "Round-trip over real MCP" })
+                        .as_object()
+                        .expect("object")
+                        .clone(),
+                ),
+            )
             .await
             .expect("create_goal call should succeed");
         assert_eq!(create.is_error, Some(false));
 
         let get = client
-            .call_tool(CallToolRequestParam {
-                name: "get_goal".into(),
-                arguments: None,
-            })
+            .call_tool(CallToolRequestParams::new("get_goal"))
             .await
             .expect("get_goal call should succeed");
         let goal_text = get.content[0]
@@ -832,7 +854,7 @@ mod tests {
         use std::collections::BTreeSet;
 
         use rmcp::ServiceExt;
-        use rmcp::model::ReadResourceRequestParam;
+        use rmcp::model::ReadResourceRequestParams;
         use rmcp::model::ResourceContents;
 
         let connected = Arc::new(AtomicBool::new(false));
@@ -864,7 +886,7 @@ mod tests {
             .expect("client should list resources");
         let resource_uris: BTreeSet<&str> = resources
             .iter()
-            .map(|resource| resource.raw.uri.as_str())
+            .map(|resource| resource.uri.as_str())
             .collect();
         assert_eq!(
             resource_uris,
@@ -877,9 +899,9 @@ mod tests {
         );
 
         let context = client
-            .read_resource(ReadResourceRequestParam {
-                uri: "nori://context/cli".to_string(),
-            })
+            .read_resource(ReadResourceRequestParams::new(
+                "nori://context/cli".to_string(),
+            ))
             .await
             .expect("client should read CLI context");
         assert_eq!(context.contents.len(), 1);
@@ -891,9 +913,9 @@ mod tests {
         assert!(text.contains("https://github.com/tilework-tech/nori-cli"));
 
         let repo = client
-            .read_resource(ReadResourceRequestParam {
-                uri: "nori://context/repo".to_string(),
-            })
+            .read_resource(ReadResourceRequestParams::new(
+                "nori://context/repo".to_string(),
+            ))
             .await
             .expect("client should read repo source context");
         let ResourceContents::TextResourceContents { text, .. } = &repo.contents[0] else {
@@ -904,9 +926,9 @@ mod tests {
         assert!(text.contains("nori-rs/tui"));
 
         let custom_agent = client
-            .read_resource(ReadResourceRequestParam {
-                uri: "nori://help/custom-acp-agent".to_string(),
-            })
+            .read_resource(ReadResourceRequestParams::new(
+                "nori://help/custom-acp-agent".to_string(),
+            ))
             .await
             .expect("client should read custom ACP agent help");
         let ResourceContents::TextResourceContents { text, .. } = &custom_agent.contents[0] else {
@@ -917,9 +939,9 @@ mod tests {
         assert!(text.contains("[agents.distribution.uvx]"));
 
         let wire_logs = client
-            .read_resource(ReadResourceRequestParam {
-                uri: "nori://help/acp-wire-logs".to_string(),
-            })
+            .read_resource(ReadResourceRequestParams::new(
+                "nori://help/acp-wire-logs".to_string(),
+            ))
             .await
             .expect("client should read ACP wire logs help");
         let ResourceContents::TextResourceContents { text, .. } = &wire_logs.contents[0] else {
@@ -940,8 +962,7 @@ mod tests {
         use std::collections::BTreeSet;
 
         use rmcp::ServiceExt;
-        use rmcp::model::GetPromptRequestParam;
-        use rmcp::model::PromptMessageContent;
+        use rmcp::model::GetPromptRequestParams;
 
         let connected = Arc::new(AtomicBool::new(false));
         let state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
@@ -982,32 +1003,34 @@ mod tests {
         );
 
         let prompt = client
-            .get_prompt(GetPromptRequestParam {
-                name: "answer_nori_cli_question".to_string(),
-                arguments: None,
-            })
+            .get_prompt(GetPromptRequestParams::new(
+                "answer_nori_cli_question".to_string(),
+            ))
             .await
             .expect("client should get source Q&A prompt");
         assert_eq!(prompt.messages.len(), 1);
-        let PromptMessageContent::Text { text } = &prompt.messages[0].content else {
+        let Some(content) = prompt.messages[0].content.as_text() else {
             panic!("source Q&A prompt should be text");
         };
-        assert!(text.contains("nori://context/repo"));
-        assert!(text.contains("Nori CLI"));
+        assert!(content.text.contains("nori://context/repo"));
+        assert!(content.text.contains("Nori CLI"));
 
         let prompt = client
-            .get_prompt(GetPromptRequestParam {
-                name: "debug_acp_wire_protocol".to_string(),
-                arguments: None,
-            })
+            .get_prompt(GetPromptRequestParams::new(
+                "debug_acp_wire_protocol".to_string(),
+            ))
             .await
             .expect("client should get ACP wire debug prompt");
-        let PromptMessageContent::Text { text } = &prompt.messages[0].content else {
+        let Some(content) = prompt.messages[0].content.as_text() else {
             panic!("ACP wire debug prompt should be text");
         };
-        assert!(text.contains("nori://help/acp-wire-logs"));
-        assert!(text.contains("timestamp-ordered request/response timeline"));
-        assert!(text.contains("first divergent protocol boundary"));
+        assert!(content.text.contains("nori://help/acp-wire-logs"));
+        assert!(
+            content
+                .text
+                .contains("timestamp-ordered request/response timeline")
+        );
+        assert!(content.text.contains("first divergent protocol boundary"));
 
         client.cancel().await.expect("client should shut down");
     }
