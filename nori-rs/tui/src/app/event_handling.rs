@@ -614,6 +614,10 @@ impl App {
                 };
                 self.pending_session_activation = None;
                 let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
+                // A deferred resume already started its clean screen on a
+                // sessionless placeholder; only a live session's history is
+                // replaced here.
+                let replaces_live_session = self.chat_widget.has_harness_session();
                 self.shutdown_current_conversation();
                 let mut init = self.chat_widget_init(
                     tui.frame_requester(),
@@ -624,7 +628,9 @@ impl App {
                     None,
                 );
                 init.prepared_agent = Some(agent);
-                self.begin_replacing_session_transcript(tui)?;
+                if replaces_live_session {
+                    self.begin_replacing_session_transcript(tui)?;
+                }
                 self.install_active_widget(ChatWidget::new_resumed_acp(
                     init,
                     acp_session_id,
@@ -1596,7 +1602,7 @@ impl App {
 
                         if self.prepared_agent.is_none() {
                             self.defer_resume_activation(
-                                tui.frame_requester(),
+                                tui,
                                 acp_session_id,
                                 None,
                                 Some(transcript),
@@ -1721,7 +1727,7 @@ impl App {
                         .unwrap_or_else(|| self.config.active_agent.clone());
                 if self.prepared_agent.is_none() {
                     self.defer_resume_activation(
-                        tui.frame_requester(),
+                        tui,
                         Some(acp_session_id.clone()),
                         title.clone(),
                         None,

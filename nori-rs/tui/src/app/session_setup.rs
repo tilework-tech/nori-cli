@@ -203,15 +203,20 @@ impl App {
     /// prepared for an already-selected resume directive.
     pub(super) fn defer_resume_activation(
         &mut self,
-        frame_requester: crate::tui::FrameRequester,
+        tui: &mut crate::tui::Tui,
         acp_session_id: Option<String>,
         title: Option<String>,
         transcript: Option<nori_harness::transcript::Transcript>,
     ) {
         let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
         self.shutdown_current_conversation();
+        // The resumed session starts on a clean screen now, so messages shown
+        // while its agent is prepared stay with it.
+        if let Err(error) = self.begin_replacing_session_transcript(tui) {
+            tracing::warn!(%error, "failed to clear the screen for a resumed session");
+        }
         let init = self.chat_widget_init(
-            frame_requester,
+            tui.frame_requester(),
             initial_prompt,
             initial_images,
             None,

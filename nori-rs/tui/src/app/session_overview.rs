@@ -312,7 +312,7 @@ impl App {
             .session_rows_title(first.generation)
             .unwrap_or_else(|| "A session".to_string());
         let mut spans = vec![
-            "● ".yellow(),
+            "● ".cyan(),
             title.bold(),
             format!(" is {}", crate::session_status::WAITING_ON_YOU_LABEL).into(),
         ];
