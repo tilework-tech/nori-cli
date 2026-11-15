@@ -29,11 +29,20 @@ fn spawn() -> TuiSession {
     session
 }
 
+/// Submit `prompt` and wait for a new copy of `answer`, so an answer already
+/// in the history from an earlier turn does not count.
 fn ask(session: &mut TuiSession, prompt: &str, answer: &str) {
+    let before = session.history_contents().matches(answer).count();
     session.submit_input(prompt).unwrap();
-    session
-        .wait_for_text(answer, TIMEOUT)
-        .unwrap_or_else(|e| panic!("{answer:?} should arrive: {e}"));
+    let deadline = std::time::Instant::now() + TIMEOUT;
+    while session.history_contents().matches(answer).count() <= before {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{answer:?} should arrive for {prompt:?}:\n{}",
+            session.screen_contents()
+        );
+        session.settle(Duration::from_millis(50));
+    }
     session.settle(Duration::from_millis(300));
 }
 
@@ -307,8 +316,11 @@ fn a_fork_is_listed_under_its_parent_and_its_request_marks_the_parent() {
     ask(&mut session, "parent question", ALPHA_ANSWER);
     session.submit_input("/fork").unwrap();
     session
-        .wait_for_text("parent question", Duration::from_secs(5))
-        .expect("the fork picker lists the parent's messages");
+        .wait_for(
+            |screen| screen.contains("Select a message to rewind to"),
+            Duration::from_secs(5),
+        )
+        .expect("the fork picker opens");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
@@ -388,4 +400,19 @@ fn a_focused_terminal_gets_no_notification() {
     session.settle(Duration::from_millis(500));
     let raw = String::from_utf8_lossy(session.raw_output()).to_string();
     assert!(!raw.contains("\u{1b}]9;"), "unexpected notification");
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn left_with_text_in_the_prompt_moves_the_cursor_instead_of_opening_the_list() {
+    let mut session = spawn();
+    ask(&mut session, "alpha question", ALPHA_ANSWER);
+    start_new_session(&mut session);
+    session.type_input("draft").unwrap();
+    session.send_key(Key::Left).unwrap();
+    session.send_key(Key::Char('X')).unwrap();
+    session
+        .wait_for_text("drafXt", Duration::from_secs(3))
+        .expect("Left moves the cursor in a non-empty prompt");
+    assert!(!session.screen_contents().contains("Sessions 2"));
 }

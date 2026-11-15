@@ -55,11 +55,20 @@ fn start_alt_session(session: &mut TuiSession) {
     std::thread::sleep(TIMEOUT_INPUT);
 }
 
+/// Submit `prompt` and wait for a new copy of `answer`, so an answer already
+/// in the history from an earlier turn does not count.
 fn ask(session: &mut TuiSession, prompt: &str, answer: &str) {
+    let before = session.history_contents().matches(answer).count();
     session.submit_input(prompt).unwrap();
-    session
-        .wait_for_text(answer, TIMEOUT)
-        .unwrap_or_else(|e| panic!("{answer:?} should arrive: {e}"));
+    let deadline = std::time::Instant::now() + TIMEOUT;
+    while session.history_contents().matches(answer).count() <= before {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{answer:?} should arrive for {prompt:?}:\n{}",
+            session.screen_contents()
+        );
+        session.settle(Duration::from_millis(50));
+    }
     session.settle(Duration::from_millis(300));
 }
 
@@ -276,5 +285,57 @@ fn jump_timing_on_a_long_history() {
             .map(|(d, _)| d.as_millis())
             .collect::<Vec<_>>(),
         samples.iter().map(|(_, b)| *b).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn session_moves_follow_the_bindings_in_config() {
+    let config = multi_session_config().with_extra_config_toml(
+        "[features]\nmulti_session = true\n\n[tui.hotkeys]\nprevious_session = \"alt+p\"\n",
+    );
+    let mut session = spawn(config);
+    ask(&mut session, "first alpha question", ALPHA_ANSWER);
+    start_alt_session(&mut session);
+    ask(&mut session, "first beta question", BETA_ANSWER);
+
+    session.send_key(Key::Alt(',')).unwrap();
+    session.settle(Duration::from_millis(800));
+    assert!(
+        !session.history_contents().contains("first alpha question"),
+        "the default binding no longer moves once rebound"
+    );
+    session.send_key(Key::Alt('p')).unwrap();
+    wait_for_history(
+        &mut session,
+        |h| h.contains("first alpha question") && !h.contains("first beta question"),
+        "the configured binding moves to the previous session",
+    );
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn a_burst_of_moves_lands_on_the_last_target() {
+    let mut session = spawn(multi_session_config());
+    ask(&mut session, "first alpha question", ALPHA_ANSWER);
+    session.submit_input("/new").unwrap();
+    wait_for_history(
+        &mut session,
+        |h| !h.contains("first alpha question"),
+        "/new",
+    );
+    ask(&mut session, "second alpha question", ALPHA_ANSWER);
+    start_alt_session(&mut session);
+    ask(&mut session, "first beta question", BETA_ANSWER);
+
+    session.send_str("\x1b.\x1b.\x1b.\x1b.").unwrap();
+    wait_for_history(
+        &mut session,
+        |h| {
+            h.contains("first alpha question")
+                && !h.contains("beta question")
+                && !h.contains("second alpha")
+        },
+        "four moves from the third of three sessions land on the first",
     );
 }

@@ -973,7 +973,13 @@ fn test_cloud_sessions_share_the_session_list() {
                 screen.contains("Sessions 2")
                     && screen.contains("first cloud question")
                     && screen.contains("second cloud question")
-                    && screen.matches("Nori Cloud").count() >= 2
+                    && screen
+                        .lines()
+                        .filter(|line| {
+                            line.contains("cloud question") && line.contains("Nori Cloud")
+                        })
+                        .count()
+                        == 2
             },
             Duration::from_secs(3),
         )
