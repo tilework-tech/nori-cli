@@ -301,7 +301,9 @@ fn alt_down_reaches_a_waiting_child_even_with_a_draft_in_the_parent() {
     let mut session = spawn(true);
     start_waiting_child(&mut session);
     session.type_input("my unsent draft").unwrap();
-    session.settle(Duration::from_millis(300));
+    session
+        .wait_for_text("my unsent draft", TIMEOUT)
+        .expect("the draft is in the parent's prompt");
     session.send_key(Key::AltDown).unwrap();
     session
         .wait_for_text("Would you like to allow", TIMEOUT)
@@ -332,7 +334,7 @@ fn alt_down_reaches_a_waiting_child_even_with_a_draft_in_the_parent() {
     let last_answer = lines
         .iter()
         .rposition(|line| line.contains("Delegation continuation received"))
-        .unwrap_or_default();
+        .expect("the parent's answer to the result");
     assert!(
         draft > last_answer && screen.matches("my unsent draft").count() == 1,
         "the draft is still unsent, in the parent's prompt:\n{screen}"
@@ -345,7 +347,9 @@ fn alt_up_in_a_top_level_session_leaves_the_prompt_alone() {
     session.settle(Duration::from_millis(300));
     let before = session.screen_contents();
     session.send_key(Key::AltUp).unwrap();
-    session.settle(Duration::from_millis(500));
+    // A typed sentinel shows that the key has been handled before comparing.
+    session.type_input("zq").unwrap();
+    session.wait_for_text("zq", TIMEOUT).unwrap();
     let after = session.screen_contents();
     assert_eq!(
         after.matches("parent task identity").count(),

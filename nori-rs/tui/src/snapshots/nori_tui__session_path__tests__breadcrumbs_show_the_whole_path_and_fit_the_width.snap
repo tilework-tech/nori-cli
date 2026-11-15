@@ -1,6 +1,5 @@
 ---
 source: tui/src/session_path.rs
-assertion_line: 286
 expression: "render(&[(\"three levels\", 120, breadcrumb_line(&three, KEY, 120)),\n(\"three levels\", 78, breadcrumb_line(&three, KEY, 78)),\n(\"shared prefix\", 120, breadcrumb_line(&shared, KEY, 120)),\n(\"shared prefix\", 78, breadcrumb_line(&shared, KEY, 78)),\n(\"long names\", 118, breadcrumb_line(&long, KEY, 118)),\n(\"long names\", 78, breadcrumb_line(&long, KEY, 78)),\n(\"long names\", 40, breadcrumb_line(&long, KEY, 40)),])"
 ---
 three levels @120

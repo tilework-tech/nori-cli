@@ -270,9 +270,6 @@ pub(crate) struct ChatWidget {
     active_resume_picker_generation: Option<u64>,
     // The first user prompt text, preserved for /first-prompt command
     first_prompt_text: Option<String>,
-    /// The task of a `/delegate` sent before any prompt; it names the
-    /// session until the user's own first prompt does.
-    first_delegated_task: Option<String>,
     // Latest ACP-owned goal snapshot for this session.
     current_goal: Option<nori_protocol::ThreadGoal>,
     // Latest ACP capability snapshot projected into Nori client concepts.

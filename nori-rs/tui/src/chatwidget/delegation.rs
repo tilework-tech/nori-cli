@@ -25,9 +25,6 @@ impl ChatWidget {
             self.add_error_message("Start a session before delegating a task.".into());
             return true;
         };
-        if self.first_prompt_text.is_none() && self.first_delegated_task.is_none() {
-            self.first_delegated_task = Some(task.clone());
-        }
         let manager = self.session_manager.clone();
         let tx = self.app_event_tx.clone();
         tokio::spawn(async move {

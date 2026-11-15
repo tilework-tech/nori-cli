@@ -1,6 +1,5 @@
 ---
 source: tui/src/attach/tests.rs
-assertion_line: 616
 expression: rendered
 ---
  Nori host  WATCHING · read-only · alt+t take control

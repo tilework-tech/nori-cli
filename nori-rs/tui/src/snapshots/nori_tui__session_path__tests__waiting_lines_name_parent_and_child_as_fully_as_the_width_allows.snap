@@ -1,6 +1,5 @@
 ---
 source: tui/src/session_path.rs
-assertion_line: 326
 expression: "render(&[(\"child\", 118,\nwaiting_line(&child, request, 0, Some(\"alt + down\"), 118)),\n(\"child\", 78, waiting_line(&child, request, 0, Some(\"alt + down\"), 78)),\n(\"shared prefix\", 118,\nwaiting_line(&shared, request, 1, Some(\"alt + down\"), 118)),\n(\"shared prefix\", 78,\nwaiting_line(&shared, request, 1, Some(\"alt + down\"), 78)),\n(\"top level\", 78, waiting_line(&root, request, 0, Some(\"alt + down\"), 78)),\n(\"no key\", 78, waiting_line(&child, None, 0, None, 78)),])"
 ---
 child @118

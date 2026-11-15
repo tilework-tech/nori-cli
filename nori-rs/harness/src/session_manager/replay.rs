@@ -102,7 +102,7 @@ impl Journal {
                     && delegation.origin == nori_protocol::DelegationOrigin::User
                     && delegation.parent_id == envelope.conversation_id =>
             {
-                history.title = nori_protocol::session_display_name(&delegation.task);
+                history.title = Some(title_line(&delegation.task));
             }
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::AgentNotification::SessionNotification(notification),
@@ -116,15 +116,7 @@ impl Journal {
                     if let acp::ContentBlock::Text(text) = &chunk.content
                         && nori_protocol::delegation_result_summary(&text.text).is_none()
                     {
-                        history.title = Some(
-                            text.text
-                                .lines()
-                                .next()
-                                .unwrap_or_default()
-                                .chars()
-                                .take(120)
-                                .collect(),
-                        );
+                        history.title = Some(title_line(&text.text));
                     }
                 }
                 _ => {}
@@ -230,4 +222,14 @@ impl Journal {
         let events = self.subscribe(session, capacity);
         Ok(ManagedSubscription { replay, events })
     }
+}
+
+/// The title a session gets from text the user gave it: its first line.
+fn title_line(text: &str) -> String {
+    text.lines()
+        .next()
+        .unwrap_or_default()
+        .chars()
+        .take(120)
+        .collect()
 }

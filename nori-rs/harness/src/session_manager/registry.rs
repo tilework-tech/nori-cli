@@ -471,7 +471,6 @@ impl Registry {
         }
     }
 
-    /// The live agent process of a session, if it still has one.
     /// Mark a delegated child whose task finished, so closing it reads as
     /// done rather than closed.
     pub(crate) fn mark_task_done(&mut self, conversation_id: &ConversationId) {
@@ -480,6 +479,7 @@ impl Registry {
         }
     }
 
+    /// The live agent process of a session, if it still has one.
     pub(crate) fn live_process(&self, conversation_id: &ConversationId) -> Option<AgentProcessId> {
         self.sessions.get(conversation_id)?.process
     }

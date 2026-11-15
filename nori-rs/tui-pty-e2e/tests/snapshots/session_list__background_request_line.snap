@@ -1,6 +1,5 @@
 ---
 source: tui-pty-e2e/tests/session_list.rs
-assertion_line: 237
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 • Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)

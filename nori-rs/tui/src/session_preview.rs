@@ -107,6 +107,15 @@ impl SessionPreviews {
                 }
                 SessionPhase::Cancelling { .. } => {}
             },
+            // A `/delegate` sent before any prompt names the session by its
+            // task. A child's own first prompt is that same task.
+            SessionEvent::Nori(NoriEvent::DelegationChanged(delegation))
+                if preview.first_prompt.is_none()
+                    && delegation.origin == nori_protocol::DelegationOrigin::User =>
+            {
+                preview.first_prompt = delegation.task.lines().next().map(str::to_owned);
+                preview.first_prompt_open = false;
+            }
             SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
                 preview.pending.clear();
                 preview.running.clear();
@@ -504,5 +513,28 @@ mod tests {
             ]),
             Some("All tests pass.".to_string())
         );
+    }
+
+    #[test]
+    fn a_delegation_sent_before_any_prompt_names_the_session_by_its_task() {
+        let delegation = nori_protocol::Delegation {
+            request_id: "request-1".into(),
+            parent_id: "parent".into(),
+            child_id: "child".into(),
+            parent_agent: "mock-model".into(),
+            agent: "mock-model".into(),
+            task: "inspect the parser\nand report".into(),
+            status: nori_protocol::DelegationStatus::Running,
+            depth: 1,
+            result: None,
+            origin: nori_protocol::DelegationOrigin::User,
+        };
+        let mut previews = SessionPreviews::default();
+        previews.observe(
+            1,
+            &SessionEvent::Nori(NoriEvent::DelegationChanged(delegation)),
+        );
+        previews.observe(1, &user_text("now fix it"));
+        assert_eq!(previews.title(1), Some("inspect the parser".to_string()));
     }
 }

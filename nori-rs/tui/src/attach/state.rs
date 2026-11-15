@@ -163,7 +163,8 @@ impl AttachState {
                     .title
                     .clone()
                     .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.into());
-                // A top-level session speaks for its family.
+                // A top-level session shows the status of the family member
+                // that most needs the user, as in the local list.
                 let status = row
                     .family_status
                     .filter(|_| depth == 0)

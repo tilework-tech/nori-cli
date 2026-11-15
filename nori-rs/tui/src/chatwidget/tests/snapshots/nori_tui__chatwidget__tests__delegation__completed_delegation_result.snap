@@ -1,6 +1,5 @@
 ---
 source: tui/src/chatwidget/tests/delegation.rs
-assertion_line: 186
 expression: screen
 ---
 ○ result from mock-model-alt · Review the parser · done

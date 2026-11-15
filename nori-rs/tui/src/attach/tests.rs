@@ -958,8 +958,12 @@ fn the_waiting_line_names_another_waiting_session_never_the_one_on_screen() {
         ..Default::default()
     };
     let mut sessions = family();
-    sessions["sessions"][3]["status"] = json!("waiting_on_you");
-    sessions["sessions"][3]["family_status"] = json!("waiting_on_you");
+    for row in sessions["sessions"].as_array_mut().unwrap() {
+        if row["session_id"] == "other-session" {
+            row["status"] = json!("waiting_on_you");
+            row["family_status"] = json!("waiting_on_you");
+        }
+    }
     state.replace_sessions(sessions).unwrap();
     state.list_open = false;
     let rendered = screen(&state);
@@ -979,7 +983,7 @@ fn a_grandchild_breadcrumb_shows_the_path_from_its_top_level_session() {
     let rendered = screen_at(&viewing("grandchild-session"), 140);
     let breadcrumb = rendered
         .lines()
-        .find(|line| line.contains("›"))
+        .find(|line| line.contains("alt+up parent"))
         .unwrap_or_else(|| panic!("breadcrumb missing:\n{rendered}"));
     assert!(
         breadcrumb.contains(
@@ -991,7 +995,7 @@ fn a_grandchild_breadcrumb_shows_the_path_from_its_top_level_session() {
         let rendered = screen_at(&viewing("grandchild-session"), width);
         let breadcrumb = rendered
             .lines()
-            .find(|line| line.contains("›"))
+            .find(|line| line.contains("alt+up parent"))
             .unwrap_or_else(|| panic!("breadcrumb missing:\n{rendered}"));
         assert!(
             breadcrumb.starts_with(" mock-model · Ship"),

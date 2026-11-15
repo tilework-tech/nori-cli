@@ -939,11 +939,12 @@ in the prompt still moves the cursor.
   takes; "Nori Cloud" in cloud mode) with its provider tone, and a status
   word, with a preview line below. The title is the agent's prompt summary,
   else the session's first user message as seen in `UserMessageChunk` updates
-  (so a prompt sent by a remote-control client also titles it), else
-  `ChatWidget::first_input_title` (the widget's first prompt, else the task of
-  a `/delegate` sent before any prompt), cut to its first line. A delegation
-  result prompt never counts as the first message. `first_prompt_text` itself
-  is unchanged and still serves loop mode and `/first-prompt`. Previews
+  (so a prompt sent by a remote-control client also titles it), else the
+  widget's first prompt, cut to its first line. A user-origin
+  `DelegationChanged` that arrives before any prompt (a `/delegate` sent first)
+  titles the session with the first line of its task, the same rule the host
+  journal uses, so `nori attach` and `nori host ls` name it alike. A
+  delegation result prompt never counts as the first message. Previews
   come from [`session_preview.rs`](src/session_preview.rs) using only session
   events, never a call to the agent, in priority order: pending request
   (`approve: ...`), running tool, how the session ended (connection lost,

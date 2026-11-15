@@ -133,7 +133,7 @@ impl App {
         let widget = self.widget_for(generation);
         self.session_previews
             .title(generation)
-            .or_else(|| widget.and_then(ChatWidget::first_input_title))
+            .or_else(|| widget.and_then(ChatWidget::first_prompt_text))
             .map(|title| cut(title.lines().next().unwrap_or_default().trim(), limit))
             .filter(|title| !title.is_empty())
     }
@@ -410,11 +410,14 @@ impl App {
         let mut record = child
             .conversation_id
             .and_then(|id| self.session_manager.get(&id));
+        let mut seen = Vec::new();
         while let Some(current) = record
             && current.source == nori_harness::session_manager::SessionSource::Session
             && let Some(parent) = current.parent
+            && !seen.contains(&parent)
             && let Some(parent_record) = self.session_manager.get(&parent)
         {
+            seen.push(parent);
             path.push(crate::session_path::PathStep {
                 agent: parent_record.agent.clone(),
                 name: self.session_name(&parent, TITLE_CHARS),

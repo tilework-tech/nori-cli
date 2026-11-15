@@ -220,21 +220,23 @@ fn clip(line: Line<'static>, width: usize) -> Line<'static> {
     if line.width() <= width {
         return line;
     }
-    let mut left = width.saturating_sub(1);
+    if width == 0 {
+        return Line::default();
+    }
+    // Leave one cell for the ellipsis that marks the cut.
+    let mut left = width - 1;
     let mut spans = Vec::new();
-    for span in line.spans {
-        if left == 0 {
-            break;
+    'spans: for span in line.spans {
+        let mut kept = String::new();
+        for ch in span.content.chars() {
+            let cells = ch.to_string().width();
+            if cells > left {
+                spans.push(Span::styled(kept, span.style));
+                break 'spans;
+            }
+            left -= cells;
+            kept.push(ch);
         }
-        let kept = fit(&span.content, left.min(span.content.width()));
-        let kept = if kept.width() < span.content.width() {
-            fit(&span.content, left + 1)
-                .trim_end_matches('…')
-                .to_string()
-        } else {
-            kept
-        };
-        left -= kept.width();
         spans.push(Span::styled(kept, span.style));
     }
     spans.push(Span::raw("…"));
@@ -398,5 +400,46 @@ mod tests {
             "{line}"
         );
         assert!(line.ends_with(" · alt + down to jump"), "{line}");
+    }
+
+    #[test]
+    fn lines_never_exceed_the_terminal_width() {
+        let long = [
+            step(
+                "mock-model",
+                "A parent session with a very long title indeed",
+            ),
+            step(
+                "mock-model-alt",
+                "A child with a very long title that goes on",
+            ),
+            step(
+                "mock-model",
+                "A grandchild whose title is also very long here",
+            ),
+        ];
+        let names = ["Ship tree-row picker".to_string(), SHARED.to_string()];
+        let alone = ["Spike transport".to_string()];
+        for width in 0..=120 {
+            let lines = [
+                breadcrumb_line(&long, KEY, width),
+                breadcrumb_line(&long[..1], KEY, width),
+                waiting_line(
+                    &names,
+                    Some("cargo test --workspace"),
+                    2,
+                    Some("alt + down"),
+                    width,
+                ),
+                waiting_line(&alone, None, 0, Some("alt + down"), width),
+            ];
+            for line in lines {
+                assert!(
+                    line.width() <= usize::from(width),
+                    "@{width}: {:?}",
+                    text(&line)
+                );
+            }
+        }
     }
 }

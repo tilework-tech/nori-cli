@@ -103,8 +103,8 @@ pub(super) fn format_table(listing: &Value, width: Option<usize>, color: bool) -
         };
         let id = clean("session_id");
         let agent = clean("agent");
-        // A top-level session speaks for its family: if anything under it
-        // waits on the user, so does its row.
+        // A top-level session speaks for its family: its row shows the
+        // status of the member that most needs the user.
         let status_key = row["family_status"]
             .as_str()
             .filter(|_| depth == 0)
@@ -153,8 +153,13 @@ pub(super) fn format_table(listing: &Value, width: Option<usize>, color: bool) -
         } else {
             status
         };
-        let line =
-            format!("{id:<id_cells$}  {agent:<agent_cells$}  {status}  {age:>age_cells$}  {title}");
+        let line = match width {
+            // Below the tight layout, metadata alone overflows: clip plainly.
+            Some(width) if width < prefix_width => truncate(&prefix, width),
+            _ => format!(
+                "{id:<id_cells$}  {agent:<agent_cells$}  {status}  {age:>age_cells$}  {title}"
+            ),
+        };
         output.push_str(line.trim_end());
         output.push('\n');
     }
@@ -449,6 +454,20 @@ mod tests {
             assert!(
                 codes_before(row, word).iter().any(|c| c == code),
                 "{word} uses color {code}: {colored:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rows_stay_within_a_very_narrow_terminal() {
+        let listing = json!({"sessions":[
+            {"session_id":"11111111-1111-1111-1111-111111111111","agent":"mock-model","status":"waiting_on_you","title":"Ship tree picker","age_seconds":754}
+        ]});
+        for width in [20, 40, 50] {
+            let rendered = strip_ansi(&format_table(&listing, Some(width), true));
+            assert!(
+                rendered.lines().all(|line| line.width() <= width),
+                "@{width}: {rendered}"
             );
         }
     }

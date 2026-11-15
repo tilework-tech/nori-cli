@@ -685,6 +685,9 @@ processes.
   child's registry entry task-done (`Registry::mark_task_done`) when its
   delegation reaches `Completed`, before closing the child; the entry then
   records that close as `Done`. Every other end keeps its ordinary status.
+  `Done` lives only in the in-memory registry: nothing in the transcript
+  records it, so a child reloaded from its transcript after the host restarts
+  reads `Closed`.
 
   A pending request clears when any `HarnessHandle` clone answers it, when the
   phase returns to `Idle` or enters `Cancelling`, or when the session ends.
