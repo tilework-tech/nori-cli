@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · Ship the tree picker · ready
+
+
+  Sessions 4
+
+     ID        AGENT           STATUS            AGE    TITLE
+  ▏  1bc436ac  mock-model      ready             9s     Spike the remote transport                                   ▕
+     7ee42dd2  mock-model      ready             7s     Ship the tree picker (current)
+     3de8cbed  mock-model      ready             4s     └─ mock:delegate mock-model mock:request-permis…
+     f66a4ade  mock-model      waiting on you    4s        └─ mock:request-permission:verify-links
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/tmp.LEG2Xiyfsu · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Draft the release report
+
+
+• Plan: I will ask a second agent to write the report.
+
+
+  Would you like to start a mock-model-alt session for your task?
+
+  asked by  you, with /delegate
+  runs on   mock-model-alt · a different agent from this session
+  task      mock:request-permission:write-report
+
+› 1. Yes, start it
+  2. No, decline
+
+  Press enter to confirm or esc to decline

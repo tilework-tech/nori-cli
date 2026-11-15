@@ -1,0 +1,40 @@
+$ nori host ls
+ID                                    AGENT             STATUS               AGE  TITLE
+1bc436ac-ad78-46ff-be58-7789437a57b9  mock-model        ready                 7s  Spike the remote transport
+7ee42dd2-660d-4fa1-aa24-6b89d0ebbf2a  mock-model        ready                 5s  Ship the tree picker
+3de8cbed-f436-41f6-b90b-55a01dcb2802  mock-model        ready                 2s  └─ mock:delegate mock-model mock:requ…
+f66a4ade-1427-4275-99b8-858d366a6b1a  mock-model        waiting on you        2s     └─ mock:request-permission:verify-…
+$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
