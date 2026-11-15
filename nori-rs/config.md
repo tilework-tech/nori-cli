@@ -117,27 +117,30 @@ another session and say how to close one.
 | Way in | What it does |
 | --- | --- |
 | `previous_session` / `next_session` | Move through sessions in the order they were opened, wrapping at the ends |
-| `next_waiting_session` | With an empty prompt, jump to the next session waiting on you |
+| `next_waiting_session` | Jump to the next session waiting on you; a draft stays in its own session's prompt. With nothing waiting, the key goes to a non-empty prompt |
 | Left on an empty prompt, `open_session_list`, or `/sessions` | Open the session list |
-| `parent_session` | From a delegated child, return to the session that delegated it |
+| `parent_session` | From a delegated child, return to the session that delegated it; elsewhere it does nothing |
 
 The `[tui.hotkeys]` values above are the defaults, and the actions appear in
 the Hotkeys view only with the feature on. Moving between sessions skips
-closed ones. In the session list, Tab shows only sessions waiting on you (Tab
+closed and done ones. In the session list, Tab shows only sessions waiting on you (Tab
 again shows all), typing filters by title or agent, Enter jumps, Esc clears
 the filter and then closes, and Ctrl+R restarts a failed session from its
 transcript in the same place, keeping its title. A session is titled by the
-agent's summary, else its first message.
+agent's summary, else its first message, else the task of a `/delegate` sent
+first; a delegation result never titles a session. Rows show the agent slug
+that `/delegate` takes.
 
 Closing a session:
 
 | Way | What it does |
 | --- | --- |
 | Ctrl+D in the session list | Closes the selected session and stops its agent. A working, starting, or waiting session needs a second Ctrl+D; any other key cancels |
-| Ctrl+D on a `closed` row | Removes it from the list |
+| Ctrl+D on a `closed` or `done` row | Removes it from the list |
 | `/close` | Closes the session on screen (local sessions); in Nori Cloud it releases the session |
 
-A closed session stays in the list as `closed` until you remove it. Closing
+A closed session stays in the list as `closed` until you remove it; a
+delegated child whose task finished stays as `done`. Closing
 the session on screen shows the next open one. The last open session cannot be
 closed this way; use `/quit`.
 
@@ -145,10 +148,11 @@ A status line above the prompt counts open sessions by status (starting,
 working, waiting on you, ready, failed) once two or more are open, a separate
 line names a background session that is waiting on you (for a delegated child,
 as `<parent> › <child>`), and a temporary "Preparing <agent>…" line shows while
-`/agent` starts a new agent. Inside a delegated child, a breadcrumb line names
-the parent and child and the `parent_session` key. In the session list,
-status words are colored: waiting on you amber, working cyan, ready green,
-failed red. A blank session that never started is not counted or listed.
+`/agent` starts a new agent. Inside a delegated child, a breadcrumb line shows
+the path from the top-level session down to it and the `parent_session` key.
+These lines fit the terminal width, shortening names before dropping them. In
+the session list, status words are colored: waiting on you amber, working
+cyan, ready green, failed red; starting, closed, and done are muted. A blank session that never started is not counted or listed.
 
 `/delegate <agent> <task>` (or the agent's own `delegate` tool) starts a
 delegated child session, named after the first line of its task. In the

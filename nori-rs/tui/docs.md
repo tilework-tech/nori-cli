@@ -921,10 +921,10 @@ a binding).
 
 | Action (`[tui.hotkeys]`) | Default | Notes |
 | --- | --- | --- |
-| `previous_session` / `next_session` | `alt+,` / `alt+.` | Wraps at both ends of the navigation order and skips closed sessions |
-| `next_waiting_session` | `alt+down` | Only with an empty prompt; next session after the active one that is waiting on you |
+| `previous_session` / `next_session` | `alt+,` / `alt+.` | Wraps at both ends of the navigation order and skips closed and done sessions |
+| `next_waiting_session` | `alt+down` | Shows the next session after the active one that is waiting on you, even with a draft (the draft stays in the parked widget's composer). With nothing waiting, an empty prompt consumes the key and a draft passes it on to the composer |
 | `open_session_list` | `alt+s` | Needs the composer in front |
-| `parent_session` | `alt+up` | Only on a delegated child (record source `Session` with a parent); shows the parent's widget |
+| `parent_session` | `alt+up` | On a delegated child (record source `Session` with a parent) shows the parent's widget; elsewhere it is consumed and does nothing, so it never reaches history recall |
 
 The Hotkeys view lists these actions only with the flag
 (`HotkeyAction::is_multi_session`).
@@ -935,16 +935,22 @@ default, behind `LEFT_ON_EMPTY_PROMPT_OPENS_SESSION_LIST`), `open_session_list`,
 or `/sessions` (hidden from the slash popup without the flag). Left with text
 in the prompt still moves the cursor.
 
-- Each row is a status glyph and title, the agent with its provider tone, and
-  a status word, with a preview line below. The title is the agent's prompt
-  summary, else the session's first user message as seen in
-  `UserMessageChunk` updates (so a prompt sent by a remote-control client also
-  titles it), else the widget's first prompt, cut to its first line. Previews
+- Each row is a status glyph and title, the agent slug (the name `/delegate`
+  takes; "Nori Cloud" in cloud mode) with its provider tone, and a status
+  word, with a preview line below. The title is the agent's prompt summary,
+  else the session's first user message as seen in `UserMessageChunk` updates
+  (so a prompt sent by a remote-control client also titles it), else
+  `ChatWidget::first_input_title` (the widget's first prompt, else the task of
+  a `/delegate` sent before any prompt), cut to its first line. A delegation
+  result prompt never counts as the first message. `first_prompt_text` itself
+  is unchanged and still serves loop mode and `/first-prompt`. Previews
   come from [`session_preview.rs`](src/session_preview.rs) using only session
   events, never a call to the agent, in priority order: pending request
-  (`approve: ...`), running tool, how the session ended, then the latest line
-  of agent text. Agent text after a request or tool starts a new line, so the
-  preview never glues the two together.
+  (`approve: ...`), running tool, how the session ended (connection lost,
+  spawn failure, or timeout; an ordinary close or shutdown adds nothing, since
+  the status column already says so), then the latest line of agent text.
+  Agent text after a request or tool starts a new line, so the preview never
+  glues the two together.
 - The header counts sessions by status. Tab toggles a "waiting on you" filter
   and back (the footer then offers "tab all sessions"); typing filters by title
   or agent; Esc clears the query first, then closes; Enter shows the selected
@@ -954,7 +960,7 @@ in the prompt still moves the cursor.
 - Ctrl+D closes the selected session through `AppEvent::CloseSession`. A
   `working`, `waiting on you`, or `starting` row is armed by the first press
   (footer "ctrl+d again to close") and closed by the second; any other key
-  disarms it. On a `closed` row Ctrl+D sends `AppEvent::RemoveSession`
+  disarms it. On a `closed` or `done` row Ctrl+D sends `AppEvent::RemoveSession`
   instead. The footer hint reads "ctrl+d close" or "ctrl+d remove". Rows for
   manager-only descendants (negative keys) cannot be closed here.
 - Children are indented under their parent using the session manager's record
@@ -963,7 +969,8 @@ in the prompt still moves the cursor.
   **session family** status, so a parent reads "waiting on you" when a child
   does. Status tones come from `session_status::status_tone`, shared with
   `nori attach`: waiting on you amber, working cyan, ready green, failed red,
-  starting and closed muted. Manager sessions that descend from a listed session
+  starting, closed, and done muted (closed and done titles are muted too).
+  Manager sessions that descend from a listed session
   but have no TUI view are listed under their parent with negative keys that
   cannot collide with a generation; they are not navigation targets. Delegated
   children are adopted as real parked widgets by
@@ -980,24 +987,38 @@ in the prompt still moves the cursor.
 Status words and their tones live in [`session_status.rs`](src/session_status.rs): `starting`,
 `working`, `waiting on you` (`WAITING_ON_YOU_LABEL`, the **session status**
 `WaitingOnYou`), `ready`, `ready · new` (finished a turn while off screen, until
-it is viewed), `failed`, and `closed`. Statuses come from the harness
-`SessionManager`; a widget without a managed record reads `starting`. Lines drawn
-above the bottom pane (`ChatWidget::set_session_lines`) stay visible while a
-view is open:
+it is viewed), `failed`, `closed` (closed or shut down by the user), and
+`done` (a delegated child whose task finished). Code that asks whether a
+session has ended uses `SessionStatus::is_closed()`, which covers both closed
+and done. Statuses come from the harness `SessionManager`; a widget without a
+managed record reads `starting`. Lines drawn above the bottom pane
+(`ChatWidget::set_session_lines`) stay visible while a view is open.
+`App::refresh_session_overview` receives the terminal width from the draw
+handler and fits each line to one row, two cells narrower than the terminal:
 
-- a parent breadcrumb, only while a delegated child is on screen:
-  `<parent agent> · <parent> › <agent> · <child> · <key> to parent`, where the
-  key is the `parent_session` binding (omitted when unbound). The parent name
-  comes from `App::session_name`: its title in this TUI, else its replay
-  journal title, else `session <short id>`;
+- a breadcrumb, only while a delegated child is on screen: the full path from
+  the top-level session, `<agent> · <name> › … › <agent> · <child> · <key> to
+  parent`, where the key is the `parent_session` binding (omitted when
+  unbound). The path walks `SessionRecord.parent` while the record's source is
+  `Session`, so a fork ends it. Names come from `App::session_name`: the title
+  in this TUI, else the replay journal title, else
+  `nori_protocol::UNTITLED_SESSION_NAME`;
 - a background-request line, naming the first off-screen session waiting on
-  you with an amber `●` (`<title> is waiting on you`), its request, `+N more`
-  when others wait, and the `next_waiting_session` key. For a delegated child
-  the label is `<parent> › <child>` with smaller per-part budgets for parent,
-  child, and request, so either form fits one row of a 100-column terminal;
+  you with an amber `●` (`<title> is waiting on you`, or `<parent> › <child>`
+  for a delegated child), its request, `(+N more)` when others wait, and the
+  `next_waiting_session` key;
 - a status line counting sessions by their own status, most urgent first
-  (waiting on you, failed, working, starting, ready; closed is omitted), shown
-  only with two or more sessions.
+  (waiting on you, failed, working, starting, ready; closed and done are
+  omitted), shown only with two or more sessions.
+
+Both path lines are built by [`session_path.rs`](src/session_path.rs), which
+`nori attach` shares. It holds pure, width-aware builders:
+
+| Builder | Fitting rules |
+| --- | --- |
+| `breadcrumb_line(path, tail, width)` | Never drops the top-level session, the current one, or the tail. Sessions between them collapse to one `…` when the names would get fewer than 16 cells each; on very narrow terminals agent labels drop; spare cells go to longer names; a final clip guarantees the width |
+| `waiting_line(path_names, request, more, jump_key, width)` | Names come first. The request text gets the cells left after the full names when it fits there or at least 20 cells remain; otherwise it is cut to 20 cells only if each name can still keep 16, and dropped if not |
+| `fit(text, cells)` | Cuts by display cells, ending in `…` |
 
 While an `/agent` candidate is preparing, a dim `Preparing <agent>…` line sits
 above these. With the flag this replaces the history cell that single-session
@@ -1012,7 +1033,7 @@ Ctrl+D (list) / local /close ──> AppEvent::CloseSession{generation}
         |                             mark_closed_by_user + SessionManager::close
         |                             on screen? show next open session
         v
-row reads `closed` ── Ctrl+D ──> AppEvent::RemoveSession ──> deck.remove
+row reads `closed`/`done` ── Ctrl+D ──> AppEvent::RemoveSession ──> deck.remove
 
 cloud /close ──> session/close ──> SessionEnded(Closed)
         ──> AppEvent::SessionClosed{generation} ──> App::on_session_closed
@@ -1083,7 +1104,7 @@ child ID.
 | Status | On screen |
 | --- | --- |
 | running | `↳ <requester> delegated to <agent> · <child name> · working`, plus `<transcript key> shows the brief` |
-| completed | `○ result from <agent> · <child name> · ready`, up to six result lines, each wrapped under the `▏` rail (then `… N more lines`), and `returns to <parent agent> on its own · its history: <session list key>` |
+| completed | `○ result from <agent> · <child name> · done`, up to six result lines, each wrapped under the `▏` rail (then `… N more lines`), and `returns to <parent agent> on its own · its history: <session list key>` |
 | failed | `✕ <agent> · <child name> · failed · <reason>` and `sent to <parent agent> as a failure` |
 | declined, cancelled | `✕ delegation to <agent> · <child name> · declined by you` / `cancelled · <reason>` |
 
@@ -1103,7 +1124,8 @@ permission request.
 The result prompt the manager delivers to the parent appears as a
 `UserHistoryCell`. When `nori_protocol::delegation_result_summary` recognizes
 it (a `[Nori delegation result]` first line followed by a `Child session: `
-line; a user message that only begins with the header stays whole),
+line, or ending in ` · declined`; a user message that only begins with the
+header stays whole),
 [`history_cell`](src/history_cell/mod.rs) shows it on screen as one
 line (`› delegation result <summary> · delivered to this session`), because
 the result block was already shown when the child ended; the transcript view
@@ -1115,7 +1137,7 @@ follow the normal session-deck path. Alt+Down (`next_waiting_session`) opens the
 next session needing the user, where the ordinary permission UI answers the
 child, and Alt+Up (`parent_session`) returns. Parent notices name both
 sessions readably and do not open the child's permission popup in the parent.
-Closed completed children keep inspectable history; ending their process must
+Completed children read `done` and keep inspectable history; ending their process must
 not be interpreted as exiting Nori. When
 [startup replay](src/chatwidget/event_handlers.rs) reaches a closed child
 widget with no live handle, it applies the history metadata without
@@ -1448,9 +1470,13 @@ part of the public harness protocol.
   (`SessionClosed`, `LoopIteration`, `CloseSession`, `RemoveSession`) carry a
   session generation. Acting on "the active widget" instead would close or
   replace the wrong session.
-- A `closed` session is still in the deck. Navigation, the status-line counts,
-  and "next open session" filter it out by status; code that walks the deck
-  directly sees it.
+- A `closed` or `done` session is still in the deck. Navigation, the
+  status-line counts, and "next open session" filter it out with
+  `SessionStatus::is_closed()`; code that walks the deck directly sees it, and
+  a check against `Closed` alone misses finished delegated children.
+- The queued-message preview in the bottom pane advertises `⌥↑ edit`, but no
+  key handler edits a queued message; with `multi_session`, Alt+Up is the
+  `parent_session` key.
 - `nori-config` is the source of approval and sandbox policy; ACP session config
   options remain ACP schema values.
 - `-p` belongs to the top-level CLI as `--print`. The TUI's own flag set must not

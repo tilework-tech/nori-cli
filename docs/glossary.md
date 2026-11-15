@@ -134,7 +134,7 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 | Term                 | Definition                                                                                        | Aliases to avoid   |
 | -------------------- | ------------------------------------------------------------------------------------------------- | ------------------ |
 | **Session envelope** | A session event tagged with its **conversation ID**, agent, and per-conversation sequence number. | Frame, message     |
-| **Session status**   | A managed session's coarse state: starting, working, waiting on you, ready, failed, or closed.         | Phase, turn status |
+| **Session status**   | A managed session's coarse state: starting, working, waiting on you, ready, failed, closed, or done (a delegated child whose task finished). | Phase, turn status |
 | **Session family**   | A top-level **session** plus all of its descendants, whose **session statuses** roll up into one. | Thread, tree       |
 | **Request resolved** | A **session envelope** announcing that a client answered a pending agent request, and which one.  | Approval event     |
 | **Active session**   | The one **session** the TUI shows; the prompt, terminal title, and scrollback belong to it.        | Current tab        |

@@ -373,7 +373,8 @@ not keep a process-global host or own listener policy.
 
 [`ManagedRemoteHost`](src/managed_remote.rs) shares one command boundary
 between the WebSocket `/sessions` adapter and managed ACP stdio. It lists
-manager records and journal cursors, resolves explicit conversation IDs before
+manager records and journal cursors (each row also carries `family_status`,
+the record's `SessionManager::family_status`, else its own status), resolves explicit conversation IDs before
 using the frontend's selected default, and opens one-session or all-session
 subscriptions. Its `_nori/session/event` notifications retain the complete
 manager envelope, including Nori events; legacy ACP projection stays separate.
@@ -678,6 +679,12 @@ processes.
   | `Ready` | Idle |
   | `Failed` | `SessionEnded` with `ConnectionLost`, `SpawnFailed`, or `TimedOut`, or the stream closed with no end event |
   | `Closed` | `SessionEnded` with `Shutdown` or `Closed`, or superseded by a fork |
+  | `Done` | A delegated child's `SessionEnded(Closed)` after its task completed |
+
+  The [delegation driver](src/session_manager/delegation_driver.rs) marks a
+  child's registry entry task-done (`Registry::mark_task_done`) when its
+  delegation reaches `Completed`, before closing the child; the entry then
+  records that close as `Done`. Every other end keeps its ordinary status.
 
   A pending request clears when any `HarnessHandle` clone answers it, when the
   phase returns to `Idle` or enters `Cancelling`, or when the session ends.
@@ -701,7 +708,8 @@ processes.
   client following a session learns the request no longer waits on the user.
 - **Families.** A session family is a top-level session plus all of its
   descendants. `family_status` rolls member statuses up with priority
-  `WaitingOnYou` > `Failed` > `Working` > `Starting` > `Ready` > `Closed`.
+  `WaitingOnYou` > `Failed` > `Working` > `Starting` > `Ready` > `Closed` /
+  `Done` (equal rank).
 - **Fork.** On `NoriEvent::SessionForked` (branch at head) the parent becomes
   `Closed` and a child record (source `Fork`, parent = previous conversation)
   takes over the same agent process and capacity slot. `SessionForked` is
@@ -815,8 +823,12 @@ remote /session/delegate ----------+         |
   It does not repeat the parent's own ID. The result is the text of the
   child's agent message chunks from its last prompting turn; when a tool call,
   permission request, or other session update arrived between chunks, the next
-  chunk starts a new paragraph (`\n\n`) rather than being joined directly. The TUI recognizes these prompts by
-  their `[Nori delegation result]` header. A busy parent consumes it
+  chunk starts a new paragraph (`\n\n`) rather than being joined directly. A
+  child that crashed reports only the first non-empty line of its
+  `RequestFailed` message (for example `Agent process exited unexpectedly
+  (exit code 17).`); the agent's stderr tail stays in the child's own history.
+  Frontends recognize these prompts through
+  `nori_protocol::delegation_result_summary`. A busy parent consumes it
   through its normal prompt queue. The [result driver](src/session_manager/delegation_driver.rs)
   retains that delivery until the parent's correlated ACP `PromptResponse`,
   not merely queue admission. If the process crashes first, stable-ID resume
@@ -825,6 +837,13 @@ remote /session/delegate ----------+         |
   turns before returning its own final result. Terminal completion stops the
   child process and releases its capacity slot while retaining the registry
   record and transcript.
+- A result prompt never titles the parent that receives it. The
+  [replay journal](src/session_manager/replay.rs) skips user-message chunks
+  that are result prompts when it derives a title, and titles a still-untitled
+  parent from the task of a user-origin `DelegationChanged` it requested, so a
+  session whose first input is `/delegate` is named by that task. The
+  first-prompt summary hook in [user input](src/backend/user_input.rs) likewise
+  ignores result prompts, leaving the summary for the user's own first prompt.
 - Explicit parent close cancels descendants and invalidates pending delegation
   approvals, including when the parent has already failed. A parent process
   crash leaves children running; results wait for the parent's stable-ID

@@ -47,17 +47,32 @@ host ls / host stop ---------------+                   SessionManager
 - Each start generates a token and binds loopback before publishing discovery
   state. Administrative clients initialize with `observe: true`, so list and
   stop do not claim the controller slot. [List formatting](table.rs) sanitizes
-  control characters and colors status only on a terminal. Terminal rows fit
-  the available display cells by truncating titles with an ellipsis at grapheme
-  boundaries; if metadata alone exceeds the width, that prefix is clipped.
-  Piped output retains full titles without color or a width limit.
+  control characters and colors status only on a terminal. On a terminal the
+  ID, AGENT, STATUS, and AGE columns take one of three fixed layouts, chosen
+  as the widest that still leaves TITLE at least 24 cells:
+
+  | Layout | ID | AGENT | STATUS | AGE | Used when |
+  | --- | --- | --- | --- | --- | --- |
+  | Wide | 36 | 16 | 16 | 6 | TITLE keeps 24 cells; also every piped listing |
+  | Compact | 8 | 14 | 16 | 5 | Wide does not fit; matches the `nori attach` list |
+  | Tight | 8 | 10 | 14 | 4 | Neither fits |
+
+  The ID is shortened to the column, AGENT and STATUS are cut with `…`, and
+  AGE is never cut. TITLE, with its tree guides, gets whatever cells remain
+  (none only below the tight layout's metadata width) and is cut with `…` at
+  grapheme boundaries. Status color applies on every row. Piped output
+  keeps full values in the wide layout, without color or a width limit.
+- A top-level row (tree depth 0) shows the row's `family_status` when the host
+  sends one, so a parent reads `waiting on you` while anything under it does;
+  child rows always show their own `status`. Older hosts omit
+  `family_status`, and the row falls back to `status`.
 - Rows are tree-ordered with the shared
   [picker helpers](../../../tui-components/docs.md): `tree_order` builds a
   depth-first order from each row's `session_id` and `parent` (a missing
   parent makes the row top level), and `tree_guides` supplies `├─`, `└─`, and
   `│` prefixes. The guides are written inside TITLE, after the fixed ID, AGENT,
   STATUS, and AGE columns, so nesting never shifts metadata, and truncation
-  cuts the title rather than its guide. Piped output appends
+  cuts from the end of the title, so the guide is the last thing to go. Piped output appends
   `  (parent <full parent ID>)` to every row that has a parent, including a
   child whose parent is no longer listed and so prints at top level, so scripts
   keep the exact link; terminal output omits it.
@@ -68,7 +83,7 @@ host ls / host stop ---------------+                   SessionManager
   | working | cyan |
   | ready | green |
   | failed | red |
-  | others, including starting | dimmed |
+  | others (starting, done, closed) | dimmed |
 - Lifecycle requests prepare agents using the host's configuration. Resume
   uses the stored agent and working directory while retaining the conversation
   identity. Stop closes the server, shuts down the manager, removes discovery
@@ -87,7 +102,7 @@ host ls / host stop ---------------+                   SessionManager
 - Delegation requests pass through `ManagedRemoteHost` to the same manager
   used by local sessions. Child sessions consume the ordinary session cap;
   completing a child releases its process slot but preserves its listed record
-  and transcript. Closing a parent cancels descendants, while a parent crash
+  and transcript, and the row then reads `done` rather than `closed`. Closing a parent cancels descendants, while a parent crash
   preserves children and holds their results for stable-ID resume.
 - The host has no persistent manager snapshot. Transcripts survive normally,
   but in-memory registry state and reconnect replay belong to the current host
