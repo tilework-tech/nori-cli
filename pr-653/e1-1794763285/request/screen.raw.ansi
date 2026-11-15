@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m~/org/workspace/cli/.local/pr-proof/e1/work[2m · [0m[39m[49mAgent approvals
+[2m  Agent        [0m[39m[49mMock ACP
+
+[2m• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mPrepare the report with a delegated child.
+
+
+[2m• [0m[39m[49mParent is ready to delegate.
+
+
+[38;5;2m/[39m delegate mock-model-alt mock:request-permission:write-report
+
+                                                                                        [38;5;3m⎇ feat/multi-session-e1-deleg...

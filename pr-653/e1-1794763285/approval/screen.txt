@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/pr-proof/e1/work · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Prepare the report with a delegated child.
+
+
+• Parent is ready to delegate.
+
+• Child 3a71479c-b987-410f-91ca-b8e23a8fa3ca (mock-model-alt) · parent 5c35b735-12a3-41e2-a50a-9ca828b6a250 (mock-model)
+· awaiting approval
+
+
+  Start delegated session?
+  Child 3a71479c-b987-410f-91ca-b8e23a8fa3ca (mock-model-alt)
+  parent 5c35b735-12a3-41e2-a50a-9ca828b6a250 (mock-model)
+  mock:request-permission:write-report
+
+› 1. Start
+  2. Decline
+
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back
