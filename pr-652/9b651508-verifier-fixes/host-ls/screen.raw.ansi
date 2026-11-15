@@ -1,0 +1,40 @@
+$ nori host ls
+ID                                    AGENT             STATUS               AGE  TITLE
+64de8892-f6b9-4e33-a880-49d37d0b3c75  mock-model        [32mready           [39m     16s  D2 long title aligned columns should …
+$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

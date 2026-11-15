@@ -1,0 +1,40 @@
+ Nori host  DISCONNECTED · ctrl+d to detach
+ mock-model · 64de8892-f6b9-4e33-a880-49d37d0b3c75 · ready
+
+ › You
+ D2 long title aligned columns should preserve the entire title without putting continuation text into the ID column
+
+ This session stays on the original host until it is stopped.
+
+ Connection lost. Reconnecting… host connection closed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Host restarted; sessions were lost. Re-run nori attach.
+
+› This draft is retained after the host restarts
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

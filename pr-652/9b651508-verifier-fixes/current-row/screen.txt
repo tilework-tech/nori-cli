@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · 64de8892-f6b9-4e33-a880-49d37d0b3c75 · ready
+
+
+  Sessions 1
+
+     ID        AGENT           STATUS            AGE    TITLE
+  ▏  64de8892  mock-model      ready             27s    (current) D2 long title aligned columns should …             ▕
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt
+
+   alt+s sessions    alt+t take control    ctrl+d detach    /new new session

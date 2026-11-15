@@ -1,0 +1,10 @@
+{
+  "cols": 120,
+  "rows": 40,
+  "pixelWidth": 1080,
+  "pixelHeight": 520,
+  "pngSizeBytes": 19609,
+  "renderer": "ghostty-web@0.4.0",
+  "sha256": "217fddbb9269d764a5cd82e281dd400adb1e41944ae8b877bc968875b89a3ead",
+  "sourceCommit": "9b65150833f4f4ed9232e6df381aea5d4d9fc587"
+}
