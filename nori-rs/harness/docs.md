@@ -501,6 +501,16 @@ task. A frontend may remain open to show the terminal state.
 Explicit `shutdown()` aborts the retained reducer and relay tasks during
 teardown so those session-owned tasks cannot outlive the harness.
 
+[`HarnessHandle`](src/runtime.rs) clones share a normal-teardown marker for
+their process. It is set while handling shutdown or close, retained on success,
+reset on failure, and also set when the relay observes `Shutdown` or `Closed`.
+Command-channel and response-channel closure use a private typed error;
+`is_expected_shutdown_error` requires both that type and the normal-teardown
+marker. Frontends can therefore omit late command failures caused by ordinary
+child cleanup without hiding an actual backend error, even one returned before
+shutdown began. Unexpected process loss does not establish normal teardown,
+and a replacement process receives a fresh marker.
+
 #### Compaction, branching, and session swap
 
 `compact()` has two paths, chosen in `harness/src/backend/submit_and_ops.rs`. If

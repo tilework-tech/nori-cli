@@ -373,7 +373,16 @@ impl ChatWidget {
 
     fn on_session_started(&mut self, event: nori_protocol::SessionStarted) {
         self.session_configured_received = true;
-        self.submit_harness_action(crate::app_event::HarnessAction::LoadCustomPrompts);
+        // A completed child's replay has no live process to load prompts from.
+        let historical_child = self.delegated_child
+            && self.harness_handle.is_none()
+            && self
+                .managed_conversation_id
+                .and_then(|id| self.session_manager.get(&id))
+                .is_some_and(|record| record.status == nori_protocol::SessionStatus::Closed);
+        if !historical_child {
+            self.submit_harness_action(crate::app_event::HarnessAction::LoadCustomPrompts);
+        }
         self.bottom_pane.hide_status_indicator();
         self.update_approval_mode_label();
         self.bottom_pane.set_history_metadata(

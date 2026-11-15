@@ -1,0 +1,5 @@
+---
+source: tui/src/chatwidget/tests/action_failures.rs
+expression: text
+---
+■ This agent does not support branching

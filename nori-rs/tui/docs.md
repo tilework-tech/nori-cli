@@ -732,11 +732,11 @@ exit requests immediate owned ACP process-group cleanup; cloud exit allows a
 short detach grace. The TUI exits when cleanup publishes `SessionEnded`, rather
 than using an independent timer that can abandon reaping.
 
-Events entering the application are tagged with their session generation.
-Candidate events are routed to the candidate widget until activation commits;
-events for a parked session (see the multi-session view below) go to its
-widget; after a session is replaced, events from other older generations are
-discarded. Every path that replaces the active widget calls
+Harness session-stream events entering the application carry their session
+generation. Candidate stream events go to the candidate widget until
+activation commits; events for a parked session (see the multi-session view
+below) go to its widget. Stream events from replaced generations are discarded.
+Every path that replaces the active widget calls
 `shutdown_current_conversation` and then `install_active_widget` (in
 [`session_setup.rs`](src/app/session_setup.rs) and
 [`session_view.rs`](src/app/session_view.rs)); a loop iteration is the
@@ -885,6 +885,15 @@ App
   `InsertHistoryCell` and `ConsolidateAgentMessage` in
   `AppEvent::SessionHistory`. `App` files history from a parked widget in that
   session's own transcript and prints only the active session's history.
+- **Action failures.** The same sender tags `HarnessActionFailed` with its
+  originating widget generation. [Routing](src/app/session_view.rs) uses the
+  owning active or parked widget's [error path](src/chatwidget/helpers.rs),
+  which flushes buffered cells before the error and preserves the separator
+  before the next agent message. An activating candidate's error is retained
+  for startup failure handling. Queued history events are checked again against
+  active, parked, or known candidate generations; removed or replaced
+  generations are dropped, including when removal happens after the error
+  queued its history cell.
 - **Background sessions.** Parked widgets keep receiving their
   `SessionEvent`s and commit ticks, so streams finish into their own
   transcript. A parked widget never writes the terminal title
@@ -1065,7 +1074,12 @@ child. Parent notices identify both child and parent and do not open the
 child's permission popup in the parent. Child list labels put the parent
 identity before the task title so title truncation preserves attribution. Closed completed children keep
 inspectable history; ending their process must not be interpreted as exiting
-Nori.
+Nori. When [startup replay](src/chatwidget/event_handlers.rs) reaches a closed
+child widget with no live handle, it applies the history metadata without
+requesting custom prompts. If a retained handle instead races normal teardown,
+[command submission](src/chatwidget/helpers.rs) suppresses only the harness's
+classified expected transport closure. Real backend errors and unexpected
+transport loss still follow the originating session's failure route.
 
 Result delivery is manager-owned and automatically prompts the parent. The
 terminal renders attributed status/result text; it neither approves the result
