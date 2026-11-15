@@ -156,3 +156,15 @@ fn a_cell_tone_colours_that_cell_through_the_theme() {
         .unwrap_or_else(|| panic!("status cell drawn:\n{}", terminal.backend()));
     assert_eq!(buffer[(x, y)].fg, theme.error.fg.expect("error colour"));
 }
+
+#[test]
+fn a_child_shown_without_its_parent_has_no_hanging_guide() {
+    let mut state = family_picker();
+    state.handle(PickerAction::ActivateSearch);
+    for c in "Check".chars() {
+        state.handle(PickerAction::AppendQuery(c));
+    }
+    let screen = render(&state, 72, 10, PickerDensity::Compact);
+    assert!(screen.contains("› Check fixtures"), "{screen}");
+    assert!(!screen.contains("└─"), "{screen}");
+}

@@ -591,6 +591,10 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    pub(crate) fn session_list_in_front(&self) -> bool {
+        self.bottom_pane.session_list_in_front()
+    }
+
     pub(crate) fn close_session_list(&mut self) {
         self.bottom_pane.close_session_list();
     }

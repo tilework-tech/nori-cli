@@ -4,6 +4,17 @@
 /// Each entry is the prefix for the row's first line and the prefix for its
 /// description line. Top-level rows get no guides.
 pub(crate) fn tree_guides(depths: &[i32]) -> Vec<(String, String)> {
+    // A filter can hide a row's parent. Each row nests at most one level below
+    // the row above it, so guides never hang from a row that is not shown.
+    let mut previous = -1;
+    let depths: Vec<i32> = depths
+        .iter()
+        .map(|depth| {
+            previous = (*depth).clamp(0, previous + 1);
+            previous
+        })
+        .collect();
+    let depths = depths.as_slice();
     (0..depths.len())
         .map(|row| {
             let depth = depths[row];

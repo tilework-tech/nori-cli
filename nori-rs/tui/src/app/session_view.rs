@@ -240,4 +240,44 @@ impl App {
             tui.frame_requester().schedule_frame();
         }
     }
+
+    /// Whether any session, on screen or parked, has a stream in progress.
+    pub(super) fn any_session_streaming(&mut self) -> bool {
+        self.chat_widget.has_active_agent_stream()
+            || self
+                .session_deck
+                .parked_sessions_mut()
+                .any(|(_, parked)| parked.widget.has_active_agent_stream())
+    }
+
+    /// Shut down every parked session in parallel before the TUI exits. Each
+    /// close is bounded by the session manager's shutdown limit.
+    pub(super) async fn close_parked_sessions(&mut self) {
+        let grace = if self.cloud_mode {
+            std::time::Duration::from_secs(1)
+        } else {
+            std::time::Duration::ZERO
+        };
+        let mut closing = tokio::task::JoinSet::new();
+        for (_, parked) in self.session_deck.parked_sessions_mut() {
+            if let Some(id) = parked.widget.managed_conversation_id() {
+                let manager = self.session_manager.clone();
+                closing.spawn(async move { manager.close(&id, grace).await });
+            }
+        }
+        while let Some(result) = closing.join_next().await {
+            if let Ok(Err(error)) = result {
+                tracing::warn!(%error, "a parked session did not shut down cleanly");
+            }
+        }
+    }
+
+    /// Whether a session is being set up for the session on screen. Session
+    /// moves wait until it is installed, so it cannot take another session's
+    /// place.
+    pub(super) fn session_setup_pending(&self) -> bool {
+        self.pending_session_activation.is_some()
+            || self.candidate_agent.is_some()
+            || self.primary_agent_preparation.is_some()
+    }
 }

@@ -17,7 +17,7 @@ use crate::session_status::status_summary;
 use crate::session_status::status_word;
 
 /// Longest title shown for a session that has no summary yet.
-const TITLE_CHARS: usize = 60;
+const TITLE_CHARS: i32 = 60;
 
 /// One session as the overview sees it.
 pub(crate) struct SessionFacts {
@@ -118,8 +118,9 @@ impl App {
             .or_else(|| widget.and_then(ChatWidget::first_prompt_text))
             .map(|title| {
                 let line = title.lines().next().unwrap_or_default().trim().to_string();
-                if line.chars().count() > TITLE_CHARS {
-                    let cut: String = line.chars().take(TITLE_CHARS - 1).collect();
+                let limit = usize::try_from(TITLE_CHARS).unwrap_or(0);
+                if line.chars().count() > limit {
+                    let cut: String = line.chars().take(limit.saturating_sub(1)).collect();
                     format!("{cut}…")
                 } else {
                     line
@@ -197,9 +198,15 @@ impl App {
         if self.cloud_mode {
             return "Nori Cloud".to_string();
         }
-        crate::nori::agent_picker::get_agent_info(agent_name)
-            .map(|info| info.display_name)
-            .unwrap_or_else(|| agent_name.to_string())
+        self.agent_display_names
+            .borrow_mut()
+            .entry(agent_name.to_string())
+            .or_insert_with(|| {
+                crate::nori::agent_picker::get_agent_info(agent_name)
+                    .map(|info| info.display_name)
+                    .unwrap_or_else(|| agent_name.to_string())
+            })
+            .clone()
     }
 
     /// Open the session list with the active session selected.
@@ -231,7 +238,7 @@ impl App {
             lines.push(Line::from(summary.dim()));
         }
         self.chat_widget.set_session_lines(lines);
-        if self.chat_widget.has_active_popup() {
+        if self.chat_widget.session_list_in_front() {
             let rows = self.session_rows();
             self.chat_widget.update_session_list(&rows);
         }

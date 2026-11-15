@@ -18,6 +18,9 @@ impl App {
         generation: SessionGeneration,
     ) -> Result<()> {
         self.show_session(generation);
+        if self.chat_widget.session_generation() != generation {
+            return Ok(());
+        }
         let Some(record) = self
             .chat_widget
             .managed_conversation_id()

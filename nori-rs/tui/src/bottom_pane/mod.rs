@@ -538,6 +538,12 @@ impl BottomPane {
         self.push_view(Box::new(view));
     }
 
+    pub(crate) fn session_list_in_front(&self) -> bool {
+        self.view_stack
+            .last()
+            .is_some_and(|view| view.is_session_list())
+    }
+
     /// Close the session list if it is the view in front.
     pub(crate) fn close_session_list(&mut self) {
         if self

@@ -715,7 +715,11 @@ impl App {
                 }
             }
             AppEvent::StopCommitAnimation => {
-                self.commit_anim_running.store(false, Ordering::Release);
+                // A parked session's stream can go idle while the session on
+                // screen still streams; the shared ticker keeps running then.
+                if !self.any_session_streaming() {
+                    self.commit_anim_running.store(false, Ordering::Release);
+                }
             }
             AppEvent::CommitTick => {
                 self.tick_all_sessions();
@@ -848,6 +852,7 @@ impl App {
                 if let Some(agent) = self.prepared_agent.take() {
                     agent.shutdown().await;
                 }
+                self.close_parked_sessions().await;
                 self.prepared_agent_initial_context = None;
                 self.discard_candidate();
                 // Create and insert exit message cell before exiting

@@ -114,6 +114,8 @@ pub(crate) struct App {
     unseen_finishes: crate::session_status::UnseenFinishes,
     /// What each session is doing, for the session list.
     session_previews: crate::session_preview::SessionPreviews,
+    /// Agent display names for the session list, looked up once per agent.
+    agent_display_names: std::cell::RefCell<std::collections::HashMap<String, String>>,
 
     // Pager overlay state (Transcript or Static like Diff)
     pub(crate) overlay: Option<Overlay>,
@@ -351,6 +353,7 @@ impl App {
             session_reprint_pending: false,
             unseen_finishes: Default::default(),
             session_previews: Default::default(),
+            agent_display_names: Default::default(),
             overlay: None,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,
