@@ -13,6 +13,9 @@ This crate is the primary entry point that ties together the core crates:
 - **Always included:** `nori-tui`, `nori-exec`, `nori-harness`, `nori-config`, `codex-sandbox`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 - **Uses** `codex-sandbox` (`@/nori-rs/sandbox/`) for the `nori sandbox` debug subcommand's seatbelt/landlock/windows spawn helpers
+- Owns the background [host lifecycle](src/host/docs.md), composing the
+  harness session manager with an authenticated managed transport. The
+  [attached frontend](../tui/src/attach/docs.md) owns only terminal state.
 - Maps each agent-bearing entrypoint to the stable product analytics modes in
   [`nori-installed`](../installed/docs.md): ordinary and resumed TUI sessions
   are `interactive`, `nori cloud` is `cloud`, plaintext execution is `exec`, and
@@ -45,19 +48,16 @@ PostHog identity or organization membership itself.
 - `nori resume --all` - Lets picker/last selection search all transcript projects instead of only the current working directory
 - TUI flags such as `--agent`, approval-bypass options, prompts, images, `-c`, and working-directory overrides can be passed after `resume`; they are merged into the normal interactive CLI configuration before `nori_tui::run_main()`
 
-```rust
-match subcommand {
-    None if print => run_exec(...),            // `-p` / `--print`: same path as `exec`
-    None => nori_tui::run_main(...),           // Interactive TUI
-    Some(Subcommand::Resume(cmd)) => nori_tui::run_main(...),
-    Some(Subcommand::Cloud(cmd)) => nori_tui::run_main(...),  // Pinned nori-handroll agent
-    Some(Subcommand::Exec(cmd)) => run_exec(cmd),
-    Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
-    Some(Subcommand::Skillsets(cmd)) => run_skillsets_command(...),
-    Some(Subcommand::Completions(cmd)) => clap_complete::generate(...),
-    // ... other subcommands
-}
-```
+**Host and attach:** `nori host` starts a detached Unix process owning an empty
+session manager; `host ls` reads its flat table and `host stop` shuts it down.
+The host outlives both attached terminals and its final session. `nori attach`
+requires `multi_session`, discovers the local host and token, then opens the
+session list or a supplied conversation ID. Explicit `--host` and
+`--token-file` must be supplied together. Startup and attach resolve ordinary
+Nori configuration without entering the local process-owning TUI `App`.
+Administrative list and stop use host discovery directly, so a later malformed
+configuration file cannot prevent shutdown.
+See [the command and wire contract](../../docs/remote-control.md#11-background-host-and-attached-terminals).
 
 **ExecCommand**: Provides two terminal-independent execution surfaces:
 - `nori exec [PROMPT]` runs one prompt through the selected ACP agent and writes only the complete assistant text to stdout. The prompt may come from the positional argument, from piped stdin, or from both (see **Prompt Sources**). Diagnostics and failures remain on stderr so the answer can be piped or redirected directly.
@@ -75,7 +75,7 @@ match subcommand {
 - **Stdin is read only after `exec --acp` has taken its early return into the facade.** The ACP stdio facade speaks JSON-RPC over stdin and must keep exclusive ownership of it, so the CLI must never ingest stdin during dispatch or anywhere upstream of the mode decision. This ordering is the load-bearing constraint of the piped-prompt path; violating it silently corrupts the ACP protocol rather than failing loudly.
 - Piping into bare `nori` does not select headless behavior. The piped text seeds the first turn and the TUI starts normally, which requires only that a controlling terminal is reachable for key input (see `@/nori-rs/tui/docs.md`). Environments with no terminal at all must use `exec` or `-p`.
 
-**CloudCommand** (`cloud.rs`): Runs a TUI session backed by Nori Sessions by delegating everything cloud-related to the external `nori-handroll` binary (from the nori-sessions repo). The CLI no longer contains any broker client, OAuth flow, or WebSocket transport -- it does not know the word "broker" beyond translating one config value:
+**CloudCommand** (`cloud.rs`): Runs a TUI session backed by Nori Sessions by delegating everything cloud-related to the external `nori-handroll` binary. The cloud route contains no broker client, OAuth flow, or cloud WebSocket transport; it only translates the broker configuration passed to Handroll:
 - `resolve_handroll_bin()` resolves the `nori-handroll` binary. A `NORI_HANDROLL_BIN` env override wins when set and must point at an existing file (a dangling override is an error, not a fallback); otherwise the first `nori-handroll` on `PATH` is used. A missing binary fails with an actionable "install Nori Sessions" error before the TUI starts
 - `cloud_agent_config()` builds a synthetic registry entry (slug `nori-cloud`): a local distribution running `<handroll-bin> cloud-acp`, with the read-only `[cloud] broker_url` from `config.toml` (when present) translated to a `NORI_BROKER_URL` environment variable on the child, and an auth hint pointing at `nori-handroll login`. When the `--onboard` flag is set, `--onboard` is appended to the spawned `cloud-acp` argv so the handroll child acquires-or-resumes the org's broker-side onboarding session server-side
 - The dispatch in `main.rs` forces `interactive.agent = "nori-cloud"` AFTER flag merging, so `--agent` cannot bypass Sessions, passes the entry via the clap-skipped `TuiCli.extra_agents` field, and sets the clap-skipped `TuiCli.cloud_mode` launch-origin flag (see `@/nori-rs/tui/src/cli.rs`). Cloud entry is picker-first: the TUI prepares one live agent connection, lists sessions when advertised, and opens the session picker before anything can claim a VM, with "Start a new session" as an explicit pick. The chosen new or existing session is activated on that prepared connection rather than a second child (see `@/nori-rs/tui/docs.md`)

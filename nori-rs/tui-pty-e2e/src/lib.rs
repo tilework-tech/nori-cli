@@ -246,22 +246,23 @@ impl TuiSession {
             cmd.cwd(cwd);
         }
 
-        // Run a subcommand (e.g. `nori cloud`) if requested
-        if let Some(subcommand) = &config.subcommand {
-            cmd.arg(subcommand);
-        }
-
-        // Use mock-acp-agent agent
-        cmd.arg("--agent");
-        cmd.arg(&config.agent);
-
-        // Skip trust directory prompt for E2E tests (avoids interactive prompts)
-        if config.skip_trust_directory {
-            cmd.arg("--skip-trust-directory");
-        }
-
-        for arg in &config.args {
-            cmd.arg(arg);
+        if let Some(args) = &config.command_args {
+            for arg in args {
+                cmd.arg(arg);
+            }
+        } else {
+            // Run a subcommand (e.g. `nori cloud`) if requested.
+            if let Some(subcommand) = &config.subcommand {
+                cmd.arg(subcommand);
+            }
+            cmd.arg("--agent");
+            cmd.arg(&config.agent);
+            if config.skip_trust_directory {
+                cmd.arg("--skip-trust-directory");
+            }
+            for arg in &config.args {
+                cmd.arg(arg);
+            }
         }
 
         // Set TERM to enable terminal features
@@ -437,6 +438,12 @@ trust_level = "trusted"
             }
             std::thread::sleep(Duration::from_millis(50));
         }
+    }
+
+    /// Kill a test client and reap it within a bounded interval.
+    pub fn terminate_and_wait(&mut self, timeout: Duration) -> bool {
+        let _ = self.child.kill();
+        self.wait_for_process_exit(timeout)
     }
 
     /// Read any available output and update screen state
@@ -746,6 +753,8 @@ fn find_acp_log_file(nori_home: &std::path::Path) -> Option<std::path::PathBuf> 
 /// Configuration for spawning a test session
 pub struct SessionConfig {
     pub agent: String,
+    /// Exact command arguments, bypassing the default interactive TUI flags.
+    pub command_args: Option<Vec<String>>,
     /// Subcommand to run before the flags (e.g. "cloud" for `nori cloud`).
     pub subcommand: Option<String>,
     /// Positional arguments appended after the standard test flags.
@@ -790,6 +799,7 @@ impl SessionConfig {
     pub fn new() -> Self {
         Self {
             agent: "mock-model".to_string(),
+            command_args: None,
             subcommand: None,
             args: Vec::new(),
             mock_agent_env: HashMap::new(),
@@ -827,6 +837,12 @@ impl SessionConfig {
     /// Run `nori <subcommand>` instead of plain `nori` (e.g. "cloud").
     pub fn with_subcommand(mut self, subcommand: impl Into<String>) -> Self {
         self.subcommand = Some(subcommand.into());
+        self
+    }
+
+    /// Drive a CLI subcommand with its own argument grammar in the PTY.
+    pub fn with_command_args(mut self, args: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.command_args = Some(args.into_iter().map(Into::into).collect());
         self
     }
 

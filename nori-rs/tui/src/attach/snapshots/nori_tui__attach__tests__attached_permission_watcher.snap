@@ -1,0 +1,21 @@
+---
+source: tui/src/attach/tests.rs
+expression: screen(&state)
+---
+ Nori host  WATCHING · read-only · alt+t take control
+ session · one ·
+
+ Ready. Send a prompt to begin.
+
+
+
+
+
+
+ Permission · Write a file
+ › 1  Allow once
+ Watching · read-only · alt+t to take control
+
+
+
+› Send a prompt

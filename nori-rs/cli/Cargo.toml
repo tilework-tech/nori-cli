@@ -35,6 +35,8 @@ libc = { workspace = true }
 owo-colors = { workspace = true }
 regex-lite = { workspace = true}
 serde_json = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+uuid = { workspace = true, features = ["v4"] }
 supports-color = { workspace = true }
 toml = { workspace = true }
 tokio = { workspace = true, features = [

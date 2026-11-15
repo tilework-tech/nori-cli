@@ -145,7 +145,7 @@ async fn serve<M: ManagedAgent>(
     Ok(())
 }
 
-async fn send_frame(
+pub(super) async fn send_frame(
     sink: &mut futures::stream::SplitSink<WebSocket, Message>,
     frame: Message,
 ) -> anyhow::Result<()> {

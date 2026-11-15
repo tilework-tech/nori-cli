@@ -388,6 +388,15 @@ They use the remote responder label, so TUI and remote observers see the same
 `RequestResolved`. Managed disconnect does not cancel a turn or resolve its
 pending permission: the continuing session can be controlled after reconnect.
 
+The background [`HostService`](../cli/src/host/service.rs) composes this
+adapter with manager lifecycle operations for new, close, cancel, and resume.
+It owns the manager independently of every attached terminal. Transport
+authentication and controller/watcher admission live below this layer in
+[`acp-host`](../acp-host/src/remote/host_control.rs); the harness remains the
+authority for prompt, permission, transcript, and session state. The
+`ManagedClient` re-export lets an attached frontend consume this transport
+without importing the ACP host crate directly.
+
 #### Goal ownership and MCP routing
 
 Thread goals are Nori-owned live state. The harness is the authority for their
@@ -791,8 +800,9 @@ temp dir is removed.
 - Consumers should correlate raw requests and responses only by the supplied
   ACP `RequestId`.
 - The legacy `HarnessRemoteHost` exposes one attached session; the managed
-  host exposes the manager registry. WebSocket endpoints share one controller
-  slot (last connect wins). Bounded consumers close on overflow without
+  host exposes the manager registry. Legacy `--remote` WebSocket endpoints
+  share one controller slot (last connect wins); the background host instead
+  admits one controller and independent watchers. Bounded consumers close on overflow without
   blocking sessions. [Legacy remote tests](tests/remote_host.rs) exercise the
   ACP projection; [managed WebSocket tests](tests/managed_remote.rs) compare
   reconnect delivery against the manager's envelope stream.
