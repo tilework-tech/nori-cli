@@ -160,6 +160,10 @@ consumer application
   (`├─`, `└─`, `│`) from the depths of the visible rows only, so filtering
   redraws the guides for what remains. The guide prefixes the primary cell and
   a matching continuation prefixes the row's description line, at every depth.
+- An item's `current`, `default`, and `read_only` flags render as a badge such
+  as `(current)` after the primary cell. When the first column is too narrow,
+  the renderer cuts the title (with `…`) to make room, so the tree guide and the
+  badge always stay visible.
 - `Picker::compact_descriptions(true)` keeps each row's description on a
   second line in compact density as well, for lists whose descriptions carry a
   live preview. Compact rows become two lines tall only when at least one
