@@ -640,3 +640,65 @@ fn next_waiting_refreshes_stale_rows_and_opens_new_child_without_second_key() {
         "one navigation sends one subscription"
     );
 }
+
+#[test]
+fn deferred_next_waiting_keeps_a_new_draft_in_its_parent_session() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.role_changed("controller");
+    runtime
+        .state
+        .replace_sessions(json!({"sessions":[
+            {"session_id":"parent-session","agent":"mock-model","status":"ready"}
+        ]}))
+        .unwrap();
+    runtime.key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
+    let refresh = rx.try_recv().unwrap();
+    runtime.composer.handle_paste("Parent-only draft".into());
+    runtime.connection_event(super::connection::ConnectionEvent::Message(json!({
+        "id":refresh["id"],"result":{"sessions":[
+            {"session_id":"parent-session","agent":"mock-model","status":"ready"},
+            {"session_id":"child-session","agent":"mock-model","status":"waiting_on_you","parent":"parent-session","depth":1}
+        ]}
+    }))).unwrap();
+    assert_eq!(runtime.state.selected.as_deref(), Some("parent-session"));
+    assert!(rx.try_recv().is_err(), "draft prevents deferred navigation");
+    runtime.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let prompt = rx.try_recv().unwrap();
+    assert_eq!(prompt["method"], "_nori/session/prompt");
+    assert_eq!(prompt["params"]["session_id"], "parent-session");
+}
+
+#[test]
+fn explicit_session_list_navigation_cancels_deferred_next_waiting() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    runtime.state.connected = true;
+    runtime
+        .state
+        .replace_sessions(json!({"sessions":[
+            {"session_id":"parent-session","agent":"mock-model","status":"ready"}
+        ]}))
+        .unwrap();
+    runtime.key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
+    let refresh = rx.try_recv().unwrap();
+    runtime.key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::ALT));
+    runtime.connection_event(super::connection::ConnectionEvent::Message(json!({
+        "id":refresh["id"],"result":{"sessions":[
+            {"session_id":"parent-session","agent":"mock-model","status":"ready"},
+            {"session_id":"child-session","agent":"mock-model","status":"waiting_on_you","parent":"parent-session","depth":1}
+        ]}
+    }))).unwrap();
+    assert_eq!(runtime.state.selected.as_deref(), Some("parent-session"));
+    assert!(
+        runtime.state.list_open,
+        "explicit list navigation remains open"
+    );
+    assert!(
+        rx.try_recv().is_err(),
+        "refresh cannot override explicit navigation"
+    );
+}

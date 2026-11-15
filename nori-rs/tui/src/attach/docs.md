@@ -64,10 +64,12 @@ Path: @/nori-rs/tui/src/attach
   `next_waiting_session` binding (Alt+Down by default) navigates there. If the
   cached list has no waiting target, a connected terminal retains the navigation
   action while refreshing the list, then selects a newly discovered waiting
-  session from the response. List errors or disconnection clear that pending
-  action. Parent notices and child list rows identify the child and its parent.
-  Hierarchy labels prefix TITLE so parent attribution survives long task titles while
-  metadata columns keep their positions.
+  session from the response. Later input or navigation, list errors, and
+  disconnection cancel that pending action. The response also requires an empty
+  composer, including after paste, so a draft begun in the parent stays there.
+  Parent notices and child list rows identify the child and its parent.
+  Hierarchy labels prefix TITLE so parent attribution survives long task titles
+  while metadata columns keep their positions.
   Results return through the parent's ordinary event stream without a terminal
   review step.
 

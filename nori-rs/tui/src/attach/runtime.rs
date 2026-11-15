@@ -221,7 +221,8 @@ impl Runtime {
             }
             Pending::List => {
                 self.state.replace_sessions(result.clone())?;
-                if std::mem::take(&mut self.next_waiting_after_refresh) {
+                if std::mem::take(&mut self.next_waiting_after_refresh) && self.composer.is_empty()
+                {
                     self.next_waiting_session(false);
                 }
                 if let Some(id) = &self.state.selected

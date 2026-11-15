@@ -18,6 +18,8 @@ impl Runtime {
         if key.kind == KeyEventKind::Release {
             return true;
         }
+        // A later user action supersedes navigation waiting on a list refresh.
+        self.next_waiting_after_refresh = false;
         if key.code == KeyCode::Char('d') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return false;
         }
