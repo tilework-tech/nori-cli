@@ -685,9 +685,11 @@ processes.
   child's registry entry task-done (`Registry::mark_task_done`) when its
   delegation reaches `Completed`, before closing the child; the entry then
   records that close as `Done`. Every other end keeps its ordinary status.
-  `Done` lives only in the in-memory registry: nothing in the transcript
-  records it, so a child reloaded from its transcript after the host restarts
-  reads `Closed`.
+  `Done`, like the parent link and the rest of the registry, lives only in
+  the in-memory manager; the host keeps no snapshot of it. After a host
+  restart a finished child is not listed at all (`nori host ls` and the
+  `nori attach` list omit it), and reopening its transcript with `/resume`
+  starts it as a live top-level `ready` session with no parent link.
 
   A pending request clears when any `HarnessHandle` clone answers it, when the
   phase returns to `Idle` or enters `Cancelling`, or when the session ends.
@@ -818,11 +820,12 @@ remote /session/delegate ----------+         |
   `<agent> · <child name> is waiting on you (delegated by <parent agent> · <parent name>). Press Alt+Down to answer it.`
   The child name comes from `nori_protocol::delegation_child_name`; the parent
   name is the parent's replay-journal title through
-  `nori_protocol::session_display_name`, else `this session`.
+  `nori_protocol::session_display_name` (40 characters, cut in the middle),
+  else `this session`.
 - A child's final output or failure becomes an attributed prompt queued into
   its parent automatically, without a review step. Its text is
   `nori_protocol::delegation_result_prompt`: a readable first line naming the
-  child agent, child name, and outcome, then the child ID, then the result.
+  child agent, the child's whole first task line, and outcome, then the child ID, then the result.
   It does not repeat the parent's own ID. The result is the text of the
   child's agent message chunks from its last prompting turn; when a tool call,
   permission request, or other session update arrived between chunks, the next

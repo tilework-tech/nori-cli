@@ -59,8 +59,10 @@ host ls / host stop ---------------+                   SessionManager
 
   The ID is shortened to the column, AGENT and STATUS are cut with `…`, and
   AGE is never cut. TITLE, with its tree guides, gets whatever cells remain
-  (none only below the tight layout's metadata width) and is cut with `…` at
-  grapheme boundaries. Status color applies on every row. Piped output
+  (none only below the tight layout's metadata width). The guide stays whole
+  and the name is cut in the middle (start, `…`, end) at grapheme boundaries,
+  so titles sharing a long prefix still read apart; only when the room is no
+  wider than the guide is the whole title cut from the end. Status color applies on every row. Piped output
   keeps full values in the wide layout, without color or a width limit.
 - A top-level row (tree depth 0) shows the row's `family_status` when the host
   sends one, so a parent reads `waiting on you` while anything under it does;
@@ -71,8 +73,7 @@ host ls / host stop ---------------+                   SessionManager
   depth-first order from each row's `session_id` and `parent` (a missing
   parent makes the row top level), and `tree_guides` supplies `├─`, `└─`, and
   `│` prefixes. The guides are written inside TITLE, after the fixed ID, AGENT,
-  STATUS, and AGE columns, so nesting never shifts metadata, and truncation
-  cuts from the end of the title, so the guide is the last thing to go. Piped output appends
+  STATUS, and AGE columns, so nesting never shifts metadata. Piped output appends
   `  (parent <full parent ID>)` to every row that has a parent, including a
   child whose parent is no longer listed and so prints at top level, so scripts
   keep the exact link; terminal output omits it.
@@ -83,7 +84,8 @@ host ls / host stop ---------------+                   SessionManager
   | working | cyan |
   | ready | green |
   | failed | red |
-  | others (starting, done, closed) | dimmed |
+  | done | default color, so a finished child reads apart from a closed one |
+  | others (starting, closed) | dimmed |
 - Lifecycle requests prepare agents using the host's configuration. Resume
   uses the stored agent and working directory while retaining the conversation
   identity. Stop closes the server, shuts down the manager, removes discovery
@@ -106,7 +108,9 @@ host ls / host stop ---------------+                   SessionManager
   preserves children and holds their results for stable-ID resume.
 - The host has no persistent manager snapshot. Transcripts survive normally,
   but in-memory registry state and reconnect replay belong to the current host
-  process. The token rotates when that process starts again.
+  process. After a restart, earlier sessions, including finished delegated
+  children, are not listed; `/resume` on a child's transcript reopens it as a
+  live top-level `ready` session without its parent link. The token rotates when that process starts again.
 - [Lifecycle tests](../../tests/host_lifecycle.rs) use isolated homes and
   bounded process waits to cover detached startup, privacy, lock ownership,
   occupied ports, and explicit stop.

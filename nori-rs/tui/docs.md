@@ -970,7 +970,8 @@ in the prompt still moves the cursor.
   **session family** status, so a parent reads "waiting on you" when a child
   does. Status tones come from `session_status::status_tone`, shared with
   `nori attach`: waiting on you amber, working cyan, ready green, failed red,
-  starting, closed, and done muted (closed and done titles are muted too).
+  done in the default color, starting and closed muted (closed and done titles
+  are muted). `nori host ls` follows the same split: done plain, closed dimmed.
   Manager sessions that descend from a listed session
   but have no TUI view are listed under their parent with negative keys that
   cannot collide with a generation; they are not navigation targets. Delegated
@@ -1001,9 +1002,9 @@ handler and fits each line to one row, two cells narrower than the terminal:
   the top-level session, `<agent> · <name> › … › <agent> · <child> · <key> to
   parent`, where the key is the `parent_session` binding (omitted when
   unbound). The path walks `SessionRecord.parent` while the record's source is
-  `Session`, so a fork ends it. Names come from `App::session_name`: the title
-  in this TUI, else the replay journal title, else
-  `nori_protocol::UNTITLED_SESSION_NAME`;
+  `Session`, so a fork ends it. Names come from `App::session_name` whole (the
+  title in this TUI, else the replay journal title's first line, else
+  `nori_protocol::UNTITLED_SESSION_NAME`) and are cut only by the builder;
 - a background-request line, naming the first off-screen session waiting on
   you with an amber `●` (`<title> is waiting on you`, or `<parent> › <child>`
   for a delegated child), its request, `(+N more)` when others wait, and the
@@ -1017,9 +1018,10 @@ Both path lines are built by [`session_path.rs`](src/session_path.rs), which
 
 | Builder | Fitting rules |
 | --- | --- |
-| `breadcrumb_line(path, tail, width)` | Never drops the top-level session, the current one, or the tail. Sessions between them collapse to one `…` when the names would get fewer than 16 cells each; on very narrow terminals agent labels drop; spare cells go to longer names; a final clip guarantees the width |
+| `breadcrumb_line(path, status, key, width)` | Never drops the top-level session or the current one. Tries layouts in order (whole path with key, middle steps elided to one `…` with key, whole path without key, elided without key, elided without key or agent labels) and takes the first where the current name is whole and every other name keeps at least min(its width, 8) cells. The last layout always renders, giving the current name priority while others keep at least 4 cells. So the key gives way before the current name is cut, and the current name is cut last; a final clip guarantees the width. The local TUI passes an empty status and ` · <key> to parent` |
 | `waiting_line(path_names, request, more, jump_key, width)` | Names come first. The request text gets the cells left after the full names when it fits there or at least 20 cells remain; otherwise it is cut to 20 cells only if each name can still keep 16, and dropped if not |
 | `fit(text, cells)` | Cuts by display cells, ending in `…` |
+| `fit_name(text, cells)` | Cuts by display cells in the middle (start, `…`, end), so names sharing a long prefix stay distinct; used for every session name on these lines |
 
 While an `/agent` candidate is preparing, a dim `Preparing <agent>…` line sits
 above these. With the flag this replaces the history cell that single-session
@@ -1098,13 +1100,15 @@ notices, result prompts, and terminal text agree. The
 and renders its `DelegationChanged` events.
 
 Each non-approval `DelegationChanged` adds a `DelegationCell` history cell.
+A cell is printed once and never updates, so a running child's card says
+`started` rather than `working` (the protocol's status words are unchanged).
 On screen it stays compact so many delegations remain readable; the
 transcript view (`open_transcript`) shows the full brief, full result, and
 child ID.
 
 | Status | On screen |
 | --- | --- |
-| running | `↳ <requester> delegated to <agent> · <child name> · working`, plus `<transcript key> shows the brief` |
+| running | `↳ <requester> delegated to <agent> · <child name> · started`, plus `<transcript key> shows the brief` |
 | completed | `○ result from <agent> · <child name> · done`, up to six result lines, each wrapped under the `▏` rail (then `… N more lines`), and `returns to <parent agent> on its own · its history: <session list key>` |
 | failed | `✕ <agent> · <child name> · failed · <reason>` and `sent to <parent agent> as a failure` |
 | declined, cancelled | `✕ delegation to <agent> · <child name> · declined by you` / `cancelled · <reason>` |
@@ -1128,9 +1132,15 @@ it (a `[Nori delegation result]` first line followed by a `Child session: `
 line, or ending in ` · declined`; a user message that only begins with the
 header stays whole),
 [`history_cell`](src/history_cell/mod.rs) shows it on screen as one
-line (`› delegation result <summary> · delivered to this session`), because
-the result block was already shown when the child ended; the transcript view
-keeps the exact text the agent received.
+line, `› delegation result from <agent> · <name> · <status> · delivered to this
+session`, because the result block was already shown when the child ended; the
+transcript view keeps the exact text the agent received. The line comes from
+`delegation::delivered_result_spans`, shared with `nori attach`: it reads the
+parts back with `nori_protocol::delegation_result_parts`, drops
+` · delivered to this session` first when the row is too narrow, then cuts the
+name in the middle with `session_path::fit_name`, so it fits one row at 80
+columns. The header carries the child's whole first task line, so the name is
+cut only once, by width.
 
 Children receive navigable parked widgets without replacing the parent on
 screen. Their stream, history, pending permissions, and session-scoped events
