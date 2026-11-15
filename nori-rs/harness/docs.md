@@ -696,6 +696,11 @@ processes.
   `Unknown`, `NotFailed`, `NoTranscript`, `AgentMismatch`, and `Transcript`.
 - **Close and shutdown.** `close(id, child_grace)` shuts one session down,
   bounded by `shutdown_timeout`; closing an ended session does nothing.
+  Successful close waits for the manager's event pump to observe process end
+  and release the capacity slot, so a caller can immediately start a
+  replacement. Backend shutdown and that observation share one timeout. The
+  pump notifies waiters after reducing terminal state or stream EOF; close
+  does not synthesize a lifecycle event.
   `close` follows the session's lineage to the live process: a parent forked at
   head leads to the child that took over its agent process, and a resumed
   session's old ID leads to its replacement. `shutdown(child_grace)` stops admission, then shuts every live

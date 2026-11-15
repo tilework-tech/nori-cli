@@ -485,6 +485,33 @@ async fn the_cap_refuses_a_session_beyond_the_limit() {
     manager.shutdown(Duration::ZERO).await;
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn closing_at_the_cap_frees_the_slot_before_returning() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let manager = SessionManager::new(SessionManagerConfig {
+        max_sessions: 1,
+        ..SessionManagerConfig::default()
+    });
+    for _ in 0..64 {
+        let session = start(&manager, prepare_spec("mock-model", home.path(), None));
+        wait_for_status(&manager, &session.conversation_id, SessionStatus::Ready).await;
+        manager
+            .close(&session.conversation_id, Duration::ZERO)
+            .await
+            .expect("close session");
+        assert_eq!(manager.free_slots(), 1, "close releases its capacity slot");
+        assert_eq!(
+            manager
+                .get(&session.conversation_id)
+                .map(|record| record.status),
+            Some(SessionStatus::Closed),
+            "close waits for the terminal event to update the registry"
+        );
+    }
+    manager.shutdown(Duration::ZERO).await;
+}
+
 #[tokio::test]
 #[serial]
 async fn free_slots_count_down_on_start_and_come_back_on_close() {

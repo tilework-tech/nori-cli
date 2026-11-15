@@ -20,6 +20,7 @@ use nori_protocol::RequestResolved;
 use nori_protocol::SessionEnvelope;
 use nori_protocol::SessionEvent;
 use nori_protocol::SessionStatus;
+use tokio::sync::Notify;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
@@ -172,6 +173,7 @@ pub struct SessionManager {
 struct Shared {
     config: SessionManagerConfig,
     state: Mutex<State>,
+    process_ended: Notify,
 }
 
 struct State {
@@ -197,6 +199,7 @@ impl SessionManager {
         Self {
             shared: Arc::new(Shared {
                 config,
+                process_ended: Notify::new(),
                 state: Mutex::new(State {
                     registry: Registry::new(config.max_sessions),
                     handles: HashMap::new(),
@@ -344,6 +347,7 @@ impl SessionManager {
                         // Holding a handle to an ended session would keep its
                         // runtime, and so this stream, alive.
                         state.handles.remove(&process);
+                        shared.process_ended.notify_waiters();
                     }
                     envelopes
                 };
@@ -356,6 +360,7 @@ impl SessionManager {
             let mut state = shared.state();
             state.registry.process_exited(process);
             state.handles.remove(&process);
+            shared.process_ended.notify_waiters();
         });
 
         Ok(ManagedSession {
@@ -457,28 +462,48 @@ impl SessionManager {
     /// Shut down one session, waiting at most the configured time limit.
     /// Closing a session that has already ended does nothing. Closing a
     /// session that was forked at head closes the child that took over its
-    /// agent process.
+    /// agent process. On success the registry has observed its end and its
+    /// capacity slot is available for a replacement.
     pub async fn close(
         &self,
         conversation_id: &ConversationId,
         child_grace: Duration,
     ) -> anyhow::Result<()> {
-        let handle = {
+        let process_and_handle = {
             let state = self.shared.state();
             state
                 .registry
                 .process_following_forks(conversation_id)
-                .and_then(|process| state.handles.get(&process).cloned())
+                .and_then(|process| {
+                    state
+                        .handles
+                        .get(&process)
+                        .cloned()
+                        .map(|handle| (process, handle))
+                })
         };
-        let Some(handle) = handle else {
+        let Some((process, handle)) = process_and_handle else {
             return Ok(());
         };
         let limit = self.shared.config.shutdown_timeout;
-        tokio::time::timeout(limit, handle.shutdown_with_grace(child_grace))
-            .await
-            .map_err(|_| {
-                anyhow::anyhow!("session {conversation_id} did not shut down within {limit:?}")
-            })?
+        tokio::time::timeout(limit, async {
+            handle.shutdown_with_grace(child_grace).await?;
+            loop {
+                // Register before reading state so an end observed between
+                // the check and await cannot leave this close waiting forever.
+                let ended = self.shared.process_ended.notified();
+                tokio::pin!(ended);
+                ended.as_mut().enable();
+                if !self.shared.state().handles.contains_key(&process) {
+                    return Ok(());
+                }
+                ended.await;
+            }
+        })
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!("session {conversation_id} did not shut down within {limit:?}")
+        })?
     }
 
     /// Refuse new sessions and shut every live session down in parallel, each
