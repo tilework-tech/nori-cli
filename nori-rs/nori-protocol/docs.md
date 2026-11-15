@@ -49,29 +49,10 @@ pub enum AcpEvent {
 }
 ```
 
-`NoriEvent` outer variants:
-
-```rust
-pub enum NoriEvent {
-    SessionStarted(SessionStarted),
-    SessionPhaseChanged(SessionPhase),
-    SessionEnded(SessionEnded),
-    QueueChanged(QueueSnapshot),
-    ReplayStarted(ReplayStarted),
-    ReplayFinished,
-    ContextCompacted(ContextCompactedEvent),
-    SessionForked(SessionForked),
-    GoalChanged(Option<ThreadGoal>),
-    CapabilitiesChanged(NoriCapabilities),
-    Undo(UndoEvent),
-    UserShell(UserShellEvent),
-    HookOutput(HookOutput),
-    PromptSummaryUpdated(PromptSummary),
-    Notice(Notice),
-    RequestFailed(RequestFailure),
-    RequestResolved(RequestResolved),
-}
-```
+`NoriEvent` variants cover session lifecycle (started, phase changed, ended,
+forked), queue and replay bracketing, compaction, goals, capabilities, undo,
+user-shell and hook output, prompt summaries, notices, request failure and
+resolution, and delegation changes (`DelegationChanged`).
 
 `NoriEvent` carries harness-owned lifecycle and product behavior that has no
 ACP event of its own. A `session/update` received without a locally owned
@@ -108,6 +89,30 @@ in snake case). The rules that derive it from the event stream live in the
 harness session manager (see [`nori-harness`](../harness/docs.md)); this crate
 defines only the values.
 
+`Delegation` is the record a `DelegationChanged` event carries for one
+delegated child: request, parent, and child identities, both agent names, the
+task, depth, `DelegationStatus`, optional result, and `DelegationOrigin`
+(`Agent` when the parent agent called the `delegate` tool, `User` for
+`/delegate` or a direct manager call). `origin` has a serde default of `Agent`
+so events from hosts that predate the field still deserialize.
+
+[`delegation.rs`](src/delegation.rs) holds the only text logic in the crate:
+the shared naming and result-prompt wording that the harness, the local TUI,
+and `nori attach` must agree on.
+
+| Function | Produces |
+| --- | --- |
+| `session_display_name` | First non-empty trimmed line of a task or title, cut to 40 characters with `…` |
+| `delegation_child_name` | The child's display name from its task, else `session <first 8 of child ID>` |
+| `delegation_status_word` | `waiting on you`, `working`, `ready`, `failed`, `declined`, or `cancelled`, matching session status words |
+| `delegation_result_prompt` | The prompt delivered to the parent: `[Nori delegation result] from <agent> · <child name> · <outcome>`, then `Child session: <child id>`, then the result text |
+| `delegation_result_summary` | The text after `DELEGATION_RESULT_HEADER` on a prompt's first line, or `None` for any other prompt |
+
+The result prompt keeps the child ID on its own line so the receiving agent can
+still address that session, while the first line stays readable. Because the
+parent TUI recognizes a delivered result only by that header prefix, the
+header string is a cross-crate contract.
+
 Session termination reasons are `Shutdown`, `Closed`, `ConnectionLost`,
 `SpawnFailed`, and `TimedOut`. Raw ACP request and response envelopes retain the
 original `RequestId`; consumers do not correlate requests from content or from
@@ -120,15 +125,16 @@ exact ACP wire `RequestId` for harness-issued operations.
   terminal requests, modes, config options, capabilities, usage, and method
   responses. Do not mirror them into Nori types.
 - Nori owns only behavior around the ACP session: lifecycle, queueing, replay,
-  compaction, goals, undo, user-shell output, hooks, summaries, notices, and
-  failures that have no ACP response.
+  compaction, goals, undo, user-shell output, hooks, summaries, notices,
+  delegation, and failures that have no ACP response.
 - Output without an active local request remains raw `SessionEvent::Acp`
   traffic. Presentation grouping and optional lifecycle hints stay private to
   consumers such as [`nori-tui`](../tui/docs.md).
 - `SessionEnvelope` and `SessionStatus` are Nori routing and summary types, not
   ACP extensions.
-- The crate contains no reducer, normalizer, parser, formatter, transcript
-  compatibility decoder, or presentation state.
+- The crate contains no reducer, normalizer, transcript compatibility
+  decoder, or presentation state. The delegation text helpers are plain
+  strings with no styling; each frontend applies its own colors.
 - `ReplayStarted` and `ReplayFinished` bracket historical ACP notifications
   only. Current setup responses and Nori lifecycle events remain outside the
   replay body.

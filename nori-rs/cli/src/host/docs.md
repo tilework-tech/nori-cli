@@ -50,10 +50,24 @@ host ls / host stop ---------------+                   SessionManager
   control characters and colors status only on a terminal. Terminal rows fit
   the available display cells by truncating titles with an ellipsis at grapheme
   boundaries; if metadata alone exceeds the width, that prefix is clipped.
-  Piped output retains full titles without color or a width limit. Delegated
-  child rows retain their own ID, agent, status, and age columns; the hierarchy
-  marker and parent identity prefix TITLE, so long task titles do not displace
-  parent attribution and indentation never shifts the metadata columns.
+  Piped output retains full titles without color or a width limit.
+- Rows are tree-ordered with the shared
+  [picker helpers](../../../tui-components/docs.md): `tree_order` builds a
+  depth-first order from each row's `session_id` and `parent` (a missing
+  parent makes the row top level), and `tree_guides` supplies `├─`, `└─`, and
+  `│` prefixes. The guides are written inside TITLE, after the fixed ID, AGENT,
+  STATUS, and AGE columns, so nesting never shifts metadata, and truncation
+  cuts the title rather than its guide. Piped output appends
+  `  (parent <full parent ID>)` to each child's title so scripts keep the exact
+  link; terminal output omits it.
+
+  | Status | Terminal color |
+  | --- | --- |
+  | waiting on you | yellow |
+  | working, starting | cyan |
+  | ready | green |
+  | failed | red |
+  | others | dimmed |
 - Lifecycle requests prepare agents using the host's configuration. Resume
   uses the stored agent and working directory while retaining the conversation
   identity. Stop closes the server, shuts down the manager, removes discovery

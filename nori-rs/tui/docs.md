@@ -924,6 +924,7 @@ a binding).
 | `previous_session` / `next_session` | `alt+,` / `alt+.` | Wraps at both ends of the navigation order and skips closed sessions |
 | `next_waiting_session` | `alt+down` | Only with an empty prompt; next session after the active one that is waiting on you |
 | `open_session_list` | `alt+s` | Needs the composer in front |
+| `parent_session` | `alt+up` | Only on a delegated child (record source `Session` with a parent); shows the parent's widget |
 
 The Hotkeys view lists these actions only with the flag
 (`HotkeyAction::is_multi_session`).
@@ -957,9 +958,12 @@ in the prompt still moves the cursor.
   instead. The footer hint reads "ctrl+d close" or "ctrl+d remove". Rows for
   manager-only descendants (negative keys) cannot be closed here.
 - Children are indented under their parent using the session manager's record
-  parent, with the shared picker's tree rows. A top-level row's status word and
-  tone, and its glyph, follow its **session family** status, so a parent reads
-  "waiting on you" when a child does. Manager sessions that descend from a listed session
+  parent, with the shared picker's tree rows; titles carry no parent-ID
+  prefix. A top-level row's status word and tone, and its glyph, follow its
+  **session family** status, so a parent reads "waiting on you" when a child
+  does. Status tones come from `session_status::status_tone`, shared with
+  `nori attach`: waiting on you amber, working cyan, ready green, failed red,
+  starting and closed muted. Manager sessions that descend from a listed session
   but have no TUI view are listed under their parent with negative keys that
   cannot collide with a generation; they are not navigation targets. Delegated
   children are adopted as real parked widgets by
@@ -973,19 +977,24 @@ in the prompt still moves the cursor.
   open it replaces the rows in place, keeping the selection on the same
   session. In cloud mode every session's agent reads "Nori Cloud".
 
-Status words live in [`session_status.rs`](src/session_status.rs): `starting`,
+Status words and their tones live in [`session_status.rs`](src/session_status.rs): `starting`,
 `working`, `waiting on you` (`WAITING_ON_YOU_LABEL`, the **session status**
 `WaitingOnYou`), `ready`, `ready · new` (finished a turn while off screen, until
 it is viewed), `failed`, and `closed`. Statuses come from the harness
-`SessionManager`; a widget without a managed record reads `starting`. Two lines
-drawn above the bottom pane (`ChatWidget::set_session_lines`) stay visible
-while a view is open:
+`SessionManager`; a widget without a managed record reads `starting`. Lines drawn
+above the bottom pane (`ChatWidget::set_session_lines`) stay visible while a
+view is open:
 
+- a parent breadcrumb, only while a delegated child is on screen:
+  `<parent agent> · <parent> › <agent> · <child> · <key> to parent`, where the
+  key is the `parent_session` binding (omitted when unbound). The parent name
+  comes from `App::session_name`: its title in this TUI, else its replay
+  journal title, else `session <short id>`;
 - a background-request line, naming the first off-screen session waiting on
-  you by title (`<title> is waiting on you`), its request, `+N more` when
-  others wait, and the `next_waiting_session` key. The title, including any
-  parent attribution prefix, shares one bounded label budget; the request text
-  is separately shortened so the line fits one row of a 100-column terminal;
+  you with an amber `●` (`<title> is waiting on you`), its request, `+N more`
+  when others wait, and the `next_waiting_session` key. For a delegated child
+  the label is `<parent> › <child>` with smaller per-part budgets for parent,
+  child, and request, so either form fits one row of a 100-column terminal;
 - a status line counting sessions by their own status, most urgent first
   (waiting on you, failed, working, starting, ready; closed is omitted), shown
   only with two or more sessions.
@@ -1059,38 +1068,66 @@ reflow.
 
 `/delegate <agent> <task>` is the user entry point in the local and attached
 frontends. It is enabled only with `multi_session`; the session list does not
-start delegations. The shared [parser and labels](src/delegation.rs) keep
-syntax and parent/child attribution consistent. The
+start delegations. [`delegation.rs`](src/delegation.rs) holds the command
+parser and all delegation presentation shared by both frontends; naming and
+status words come from `nori_protocol`'s delegation helpers so the harness
+notices, result prompts, and terminal text agree. The
 [chat-widget adapter](src/chatwidget/delegation.rs) calls the harness manager
-and renders its `DelegationChanged` events. Different-kind requests expose
-Start and Decline; same-kind requests start immediately. These approval choices
-control child creation, separately from a child's later ACP permission request.
+and renders its `DelegationChanged` events.
+
+Each non-approval `DelegationChanged` adds a `DelegationCell` history cell.
+On screen it stays compact so many delegations remain readable; the
+transcript view (`open_transcript`) shows the full brief, full result, and
+child ID.
+
+| Status | On screen |
+| --- | --- |
+| running | `↳ <requester> delegated to <agent> · <child name> · working`, plus `<transcript key> shows the brief` |
+| completed | `○ result from <agent> · <child name> · ready`, up to six result lines (then `… N more lines`), and `returns to <parent agent> on its own · its history: <session list key>` |
+| failed | `✕ <agent> · <child name> · failed · <reason>` and `sent to <parent agent> as a failure` |
+| declined, cancelled | `✕ delegation to <agent> · <child name> · declined by you` / `cancelled · <reason>` |
+
+The requester is `you` for origin `user` and the parent agent for origin
+`agent`. Key hints come from `DelegationHints`, filled from the configured
+`open_transcript` and `open_session_list` bindings; an unbound key, or the
+attached frontend, hides its hint.
+
+Same-kind requests start immediately. Different-kind requests open a selection
+view built from `approval_lines`: a question worded by origin ("Would you like
+<parent agent> to start a <agent> session?" or "Would you like to start a
+<agent> session for your task?"), then `asked by`, `runs on`, and `task` rows.
+The choices are "Yes, start it" and "No, decline"; Esc (dismiss) declines.
+These choices control child creation, separately from a child's later ACP
+permission request.
+
+The result prompt the manager delivers to the parent appears as a
+`UserHistoryCell`. When its first line carries the `[Nori delegation result]`
+header, [`history_cell`](src/history_cell/mod.rs) shows it on screen as one
+line (`› delegation result <summary> · delivered to this session`), because
+the result block was already shown when the child ended; the transcript view
+keeps the exact text the agent received.
 
 Children receive navigable parked widgets without replacing the parent on
 screen. Their stream, history, pending permissions, and session-scoped events
 follow the normal session-deck path. Alt+Down (`next_waiting_session`) opens the
 next session needing the user, where the ordinary permission UI answers the
-child. Parent notices identify both child and parent and do not open the
-child's permission popup in the parent. Child list labels put the parent
-identity before the task title so title truncation preserves attribution. Closed completed children keep
-inspectable history; ending their process must not be interpreted as exiting
-Nori. When [startup replay](src/chatwidget/event_handlers.rs) reaches a closed
-child widget with no live handle, it applies the history metadata without
+child, and Alt+Up (`parent_session`) returns. Parent notices name both
+sessions readably and do not open the child's permission popup in the parent.
+Closed completed children keep inspectable history; ending their process must
+not be interpreted as exiting Nori. When
+[startup replay](src/chatwidget/event_handlers.rs) reaches a closed child
+widget with no live handle, it applies the history metadata without
 requesting custom prompts. If a retained handle instead races normal teardown,
 [command submission](src/chatwidget/helpers.rs) suppresses only the harness's
 classified expected transport closure. Real backend errors and unexpected
 transport loss still follow the originating session's failure route.
 
 Result delivery is manager-owned and automatically prompts the parent. The
-terminal renders attributed status/result text; it neither approves the result
-nor drives completion. Explicit parent close cancels descendants; a crashed
-parent can be resumed with Ctrl+R under the same conversation ID to receive
-held results, including redelivery when the previous parent process admitted
-but never acknowledged a result turn. See the [manager lifecycle](../harness/docs.md#delegation-between-managed-sessions).
-
-The initial rendering is intentionally text and existing selection components.
-Dedicated delegation/result cards and further hierarchy styling belong to the
-later presentation workstream.
+terminal renders the result; it neither approves the result nor drives
+completion. Explicit parent close cancels descendants; a crashed parent can be
+resumed with Ctrl+R under the same conversation ID to receive held results,
+including redelivery when the previous parent process admitted but never
+acknowledged a result turn. See the [manager lifecycle](../harness/docs.md#delegation-between-managed-sessions).
 
 #### Host attachment
 

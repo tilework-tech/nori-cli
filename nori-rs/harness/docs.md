@@ -769,7 +769,7 @@ is unchanged.
 parent agent -- HTTP MCP delegate --+
 local /delegate -------------------+--> SessionManager
 remote /session/delegate ----------+         |
-                                   different agent? -> Start / Decline
+                                   different agent? -> approve / decline
                                              |
                                       child ACP process
                                              |
@@ -780,7 +780,7 @@ remote /session/delegate ----------+         |
 
 - Delegation records reserve a child conversation identity before approval.
   Same-kind children start immediately; different-kind children stay
-  `awaiting_approval` until Start or Decline. Approval is scoped to the
+  `awaiting_approval` until the user approves or declines. Approval is scoped to the
   requesting parent and request ID. Spawn admission uses the manager's shared
   session cap, including children, and is checked when a child actually starts.
 - Depth counts delegation edges, separately from fork ancestry. A top-level
@@ -792,15 +792,28 @@ remote /session/delegate ----------+         |
   stable. [State reduction](src/session_manager/delegation_state.rs) republishes
   the changed attribution for observers.
 - `DelegationChanged` carries request, parent, and child identities, agent
-  names, task, depth, status, and optional result. Manager envelopes make those
+  names, task, depth, status, optional result, and origin. The MCP tool path
+  passes the calling process as its expected process and records origin
+  `agent`; the public `SessionManager::delegate` (local and remote `/delegate`)
+  records `user`. Frontends use origin only to word who asked. Manager envelopes make those
   changes observable through ordinary subscriptions and reconnect replay,
   including events published while a failed parent has no process. Child-start
   approval contributes to the parent's `WaitingOnYou` status separately from
   its ACP permission request IDs.
   ACP permission requests remain owned by the child conversation; permission
-  responses must target that child, not its parent.
+  responses must target that child, not its parent. When a child sends an ACP
+  permission request, [state reduction](src/session_manager/delegation_state.rs)
+  emits a `Notice` into the parent:
+  `<agent> · <child name> is waiting on you (delegated by <parent agent> · <parent name>). Press Alt+Down to answer it.`
+  The child name comes from `nori_protocol::delegation_child_name`; the parent
+  name is the parent's replay-journal title through
+  `nori_protocol::session_display_name`, else `this session`.
 - A child's final output or failure becomes an attributed prompt queued into
-  its parent automatically, without a review step. A busy parent consumes it
+  its parent automatically, without a review step. Its text is
+  `nori_protocol::delegation_result_prompt`: a readable first line naming the
+  child agent, child name, and outcome, then the child ID, then the result.
+  It does not repeat the parent's own ID. The TUI recognizes these prompts by
+  their `[Nori delegation result]` header. A busy parent consumes it
   through its normal prompt queue. The [result driver](src/session_manager/delegation_driver.rs)
   retains that delivery until the parent's correlated ACP `PromptResponse`,
   not merely queue admission. If the process crashes first, stable-ID resume

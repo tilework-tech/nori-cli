@@ -158,10 +158,22 @@ consumer application
   negative values clamp to 0; a row nests under the closest earlier row with a
   smaller depth. The [`tree`](src/picker/tree.rs) helper computes indent guides
   (`├─`, `└─`, `│`) from the depths of the visible rows only, so filtering
-  redraws the guides for what remains. The guide prefixes the primary cell and
+  redraws the guides for what remains. The guide prefixes the tree column and
   a matching continuation prefixes the row's description line, at every depth.
+- `PickerState::tree_column(key)` names the column that carries tree guides and
+  badges. It defaults to the first visible column, and falls back to it when
+  the named column is hidden. Pointing it at a later column (the attached
+  session list uses TITLE) keeps the earlier fixed-width columns aligned at
+  every depth.
+- `tree_guides` and `tree_order` are public so non-picker output can draw the
+  same tree. `tree_order` takes `(id, parent)` pairs and returns each row's
+  index and depth in depth-first order: children follow their parent and
+  siblings keep their given order. A row whose parent is absent (or is itself)
+  becomes top level, and rows caught in a parent cycle are listed at top level
+  rather than dropped. `nori host ls` uses both helpers for its plain-text
+  table.
 - An item's `current`, `default`, and `read_only` flags render as a badge such
-  as `(current)` after the primary cell. When the first column is too narrow,
+  as `(current)` after the tree column's text. When that column is too narrow,
   the renderer cuts the title (with `…`) to make room, so the tree guide and the
   badge always stay visible.
 - `Picker::compact_descriptions(true)` keeps each row's description on a

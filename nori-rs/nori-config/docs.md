@@ -45,7 +45,7 @@ to the harness `SessionManager` as its capacity. `[tui.hotkeys]`
 resolves every `HotkeyAction` to a `HotkeyBinding`, with per-action defaults
 from `HotkeyAction::default_binding`. The session-move actions
 (`previous_session`, `next_session`, `next_waiting_session`,
-`open_session_list`) always resolve, but `HotkeyAction::is_multi_session`
+`open_session_list`, `parent_session`) always resolve, but `HotkeyAction::is_multi_session`
 marks them so frontends ignore and hide them unless `multi_session` is on.
 
 `[default_models]` maps an agent slug to a model id. This crate only stores the

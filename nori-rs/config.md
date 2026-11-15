@@ -99,6 +99,7 @@ previous_session = "alt+,"
 next_session = "alt+."
 next_waiting_session = "alt+down"
 open_session_list = "alt+s"
+parent_session = "alt+up"
 ```
 
 Off by default; restart Nori after changing it. With it on, `/new`, `/resume`,
@@ -118,6 +119,7 @@ another session and say how to close one.
 | `previous_session` / `next_session` | Move through sessions in the order they were opened, wrapping at the ends |
 | `next_waiting_session` | With an empty prompt, jump to the next session waiting on you |
 | Left on an empty prompt, `open_session_list`, or `/sessions` | Open the session list |
+| `parent_session` | From a delegated child, return to the session that delegated it |
 
 The `[tui.hotkeys]` values above are the defaults, and the actions appear in
 the Hotkeys view only with the feature on. Moving between sessions skips
@@ -141,9 +143,20 @@ closed this way; use `/quit`.
 
 A status line above the prompt counts open sessions by status (starting,
 working, waiting on you, ready, failed) once two or more are open, a separate
-line names a background session that is waiting on you, and a temporary
-"Preparing <agent>…" line shows while `/agent` starts a new agent. A blank
-session that never started is not counted or listed.
+line names a background session that is waiting on you (for a delegated child,
+as `<parent> › <child>`), and a temporary "Preparing <agent>…" line shows while
+`/agent` starts a new agent. Inside a delegated child, a breadcrumb line names
+the parent and child and the `parent_session` key. In the session list,
+status words are colored: waiting on you amber, working cyan, ready green,
+failed red. A blank session that never started is not counted or listed.
+
+`/delegate <agent> <task>` (or the agent's own `delegate` tool) starts a
+delegated child session, named after the first line of its task. In the
+parent it reads as one line (`↳ you delegated to <agent> · <name> · working`);
+the full brief and result are in the transcript view (Ctrl+T). When the child
+ends, a short result block names it and shows up to six result lines, and the
+result goes back to the parent agent on its own. A child on a different agent
+asks first ("Yes, start it" / "No, decline"; Esc declines).
 
 Remote control (`--remote`, `/remote-control`) serves the most recently started
 session, which is not necessarily the one on screen.

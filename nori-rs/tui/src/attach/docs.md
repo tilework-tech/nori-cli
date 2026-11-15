@@ -51,15 +51,34 @@ Path: @/nori-rs/tui/src/attach
   phases, and session end.
 - [Rendering](render.rs) keeps role and connectivity visible beside the
   selected conversation or session list. Watchers receive the same content and
-  permissions but must take control before sending mutations. The current
-  session marker appears in TITLE, preserving the short ID in its own column.
+  permissions but must take control before sending mutations.
+- The identity line under the header shows the selected session as
+  `<agent> · <name> · <status>`, where the name is the session title through
+  `nori_protocol::session_display_name` (else the short ID). Inside a delegated
+  child whose parent is listed, it becomes a breadcrumb
+  `<parent agent> · <parent name> › <agent> · <child name> · <status>` followed
+  by the `parent_session` key (Alt+Up by default).
+- The session list is tree-ordered: [AttachState](state.rs) runs the listed
+  `(session_id, parent)` pairs through the shared picker `tree_order` and gives
+  each item its depth, and the picker is built with `tree_column("title")`.
+  Tree guides and the `(current)` badge therefore sit inside TITLE while ID,
+  AGENT, STATUS, and AGE stay aligned at every depth. Status words take the
+  shared `session_status::status_tone` colors (waiting on you amber, working
+  cyan, ready green, failed red). The list ignores the host's `depth` field and
+  derives depth from parent links.
 
-- Delegation uses the shared [command parser](../delegation.rs):
+- Delegation uses the shared [command parser and presentation](../delegation.rs):
   `/delegate <agent> <task>` sends the selected parent to the manager's remote
-  delegate method. Different-kind Start/Decline decisions resolve the manager
-  request; watchers must take control before either operation. Session lists
-  carry pending delegation state so reconnecting terminals can recover the
-  approval view without resending a mutation.
+  delegate method. A different-kind request shows the shared `approval_lines`
+  prompt (question, `asked by` / `runs on` / `task` rows) with
+  `1 Yes, start it · 2 No, decline`; watchers must take control before either
+  operation. Session lists carry pending delegation state so reconnecting
+  terminals can recover the approval view without resending a mutation.
+- Every other `DelegationChanged` becomes a `Part::Delegation` in the parent's
+  conversation, rendered by the shared `DelegationCell`. Attached clients have
+  no transcript view or local session-list key here, so the cell is built with
+  empty `DelegationHints` and shows no key hints. An `awaiting_approval` change
+  adds no part; the approval prompt covers it.
 - Child permissions stay in the child's conversation. The configured
   `next_waiting_session` binding (Alt+Down by default) navigates there. If the
   cached list has no waiting target, a connected terminal retains the navigation
@@ -67,9 +86,10 @@ Path: @/nori-rs/tui/src/attach
   session from the response. Later input or navigation, list errors, and
   disconnection cancel that pending action. The response also requires an empty
   composer, including after paste, so a draft begun in the parent stays there.
-  Parent notices and child list rows identify the child and its parent.
-  Hierarchy labels prefix TITLE so parent attribution survives long task titles
-  while metadata columns keep their positions.
+  Parent notices name the child and parent readably (see the
+  [harness](../../../harness/docs.md#delegation-between-managed-sessions)).
+  The `parent_session` binding moves the selection from a child to its parent
+  when that parent is in the cached list, closing the list and resubscribing.
   Results return through the parent's ordinary event stream without a terminal
   review step.
 
