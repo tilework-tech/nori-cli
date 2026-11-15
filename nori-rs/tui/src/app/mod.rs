@@ -246,6 +246,7 @@ mod event_handling;
 mod resize_reflow;
 mod session_deck;
 mod session_keys;
+mod session_lifecycle;
 mod session_overview;
 mod session_resume;
 mod session_setup;
@@ -278,7 +279,10 @@ impl App {
         let needs_deferred_spawn = true;
         let mut pending_session_activation = None;
         let session_manager = nori_harness::session_manager::SessionManager::new(
-            nori_harness::session_manager::SessionManagerConfig::default(),
+            nori_harness::session_manager::SessionManagerConfig {
+                max_sessions: config.max_sessions,
+                ..nori_harness::session_manager::SessionManagerConfig::default()
+            },
         );
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {

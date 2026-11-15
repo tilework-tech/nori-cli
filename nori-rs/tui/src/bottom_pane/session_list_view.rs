@@ -3,7 +3,8 @@
 //! Rows show a status glyph, the title, the agent and a status word, with a
 //! one-line preview below. Children sit indented under their parent. Tab
 //! toggles between every session and only those waiting on the user, and
-//! typing filters by title or agent. Rows are replaced while the list is open
+//! typing filters by title or agent. Ctrl+D closes the selected session (a
+//! busy one takes a second press) and removes a closed one from the list. Rows are replaced while the list is open
 //! without moving the selection.
 
 use crossterm::event::KeyCode;
@@ -44,11 +45,14 @@ pub(crate) struct SessionRow {
     pub(crate) title: String,
     pub(crate) agent: String,
     pub(crate) provider: Option<ProviderKind>,
-    /// The session's own status, which decides its glyph.
+    /// The session's own status, which decides what it can do (resume,
+    /// close).
     pub(crate) status: SessionStatus,
     /// The word shown in the status column. For a parent this follows its
     /// whole family.
     pub(crate) status_word: String,
+    /// The status shown by the glyph and the status tone. For a parent this
+    /// follows its whole family.
     pub(crate) family_status: SessionStatus,
     pub(crate) preview: Option<String>,
     pub(crate) depth: i32,
@@ -60,6 +64,9 @@ pub(crate) struct SessionListView {
     rows: Vec<SessionRow>,
     app_event_tx: AppEventSender,
     complete: bool,
+    /// A busy session the user pressed the close key on once. Closing it
+    /// loses its work in progress, so it takes a second press.
+    close_armed: Option<SessionGeneration>,
 }
 
 const TITLE: &str = "title";
@@ -88,6 +95,7 @@ impl SessionListView {
             rows,
             app_event_tx,
             complete: false,
+            close_armed: None,
         }
     }
 
@@ -117,6 +125,53 @@ impl SessionListView {
     fn selected_row(&self) -> Option<&SessionRow> {
         let generation = self.state.selected_item()?.key;
         self.rows.iter().find(|row| row.generation == generation)
+    }
+
+    /// Close the selected session, or drop it from the list once closed. A
+    /// busy session needs the key twice.
+    fn close_selected(&mut self) {
+        let Some(row) = self.selected_row() else {
+            return;
+        };
+        let generation = row.generation;
+        if generation < 0 {
+            return;
+        }
+        match row.status {
+            SessionStatus::Closed => {
+                self.app_event_tx
+                    .send(AppEvent::RemoveSession { generation });
+            }
+            SessionStatus::Working | SessionStatus::WaitingOnYou | SessionStatus::Starting
+                if self.close_armed != Some(generation) =>
+            {
+                self.close_armed = Some(generation);
+            }
+            SessionStatus::Working
+            | SessionStatus::WaitingOnYou
+            | SessionStatus::Starting
+            | SessionStatus::Ready
+            | SessionStatus::Failed => {
+                self.close_armed = None;
+                self.app_event_tx
+                    .send(AppEvent::CloseSession { generation });
+            }
+        }
+    }
+
+    fn close_hint(&self) -> Option<KeyHint<'static>> {
+        let row = self.selected_row().filter(|row| row.generation >= 0)?;
+        Some(match row.status {
+            SessionStatus::Closed => KeyHint::new("ctrl+d", "remove"),
+            _ if self.close_armed == Some(row.generation) => {
+                KeyHint::new("ctrl+d", "again to close")
+            }
+            SessionStatus::Working
+            | SessionStatus::WaitingOnYou
+            | SessionStatus::Starting
+            | SessionStatus::Ready
+            | SessionStatus::Failed => KeyHint::new("ctrl+d", "close"),
+        })
     }
 
     fn apply(&mut self, action: PickerAction) {
@@ -163,7 +218,7 @@ fn items(rows: &[SessionRow]) -> Vec<PickerItem<SessionGeneration>> {
             let mut item = PickerItem::new(
                 row.generation,
                 TITLE,
-                format!("{} {}", glyph(row.status), row.title),
+                format!("{} {}", glyph(row.family_status), row.title),
             )
             .cell(AGENT, row.agent.clone())
             .cell(STATUS, row.status_word.clone())
@@ -193,6 +248,11 @@ impl BottomPaneView for SessionListView {
         if key.kind == KeyEventKind::Release {
             return;
         }
+        if key.code == KeyCode::Char('d') && key.modifiers == KeyModifiers::CONTROL {
+            self.close_selected();
+            return;
+        }
+        self.close_armed = None;
         if key.code == KeyCode::Char('r') && key.modifiers == KeyModifiers::CONTROL {
             if let Some(row) = self.selected_row()
                 && row.status == SessionStatus::Failed
@@ -288,7 +348,12 @@ impl Renderable for SessionListView {
                     self.selected_row()
                         .filter(|row| row.status == SessionStatus::Failed)
                         .map(|_| KeyHint::new("ctrl+r", "resume")),
-                    Some(KeyHint::new("tab", WAITING_FILTER_LABEL)),
+                    self.close_hint(),
+                    Some(if self.state.active_category.is_some() {
+                        KeyHint::new("tab", "all sessions")
+                    } else {
+                        KeyHint::new("tab", WAITING_FILTER_LABEL)
+                    }),
                     Some(KeyHint::new("esc", "close")),
                 ]
                 .into_iter()
@@ -310,5 +375,98 @@ impl Renderable for SessionListView {
         rows.saturating_mul(row_height)
             .saturating_add(chrome)
             .min(24)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use insta::assert_snapshot;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    fn row(generation: SessionGeneration, title: &str, status: SessionStatus) -> SessionRow {
+        SessionRow {
+            generation,
+            title: title.to_string(),
+            agent: "Mock ACP".to_string(),
+            provider: None,
+            status,
+            status_word: crate::session_status::status_label(status).to_string(),
+            family_status: status,
+            preview: None,
+            depth: 0,
+            on_screen: false,
+        }
+    }
+
+    fn view(rows: Vec<SessionRow>) -> SessionListView {
+        let (tx, _rx) = unbounded_channel();
+        SessionListView::new(rows, AppEventSender::new(tx))
+    }
+
+    fn render(view: &SessionListView, width: u16) -> String {
+        let height = view.desired_height(width);
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("terminal");
+        terminal
+            .draw(|frame| view.render(frame.area(), frame.buffer_mut()))
+            .expect("draw");
+        terminal.backend().to_string()
+    }
+
+    #[test]
+    fn a_parent_shows_the_glyph_of_its_family_status() {
+        let mut parent = row(1, "parent session", SessionStatus::Ready);
+        parent.family_status = SessionStatus::WaitingOnYou;
+        parent.status_word = "waiting on you".to_string();
+        let mut child = row(2, "child session", SessionStatus::WaitingOnYou);
+        child.depth = 1;
+        let screen = render(&view(vec![parent, child]), 80);
+        let parent_line = screen
+            .lines()
+            .find(|line| line.contains("parent session"))
+            .expect("parent row");
+        assert!(parent_line.contains("● parent session"), "{screen}");
+    }
+
+    #[test]
+    fn after_tab_the_footer_offers_every_session_again() {
+        let mut waiting = row(1, "waiting session", SessionStatus::WaitingOnYou);
+        waiting.on_screen = true;
+        let mut list = view(vec![waiting, row(2, "ready session", SessionStatus::Ready)]);
+        list.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        let screen = render(&list, 80);
+        assert!(screen.contains("tab all sessions"), "{screen}");
+        assert!(!screen.contains("tab waiting on you"), "{screen}");
+        assert_snapshot!(screen);
+    }
+
+    #[test]
+    fn a_busy_session_needs_a_second_close_press() {
+        let (tx, mut rx) = unbounded_channel();
+        let mut busy = row(1, "busy session", SessionStatus::Working);
+        busy.on_screen = false;
+        let mut current = row(2, "current session", SessionStatus::Ready);
+        current.on_screen = true;
+        let mut list = SessionListView::new(vec![busy, current], AppEventSender::new(tx));
+        let mut closes = || {
+            std::iter::from_fn(|| rx.try_recv().ok())
+                .filter_map(|event| match event {
+                    AppEvent::CloseSession { generation } => Some(generation),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        // The list opens on the session on screen; Up selects the busy one.
+        list.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        let ctrl_d = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL);
+        list.handle_key_event(ctrl_d);
+        let after_first = closes();
+        let screen = render(&list, 80);
+        list.handle_key_event(ctrl_d);
+        let after_second = closes();
+        assert!(screen.contains("ctrl+d again to close"), "{screen}");
+        assert_eq!((after_first, after_second), (Vec::new(), vec![1]));
     }
 }

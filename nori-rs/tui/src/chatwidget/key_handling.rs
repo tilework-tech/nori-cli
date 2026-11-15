@@ -101,7 +101,14 @@ impl ChatWidget {
             }
             return;
         }
-        if !cmd.available_during_task() && self.bottom_pane.is_task_running() {
+        // With several sessions, starting another one leaves the busy one
+        // running in the background.
+        let starts_beside = self.config.multi_session
+            && matches!(
+                cmd,
+                SlashCommand::New | SlashCommand::Agent | SlashCommand::Resume
+            );
+        if !cmd.available_during_task() && !starts_beside && self.bottom_pane.is_task_running() {
             let message = format!(
                 "'/{}' is disabled while a task is in progress.",
                 cmd.command()
@@ -150,29 +157,13 @@ impl ChatWidget {
                 self.open_viewonly_session_picker();
             }
             SlashCommand::Close => {
-                let Some(handle) = self.harness_handle.clone() else {
-                    self.add_error_message("No live agent connection to close.".to_string());
-                    return;
-                };
-                self.session_close_in_flight = true;
-                let tx = self.app_event_tx.clone();
-                tokio::spawn(async move {
-                    match handle.close_session().await {
-                        Ok(()) => {
-                            tx.send(AppEvent::InsertHistoryCell(Box::new(
-                                history_cell::new_info_event(
-                                    "Session closed (released).".to_string(),
-                                    None,
-                                ),
-                            )));
-                        }
-                        Err(e) => {
-                            tx.send(AppEvent::SessionCloseFailed {
-                                message: format!("{e}"),
-                            });
-                        }
-                    }
-                });
+                if self.config.multi_session && !self.cloud_mode {
+                    self.app_event_tx.send(AppEvent::CloseSession {
+                        generation: self.session_generation,
+                    });
+                } else {
+                    self.start_cloud_close();
+                }
             }
             SlashCommand::Init => {
                 let init_target = self.config.cwd.join(DEFAULT_PROJECT_DOC_FILENAME);

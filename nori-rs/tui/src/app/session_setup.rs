@@ -150,13 +150,20 @@ impl App {
     /// Start preparing a switch candidate immediately. Replacing this state
     /// drops and tears down any older candidate without touching the active session.
     pub(crate) fn begin_agent_candidate(&mut self, agent_name: String, display_name: String) {
+        if self.chat_widget.has_harness_session() && self.refuse_at_session_cap() {
+            return;
+        }
         self.discard_candidate();
         self.chat_widget
             .set_login_agent_override(Some(agent_name.clone()));
         let generation = crate::chatwidget::agent::next_session_generation();
         let config = self.config_for_agent(&agent_name);
-        self.chat_widget
-            .add_info_message(format!("Preparing {display_name}…"), None);
+        // With several sessions the session lines say this instead, so the
+        // session on screen keeps no line about another session.
+        if !self.config.multi_session {
+            self.chat_widget
+                .add_info_message(format!("Preparing {display_name}…"), None);
+        }
 
         let spec = crate::chatwidget::agent::agent_prepare_spec(config, None);
         let tx = self.app_event_tx.clone();

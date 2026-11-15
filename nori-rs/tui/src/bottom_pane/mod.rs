@@ -747,6 +747,27 @@ impl BottomPane {
         }
     }
 
+    /// Drop a request that another client answered from every open view.
+    /// Returns true when a view held it.
+    pub(crate) fn dismiss_request(
+        &mut self,
+        request_id: &nori_protocol::acp::v1::RequestId,
+    ) -> bool {
+        let mut dismissed = false;
+        for view in &mut self.view_stack {
+            dismissed |= view.dismiss_request(request_id);
+        }
+        let open = self.view_stack.len();
+        self.view_stack.retain(|view| !view.is_complete());
+        if self.view_stack.len() != open {
+            self.on_active_view_complete();
+        }
+        if dismissed {
+            self.request_redraw();
+        }
+        dismissed
+    }
+
     /// Called when the agent requests user approval.
     pub fn push_approval_request(&mut self, request: ApprovalRequest) {
         let request = if let Some(view) = self.view_stack.last_mut() {

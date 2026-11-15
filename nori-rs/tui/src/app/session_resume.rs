@@ -42,6 +42,7 @@ impl App {
                 return Ok(());
             }
         };
+        let title = self.session_rows_title(generation);
         let config = self.config_for_agent(&record.agent);
         let mut init = self.chat_widget_init(
             tui.frame_requester(),
@@ -55,6 +56,10 @@ impl App {
         self.begin_replacing_session_transcript(tui)?;
         let widget =
             ChatWidget::new_resumed_acp(init, record.acp_session_id, None, Some(transcript));
+        if let Some(title) = title {
+            self.session_previews
+                .inherit_title(widget.session_generation(), title);
+        }
         self.install_active_widget(widget);
         self.configure_new_chat_widget();
         self.chat_widget.add_info_message(

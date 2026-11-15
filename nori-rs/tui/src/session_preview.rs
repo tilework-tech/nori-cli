@@ -19,6 +19,11 @@ use crate::app_event::SessionGeneration;
 #[derive(Default)]
 struct Preview {
     title: Option<String>,
+    /// The session's first user message, which titles it until the agent
+    /// summarises it. Stays open for more chunks until something else
+    /// arrives.
+    first_prompt: Option<String>,
+    first_prompt_open: bool,
     /// Requests waiting on the user, in arrival order.
     pending: Vec<(acp::RequestId, String)>,
     running: Vec<(acp::ToolCallId, String)>,
@@ -55,6 +60,15 @@ pub(crate) struct SessionPreviews {
 impl SessionPreviews {
     pub(crate) fn observe(&mut self, generation: SessionGeneration, event: &SessionEvent) {
         let preview = self.sessions.entry(generation).or_default();
+        let user_chunk = matches!(
+            event,
+            SessionEvent::Acp(AcpEvent::Notification(
+                acp::AgentNotification::SessionNotification(notification),
+            )) if matches!(notification.update, acp::SessionUpdate::UserMessageChunk(_))
+        );
+        if !user_chunk {
+            preview.first_prompt_open = false;
+        }
         match event {
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::AgentNotification::SessionNotification(notification),
@@ -70,6 +84,7 @@ impl SessionPreviews {
                     request_id.clone(),
                     format!("approve: {}", first_line(&subject)),
                 ));
+                break_text(preview);
             }
             SessionEvent::Acp(AcpEvent::Response { request_id, .. }) => {
                 preview.pending.retain(|(id, _)| id != request_id);
@@ -108,15 +123,28 @@ impl SessionPreviews {
         }
     }
 
+    /// Title a session that took another's place, such as a restarted
+    /// session, until it has a title of its own.
+    pub(crate) fn inherit_title(&mut self, generation: SessionGeneration, title: String) {
+        let preview = self.sessions.entry(generation).or_default();
+        if preview.first_prompt.is_none() {
+            preview.first_prompt = Some(title);
+        }
+    }
+
     pub(crate) fn preview(&self, generation: SessionGeneration) -> Option<String> {
         self.sessions.get(&generation).and_then(Preview::line)
     }
 
     /// The agent's own summary of what the session is about, once it has one.
+    /// Falls back to the first user message until a summary arrives.
     pub(crate) fn title(&self, generation: SessionGeneration) -> Option<String> {
-        self.sessions
-            .get(&generation)
-            .and_then(|preview| preview.title.clone())
+        self.sessions.get(&generation).and_then(|preview| {
+            preview
+                .title
+                .clone()
+                .or_else(|| preview.first_prompt.clone())
+        })
     }
 
     /// The request this session is waiting on, if any, as shown in its preview.
@@ -128,8 +156,28 @@ impl SessionPreviews {
     }
 }
 
+/// End the current line of agent text, so text that follows a request or a
+/// tool starts a line of its own.
+fn break_text(preview: &mut Preview) {
+    if !preview.latest_text.is_empty() && !preview.latest_text.ends_with('\n') {
+        preview.latest_text.push('\n');
+    }
+}
+
 fn observe_update(preview: &mut Preview, update: &acp::SessionUpdate) {
     match update {
+        acp::SessionUpdate::UserMessageChunk(chunk) => {
+            if let acp::ContentBlock::Text(text) = &chunk.content {
+                match &mut preview.first_prompt {
+                    None => {
+                        preview.first_prompt = Some(text.text.clone());
+                        preview.first_prompt_open = true;
+                    }
+                    Some(prompt) if preview.first_prompt_open => prompt.push_str(&text.text),
+                    Some(_) => {}
+                }
+            }
+        }
         acp::SessionUpdate::AgentMessageChunk(chunk) => {
             if let acp::ContentBlock::Text(text) = &chunk.content {
                 preview.latest_text.push_str(&text.text);
@@ -144,6 +192,7 @@ fn observe_update(preview: &mut Preview, update: &acp::SessionUpdate) {
                     .running
                     .push((call.tool_call_id.clone(), first_line(&call.title)));
             }
+            break_text(preview);
         }
         acp::SessionUpdate::ToolCallUpdate(update) => {
             let done = matches!(
@@ -347,6 +396,73 @@ mod tests {
         assert_eq!(
             (previews.preview(1), previews.title(1)),
             (None, Some("Fix the login test".to_string()))
+        );
+    }
+
+    fn user_text(chunk: &str) -> SessionEvent {
+        update(acp::SessionUpdate::UserMessageChunk(
+            acp::ContentChunk::new(acp::ContentBlock::Text(acp::TextContent::new(chunk))),
+        ))
+    }
+
+    #[test]
+    fn text_after_an_answered_request_starts_a_new_line() {
+        assert_eq!(
+            feed(&[
+                text("Test message 1"),
+                permission(1, "echo hi"),
+                resolved(1),
+                text("Permission granted"),
+            ]),
+            Some("Permission granted".to_string())
+        );
+    }
+
+    #[test]
+    fn text_after_a_tool_starts_a_new_line() {
+        assert_eq!(
+            feed(&[
+                text("Looking"),
+                tool("t", "ls"),
+                tool_done("t"),
+                text("Done")
+            ]),
+            Some("Done".to_string())
+        );
+    }
+
+    #[test]
+    fn the_first_user_message_titles_a_session_until_the_agent_summarises_it() {
+        let mut previews = SessionPreviews::default();
+        for event in [
+            user_text("fix the "),
+            user_text("login test"),
+            text("On it"),
+        ] {
+            previews.observe(1, &event);
+        }
+        previews.observe(
+            1,
+            &SessionEvent::Nori(NoriEvent::SessionPhaseChanged(SessionPhase::Prompting {
+                request_id: acp::RequestId::Number(2),
+            })),
+        );
+        previews.observe(1, &user_text("second prompt"));
+        let before_summary = previews.title(1);
+        previews.observe(
+            1,
+            &SessionEvent::Nori(NoriEvent::PromptSummaryUpdated(
+                nori_protocol::PromptSummary {
+                    summary: "Fix the login test".to_string(),
+                },
+            )),
+        );
+        assert_eq!(
+            (before_summary, previews.title(1)),
+            (
+                Some("fix the login test".to_string()),
+                Some("Fix the login test".to_string())
+            )
         );
     }
 }

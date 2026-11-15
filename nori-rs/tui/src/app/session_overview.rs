@@ -19,6 +19,21 @@ use crate::session_status::status_word;
 /// Longest title shown for a session that has no summary yet.
 const TITLE_CHARS: i32 = 60;
 
+/// Longest title and request text on the background-request line, so the
+/// line fits one row of a 100-column terminal.
+const REQUEST_LINE_TITLE_CHARS: i32 = 24;
+const REQUEST_LINE_REQUEST_CHARS: i32 = 28;
+
+fn cut(text: &str, limit: i32) -> String {
+    let limit = usize::try_from(limit).unwrap_or(0);
+    if text.chars().count() > limit {
+        let kept: String = text.chars().take(limit.saturating_sub(1)).collect();
+        format!("{kept}…")
+    } else {
+        text.to_string()
+    }
+}
+
 /// One session as the overview sees it.
 pub(crate) struct SessionFacts {
     pub(crate) generation: SessionGeneration,
@@ -56,6 +71,14 @@ impl App {
             .filter_map(|generation| {
                 let widget = self.widget_for(*generation)?;
                 let conversation_id = widget.managed_conversation_id();
+                let on_screen = *generation == active;
+                // A blank session that has not started is not counted.
+                if conversation_id.is_none()
+                    && !widget.has_harness_session()
+                    && !(on_screen && self.session_setup_pending())
+                {
+                    return None;
+                }
                 let record = conversation_id.and_then(|id| self.session_manager.get(&id));
                 let status = self.status_of(widget);
                 Some(SessionFacts {
@@ -67,7 +90,7 @@ impl App {
                     conversation_id,
                     parent: record.as_ref().and_then(|record| record.parent),
                     agent: widget.config_ref().active_agent.clone(),
-                    on_screen: *generation == active,
+                    on_screen,
                 })
             })
             .collect()
@@ -110,23 +133,18 @@ impl App {
     }
 
     /// The title a session is listed under: the agent's summary, else the
-    /// first prompt.
-    fn session_rows_title(&self, generation: SessionGeneration) -> Option<String> {
+    /// first prompt, cut to `limit` characters.
+    fn session_title(&self, generation: SessionGeneration, limit: i32) -> Option<String> {
         let widget = self.widget_for(generation);
         self.session_previews
             .title(generation)
             .or_else(|| widget.and_then(ChatWidget::first_prompt_text))
-            .map(|title| {
-                let line = title.lines().next().unwrap_or_default().trim().to_string();
-                let limit = usize::try_from(TITLE_CHARS).unwrap_or(0);
-                if line.chars().count() > limit {
-                    let cut: String = line.chars().take(limit.saturating_sub(1)).collect();
-                    format!("{cut}…")
-                } else {
-                    line
-                }
-            })
+            .map(|title| cut(title.lines().next().unwrap_or_default().trim(), limit))
             .filter(|title| !title.is_empty())
+    }
+
+    pub(super) fn session_rows_title(&self, generation: SessionGeneration) -> Option<String> {
+        self.session_title(generation, TITLE_CHARS)
     }
 
     /// Sessions in the manager that descend from a session this TUI shows but
@@ -231,6 +249,10 @@ impl App {
                 .observe(fact.generation, fact.status, fact.on_screen);
         }
         let mut lines = Vec::new();
+        if let Some(super::CandidateAgent::Preparing { agent_name, .. }) = &self.candidate_agent {
+            let name = self.agent_display_name(agent_name);
+            lines.push(Line::from(format!("Preparing {name}…").dim()));
+        }
         lines.extend(self.background_request_line(&facts));
         if facts.len() > 1
             && let Some(summary) = status_summary(facts.iter().map(|fact| fact.status))
@@ -316,7 +338,7 @@ impl App {
             .collect();
         let first = waiting.first()?;
         let title = self
-            .session_rows_title(first.generation)
+            .session_title(first.generation, REQUEST_LINE_TITLE_CHARS)
             .unwrap_or_else(|| "A session".to_string());
         let mut spans = vec![
             "● ".cyan(),
@@ -324,6 +346,7 @@ impl App {
             format!(" is {}", crate::session_status::WAITING_ON_YOU_LABEL).into(),
         ];
         if let Some(request) = self.session_previews.pending_request(first.generation) {
+            let request = cut(&request, REQUEST_LINE_REQUEST_CHARS);
             spans.push(format!(" · {request}").dim());
         }
         if waiting.len() > 1 {

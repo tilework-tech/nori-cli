@@ -129,6 +129,7 @@ impl ChatWidget {
             session_manager,
             managed_conversation_id: spawn_result.conversation_id,
             session_close_in_flight: false,
+            closed_by_user: false,
             exiting: false,
             agent_config: crate::nori::agent_config_state::AgentConfigState::default(),
             agent_status: crate::nori::session_header::AgentStatusHandle::new(
@@ -317,6 +318,7 @@ impl ChatWidget {
             session_manager,
             managed_conversation_id: spawn_result.conversation_id,
             session_close_in_flight: false,
+            closed_by_user: false,
             exiting: false,
             agent_config: crate::nori::agent_config_state::AgentConfigState::default(),
             agent_status: crate::nori::session_header::AgentStatusHandle::new(

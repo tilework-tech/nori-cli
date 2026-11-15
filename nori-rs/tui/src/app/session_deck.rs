@@ -68,6 +68,12 @@ impl<W> SessionDeck<W> {
         self.parked.remove(&previous)
     }
 
+    /// Drop a session from the order, and its parked widget if any.
+    pub(crate) fn remove(&mut self, generation: SessionGeneration) -> Option<ParkedSession<W>> {
+        self.order.retain(|g| *g != generation);
+        self.parked.remove(&generation)
+    }
+
     pub(crate) fn park(&mut self, generation: SessionGeneration, session: ParkedSession<W>) {
         self.add(generation);
         self.parked.insert(generation, session);
@@ -92,16 +98,6 @@ impl<W> SessionDeck<W> {
         &mut self,
     ) -> impl Iterator<Item = (SessionGeneration, &mut ParkedSession<W>)> {
         self.parked.iter_mut().map(|(g, s)| (*g, s))
-    }
-
-    /// The session next to `from` in navigation order, wrapping at the ends.
-    /// Returns `None` when `from` is the only session.
-    pub(crate) fn step(
-        &self,
-        from: SessionGeneration,
-        direction: Direction,
-    ) -> Option<SessionGeneration> {
-        self.next_where(from, direction, |_| true)
     }
 
     /// The first session after `from`, in `direction` and wrapping, for which
@@ -148,10 +144,10 @@ mod tests {
         let deck = deck_of(&[1, 2, 3]);
         assert_eq!(
             [
-                deck.step(1, Direction::Next),
-                deck.step(3, Direction::Next),
-                deck.step(1, Direction::Previous),
-                deck.step(2, Direction::Previous),
+                deck.next_where(1, Direction::Next, |_| true),
+                deck.next_where(3, Direction::Next, |_| true),
+                deck.next_where(1, Direction::Previous, |_| true),
+                deck.next_where(2, Direction::Previous, |_| true),
             ],
             [Some(2), Some(1), Some(3), Some(1)]
         );
@@ -160,8 +156,8 @@ mod tests {
     #[test]
     fn a_lone_session_has_nowhere_to_move() {
         let deck = deck_of(&[7]);
-        assert_eq!(deck.step(7, Direction::Next), None);
-        assert_eq!(deck.step(7, Direction::Previous), None);
+        assert_eq!(deck.next_where(7, Direction::Next, |_| true), None);
+        assert_eq!(deck.next_where(7, Direction::Previous, |_| true), None);
     }
 
     #[test]
@@ -186,6 +182,15 @@ mod tests {
         let dropped = deck.replace(2, 9).map(|session| session.widget);
         deck.park(1, parked("one"));
         assert_eq!((deck.order(), dropped), (&[1, 9, 3][..], Some("two")));
+    }
+
+    #[test]
+    fn a_removed_session_leaves_the_order_and_gives_back_its_widget() {
+        let mut deck = deck_of(&[1, 3]);
+        deck.park(2, parked("two"));
+        let removed = deck.remove(2).map(|session| session.widget);
+        assert_eq!((deck.order(), removed), (&[1, 3][..], Some("two")));
+        assert_eq!(deck.next_where(1, Direction::Next, |_| true), Some(3));
     }
 
     #[test]

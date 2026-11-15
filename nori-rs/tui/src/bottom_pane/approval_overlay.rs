@@ -157,6 +157,21 @@ impl ApprovalOverlay {
             }));
     }
 
+    fn dismiss(&mut self, request_id: &acp::RequestId) -> bool {
+        let queued = self.queue.len();
+        self.queue
+            .retain(|request| request.request_id != *request_id);
+        let current = self
+            .current_request
+            .as_ref()
+            .is_some_and(|request| request.request_id == *request_id);
+        if current {
+            self.current_request = None;
+            self.advance_queue();
+        }
+        current || self.queue.len() != queued
+    }
+
     fn advance_queue(&mut self) {
         if let Some(next) = self.queue.pop() {
             self.set_current(next);
@@ -218,6 +233,10 @@ impl BottomPaneView for ApprovalOverlay {
 
     fn is_complete(&self) -> bool {
         self.done
+    }
+
+    fn dismiss_request(&mut self, request_id: &acp::RequestId) -> bool {
+        self.dismiss(request_id)
     }
 
     fn try_consume_approval_request(

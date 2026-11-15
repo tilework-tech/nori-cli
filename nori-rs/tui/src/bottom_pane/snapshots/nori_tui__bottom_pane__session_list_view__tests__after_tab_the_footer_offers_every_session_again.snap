@@ -1,0 +1,13 @@
+---
+source: tui/src/bottom_pane/session_list_view.rs
+expression: screen
+---
+"  Sessions 2 · 1 waiting on you · 1 ready  tab: all sessions · type to search   "
+"                                                                                "
+"  All  waiting on you                                                           "
+"                                                                                "
+"    Session                                   Agent           Status            "
+"  › ● waiting session (current)               Mock ACP        waiting on you    "
+"                                                                                "
+"  ↑↓ move  enter open  ctrl+d close  tab all sessions  esc close                "
+"                                                                                "

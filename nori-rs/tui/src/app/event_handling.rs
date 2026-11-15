@@ -166,6 +166,12 @@ impl App {
                     .handle_context_timeline(generation, conversation_id, result);
             }
             AppEvent::NewSession => {
+                if !matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. }))
+                    && self.chat_widget.has_harness_session()
+                    && self.refuse_at_session_cap()
+                {
+                    return Ok(true);
+                }
                 if matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. })) {
                     let Some(CandidateAgent::Prepared {
                         agent_name,
@@ -301,32 +307,8 @@ impl App {
             AppEvent::SessionCloseFailed { message } => {
                 self.chat_widget.on_session_close_failed(message);
             }
-            AppEvent::SessionClosed => {
-                // The session was released; land back on the session picker
-                // with a fresh deferred widget — never auto-claim a new
-                // session (on a cloud agent that would boot a new VM).
-                self.cancel_primary_agent_preparation();
-                self.discard_candidate();
-                self.pending_session_activation = None;
-                if let Some(agent) = self.prepared_agent.take() {
-                    tokio::spawn(agent.shutdown());
-                }
-                self.prepared_agent_initial_context = None;
-                let init = self.chat_widget_init(
-                    tui.frame_requester(),
-                    None,
-                    Vec::new(),
-                    None,
-                    true,
-                    None,
-                );
-                self.install_active_widget(ChatWidget::new(init));
-                self.configure_new_chat_widget();
-                self.deferred_spawn_pending = true;
-                self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Picker {
-                    fallback_to_spawn: false,
-                });
-                tui.frame_requester().schedule_frame();
+            AppEvent::SessionClosed { generation } => {
+                return self.on_session_closed(tui, generation);
             }
             AppEvent::RemoteControlRequested(request) => {
                 let tailnet = match request {
@@ -682,6 +664,14 @@ impl App {
             }
             AppEvent::ResumeFailedSession { generation } => {
                 self.resume_failed_session(tui, generation).await?;
+            }
+            AppEvent::CloseSession { generation } => {
+                self.close_session(generation);
+                tui.frame_requester().schedule_frame();
+            }
+            AppEvent::RemoveSession { generation } => {
+                self.remove_session(generation);
+                tui.frame_requester().schedule_frame();
             }
             AppEvent::ShowSession { generation } => {
                 self.show_session(generation);
@@ -1412,31 +1402,12 @@ impl App {
                     .open_file_manager_picker(self.config.file_manager);
             }
             AppEvent::LoopIteration {
+                generation,
                 prompt,
                 remaining,
                 total,
             } => {
-                let iteration = total - remaining;
-                tracing::info!("Loop iteration {iteration}/{total} (remaining: {remaining})");
-
-                self.shutdown_current_conversation();
-
-                let init = self.chat_widget_init(
-                    tui.frame_requester(),
-                    Some(prompt),
-                    Vec::new(),
-                    None,
-                    true,
-                    None,
-                );
-                self.install_active_widget(ChatWidget::new(init));
-                self.configure_new_chat_widget();
-                self.chat_widget.set_loop_state(remaining, total);
-                self.pending_session_activation = Some(PendingSessionActivation::New);
-                self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
-
-                self.chat_widget
-                    .add_info_message(format!("Loop iteration {iteration} of {total}"), None);
+                self.run_loop_iteration(tui, generation, prompt, remaining, total);
             }
             AppEvent::SetConfigVimMode {
                 value,

@@ -574,9 +574,13 @@ downstream handling are the same as for a single directly launched session. A
 manager start error (for example the session cap) is delivered as a fatal
 `RequestFailed` followed by `SessionEnded(SpawnFailed)`, the same path as any
 other spawn failure. Each widget remembers its managed conversation ID and
-follows `SessionForked` to the child ID. The widget ignores
-`NoriEvent::RequestResolved`, which the manager adds when any handle answers a
-pending request, because it answers its own requests. The `/agent` candidate's process is an
+follows `SessionForked` to the child ID. `NoriEvent::RequestResolved`, which
+the manager adds when any handle answers a pending request, reaches the widget
+through `BottomPane::dismiss_request`: every open view gets
+`BottomPaneView::dismiss_request`, and `ApprovalOverlay` drops the matching
+request from its current slot or queue, so an approval answered by a
+remote-control client closes the TUI modal too. Views that hold no requests
+keep the default no-op. The `/agent` candidate's process is an
 ordinary manager session; `CandidateAgent` holds only UI flow state (picker,
 preparation, activation capture). The pre-session `PreparedAgent` that `App`
 keeps is held outside the manager until a session consumes it.
@@ -735,7 +739,9 @@ widget; after a session is replaced, events from other older generations are
 discarded. Every path that replaces the active widget calls
 `shutdown_current_conversation` and then `install_active_widget` (in
 [`session_setup.rs`](src/app/session_setup.rs) and
-[`session_view.rs`](src/app/session_view.rs)). Without `[features]
+[`session_view.rs`](src/app/session_view.rs)); a loop iteration is the
+exception and shuts the replaced session down directly so it is never parked
+(see the multi-session view below). Without `[features]
 multi_session`, shutting down a replaced session, a discarded candidate, or the
 old widget after a switch commits goes through `SessionManager::close` with the
 widget's managed conversation ID (with the cloud detach grace when in cloud
@@ -827,7 +833,8 @@ detach/reattach wording. Reattach copy does not promise whether history is
 replayed because that is selected independently from ACP capabilities.
 Quitting an attached cloud session detaches through connection teardown;
 `/close` is available only in cloud mode and remains gated by the facade's
-`session/close` support.
+`session/close` support, except that with `[features] multi_session` a local
+`/close` closes the session on screen (see the multi-session view below).
 
 #### Multi-session view
 
@@ -857,7 +864,15 @@ App
   `install_active_widget` parks the old widget behind the new one, appending
   the new session to the order. Without the flag the new widget takes the old
   one's place in the order. Because the previous session keeps running, `/new`
-  does not print a `nori resume` hint for it.
+  does not print a `nori resume` hint for it. With the flag, `/new`, `/agent`,
+  and `/resume` pass the busy-task gate in
+  [`key_handling.rs`](src/chatwidget/key_handling.rs): the busy session is
+  parked and keeps working, and the next prompt goes to the new session.
+- **Blank sessions.** A widget with no managed conversation and no harness
+  session (and, on screen, no setup in flight) is not a session yet. The
+  overview omits it from rows and counts, and `show_session` removes it from
+  the deck instead of parking it when the user moves away, so an abandoned
+  `/new` leaves no "starting" row behind.
 - **Showing a session.** [`show_session`](src/app/session_view.rs) swaps the
   target widget and transcript in immediately, so keys reach it, and marks a
   reprint that runs on the next draw. A burst of jumps therefore reprints only
@@ -881,7 +896,9 @@ App
   [`resume_failed_session`](src/app/session_resume.rs): it loads the failed
   record's transcript through `nori_harness::transcript::load_transcript_from_path`,
   starts the same agent on a new process, and installs the resumed widget in
-  the failed one's place in the navigation order.
+  the failed one's place in the navigation order. The resumed session inherits
+  the failed one's title (`SessionPreviews::inherit_title`) until it has its
+  own.
 
 Session moves are handled in [`session_keys.rs`](src/app/session_keys.rs)
 before other App hotkeys and work over open views, so the user can leave a
@@ -891,7 +908,7 @@ a binding).
 
 | Action (`[tui.hotkeys]`) | Default | Notes |
 | --- | --- | --- |
-| `previous_session` / `next_session` | `alt+,` / `alt+.` | Wraps at both ends of the navigation order |
+| `previous_session` / `next_session` | `alt+,` / `alt+.` | Wraps at both ends of the navigation order and skips closed sessions |
 | `next_waiting_session` | `alt+down` | Only with an empty prompt; next session after the active one that is waiting on you |
 | `open_session_list` | `alt+s` | Needs the composer in front |
 
@@ -906,18 +923,28 @@ in the prompt still moves the cursor.
 
 - Each row is a status glyph and title, the agent with its provider tone, and
   a status word, with a preview line below. The title is the agent's prompt
-  summary, else the first prompt's first line. Previews come from
-  [`session_preview.rs`](src/session_preview.rs) using only session events,
-  never a call to the agent, in priority order: pending request (`approve:
-  ...`), running tool, how the session ended, then the latest line of agent
-  text.
+  summary, else the session's first user message as seen in
+  `UserMessageChunk` updates (so a prompt sent by a remote-control client also
+  titles it), else the widget's first prompt, cut to its first line. Previews
+  come from [`session_preview.rs`](src/session_preview.rs) using only session
+  events, never a call to the agent, in priority order: pending request
+  (`approve: ...`), running tool, how the session ended, then the latest line
+  of agent text. Agent text after a request or tool starts a new line, so the
+  preview never glues the two together.
 - The header counts sessions by status. Tab toggles a "waiting on you" filter
-  and back; typing filters by title or agent; Esc clears the query first,
-  then closes; Enter shows the selected session.
+  and back (the footer then offers "tab all sessions"); typing filters by title
+  or agent; Esc clears the query first, then closes; Enter shows the selected
+  session.
+- Ctrl+D closes the selected session through `AppEvent::CloseSession`. A
+  `working`, `waiting on you`, or `starting` row is armed by the first press
+  (footer "ctrl+d again to close") and closed by the second; any other key
+  disarms it. On a `closed` row Ctrl+D sends `AppEvent::RemoveSession`
+  instead. The footer hint reads "ctrl+d close" or "ctrl+d remove". Rows for
+  manager-only descendants (negative keys) cannot be closed here.
 - Children are indented under their parent using the session manager's record
   parent, with the shared picker's tree rows. A top-level row's status word and
-  tone follow its **session family** status, so a parent reads "waiting on
-  you" when a child does. Manager sessions that descend from a listed session
+  tone, and its glyph, follow its **session family** status, so a parent reads
+  "waiting on you" when a child does. Manager sessions that descend from a listed session
   but have no TUI view are listed under their parent with negative keys that
   cannot collide with a generation; they are not navigation targets.
 - `App::refresh_session_overview` runs before every draw. While the list is
@@ -934,10 +961,65 @@ while a view is open:
 
 - a background-request line, naming the first off-screen session waiting on
   you by title (`<title> is waiting on you`), its request, `+N more` when
-  others wait, and the `next_waiting_session` key;
+  others wait, and the `next_waiting_session` key. The title and request text
+  are cut to short fixed lengths so the line fits one row of a 100-column
+  terminal;
 - a status line counting sessions by their own status, most urgent first
   (waiting on you, failed, working, starting, ready; closed is omitted), shown
   only with two or more sessions.
+
+While an `/agent` candidate is preparing, a dim `Preparing <agent>…` line sits
+above these. With the flag this replaces the history cell that single-session
+mode adds, so the session on screen keeps no line about another session.
+
+Session lifecycle with the flag lives in
+[`session_lifecycle.rs`](src/app/session_lifecycle.rs):
+
+```text
+Ctrl+D (list) / local /close ──> AppEvent::CloseSession{generation}
+        |                           App::close_session
+        |                             mark_closed_by_user + SessionManager::close
+        |                             on screen? show next open session
+        v
+row reads `closed` ── Ctrl+D ──> AppEvent::RemoveSession ──> deck.remove
+
+cloud /close ──> session/close ──> SessionEnded(Closed)
+        ──> AppEvent::SessionClosed{generation} ──> App::on_session_closed
+              another open session? show it (released one stays listed closed)
+              none? park it and open the agent session picker
+```
+
+- **Session cap.** `App` builds its `SessionManager` with
+  `NoriConfig.max_sessions` (`[tui] max_sessions`). Before `/new` or `/agent`
+  prepares an agent, `refuse_at_session_cap` checks
+  `SessionManager::free_slots()` and, at zero, prints an error naming the cap
+  and how to close a session. The check applies only when a harness session
+  already exists, and `/new` skips it when consuming an already prepared
+  candidate. The manager's own `CapacityReached` start error remains the
+  backstop.
+- **Closing.** `close_session` refuses to close the last open session on screen
+  ("Use /quit"), ignores an already closed one, marks the widget
+  `closed_by_user`, and shuts its process down through `SessionManager::close`
+  (with the cloud detach grace in cloud mode). The `closed_by_user` flag stops
+  that widget's `SessionEnded(Shutdown)` from being read as "exit Nori". The
+  closed widget stays in the deck so its row and transcript remain;
+  `remove_session` drops it only when it is closed and not on screen.
+- **`/close`.** A local `/close` with the flag bypasses the cloud-only gate in
+  [`goal.rs`](src/chatwidget/goal.rs) and sends `CloseSession` for the session
+  on screen. In cloud mode it still calls `session/close`
+  ([`session_close.rs`](src/chatwidget/session_close.rs)).
+  `AppEvent::SessionClosed` carries the closing widget's generation, and a
+  close from a session that is no longer on screen is ignored.
+- **Loop iterations.** `AppEvent::LoopIteration` carries the generation of the
+  session whose turn finished. `run_loop_iteration` shuts that session down
+  and starts the next iteration in a new widget in the same deck position. An
+  on-screen iteration takes the screen as before; a background iteration builds
+  a non-deferred widget for the same agent, parks it in place with the old
+  transcript, and never takes over the screen.
+- **Remote control.** The remote host attaches on the `SessionStarted` of the
+  widget that is active when it starts, and moving between sessions does not
+  re-attach it, so remote control follows the most recently started session,
+  not necessarily the one on screen.
 
 The ignored `jump_timing_on_a_long_history` PTY test measures a jump to a
 long history; the reprint is bounded by the same cell and row caps as resize
@@ -1225,6 +1307,13 @@ part of the public harness protocol.
 - With `[features] multi_session`, history from a widget must reach `App`
   through its session-scoped sender. Printing a parked session's history
   directly would put it in the active session's scrollback.
+- Session-scoped `AppEvent`s that can arrive after the screen moved
+  (`SessionClosed`, `LoopIteration`, `CloseSession`, `RemoveSession`) carry a
+  session generation. Acting on "the active widget" instead would close or
+  replace the wrong session.
+- A `closed` session is still in the deck. Navigation, the status-line counts,
+  and "next open session" filter it out by status; code that walks the deck
+  directly sees it.
 - `nori-config` is the source of approval and sandbox policy; ACP session config
   options remain ACP schema values.
 - `-p` belongs to the top-level CLI as `--print`. The TUI's own flag set must not

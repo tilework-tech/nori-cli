@@ -94,13 +94,18 @@ impl App {
         let previous_transcript = std::mem::replace(&mut self.transcript_cells, parked.transcript);
         previous.set_foreground(false);
         previous.close_session_list();
-        self.session_deck.park(
-            current,
-            ParkedSession {
-                widget: Box::new(previous),
-                transcript: previous_transcript,
-            },
-        );
+        if previous.has_harness_session() || previous.managed_conversation_id().is_some() {
+            self.session_deck.park(
+                current,
+                ParkedSession {
+                    widget: Box::new(previous),
+                    transcript: previous_transcript,
+                },
+            );
+        } else {
+            // A blank session that never started has nothing to come back to.
+            self.session_deck.remove(current);
+        }
         self.backtrack = crate::app_backtrack::BacktrackState::default();
         self.chat_widget.set_foreground(true);
         let agent = self.chat_widget.config_ref().active_agent.clone();
@@ -109,10 +114,21 @@ impl App {
         self.session_reprint_pending = true;
     }
 
-    /// Move one session along the navigation order.
+    /// Move one session along the navigation order, past closed sessions.
     pub(super) fn step_session(&mut self, direction: Direction) {
         let current = self.chat_widget.session_generation();
-        if let Some(target) = self.session_deck.step(current, direction) {
+        let closed: Vec<SessionGeneration> = self
+            .session_facts()
+            .into_iter()
+            .filter(|fact| fact.status == nori_protocol::SessionStatus::Closed)
+            .map(|fact| fact.generation)
+            .collect();
+        if let Some(target) = self
+            .session_deck
+            .next_where(current, direction, |generation| {
+                !closed.contains(&generation)
+            })
+        {
             self.show_session(target);
         }
     }
