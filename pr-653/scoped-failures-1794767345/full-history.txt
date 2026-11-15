@@ -1,0 +1,84 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/pr-proof/e1-fix/work · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› ROOT_BEFORE_NESTED
+
+
+• Root remains ready.
+
+• Child 6528c0e3-229a-4af1-9fba-28443c315caf (mock-model) · parent 372be08a-c08b-48c9-aab4-86b4ef4e4654 (mock-model)
+· running
+
+• Child 6528c0e3-229a-4af1-9fba-28443c315caf (mock-model) · parent 372be08a-c08b-48c9-aab4-86b4ef4e4654 (mock-model)
+· completed
+Delegation continuation received: [Nori delegation result]
+Child session fc7319c9-12a0-495c-870d-c7dadaee5656 (mock-model) for parent session 6528c0e3-229a-4af1-9fba-28443c315caf
+(mock-model): Completed
+Root remains ready.
+
+
+› [Nori delegation result]
+  Child session 6528c0e3-229a-4af1-9fba-28443c315caf (mock-model) for parent session 372be08a-c08b-48c9-aab4-
+  86b4ef4e4654 (mock-model): Completed
+  Delegation continuation received: [Nori delegation result]
+  Child session fc7319c9-12a0-495c-870d-c7dadaee5656 (mock-model) for parent session 6528c0e3-229a-4af1-9fba-
+  28443c315caf (mock-model): Completed
+  Root remains ready.
+
+
+• Delegation continuation received: [Nori delegation result]
+  Child session 6528c0e3-229a-4af1-9fba-28443c315caf (mock-model) for parent session 372be08a-c08b-48c9-aab4-
+  86b4ef4e4654 (mock-model): Completed
+  Delegation continuation received: [Nori delegation result]
+  Child session fc7319c9-12a0-495c-870d-c7dadaee5656 (mock-model) for parent session 6528c0e3-229a-4af1-9fba-
+  28443c315caf (mock-model): Completed
+  Root remains ready.
+
+
+› ROOT_OK_AFTER_NESTED
+
+
+• Root remains ready.
+
+  1 ready
+
+
+› ! for shell commands
+
+                                                                                        ⎇ feat/multi-session-e1-deleg...

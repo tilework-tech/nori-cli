@@ -1,0 +1,40 @@
+[2m• [0m[39m[49mChild 6528c0e3-229a-4af1-9fba-28443c315caf (mock-model) · parent 372be08a-c08b-48c9-aab4-86b4ef4e4654 (mock-model)
+· running
+
+[2m• [0m[39m[49mChild 6528c0e3-229a-4af1-9fba-28443c315caf (mock-model) · parent 372be08a-c08b-48c9-aab4-86b4ef4e4654 (mock-model)
+· completed
+Delegation continuation received: [Nori delegation result]
+Child session fc7319c9-12a0-495c-870d-c7dadaee5656 (mock-model) for parent session 6528c0e3-229a-4af1-9fba-28443c315caf
+(mock-model): Completed
+Root remains ready.
+
+
+[1;2m› [0m[39m[49m[Nori delegation result]
+  Child session 6528c0e3-229a-4af1-9fba-28443c315caf (mock-model) for parent session 372be08a-c08b-48c9-aab4-
+  86b4ef4e4654 (mock-model): Completed
+  Delegation continuation received: [Nori delegation result]
+  Child session fc7319c9-12a0-495c-870d-c7dadaee5656 (mock-model) for parent session 6528c0e3-229a-4af1-9fba-
+  28443c315caf (mock-model): Completed
+  Root remains ready.
+
+
+[2m• [0m[39m[49mDelegation continuation received: [Nori delegation result]
+  Child session 6528c0e3-229a-4af1-9fba-28443c315caf (mock-model) for parent session 372be08a-c08b-48c9-aab4-
+  86b4ef4e4654 (mock-model): Completed
+  Delegation continuation received: [Nori delegation result]
+  Child session fc7319c9-12a0-495c-870d-c7dadaee5656 (mock-model) for parent session 6528c0e3-229a-4af1-9fba-
+  28443c315caf (mock-model): Completed
+  Root remains ready.
+
+
+[1;2m› [0m[39m[49mROOT_OK_AFTER_NESTED
+
+
+[2m• [0m[39m[49mRoot remains ready.
+
+  [2m1 ready
+
+
+[0;1m[39m[49m›[0m[39m[49m [2m! for shell commands
+
+[0m[39m[49m                                                                                        [38;5;3m⎇ feat/multi-session-e1-deleg...
