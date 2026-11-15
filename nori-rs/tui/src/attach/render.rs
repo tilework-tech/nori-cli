@@ -15,11 +15,18 @@ use super::state::Part;
 use crate::history_cell::HistoryCell;
 use crate::presentation::MessageStream;
 
-pub(super) fn composer_area(composer: &crate::ComposerInput, area: Rect) -> Rect {
+pub(super) fn composer_area(
+    state: &AttachState,
+    composer: &crate::ComposerInput,
+    area: Rect,
+) -> Rect {
+    let reserved = u16::try_from(notice_lines(state, area.width).len())
+        .unwrap_or(u16::MAX)
+        .min(area.height.saturating_sub(6));
     let height = composer
         .desired_height(area.width)
         .max(3)
-        .min(area.height.saturating_sub(3));
+        .min(area.height.saturating_sub(3 + reserved));
     Rect::new(
         area.x,
         area.bottom().saturating_sub(height),
@@ -38,7 +45,9 @@ pub(super) fn render(
         return;
     }
     let mut header = vec![" Nori host  ".bold()];
-    if state.connected {
+    if state.stopped.is_some() {
+        header.push("DISCONNECTED · ctrl+d to detach".red());
+    } else if state.connected {
         header.push(if state.watching {
             state.role_label().cyan()
         } else {
@@ -62,21 +71,26 @@ pub(super) fn render(
         })
         .unwrap_or_else(|| " Sessions · /new starts a session · ctrl+d detaches".into());
     Line::from(identity.dim()).render(Rect::new(area.x, area.y + 1, area.width, 1), buf);
-    let input = composer_area(composer, area);
-    let notice = state.replay_error.as_ref().or(state.notice.as_ref());
-    let notice_height = u16::from(notice.is_some());
+    let input = composer_area(state, composer, area);
+    let notice_lines = notice_lines(state, area.width);
+    let notice_height = u16::try_from(notice_lines.len())
+        .unwrap_or(u16::MAX)
+        .min(input.y.saturating_sub(area.y + 3));
     let body = Rect::new(
         area.x,
         area.y + 3,
         area.width,
         input.y.saturating_sub(area.y + 3 + notice_height),
     );
-    if let Some(notice) = notice {
-        Line::from(format!(" {notice}").red()).render(
-            Rect::new(area.x, input.y.saturating_sub(1), area.width, 1),
-            buf,
-        );
-    }
+    Paragraph::new(notice_lines).render(
+        Rect::new(
+            area.x,
+            input.y.saturating_sub(notice_height),
+            area.width,
+            notice_height,
+        ),
+        buf,
+    );
     if state.list_open {
         if state.sessions.is_empty() {
             Paragraph::new(vec![
@@ -108,6 +122,21 @@ pub(super) fn render(
             .render(body, buf);
     }
     composer.render_ref(input, buf);
+}
+
+fn notice_lines(state: &AttachState, width: u16) -> Vec<Line<'static>> {
+    state
+        .stopped
+        .as_ref()
+        .or(state.replay_error.as_ref())
+        .or(state.notice.as_ref())
+        .map(|notice| {
+            crate::wrapping::word_wrap_lines(
+                [Line::from(format!(" {notice}").red())],
+                usize::from(width),
+            )
+        })
+        .unwrap_or_default()
 }
 
 fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buffer) {

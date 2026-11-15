@@ -2,6 +2,7 @@
 
 mod service;
 mod state;
+mod table;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -19,8 +20,6 @@ use nori_harness::remote_agent::ManagedRemoteHost;
 use nori_harness::remote_agent::RemoteAcpServer;
 use nori_harness::session_manager::SessionManager;
 use nori_harness::session_manager::SessionManagerConfig;
-use owo_colors::OwoColorize;
-use serde_json::Value;
 use serde_json::json;
 
 use self::service::HostService;
@@ -69,11 +68,16 @@ pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow
         config.multi_session,
         "nori attach requires [features] multi_session = true"
     );
+    let mut refresh_local_token = None;
     let (endpoint, token) = if let Some(endpoint) = command.host {
         let path = command.token_file.context("--token-file is required")?;
         (endpoint, state::read_token(&path)?)
     } else {
-        let (host, token) = HostFiles::new(&config.nori_home)?.read()?;
+        let files = HostFiles::new(&config.nori_home)?;
+        let (host, token) = files.read()?;
+        let token_path = files.directory.join("token");
+        refresh_local_token = Some(Box::new(move || state::read_token(&token_path))
+            as Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>);
         (host.endpoint, token)
     };
     nori_tui::run_attach(
@@ -82,6 +86,7 @@ pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow
             endpoint,
             token,
             session_id: command.session_id,
+            refresh_local_token,
         },
     )
     .await
@@ -97,7 +102,10 @@ pub(crate) async fn run(command: HostCommand, config: Option<NoriConfig>) -> any
         Some(HostAction::Ls) => {
             let (mut client, _) = connect(&files).await?;
             let listing = client.request("_nori/session/list", json!({})).await?;
-            print_table(&listing);
+            let tty = std::io::stdout().is_terminal();
+            let width = tty
+                .then(|| crossterm::terminal::size().map_or(80, |(width, _)| usize::from(width)));
+            print!("{}", table::format_table(&listing, width, tty));
             Ok(())
         }
         Some(HostAction::Stop) => {
@@ -265,46 +273,4 @@ async fn serve(port: i32, config: NoriConfig, files: &HostFiles) -> anyhow::Resu
     );
     drop(lock);
     Ok(())
-}
-
-fn print_table(listing: &Value) {
-    let color = std::io::stdout().is_terminal();
-    println!(
-        "{:<36}  {:<16}  {:<16}  {:>6}  TITLE",
-        "ID", "AGENT", "STATUS", "AGE"
-    );
-    for row in listing["sessions"].as_array().into_iter().flatten() {
-        let clean = |key: &str| {
-            row[key]
-                .as_str()
-                .unwrap_or("-")
-                .chars()
-                .map(|c| if c.is_control() { ' ' } else { c })
-                .collect::<String>()
-        };
-        let id = clean("session_id");
-        let agent = clean("agent");
-        let status = clean("status").replace('_', " ");
-        let title = clean("title");
-        let seconds = row["age_seconds"].as_i64().unwrap_or(0).max(0);
-        let age = if seconds < 60 {
-            format!("{seconds}s")
-        } else if seconds < 3600 {
-            format!("{}m", seconds / 60)
-        } else {
-            format!("{}h", seconds / 3600)
-        };
-        let status = format!("{status:<16}");
-        let status = if color {
-            match row["status"].as_str().unwrap_or_default() {
-                "failed" => status.red().to_string(),
-                "waiting_on_you" | "working" | "starting" => status.yellow().to_string(),
-                "ready" => status.green().to_string(),
-                _ => status.dimmed().to_string(),
-            }
-        } else {
-            status
-        };
-        println!("{id:<36}  {agent:<16}  {status}  {age:>6}  {title}");
-    }
 }

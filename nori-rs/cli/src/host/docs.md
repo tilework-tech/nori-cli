@@ -46,8 +46,11 @@ host ls / host stop ---------------+                   SessionManager
   Discovery state contains the endpoint and PID; the lock decides liveness.
 - Each start generates a token and binds loopback before publishing discovery
   state. Administrative clients initialize with `observe: true`, so list and
-  stop do not claim the controller slot. List uses fixed columns, sanitizes
-  control characters, and colors status only when stdout is a terminal.
+  stop do not claim the controller slot. [List formatting](table.rs) sanitizes
+  control characters and colors status only on a terminal. Terminal rows fit
+  the available display cells by truncating titles with an ellipsis at grapheme
+  boundaries; if metadata alone exceeds the width, that prefix is clipped.
+  Piped output retains full titles without color or a width limit.
 - Lifecycle requests prepare agents using the host's configuration. Resume
   uses the stored agent and working directory while retaining the conversation
   identity. Stop closes the server, shuts down the manager, removes discovery
@@ -56,8 +59,10 @@ host ls / host stop ---------------+                   SessionManager
 ### Things to Know
 
 - Tokens are mandatory even for loopback. Local attach reads the private token
-  automatically; explicit endpoints require `--host` together with
-  `--token-file`. Token contents never appear in startup output.
+  automatically and receives a callback that rereads it with the same private
+  file validation after a reconnect authentication failure. Explicit endpoints
+  require `--host` together with `--token-file` and receive no local credential
+  rediscovery callback. Token contents never appear in startup output.
 - The authenticated listener exposes only `/sessions`; it does not change the
   legacy interactive remote-control listener. See the
   [wire contract](../../../../docs/remote-control.md#11-background-host-and-attached-terminals).

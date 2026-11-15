@@ -3812,6 +3812,7 @@ dependencies = [
  "codex-sandbox",
  "codex-stdio-to-uds",
  "codex-windows-sandbox",
+ "crossterm",
  "ctor 0.5.0",
  "libc",
  "nori-config",
@@ -3830,6 +3831,8 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
+ "unicode-segmentation",
+ "unicode-width 0.2.1",
  "uuid",
  "which",
 ]

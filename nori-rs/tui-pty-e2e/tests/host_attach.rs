@@ -722,3 +722,73 @@ fn assert_reconnect_after_outage(blackhole: bool) {
         "recovered connection carries new prompts without duplicating replay"
     );
 }
+
+#[test]
+fn same_port_host_restart_stops_reconnecting_and_explains_session_loss() {
+    let host = Host::new();
+    host.start();
+    let mut client = host.create_session();
+    ask(&mut client, "Session before restart");
+    let state: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(host.home.path().join("host/state.json")).unwrap())
+            .unwrap();
+    let address: SocketAddr = state["endpoint"]
+        .as_str()
+        .unwrap()
+        .trim_start_matches("ws://")
+        .trim_end_matches("/sessions")
+        .parse()
+        .unwrap();
+    let old_token = std::fs::read(host.home.path().join("host/token")).unwrap();
+    let stopped = host.command(&["host", "stop"], CLEANUP_TIMEOUT);
+    assert!(stopped.status.success());
+    client.wait_for_text("RECONNECTING", TIMEOUT).unwrap();
+    let started = host.command(&["host", "--port", &address.port().to_string()], TIMEOUT);
+    assert!(
+        started.status.success(),
+        "{}",
+        String::from_utf8_lossy(&started.stderr)
+    );
+    assert_ne!(
+        std::fs::read(host.home.path().join("host/token")).unwrap(),
+        old_token
+    );
+    client.wait_for_text("Host restarted", TIMEOUT).unwrap();
+    let screen = client.screen_contents();
+    assert!(
+        screen.contains("sessions were lost") && screen.contains("nori attach"),
+        "{screen}"
+    );
+    assert!(
+        !screen.contains("RECONNECTING") && !screen.contains("sessions continue"),
+        "{screen}"
+    );
+    client.send_key(Key::Escape).unwrap();
+    client.send_key(Key::Alt('t')).unwrap();
+    client.settle(Duration::from_millis(200));
+    assert!(client.screen_contents().contains("Host restarted"));
+    let mut fresh = host.attach(None);
+    fresh.wait_for_text("Sessions 0", TIMEOUT).unwrap();
+    client.send_key(Key::Ctrl('d')).unwrap();
+    assert!(client.wait_for_process_exit(TIMEOUT));
+}
+
+#[test]
+fn host_list_truncates_tty_title_without_losing_piped_title() {
+    let host = Host::new();
+    host.start();
+    let mut client = host.create_session();
+    let title = "Long title aligned columns should preserve the entire title without putting continuation text into the ID column";
+    ask(&mut client, title);
+    assert!(host.list().contains(title));
+    let id = host.session_id();
+    let mut listing = host.terminal(&["host", "ls"]);
+    assert!(listing.wait_for_process_exit(TIMEOUT));
+    let screen = listing.screen_contents();
+    let row = screen
+        .lines()
+        .find(|line| line.contains(&id))
+        .expect("session row");
+    assert!(row.trim_end().ends_with('…'), "{screen}");
+    assert!(!screen.contains("continuation text"), "{screen}");
+}

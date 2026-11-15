@@ -31,6 +31,9 @@ codex-process-hardening = { workspace = true }
 codex-stdio-to-uds = { workspace = true }
 nori-tui = { workspace = true }
 ctor = { workspace = true }
+crossterm = { workspace = true }
+unicode-segmentation = { workspace = true }
+unicode-width = { workspace = true }
 libc = { workspace = true }
 owo-colors = { workspace = true }
 regex-lite = { workspace = true}

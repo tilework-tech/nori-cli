@@ -178,6 +178,9 @@ impl Runtime {
     }
 
     fn require_mutation(&self) -> anyhow::Result<()> {
+        if let Some(reason) = &self.state.stopped {
+            anyhow::bail!("{reason}");
+        }
         anyhow::ensure!(
             self.state.connected,
             "Reconnecting. Your draft is preserved; send it after the connection is restored."

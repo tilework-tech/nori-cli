@@ -17,6 +17,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 pub struct ManagedClient {
     socket: WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
     next_id: i64,
+    host_instance: Option<uuid::Uuid>,
 }
 
 impl ManagedClient {
@@ -28,10 +29,32 @@ impl ManagedClient {
             .parse::<tokio_tungstenite::tungstenite::http::HeaderValue>()?;
         authorization.set_sensitive(true);
         request.headers_mut().insert("Authorization", authorization);
-        let (socket, _) = tokio::time::timeout(Duration::from_secs(10), connect_async(request))
-            .await
-            .map_err(|_| anyhow::anyhow!("host connection timed out"))??;
-        Ok(Self { socket, next_id: 1 })
+        let (socket, response) =
+            tokio::time::timeout(Duration::from_secs(10), connect_async(request))
+                .await
+                .map_err(|_| anyhow::anyhow!("host connection timed out"))??;
+        let host_instance = response
+            .headers()
+            .get("x-nori-host-instance")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse().ok());
+        Ok(Self {
+            socket,
+            next_id: 1,
+            host_instance,
+        })
+    }
+
+    /// Continuity metadata from the authenticated upgrade, independent of credentials.
+    pub fn host_instance(&self) -> Option<uuid::Uuid> {
+        self.host_instance
+    }
+
+    /// Authentication rejection is terminal unless local credentials can be refreshed.
+    pub fn is_authentication_error(error: &anyhow::Error) -> bool {
+        matches!(error.downcast_ref::<tokio_tungstenite::tungstenite::Error>(),
+            Some(tokio_tungstenite::tungstenite::Error::Http(response))
+                if matches!(response.status().as_u16(), 401 | 403))
     }
 
     pub async fn send(&mut self, message: Value) -> anyhow::Result<()> {

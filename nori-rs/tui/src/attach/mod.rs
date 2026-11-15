@@ -1,6 +1,8 @@
 //! A terminal attachment observes host-owned sessions without owning their lifetime.
 
 mod connection;
+#[cfg(test)]
+mod connection_tests;
 mod input;
 mod render;
 mod runtime;
@@ -17,6 +19,8 @@ pub struct AttachOptions {
     pub endpoint: String,
     pub token: String,
     pub session_id: Option<String>,
+    /// Secure local discovery only; explicit remote credentials are never refreshed.
+    pub refresh_local_token: Option<Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>>,
 }
 
 /// Attach to an existing host. Leaving this frontend never stops host sessions.
@@ -59,10 +63,13 @@ async fn run(
     let result = async {
         loop {
             tokio::select! {
-                incoming = event_rx.recv() => {
+                incoming = event_rx.recv(), if runtime.state.stopped.is_none() => {
                     let Some(incoming) = incoming else { anyhow::bail!("Host connection worker stopped"); };
                     if let Err(error) = runtime.connection_event(incoming) {
                         runtime.state.show_notice(error.to_string());
+                    }
+                    if runtime.state.stopped.is_some() {
+                        connection.abort();
                     }
                 }
                 event = events.next() => {
@@ -82,7 +89,7 @@ async fn run(
             tui.draw(height, |frame| {
                 let area = frame.area();
                 render::render(&runtime.state, &runtime.composer, area, frame.buffer_mut());
-                if let Some(position) = runtime.composer.cursor_pos(render::composer_area(&runtime.composer, area)) {
+                if let Some(position) = runtime.composer.cursor_pos(render::composer_area(&runtime.state, &runtime.composer, area)) {
                     frame.set_cursor_position(position);
                 }
             })?;

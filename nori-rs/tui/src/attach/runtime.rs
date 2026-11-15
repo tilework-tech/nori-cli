@@ -63,6 +63,9 @@ impl Runtime {
     }
 
     pub fn send(&mut self, method: &str, params: Value, pending: Pending) {
+        if self.state.stopped.is_some() {
+            return;
+        }
         self.next_id += 1;
         let id = self.next_id;
         self.pending.insert(id, pending);
@@ -100,6 +103,11 @@ impl Runtime {
 
     pub fn connection_event(&mut self, event: ConnectionEvent) -> anyhow::Result<()> {
         match event {
+            ConnectionEvent::Stopped(reason) => {
+                self.state.connected = false;
+                self.state.stopped = Some(reason);
+                self.pending.clear();
+            }
             ConnectionEvent::Connected => {
                 self.send("initialize", json!({}), Pending::Initialize);
             }
@@ -157,6 +165,13 @@ impl Runtime {
                 .as_str()
                 .unwrap_or("Host request failed")
                 .to_string();
+            if matches!(pending, Pending::Initialize) {
+                self.state.connected = false;
+                self.state.stopped = Some(format!(
+                    "Host initialization failed: {text}. Re-run nori attach."
+                ));
+                self.pending.clear();
+            }
             if let Pending::Subscribe { session_id } = &pending {
                 if self.state.selected.as_ref() != Some(session_id) {
                     return Ok(());

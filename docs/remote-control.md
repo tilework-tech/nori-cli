@@ -435,7 +435,7 @@ released after cleanup. Startup and stop do not require a terminal.
 | Command | Behavior |
 | --- | --- |
 | `nori host` | Start the background host, or report the already-running host. |
-| `nori host ls` | Print the flat `ID AGENT STATUS AGE TITLE` table; status colors appear only on a TTY. |
+| `nori host ls` | Print the flat `ID AGENT STATUS AGE TITLE` table; TTY output colors status and truncates titles to the terminal width, while piped output keeps full titles without color. |
 | `nori attach` | Open the host session list; requires `[features] multi_session = true`. |
 | `nori attach <id>` | Open the named Nori conversation. |
 | `nori attach --host <URL> --token-file <path>` | Connect to an explicit managed endpoint using a private token file. |
@@ -456,6 +456,18 @@ route. A valid `Authorization: Bearer <token>` header is required before the
 WebSocket upgrade, including on loopback; a missing or wrong token returns
 HTTP 401. This policy applies to `nori host`, not the separate `--remote` or
 `/remote-control` listeners.
+
+Successful authenticated upgrades include `x-nori-host-instance`, a UUID
+generated for that router lifetime independently of the bearer token. It stays
+stable across connections and changes when a new host router starts, even if
+the address and token are reused. Reconnecting clients check this identity
+before initialization or replay so an old cursor cannot silently target a new
+manager.
+
+The terminal table budgets display cells, preserving grapheme boundaries and
+adding an ellipsis when a title exceeds the remaining width. If the terminal
+cannot fit the metadata columns, the row prefix is clipped too. Piped output
+has no width limit; control characters are sanitized in either mode.
 
 ```text
 attached controller -- commands --+
@@ -503,15 +515,16 @@ cursors, never the host's agent processes. Alt+T takes control; Ctrl+D or
 `/quit` detaches. The configured `hotkeys.open_session_list` binding, Left with
 an empty composer, or `/sessions` opens the session list. Ctrl+R resumes its
 highlighted failed session with the same conversation ID. The status line shows
-controlling, watching/read-only, or reconnecting state. Session commands address
-the host; they do not launch local agents.
+controlling, watching/read-only, reconnecting, or disconnected state. The
+current session marker appears inside TITLE, leaving its short ID visible.
+Session commands address the host; they do not launch local agents.
 
 Socket loss or a receive-liveness deadline starts recovery. Periodic session
 list requests keep idle connections observable; receiving JSON renews the
 deadline, while outgoing traffic alone does not. The deadline also bounds
-blocked sends. The frontend retains its rendered sessions, reconnects,
-initializes again, and subscribes to the selected conversation with its last
-applied cursor. Switching conversations uses that conversation's saved cursor;
+blocked sends. The frontend retains its rendered sessions, reconnects, verifies
+the host-instance identity, initializes again, and subscribes to the selected
+conversation with its last applied cursor. Switching conversations uses that conversation's saved cursor;
 the session list refreshes independently without subscribing to every session.
 It advances a cursor only after applying that envelope and ignores duplicates.
 Transcript restoration is distinct: `ReplayStarted` replaces the rendered
@@ -523,3 +536,13 @@ Replay expiry or an unexpected sequence gap is visible as an error; the
 frontend does not silently jump to live output. Replay is bounded to the
 current host process lifetime, so a fresh attachment may also encounter an
 expired prefix. Restarting a host does not restore its in-memory manager.
+
+On HTTP 401 or 403 during reconnect, a locally discovered attachment rereads
+the current token file using the same ownership, permission, and regular-file
+checks as startup, then retries once. An explicit `--host` attachment never
+rediscovers local credentials. An unavailable token, failed retry, or changed
+or unavailable host identity stops recovery and leaves a persistent message
+in the terminal. A confirmed identity change reports that the host restarted
+and its sessions were lost; authentication failures report that the host may
+have restarted. The rendered history and unsent draft remain visible. Detach
+with Ctrl+D and rerun `nori attach` to connect afresh.

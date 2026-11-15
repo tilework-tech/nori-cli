@@ -330,3 +330,66 @@ async fn slow_initialize_does_not_reserve_control_or_block_other_clients() {
     );
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn host_identity_is_stable_across_connections_but_not_host_lifetimes() {
+    let first = start().await;
+    let second = start().await;
+    let mut identities = Vec::new();
+    for server in [&first, &first, &second] {
+        let mut request = format!("ws://{}/sessions", server.local_addr())
+            .into_client_request()
+            .unwrap();
+        request
+            .headers_mut()
+            .insert("Authorization", "Bearer secret".parse().unwrap());
+        let (mut socket, response) = connect_async(request).await.unwrap();
+        let identity = response
+            .headers()
+            .get("x-nori-host-instance")
+            .expect("authenticated connection must identify its host lifetime")
+            .to_str()
+            .unwrap()
+            .to_owned();
+        assert!(!identity.is_empty());
+        identities.push(identity);
+        socket.close(None).await.unwrap();
+    }
+    assert_eq!(identities[0], identities[1]);
+    assert_ne!(
+        identities[0], identities[2],
+        "same token must not imply the same host"
+    );
+    first.shutdown().await;
+    second.shutdown().await;
+}
+
+#[tokio::test]
+async fn missing_or_malformed_host_identity_is_unavailable_for_safe_replay() {
+    use nori_acp_host::remote::ManagedClient;
+    use tokio_tungstenite::tungstenite::handshake::server::Request;
+    use tokio_tungstenite::tungstenite::handshake::server::Response;
+    for identity in [None, Some("not-a-host-uuid")] {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("ws://{}/sessions", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            tokio_tungstenite::accept_hdr_async(
+                stream,
+                move |_: &Request, mut response: Response| {
+                    if let Some(identity) = identity {
+                        response
+                            .headers_mut()
+                            .insert("x-nori-host-instance", identity.parse().unwrap());
+                    }
+                    Ok(response)
+                },
+            )
+            .await
+            .unwrap()
+        });
+        let connection = ManagedClient::connect(&endpoint, "token").await;
+        let _socket = server.await.unwrap();
+        assert_eq!(connection.unwrap().host_instance(), None);
+    }
+}

@@ -110,14 +110,13 @@ fn unresolved_permission_replays_and_remote_answer_clears_it() {
 }
 
 fn screen(state: &AttachState) -> String {
+    screen_with_composer(state, &crate::ComposerInput::for_attachment())
+}
+
+fn screen_with_composer(state: &AttachState, composer: &crate::ComposerInput) -> String {
     let area = ratatui::layout::Rect::new(0, 0, 90, 18);
     let mut buffer = ratatui::buffer::Buffer::empty(area);
-    super::render::render(
-        state,
-        &crate::ComposerInput::for_attachment(),
-        area,
-        &mut buffer,
-    );
+    super::render::render(state, composer, area, &mut buffer);
     (0..area.height)
         .map(|y| {
             (0..area.width)
@@ -353,4 +352,80 @@ fn session_list_uses_the_configured_binding_instead_of_the_default() {
     );
     runtime.key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::ALT));
     assert!(runtime.state.list_open, "configured binding opens the list");
+}
+
+#[test]
+fn current_session_row_keeps_short_id_visible() {
+    let mut state = AttachState {
+        connected: true,
+        selected: Some("abcd1234-session".into()),
+        ..Default::default()
+    };
+    state.replace_sessions(json!({"sessions":[
+        {"session_id":"abcd1234-session","agent":"mock-model","status":"ready","title":"Review parser","age_seconds":120}
+    ]})).unwrap();
+    let rendered = screen(&state);
+    let row = rendered
+        .lines()
+        .find(|line| line.contains("Review parser"))
+        .unwrap();
+    assert!(row.contains("abcd1234"), "{rendered}");
+    assert!(row.contains("current"), "{rendered}");
+    insta::assert_snapshot!("attached_current_session_id", rendered);
+}
+
+#[test]
+fn terminal_connection_failure_remains_visible_and_blocks_requests() {
+    use super::connection::ConnectionEvent;
+    use super::runtime::Runtime;
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    let (requests, mut received) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = Runtime::new(Some("one".into()), requests);
+    runtime
+        .state
+        .apply(message("one", 1, "Preserved history"))
+        .unwrap();
+    runtime
+        .connection_event(ConnectionEvent::Stopped(
+            "Host restarted; sessions were lost. Re-run nori attach.".into(),
+        ))
+        .unwrap();
+    runtime.key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    runtime.key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::ALT));
+    runtime.composer.handle_paste("My draft".into());
+    runtime.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    runtime.refresh_list();
+    runtime.subscribe_selected();
+    assert!(received.try_recv().is_err());
+    assert_eq!(runtime.state.transcript_text("one"), "Preserved history");
+    assert!(!runtime.composer.is_empty());
+    let rendered = screen(&runtime.state);
+    assert!(
+        rendered.contains("Host restarted") && rendered.contains("nori attach"),
+        "{rendered}"
+    );
+    assert!(
+        !rendered.contains("RECONNECTING") && !rendered.contains("sessions continue"),
+        "{rendered}"
+    );
+    insta::assert_snapshot!("attached_host_restarted", rendered);
+}
+
+#[test]
+fn stopped_explanation_remains_visible_above_a_tall_draft() {
+    let state = AttachState {
+        stopped: Some("Host restarted; sessions were lost. Re-run nori attach.".into()),
+        ..Default::default()
+    };
+    let mut composer = crate::ComposerInput::for_attachment();
+    composer.handle_paste("Preserved draft line\n".repeat(30));
+    let rendered = screen_with_composer(&state, &composer);
+    assert!(
+        rendered.contains("Host restarted") && rendered.contains("nori attach"),
+        "{rendered}"
+    );
+    assert!(!composer.is_empty());
+    insta::assert_snapshot!("attached_host_restarted_with_draft", rendered);
 }

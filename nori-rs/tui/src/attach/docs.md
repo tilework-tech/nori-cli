@@ -30,7 +30,11 @@ Path: @/nori-rs/tui/src/attach
   attempts from rendering. Received JSON messages renew a liveness deadline;
   periodic session-list replies keep an idle connection alive. Reads and sends
   share that deadline, so silent traffic loss also produces the reconnecting
-  state. Recovery authenticates again and starts a new initialization exchange.
+  state. Recovery authenticates again and compares the upgrade's host-instance
+  UUID with the initial connection before initializing or resuming replay.
+  Authentication rejection permits a secure local-token reread and one retry
+  through the callback supplied by CLI dispatch; explicit endpoints have no
+  such callback.
 - [Runtime correlation](runtime.rs) tracks request IDs while processing every
   notification. Initialization supplies the role, refreshes the session list,
   and subscribes to the selected conversation using its applied cursor.
@@ -47,7 +51,8 @@ Path: @/nori-rs/tui/src/attach
   phases, and session end.
 - [Rendering](render.rs) keeps role and connectivity visible beside the
   selected conversation or session list. Watchers receive the same content and
-  permissions but must take control before sending mutations.
+  permissions but must take control before sending mutations. The current
+  session marker appears in TITLE, preserving the short ID in its own column.
 
 ### Things to Know
 
@@ -62,6 +67,12 @@ Path: @/nori-rs/tui/src/attach
 - Replay failure preserves existing conversation content and displays the
   error. It does not silently substitute a new live cursor. Cursors are local
   memory, and a fresh attachment starts from the host journal's beginning.
+- A changed or unavailable host identity, an unrecoverable authentication
+  failure, or rejected initialization stops recovery. The terminal retains
+  conversation history and the composer draft, displays a persistent reason
+  with instructions to rerun `nori attach`, and remains open for Ctrl+D detach.
+  No initialization or replay reaches a replacement host after identity
+  comparison rejects it; token equality alone cannot establish continuity.
 - Snapshot and reducer [tests](tests.rs) cover roles, read-only behavior, and
   sequence application. The [PTY scenarios](../../../tui-pty-e2e/tests/host_attach.rs)
   exercise the complete host, multiple terminals, and dropped or silently

@@ -68,6 +68,7 @@ pub(super) struct AttachState {
     pub picker: PickerState<String>,
     pub watching: bool,
     pub connected: bool,
+    pub stopped: Option<String>,
     pub selected: Option<String>,
     pub list_open: bool,
     pub notice: Option<String>,
@@ -95,6 +96,7 @@ impl Default for AttachState {
             .search_placeholder("Title or agent"),
             watching: true,
             connected: false,
+            stopped: None,
             selected: None,
             list_open: true,
             notice: None,
@@ -117,22 +119,23 @@ impl AttachState {
             } else {
                 format!("{}h", seconds / 3600)
             };
-            PickerItem::new(
-                row.session_id.clone(),
-                "title",
-                row.title.clone().unwrap_or_else(|| "New session".into()),
-            )
-            .cell("id", row.session_id.chars().take(8).collect::<String>())
-            .cell("agent", row.agent.clone())
-            .cell("status", crate::session_status::status_label(row.status))
-            .cell("age", age)
-            .search_text(format!(
-                "{} {} {}",
-                row.title.as_deref().unwrap_or_default(),
-                row.agent,
-                row.session_id
-            ))
-            .current(self.selected.as_ref() == Some(&row.session_id))
+            let title = row.title.clone().unwrap_or_else(|| "New session".into());
+            let title = if self.selected.as_ref() == Some(&row.session_id) {
+                format!("(current) {title}")
+            } else {
+                title
+            };
+            PickerItem::new(row.session_id.clone(), "title", title)
+                .cell("id", row.session_id.chars().take(8).collect::<String>())
+                .cell("agent", row.agent.clone())
+                .cell("status", crate::session_status::status_label(row.status))
+                .cell("age", age)
+                .search_text(format!(
+                    "{} {} {}",
+                    row.title.as_deref().unwrap_or_default(),
+                    row.agent,
+                    row.session_id
+                ))
         }));
         Ok(())
     }
@@ -191,6 +194,9 @@ impl AttachState {
     }
 
     pub fn show_notice(&mut self, message: impl Into<String>) {
+        if self.stopped.is_some() {
+            return;
+        }
         let message = message.into();
         self.notice = Some(message.clone());
         if let Some(id) = &self.selected {

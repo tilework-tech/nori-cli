@@ -31,6 +31,7 @@ use super::managed_wire::send_frame;
 struct HostState<M> {
     host: Arc<M>,
     token: Arc<str>,
+    instance: uuid::Uuid,
     control: Arc<Mutex<HostControl>>,
     generation: Arc<AtomicI64>,
     shutdown: CancellationToken,
@@ -41,6 +42,7 @@ impl<M> Clone for HostState<M> {
         Self {
             host: self.host.clone(),
             token: self.token.clone(),
+            instance: self.instance,
             control: self.control.clone(),
             generation: self.generation.clone(),
             shutdown: self.shutdown.clone(),
@@ -59,6 +61,7 @@ pub(super) fn router<M: ManagedAgent>(
         .with_state(HostState {
             host,
             token: token.into(),
+            instance: uuid::Uuid::new_v4(),
             control,
             generation: Arc::new(AtomicI64::new(0)),
             shutdown,
@@ -96,7 +99,8 @@ async fn route<M: ManagedAgent>(
         )
             .into_response();
     };
-    upgrade
+    let instance = state.instance.to_string();
+    let response = upgrade
         .on_upgrade(move |socket| async move {
             let client = state.generation.fetch_add(1, Ordering::Relaxed);
             let cancel = state.shutdown.child_token();
@@ -110,7 +114,8 @@ async fn route<M: ManagedAgent>(
             }
             state.control.lock().await.remove(client);
         })
-        .into_response()
+        .into_response();
+    ([("x-nori-host-instance", instance)], response).into_response()
 }
 
 async fn serve<M: ManagedAgent>(

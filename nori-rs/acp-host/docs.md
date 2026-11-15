@@ -104,9 +104,14 @@ the session registry nor replay retention. The dependency direction stays
   or administrative requests. Role notifications preserve every connection.
   Watcher mutations fail before reaching `ManagedAgent`; listing,
   subscribing, taking control, and authenticated host stop remain available.
+  Successful authenticated upgrades include `x-nori-host-instance`, a UUID
+  generated once per router lifetime independently of the bearer token. Clients
+  can compare it before replaying against a replacement listener at the same
+  address.
 - [`ManagedClient`](src/remote/client.rs) authenticates the upgrade and exposes
-  streaming send/receive for frontends that retain notifications. Its sequential
-  request helper intentionally ignores intervening notifications and is used by
+  the optional host-instance UUID and HTTP 401/403 authentication classification,
+  alongside streaming send/receive for frontends that retain notifications.
+  Its sequential request helper intentionally ignores intervening notifications and is used by
   short-lived administrative commands. Reconnect policy and cursor state belong
   to the frontend, not this socket wrapper.
 - Each `/acp` listener sends a fresh `Acp-Connection-Id` on a 101 upgrade and
