@@ -643,7 +643,9 @@ fn next_waiting_refreshes_stale_rows_and_opens_new_child_without_second_key() {
 
 #[test]
 fn deferred_next_waiting_keeps_a_new_draft_in_its_parent_session() {
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
     runtime.state.connected = true;
@@ -673,7 +675,9 @@ fn deferred_next_waiting_keeps_a_new_draft_in_its_parent_session() {
 
 #[test]
 fn explicit_session_list_navigation_cancels_deferred_next_waiting() {
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
     runtime.state.connected = true;
