@@ -20,6 +20,9 @@ pub struct Theme {
     pub input: Style,
     pub row: Style,
     pub row_alt: Style,
+    /// The shaded lines of a striped session table; the lines between them
+    /// keep the terminal's own background.
+    pub row_stripe: Style,
     pub detail_surface: Style,
     pub selected: Style,
     pub disabled: Style,
@@ -55,6 +58,7 @@ impl Default for Theme {
             input: Style::new(),
             row: Style::new(),
             row_alt: Style::new(),
+            row_stripe: Style::new(),
             detail_surface: Style::new(),
             selected: Style::new(),
             disabled: Style::new().fg(Color::DarkGray),
@@ -102,6 +106,7 @@ impl Theme {
             .bg(darken_surface(menu_surface, 6));
         theme.row = theme.row.bg(relative_surface(background, 4));
         theme.row_alt = theme.row_alt.bg(relative_surface(background, 7));
+        theme.row_stripe = theme.row_stripe.bg(relative_surface(background, 4));
         theme.input = theme.input.bg(relative_surface(background, 8));
         theme.detail_surface = theme.detail_surface.bg(relative_surface(background, 8));
         theme.selected = theme.selected.bg(relative_surface(background, 10));

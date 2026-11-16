@@ -206,9 +206,7 @@ fn terminal_table(
     let order = nori_tui_components::picker::tree_order(&links);
     let depths: Vec<i32> = order.iter().map(|(_, depth)| *depth).collect();
     let guides = nori_tui_components::picker::tree_guides(&depths);
-    for (position, ((index, depth), (guide, continuation))) in
-        order.into_iter().zip(guides).enumerate()
-    {
+    for ((index, depth), (guide, continuation)) in order.into_iter().zip(guides) {
         let row = rows[index];
         let clean = |key: &str| {
             row[key].as_str().map(|value| {
@@ -306,11 +304,12 @@ fn terminal_table(
                 "2",
             ));
         }
-        let shade = shade.filter(|_| position % 2 == 1);
-        for line in [first, second] {
-            output.push_str(&paint(&line, width, color, shade));
-            output.push('\n');
-        }
+        // Lines alternate: each session's first line is shaded and its
+        // second keeps the terminal's own background.
+        output.push_str(&paint(&first, width, color, shade));
+        output.push('\n');
+        output.push_str(&paint(&second, width, color, None));
+        output.push('\n');
     }
     output
 }
@@ -751,14 +750,32 @@ mod tests {
     }
 
     #[test]
-    fn every_other_session_is_shaded_on_both_its_rows() {
-        let colored = format_table(&sessions(), Some(120), true, Some(BLACK));
+    fn session_lines_alternate_between_shaded_and_the_terminal_background() {
+        let colored = format_table(&sessions(), Some(120), true, Some((9, 8, 7)));
         let rows = colored.lines().skip(1).collect::<Vec<_>>();
-        let shaded = |row: &str| row.contains("\u{1b}[48;2;");
+        let shaded = |row: &str| row.contains("\u{1b}[48;2;9;8;7m");
         assert_eq!(
             rows.iter().map(|row| shaded(row)).collect::<Vec<_>>(),
-            [false, false, true, true, false, false],
+            [true, false, true, false, true, false],
             "{colored:?}"
+        );
+        assert!(
+            rows.iter()
+                .step_by(2)
+                .all(|row| strip_ansi(row).width() == 120 && row.ends_with("\u{1b}[0m")),
+            "shaded lines reach the right edge: {colored:?}"
+        );
+        let uncoloured = format_table(&sessions(), Some(120), false, Some((9, 8, 7)));
+        assert!(
+            !uncoloured.contains("\u{1b}[48;"),
+            "no shade without colour: {uncoloured:?}"
+        );
+        assert!(
+            rows.iter()
+                .skip(1)
+                .step_by(2)
+                .all(|row| !row.contains("\u{1b}[48;")),
+            "unshaded lines set no background: {colored:?}"
         );
         let plain = format_table(&sessions(), Some(120), true, None);
         assert!(

@@ -333,6 +333,12 @@ impl<K: Clone + Eq> Picker<'_, K> {
         }
         let columns = visible_columns(&self.state.columns, row_content_area.width);
         let widths = column_widths(&columns, self.state, &visible, row_content_area.width);
+        // A session table stripes its lines: each session's first line is
+        // shaded and its second keeps the terminal's own background.
+        let striped = self.density == PickerDensity::Compact
+            && visible
+                .iter()
+                .any(|index| !self.state.items[*index].second_row.is_empty());
         let row_height = match self.density {
             PickerDensity::Compact
                 if visible.iter().any(|index| {
@@ -429,6 +435,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
             };
             let marker_width = if numbered_position.is_some() { 3 } else { 2 };
             let surface = match self.density {
+                PickerDensity::Compact if striped => self.theme.row_stripe,
                 PickerDensity::Compact if (start + row_offset).is_multiple_of(2) => self.theme.row,
                 PickerDensity::Compact => self.theme.row_alt,
                 PickerDensity::Normal => self.theme.surface,
@@ -489,7 +496,26 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 area.width,
                 row_height,
             );
-            buf.set_style(row_area, style);
+            let second_surface = if striped { Style::new() } else { surface };
+            if striped && !selected {
+                buf.set_style(
+                    Rect {
+                        height: 1,
+                        ..row_area
+                    },
+                    style,
+                );
+                buf.set_style(
+                    Rect {
+                        y: row_area.y.saturating_add(1),
+                        height: row_area.height.saturating_sub(1),
+                        ..row_area
+                    },
+                    second_surface.patch(self.theme.text),
+                );
+            } else {
+                buf.set_style(row_area, style);
+            }
             if selected && self.fullscreen_selection_rails {
                 let rail_style = style.patch(self.theme.pointer);
                 for y in row_area.y..row_area.bottom() {
@@ -537,7 +563,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
             let second_row_style = if selected {
                 style.patch(self.theme.muted)
             } else {
-                surface.patch(self.theme.muted)
+                second_surface.patch(self.theme.muted)
             };
             if row_height > 1 && !item.second_row.is_empty() {
                 let values = columns

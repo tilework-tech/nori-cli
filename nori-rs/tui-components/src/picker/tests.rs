@@ -790,18 +790,103 @@ fn a_selected_session_keeps_its_status_and_agent_colours_over_its_highlight() {
 }
 
 #[test]
-fn both_rows_of_a_session_share_a_shade_and_the_next_session_differs() {
+fn session_table_lines_alternate_between_a_subtle_stripe_and_the_terminal_background() {
     let mut state = two_row_sessions();
     state.selected_index = Some(2);
-    let theme = Theme::for_terminal_background(Some((0, 0, 0)));
+    for background in [(0, 0, 0), (250, 250, 250)] {
+        let theme = Theme::for_terminal_background(Some(background));
+        let buffer = render_sessions(&state, theme, 87);
+        let line_backgrounds = |y: u16| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].bg)
+                .collect::<Vec<_>>()
+        };
+        let first = find_ascii_text_at_or_below(&buffer, "Fix the par", 0).expect("row 1");
+        let selected =
+            find_ascii_text_at_or_below(&buffer, "Update the docs", 0).expect("selected");
+        let body = first.1..selected.1;
+        assert_eq!(
+            body.len(),
+            4,
+            "two sessions of two lines above the selection"
+        );
+        for y in (0..first.1).chain(selected.1 + 2..buffer.area.height) {
+            assert!(
+                line_backgrounds(y).iter().all(|bg| *bg == Color::Reset),
+                "line {y} outside the body is not shaded"
+            );
+        }
+        let mut stripe = None;
+        for (line, y) in body.enumerate() {
+            let backgrounds = line_backgrounds(y);
+            if line % 2 == 1 {
+                assert!(
+                    backgrounds.iter().all(|bg| *bg == Color::Reset),
+                    "line {line} keeps the terminal background: {backgrounds:?}"
+                );
+                continue;
+            }
+            assert!(
+                backgrounds.iter().all(|bg| *bg == backgrounds[0]),
+                "line {line} is shaded edge to edge: {backgrounds:?}"
+            );
+            assert_ne!(backgrounds[0], Color::Reset, "line {line} is shaded");
+            assert_eq!(*stripe.get_or_insert(backgrounds[0]), backgrounds[0]);
+        }
+        // The stripe sits closer to the terminal background than the
+        // previous band, which used `row_alt`.
+        let distance = |colour: Option<Color>| match colour {
+            Some(Color::Rgb(red, green, blue)) => [
+                (red, background.0),
+                (green, background.1),
+                (blue, background.2),
+            ]
+            .into_iter()
+            .map(|(channel, base)| (i32::from(channel) - i32::from(base)).abs())
+            .max()
+            .unwrap_or(0),
+            other => panic!("expected an RGB colour: {other:?}"),
+        };
+        let step = distance(stripe);
+        assert!(
+            step > 0 && step < distance(theme.row_alt.bg),
+            "stripe step {step} for {background:?}"
+        );
+        let selected_bg = theme.selected.bg.expect("selected background");
+        for y in [selected.1, selected.1 + 1] {
+            assert!(
+                line_backgrounds(y).iter().all(|bg| *bg == selected_bg),
+                "selected line {y} keeps its highlight"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_selected_session_keeps_its_colours_on_a_light_terminal() {
+    let state = two_row_sessions();
+    let theme = Theme::for_terminal_background(Some((250, 250, 250)));
     let buffer = render_sessions(&state, theme, 87);
-    let first = find_ascii_text_at_or_below(&buffer, "Fix the par", 0).expect("row 1");
-    let first_reply = find_ascii_text_at_or_below(&buffer, "I traced", 0).expect("row 2");
-    let second = find_ascii_text_at_or_below(&buffer, "Improve Markdown", 0).expect("next");
-    let second_reply = find_ascii_text_at_or_below(&buffer, "no reply yet", 0).expect("next row 2");
-    assert_eq!(first_reply.1, first.1 + 1);
-    let edge = |(_, y): (u16, u16)| buffer[(buffer.area.width - 1, y)].bg;
-    assert_eq!(edge(first), edge(first_reply));
-    assert_eq!(edge(second), edge(second_reply));
-    assert_ne!(edge(first), edge(second));
+    let status = find_ascii_text_at_or_below(&buffer, "working", 0).expect("status cell");
+    let agent = find_ascii_text_at_or_below(&buffer, "claude-code", 0).expect("agent cell");
+    assert_eq!(buffer[status].fg, Color::Cyan);
+    assert_eq!(buffer[agent].fg, Color::Yellow);
+    assert_eq!(
+        buffer[status].bg,
+        theme.selected.bg.expect("selected background")
+    );
+}
+
+#[test]
+fn session_table_stripes_need_a_known_terminal_background() {
+    let buffer = render_sessions(
+        &two_row_sessions(),
+        Theme::for_terminal_background(None),
+        87,
+    );
+    for y in 0..buffer.area.height {
+        for x in 0..buffer.area.width {
+            assert_eq!(buffer[(x, y)].bg, Color::Reset, "({x}, {y})");
+        }
+    }
 }
