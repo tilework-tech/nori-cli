@@ -524,10 +524,11 @@ released after cleanup. Startup and stop do not require a terminal.
 | Command | Behavior |
 | --- | --- |
 | `nori host` | Start the background host, or report the already-running host. |
-| `nori host ls` | List host sessions with delegated children under their parent and `├─`/`└─`/`│` tree guides inside the title column. Top-level rows show their `family_status` when the host sends it. On a TTY it prints the same two-row layout as the attached and local session lists (no ID column): status glyph, title, agent, status, and context, then a faint row with the reply start (or, while waiting on you, what the session asks for), model, and time since last activity; status words are colored (waiting on you yellow, working cyan, ready green, failed red, done in the default color, starting and closed dimmed) and every other session is shaded when stdin and stdout are terminals that report their background and support 24-bit colour. Piped output is one plain `ID AGENT STATUS AGE TITLE` row per session with full values, no color, and `  (parent <full id>)` on every row with a parent, including a child whose parent is no longer listed and so prints at top level. |
+| `nori host ls` | List host sessions with delegated children under their parent and `├─`/`└─`/`│` tree guides inside the title column. Top-level rows show their `family_status` when the host sends it. On a TTY it prints the same two-row layout as the attached and local session lists (no ID column): status glyph, title, agent, status, and context, then a faint row with the session's short folder (`~/rel` up to 20 characters, else the folder name) and ` · ` before the reply start (or, while waiting on you, what the session asks for), model, and time since last activity; status words are colored (waiting on you yellow, working cyan, ready green, failed red, done in the default color, starting and closed dimmed) and every other session is shaded when stdin and stdout are terminals that report their background and support 24-bit colour. Piped output is one plain `ID AGENT STATUS AGE CWD TITLE` row per session with full values (CWD is the full canonical folder), no color, and `  (parent <full id>)` on every row with a parent, including a child whose parent is no longer listed and so prints at top level. |
 | `nori attach` | Open the host session list; requires `[features] multi_session = true`. |
 | `nori attach <id>` | Open the named Nori conversation. Any unique start of the ID works, and a full ID may be typed in any case, with or without hyphens: the CLI resolves it against `_nori/session/list` (3 s timeout) before the terminal opens, lists the candidates (ID, agent, title) when several match, and points at `nori host ls \| cat` when none does. |
 | `nori attach --host <URL> --token-file <path>` | Connect to an explicit managed endpoint using a private token file. |
+| `nori host new [--cwd DIR] [--agent AGENT] [--prompt TEXT] [--json]` | Start a session on the running host (local, or `--host <URL> --token-file <path>`) and print its ID, or the `{session_id, cwd}` reply with `--json`. `--cwd` resolves against the caller's directory, and the host checks the folder exists on its machine. Without `--cwd` the local host uses the caller's directory and a `--host` host uses its own folder. Refuses a host that does not advertise `session_cwd`. |
 | `nori host stop` | Stop the listener and all host-owned sessions. |
 
 The CLI stores discovery state, token, log, and lock under `$NORI_HOME/host`.
@@ -575,14 +576,16 @@ attached watchers --------> authenticated /sessions --> HostService
 The first successful interactive `initialize` claims control when the slot is
 empty. Later clients remain connected as watchers. `initialize` with
 `{"observe":true}` never claims the slot, so polling `host ls` and running
-administrative stop do not take control. Initialization returns
-`result.control` containing `role` and `controller_connected`.
+administrative `new` and stop do not take control. Initialization returns
+`result.control` containing `role` and `controller_connected`, and the host
+adds `session_cwd: true` to `result.capabilities.nori_sessions` to advertise
+per-session folders. Clients send `cwd` only when it is advertised.
 
 | Method | Meaning |
 | --- | --- |
 | `_nori/control/status` | Return this connection's role and whether a controller is connected. |
 | `_nori/control/take` | Transfer control to the caller without closing another connection. |
-| `_nori/session/new` | Start a session with the host configuration; optional `agent` selects its agent. |
+| `_nori/session/new` | Start a session; any authenticated initialized client may call it, since it changes no existing session; the new session becomes the host's selected session. Optional `cwd` (absolute; canonicalized, and refused when relative, missing, or not a directory) loads the host's configuration in that folder with the host's command-line overrides, so the folder's own project trust and approval settings apply; without it the host's start configuration is used. Optional `agent` selects the agent; optional `prompt` is sent as the first prompt after the session starts, without delaying the reply. Replies `{session_id, cwd}`. Resume reloads configuration from the record's cwd the same way. |
 | `_nori/session/close`, `_nori/session/cancel`, `_nori/session/resume` | Apply the operation to the required `session_id`; resume retains the Nori conversation ID. |
 | `_nori/host/stop` | Request host shutdown; any authenticated initialized client may call it. |
 
@@ -591,8 +594,8 @@ by a handoff. The admission mutex serializes the ownership check with handoff,
 then releases before awaiting the backend. An already-admitted operation may
 finish after control moves; new mutations from the previous controller are
 refused. A slow operation on one connection does not hold up another client's
-initialization, list, takeover, or stop. Watchers can list, subscribe, and take
-control; session mutations, including prompts and permission answers, fail with
+initialization, list, takeover, or stop. Watchers can list, subscribe, start new
+sessions, stop the host, and take control; other session mutations, including prompts and permission answers, fail with
 `-32016` and a read-only error. When the controller disconnects, existing
 watchers are not automatically promoted. They may take control explicitly, or
 a new interactive initializer may claim the empty slot.
@@ -613,6 +616,14 @@ and `j`/`k` move, `/`, `f`, or Ctrl+F search, and Esc leaves a search; while
 the composer holds text, only arrows, PageUp/PageDown, and Ctrl keys act on
 the list.
 Session commands address the host; they do not launch local agents.
+`/new [DIR] [AGENT]` (which still requires control in the terminal) starts a
+session in the attaching terminal's directory (the host's own folder for a `--host` host), or in `DIR`, made absolute
+first. A lone argument is a folder when it starts with `/`, `~`, or `.`,
+contains `/`, or names an existing folder under the attaching directory;
+otherwise it is an agent. Tab completes the folder against the attaching
+machine's filesystem like a shell, listing several matches in the notice
+line. The identity line reads `agent · title · folder · status`, and list
+rows show the short folder before the reply.
 `/delegate <agent> <task>` is the delegation entry point; the list does not
 start delegations. The configured `hotkeys.next_waiting_session` binding
 (Alt+Down by default) selects the next waiting child or other session, even

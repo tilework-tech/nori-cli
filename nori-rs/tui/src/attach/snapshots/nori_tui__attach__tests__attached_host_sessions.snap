@@ -10,7 +10,7 @@ Sessions 2 · 1 waiting on you · 1 ready
 
   Session                                        Agent         Status
 › ○ Review the parser                            mock-model    ready
-
+    parser
   ● Update tests                                 other-agent   waiting on you
 
 

@@ -212,13 +212,19 @@ consumer application
   `session_widths(width)` for plain-text output, and the cell formatters
   `ago()` (`2m ago`), `context_text()` / `compact_tokens()` (`8% / 475k`, the
   TUI footer's context segment), `context_cell()` / `context_from_usage()`
-  (the same text fitted to the Context column), and `NO_REPLY` (`no reply
-  yet`). `context_cell` keeps `context_text`'s form when it fits the column's
+  (the same text fitted to the Context column), `NO_REPLY` (`no reply
+  yet`), `short_folder()` (a session's folder as `~` or `~/rel` when that is
+  at most 20 characters, else the folder's own name), and `folder_and_reply()`
+  (row 2's `<short folder> · <reply>`, the folder alone with no reply, the
+  reply alone with no folder). The host-backed lists (`nori attach`,
+  `nori host ls`) use the folder forms; the local list does not, since all
+  local sessions share one folder. `context_cell` keeps `context_text`'s form when it fits the column's
   cells and otherwise re-formats token counts with at most one decimal, so
   `100% / 1.05M` reads `100% / 1.1M`; the Context column therefore never cuts
   its value. Row 1 is status glyph and title, agent, status word, and a
   header-less context column; row 2 is the start of the agent's last reply
-  (or, for a session waiting on the user, what it asks for), the model, and
+  (or, for a session waiting on the user, what it asks for; prefixed with the
+  short folder in host-backed lists), the model, and
   the time since the last activity.
 
   | Column | Width |

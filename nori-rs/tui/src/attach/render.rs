@@ -158,7 +158,14 @@ fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
     } else {
         current.status
     };
-    let status = format!(" · {}", crate::session_status::status_label(shown));
+    let label = crate::session_status::status_label(shown);
+    let status = match &current.cwd {
+        Some(cwd) => format!(
+            " · {} · {label}",
+            nori_tui_components::session_table::short_folder(cwd, dirs::home_dir().as_deref())
+        ),
+        None => format!(" · {label}"),
+    };
     let mut path = vec![current];
     while let Some(parent) = path
         .last()

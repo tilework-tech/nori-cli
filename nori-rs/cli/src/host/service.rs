@@ -1,9 +1,13 @@
 //! Host lifecycle commands layered on the existing managed-session protocol.
 
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context;
 use nori_config::NoriConfig;
+use nori_config::NoriConfigOverrides;
 use nori_harness::ConversationId;
 use nori_harness::remote_agent::ManagedAgent;
 use nori_harness::remote_agent::ManagedRemoteHost;
@@ -14,6 +18,8 @@ use nori_harness::session_manager::SessionAgent;
 use nori_harness::session_manager::SessionManager;
 use nori_harness::session_manager::SessionSource;
 use nori_harness::session_manager::StartSession;
+use nori_protocol::acp::v1::ContentBlock;
+use nori_protocol::acp::v1::TextContent;
 use serde_json::Value;
 use serde_json::json;
 use tokio::sync::Notify;
@@ -22,37 +28,102 @@ pub(super) struct HostService {
     pub manager: SessionManager,
     pub managed: ManagedRemoteHost,
     pub config: Arc<NoriConfig>,
+    /// The host's command-line settings, reapplied to each session folder.
+    pub overrides: NoriConfigOverrides,
     pub stop: Notify,
 }
 
+/// The canonical form of a requested session folder, which must already
+/// exist as a directory on this machine.
+fn session_folder(requested: &str) -> anyhow::Result<PathBuf> {
+    let path = Path::new(requested);
+    anyhow::ensure!(
+        path.is_absolute(),
+        "session folder must be an absolute path: {requested}"
+    );
+    let folder = dunce::canonicalize(path).map_err(|error| match error.kind() {
+        std::io::ErrorKind::NotFound => {
+            anyhow::anyhow!("session folder does not exist on the host: {requested}")
+        }
+        _ => anyhow::anyhow!("cannot open session folder {requested}: {error}"),
+    })?;
+    anyhow::ensure!(
+        folder.is_dir(),
+        "session folder is not a directory: {requested}"
+    );
+    Ok(folder)
+}
+
 impl HostService {
+    /// The host's configuration as it applies in `folder`, so the folder's
+    /// own project trust and settings hold for its sessions.
+    async fn config_in(&self, folder: PathBuf) -> anyhow::Result<NoriConfig> {
+        let overrides = NoriConfigOverrides {
+            cwd: Some(folder),
+            ..self.overrides.clone()
+        };
+        // Loading reads files and may ask git for the folder's repository.
+        tokio::task::spawn_blocking(move || NoriConfig::load_with_overrides(overrides))
+            .await?
+            .context("could not load configuration for the session folder")
+    }
+
+    fn prepare(config: NoriConfig) -> AgentPrepareSpec {
+        AgentPrepareSpec {
+            config: Arc::new(config),
+            cli_version: env!("CARGO_PKG_VERSION").into(),
+            session_context: None,
+            initial_context: None,
+        }
+    }
+
     async fn lifecycle(&self, method: &str, params: &Value) -> anyhow::Result<Value> {
         if method == "_nori/host/stop" {
             self.stop.notify_one();
             return Ok(json!({"stopping":true}));
         }
-        let mut config = (*self.config).clone();
         if method == "_nori/session/new" {
-            if let Some(agent) = params.get("agent") {
-                config.active_agent = agent
-                    .as_str()
-                    .ok_or_else(|| anyhow::anyhow!("agent must be a string"))?
-                    .to_owned();
+            let string = |key: &str| {
+                params
+                    .get(key)
+                    .map(|value| {
+                        value
+                            .as_str()
+                            .ok_or_else(|| anyhow::anyhow!("{key} must be a string"))
+                    })
+                    .transpose()
+            };
+            let (cwd, agent, prompt) = (string("cwd")?, string("agent")?, string("prompt")?);
+            let mut config = match cwd {
+                Some(cwd) => self.config_in(session_folder(cwd)?).await?,
+                None => (*self.config).clone(),
+            };
+            if let Some(agent) = agent {
+                config.active_agent = agent.to_owned();
             }
+            let cwd = config
+                .cwd
+                .to_str()
+                .context("session folder is not valid UTF-8")?
+                .to_owned();
             let session = self.manager.start(StartSession {
-                agent: SessionAgent::Prepare(AgentPrepareSpec {
-                    config: Arc::new(config),
-                    cli_version: env!("CARGO_PKG_VERSION").into(),
-                    session_context: None,
-                    initial_context: None,
-                }),
+                agent: SessionAgent::Prepare(Self::prepare(config)),
                 start: SessionStart::New,
                 parent: None,
                 source: SessionSource::User,
             })?;
+            if let Some(prompt) = prompt {
+                let handle = session.handle.clone();
+                let prompt = vec![ContentBlock::Text(TextContent::new(prompt))];
+                tokio::spawn(async move {
+                    if let Err(error) = handle.prompt(prompt).await {
+                        tracing::warn!("initial prompt was not accepted: {error}");
+                    }
+                });
+            }
             self.managed
                 .set_selected_session(Some(session.conversation_id));
-            return Ok(json!({"session_id":session.conversation_id.to_string()}));
+            return Ok(json!({"session_id":session.conversation_id.to_string(),"cwd":cwd}));
         }
         let id = params["session_id"]
             .as_str()
@@ -72,19 +143,9 @@ impl HostService {
                     .await?
             }
             "_nori/session/resume" => {
+                let mut config = self.config_in(record.cwd).await?;
                 config.active_agent = record.agent;
-                config.cwd = record.cwd;
-                self.manager
-                    .resume(
-                        &id,
-                        AgentPrepareSpec {
-                            config: Arc::new(config),
-                            cli_version: env!("CARGO_PKG_VERSION").into(),
-                            session_context: None,
-                            initial_context: None,
-                        },
-                    )
-                    .await?;
+                self.manager.resume(&id, Self::prepare(config)).await?;
             }
             _ => anyhow::bail!("unknown host operation"),
         }
@@ -103,7 +164,16 @@ impl ManagedAgent for HostService {
                 | "_nori/session/cancel"
                 | "_nori/session/resume"
         ) {
-            return self.managed.request(request).await;
+            let initialize = method == "initialize";
+            let mut reply = self.managed.request(request).await;
+            if initialize
+                && let Some(sessions) = reply
+                    .response
+                    .pointer_mut("/result/capabilities/nori_sessions")
+            {
+                sessions["session_cwd"] = json!(true);
+            }
+            return reply;
         }
         let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
         let result =
