@@ -1039,6 +1039,27 @@ The ignored `jump_timing_on_a_long_history` PTY test measures a jump to a
 long history; the reprint is bounded by the same cell and row caps as resize
 reflow.
 
+#### Host attachment
+
+[`attach`](src/attach/docs.md) is the dedicated frontend for `nori attach`,
+entered only with `multi_session`. It consumes host-owned manager envelopes
+through the harness's `ManagedClient` re-export. It does not construct the
+local process-owning `App`, launch agents, or shut down sessions when its
+terminal closes. Its session list and selected conversation are terminal-local;
+the host remains authoritative for session lifecycle and controller ownership.
+The attachment composer submits raw slash commands to this frontend rather
+than the local app's command router; that mode is disabled for ordinary TUI
+composers. It honors the configured session-list hotkey and resumes highlighted
+failed sessions with Ctrl+R under the existing conversation ID.
+
+The status line keeps control, watch/read-only, and reconnecting states visible.
+Alt+T requests control without disconnecting another terminal. Prompts and
+permission answers require controller status locally and on the server. Socket
+recovery retains view state and resumes from applied per-session sequence
+cursors; mutation requests are never retransmitted. See the
+[host contract](../../docs/remote-control.md#11-background-host-and-attached-terminals)
+for command behavior and the distinction from the legacy listener below.
+
 #### Remote ACP transport activation
 
 `--remote <ADDR>` (in [`cli.rs`](src/cli.rs)) serves the running interactive
@@ -1082,6 +1103,13 @@ fails, it restores that surface and returns the original error, with the old
 controller disconnected and able to reconnect. Only a restoration bind failure
 leaves remote control off, and the user-visible error includes both failures.
 Repeating the active target is idempotent.
+
+The same-port replacement and rollback tests in
+[`remote_control.rs`](src/remote_control.rs) each run in an isolated test
+process. Concurrent subprocess launches elsewhere in the suite can briefly
+inherit a listening socket until exec, keeping its address occupied after the
+owning test closes it. Isolation preserves the close/rebind assertions without
+retrying replacement or rollback.
 
 Without `multi_session`, on every active session's `SessionStarted`,
 [`App`](src/app/event_handling.rs) attaches its stable host using the observed

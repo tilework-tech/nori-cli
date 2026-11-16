@@ -1,9 +1,5 @@
 # Remote ACP Transport
 
-**Status:** Implemented ACP transport plus feature-gated managed-session transport
-
-**Date:** 2026-08-23 (revised 2026-11-15)
-
 **Upstream:** [ACP Streamable HTTP & WebSocket Transport RFD](https://agentclientprotocol.com/rfds/streamable-http-websocket-transport)
 
 ## 1. Decision
@@ -21,8 +17,10 @@ wildcard listener or separate session-host crate is introduced.
 Without `[features] multi_session`, `nori exec --acp` remains a bounded,
 terminal-independent stdio facade and `/acp` exposes the interactive harness.
 With the flag, `/sessions` and the existing exec facade share the managed
-session commands described in section 10. This adds transport primitives only;
-it does not introduce host/attach commands or a persistent host lifecycle.
+session commands described in section 10. The separate `nori host` process
+owns sessions without a terminal; `nori attach` is its feature-gated terminal
+frontend. Its authenticated endpoint and controller/watcher policy are
+described in section 11.
 Sections 3–6 describe the legacy `/acp` projection unless stated otherwise.
 
 ## 2. Topology
@@ -277,8 +275,9 @@ nori-rs/
 ```
 
 The `--remote` flag lives on the interactive CLI surface and is normalized into
-the same TUI-owned manager as runtime commands; the `cli` crate itself remains
-unchanged. Remote prompts use the same harness-originated user-message
+the same TUI-owned manager as runtime commands. Background host commands are
+dispatched separately by [`cli/src/host`](../nori-rs/cli/src/host/docs.md).
+Remote prompts use the same harness-originated user-message
 notifications as local prompts, so their
 original content is visible in the observing TUI and every attached frontend.
 
@@ -301,9 +300,11 @@ v1 transport:
 - An initialized socket receives live session updates before it explicitly
   attaches to the session through `session/load` or `session/resume`.
 
-Authentication, TLS, endpoint discovery, broker routing, Handroll federation,
-capability aggregation across hosts, Streamable HTTP/SSE, and replay across a
-host-process restart remain outside this implementation. Legacy `/acp` retains
+The legacy `--remote` surface remains unauthenticated. The background host
+requires a token and supports same-machine discovery (section 11). TLS
+termination, broker routing, Handroll federation, capability aggregation across
+hosts, Streamable HTTP/SSE, and replay across a host-process restart remain
+outside this implementation. Legacy `/acp` retains
 its transcript-based recovery; managed envelopes add bounded reconnect replay
 within the current manager lifetime.
 
@@ -406,9 +407,9 @@ supply `replay_cursors` for all-session live following, or the chosen row's
 `latest_seq` for one session. This is an explicit new observation point, not
 recovery of the missing prefix.
 
-`/acp` and `/sessions` share one controller slot across all exact listeners;
-last connect wins. Whether future clients can both control, or one can control
-while another watches, remains a pending D2 decision. Disconnect or listener
+On the legacy `--remote` surface, `/acp` and `/sessions` share one controller
+slot across all exact listeners; last connect wins. The background host uses
+the controller/watcher policy below instead. Disconnect or listener
 shutdown detaches managed clients without stopping sessions, cancelling admitted turns, or answering pending
 permissions. Those permissions remain visible and answerable after reconnect
 or from the TUI. A slow managed consumer is dropped when its bounded live queue
@@ -421,3 +422,127 @@ resubscribe share the same cursor validation, so expiry cannot silently lose
 history. Stdio encoding or writer failure cannot guarantee an ending
 notification. At the exec process boundary, stdin EOF shuts down all managed
 sessions.
+
+## 11. Background host and attached terminals
+
+`nori host` starts a detached Unix process with an initially empty
+`SessionManager`. The host owns the agent processes and remains alive when
+every terminal detaches or the last session ends. It binds only loopback,
+defaults to port 7420, and accepts `--port 0` to allocate a port. `nori host stop`
+authenticates, requests shutdown, and waits for the host's singleton lock to be
+released after cleanup. Startup and stop do not require a terminal.
+
+| Command | Behavior |
+| --- | --- |
+| `nori host` | Start the background host, or report the already-running host. |
+| `nori host ls` | Print the flat `ID AGENT STATUS AGE TITLE` table; TTY output colors status and truncates titles to the terminal width, while piped output keeps full titles without color. |
+| `nori attach` | Open the host session list; requires `[features] multi_session = true`. |
+| `nori attach <id>` | Open the named Nori conversation. |
+| `nori attach --host <URL> --token-file <path>` | Connect to an explicit managed endpoint using a private token file. |
+| `nori host stop` | Stop the listener and all host-owned sessions. |
+
+The CLI stores discovery state, token, log, and lock under `$NORI_HOME/host`.
+The directory is created with mode `0700`; files are created with mode `0600`.
+Existing paths must be owned by the effective user and inaccessible to group
+and other users; files must be regular and cannot be symlinks. An OS-held lock,
+not the saved PID, determines whether the host is running. Each host start
+generates a new token and publishes its endpoint only after binding. Local
+commands read that token automatically; startup prints its path, never its
+value. Background hosting is refused on platforms without the implemented Unix
+permission checks.
+
+`RemoteAcpServer::bind_host` exposes only `/sessions`, with no legacy `/acp`
+route. A valid `Authorization: Bearer <token>` header is required before the
+WebSocket upgrade, including on loopback; a missing or wrong token returns
+HTTP 401. This policy applies to `nori host`, not the separate `--remote` or
+`/remote-control` listeners.
+
+Successful authenticated upgrades include `x-nori-host-instance`, a UUID
+generated for that router lifetime independently of the bearer token. It stays
+stable across connections and changes when a new host router starts, even if
+the address and token are reused. Reconnecting clients check this identity
+before initialization or replay so an old cursor cannot silently target a new
+manager.
+
+The terminal table budgets display cells, preserving grapheme boundaries and
+adding an ellipsis when a title exceeds the remaining width. If the terminal
+cannot fit the metadata columns, the row prefix is clipped too. Piped output
+has no width limit; control characters are sanitized in either mode.
+
+```text
+attached controller -- commands --+
+                                 v
+attached watchers --------> authenticated /sessions --> HostService
+       ^                         |                         |
+       |                         +-- role changes          v
+       +---------- ordered replay/live events ------ SessionManager
+                                                           |
+                                                     ACP agent processes
+```
+
+### Control and lifecycle requests
+
+The first successful interactive `initialize` claims control when the slot is
+empty. Later clients remain connected as watchers. `initialize` with
+`{"observe":true}` never claims the slot, so polling `host ls` and running
+administrative stop do not take control. Initialization returns
+`result.control` containing `role` and `controller_connected`.
+
+| Method | Meaning |
+| --- | --- |
+| `_nori/control/status` | Return this connection's role and whether a controller is connected. |
+| `_nori/control/take` | Transfer control to the caller without closing another connection. |
+| `_nori/session/new` | Start a session with the host configuration; optional `agent` selects its agent. |
+| `_nori/session/close`, `_nori/session/cancel`, `_nori/session/resume` | Apply the operation to the required `session_id`; resume retains the Nori conversation ID. |
+| `_nori/host/stop` | Request host shutdown; any authenticated initialized client may call it. |
+
+`_nori/control/changed` notifications carry the new `role` to terminals affected
+by a handoff. The admission mutex serializes the ownership check with handoff,
+then releases before awaiting the backend. An already-admitted operation may
+finish after control moves; new mutations from the previous controller are
+refused. A slow operation on one connection does not hold up another client's
+initialization, list, takeover, or stop. Watchers can list, subscribe, and take
+control; session mutations, including prompts and permission answers, fail with
+`-32016` and a read-only error. When the controller disconnects, existing
+watchers are not automatically promoted. They may take control explicitly, or
+a new interactive initializer may claim the empty slot.
+
+### Attached frontend and recovery
+
+The dedicated [`attach` frontend](../nori-rs/tui/src/attach/docs.md) uses the
+managed client through harness re-exports. It owns terminal state and replay
+cursors, never the host's agent processes. Alt+T takes control; Ctrl+D or
+`/quit` detaches. The configured `hotkeys.open_session_list` binding, Left with
+an empty composer, or `/sessions` opens the session list. Ctrl+R resumes its
+highlighted failed session with the same conversation ID. The status line shows
+controlling, watching/read-only, reconnecting, or disconnected state. The
+current session marker appears inside TITLE, leaving its short ID visible.
+Session commands address the host; they do not launch local agents.
+
+Socket loss or a receive-liveness deadline starts recovery. Periodic session
+list requests keep idle connections observable; receiving JSON renews the
+deadline, while outgoing traffic alone does not. The deadline also bounds
+blocked sends. The frontend retains its rendered sessions, reconnects, verifies
+the host-instance identity, initializes again, and subscribes to the selected
+conversation with its last applied cursor. Switching conversations uses that conversation's saved cursor;
+the session list refreshes independently without subscribing to every session.
+It advances a cursor only after applying that envelope and ignores duplicates.
+Transcript restoration is distinct: `ReplayStarted` replaces the rendered
+conversation and pending permissions without resetting transport sequence
+tracking. Permission prompts also clear when the turn becomes idle or begins
+cancelling, the session ends, or a matching answer is resolved. The frontend
+does not retransmit mutations whose acknowledgement may have been lost.
+Replay expiry or an unexpected sequence gap is visible as an error; the
+frontend does not silently jump to live output. Replay is bounded to the
+current host process lifetime, so a fresh attachment may also encounter an
+expired prefix. Restarting a host does not restore its in-memory manager.
+
+On HTTP 401 or 403 during reconnect, a locally discovered attachment rereads
+the current token file using the same ownership, permission, and regular-file
+checks as startup, then retries once. An explicit `--host` attachment never
+rediscovers local credentials. An unavailable token, failed retry, or changed
+or unavailable host identity stops recovery and leaves a persistent message
+in the terminal. A confirmed identity change reports that the host restarted
+and its sessions were lost; authentication failures report that the host may
+have restarted. The rendered history and unsent draft remain visible. Detach
+with Ctrl+D and rerun `nori attach` to connect afresh.

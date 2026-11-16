@@ -1,20 +1,24 @@
 //! Optional remote ACP transport: the WebSocket profile of the upstream
 //! [Streamable HTTP & WebSocket Transport RFD].
 //!
-//! Serves the hosted harness session as an ACP Agent on a single `/acp`
-//! endpoint. Disabled unless remote mode is explicitly enabled; loopback by
-//! default. See `docs/remote-control.md`.
+//! Legacy remote control serves a harness session as an ACP Agent on `/acp`.
+//! Managed hosts expose authenticated `/sessions` connections with one
+//! controller and any number of watchers. See `docs/remote-control.md`.
 //!
 //! [Streamable HTTP & WebSocket Transport RFD]:
 //!     https://agentclientprotocol.com/rfds/streamable-http-websocket-transport
 
+mod client;
 mod connection;
+mod host_control;
+mod host_wire;
 mod hosted_agent;
 mod managed;
 mod managed_wire;
 mod server;
 mod wire;
 
+pub use client::ManagedClient;
 pub use hosted_agent::HostedAgent;
 pub use hosted_agent::HostedEventReceiver;
 pub use hosted_agent::HostedSubscription;

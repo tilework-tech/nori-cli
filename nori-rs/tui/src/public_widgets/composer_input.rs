@@ -32,12 +32,21 @@ pub struct ComposerInput {
 }
 
 impl ComposerInput {
+    /// Composer for an attached host, whose commands are interpreted by its frontend.
+    pub fn for_attachment() -> Self {
+        Self::with_commands("Send a prompt", true)
+    }
     /// Create a new composer input with a neutral placeholder.
     pub fn new() -> Self {
+        Self::with_commands("Compose new task", false)
+    }
+
+    fn with_commands(placeholder: &str, literal_commands: bool) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let sender = AppEventSender::new(tx.clone());
         // `enhanced_keys_supported=true` enables Shift+Enter newline hint/behavior.
-        let inner = ChatComposer::new(true, sender, true, "Compose new task".to_string(), false);
+        let mut inner = ChatComposer::new(true, sender, true, placeholder.to_string(), false);
+        inner.set_literal_commands(literal_commands);
         Self { inner, _tx: tx, rx }
     }
 

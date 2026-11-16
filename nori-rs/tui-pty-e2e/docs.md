@@ -79,6 +79,16 @@ paths share one listener owner, disabling listeners preserves the harness, and
 the stable endpoint exposes a replacement only after its `SessionStarted`
 commit.
 
+The [host attachment scenarios](tests/host_attach.rs) run a detached host and
+independent attached PTYs sharing a disposable Nori home. They cover the flat
+script-facing list, session creation, controller/watcher handoff, refused
+watcher prompts and permission answers, detach/reattach, and host survival
+after its last session closes. A local TCP proxy either drops one terminal's
+connection or silently stops forwarding traffic while the controller continues,
+then checks the reconnecting marker and replay of missed output without
+duplicates. Cleanup owns both clients and the host so a failed assertion does
+not leave background agents running.
+
 Prepared-startup scenarios wrap `mock-acp-agent` behind the exact registered
 `nori-handroll acp --type remote` argv while recording process identity. They
 prove that ordinary and remote-adapter startup initialize, optionally list, and

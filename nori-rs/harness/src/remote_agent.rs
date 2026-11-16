@@ -25,6 +25,7 @@ pub use nori_acp_host::remote::HostedAgent;
 pub use nori_acp_host::remote::HostedSubscription;
 pub use nori_acp_host::remote::LoadedSession;
 pub use nori_acp_host::remote::ManagedAgent;
+pub use nori_acp_host::remote::ManagedClient;
 pub use nori_acp_host::remote::ManagedReply;
 pub use nori_acp_host::remote::ManagedSubscription;
 pub use nori_acp_host::remote::RemoteAcpServer;

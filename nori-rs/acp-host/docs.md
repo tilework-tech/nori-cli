@@ -14,6 +14,8 @@ implementing the WebSocket profile of the upstream ACP "Streamable HTTP &
 WebSocket Transport" RFD, serving the hosted harness session outward as an ACP
 Agent. The optional `/sessions` endpoint carries managed session commands and
 full manager envelopes (see [the wire contract](../../docs/remote-control.md)).
+The background-host listener has a separate authenticated `/sessions` route
+with controller/watcher ownership and a reusable managed WebSocket client.
 
 ### How it fits into the larger codebase
 
@@ -77,7 +79,7 @@ the session registry nor replay retention. The dependency direction stays
   `features.goals = false`, leaving Nori-owned goal state to the `nori-client`
   MCP server. `error_category.rs` preserves structured ACP errors before
   falling back to message classification.
-- `remote/` serves one logical ACP surface through one or more exact-address
+- The legacy remote surface serves ACP through one or more exact-address
   axum listeners. `RemoteAcpServer::bind_many` binds every socket before any
   begins serving; a zero port after the first address reuses the first
   listener's allocated port. The listeners share one active-connection slot
@@ -91,6 +93,27 @@ the session registry nor replay retention. The dependency direction stays
   bounded live queues and timed socket writes prevent a slow client from
   blocking manager publication. The frontend opts into this route only with
   runtime `multi_session` enabled.
+- `bind_host` serves only authenticated `/sessions`, using
+  [`host_wire.rs`](src/remote/host_wire.rs) and
+  [`host_control.rs`](src/remote/host_control.rs). The first interactive
+  initializer controls; other clients watch until an explicit takeover.
+  Observation-only initialization never claims control. A mutex serializes
+  mutation admission with handoff, then releases before backend work. An
+  admitted operation may finish after takeover, while later old-owner mutations
+  are refused. Slow backend operations cannot lock out other clients' control
+  or administrative requests. Role notifications preserve every connection.
+  Watcher mutations fail before reaching `ManagedAgent`; listing,
+  subscribing, taking control, and authenticated host stop remain available.
+  Successful authenticated upgrades include `x-nori-host-instance`, a UUID
+  generated once per router lifetime independently of the bearer token. Clients
+  can compare it before replaying against a replacement listener at the same
+  address.
+- [`ManagedClient`](src/remote/client.rs) authenticates the upgrade and exposes
+  the optional host-instance UUID and HTTP 401/403 authentication classification,
+  alongside streaming send/receive for frontends that retain notifications.
+  Its sequential request helper intentionally ignores intervening notifications and is used by
+  short-lived administrative commands. Reconnect policy and cursor state belong
+  to the frontend, not this socket wrapper.
 - Each `/acp` listener sends a fresh `Acp-Connection-Id` on a 101 upgrade and
   `426 Upgrade Required` for plain HTTP. One JSON-RPC message occupies each
   UTF-8 text frame, adapted into the SDK's `Lines` transport
@@ -195,7 +218,7 @@ the session registry nor replay retention. The dependency direction stays
 - Terminal and extension request families are not advertised by the current
   host. Adding them requires an explicit host-policy decision, not a generic
   protocol mirror.
-- The remote WebSocket server is unauthenticated. `parse_bind_addr` treats a
+- The legacy `--remote` WebSocket surface is unauthenticated. `parse_bind_addr` treats a
   bare port as a loopback bind and refuses non-loopback addresses without the
   caller's explicit opt-in flag. Exact-address selection, wildcard rejection,
   dangerous-exposure confirmation, endpoint reporting, and runtime listener
@@ -204,6 +227,12 @@ the session registry nor replay retention. The dependency direction stays
   snapshots `local_addrs()` and consumes the old server; if the new bind fails,
   it uses `bind_many` to restore the previous exact surface. A failed restore is
   distinct from the original bind failure and leaves no server running.
+- The background-host listener requires a nonempty bearer token, even on
+  loopback, and returns HTTP 401 before upgrade for missing or invalid tokens.
+  It exposes no `/acp` fallback. The CLI owns token generation, private file
+  validation, daemon lifetime, and loopback bind policy; this crate owns
+  authentication and connection roles. A disconnected controller leaves the
+  slot empty without promoting an existing watcher.
 - Every accepted upgrade receives a child of the server-wide cancellation
   token. Consuming `RemoteAcpServer::shutdown` cancels that token before the
   active controller, then aborts and awaits every accept task; an upgrade whose

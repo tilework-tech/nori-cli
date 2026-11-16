@@ -25,6 +25,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use supports_color::Stream;
 
+mod host;
 mod stdin_prompt;
 #[cfg(not(windows))]
 mod wsl_paths;
@@ -63,6 +64,11 @@ struct MultitoolCli {
 
 #[derive(Debug, clap::Subcommand)]
 enum Subcommand {
+    /// Start or manage a background session host.
+    Host(host::HostCommand),
+
+    /// Attach a terminal to host-owned sessions.
+    Attach(host::AttachCommand),
     /// Run commands within a Nori-provided sandbox.
     #[clap(visible_alias = "debug")]
     Sandbox(SandboxArgs),
@@ -370,6 +376,18 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
     }
 
     match subcommand {
+        Some(Subcommand::Host(command)) => {
+            let config = if command.needs_config() {
+                Some(host_config(interactive, root_config_overrides)?)
+            } else {
+                None
+            };
+            host::run(command, config).await?;
+        }
+        Some(Subcommand::Attach(command)) => {
+            let config = host_config(interactive, root_config_overrides)?;
+            host::attach(command, config).await?;
+        }
         None if print => {
             // `run_exec` has no way to attach images, so accepting them here
             // would silently answer without the attachment.
@@ -545,6 +563,29 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
     }
 
     Ok(())
+}
+
+fn host_config(
+    interactive: TuiCli,
+    root: CliConfigOverrides,
+) -> anyhow::Result<nori_config::NoriConfig> {
+    let mut raw_overrides = root.raw_overrides;
+    raw_overrides.extend(interactive.config_overrides.raw_overrides);
+    let raw_overrides = CliConfigOverrides { raw_overrides }
+        .parse_overrides()
+        .map_err(anyhow::Error::msg)?;
+    nori_config::NoriConfig::load_with_overrides(NoriConfigOverrides {
+        agent: interactive.agent,
+        cwd: interactive.cwd,
+        raw_overrides,
+        additional_writable_roots: interactive.add_dir,
+        approval_policy: interactive
+            .dangerously_bypass_approvals_and_sandbox
+            .then_some(AskForApproval::Never),
+        sandbox_mode: interactive
+            .dangerously_bypass_approvals_and_sandbox
+            .then_some(SandboxMode::DangerFullAccess),
+    })
 }
 
 async fn run_exec(

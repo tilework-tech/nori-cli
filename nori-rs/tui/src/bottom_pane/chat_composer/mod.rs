@@ -115,6 +115,8 @@ pub(crate) struct ChatComposer {
     textarea: TextArea,
     textarea_state: RefCell<TextAreaState>,
     input_enabled: bool,
+    /// Let embedding frontends interpret submitted commands themselves.
+    literal_commands: bool,
     active_popup: ActivePopup,
     app_event_tx: AppEventSender,
     history: ChatComposerHistory,
@@ -194,6 +196,7 @@ impl ChatComposer {
             textarea: TextArea::new(),
             textarea_state: RefCell::new(TextAreaState::default()),
             input_enabled: true,
+            literal_commands: false,
             active_popup: ActivePopup::None,
             app_event_tx,
             history: ChatComposerHistory::new(),
@@ -240,6 +243,11 @@ impl ChatComposer {
     /// Returns true if the composer currently contains no user input.
     pub(crate) fn is_empty(&self) -> bool {
         !self.is_shell_mode && self.textarea.is_empty()
+    }
+
+    pub(crate) fn set_literal_commands(&mut self, enabled: bool) {
+        self.literal_commands = enabled;
+        self.sync_command_popup();
     }
 
     /// Record the history metadata advertised by `SessionConfiguredEvent` so

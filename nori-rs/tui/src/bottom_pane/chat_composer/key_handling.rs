@@ -826,6 +826,7 @@ impl ChatComposer {
                 // literal text.
                 let first_line = self.textarea.text().lines().next().unwrap_or("");
                 if let Some((name, rest)) = parse_slash_name(first_line)
+                    && !self.literal_commands
                     && rest.is_empty()
                     && let Some((_n, cmd)) = built_in_slash_commands()
                         .into_iter()
@@ -881,7 +882,7 @@ impl ChatComposer {
                 // user can quit without the leading slash. A leading space opts out
                 // (mirroring how a leading space escapes slash commands below),
                 // keeping the words available as literal messages to the agent.
-                if !input_starts_with_space {
+                if !input_starts_with_space && !self.literal_commands {
                     if text == "exit" {
                         return (InputResult::Command(SlashCommand::Exit), true);
                     }
@@ -890,7 +891,8 @@ impl ChatComposer {
                     }
                 }
                 if let Some((name, _rest)) = parse_slash_name(&text) {
-                    let treat_as_plain_text = input_starts_with_space || name.contains('/');
+                    let treat_as_plain_text =
+                        self.literal_commands || input_starts_with_space || name.contains('/');
                     if !treat_as_plain_text {
                         let is_builtin = built_in_slash_commands()
                             .into_iter()
