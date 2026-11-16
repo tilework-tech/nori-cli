@@ -14,10 +14,10 @@ All  waiting on you
 
   Session                                                            Agent         Status
   ○ alpha question                                                   mock-model    ready
-    alpha agent answer                                               Mock D…Model  Ns ago
+    alpha agent answer                                               Mock D…Model  N ago
   ● mock:request-permission:rm -rf target/debug                      mock-model-…  waiting on you
-    beta agent answer                                                Mock D…Model  Ns ago
+    beta agent answer                                                Mock D…Model  N ago
 › ○ gamma question (current)                                         mock-model    ready
-    alpha agent answer                                               Mock D…Model  Ns ago
+    alpha agent answer                                               Mock D…Model  N ago
 
 ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close
