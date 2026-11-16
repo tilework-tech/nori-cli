@@ -165,6 +165,61 @@ fn user_requested_approval_says_the_user_asked() {
 }
 
 #[test]
+fn a_delegation_prompt_revealed_by_a_closed_request_waits_out_its_own_grace() {
+    let (mut chat, mut rx, clock) = delegating_parent_with_clock();
+    let generation = chat.session_generation();
+    chat.handle_session_event(generation, delegation("awaiting_approval"));
+    clock.pass_grace();
+    // A permission request opens above the waiting delegation prompt.
+    chat.bottom_pane
+        .push_approval_request(crate::bottom_pane::ApprovalRequest {
+            request_id: "permission".to_string().into(),
+            title: "Run echo ok".to_string(),
+            kind: crate::presentation::ToolKind::Execute,
+            cwd: std::env::current_dir().expect("current directory"),
+            snapshot: Box::new(crate::presentation::ToolSnapshot {
+                call_id: "call".to_string(),
+                title: "Run echo ok".to_string(),
+                kind: crate::presentation::ToolKind::Execute,
+                phase: crate::presentation::ToolPhase::PendingApproval,
+                locations: Vec::new(),
+                invocation: None,
+                artifacts: Vec::new(),
+                raw_input: None,
+                raw_output: None,
+                owner_request_id: None,
+            }),
+            options: vec![nori_protocol::acp::v1::PermissionOption::new(
+                nori_protocol::acp::v1::PermissionOptionId::new("reject-once"),
+                "Reject",
+                nori_protocol::acp::v1::PermissionOptionKind::RejectOnce,
+            )],
+        });
+    clock.pass_grace();
+    chat.handle_key_event(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Esc,
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    while rx.try_recv().is_ok() {}
+
+    chat.handle_key_event(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('1'),
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    assert_eq!(
+        resolved_delegation(&mut rx),
+        None,
+        "the revealed prompt just appeared"
+    );
+    clock.pass_grace();
+    chat.handle_key_event(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('1'),
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    assert_eq!(resolved_delegation(&mut rx), Some(true));
+}
+
+#[test]
 fn escape_declines_a_pending_delegation() {
     let (mut chat, mut rx) = delegating_parent();
     let generation = chat.session_generation();

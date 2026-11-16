@@ -826,6 +826,8 @@ impl BottomPane {
 
     fn on_active_view_complete(&mut self) {
         self.resume_status_timer_after_modal();
+        // A request under the closed view is newly visible.
+        self.request_shown();
     }
 
     fn pause_status_timer_for_modal(&mut self) {

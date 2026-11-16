@@ -195,7 +195,11 @@ impl Runtime {
                     format!("Connection lost. Reconnecting… {reason}")
                 });
             }
-            ConnectionEvent::Message(message) => self.message(message)?,
+            ConnectionEvent::Message(message) => {
+                let handled = self.message(message);
+                self.note_request_on_screen();
+                return handled;
+            }
         }
         self.note_request_on_screen();
         Ok(())

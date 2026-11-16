@@ -372,21 +372,24 @@ support see only those.
 
 When an ACP permission request arrives, the overlay renders the ACP subject and
 options, then calls `respond_to_agent(request_id, response)` with the exact ID
-from the request. Esc picks the first `RejectOnce`/`RejectAlways` option, as
-`nori attach` does, and the footer then reads `esc to reject`; with no reject
+from the request. Esc picks the `RejectOnce` option when offered, else
+`RejectAlways` (the shared `answer_guard::esc_reject_option`, which
+`nori attach` also uses), and the footer then reads `esc to reject`; with no reject
 option Esc sends `Cancelled` and the footer reads `esc to cancel`. Ctrl-C
 always sends `Cancelled`.
 
 Request prompts hold back option keys (digits, Enter, and plain letters such as
-the `y`/`a`/`n`/`d` shortcuts) until the request has been visible for
+the `y`/`a`/`n`/`d` shortcuts, but not the `j`/`k` that move the selection) until the request has been visible for
 `REQUEST_ANSWER_GRACE` (400 ms) from [`answer_guard.rs`](src/answer_guard.rs),
 so a key typed into the composer just as a request appears does not answer it.
-Esc, Ctrl-C, and arrows act immediately. The `AnswerGuard` reads an injectable
+Esc, Ctrl-C, arrows, and `j`/`k` act immediately. The `AnswerGuard` reads an injectable
 `Clock` (the system clock in production, `ManualClock` in tests) that flows
 `ChatWidgetInit` -> `BottomPaneParams` -> `BottomPane::clock()`. The
 `ApprovalOverlay` restarts the grace when a queued request becomes current,
 and `BottomPaneView::request_shown` restarts it when the session is brought to
-the foreground (`ChatWidget::set_foreground`). The `/delegate` approval prompt
+the foreground (`ChatWidget::set_foreground`) and when a view stacked above it
+closes (`BottomPane::on_active_view_complete`), since the request beneath is
+newly visible. The `/delegate` approval prompt
 opts in through `SelectionViewParams.answer_guard`; other selection views
 carry no guard. This applies with or without `[features] multi_session`, since
 the overlay is shared. `nori attach` applies the same guard to its own request

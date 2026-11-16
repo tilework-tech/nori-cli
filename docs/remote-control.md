@@ -526,7 +526,7 @@ released after cleanup. Startup and stop do not require a terminal.
 | `nori host` | Start the background host, or report the already-running host. |
 | `nori host ls` | List host sessions with delegated children under their parent and `├─`/`└─`/`│` tree guides inside the title column. Top-level rows show their `family_status` when the host sends it. On a TTY it prints the same two-row layout as the attached and local session lists (no ID column): status glyph, title, agent, status, and context, then a faint row with the reply start (or, while waiting on you, what the session asks for), model, and time since last activity; status words are colored (waiting on you yellow, working cyan, ready green, failed red, done in the default color, starting and closed dimmed) and every other session is shaded when stdin and stdout are terminals that report their background and support 24-bit colour. Piped output is one plain `ID AGENT STATUS AGE TITLE` row per session with full values, no color, and `  (parent <full id>)` on every row with a parent, including a child whose parent is no longer listed and so prints at top level. |
 | `nori attach` | Open the host session list; requires `[features] multi_session = true`. |
-| `nori attach <id>` | Open the named Nori conversation. Any unique start of the ID works: the CLI resolves it against `_nori/session/list` before the terminal opens, lists the candidates (ID, agent, title) when several match, and points at `nori host ls \| cat` when none does. |
+| `nori attach <id>` | Open the named Nori conversation. Any unique start of the ID works, and a full ID may be typed in any case, with or without hyphens: the CLI resolves it against `_nori/session/list` (3 s timeout) before the terminal opens, lists the candidates (ID, agent, title) when several match, and points at `nori host ls \| cat` when none does. |
 | `nori attach --host <URL> --token-file <path>` | Connect to an explicit managed endpoint using a private token file. |
 | `nori host stop` | Stop the listener and all host-owned sessions. |
 
@@ -610,7 +610,8 @@ list uses the shared two-row session layout (title, agent, status, context;
 then reply start, model, time since last activity) and marks the current
 session inside the Session column. Its keys match the other pickers: arrows
 and `j`/`k` move, `/`, `f`, or Ctrl+F search, and Esc leaves a search; while
-the composer holds text, only arrows and Ctrl keys act on the list.
+the composer holds text, only arrows, PageUp/PageDown, and Ctrl keys act on
+the list.
 Session commands address the host; they do not launch local agents.
 `/delegate <agent> <task>` is the delegation entry point; the list does not
 start delegations. The configured `hotkeys.next_waiting_session` binding
@@ -623,15 +624,14 @@ under their parent and draw tree guides inside the title column, so the other
 columns stay aligned, and both show a top-level row's `family_status`.
 While a permission prompt or delegation approval shows for the on-screen
 session, the composer and its cursor are hidden and only request keys and
-PageUp/PageDown act. Esc rejects (a permission's first reject option, else
-`cancelled`; a delegation is declined); one Ctrl+C cancels (permission outcome
+PageUp/PageDown act. Esc rejects (a permission's reject-once option, else
+reject-always, else `cancelled`; a delegation is declined); one Ctrl+C cancels (permission outcome
 `cancelled`; a delegation is declined). The draft is kept either way.
-Option keys (digits, Enter, plain letters) are ignored until a request has
+Option keys (digits, Enter, plain letters other than `j`/`k`) are ignored until a request has
 been on screen for a short grace period (400 ms), so a key typed into the
-composer just as the request appears does not answer it; Esc, Ctrl+C, and
-arrows act at once. The local TUI's approval overlay and `/delegate` approval
-prompt follow the same rules, and its overlay's Esc likewise picks the first
-reject option.
+composer just as the request appears does not answer it; Esc, Ctrl+C,
+arrows, and `j`/`k` act at once. The local TUI's approval overlay and `/delegate` approval
+prompt follow the same rules, and its overlay's Esc picks the same reject option.
 Each session keeps its own unsent draft: switching sessions parks the
 composer text with the session it was typed in and restores the target's.
 The identity line names the selected session; a top-level session shows its

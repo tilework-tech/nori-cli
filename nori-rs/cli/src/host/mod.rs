@@ -84,10 +84,21 @@ pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow
     // A session can be named by the start of its ID; the host knows only
     // full IDs.
     let session_id = match command.session_id {
-        Some(full) if uuid::Uuid::parse_str(&full).is_ok() => Some(full),
+        // An ID in the host's own spelling needs no lookup.
+        Some(full)
+            if uuid::Uuid::parse_str(&full)
+                .is_ok_and(|parsed| parsed.hyphenated().to_string() == full) =>
+        {
+            Some(full)
+        }
         Some(query) => {
             let mut client = connect_endpoint(&endpoint, &token).await?;
-            let listing = client.request("_nori/session/list", json!({})).await?;
+            let listing = tokio::time::timeout(
+                Duration::from_secs(3),
+                client.request("_nori/session/list", json!({})),
+            )
+            .await
+            .context("host did not list its sessions")??;
             Some(session_lookup::resolve_session(&listing, &query)?)
         }
         None => None,

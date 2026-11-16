@@ -289,18 +289,20 @@ impl AttachState {
         }
         let id = self.selected.as_ref()?;
         let conversation = self.conversations.get(id)?;
+        // Keys answer a waiting delegation before a permission, so it is
+        // the one on screen when both wait.
         let request = conversation
-            .permissions
-            .first()
-            .map(|permission| permission.request_id.to_string())
+            .delegations
+            .iter()
+            .find(|delegation| {
+                delegation.status == nori_protocol::DelegationStatus::AwaitingApproval
+            })
+            .map(|delegation| delegation.request_id.clone())
             .or_else(|| {
                 conversation
-                    .delegations
-                    .iter()
-                    .find(|delegation| {
-                        delegation.status == nori_protocol::DelegationStatus::AwaitingApproval
-                    })
-                    .map(|delegation| delegation.request_id.clone())
+                    .permissions
+                    .first()
+                    .map(|permission| permission.request_id.to_string())
             })?;
         Some(format!("{id}/{request}"))
     }

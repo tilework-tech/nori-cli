@@ -109,8 +109,8 @@ Path: @/nori-rs/tui/src/attach
   move, PageUp/PageDown/Home/End page, Enter opens, `/`, `f`, or Ctrl+F start
   a search, typing filters only while searching, Backspace edits the query,
   and Esc leaves the search. The list shares the screen with the composer, so
-  while the composer holds text (and no search is active) only the arrows and
-  Ctrl-modified keys act on the list; every other key edits the draft. The
+  while the composer holds text (and no search is active) only the arrows,
+  PageUp/PageDown, and Ctrl-modified keys act on the list; every other key edits the draft. The
   footer reads `↑↓/j/k move · enter open · ctrl+r resume · / search · esc
   back`.
 
@@ -135,21 +135,23 @@ Path: @/nori-rs/tui/src/attach
   | Key | Permission | Delegation |
   | --- | --- | --- |
   | Up/Down, plain Enter, 1-9 | Up/Down move the choice; Enter answers it; a digit answers that option (out-of-range digits do nothing) | 1 or plain Enter approves, 2 declines |
-  | Esc | the first `reject_once`/`reject_always` option, else `cancelled` | declines |
+  | Esc | `reject_once` when offered, else `reject_always`, else `cancelled` (shared `answer_guard::esc_reject_option`) | declines |
   | Ctrl+C (once) | outcome `cancelled` | declines |
 
   PageUp/PageDown still scroll; every other key is swallowed. The hint rows
   read `↑↓ choose · enter answer · number selects · esc reject · ctrl+c
   cancel` and `· esc or ctrl+c declines`. Earlier hotkeys and pastes are
   unaffected; off-screen requests capture nothing.
-- Option keys (digits, Enter, and plain letters) are ignored until a request
-  has been on screen for the shared answer grace period
-  ([`answer_guard`](../answer_guard.rs), `REQUEST_ANSWER_GRACE`), so a key
-  typed into the composer just as a request appears cannot answer it. Esc,
-  Ctrl+C, and arrows always act. The [Runtime](runtime.rs) records the
-  on-screen request identity (`AttachState::request_on_screen_id`, the
-  session plus its first permission or awaiting delegation, `None` while the
-  list is open) after each host event, session switch, and key, and restarts
+- Option keys (digits, Enter, and plain letters other than `j`/`k`) are
+  dropped until a request has been on screen for the shared answer grace
+  period ([`answer_guard`](../answer_guard.rs), `REQUEST_ANSWER_GRACE`), so a
+  key typed into the composer just as a request appears cannot answer it.
+  Esc, Ctrl+C, arrows, and `j`/`k` always act. The [Runtime](runtime.rs)
+  records the on-screen request identity (`AttachState::request_on_screen_id`,
+  the session plus its awaiting delegation, else its first permission, the
+  order in which request keys answer them; `None` while the list is open)
+  after each host event (even one that fails to apply), session switch, and
+  key, and restarts
   the grace whenever that identity changes. `Runtime::with_clock` injects the
   time source so tests step time instead of sleeping.
 - Child permissions stay in the child's conversation. The configured

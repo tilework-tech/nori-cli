@@ -5,7 +5,12 @@ use serde_json::Value;
 
 /// The full ID of the one session in `listing` whose ID starts with `query`.
 pub(super) fn resolve_session(listing: &Value, query: &str) -> anyhow::Result<String> {
-    let query = query.trim().to_lowercase();
+    let typed = query.trim();
+    // A full ID may be spelled in any case, with or without hyphens.
+    let query = match uuid::Uuid::parse_str(query.trim()) {
+        Ok(full) => full.hyphenated().to_string(),
+        Err(_) => query.trim().to_lowercase(),
+    };
     let sessions: Vec<&Value> = listing["sessions"]
         .as_array()
         .into_iter()
@@ -22,7 +27,7 @@ pub(super) fn resolve_session(listing: &Value, query: &str) -> anyhow::Result<St
     match matches.as_slice() {
         [only] => Ok(id(only)),
         [] => anyhow::bail!(
-            "No session on this host has an ID starting with {query}. Run `nori host ls | cat` to see full IDs, or `nori attach` to pick from the list."
+            "No session on this host has an ID starting with {typed}. Run `nori host ls | cat` to see full IDs, or `nori attach` to pick from the list."
         ),
         several => {
             let candidates: Vec<String> = several
@@ -44,7 +49,7 @@ pub(super) fn resolve_session(listing: &Value, query: &str) -> anyhow::Result<St
                 })
                 .collect();
             anyhow::bail!(
-                "{query} matches {} sessions; use more of the ID:\n{}",
+                "{typed} matches {} sessions; use more of the ID:\n{}",
                 several.len(),
                 candidates.join("\n")
             )
@@ -85,6 +90,20 @@ mod tests {
             resolve_session(&listing(), "3f2a9c22-0000-4000-8000-000000000002").unwrap(),
             "3f2a9c22-0000-4000-8000-000000000002"
         );
+    }
+
+    #[test]
+    fn a_full_id_in_any_spelling_names_its_session() {
+        for spelling in [
+            "3F2A9C22-0000-4000-8000-000000000002",
+            "3f2a9c22000040008000000000000002",
+        ] {
+            assert_eq!(
+                resolve_session(&listing(), spelling).unwrap(),
+                "3f2a9c22-0000-4000-8000-000000000002",
+                "{spelling}"
+            );
+        }
     }
 
     #[test]

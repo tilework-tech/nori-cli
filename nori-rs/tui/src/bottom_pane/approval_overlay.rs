@@ -102,7 +102,7 @@ impl ApprovalOverlay {
                     key_hint::plain(KeyCode::Enter).into(),
                     " to confirm or ".into(),
                     key_hint::plain(KeyCode::Esc).into(),
-                    if reject_index(&request.options).is_some() {
+                    if crate::answer_guard::esc_reject_option(&request.options).is_some() {
                         " to reject".into()
                     } else {
                         " to cancel".into()
@@ -219,16 +219,6 @@ impl ApprovalOverlay {
     }
 }
 
-/// The option Esc picks: the first reject option, as in `nori attach`.
-fn reject_index(options: &[acp::PermissionOption]) -> Option<usize> {
-    options.iter().position(|option| {
-        matches!(
-            option.kind,
-            acp::PermissionOptionKind::RejectOnce | acp::PermissionOptionKind::RejectAlways
-        )
-    })
-}
-
 impl BottomPaneView for ApprovalOverlay {
     fn handle_key_event(&mut self, event: KeyEvent) {
         if !self.answer_guard.allows(&event) {
@@ -248,7 +238,7 @@ impl BottomPaneView for ApprovalOverlay {
             .current_request
             .as_ref()
             .filter(|_| !self.done && !self.current_complete)
-            .and_then(|request| reject_index(&request.options));
+            .and_then(|request| crate::answer_guard::esc_reject_option(&request.options));
         match reject {
             Some(index) => {
                 self.apply_selection(index);

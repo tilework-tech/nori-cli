@@ -86,10 +86,12 @@ host ls / host stop ---------------+                   SessionManager
   | done | default color, so a finished child reads apart from a closed one |
   | others (starting, closed) | dimmed |
 - `nori attach <id>` accepts any unique start of a session ID.
-  [Dispatch](mod.rs) passes a full UUID through unchanged; anything else is
-  resolved before the attach TUI starts by an observing `_nori/session/list`
-  request to the same endpoint (local or `--host`) and
-  [`session_lookup`](session_lookup.rs), which matches case-insensitively. An
+  [Dispatch](mod.rs) passes an ID already in the host's spelling (lowercase,
+  hyphenated UUID) through unchanged; anything else is resolved before the
+  attach TUI starts by an observing `_nori/session/list` request (3 s timeout)
+  to the same endpoint (local or `--host`) and
+  [`session_lookup`](session_lookup.rs), which matches case-insensitively and
+  normalises a full ID typed in any case, with or without hyphens. An
   exact ID wins; several matches fail with the candidates (ID, agent, title)
   listed; no match fails with a pointer to `nori host ls | cat` (full IDs) and
   to `nori attach` without an ID. The host itself only knows full IDs.

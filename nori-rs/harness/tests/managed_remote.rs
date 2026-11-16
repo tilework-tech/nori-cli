@@ -953,5 +953,46 @@ async fn a_waiting_sessions_list_row_says_what_it_asks_for() {
         .cloned()
         .unwrap();
     assert_eq!(other["waiting_request"], Value::Null, "{other}");
+
+    let answered = fixture
+        .host
+        .request(
+            json!({"jsonrpc":"2.0","id":4,"method":"_nori/session/respond","params":{
+                "session_id":id.to_string(), "request_id":row["pending_requests"][0],
+                "response":{"outcome":{"outcome":"selected","optionId":"allow"}}
+            }}),
+        )
+        .await;
+    assert!(
+        answered.response.get("error").is_none(),
+        "{}",
+        answered.response
+    );
+    let after = tokio::time::timeout(WAIT, async {
+        loop {
+            let listed = fixture
+                .host
+                .request(json!({"jsonrpc":"2.0","id":5,"method":"_nori/session/list"}))
+                .await;
+            let row = listed.response["result"]["sessions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["session_id"] == id.to_string())
+                .cloned()
+                .unwrap();
+            if row["status"] == "ready" {
+                return row;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        after["waiting_request"],
+        Value::Null,
+        "an answered request clears: {after}"
+    );
     fixture.stop().await;
 }

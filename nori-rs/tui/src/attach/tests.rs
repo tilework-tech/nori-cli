@@ -1533,6 +1533,29 @@ fn opening_a_session_that_already_waits_restarts_the_grace_period() {
 }
 
 #[test]
+fn a_delegation_arriving_over_a_permission_gets_its_own_grace_period() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx, clock) = runtime_with_fresh_request(permission_event(1));
+    clock.pass_grace();
+    host_event(&mut runtime, delegation_event(2, "awaiting_approval"));
+    while rx.try_recv().is_ok() {}
+
+    key(&mut runtime, KeyCode::Char('1'), KeyModifiers::NONE);
+    assert!(
+        rx.try_recv().is_err(),
+        "1 answered a delegation that just appeared"
+    );
+
+    clock.pass_grace();
+    key(&mut runtime, KeyCode::Char('1'), KeyModifiers::NONE);
+    let sent = rx
+        .try_recv()
+        .expect("an answer is sent once the grace ends");
+    assert_eq!(sent["method"], "_nori/session/delegation/resolve", "{sent}");
+}
+
+#[test]
 fn esc_and_ctrl_c_act_on_a_request_during_the_grace_period() {
     use crossterm::event::KeyCode;
     use crossterm::event::KeyModifiers;
@@ -1929,6 +1952,38 @@ fn j_and_k_move_through_the_attach_list_and_letters_do_not_filter() {
 }
 
 #[test]
+fn with_a_draft_letters_edit_the_draft_and_arrows_move_the_list() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, _rx) = runtime_with_list();
+    runtime.composer.handle_paste("fix".into());
+    for character in ['j', '/', 'k'] {
+        key(&mut runtime, KeyCode::Char(character), KeyModifiers::NONE);
+    }
+    assert!(
+        marked_title(&runtime).contains("Greeting in three words"),
+        "letters left the list alone"
+    );
+    assert!(
+        !runtime.state.picker.search_active,
+        "/ was typed, not a search"
+    );
+    // The attach loop flushes quickly typed keys once they stop arriving.
+    std::thread::sleep(crate::ComposerInput::recommended_flush_delay());
+    runtime.composer.flush_paste_burst_if_due();
+    let rendered = screen_area(&runtime.state, &runtime.composer, 120, 24);
+    assert!(
+        rendered.contains("fixj/k"),
+        "the letters went to the draft: {rendered}"
+    );
+    key(&mut runtime, KeyCode::Down, KeyModifiers::NONE);
+    assert!(
+        marked_title(&runtime).contains("inspect the parser"),
+        "down still moves"
+    );
+}
+
+#[test]
 fn slash_searches_the_attach_list_and_esc_leaves_search_before_closing() {
     use crossterm::event::KeyCode;
     use crossterm::event::KeyModifiers;
@@ -1978,7 +2033,7 @@ fn a_waiting_rows_second_line_says_what_it_asks_for() {
         {"session_id":"asking","agent":"mock-model","status":"waiting_on_you","title":"Fix the parser",
          "reply_preview":"Let me run the tests first.","waiting_request":"approve: cargo test -p parser","idle_seconds":3},
         {"session_id":"answering","agent":"mock-model","status":"ready","title":"Spike transport",
-         "reply_preview":"The transport spike is done.","waiting_request":null,"idle_seconds":9}
+         "reply_preview":"The transport spike is done.","waiting_request":"approve: stale","idle_seconds":9}
     ]})).unwrap();
     let rendered = screen_area(&state, &crate::ComposerInput::for_attachment(), 120, 24);
     let below = |title: &str| {
@@ -2000,6 +2055,10 @@ fn a_waiting_rows_second_line_says_what_it_asks_for() {
     assert!(
         below("Spike transport").contains("The transport spike is done."),
         "{rendered}"
+    );
+    assert!(
+        !rendered.contains("approve: stale"),
+        "only a waiting row shows its request: {rendered}"
     );
 }
 

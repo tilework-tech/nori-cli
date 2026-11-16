@@ -121,7 +121,7 @@ fn left_on_an_empty_prompt_lists_sessions_with_status_and_reply() {
     let lines: Vec<&str> = screen.lines().collect();
     let waiting = lines
         .iter()
-        .position(|line| line.contains("waiting on you") && line.contains("rm -rf"))
+        .position(|line| line.contains("mock-model-") && line.contains("rm -rf"))
         .expect("the waiting row");
     assert!(
         lines[waiting + 1].contains("approve: rm -rf target/debug"),

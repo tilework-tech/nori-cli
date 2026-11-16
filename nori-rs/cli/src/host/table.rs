@@ -538,12 +538,19 @@ mod tests {
             {"session_id":"asking","agent":"mock-model","status":"waiting_on_you","title":"Fix the parser",
              "reply_preview":"Let me run the tests first.","waiting_request":"approve: cargo test -p parser"},
             {"session_id":"answering","agent":"mock-model","status":"ready","title":"Spike transport",
-             "reply_preview":"The transport spike is done."}
+             "reply_preview":"The transport spike is done.","waiting_request":"approve: stale"}
         ]});
         let rendered = format_table(&listing, Some(120), false, None);
-        let rows: Vec<&str> = rendered.lines().skip(1).collect();
+        let below = |title: &str| {
+            let lines: Vec<&str> = rendered.lines().collect();
+            let at = lines
+                .iter()
+                .position(|line| line.contains(title))
+                .unwrap_or_else(|| panic!("{title} in {rendered}"));
+            lines[at + 1].to_string()
+        };
         assert!(
-            rows[1].contains("approve: cargo test -p parser"),
+            below("Fix the parser").contains("approve: cargo test -p parser"),
             "{rendered}"
         );
         assert!(
@@ -551,8 +558,12 @@ mod tests {
             "{rendered}"
         );
         assert!(
-            rows[3].contains("The transport spike is done."),
+            below("Spike transport").contains("The transport spike is done."),
             "{rendered}"
+        );
+        assert!(
+            !rendered.contains("approve: stale"),
+            "only a waiting row shows its request"
         );
     }
 

@@ -164,7 +164,11 @@ fn the_next_queued_request_gets_its_own_grace_period() {
     clock.pass_grace();
     press(&mut pane, KeyCode::Char('1'));
     let first = answers(&mut rx);
-    assert_eq!(first.len(), 1, "one request is answered: {first:?}");
+    assert_eq!(
+        first,
+        vec![("1".to_string(), "allow-once".to_string())],
+        "the first request shows first"
+    );
 
     press(&mut pane, KeyCode::Char('1'));
     assert_eq!(
@@ -175,9 +179,11 @@ fn the_next_queued_request_gets_its_own_grace_period() {
 
     clock.pass_grace();
     press(&mut pane, KeyCode::Char('1'));
-    let second = answers(&mut rx);
-    assert_eq!(second.len(), 1, "the next request is answered: {second:?}");
-    assert_ne!(first[0].0, second[0].0, "each request is answered once");
+    assert_eq!(
+        answers(&mut rx),
+        vec![("2".to_string(), "allow-once".to_string())],
+        "the next request is answered"
+    );
 }
 
 #[test]
@@ -193,6 +199,29 @@ fn esc_rejects_the_request_even_during_the_grace_period() {
         vec![("1".to_string(), "reject-once".to_string())]
     );
     assert!(!pane.has_active_view(), "the prompt closes");
+}
+
+#[test]
+fn esc_rejects_once_even_when_reject_always_is_listed_first() {
+    let clock = ManualClock::new();
+    let (mut pane, mut rx) = pane(&clock);
+    let mut request = request("1");
+    request.options.insert(
+        0,
+        acp::PermissionOption::new(
+            acp::PermissionOptionId::new("reject-always"),
+            "Always reject",
+            acp::PermissionOptionKind::RejectAlways,
+        ),
+    );
+    pane.push_approval_request(request);
+
+    press(&mut pane, KeyCode::Esc);
+
+    assert_eq!(
+        answers(&mut rx),
+        vec![("1".to_string(), "reject-once".to_string())]
+    );
 }
 
 #[test]

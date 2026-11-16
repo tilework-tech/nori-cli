@@ -103,14 +103,70 @@ impl AnswerGuard {
     }
 }
 
-/// Whether `key` picks an option: a digit, Enter, or a plain letter.
+/// Whether `key` picks an option: a digit, Enter, or a plain letter other
+/// than the `j`/`k` that move the selection.
 fn is_option_key(key: &KeyEvent) -> bool {
     let plain = !key
         .modifiers
         .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
     match key.code {
         KeyCode::Enter => true,
+        KeyCode::Char('j' | 'k') => false,
         KeyCode::Char(c) => plain && c.is_alphanumeric(),
         _ => false,
+    }
+}
+
+/// The option Esc picks on a permission request: "reject once" when offered,
+/// else "reject always". `None` means Esc cancels the request.
+pub(crate) fn esc_reject_option(
+    options: &[nori_protocol::acp::v1::PermissionOption],
+) -> Option<usize> {
+    use nori_protocol::acp::v1::PermissionOptionKind;
+    options
+        .iter()
+        .position(|option| option.kind == PermissionOptionKind::RejectOnce)
+        .or_else(|| {
+            options
+                .iter()
+                .position(|option| option.kind == PermissionOptionKind::RejectAlways)
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn only_keys_that_answer_wait_out_the_grace_period() {
+        let clock = ManualClock::new();
+        let mut guard = AnswerGuard::new(clock.clock());
+        guard.shown();
+        let key = |code, modifiers| KeyEvent::new(code, modifiers);
+        let held: Vec<bool> = [
+            key(KeyCode::Char('1'), KeyModifiers::NONE),
+            key(KeyCode::Enter, KeyModifiers::NONE),
+            key(KeyCode::Char('y'), KeyModifiers::NONE),
+            key(KeyCode::Char('N'), KeyModifiers::SHIFT),
+        ]
+        .iter()
+        .map(|key| guard.allows(key))
+        .collect();
+        assert_eq!(held, vec![false; 4], "answer keys wait");
+        let free: Vec<bool> = [
+            key(KeyCode::Esc, KeyModifiers::NONE),
+            key(KeyCode::Up, KeyModifiers::NONE),
+            key(KeyCode::Char('j'), KeyModifiers::NONE),
+            key(KeyCode::Char('k'), KeyModifiers::NONE),
+            key(KeyCode::Char('c'), KeyModifiers::CONTROL),
+            key(KeyCode::Char('1'), KeyModifiers::ALT),
+        ]
+        .iter()
+        .map(|key| guard.allows(key))
+        .collect();
+        assert_eq!(free, vec![true; 6], "other keys act at once");
+        clock.pass_grace();
+        assert!(guard.allows(&key(KeyCode::Char('1'), KeyModifiers::NONE)));
     }
 }

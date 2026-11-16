@@ -164,7 +164,8 @@ previews use it directly.
 | `DelegationChanged` with `awaiting_approval` | Opens `approve: start <agent> · <first task line>` |
 | ACP response or `RequestResolved` with the same request ID | Closes that permission request |
 | Any other `DelegationChanged` for the same delegation | Closes that delegation |
-| `Idle` phase or `SessionEnded` | Closes every permission request; awaiting delegations stay |
+| `Idle` phase | Closes every permission request; awaiting delegations stay |
+| `SessionEnded` | Closes every open request |
 
 `text()` is the oldest open request, or `None` when nothing is open.
 

@@ -71,11 +71,12 @@ impl PendingRequest {
                     ));
                 }
             }
-            SessionEvent::Nori(
-                NoriEvent::SessionPhaseChanged(SessionPhase::Idle) | NoriEvent::SessionEnded(_),
-            ) => self
+            // A finished turn leaves no permission open; a delegation waits
+            // for its own answer.
+            SessionEvent::Nori(NoriEvent::SessionPhaseChanged(SessionPhase::Idle)) => self
                 .open
                 .retain(|open| matches!(open, Open::Delegation(..))),
+            SessionEvent::Nori(NoriEvent::SessionEnded(_)) => self.open.clear(),
             SessionEvent::Acp(_) | SessionEvent::Nori(_) => {}
         }
     }
@@ -163,9 +164,29 @@ mod tests {
     }
 
     #[test]
-    fn a_turn_that_ends_or_a_session_that_ends_has_nothing_open() {
+    fn a_finished_turn_closes_permissions_but_not_a_waiting_delegation() {
         let idle = SessionEvent::Nori(NoriEvent::SessionPhaseChanged(SessionPhase::Idle));
-        assert_eq!(after(&[permission(1, "rm -rf build"), idle]), None);
+        assert_eq!(after(&[permission(1, "rm -rf build"), idle.clone()]), None);
+        assert_eq!(
+            after(&[delegation("awaiting_approval"), idle]),
+            Some("approve: start codex · Review the parser".to_string())
+        );
+    }
+
+    #[test]
+    fn an_ended_session_has_nothing_open() {
+        let ended = SessionEvent::Nori(NoriEvent::SessionEnded(crate::SessionEnded {
+            reason: crate::SessionEndReason::Shutdown,
+            message: None,
+        }));
+        assert_eq!(
+            after(&[
+                permission(1, "rm -rf build"),
+                delegation("awaiting_approval"),
+                ended
+            ]),
+            None
+        );
     }
 
     #[test]

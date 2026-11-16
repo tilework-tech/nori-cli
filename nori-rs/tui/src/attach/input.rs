@@ -123,7 +123,7 @@ impl Runtime {
             let passes = matches!(key.code, KeyCode::PageUp | KeyCode::PageDown);
             if !passes {
                 // A key typed just as the request appeared was meant for
-                // the composer.
+                // the composer; it is dropped rather than answering.
                 if !self.answer_guard.allows(&key) {
                     return true;
                 }
@@ -219,15 +219,18 @@ impl Runtime {
     }
 
     /// The shared picker keys. While the composer holds text, only the
-    /// arrows and Ctrl+F act on the list; other keys edit the draft.
+    /// arrows, PageUp/PageDown and Ctrl+F act on the list; other keys edit
+    /// the draft.
     fn picker_key(&mut self, key: KeyEvent) -> bool {
         let search_active = self.state.picker.search_active;
         let Some(action) = crate::bottom_pane::picker_keys::navigation_action(&key, search_active)
         else {
             return false;
         };
-        let list_only = matches!(key.code, KeyCode::Up | KeyCode::Down)
-            || key.modifiers == KeyModifiers::CONTROL;
+        let list_only = matches!(
+            key.code,
+            KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown
+        ) || key.modifiers == KeyModifiers::CONTROL;
         if !search_active && !list_only && !self.composer.is_empty() {
             return false;
         }
@@ -249,12 +252,7 @@ impl Runtime {
         else {
             return false;
         };
-        let reject = permission.options.iter().position(|option| {
-            matches!(
-                option.kind,
-                acp::PermissionOptionKind::RejectOnce | acp::PermissionOptionKind::RejectAlways
-            )
-        });
+        let reject = crate::answer_guard::esc_reject_option(&permission.options);
         let selected = match key.code {
             KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => None,
             KeyCode::Esc => reject,

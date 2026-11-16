@@ -36,3 +36,56 @@ pub(crate) fn navigation_action(key: &KeyEvent, search_active: bool) -> Option<P
         _ => return None,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn action(code: KeyCode, modifiers: KeyModifiers, search_active: bool) -> Option<PickerAction> {
+        navigation_action(&KeyEvent::new(code, modifiers), search_active)
+    }
+
+    #[test]
+    fn letters_move_or_start_a_search_until_one_is_running() {
+        let none = KeyModifiers::NONE;
+        assert_eq!(
+            [
+                action(KeyCode::Char('j'), none, false),
+                action(KeyCode::Char('k'), none, false),
+                action(KeyCode::Char('/'), none, false),
+                action(KeyCode::Char('f'), none, false),
+                action(KeyCode::Char('f'), KeyModifiers::CONTROL, false),
+                action(KeyCode::Char('x'), none, false),
+                action(KeyCode::Esc, none, false),
+            ],
+            [
+                Some(PickerAction::MoveDown),
+                Some(PickerAction::MoveUp),
+                Some(PickerAction::ActivateSearch),
+                Some(PickerAction::ActivateSearch),
+                Some(PickerAction::ActivateSearch),
+                None,
+                None,
+            ]
+        );
+        assert_eq!(
+            [
+                action(KeyCode::Char('j'), none, true),
+                action(KeyCode::Char('/'), none, true),
+                action(KeyCode::Char('X'), KeyModifiers::SHIFT, true),
+                action(KeyCode::Backspace, none, true),
+                action(KeyCode::Esc, none, true),
+                action(KeyCode::Down, none, true),
+            ],
+            [
+                Some(PickerAction::AppendQuery('j')),
+                Some(PickerAction::AppendQuery('/')),
+                Some(PickerAction::AppendQuery('X')),
+                Some(PickerAction::Backspace),
+                Some(PickerAction::DeactivateSearch),
+                Some(PickerAction::MoveDown),
+            ]
+        );
+    }
+}
