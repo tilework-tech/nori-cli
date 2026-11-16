@@ -626,3 +626,178 @@ fn find_ascii_text_at_or_below(buffer: &Buffer, text: &str, minimum_y: u16) -> O
     }
     None
 }
+
+fn two_row_sessions() -> PickerState<String> {
+    let items = [
+        PickerItem::new("parser".to_string(), crate::session_table::SESSION, "● Fix the parser recovery path")
+            .cell(crate::session_table::AGENT, "claude-code")
+            .cell_tone(crate::session_table::AGENT, ProviderKind::Claude)
+            .cell(crate::session_table::STATUS, "working")
+            .cell_detail_tone(crate::session_table::STATUS, crate::DetailTone::Info)
+            .cell(crate::session_table::CONTEXT, "8% / 475k")
+            .second_row_cell(
+                crate::session_table::SESSION,
+                "I traced the failure to the recovery branch, which drops the token after a missing brace",
+            )
+            .second_row_cell(crate::session_table::AGENT, "claude-opus-5-5-with-a-long-model-name")
+            .second_row_cell(crate::session_table::STATUS, "2m ago"),
+        PickerItem::new("tables".to_string(), crate::session_table::SESSION, "○ Improve Markdown tables")
+            .cell(crate::session_table::AGENT, "codex")
+            .cell(crate::session_table::STATUS, "ready")
+            .second_row_cell(crate::session_table::SESSION, "no reply yet")
+            .second_row_cell(crate::session_table::AGENT, "gpt-5.5")
+            .second_row_cell(crate::session_table::STATUS, "14s ago")
+            .depth(1),
+        PickerItem::new("docs".to_string(), crate::session_table::SESSION, "○ Update the docs")
+            .cell(crate::session_table::AGENT, "gemini")
+            .cell(crate::session_table::STATUS, "ready")
+            .second_row_cell(crate::session_table::SESSION, "Done.")
+            .second_row_cell(crate::session_table::STATUS, "1h ago"),
+    ];
+    PickerState::new("Sessions", crate::session_table::session_columns(), items)
+}
+
+fn render_sessions(state: &PickerState<String>, theme: Theme, width: u16) -> Buffer {
+    let backend = TestBackend::new(width, 12);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| {
+            frame.render_widget(
+                Picker::new(state)
+                    .theme(theme)
+                    .density(PickerDensity::Compact)
+                    .show_title(false)
+                    .show_details(false)
+                    .horizontal_margin(0)
+                    .selection_keeps_tones(true),
+                frame.area(),
+            )
+        })
+        .expect("draw picker");
+    terminal.backend().buffer().clone()
+}
+
+fn buffer_lines(buffer: &Buffer) -> Vec<String> {
+    (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect()
+}
+
+#[test]
+fn two_row_sessions_snapshots_at_each_layout_width() {
+    let state = two_row_sessions();
+    for width in [58, 80, 87, 120] {
+        let lines = buffer_lines(&render_sessions(&state, Theme::default(), width));
+        insta::assert_snapshot!(
+            format!("two_row_sessions_{width}"),
+            lines.join("\n").trim_end().to_string()
+        );
+    }
+}
+
+/// Display column where `needle` starts in `line`.
+fn cell_of(line: &str, needle: &str) -> Option<usize> {
+    let at = line.find(needle)?;
+    Some(unicode_width::UnicodeWidthStr::width(&line[..at]))
+}
+
+/// Terminal width, then where Agent, Status and the context value start.
+const SESSION_LAYOUTS: [(u16, Option<usize>, usize, Option<usize>); 6] = [
+    (57, None, 43, None),
+    (58, Some(30), 44, None),
+    (80, Some(52), 66, None),
+    (86, Some(58), 72, None),
+    (87, Some(46), 60, Some(76)),
+    (120, Some(79), 93, Some(109)),
+];
+
+#[test]
+fn two_row_session_columns_sit_at_the_layout_offsets() {
+    let state = two_row_sessions();
+    for (width, agent, status, context) in SESSION_LAYOUTS {
+        let lines = buffer_lines(&render_sessions(&state, Theme::default(), width));
+        let header = lines
+            .iter()
+            .find(|line| line.contains("Status"))
+            .expect("header");
+        assert_eq!(
+            cell_of(header, "Session"),
+            Some(2),
+            "width {width}: {header}"
+        );
+        assert_eq!(cell_of(header, "Agent"), agent, "width {width}: {header}");
+        assert_eq!(
+            cell_of(header, "Status"),
+            Some(status),
+            "width {width}: {header}"
+        );
+        // The context column has no heading; its values sit after Status.
+        let row = lines
+            .iter()
+            .find(|line| line.contains("Fix the par"))
+            .expect("first row");
+        assert_eq!(cell_of(row, "8% / 475k"), context, "width {width}: {row}");
+    }
+}
+
+#[test]
+fn a_second_row_value_is_cut_to_its_own_column() {
+    let state = two_row_sessions();
+    let lines = buffer_lines(&render_sessions(&state, Theme::default(), 80));
+    let preview_row = lines
+        .iter()
+        .find(|line| line.contains("I traced"))
+        .expect("preview row");
+    let agent_start = 52;
+    // The reply starts at its beginning and stops before the Agent column.
+    let session_cells: String = preview_row.chars().take(agent_start).collect();
+    assert!(session_cells.trim_end().ends_with('…'), "{preview_row}");
+    assert!(
+        session_cells.contains("I traced the failure"),
+        "{preview_row}"
+    );
+    let agent_cells: String = preview_row.chars().skip(agent_start).take(12).collect();
+    assert!(
+        agent_cells.contains('…'),
+        "the model is cut in the middle: {agent_cells}"
+    );
+    assert!(agent_cells.starts_with("claude"), "{agent_cells}");
+    assert!(agent_cells.trim_end().ends_with("name"), "{agent_cells}");
+    assert!(preview_row.contains("2m ago"), "{preview_row}");
+}
+
+#[test]
+fn a_selected_session_keeps_its_status_and_agent_colours_over_its_highlight() {
+    let state = two_row_sessions();
+    let theme = Theme::for_terminal_background(Some((0, 0, 0)));
+    let buffer = render_sessions(&state, theme, 87);
+    let status = find_ascii_text_at_or_below(&buffer, "working", 0).expect("status cell");
+    let agent = find_ascii_text_at_or_below(&buffer, "claude-code", 0).expect("agent cell");
+    assert_eq!(buffer[status].fg, Color::Cyan);
+    assert_eq!(buffer[agent].fg, Color::Yellow);
+    assert_eq!(
+        buffer[status].bg,
+        theme.selected.bg.expect("selected background")
+    );
+}
+
+#[test]
+fn both_rows_of_a_session_share_a_shade_and_the_next_session_differs() {
+    let mut state = two_row_sessions();
+    state.selected_index = Some(2);
+    let theme = Theme::for_terminal_background(Some((0, 0, 0)));
+    let buffer = render_sessions(&state, theme, 87);
+    let first = find_ascii_text_at_or_below(&buffer, "Fix the par", 0).expect("row 1");
+    let first_reply = find_ascii_text_at_or_below(&buffer, "I traced", 0).expect("row 2");
+    let second = find_ascii_text_at_or_below(&buffer, "Improve Markdown", 0).expect("next");
+    let second_reply = find_ascii_text_at_or_below(&buffer, "no reply yet", 0).expect("next row 2");
+    assert_eq!(first_reply.1, first.1 + 1);
+    let edge = |(_, y): (u16, u16)| buffer[(buffer.area.width - 1, y)].bg;
+    assert_eq!(edge(first), edge(first_reply));
+    assert_eq!(edge(second), edge(second_reply));
+    assert_ne!(edge(first), edge(second));
+}

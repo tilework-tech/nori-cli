@@ -1057,8 +1057,38 @@ fn strip_git_stats_segment(line: &str) -> String {
 }
 
 /// Normalize dynamic content in screen output for snapshot testing
+/// `text` with the digits of every `12s ago`-style time replaced by `N`.
+fn mask_activity_times(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut masked = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < chars.len() {
+        let starts_word = index == 0 || !chars[index - 1].is_alphanumeric();
+        let digits = chars[index..]
+            .iter()
+            .take_while(|character| character.is_ascii_digit())
+            .count();
+        let rest: String = chars[index + digits..].iter().take(5).collect();
+        let is_time = starts_word
+            && digits > 0
+            && rest.len() == 5
+            && rest[1..] == *" ago"
+            && matches!(rest.chars().next(), Some('s' | 'm' | 'h' | 'd'));
+        if is_time {
+            masked.push_str(&"N".repeat(digits));
+            index += digits;
+        } else {
+            masked.push(chars[index]);
+            index += 1;
+        }
+    }
+    masked
+}
+
 pub fn normalize_for_snapshot(contents: String) -> String {
-    let mut normalized = contents;
+    // Session lists show the time since a session's last activity, such as
+    // `12s ago`; keep the width and hide the digits.
+    let mut normalized = mask_activity_times(&contents);
 
     // Replace temp directories: /tmp/claude-*/.tmpXXXXXX, /tmp/claude/.tmpXXXXXX,
     // or /tmp/.tmpXXXXXX -> [TMP_DIR]. macOS can canonicalize /tmp to

@@ -122,7 +122,16 @@ fn screen_with_composer(state: &AttachState, composer: &crate::ComposerInput) ->
 }
 
 fn screen_sized(state: &AttachState, composer: &crate::ComposerInput, width: u16) -> String {
-    let area = ratatui::layout::Rect::new(0, 0, width, 18);
+    screen_area(state, composer, width, 18)
+}
+
+fn screen_area(
+    state: &AttachState,
+    composer: &crate::ComposerInput,
+    width: u16,
+    height: u16,
+) -> String {
+    let area = ratatui::layout::Rect::new(0, 0, width, height);
     let mut buffer = ratatui::buffer::Buffer::empty(area);
     super::render::render(state, composer, area, &mut buffer);
     (0..area.height)
@@ -363,22 +372,21 @@ fn session_list_uses_the_configured_binding_instead_of_the_default() {
 }
 
 #[test]
-fn current_session_row_keeps_short_id_visible() {
+fn the_current_session_row_is_marked() {
     let mut state = AttachState {
         connected: true,
         selected: Some("abcd1234-session".into()),
         ..Default::default()
     };
     state.replace_sessions(json!({"sessions":[
-        {"session_id":"abcd1234-session","agent":"mock-model","status":"ready","title":"Review parser","age_seconds":120}
+        {"session_id":"abcd1234-session","agent":"mock-model","status":"ready","title":"Review parser","idle_seconds":120}
     ]})).unwrap();
     let rendered = screen(&state);
     let row = rendered
         .lines()
-        .find(|line| line.contains("Review parser") && line.contains("2m"))
+        .find(|line| line.contains("○ Review parser"))
         .unwrap();
-    assert!(row.contains("abcd1234"), "{rendered}");
-    assert!(row.contains("current"), "{rendered}");
+    assert!(row.contains("(current)"), "{rendered}");
     insta::assert_snapshot!("attached_current_session_id", rendered);
 }
 
@@ -590,14 +598,14 @@ fn session_tree_keeps_children_under_their_parent_with_aligned_columns() {
         {"session_id":"grandchild","agent":"mock-model","status":"failed","title":"Write snapshot tests","parent":"child-one","depth":2,"source":"session","age_seconds":50},
         {"session_id":"child-two","agent":"mock-model","status":"ready","title":"Update docs","parent":"root-one","depth":1,"source":"session","age_seconds":20}
     ]})).unwrap();
-    let rendered = screen(&state);
+    let rendered = screen_area(&state, &crate::ComposerInput::for_attachment(), 90, 30);
     let titles: Vec<_> = rendered
         .lines()
         .skip_while(|line| !line.contains("Sessions 5"))
         .filter_map(|line| {
             ["Ship", "Port", "Write", "Update", "Spike"]
                 .iter()
-                .find(|word| line.contains(*word))
+                .find(|word| line.contains(*word) && line.contains("mock-model"))
                 .map(|word| {
                     let at = line.find("mock-model").expect("agent column");
                     (*word, unicode_width::UnicodeWidthStr::width(&line[..at]))
@@ -941,7 +949,7 @@ fn a_top_level_session_says_when_a_grandchild_waits_on_you() {
     );
     let mut state = viewing("root-session");
     state.list_open = true;
-    let list = screen(&state);
+    let list = screen_area(&state, &crate::ComposerInput::for_attachment(), 90, 30);
     let row = |title: &str| {
         list.lines()
             .skip_while(|line| !line.contains("Sessions 4"))
@@ -1290,32 +1298,35 @@ fn list_titles_sharing_a_long_prefix_keep_their_distinct_ends() {
             ..Default::default()
         };
         state.replace_sessions(shared_prefix_families()).unwrap();
-        let rendered = screen_at(&state, width);
-        let list = &rendered[rendered.find("TITLE").expect("list header")..];
-        for (id, end, other) in [
-            ("root-x ", ":x", ":y"),
-            ("child-x ", ":x", ":y"),
-            ("root-y ", ":y", ":x"),
-            ("child-y ", ":y", ":x"),
+        let rendered = screen_area(&state, &crate::ComposerInput::for_attachment(), width, 30);
+        let list = &rendered[rendered.find("Session ").expect("list header")..];
+        // Title rows in tree order: root-x, child-x, root-y, child-y.
+        let rows: Vec<&str> = list
+            .lines()
+            .filter(|line| line.contains("● mock"))
+            .collect();
+        assert_eq!(rows.len(), 4, "{rendered}");
+        for (row, end, other) in [
+            (rows[0], ":x", ":y"),
+            (rows[1], ":x", ":y"),
+            (rows[2], ":y", ":x"),
+            (rows[3], ":y", ":x"),
         ] {
-            let row = list
-                .lines()
-                .find(|line| line.contains(id))
-                .unwrap_or_else(|| panic!("{id} is drawn at {width}:\n{rendered}"));
             let title = row
+                .split("  mock-model")
+                .next()
+                .unwrap_or_default()
                 .trim_end()
-                .trim_end_matches('▕')
                 .trim_end_matches(" (current)");
             assert!(title.contains("mock"), "the start is kept: {row}");
             assert!(
                 title.ends_with(end) && !title.contains(other),
-                "the end that tells {id} apart is kept at {width}: {row}"
+                "the end that tells {row} apart is kept at {width}"
             );
             assert_eq!(row.matches('…').count(), 1, "cut once at {width}: {row}");
         }
-        let child = list.lines().find(|line| line.contains("child-x ")).unwrap();
         assert!(
-            child.contains("└─") && child.contains("(current)"),
+            rows[1].contains("└─") && rows[1].contains("(current)"),
             "{rendered}"
         );
     }
@@ -1372,6 +1383,7 @@ fn enter_answers_a_pending_permission_and_keeps_the_draft() {
         "{sent}"
     );
     assert!(rx.try_recv().is_err(), "the draft is not sent as a prompt");
+    resolve_permission(&mut runtime);
     let rendered = screen_with_composer(&runtime.state, &runtime.composer);
     assert!(
         rendered.contains("my draft"),
@@ -1392,6 +1404,7 @@ fn a_number_answers_a_pending_permission_and_keeps_the_draft() {
         "{sent}"
     );
     assert!(rx.try_recv().is_err(), "the draft is not sent as a prompt");
+    resolve_permission(&mut runtime);
     let rendered = screen_with_composer(&runtime.state, &runtime.composer);
     assert!(
         rendered.contains("my draft"),
@@ -1409,6 +1422,7 @@ fn a_number_approves_a_pending_delegation_and_keeps_the_draft() {
     assert_eq!(sent["method"], "_nori/session/delegation/resolve", "{sent}");
     assert_eq!(sent["params"]["approved"], true, "{sent}");
     assert!(rx.try_recv().is_err(), "the draft is not sent as a prompt");
+    settle_delegation(&mut runtime, "running");
     let rendered = screen_with_composer(&runtime.state, &runtime.composer);
     assert!(
         rendered.contains("my draft"),
@@ -1442,6 +1456,7 @@ fn enter_approves_a_pending_delegation_and_keeps_the_draft() {
     assert_eq!(sent["method"], "_nori/session/delegation/resolve", "{sent}");
     assert_eq!(sent["params"]["approved"], true, "{sent}");
     assert!(rx.try_recv().is_err(), "the draft is not sent as a prompt");
+    settle_delegation(&mut runtime, "running");
     let rendered = screen_with_composer(&runtime.state, &runtime.composer);
     assert!(
         rendered.contains("my draft"),
@@ -1483,16 +1498,233 @@ fn while_a_request_shows_typing_leaves_both_the_request_and_the_draft_alone() {
     }
     key(&mut runtime, KeyCode::Enter, KeyModifiers::SHIFT);
     assert!(rx.try_recv().is_err(), "nothing is answered or sent");
-    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
-    assert!(rendered.contains("my draft"), "{rendered}");
-    assert!(
-        !rendered.contains("fix"),
-        "the request keeps the keys:\n{rendered}"
-    );
     key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
     let sent = rx.try_recv().expect("plain enter still answers");
     assert_eq!(
         sent["params"]["response"]["outcome"]["optionId"], "allow",
         "{sent}"
+    );
+    resolve_permission(&mut runtime);
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(rendered.contains("my draft"), "{rendered}");
+    assert!(
+        !rendered.contains("fix"),
+        "the request kept the keys:\n{rendered}"
+    );
+}
+
+/// The host's answer to the permission request in `parent-session`.
+fn resolve_permission(runtime: &mut super::runtime::Runtime) {
+    runtime
+        .state
+        .apply(SessionEnvelope {
+            conversation_id: "parent-session".into(),
+            agent: "mock-model".into(),
+            seq: runtime
+                .state
+                .cursors
+                .get("parent-session")
+                .copied()
+                .unwrap_or(0)
+                + 1,
+            event: nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::RequestResolved(
+                nori_protocol::RequestResolved {
+                    request_id: nori_protocol::acp::v1::RequestId::Str("permission".into()),
+                    answered_by: "client".into(),
+                },
+            )),
+        })
+        .unwrap();
+}
+
+/// The host's answer to an approved or declined delegation.
+fn settle_delegation(runtime: &mut super::runtime::Runtime, status: &str) {
+    let seq = runtime
+        .state
+        .cursors
+        .get("parent-session")
+        .copied()
+        .unwrap_or(0)
+        + 1;
+    runtime.state.apply(delegation_event(seq, status)).unwrap();
+}
+
+#[test]
+fn a_request_on_screen_hides_the_composer_and_its_cursor() {
+    let (mut runtime, _rx) = runtime_with_draft(permission_event(1));
+    let area = ratatui::layout::Rect::new(0, 0, 90, 18);
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    let cursor = super::render::cursor_position(&runtime.state, &runtime.composer, area);
+    assert!(!rendered.contains("my draft"), "{rendered}");
+    assert_eq!(cursor, None);
+    resolve_permission(&mut runtime);
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    let cursor = super::render::cursor_position(&runtime.state, &runtime.composer, area);
+    assert!(rendered.contains("my draft"), "{rendered}");
+    assert!(cursor.is_some());
+}
+
+#[test]
+fn a_delegation_approval_on_screen_hides_the_composer() {
+    let (runtime, _rx) = runtime_with_draft(delegation_event(1, "awaiting_approval"));
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(!rendered.contains("my draft"), "{rendered}");
+}
+
+#[test]
+fn the_request_hint_names_every_key_that_answers_it() {
+    let (runtime, _rx) = runtime_with_draft(permission_event(1));
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(rendered.contains("esc reject"), "{rendered}");
+    assert!(rendered.contains("ctrl+c cancel"), "{rendered}");
+}
+
+#[test]
+fn the_delegation_approval_hint_names_esc_and_ctrl_c() {
+    let (runtime, _rx) = runtime_with_draft(delegation_event(1, "awaiting_approval"));
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(rendered.contains("esc or ctrl+c declines"), "{rendered}");
+}
+
+#[test]
+fn one_ctrl_c_cancels_a_pending_permission_and_keeps_the_draft() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx) = runtime_with_draft(permission_event(1));
+    let stays_open = runtime.key(crossterm::event::KeyEvent::new(
+        KeyCode::Char('c'),
+        KeyModifiers::CONTROL,
+    ));
+    assert!(stays_open, "ctrl+c on a request does not leave attach");
+    let sent = rx.try_recv().expect("the request is cancelled");
+    assert_eq!(sent["method"], "_nori/session/respond", "{sent}");
+    assert_eq!(sent["params"]["request_id"], "permission", "{sent}");
+    assert_eq!(
+        sent["params"]["response"]["outcome"]["outcome"], "cancelled",
+        "{sent}"
+    );
+    assert!(rx.try_recv().is_err(), "nothing else is sent");
+    resolve_permission(&mut runtime);
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(rendered.contains("my draft"), "{rendered}");
+}
+
+#[test]
+fn one_ctrl_c_declines_a_pending_delegation_and_keeps_the_draft() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx) = runtime_with_draft(delegation_event(1, "awaiting_approval"));
+    key(&mut runtime, KeyCode::Char('c'), KeyModifiers::CONTROL);
+    let sent = rx.try_recv().expect("the delegation is declined");
+    assert_eq!(sent["method"], "_nori/session/delegation/resolve", "{sent}");
+    assert_eq!(sent["params"]["approved"], false, "{sent}");
+    assert!(rx.try_recv().is_err(), "nothing else is sent");
+    settle_delegation(&mut runtime, "declined");
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(rendered.contains("my draft"), "{rendered}");
+}
+
+#[test]
+fn esc_rejects_a_pending_permission() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx) = runtime_with_draft(permission_event(1));
+    let stays_open = runtime.key(crossterm::event::KeyEvent::new(
+        KeyCode::Esc,
+        KeyModifiers::NONE,
+    ));
+    let sent = rx.try_recv().expect("the request is rejected");
+    assert!(stays_open);
+    assert_eq!(sent["method"], "_nori/session/respond", "{sent}");
+    assert_eq!(
+        sent["params"]["response"]["outcome"]["optionId"], "reject",
+        "{sent}"
+    );
+    assert!(rx.try_recv().is_err(), "nothing else is sent");
+    resolve_permission(&mut runtime);
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(rendered.contains("my draft"), "{rendered}");
+}
+
+#[test]
+fn esc_declines_a_pending_delegation() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx) = runtime_with_draft(delegation_event(1, "awaiting_approval"));
+    let stays_open = runtime.key(crossterm::event::KeyEvent::new(
+        KeyCode::Esc,
+        KeyModifiers::NONE,
+    ));
+    let sent = rx.try_recv().expect("the delegation is declined");
+    assert!(stays_open);
+    assert_eq!(sent["method"], "_nori/session/delegation/resolve", "{sent}");
+    assert_eq!(sent["params"]["approved"], false, "{sent}");
+    assert!(rx.try_recv().is_err(), "nothing else is sent");
+    settle_delegation(&mut runtime, "declined");
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(rendered.contains("my draft"), "{rendered}");
+}
+
+fn listed_sessions() -> AttachState {
+    let mut state = AttachState {
+        connected: true,
+        selected: Some("root-session".into()),
+        ..Default::default()
+    };
+    state.role_changed("controller");
+    state
+        .replace_sessions(json!({"sessions":[
+            {"session_id":"root-session","agent":"claude-code","status":"working","family_status":"working",
+             "title":"Greeting in three words","reply_preview":"Hi there, friend! Anything else you would like me to help with today?",
+             "model":"opus 5.5","idle_seconds":125,"context_used":38000,"context_size":475000},
+            {"session_id":"child-session","agent":"codex","status":"working","title":"inspect the parser recovery path",
+             "parent":"root-session","source":"session","reply_preview":"Reading src/parser.rs","model":"gpt-5.5",
+             "idle_seconds":4,"context_used":84320,"context_size":272000},
+            {"session_id":"fresh-session","agent":"gemini","status":"starting","title":"say hi in 3 words","idle_seconds":0}
+        ]}))
+        .unwrap();
+    state
+}
+
+#[test]
+fn the_attach_list_shows_two_rows_per_session_at_each_layout_width() {
+    let state = listed_sessions();
+    for width in [58, 80, 87, 120] {
+        insta::assert_snapshot!(
+            format!("attach_two_row_sessions_{width}"),
+            screen_area(&state, &crate::ComposerInput::for_attachment(), width, 24)
+        );
+    }
+}
+
+#[test]
+fn the_attach_list_second_row_holds_reply_model_and_last_activity() {
+    let rendered = screen_area(
+        &listed_sessions(),
+        &crate::ComposerInput::for_attachment(),
+        120,
+        24,
+    );
+    let root = rendered
+        .lines()
+        .position(|line| line.contains("⠋ Greeting in three words"))
+        .expect("root row");
+    let first = rendered.lines().nth(root).unwrap_or_default();
+    let second = rendered.lines().nth(root + 1).unwrap_or_default();
+    assert!(first.contains("8% / 475k"), "{rendered}");
+    assert!(second.contains("Hi there, friend!"), "{rendered}");
+    assert!(second.contains("opus 5.5"), "{rendered}");
+    assert!(second.contains("2m ago"), "{rendered}");
+    let fresh = rendered
+        .lines()
+        .position(|line| line.contains("say hi in 3 words"))
+        .expect("fresh row");
+    assert!(
+        rendered
+            .lines()
+            .nth(fresh + 1)
+            .unwrap_or_default()
+            .contains("no reply yet"),
+        "{rendered}"
     );
 }

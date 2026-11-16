@@ -76,6 +76,8 @@ struct Entry {
     forked_into: Option<ConversationId>,
     transcript_path: Option<PathBuf>,
     acp_session_id: Option<String>,
+    /// The display name of the model the agent says it runs.
+    model_name: Option<String>,
 }
 
 impl Entry {
@@ -96,6 +98,7 @@ impl Entry {
             forked_into: None,
             transcript_path: None,
             acp_session_id: None,
+            model_name: None,
         }
     }
 
@@ -135,6 +138,7 @@ impl Entry {
             source: self.settings.source,
             cwd: self.settings.cwd.clone(),
             model: self.settings.model.clone(),
+            model_name: self.model_name.clone(),
             approval_policy: self.settings.approval_policy,
             transcript_path: self.transcript_path.clone(),
             acp_session_id: self.acp_session_id.clone(),
@@ -153,6 +157,35 @@ fn advertised_model(options: &[acp::v1::SessionConfigOption]) -> Option<String> 
             return None;
         };
         Some(select.current_value.to_string())
+    })
+}
+
+/// The display name of the model option's current value.
+fn advertised_model_name(options: &[acp::v1::SessionConfigOption]) -> Option<String> {
+    options.iter().find_map(|option| {
+        if option.category != Some(acp::v1::SessionConfigOptionCategory::Model) {
+            return None;
+        }
+        let acp::v1::SessionConfigKind::Select(select) = &option.kind else {
+            return None;
+        };
+        let options: Vec<&acp::v1::SessionConfigSelectOption> = match &select.options {
+            acp::v1::SessionConfigSelectOptions::Ungrouped(options) => options.iter().collect(),
+            acp::v1::SessionConfigSelectOptions::Grouped(groups) => groups
+                .iter()
+                .flat_map(|group| group.options.iter())
+                .collect(),
+            _ => Vec::new(),
+        };
+        Some(
+            options
+                .into_iter()
+                .find(|choice| choice.value == select.current_value)
+                .map_or_else(
+                    || select.current_value.to_string(),
+                    |choice| choice.name.clone(),
+                ),
+        )
     })
 }
 
@@ -322,6 +355,7 @@ impl Registry {
                 if let Some(model) = advertised_model(&started.config_options) {
                     entry.settings.model = Some(model);
                 }
+                entry.model_name = advertised_model_name(&started.config_options);
             }
             SessionEvent::Nori(NoriEvent::SessionPhaseChanged(phase)) => match phase {
                 SessionPhase::Idle => {
@@ -358,10 +392,11 @@ impl Registry {
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::v1::AgentNotification::SessionNotification(notification),
             )) => {
-                if let acp::v1::SessionUpdate::ConfigOptionUpdate(update) = &notification.update
-                    && let Some(model) = advertised_model(&update.config_options)
-                {
-                    entry.settings.model = Some(model);
+                if let acp::v1::SessionUpdate::ConfigOptionUpdate(update) = &notification.update {
+                    if let Some(model) = advertised_model(&update.config_options) {
+                        entry.settings.model = Some(model);
+                    }
+                    entry.model_name = advertised_model_name(&update.config_options);
                 }
             }
             SessionEvent::Acp(AcpEvent::Request { .. } | AcpEvent::Response { .. })

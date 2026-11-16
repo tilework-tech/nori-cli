@@ -37,6 +37,16 @@ impl ChatComposer {
         }
     }
 
+    /// Context use in the status bar's short form, such as `8% / 475k`.
+    pub(crate) fn context_summary(&self) -> Option<String> {
+        let props = self.footer_props();
+        nori_tui_components::session_table::context_text(
+            props.context_window_percent,
+            props.context_window_tokens,
+            props.context_tokens,
+        )
+    }
+
     pub(super) fn footer_props(&self) -> FooterProps {
         let (
             git_branch,

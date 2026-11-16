@@ -188,6 +188,7 @@ impl App {
 
     fn session_row(&self, fact: &SessionFacts, depth: i32) -> SessionRow {
         let agent_name = fact.agent.clone();
+        let widget = self.widget_for(fact.generation);
         let title = self
             .session_rows_title(fact.generation)
             .unwrap_or_else(|| "New session".to_string());
@@ -209,7 +210,13 @@ impl App {
                 self.unseen_finishes.is_unseen(fact.generation),
             ),
             family_status: shown_status,
-            preview: self.session_previews.preview(fact.generation),
+            reply: self.session_previews.reply(fact.generation),
+            model: widget.and_then(ChatWidget::model_name),
+            idle_seconds: self
+                .session_previews
+                .last_activity(fact.generation)
+                .map(|at| i64::try_from(at.elapsed().as_secs()).unwrap_or(i64::MAX)),
+            context: widget.and_then(ChatWidget::context_summary),
             depth,
             on_screen: fact.on_screen,
         }
@@ -269,7 +276,9 @@ impl App {
         let width = width.saturating_sub(2);
         lines.extend(self.parent_breadcrumb(&facts, width));
         lines.extend(self.background_request_line(&facts, width));
+        // The open list's header carries the summary.
         if facts.len() > 1
+            && !self.chat_widget.session_list_in_front()
             && let Some(summary) = status_summary(facts.iter().map(|fact| fact.status))
         {
             lines.push(Line::from(summary.dim()));

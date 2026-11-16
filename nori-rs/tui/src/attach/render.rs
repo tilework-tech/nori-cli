@@ -95,7 +95,8 @@ pub(super) fn render(
                 .theme(crate::style::component_theme())
                 .density(PickerDensity::Compact)
                 .show_details(false)
-                .fullscreen_selection_rails(true)
+                .horizontal_margin(0)
+                .selection_keeps_tones(true)
                 .footer_hints([
                     KeyHint::new("↑↓", "move"),
                     KeyHint::new("enter", "open"),
@@ -111,7 +112,23 @@ pub(super) fn render(
         Paragraph::new(" No session selected. Use /sessions to browse or /new to start.")
             .render(body, buf);
     }
-    composer.render_ref(input, buf);
+    // A request on screen has the keyboard; the draft waits hidden.
+    if !state.request_on_screen() || state.list_open {
+        composer.render_ref(input, buf);
+    }
+}
+
+/// Where the terminal cursor goes: in the composer, unless a request has the
+/// keyboard.
+pub(super) fn cursor_position(
+    state: &AttachState,
+    composer: &crate::ComposerInput,
+    area: Rect,
+) -> Option<(u16, u16)> {
+    if state.request_on_screen() && !state.list_open {
+        return None;
+    }
+    composer.cursor_pos(composer_area(state, composer, area))
 }
 
 /// A listed session's name, whole: the lines that show it fit it to the
@@ -231,6 +248,7 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
                 "1 Yes, start it".green(),
                 " · ".dim(),
                 "2 No, decline".into(),
+                " · esc or ctrl+c declines".dim(),
             ]));
             crate::wrapping::word_wrap_lines(
                 lines.iter(),
@@ -369,7 +387,7 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
         rows.push(Line::from(if state.watching {
             "Watching · read-only · alt+t to take control".cyan()
         } else {
-            "↑↓ choose · enter answer · number selects an option".dim()
+            "↑↓ choose · enter answer · number selects · esc reject · ctrl+c cancel".dim()
         }));
         if state.permission_count(id) > 1 {
             rows.push(Line::from(

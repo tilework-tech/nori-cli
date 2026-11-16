@@ -37,6 +37,9 @@ pub struct PickerColumn {
     /// Cut a value that does not fit in the middle, keeping its start and
     /// end, instead of at its tail.
     pub cut_middle: bool,
+    /// Cut this column's second-row value in the middle instead of at its
+    /// tail.
+    pub second_row_cut_middle: bool,
 }
 
 impl PickerColumn {
@@ -51,6 +54,7 @@ impl PickerColumn {
             },
             hide_below: None,
             cut_middle: false,
+            second_row_cut_middle: false,
         }
     }
 
@@ -61,6 +65,7 @@ impl PickerColumn {
             width: PickerColumnWidth::Fixed(width),
             hide_below: None,
             cut_middle: false,
+            second_row_cut_middle: false,
         }
     }
 
@@ -71,6 +76,11 @@ impl PickerColumn {
 
     pub fn cut_middle(mut self) -> Self {
         self.cut_middle = true;
+        self
+    }
+
+    pub fn second_row_cut_middle(mut self) -> Self {
+        self.second_row_cut_middle = true;
         self
     }
 
@@ -88,6 +98,8 @@ pub struct PickerItem<K> {
     pub cell_tones: BTreeMap<String, ProviderKind>,
     /// Semantic tones for single cells, such as an error-coloured status.
     pub cell_detail_tones: BTreeMap<String, DetailTone>,
+    /// Second-row values, one per column, drawn faint under that column.
+    pub second_row: BTreeMap<String, String>,
     /// Nesting level for tree rows; 0 is top level. Rows are drawn with indent
     /// guides from their depth and the depths of the rows around them.
     pub depth: i32,
@@ -112,6 +124,7 @@ impl<K> PickerItem<K> {
             cells: BTreeMap::from([(primary_column.into(), label.clone())]),
             cell_tones: BTreeMap::new(),
             cell_detail_tones: BTreeMap::new(),
+            second_row: BTreeMap::new(),
             depth: 0,
             search_text: label,
             category: None,
@@ -141,6 +154,12 @@ impl<K> PickerItem<K> {
     /// Apply a semantic tone to one rendered cell.
     pub fn cell_detail_tone(mut self, column: impl Into<String>, tone: DetailTone) -> Self {
         self.cell_detail_tones.insert(column.into(), tone);
+        self
+    }
+
+    /// Put `value` on the row's second line, under `column`.
+    pub fn second_row_cell(mut self, column: impl Into<String>, value: impl Into<String>) -> Self {
+        self.second_row.insert(column.into(), value.into());
         self
     }
 

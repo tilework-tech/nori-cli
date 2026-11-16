@@ -33,6 +33,18 @@ const SUMMARY_ORDER: [SessionStatus; 5] = [
     SessionStatus::Ready,
 ];
 
+/// The one-cell icon in front of a session's title in every session list.
+pub fn status_glyph(status: SessionStatus) -> &'static str {
+    match status {
+        SessionStatus::WaitingOnYou => "●",
+        SessionStatus::Working => "⠋",
+        SessionStatus::Ready => "○",
+        SessionStatus::Failed => "✕",
+        SessionStatus::Closed | SessionStatus::Done => "·",
+        SessionStatus::Starting => "…",
+    }
+}
+
 pub(crate) fn status_label(status: SessionStatus) -> &'static str {
     match status {
         SessionStatus::Starting => "starting",

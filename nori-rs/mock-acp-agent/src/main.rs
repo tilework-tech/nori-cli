@@ -327,6 +327,30 @@ impl MockAgent {
                     .await?;
                 return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
             }
+            // `mock:title <title>` renames the session and `mock:usage <used>
+            // <size>` reports context use, one per line, before the usual
+            // reply.
+            for line in prompt.lines() {
+                if let Some(title) = line.strip_prefix("mock:title ") {
+                    self.send_update(
+                        arguments.session_id.clone(),
+                        acp::SessionUpdate::SessionInfoUpdate(
+                            acp::SessionInfoUpdate::new().title(title.to_string()),
+                        ),
+                    )
+                    .await?;
+                }
+                if let Some(usage) = line.strip_prefix("mock:usage ")
+                    && let Some((used, size)) = usage.split_once(' ')
+                    && let (Ok(used), Ok(size)) = (used.parse(), size.parse())
+                {
+                    self.send_update(
+                        arguments.session_id.clone(),
+                        acp::SessionUpdate::UsageUpdate(acp::UsageUpdate::new(used, size)),
+                    )
+                    .await?;
+                }
+            }
         }
         if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK") {
             let actual = last_prompt_text_block(&arguments.prompt);

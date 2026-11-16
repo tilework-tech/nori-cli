@@ -6,16 +6,28 @@ expression: rendered
  Sessions · /new starts a session · ctrl+d detaches
  ● Ship tree picker › Port picker is waiting on you · alt+down to jump
 
-  Sessions 5
+Sessions 5
 
-     ID        AGENT           STATUS            AGE    TITLE
-  ▏  root-one  mock-model      working           5m     Ship tree picker               ▕
-     child-on  mock-model-alt  waiting on you    1m     ├─ Port picker
-     grandchi  mock-model      failed            50s    │  └─ Write snapshot tests
-     child-tw  mock-model      ready             20s    └─ Update docs
-     root-two  mock-model      ready             3m     Spike transport
+  Session                                        Agent         Status
+› ⠋ Ship tree picker                             mock-model    working
+    no reply yet
+  ├─ ● Port picker                               mock-model-…  waiting on you
+  │    no reply yet
+  │  └─ ✕ Write snapshot tests                   mock-model    failed
+  │       no reply yet
+  └─ ○ Update docs                               mock-model    ready
+       no reply yet
+  ○ Spike transport                              mock-model    ready
+    no reply yet
 
-  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+
+
+
+
+
+↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
 
 
 › Send a prompt

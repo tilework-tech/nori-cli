@@ -111,7 +111,6 @@ fn left_on_an_empty_prompt_lists_sessions_with_status_and_preview() {
     let screen = session.screen_contents();
     for expected in [
         "alpha question",
-        "approve: rm -rf target/debug",
         "waiting on you",
         "gamma question",
         "(current)",
@@ -285,12 +284,10 @@ fn an_agent_that_dies_fails_only_its_session_which_can_be_resumed() {
     session.send_key(Key::Alt('s')).unwrap();
     session
         .wait_for(
-            |screen| {
-                screen.contains("failed") && screen.contains("agent exited · resume available")
-            },
+            |screen| screen.contains("Sessions 2") && screen.contains("✕ doomed question"),
             Duration::from_secs(3),
         )
-        .expect("the failed row offers a resume");
+        .expect("the failed session is listed as failed");
     session.send_key(Key::Down).unwrap();
     session
         .wait_for_text("ctrl+r resume", Duration::from_secs(3))
@@ -427,4 +424,53 @@ fn left_with_text_in_the_prompt_moves_the_cursor_instead_of_opening_the_list() {
         .wait_for_text("drafXt", Duration::from_secs(3))
         .expect("Left moves the cursor in a non-empty prompt");
     assert!(!session.screen_contents().contains("Sessions 2"));
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn the_list_shows_the_title_the_agent_sends_its_reply_and_one_summary() {
+    let mut session = spawn();
+    ask(
+        &mut session,
+        "mock:title Greeting in three words",
+        ALPHA_ANSWER,
+    );
+    ask(&mut session, "mock:usage 38000 475000", ALPHA_ANSWER);
+    start_new_session(&mut session);
+    ask(&mut session, "second question", ALPHA_ANSWER);
+    session.send_key(Key::Left).unwrap();
+    session
+        .wait_for_text("Sessions 2", Duration::from_secs(3))
+        .expect("Left on an empty prompt opens the session list");
+    session.settle(Duration::from_millis(300));
+    let screen = session.screen_contents();
+    let lines: Vec<&str> = screen.lines().collect();
+    let titled = lines
+        .iter()
+        .position(|line| line.contains("Greeting in three words"))
+        .unwrap_or_else(|| panic!("the agent's title names the session:\n{screen}"));
+    assert!(!screen.contains("mock:title"), "{screen}");
+    let reply_row = lines.get(titled + 1).copied().unwrap_or_default();
+    assert!(
+        reply_row.contains(ALPHA_ANSWER),
+        "row 2 holds the reply:\n{screen}"
+    );
+    assert!(
+        reply_row.contains("ago"),
+        "row 2 holds the last activity:\n{screen}"
+    );
+    assert!(
+        reply_row.contains("Mock") && reply_row.contains("Model"),
+        "row 2 holds the model, cut to its column:\n{screen}"
+    );
+    let title_row = lines[titled];
+    assert!(
+        title_row.contains("8% / 475k"),
+        "row 1 ends with context:\n{screen}"
+    );
+    assert_eq!(
+        screen.matches("2 ready").count(),
+        1,
+        "one summary:\n{screen}"
+    );
 }

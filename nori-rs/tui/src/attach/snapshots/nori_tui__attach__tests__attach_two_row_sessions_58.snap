@@ -1,0 +1,27 @@
+---
+source: tui/src/attach/tests.rs
+expression: "screen_area(&state, &crate::ComposerInput::for_attachment(), width, 24)"
+---
+ Nori host  CONTROLLING
+ claude-code · Greeting in three words · working
+
+
+Sessions 3
+
+  Session                     Agent         Status
+› ⠋ Greeti…e words (current)  claude-code   working
+    Hi there, friend! Anyth…  opus 5.5      2m ago
+  └─ ⠋ inspect t…covery path  codex         working
+       Reading src/parser.rs  gpt-5.5       4s ago
+  … say hi in 3 words         gemini        starting
+    no reply yet                            0s ago
+
+
+
+
+
+
+↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc
+
+
+› Send a prompt

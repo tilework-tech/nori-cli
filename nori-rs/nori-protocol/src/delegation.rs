@@ -1,5 +1,6 @@
 //! Text shared by every surface that names a delegated child or reads its result.
 use crate::Delegation;
+use crate::DelegationOrigin;
 use crate::DelegationStatus;
 
 /// First line of every result prompt a parent agent receives from a child.
@@ -64,7 +65,8 @@ pub fn delegation_status_word(status: DelegationStatus) -> &'static str {
 ///
 /// The first line names the child readably; the second keeps its ID so the
 /// agent can still refer to that session. A declined child never started, so
-/// its prompt names no session.
+/// its prompt names no session. A delegation the user started with
+/// `/delegate` says so before the result.
 pub fn delegation_result_prompt(delegation: &Delegation) -> String {
     let header = format!(
         "{DELEGATION_RESULT_HEADER} from {} · {} · {}",
@@ -73,14 +75,23 @@ pub fn delegation_result_prompt(delegation: &Delegation) -> String {
         delegation_status_word(delegation.status),
     );
     let result = delegation.result.as_deref().unwrap_or_default();
+    // A parent agent that did not ask for this child would otherwise think
+    // someone else started it.
+    let origin = match delegation.origin {
+        DelegationOrigin::User => USER_STARTED_LINE,
+        DelegationOrigin::Agent => "",
+    };
     if delegation.status == DelegationStatus::Declined {
-        return format!("{header}\n{result}");
+        return format!("{header}\n{origin}{result}");
     }
     format!(
-        "{header}\n{CHILD_LINE_PREFIX}{}\n{result}",
+        "{header}\n{CHILD_LINE_PREFIX}{}\n{origin}{result}",
         delegation.child_id
     )
 }
+
+const USER_STARTED_LINE: &str =
+    "The user started this delegation with /delegate; you did not request it.\n";
 
 /// The readable summary line of a result prompt, or `None` for other text.
 pub fn delegation_result_summary(prompt: &str) -> Option<&str> {
@@ -123,7 +134,6 @@ const PARTS_SEPARATOR: &str = " · ";
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::DelegationOrigin;
     use pretty_assertions::assert_eq;
 
     fn delegation(status: DelegationStatus, task: &str, result: Option<&str>) -> Delegation {
@@ -152,6 +162,7 @@ mod tests {
             prompt,
             "[Nori delegation result] from codex · Review the parser · done\n\
              Child session: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\n\
+             The user started this delegation with /delegate; you did not request it.\n\
              Looks good."
         );
         assert_eq!(
@@ -170,6 +181,7 @@ mod tests {
         assert_eq!(
             prompt,
             "[Nori delegation result] from codex · Review the parser · declined\n\
+             The user started this delegation with /delegate; you did not request it.\n\
              The user declined this delegation."
         );
         assert_eq!(
@@ -239,6 +251,23 @@ mod tests {
         assert_eq!(
             delegation_child_name(&delegation(DelegationStatus::Running, "  \n ", None)),
             "new session"
+        );
+    }
+
+    #[test]
+    fn a_delegation_the_agent_asked_for_does_not_say_the_user_started_it() {
+        let mut requested = delegation(
+            DelegationStatus::Completed,
+            "Review the parser",
+            Some("Done."),
+        );
+        requested.origin = DelegationOrigin::Agent;
+        let prompt = delegation_result_prompt(&requested);
+        assert_eq!(
+            prompt,
+            "[Nori delegation result] from codex · Review the parser · done\n\
+             Child session: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\n\
+             Done."
         );
     }
 }

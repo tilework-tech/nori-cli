@@ -41,6 +41,8 @@ pub struct Picker<'a, K> {
     show_details: bool,
     fullscreen_selection_rails: bool,
     compact_descriptions: bool,
+    selection_keeps_tones: bool,
+    horizontal_margin: u16,
     footer_hints: Option<Vec<KeyHint<'static>>>,
     empty_state: Option<(&'a str, &'a str)>,
 }
@@ -55,6 +57,8 @@ impl<'a, K> Picker<'a, K> {
             show_details: true,
             fullscreen_selection_rails: false,
             compact_descriptions: false,
+            selection_keeps_tones: false,
+            horizontal_margin: 2,
             footer_hints: None,
             empty_state: None,
         }
@@ -105,6 +109,20 @@ impl<'a, K> Picker<'a, K> {
         self
     }
 
+    /// Keep agent and status colours on the selected row, over its
+    /// highlight.
+    pub fn selection_keeps_tones(mut self, enabled: bool) -> Self {
+        self.selection_keeps_tones = enabled;
+        self
+    }
+
+    /// Cells left empty at each side of the picker. Lists whose column
+    /// widths follow the terminal width pass 0.
+    pub fn horizontal_margin(mut self, cells: u16) -> Self {
+        self.horizontal_margin = cells;
+        self
+    }
+
     pub fn footer_hints(mut self, hints: impl IntoIterator<Item = KeyHint<'static>>) -> Self {
         self.footer_hints = Some(hints.into_iter().collect());
         self
@@ -118,7 +136,7 @@ impl<K: Clone + Eq> Widget for Picker<'_, K> {
         }
         Block::default().style(self.theme.surface).render(area, buf);
         let inner = area.inner(Margin {
-            horizontal: 2,
+            horizontal: self.horizontal_margin,
             vertical: 1,
         });
         if inner.width < 4 || inner.height < 3 {
@@ -317,10 +335,11 @@ impl<K: Clone + Eq> Picker<'_, K> {
         let widths = column_widths(&columns, self.state, &visible, row_content_area.width);
         let row_height = match self.density {
             PickerDensity::Compact
-                if self.compact_descriptions
-                    && visible
-                        .iter()
-                        .any(|index| self.state.items[*index].description.is_some()) =>
+                if visible.iter().any(|index| {
+                    let item = &self.state.items[*index];
+                    !item.second_row.is_empty()
+                        || (self.compact_descriptions && item.description.is_some())
+                }) =>
             {
                 2
             }
@@ -486,8 +505,15 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 &columns,
                 &widths,
                 columns.iter().zip(&values).map(|(column, value)| {
-                    let cell_style = if selected || item.disabled {
+                    let cell_style = if item.disabled || (selected && !self.selection_keeps_tones) {
                         style
+                    } else if selected {
+                        let style = item.cell_tones.get(&column.key).map_or(style, |provider| {
+                            style.patch(provider_tone_style(*provider, self.theme))
+                        });
+                        item.cell_detail_tones
+                            .get(&column.key)
+                            .map_or(style, |tone| style.patch(tone_style(*tone, self.theme)))
                     } else {
                         let style = item.cell_tones.get(&column.key).map_or(style, |provider| {
                             surface.patch(provider_tone_style(*provider, self.theme))
@@ -508,7 +534,51 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 &marker,
                 marker_width,
             );
-            if row_height > 1
+            let second_row_style = if selected {
+                style.patch(self.theme.muted)
+            } else {
+                surface.patch(self.theme.muted)
+            };
+            if row_height > 1 && !item.second_row.is_empty() {
+                let values = columns
+                    .iter()
+                    .enumerate()
+                    .map(|(index, column)| {
+                        let value = item
+                            .second_row
+                            .get(&column.key)
+                            .cloned()
+                            .unwrap_or_default();
+                        if index != tree_index {
+                            return value;
+                        }
+                        // Under a tree title, the value lines up with the
+                        // title text after its guide and icon.
+                        let room = usize::from(widths.get(index).copied().unwrap_or(0))
+                            .saturating_sub(description_guide.width());
+                        let value = if column.second_row_cut_middle {
+                            crate::text::truncate_middle(&value, room)
+                        } else {
+                            truncate(&value, room)
+                        };
+                        format!("{description_guide}{value}")
+                    })
+                    .collect::<Vec<_>>();
+                let mut x = row_content_area.x.saturating_add(marker_width);
+                for (index, ((column, width), value)) in
+                    columns.iter().zip(&widths).zip(&values).enumerate()
+                {
+                    let value = if index == tree_index {
+                        truncate(value, usize::from(*width))
+                    } else if column.second_row_cut_middle {
+                        crate::text::truncate_middle(value, usize::from(*width))
+                    } else {
+                        truncate(value, usize::from(*width))
+                    };
+                    buf.set_string(x, row_area.y.saturating_add(1), value, second_row_style);
+                    x = x.saturating_add(*width).saturating_add(2);
+                }
+            } else if row_height > 1
                 && let Some(description) = &item.description
             {
                 let description_area = Rect::new(

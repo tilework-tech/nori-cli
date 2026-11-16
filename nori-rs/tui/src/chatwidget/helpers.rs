@@ -218,6 +218,18 @@ impl ChatWidget {
         self.bottom_pane.restore_composer_draft(draft);
     }
 
+    /// The model the agent runs, as the status bar names it.
+    pub(crate) fn model_name(&self) -> Option<String> {
+        self.agent_config
+            .option_for_category(&nori_protocol::acp::v1::SessionConfigOptionCategory::Model)
+            .map(crate::nori::agent_config_state::AgentConfigOption::display_value)
+    }
+
+    /// Context use as the status bar shows it.
+    pub(crate) fn context_summary(&self) -> Option<String> {
+        self.bottom_pane.context_summary()
+    }
+
     /// Returns the first prompt text for this session, used for transcript matching.
     pub(crate) fn first_prompt_text(&self) -> Option<String> {
         self.first_prompt_text.clone()

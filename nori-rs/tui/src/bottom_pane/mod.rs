@@ -538,6 +538,11 @@ impl BottomPane {
         self.push_view(Box::new(view));
     }
 
+    /// Context use as the status bar shows it.
+    pub(crate) fn context_summary(&self) -> Option<String> {
+        self.composer.context_summary()
+    }
+
     pub(crate) fn session_list_in_front(&self) -> bool {
         self.view_stack
             .last()

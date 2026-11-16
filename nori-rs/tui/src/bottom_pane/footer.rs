@@ -612,25 +612,12 @@ fn git_stats_segment(props: &FooterProps) -> Option<Line<'static>> {
 }
 
 fn context_segment(props: &FooterProps) -> Option<Line<'static>> {
-    let formatted_used_tokens = props
-        .context_tokens
-        .filter(|&tokens| tokens > 0)
-        .map(format_context_tokens);
-    let formatted_window_tokens = props
-        .context_window_tokens
-        .filter(|&tokens| tokens > 0)
-        .map(format_context_tokens);
-    let context_text = match (
-        props.context_window_percent.map(clamp_percent),
-        formatted_window_tokens,
-        formatted_used_tokens,
-    ) {
-        (Some(percent), Some(window), _) => Some(format!("{percent}% / {window}")),
-        (Some(percent), None, _) => Some(format!("{percent}%")),
-        (None, _, Some(used)) => Some(used),
-        (None, _, None) => None,
-    };
-    context_text.map(Line::from)
+    nori_tui_components::session_table::context_text(
+        props.context_window_percent,
+        props.context_window_tokens,
+        props.context_tokens,
+    )
+    .map(Line::from)
 }
 
 fn context_used_percent_segment(props: &FooterProps) -> Option<Line<'static>> {
@@ -678,12 +665,7 @@ fn clamp_percent(percent: i64) -> i64 {
 }
 
 fn format_context_tokens(tokens: i64) -> String {
-    let mut formatted = format_si_suffix(tokens);
-    if formatted.ends_with('K') {
-        formatted.pop();
-        formatted.push('k');
-    }
-    formatted
+    nori_tui_components::session_table::compact_tokens(tokens)
 }
 
 fn skillset_segment(props: &FooterProps) -> Option<Line<'static>> {

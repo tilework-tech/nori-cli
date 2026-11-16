@@ -386,8 +386,11 @@ fn a_session_that_starts_with_a_delegation_is_titled_by_its_task() {
         .find(|line| line.contains("(current)"))
         .unwrap_or_else(|| panic!("parent row missing:\n{screen}"));
     assert!(parent.contains("inspect the parser"), "{screen}");
+    // Title rows hold the glyph; the second rows hold replies, which may
+    // quote the result.
     assert!(
         rows.iter()
+            .filter(|row| row.contains("(current)") || row.contains("└─ "))
             .all(|row| !row.contains("[Nori delegation result]")),
         "{screen}"
     );
@@ -479,15 +482,22 @@ fn the_session_list_keeps_names_with_a_shared_prefix_apart_at_80_columns() {
         .lines()
         .find(|line| line.contains("└─") && line.contains("permission:z"))
         .unwrap_or_else(|| panic!("the child row keeps its end:\n{screen}"));
+    // The Session column ends where the Agent column starts.
+    let name = |row: &str| {
+        row.split("  mock-model")
+            .next()
+            .unwrap_or_default()
+            .to_string()
+    };
     for row in [parent, child] {
         assert!(row.contains("shared"), "{screen}");
         assert!(
-            row.matches('…').count() <= 1,
+            name(row).matches('…').count() <= 1,
             "names are cut once:\n{screen}"
         );
     }
     assert_eq!(
-        child.matches('…').count(),
+        name(child).matches('…').count(),
         1,
         "the long child name is cut:\n{screen}"
     );

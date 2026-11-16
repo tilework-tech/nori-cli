@@ -105,7 +105,12 @@ pub(crate) async fn run(command: HostCommand, config: Option<NoriConfig>) -> any
             let tty = std::io::stdout().is_terminal();
             let width = tty
                 .then(|| crossterm::terminal::size().map_or(80, |(width, _)| usize::from(width)));
-            print!("{}", table::format_table(&listing, width, tty));
+            let shade = if tty {
+                nori_tui::session_list_shade()
+            } else {
+                None
+            };
+            print!("{}", table::format_table(&listing, width, tty, shade));
             Ok(())
         }
         Some(HostAction::Stop) => {

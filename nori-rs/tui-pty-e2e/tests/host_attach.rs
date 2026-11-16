@@ -781,20 +781,24 @@ fn host_list_truncates_tty_title_without_losing_piped_title() {
     let title = "Long title aligned columns should preserve the entire title without putting continuation text into the ID column";
     ask(&mut client, title);
     assert!(host.list().contains(title));
-    let id = host.session_id();
     let mut listing = host.terminal(&["host", "ls"]);
     assert!(listing.wait_for_process_exit(TIMEOUT));
     let screen = listing.screen_contents();
     let row = screen
         .lines()
-        .find(|line| line.contains(&id))
+        .find(|line| line.contains("Long title"))
         .expect("session row");
+    let row = row.split("  mock-model").next().unwrap_or_default();
     assert!(row.contains("Long title") && row.contains('…'), "{screen}");
     assert!(
         row.trim_end().ends_with("ID column"),
         "a cut title keeps its end: {screen}"
     );
-    assert!(!screen.contains("continuation text"), "{screen}");
+    assert_eq!(
+        screen.matches("continuation text").count(),
+        1,
+        "the title never spills onto another row: {screen}"
+    );
 }
 
 #[test]

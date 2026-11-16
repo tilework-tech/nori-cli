@@ -8,9 +8,9 @@ use nori_protocol::SessionEnvelope;
 use nori_protocol::SessionEvent;
 use nori_protocol::SessionStatus;
 use nori_protocol::acp::v1 as acp;
-use nori_tui_components::PickerColumn;
 use nori_tui_components::PickerItem;
 use nori_tui_components::PickerState;
+use nori_tui_components::session_table;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
@@ -32,8 +32,6 @@ pub(super) struct SessionRow {
     pub status: SessionStatus,
     pub title: Option<String>,
     #[serde(default)]
-    pub age_seconds: i64,
-    #[serde(default)]
     pub parent: Option<String>,
     /// `session` for a delegated child, `fork` or `user` otherwise.
     #[serde(default)]
@@ -44,6 +42,22 @@ pub(super) struct SessionRow {
     /// on you if any member is. Older hosts omit it.
     #[serde(default)]
     pub family_status: Option<SessionStatus>,
+    /// The start of the agent's latest reply. Older hosts omit it, and so do
+    /// the rest below.
+    #[serde(default)]
+    pub reply_preview: Option<String>,
+    /// The model's display name.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Seconds since the session last did anything.
+    #[serde(default)]
+    pub idle_seconds: Option<i64>,
+    /// Tokens in context and the context window, from the agent's last usage
+    /// report.
+    #[serde(default)]
+    pub context_used: Option<i64>,
+    #[serde(default)]
+    pub context_size: Option<i64>,
 }
 
 pub(super) enum Part {
@@ -104,23 +118,11 @@ impl Default for AttachState {
             sessions: Vec::new(),
             picker: PickerState::new(
                 "Sessions",
-                [
-                    PickerColumn::fixed("id", "ID", 8).hide_below(65),
-                    PickerColumn::fixed("agent", "AGENT", 14).hide_below(55),
-                    PickerColumn::fixed("status", "STATUS", 16),
-                    PickerColumn::fixed("age", "AGE", 5).hide_below(45),
-                    PickerColumn::flexible("title", "TITLE")
-                        .width(nori_tui_components::PickerColumnWidth::Flexible {
-                            min: 8,
-                            max: 240,
-                            weight: 1,
-                        })
-                        .cut_middle(),
-                ],
+                nori_tui_components::session_table::session_columns(),
                 Vec::new(),
             )
             .search_placeholder("Title or agent")
-            .tree_column("title"),
+            .tree_column(session_table::SESSION),
             watching: true,
             connected: false,
             stopped: None,
@@ -159,14 +161,6 @@ impl AttachState {
         self.picker
             .replace_items(order.into_iter().map(|(index, depth)| {
                 let row = &self.sessions[index];
-                let seconds = row.age_seconds.max(0);
-                let age = if seconds < 60 {
-                    format!("{seconds}s")
-                } else if seconds < 3600 {
-                    format!("{}m", seconds / 60)
-                } else {
-                    format!("{}h", seconds / 3600)
-                };
                 let title = row
                     .title
                     .clone()
@@ -177,20 +171,48 @@ impl AttachState {
                     .family_status
                     .filter(|_| depth == 0)
                     .unwrap_or(row.status);
-                PickerItem::new(row.session_id.clone(), "title", title)
-                    .cell("id", row.session_id.chars().take(8).collect::<String>())
-                    .cell("agent", row.agent.clone())
-                    .cell("status", crate::session_status::status_label(status))
-                    .cell_detail_tone("status", crate::session_status::status_tone(status))
-                    .cell("age", age)
-                    .depth(depth)
-                    .current(self.selected.as_ref() == Some(&row.session_id))
-                    .search_text(format!(
-                        "{} {} {}",
-                        row.title.as_deref().unwrap_or_default(),
-                        row.agent,
-                        row.session_id
-                    ))
+                let reply = row
+                    .reply_preview
+                    .as_deref()
+                    .unwrap_or(session_table::NO_REPLY);
+                let mut item = PickerItem::new(
+                    row.session_id.clone(),
+                    session_table::SESSION,
+                    format!("{} {title}", crate::session_status::status_glyph(status)),
+                )
+                .cell(session_table::AGENT, row.agent.clone())
+                .cell(
+                    session_table::STATUS,
+                    crate::session_status::status_label(status),
+                )
+                .cell_detail_tone(
+                    session_table::STATUS,
+                    crate::session_status::status_tone(status),
+                )
+                // The reply lines up with the title, after the status glyph.
+                .second_row_cell(session_table::SESSION, format!("  {reply}"))
+                .depth(depth)
+                .current(self.selected.as_ref() == Some(&row.session_id))
+                .search_text(format!(
+                    "{} {} {}",
+                    row.title.as_deref().unwrap_or_default(),
+                    row.agent,
+                    row.session_id
+                ));
+                if let Some(model) = &row.model {
+                    item = item.second_row_cell(session_table::AGENT, model.clone());
+                }
+                if let Some(idle) = row.idle_seconds {
+                    item = item.second_row_cell(session_table::STATUS, session_table::ago(idle));
+                }
+                if let Some(context) = row
+                    .context_used
+                    .zip(row.context_size)
+                    .and_then(|(used, size)| session_table::context_from_usage(used, size))
+                {
+                    item = item.cell(session_table::CONTEXT, context);
+                }
+                item
             }));
         Ok(())
     }
@@ -225,6 +247,20 @@ impl AttachState {
                     .join("\n\n")
             })
             .unwrap_or_default()
+    }
+
+    /// Whether the session on screen shows a permission request or a
+    /// delegation waiting for approval.
+    pub fn request_on_screen(&self) -> bool {
+        self.selected
+            .as_ref()
+            .and_then(|id| self.conversations.get(id))
+            .is_some_and(|conversation| {
+                !conversation.permissions.is_empty()
+                    || conversation.delegations.iter().any(|delegation| {
+                        delegation.status == nori_protocol::DelegationStatus::AwaitingApproval
+                    })
+            })
     }
 
     pub fn permission_count(&self, id: &str) -> usize {
