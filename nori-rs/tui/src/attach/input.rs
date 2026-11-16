@@ -152,6 +152,16 @@ impl Runtime {
             }
             _ => {}
         }
+        if key.code == KeyCode::Tab
+            && let Some((completed, candidates)) =
+                super::new_session::complete(&self.composer.text(), &self.cwd)
+        {
+            self.composer.set_text(completed);
+            if !candidates.is_empty() {
+                self.state.show_notice(candidates.join("  "));
+            }
+            return true;
+        }
         if let crate::ComposerAction::Submitted(text) = self.composer.input(key) {
             return self.submit(text);
         }
@@ -330,16 +340,17 @@ impl Runtime {
             return true;
         }
         self.state.notice = None;
-        if command == "/new" || command.starts_with("/new ") {
-            let agent = command
-                .strip_prefix("/new ")
-                .map(str::trim)
-                .filter(|agent| !agent.is_empty());
-            self.send(
-                "_nori/session/new",
-                agent.map_or_else(|| json!({}), |agent| json!({"agent":agent})),
-                Pending::New,
-            );
+        if let Some(args) = command
+            .strip_prefix("/new")
+            .filter(|args| args.is_empty() || args.starts_with(' '))
+        {
+            match super::new_session::params(args, &self.cwd, self.session_folders, self.remote) {
+                Ok(params) => self.send("_nori/session/new", params, Pending::New),
+                Err(message) => {
+                    self.composer.handle_paste(text);
+                    self.state.show_notice(message);
+                }
+            }
             return true;
         }
         let Some(id) = self.state.selected.clone() else {

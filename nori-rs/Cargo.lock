@@ -3816,6 +3816,8 @@ dependencies = [
  "codex-windows-sandbox",
  "crossterm",
  "ctor 0.5.0",
+ "dirs",
+ "dunce",
  "insta",
  "libc",
  "nori-config",

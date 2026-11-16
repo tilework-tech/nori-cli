@@ -83,9 +83,12 @@ impl HostControl {
                 }
                 HostRequest::Reply(success(id, self.status(client)))
             }
-            "_nori/session/list" | "_nori/session/subscribe" | "_nori/host/stop" => {
-                HostRequest::Forward(request)
-            }
+            // Starting a session leaves every existing one alone, so any
+            // authenticated client may do it, as with stopping the host.
+            "_nori/session/list"
+            | "_nori/session/subscribe"
+            | "_nori/session/new"
+            | "_nori/host/stop" => HostRequest::Forward(request),
             _ if self.controller == Some(client) => HostRequest::Forward(request),
             _ => HostRequest::Reply(failure(
                 id,

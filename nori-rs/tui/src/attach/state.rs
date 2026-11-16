@@ -61,6 +61,9 @@ pub(super) struct SessionRow {
     pub context_used: Option<i64>,
     #[serde(default)]
     pub context_size: Option<i64>,
+    /// The folder the session works in.
+    #[serde(default)]
+    pub cwd: Option<std::path::PathBuf>,
 }
 
 pub(super) enum Part {
@@ -208,7 +211,17 @@ impl AttachState {
                     crate::session_status::status_tone(status),
                 )
                 // The reply lines up with the title, after the status glyph.
-                .second_row_cell(session_table::SESSION, format!("  {reply}"))
+                .second_row_cell(
+                    session_table::SESSION,
+                    format!(
+                        "  {}",
+                        session_table::folder_and_reply(
+                            row.cwd.as_deref(),
+                            dirs::home_dir().as_deref(),
+                            reply
+                        )
+                    ),
+                )
                 .depth(depth)
                 .current(self.selected.as_ref() == Some(&row.session_id))
                 .search_text(format!(

@@ -126,7 +126,6 @@ async fn watcher_cannot_mutate_and_takeover_notifies_both_without_disconnecting(
     for method in [
         "_nori/session/prompt",
         "_nori/session/respond",
-        "_nori/session/new",
         "_nori/session/close",
         "_nori/session/cancel",
         "_nori/session/resume",
@@ -157,6 +156,19 @@ async fn watcher_cannot_mutate_and_takeover_notifies_both_without_disconnecting(
     assert_eq!(receive(&mut second).await["result"]["mutations"], 1);
     send(&mut first, 7, "_nori/host/stop", json!({})).await;
     assert!(receive(&mut first).await.get("result").is_some());
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn watchers_and_observers_may_start_a_session_of_their_own() {
+    let server = start().await;
+    let (_controller, _) = initialized(&server, false).await;
+    for observe in [false, true] {
+        let (mut client, response) = initialized(&server, observe).await;
+        assert_eq!(response["result"]["control"]["role"], "watcher");
+        send(&mut client, 2, "_nori/session/new", json!({})).await;
+        assert!(receive(&mut client).await.get("result").is_some());
+    }
     server.shutdown().await;
 }
 

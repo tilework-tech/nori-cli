@@ -880,6 +880,12 @@ path below is inert: replacing a session shuts it down, the session hotkeys,
 sender. The only always-on part is the resume reprint described under inline
 transcript reflow.
 
+These are interactive conveniences for one terminal. Long-lived sessions under
+remote or programmatic control belong to the background host
+([`nori host`](../cli/src/host/docs.md), scriptable with `nori host new`),
+which outlives every terminal. Nori deliberately does not replicate a full
+terminal multiplexer in the TUI hot path.
+
 ```text
 App
  |- chat_widget + transcript_cells      active session (on screen)

@@ -12,7 +12,9 @@ Path: @/nori-rs/tui/src/attach
 ### How it fits into the larger codebase
 
 - [CLI host dispatch](../../../cli/src/host/docs.md) supplies a resolved endpoint
-  and token after enforcing `multi_session`. This frontend is separate from the
+  and token after enforcing `multi_session`, plus the attaching terminal's
+  configuration, whose `cwd` (the attaching directory, or `-C`) is where
+  `/new` starts sessions. This frontend is separate from the
   local TUI `App`, whose shutdown owns its local sessions.
 - The harness re-exports [ManagedClient](../../../acp-host/src/remote/client.rs)
   to preserve the frontend dependency boundary. The host retains mutation
@@ -53,7 +55,9 @@ Path: @/nori-rs/tui/src/attach
   selected conversation or session list. Watchers receive the same content and
   permissions but must take control before sending mutations.
 - The identity line under the header shows the selected session as
-  `<agent> · <name> · <status>`, where the name is the title's whole first
+  `<agent> · <name> · <folder> · <status>` (the folder is
+  `session_table::short_folder` of the row's `cwd`, omitted when an older host
+  sends none), where the name is the title's whole first
   line through `nori_protocol::session_full_name`, else
   `nori_protocol::UNTITLED_SESSION_NAME`. A top-level session shows its
   `family_status` when present, as in the session lists. Inside a delegated
@@ -77,8 +81,9 @@ Path: @/nori-rs/tui/src/attach
   the local session list and `nori host ls` on a terminal (see the
   [tui-components docs](../../../tui-components/docs.md)). Row 1 holds the
   status glyph and title (Session), agent, status word, and a header-less
-  context column; row 2 holds the start of the agent's last reply (faint,
-  `no reply yet` when absent), the model under Agent, and the time since the
+  context column; row 2 holds the session's short folder, ` · `, and the start
+  of the agent's last reply (faint, `no reply yet` when absent; the folder
+  alone when the reply is empty; see `session_table::folder_and_reply`), the model under Agent, and the time since the
   last activity under Status. A row whose own status is `waiting_on_you`
   shows what the session asks for (`waiting_request`, such as `approve:
   cargo test -p parser`) in place of the reply. These come from the additive
@@ -189,6 +194,23 @@ Path: @/nori-rs/tui/src/attach
   key> to its parent` when done and `This child session ended · …` otherwise
   (just a period when the key is unbound); a top-level session reads
   `Session ended. Use /new to start another session.`
+
+- [`/new [DIR] [AGENT]`](new_session.rs) starts a host session, and like
+  other mutations requires control in this terminal. Plain `/new` starts in
+  the attaching terminal's directory, not the host's; on a host named with
+  `--host`, which may be another machine, it starts in the host's folder. A lone argument is a
+  folder when it starts with `/`, `~`, or `.`, contains `/`, or names an
+  existing folder under the attaching directory; otherwise it is an agent, so
+  `/new <agent>` keeps working. Folders are made absolute (`~` expanded,
+  relative ones joined to the attaching directory) before sending. `cwd` is
+  sent only when the host's `initialize` advertised
+  `capabilities.nori_sessions.session_cwd`; otherwise plain `/new` sends no
+  folder and a named folder is refused with a notice, keeping the draft.
+- Tab on a `/new <partial>` draft completes the folder like a shell, against
+  this machine's filesystem (so on a remote `--host` it sees local folders):
+  it fills the longest prefix the matching folders share, appends `/` to a
+  single match, expands `~`, hides dot-folders unless the typed prefix starts
+  with `.`, and lists several matches in the notice line.
 
 ### Things to Know
 

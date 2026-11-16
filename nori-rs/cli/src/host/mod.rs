@@ -16,6 +16,7 @@ use std::time::Instant;
 use anyhow::Context;
 use clap::Parser;
 use nori_config::NoriConfig;
+use nori_config::NoriConfigOverrides;
 use nori_harness::remote_agent::ManagedClient;
 use nori_harness::remote_agent::ManagedRemoteHost;
 use nori_harness::remote_agent::RemoteAcpServer;
@@ -44,12 +45,83 @@ enum HostAction {
     Stop,
     /// List sessions in a flat table, plain when piped.
     Ls,
+    /// Start a session on the running host and print its ID.
+    New(NewCommand),
+}
+
+#[derive(Debug, Parser)]
+struct NewCommand {
+    /// Folder the session works in; relative paths start from the current
+    /// directory, which is also the default for the local host. A host named
+    /// with --host uses its own folder by default.
+    #[arg(long)]
+    cwd: Option<PathBuf>,
+    /// Agent to run instead of the host's default.
+    #[arg(long)]
+    agent: Option<String>,
+    /// First prompt to send once the session starts.
+    #[arg(long)]
+    prompt: Option<String>,
+    /// Print `{"session_id", "cwd"}` instead of the bare ID.
+    #[arg(long)]
+    json: bool,
+    /// Remote managed WebSocket URL; omit to use the local host.
+    #[arg(long, requires = "token_file")]
+    host: Option<String>,
+    /// Private token file for a remote host.
+    #[arg(long, requires = "host")]
+    token_file: Option<PathBuf>,
 }
 
 impl HostCommand {
     pub(crate) fn needs_config(&self) -> bool {
         self.action.is_none()
     }
+}
+
+/// Start a session as `command` describes and print it. The folder is
+/// resolved here, against the caller's directory, and checked by the host.
+async fn new_session(command: NewCommand, files: &HostFiles) -> anyhow::Result<()> {
+    // A named host may be another machine, where this directory need not
+    // exist, so only a folder given explicitly is sent to it.
+    let remote = command.host.is_some();
+    let (mut client, initialized) = match (command.host, command.token_file) {
+        (Some(endpoint), Some(path)) => {
+            connect_endpoint(&endpoint, &state::read_token(&path)?).await?
+        }
+        _ => {
+            let (host, token) = files.read()?;
+            connect_endpoint(&host.endpoint, &token).await?
+        }
+    };
+    anyhow::ensure!(
+        initialized["capabilities"]["nori_sessions"]["session_cwd"] == true,
+        "this host is too old for `nori host new`; restart it with this nori"
+    );
+    let mut params = json!({});
+    let cwd = command
+        .cwd
+        .or_else(|| (!remote).then(|| PathBuf::from(".")));
+    if let Some(cwd) = cwd {
+        let cwd = std::path::absolute(cwd)?;
+        params["cwd"] = json!(cwd.to_str().context("folder is not valid UTF-8")?);
+    }
+    if let Some(agent) = command.agent {
+        params["agent"] = json!(agent);
+    }
+    if let Some(prompt) = command.prompt {
+        params["prompt"] = json!(prompt);
+    }
+    let started = client.request("_nori/session/new", params).await?;
+    let id = started["session_id"]
+        .as_str()
+        .context("host did not return the new session ID")?;
+    if command.json {
+        println!("{started}");
+    } else {
+        println!("{id}");
+    }
+    Ok(())
 }
 
 #[derive(Debug, Parser)]
@@ -92,7 +164,7 @@ pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow
             Some(full)
         }
         Some(query) => {
-            let mut client = connect_endpoint(&endpoint, &token).await?;
+            let (mut client, _) = connect_endpoint(&endpoint, &token).await?;
             let listing = tokio::time::timeout(
                 Duration::from_secs(3),
                 client.request("_nori/session/list", json!({})),
@@ -115,13 +187,17 @@ pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow
     .await
 }
 
-pub(crate) async fn run(command: HostCommand, config: Option<NoriConfig>) -> anyhow::Result<()> {
+pub(crate) async fn run(
+    command: HostCommand,
+    config: Option<(NoriConfig, NoriConfigOverrides)>,
+) -> anyhow::Result<()> {
     let home = match &config {
-        Some(config) => config.nori_home.clone(),
+        Some((config, _)) => config.nori_home.clone(),
         None => nori_config::find_nori_home()?,
     };
     let files = HostFiles::new(&home)?;
     match command.action {
+        Some(HostAction::New(new)) => new_session(new, &files).await,
         Some(HostAction::Ls) => {
             let (mut client, _) = connect(&files).await?;
             let listing = client.request("_nori/session/list", json!({})).await?;
@@ -174,18 +250,22 @@ pub(crate) async fn run(command: HostCommand, config: Option<NoriConfig>) -> any
 
 async fn connect(files: &HostFiles) -> anyhow::Result<(ManagedClient, HostState)> {
     let (host, token) = files.read()?;
-    let client = connect_endpoint(&host.endpoint, &token).await?;
+    let (client, _) = connect_endpoint(&host.endpoint, &token).await?;
     Ok((client, host))
 }
 
-/// A watching client of the host at `endpoint`.
-async fn connect_endpoint(endpoint: &str, token: &str) -> anyhow::Result<ManagedClient> {
+/// A watching client of the host at `endpoint`, with the host's
+/// `initialize` reply.
+async fn connect_endpoint(
+    endpoint: &str,
+    token: &str,
+) -> anyhow::Result<(ManagedClient, serde_json::Value)> {
     tokio::time::timeout(Duration::from_secs(3), async {
         let mut client = ManagedClient::connect(endpoint, token).await?;
-        client
+        let initialized = client
             .request("initialize", json!({"observe":true}))
             .await?;
-        anyhow::Ok(client)
+        anyhow::Ok((client, initialized))
     })
     .await
     .context("host did not answer")?
@@ -249,7 +329,11 @@ async fn start(files: &HostFiles) -> anyhow::Result<()> {
     }
 }
 
-async fn serve(port: i32, config: NoriConfig, files: &HostFiles) -> anyhow::Result<()> {
+async fn serve(
+    port: i32,
+    (config, overrides): (NoriConfig, NoriConfigOverrides),
+    files: &HostFiles,
+) -> anyhow::Result<()> {
     anyhow::ensure!(
         (0..=65535).contains(&port),
         "port must be between 0 and 65535"
@@ -279,6 +363,7 @@ async fn serve(port: i32, config: NoriConfig, files: &HostFiles) -> anyhow::Resu
         managed: ManagedRemoteHost::new(manager.clone()),
         manager,
         config: Arc::new(config),
+        overrides,
         stop: tokio::sync::Notify::new(),
     });
     let server =

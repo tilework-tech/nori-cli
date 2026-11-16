@@ -30,7 +30,8 @@ used in production.
 
 - `cli/` dispatches the `nori` binary and sandbox debug commands. Its
   [host module](cli/src/host/docs.md) owns the detached process, private token,
-  and session manager used by `nori host`.
+  and session manager used by `nori host`, whose sessions each work in
+  their own folder.
 - `exec/` projects the harness into a final-answer plaintext command or a
   bounded standard ACP-over-stdio agent facade.
 - `tui/` renders events and forwards user intent through typed harness methods.

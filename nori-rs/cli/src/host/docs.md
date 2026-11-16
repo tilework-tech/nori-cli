@@ -4,8 +4,10 @@ Path: @/nori-rs/cli/src/host
 
 ### Overview
 
-- Implements `nori host`, its administrative commands, and `nori attach`
-  discovery so agent sessions can outlive every terminal.
+- Implements `nori host`, its administrative commands (`ls`, `stop`, `new`),
+  and `nori attach` discovery so agent sessions can outlive every terminal.
+- Each host session works in its own folder: the host's start folder by
+  default, or any existing folder a client names when starting it.
 - Owns Unix process lifetime and private host files; protocol framing remains
   in [acp-host](../../../acp-host/docs.md), and session policy remains in the
   [harness](../../../harness/docs.md).
@@ -13,7 +15,10 @@ Path: @/nori-rs/cli/src/host
 ### How it fits into the larger codebase
 
 - [CLI dispatch](../main.rs) resolves ordinary Nori configuration for startup
-  and attach. Administrative list and stop only need host discovery, so they
+  and attach, first making the command-line `-C` and `--add-dir` paths
+  absolute. Startup keeps those command-line overrides alongside the resolved
+  configuration so the host can reapply them in another folder.
+  Administrative list, stop, and new only need host discovery, so they
   remain available if the configuration file becomes invalid. Attach requires
   `multi_session` and invokes the dedicated
   [terminal frontend](../../../tui/src/attach/docs.md), bypassing the
@@ -29,7 +34,7 @@ Path: @/nori-rs/cli/src/host
 host command -> detached host -> authenticated /sessions -> HostService
                                    ^                         |
 attach TUI ------------------------+                         v
-host ls / host stop ---------------+                   SessionManager
+host ls / stop / new --------------+                   SessionManager
                                                              |
                                                        agent processes
 ```
@@ -51,8 +56,8 @@ host ls / host stop ---------------+                   SessionManager
 
   | Output | Shape |
   | --- | --- |
-  | Terminal | The shared two-row session layout from [`session_table`](../../../tui-components/src/session_table.rs), the same as the local session list and the `nori attach` list: a `Session`/`Agent`/`Status` header, then per session a row with status glyph, tree guide and title, agent, status word, and header-less context (`8% / 475k`), and a faint row with the start of the agent's last reply (`no reply yet` when absent; a row whose own status is `waiting_on_you` shows its `waiting_request` instead), the model, and `2m ago` from `idle_seconds`. No ID column; `nori host ls \| cat` prints full IDs. Column widths follow the terminal width as described in the [tui-components docs](../../../tui-components/docs.md). |
-  | Piped | One row per session under `ID  AGENT  STATUS  AGE  TITLE`, with full IDs, full values, no width limit, and no colour. AGE comes from `age_seconds`. |
+  | Terminal | The shared two-row session layout from [`session_table`](../../../tui-components/src/session_table.rs), the same as the local session list and the `nori attach` list: a `Session`/`Agent`/`Status` header, then per session a row with status glyph, tree guide and title, agent, status word, and header-less context (`8% / 475k`), and a faint row with the start of the session's short folder then ` · ` and the start of the agent's last reply (`no reply yet` when absent; a row whose own status is `waiting_on_you` shows its `waiting_request` instead; see `session_table::folder_and_reply`), the model, and `2m ago` from `idle_seconds`. No ID column; `nori host ls \| cat` prints full IDs. Column widths follow the terminal width as described in the [tui-components docs](../../../tui-components/docs.md). |
+  | Piped | One row per session under `ID  AGENT  STATUS  AGE  CWD  TITLE`, with full IDs, full values (CWD is the full canonical folder, its column as wide as the longest), no width limit, and no colour. AGE comes from `age_seconds`. |
 
   On a terminal the glyph and status word are coloured, row 2 is dimmed, and
   each session's first row is shaded (its second keeps the terminal's own
@@ -97,10 +102,35 @@ host ls / host stop ---------------+                   SessionManager
   exact ID wins; several matches fail with the candidates (ID, agent, title)
   listed; no match fails with a pointer to `nori host ls | cat` (full IDs) and
   to `nori attach` without an ID. The host itself only knows full IDs.
-- Lifecycle requests prepare agents using the host's configuration. Resume
-  uses the stored agent and working directory while retaining the conversation
-  identity. Stop closes the server, shuts down the manager, removes discovery
-  state, then releases the lock.
+- Lifecycle requests prepare agents using the host's configuration.
+  `_nori/session/new` takes optional `cwd`, `agent`, and `prompt` strings and
+  replies `{session_id, cwd}`. A `cwd` must be absolute; [HostService](service.rs)
+  canonicalizes it and refuses a relative path, a missing folder, or a
+  non-directory with a readable error. For a requested folder the host reloads
+  `NoriConfig` with that folder as cwd plus its own stored command-line
+  overrides, so the folder's project trust and approval settings apply rather
+  than the host's start folder's. Without `cwd` the host's own configuration is
+  used. A `prompt` is sent as the first prompt from a spawned task after the
+  session starts, so the reply does not wait for it; a rejected prompt is only
+  logged. Resume reloads configuration the same way from the record's cwd,
+  then applies the stored agent, retaining the conversation identity. Stop
+  closes the server, shuts down the manager, removes discovery state, then
+  releases the lock.
+- The host advertises folder support by adding `session_cwd: true` to
+  `capabilities.nori_sessions` in its `initialize` reply. Clients send `cwd`
+  only when it is advertised; in `nori attach` against an older host a plain
+  `/new` sends no folder and a named folder is refused client-side ("does not
+  support session folders"). `nori host new` refuses to run against such a
+  host, which would also refuse its observing client.
+- A new session becomes the host's selected session (the target of requests
+  that omit `session_id`), whoever started it.
+- `nori host new [--cwd DIR] [--agent AGENT] [--prompt TEXT] [--json]`
+  connects as an observer (locally discovered, or `--host` with
+  `--token-file`), starts one session, and prints its ID, or the reply object
+  with `--json`. `--cwd` is resolved against the caller's directory before
+  sending, and the host checks the folder exists on its machine. Without
+  `--cwd` the local host starts the session in the caller's directory; a host
+  named with `--host` may be another machine, so it uses its own folder.
 
 ### Things to Know
 
@@ -113,8 +143,9 @@ host ls / host stop ---------------+                   SessionManager
   legacy interactive remote-control listener. See the
   [wire contract](../../../../docs/remote-control.md#11-background-host-and-attached-terminals).
 - Delegation requests pass through `ManagedRemoteHost` to the same manager
-  used by local sessions. Child sessions consume the ordinary session cap;
-  completing a child releases its process slot but preserves its listed record
+  used by local sessions. Child sessions consume the ordinary session cap
+  and inherit the parent's backend configuration, so they work in the
+  parent's folder. Completing a child releases its process slot but preserves its listed record
   and transcript, and the row then reads `done` rather than `closed`. Closing a parent cancels descendants, while a parent crash
   preserves children and holds their results for stable-ID resume.
 - The host has no persistent manager snapshot. Transcripts survive normally,
