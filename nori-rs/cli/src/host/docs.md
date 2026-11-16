@@ -55,9 +55,11 @@ host ls / host stop ---------------+                   SessionManager
   | Piped | One row per session under `ID  AGENT  STATUS  AGE  TITLE`, with full IDs, full values, no width limit, and no colour. AGE comes from `age_seconds`. |
 
   On a terminal the glyph and status word are coloured, row 2 is dimmed, and
-  every other session (both its rows) is shaded when the terminal reports its
+  each session's first row is shaded (its second keeps the terminal's own
+  background, so every other line is striped) when the terminal reports its
   background and supports 24-bit colour; [dispatch](mod.rs) asks
-  `nori_tui::session_list_shade` for that colour only when stdin and stdout are
+  `nori_tui::session_list_shade` (the theme's `row_stripe` colour, matching the
+  TUI session lists) for that colour only when stdin and stdout are
   both terminals (the query is answered on stdin), and with no known background no row is shaded. The
   status glyph and title are cut together, in the middle at grapheme
   boundaries, to the same room the shared picker gives its Session cell, so a

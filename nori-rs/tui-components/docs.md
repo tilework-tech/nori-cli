@@ -192,8 +192,15 @@ consumer application
   second line under a given column instead of one free-form description. The
   line is drawn faint (muted over the selection or row surface); under the tree
   column it starts with the tree continuation guide and is fitted to the room
-  after it. In compact density row shading alternates per item, so both lines
-  of one item share a shade.
+  after it. A compact picker with any visible second-row cell is a session
+  table and stripes per line, not per item: each item's first line uses
+  [`Theme::row_stripe`](src/theme/mod.rs) (a smaller step from the terminal
+  background than `row_alt`) and its second line sets no background, keeping
+  the terminal's own. The selected item keeps `Theme::selected` on both lines.
+  Other compact pickers, including two-row ones built from descriptions, still
+  alternate `row` and `row_alt` per item, so both lines of one item share a
+  shade. Without a known terminal background these tokens are unset and
+  nothing is shaded.
 - `Picker::selection_keeps_tones(true)` keeps provider and detail tones (agent
   and status colours) on the selected row over its highlight; by default the
   selection style replaces them. `Picker::horizontal_margin(cells)` sets the
