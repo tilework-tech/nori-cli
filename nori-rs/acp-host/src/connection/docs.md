@@ -55,6 +55,14 @@ That handle exists before the initialization await, so aborting a preparation
 drops the handle, signals teardown, and leaves the watcher responsible for
 process-group cleanup and reaping.
 
+[`establish_connection`](acp_connection.rs) owns the spawned SDK task through
+an `AbortOnDropHandle` before awaiting initialization, then transfers that
+guard into `AcpConnection` on success. Early child exit or cancelled preparation
+therefore aborts the task even when no connection was constructed, releasing
+its event senders. The initialize sink must close when no response can arrive:
+[`PreparedAgent`](../../../harness/src/backend/prepared.rs) receives from it
+after spawn returns, including on startup failure.
+
 The SDK handlers delegate permission requests but handle filesystem read/write
 inside the host. File writes are restricted to the workspace or `/tmp`; reads
 remain unrestricted. Host-handled requests do not leak duplicate public

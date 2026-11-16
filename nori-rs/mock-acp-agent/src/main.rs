@@ -5,6 +5,9 @@ mod context_usage;
 mod delegation;
 mod runaway_search;
 
+#[cfg(test)]
+mod cancellation_tests;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -19,6 +22,7 @@ use std::task::Poll;
 use agent_client_protocol::Agent;
 use agent_client_protocol::ByteStreams;
 use agent_client_protocol::Client;
+use agent_client_protocol::ConnectTo;
 use agent_client_protocol::ConnectionTo;
 use agent_client_protocol::Responder;
 use futures::io::AsyncRead;
@@ -413,7 +417,6 @@ impl MockAgent {
             eprintln!("Mock agent: exiting during prompt");
             std::process::exit(17);
         }
-        self.state.cancel_requested.store(false, Ordering::SeqCst);
         let session_id = arguments.session_id.clone();
 
         if std::env::var("MOCK_AGENT_PROMPT_UNOWNED_USER_NOTIFICATION").is_ok() {
@@ -1569,6 +1572,15 @@ async fn main() -> acp::Result<()> {
     #[cfg(unix)]
     spawn_descendant_if_requested();
 
+    mock_agent()
+        .connect_to(ByteStreams::new(
+            tokio::io::stdout().compat_write(),
+            ExitOnEof::new(tokio::io::stdin().compat()),
+        ))
+        .await
+}
+
+fn mock_agent() -> impl ConnectTo<Client> {
     let state = Arc::new(MockState::default());
 
     Agent
@@ -1992,6 +2004,9 @@ async fn main() -> acp::Result<()> {
                 async move |arguments: acp::PromptRequest,
                             responder: Responder<acp::PromptResponse>,
                             cx: ConnectionTo<Client>| {
+                    // Incoming handlers run in wire order. Reset here so a
+                    // following cancel survives until the prompt task starts.
+                    state.cancel_requested.store(false, Ordering::SeqCst);
                     // Run the prompt work in a spawned task so the dispatch loop
                     // stays free to deliver cancel notifications and client
                     // request responses while the agent streams.
@@ -2167,9 +2182,4 @@ async fn main() -> acp::Result<()> {
             },
             agent_client_protocol::on_receive_notification!(),
         )
-        .connect_to(ByteStreams::new(
-            tokio::io::stdout().compat_write(),
-            ExitOnEof::new(tokio::io::stdin().compat()),
-        ))
-        .await
 }
