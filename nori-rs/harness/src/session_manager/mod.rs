@@ -1,5 +1,9 @@
 //! Session manager: one registry of live sessions per Nori process.
 
+mod delegation;
+mod delegation_driver;
+mod delegation_state;
+pub use delegation::DelegationContext;
 mod registry;
 mod replay;
 
@@ -76,6 +80,8 @@ pub enum StartError {
     ShuttingDown,
     #[error("parent session {0} is not registered")]
     UnknownParent(ConversationId),
+    #[error("parent session {0} is not running")]
+    ParentEnded(ConversationId),
     #[error("the prepared agent already carries a session")]
     AgentAlreadyActivated,
     #[error("session {0} has not failed; only failed sessions can be resumed")]
@@ -174,12 +180,16 @@ struct Shared {
     config: SessionManagerConfig,
     state: Mutex<State>,
     process_ended: Notify,
+    admission: tokio::sync::Mutex<()>,
 }
 
 struct State {
     registry: Registry,
     handles: HashMap<AgentProcessId, HarnessHandle>,
     journal: replay::Journal,
+    delegation: delegation::DelegationState,
+    configs: HashMap<AgentProcessId, AcpBackendConfig>,
+    primary: HashMap<ConversationId, mpsc::UnboundedSender<SessionEnvelope>>,
 }
 
 impl Shared {
@@ -200,10 +210,14 @@ impl SessionManager {
             shared: Arc::new(Shared {
                 config,
                 process_ended: Notify::new(),
+                admission: tokio::sync::Mutex::new(()),
                 state: Mutex::new(State {
                     registry: Registry::new(config.max_sessions),
                     handles: HashMap::new(),
                     journal: replay::Journal::new(capacity),
+                    delegation: delegation::DelegationState::default(),
+                    configs: HashMap::new(),
+                    primary: HashMap::new(),
                 }),
             }),
         }
@@ -263,30 +277,69 @@ impl SessionManager {
             model: config.default_model.clone(),
             approval_policy: config.approval_policy,
         };
-        let (agent_source, settings) = match agent {
+        let (agent_source, settings, config) = match agent {
             SessionAgent::Prepared(mut agent) => {
                 let config = agent
                     .activation_config_mut()
                     .ok_or(StartError::AgentAlreadyActivated)?;
                 config.conversation_id = Some(conversation_id);
                 let settings = settings_from(config);
-                (SessionAgentSource::Prepared(Box::new(agent)), settings)
+                let config = config.clone();
+                (
+                    SessionAgentSource::Prepared(Box::new(agent)),
+                    settings,
+                    config,
+                )
             }
             SessionAgent::Prepare(spec) => {
                 let mut config = build_backend_config(spec);
                 config.conversation_id = Some(conversation_id);
                 let settings = settings_from(&config);
-                (SessionAgentSource::Prepare(Box::new(config)), settings)
+                (
+                    SessionAgentSource::Prepare(Box::new(config.clone())),
+                    settings,
+                    config,
+                )
             }
         };
+        self.launch_registered(agent_source, settings, config, start)
+    }
+
+    fn launch_registered(
+        &self,
+        mut agent_source: SessionAgentSource,
+        settings: SessionSettings,
+        mut config: AcpBackendConfig,
+        start: SessionStart,
+    ) -> Result<ManagedSession, StartError> {
+        let conversation_id = settings.conversation_id;
         let process = {
             let mut state = self.shared.state();
+            if settings.source == SessionSource::Session
+                && let Some(parent) = settings.parent
+                && (state.registry.live_process(&parent).is_none()
+                    || state.delegation.closed.contains(&parent))
+            {
+                return Err(StartError::ParentEnded(parent));
+            }
             let reservation = state.registry.reserve()?;
             let process = state.registry.register(settings, reservation)?;
             state.journal.register(conversation_id.to_string());
             process
         };
 
+        if config.multi_session {
+            config.delegation_context = Some(DelegationContext::new(&self.shared, process));
+        }
+        match &mut agent_source {
+            SessionAgentSource::Prepared(agent) => {
+                if let Some(activation) = agent.activation_config_mut() {
+                    activation.delegation_context = config.delegation_context.clone();
+                }
+            }
+            SessionAgentSource::Prepare(activation) => **activation = config.clone(),
+        }
+        self.shared.state().configs.insert(process, config);
         let launched = launch_session_from(agent_source, start);
         // Answers are queued before they reach the agent, and the pump reads
         // this queue first, so an answer is numbered ahead of anything the
@@ -320,6 +373,10 @@ impl SessionManager {
         }
 
         let (primary_tx, primary_rx) = mpsc::unbounded_channel();
+        self.shared
+            .state()
+            .primary
+            .insert(conversation_id, primary_tx.clone());
         let shared = Arc::clone(&self.shared);
         let mut events = launched.events;
         tokio::spawn(async move {
@@ -332,11 +389,20 @@ impl SessionManager {
                         None => break,
                     },
                 };
-                let envelopes = {
+                {
                     let mut state = shared.state();
                     let envelopes = state.registry.observe_all(process, event);
                     for envelope in &envelopes {
                         state.journal.publish(envelope);
+                        if let Ok(id) = ConversationId::from_string(&envelope.conversation_id) {
+                            state
+                                .primary
+                                .entry(id)
+                                .or_insert_with(|| primary_tx.clone());
+                            let _ = primary_tx.send(envelope.clone());
+                        }
+                        state.observe_delegation(process, envelope);
+                        state.notify_child_request(envelope);
                     }
                     let ended = state
                         .registry
@@ -347,20 +413,25 @@ impl SessionManager {
                         // Holding a handle to an ended session would keep its
                         // runtime, and so this stream, alive.
                         state.handles.remove(&process);
+                        state.configs.remove(&process);
+                        if let Some(id) = state.registry.conversation_of(process) {
+                            state.primary.remove(&id);
+                        }
                         shared.process_ended.notify_waiters();
                     }
-                    envelopes
                 };
-                for envelope in envelopes {
-                    // The client may stop reading; status and subscribers
-                    // still follow the session.
-                    let _ = primary_tx.send(envelope);
-                }
+                delegation::wake(&shared);
             }
             let mut state = shared.state();
+            if let Some(id) = state.registry.conversation_of(process) {
+                state.primary.remove(&id);
+            }
             state.registry.process_exited(process);
+            state.configs.remove(&process);
             state.handles.remove(&process);
             shared.process_ended.notify_waiters();
+            drop(state);
+            delegation::wake(&shared);
         });
 
         Ok(ManagedSession {
@@ -470,6 +541,22 @@ impl SessionManager {
         conversation_id: &ConversationId,
         child_grace: Duration,
     ) -> anyhow::Result<()> {
+        let ids = {
+            let _admission = self.shared.admission.lock().await;
+            let mut state = self.shared.state();
+            state.cancel_tree(conversation_id)
+        };
+        for id in ids {
+            self.close_one(&id, child_grace).await?;
+        }
+        Ok(())
+    }
+
+    async fn close_one(
+        &self,
+        conversation_id: &ConversationId,
+        child_grace: Duration,
+    ) -> anyhow::Result<()> {
         let process_and_handle = {
             let state = self.shared.state();
             state
@@ -512,8 +599,17 @@ impl SessionManager {
     /// handle stdin EOF before it is stopped.
     pub async fn shutdown(&self, child_grace: Duration) -> ShutdownReport {
         let live: Vec<(ConversationId, HarnessHandle)> = {
-            let state = self.shared.state();
+            let mut state = self.shared.state();
             state.registry.close_admission();
+            let ids: Vec<_> = state
+                .registry
+                .records()
+                .into_iter()
+                .map(|r| r.conversation_id)
+                .collect();
+            for id in ids {
+                state.cancel_tree(&id);
+            }
             state
                 .handles
                 .iter()

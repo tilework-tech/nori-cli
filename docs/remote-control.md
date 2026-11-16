@@ -333,9 +333,11 @@ prompts; the WebSocket extension controls sessions already owned by the TUI.
 | `_nori/session/subscribe` | Optional `session_id`, optional `cursors` map | `{ "subscribed": true }`, then envelope notifications |
 | `_nori/session/prompt` | Optional `session_id`, ACP `prompt` content blocks, optional `meta` | `session_id`, admitted harness `request_id` |
 | `_nori/session/respond` | Optional `session_id`, permission `request_id`, ACP permission `response` | `session_id`, `answered: true` |
+| `_nori/session/delegate` | Optional parent `session_id`, `agent`, `task` | Delegation record |
+| `_nori/session/delegation/resolve` | Optional parent `session_id`, delegation `request_id`, `approved` boolean | Updated delegation record |
 
 A list row reports identity, agent, status, cwd, lineage, pending request IDs,
-sequence bounds (`latest_seq`, `first_available_seq`), age in seconds, and a
+`source`, delegation `depth`, the parent's `delegations`, sequence bounds (`latest_seq`, `first_available_seq`), age in seconds, and a
 title derived from observed session activity. `replay_cursors` includes every
 conversation known to the journal. Restarting a failed session with Ctrl+R keeps
 its Nori conversation ID, list row, and sequence counter. Existing subscriptions
@@ -369,6 +371,59 @@ response types are untagged; interpret a response using its correlated request
 method rather than a generic deserialize/serialize round trip, which can choose
 an empty response variant and discard fields. The transport serializes the
 original manager event without that round trip.
+
+### Delegation
+
+Delegation is a Nori-owned manager operation behind `multi_session`, shared by
+remote controllers, the local `/delegate <agent> <task>` command, and the
+session-bound `delegate` tool on Nori's authenticated HTTP `nori-client` MCP
+server. This puts approval, session capacity, and child lifetime under the
+same authority even when no terminal is attached. The MCP tool accepts
+`agent` and `task`; its parent identity is bound by Nori to the calling session.
+Agents without HTTP MCP support retain user-driven `/delegate`, but have no
+stdio agent-tool fallback.
+
+A delegation record contains `request_id`, `parent_id`, `child_id`,
+`parent_agent`, `agent`, `task`, `depth`, `status`, and optional `result`.
+The child conversation ID is reserved before approval. The statuses are
+`awaiting_approval`, `running`, `declined`, `completed`, `failed`, and
+`cancelled`; these describe delegation state, separately from session status.
+`DelegationChanged` Nori events carry the record through ordered manager
+envelopes. Lists expose current records for recovering approval presentation.
+All-session subscribers also receive the child's normal envelopes; a
+parent-only subscription does not become a subscription to every descendant.
+
+Same-kind children start immediately. A different-kind request returns
+`awaiting_approval`; resolve it for the requesting parent and request ID with
+`approved: true` (Start) or `approved: false` (Decline). Only the controller may
+request or resolve delegation. Unknown, resolved, or wrongly attributed
+requests fail rather than starting another child. Approval does not reserve a
+process indefinitely: actual startup must pass the shared session cap. Depth
+is measured in delegation edges, separately from forks. Children may delegate
+one level further; a request deeper than two levels below the top session
+returns an error to its requester. Branch-at-head transfers parent or child
+ownership to the process's new conversation without increasing delegation
+depth. The same delegation request ID remains valid, while `DelegationChanged`
+publishes updated attribution; pending approvals and result delivery follow
+the new parent identity.
+
+A child's ACP permission request belongs to that child's conversation and
+request ID. Answer it after selecting the child, with Alt+Down in the terminal
+for next waiting session. Parent notices name the child and parent rather than
+opening the child's permission popup in the parent. A completed child's result
+is automatically queued as attributed input to the parent, including when the
+parent is busy. The manager retains delivery until that parent's correlated
+ACP prompt response, rather than treating queue admission as acknowledgment.
+If the parent process crashes before acknowledgment, stable-ID resume submits
+the result again. A delegated child with descendants waits for them and its
+result-driven continuation before reporting its final result. The child process
+then ends and frees its cap slot; its record and transcript remain inspectable.
+
+Explicit parent close cancels descendants and outstanding approvals, even if
+the parent's process has already failed. Parent crash preserves running
+children and holds results until stable-ID resume (Ctrl+R). Child failure
+returns a failure result without failing the parent. This state belongs to the
+current manager lifetime; host restart does not restore it from transcripts.
 
 ### Reconnect and retention
 
@@ -518,6 +573,12 @@ highlighted failed session with the same conversation ID. The status line shows
 controlling, watching/read-only, reconnecting, or disconnected state. The
 current session marker appears inside TITLE, leaving its short ID visible.
 Session commands address the host; they do not launch local agents.
+`/delegate <agent> <task>` is the delegation entry point; the list does not
+start delegations. The configured `hotkeys.next_waiting_session` binding
+(Alt+Down by default) selects the next waiting child or other session.
+Delegated child rows prefix TITLE with the parent identity and hierarchy marker,
+so long task titles cannot displace that identity; metadata columns remain fixed
+in the attached list and `nori host ls`.
 
 Socket loss or a receive-liveness deadline starts recovery. Periodic session
 list requests keep idle connections observable; receiving JSON renews the

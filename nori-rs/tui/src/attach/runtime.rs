@@ -26,9 +26,22 @@ pub(super) struct Runtime {
     next_id: i64,
     uncertain_delivery: bool,
     pub session_list_binding: nori_config::HotkeyBinding,
+    pub next_waiting_binding: nori_config::HotkeyBinding,
+    pub(super) next_waiting_after_refresh: bool,
 }
 
 impl Runtime {
+    pub fn set_next_waiting_binding(&mut self, binding: nori_config::HotkeyBinding) {
+        self.next_waiting_binding = binding;
+        self.composer.set_hint_items(vec![
+            (self.session_list_binding.as_str(), "sessions"),
+            (self.next_waiting_binding.as_str(), "next waiting"),
+            ("alt+t", "take control"),
+            ("ctrl+d", "detach"),
+            ("/delegate", "delegate task"),
+        ]);
+    }
+
     pub fn set_session_list_binding(&mut self, binding: nori_config::HotkeyBinding) {
         self.session_list_binding = binding;
         self.composer.set_hint_items(vec![
@@ -59,6 +72,8 @@ impl Runtime {
             next_id: 0,
             uncertain_delivery: false,
             session_list_binding: nori_config::HotkeyConfig::default().open_session_list,
+            next_waiting_binding: nori_config::HotkeyConfig::default().next_waiting_session,
+            next_waiting_after_refresh: false,
         }
     }
 
@@ -105,6 +120,7 @@ impl Runtime {
         match event {
             ConnectionEvent::Stopped(reason) => {
                 self.state.connected = false;
+                self.next_waiting_after_refresh = false;
                 self.state.stopped = Some(reason);
                 self.pending.clear();
             }
@@ -113,6 +129,7 @@ impl Runtime {
             }
             ConnectionEvent::Disconnected(reason) => {
                 self.state.connected = false;
+                self.next_waiting_after_refresh = false;
                 let uncertain = self
                     .pending
                     .values()
@@ -161,12 +178,16 @@ impl Runtime {
             return Ok(());
         };
         if let Some(error) = message.get("error") {
+            if matches!(pending, Pending::List) {
+                self.next_waiting_after_refresh = false;
+            }
             let text = error["message"]
                 .as_str()
                 .unwrap_or("Host request failed")
                 .to_string();
             if matches!(pending, Pending::Initialize) {
                 self.state.connected = false;
+                self.next_waiting_after_refresh = false;
                 self.state.stopped = Some(format!(
                     "Host initialization failed: {text}. Re-run nori attach."
                 ));
@@ -200,6 +221,10 @@ impl Runtime {
             }
             Pending::List => {
                 self.state.replace_sessions(result.clone())?;
+                if std::mem::take(&mut self.next_waiting_after_refresh) && self.composer.is_empty()
+                {
+                    self.next_waiting_session(false);
+                }
                 if let Some(id) = &self.state.selected
                     && !self.state.sessions.iter().any(|row| &row.session_id == id)
                 {

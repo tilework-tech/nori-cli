@@ -1,0 +1,13 @@
+---
+source: tui/src/chatwidget/tests/delegation.rs
+expression: rendered
+---
+  Start delegated session?
+  Child 00000000-0000-0000-0000-000000000002 (mock-model-alt)
+  parent 00000000-0000-0000-0000-000000000001 (mock-model)
+  Review the parser
+
+› 1. Start
+  2. Decline
+
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

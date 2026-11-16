@@ -14,7 +14,14 @@ impl ChatWidget {
     ) -> Self {
         common.deferred_spawn = true;
         let analytics = common.analytics.clone();
+        let delegated_child = common
+            .session_manager
+            .get(&session.conversation_id)
+            .is_some_and(|record| {
+                record.source == nori_harness::session_manager::SessionSource::Session
+            });
         let mut widget = Self::new(common);
+        widget.delegated_child = delegated_child;
         let spawn = super::agent::forward_managed_session(
             session,
             widget.app_event_tx.clone(),
@@ -23,6 +30,26 @@ impl ChatWidget {
         );
         widget.harness_handle = spawn.handle;
         widget.managed_conversation_id = spawn.conversation_id;
+        widget
+    }
+
+    /// Observe a child using the manager's atomic replay and live subscription.
+    pub(crate) fn from_managed_view(
+        mut common: ChatWidgetInit,
+        id: ConversationId,
+        handle: Option<HarnessHandle>,
+        subscription: nori_harness::remote_agent::ManagedSubscription,
+    ) -> Self {
+        common.deferred_spawn = true;
+        let mut widget = Self::new(common);
+        widget.delegated_child = true;
+        widget.managed_conversation_id = Some(id);
+        widget.harness_handle = handle;
+        widget.set_foreground(false);
+        widget.suppress_welcome_card();
+        let tx = widget.app_event_tx.clone();
+        let generation = widget.session_generation;
+        super::agent::forward_managed_view(id, subscription, tx, generation);
         widget
     }
 
@@ -149,6 +176,9 @@ impl ChatWidget {
             managed_conversation_id: spawn_result.conversation_id,
             session_close_in_flight: false,
             closed_by_user: false,
+            delegated_child: false,
+            delegations: HashMap::new(),
+            delegation_approval: None,
             exiting: false,
             agent_config: crate::nori::agent_config_state::AgentConfigState::default(),
             agent_status: crate::nori::session_header::AgentStatusHandle::new(
@@ -338,6 +368,9 @@ impl ChatWidget {
             managed_conversation_id: spawn_result.conversation_id,
             session_close_in_flight: false,
             closed_by_user: false,
+            delegated_child: false,
+            delegations: HashMap::new(),
+            delegation_approval: None,
             exiting: false,
             agent_config: crate::nori::agent_config_state::AgentConfigState::default(),
             agent_status: crate::nori::session_header::AgentStatusHandle::new(

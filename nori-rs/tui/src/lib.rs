@@ -44,6 +44,7 @@ mod clipboard_paste;
 mod color;
 mod context_view;
 pub mod custom_terminal;
+mod delegation;
 mod diff_render;
 mod editor;
 mod effective_cwd_tracker;

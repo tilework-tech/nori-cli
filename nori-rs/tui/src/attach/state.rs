@@ -32,6 +32,12 @@ pub(super) struct SessionRow {
     pub title: Option<String>,
     #[serde(default)]
     pub age_seconds: i64,
+    #[serde(default)]
+    pub parent: Option<String>,
+    #[serde(default)]
+    pub depth: i32,
+    #[serde(default)]
+    pub delegations: Vec<nori_protocol::Delegation>,
 }
 
 pub(super) enum Part {
@@ -56,6 +62,7 @@ pub(super) struct Permission {
 pub(super) struct Conversation {
     pub parts: Vec<Part>,
     pub permissions: Vec<Permission>,
+    pub delegations: Vec<nori_protocol::Delegation>,
     pub cwd: std::path::PathBuf,
     normalizer: ClientEventNormalizer,
     message_boundary: bool,
@@ -109,6 +116,17 @@ impl Default for AttachState {
 impl AttachState {
     pub fn replace_sessions(&mut self, value: Value) -> anyhow::Result<()> {
         self.sessions = serde_json::from_value(value["sessions"].clone())?;
+        for row in &self.sessions {
+            if let Some(conversation) = self.conversations.get_mut(&row.session_id) {
+                conversation.delegations.clone_from(&row.delegations);
+            } else if !row.delegations.is_empty() {
+                self.conversations
+                    .entry(row.session_id.clone())
+                    .or_default()
+                    .delegations
+                    .clone_from(&row.delegations);
+            }
+        }
         self.picker.title = format!("Sessions {}", self.sessions.len());
         self.picker.replace_items(self.sessions.iter().map(|row| {
             let seconds = row.age_seconds.max(0);
@@ -120,6 +138,18 @@ impl AttachState {
                 format!("{}h", seconds / 3600)
             };
             let title = row.title.clone().unwrap_or_else(|| "New session".into());
+            let title = row.parent.as_ref().map_or_else(
+                || title.clone(),
+                |parent| {
+                    format!(
+                        "{}↳ (parent {}) {title}",
+                        "  ".repeat(
+                            usize::try_from(row.depth.saturating_sub(1).clamp(0, 2)).unwrap_or(0)
+                        ),
+                        parent.chars().take(8).collect::<String>()
+                    )
+                },
+            );
             let title = if self.selected.as_ref() == Some(&row.session_id) {
                 format!("(current) {title}")
             } else {
@@ -269,6 +299,18 @@ impl AttachState {
             }) => {
                 conversation.parts.push(Part::Notice(error.message));
                 conversation.message_boundary = true;
+            }
+            SessionEvent::Nori(NoriEvent::DelegationChanged(delegation)) => {
+                if delegation.parent_id == envelope.conversation_id {
+                    conversation
+                        .delegations
+                        .retain(|current| current.request_id != delegation.request_id);
+                    conversation
+                        .parts
+                        .push(Part::Notice(crate::delegation::summary(&delegation)));
+                    conversation.delegations.push(delegation);
+                    conversation.message_boundary = true;
+                }
             }
             SessionEvent::Nori(NoriEvent::SessionStarted(started)) => {
                 conversation.cwd = started.cwd

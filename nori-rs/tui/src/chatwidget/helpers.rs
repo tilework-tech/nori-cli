@@ -400,7 +400,9 @@ impl ChatWidget {
                     response,
                 } => handle.respond_to_agent(request_id, *response).await,
             };
-            if let Err(error) = result {
+            if let Err(error) = result
+                && !handle.is_expected_shutdown_error(&error)
+            {
                 app_event_tx.send(AppEvent::HarnessActionFailed(error.to_string()));
             }
         });
@@ -415,7 +417,9 @@ impl ChatWidget {
         };
         let app_event_tx = self.app_event_tx.clone();
         tokio::spawn(async move {
-            if let Err(error) = handle.prompt(content).await {
+            if let Err(error) = handle.prompt(content).await
+                && !handle.is_expected_shutdown_error(&error)
+            {
                 app_event_tx.send(AppEvent::HarnessActionFailed(error.to_string()));
             }
         });

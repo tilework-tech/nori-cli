@@ -85,6 +85,11 @@ pub(crate) trait BottomPaneView: Renderable {
         false
     }
 
+    /// Whether a selection view owns this stable action identifier.
+    fn has_selection_item(&self, _stable_id: &str) -> bool {
+        false
+    }
+
     /// Remove an item in a generic selection view by stable id.
     fn remove_selection_item(&mut self, _stable_id: &str) -> bool {
         false

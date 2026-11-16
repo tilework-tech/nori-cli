@@ -162,6 +162,7 @@ impl App {
             let found: Vec<_> = records
                 .iter()
                 .filter(|record| !known.contains(&record.conversation_id))
+                .filter(|record| !self.adopted_delegations.contains(&record.conversation_id))
                 .filter(|record| record.parent.is_some_and(|parent| known.contains(&parent)))
                 .collect();
             if found.is_empty() {
@@ -188,6 +189,20 @@ impl App {
         let title = self
             .session_rows_title(fact.generation)
             .unwrap_or_else(|| "New session".to_string());
+        let title = fact
+            .conversation_id
+            .and_then(|id| self.session_manager.get(&id))
+            .filter(|record| record.source == nori_harness::session_manager::SessionSource::Session)
+            .and_then(|record| record.parent)
+            .map_or_else(
+                || title.clone(),
+                |parent| {
+                    format!(
+                        "(parent {}) {title}",
+                        parent.to_string().chars().take(8).collect::<String>()
+                    )
+                },
+            );
         // A parent speaks for its family: if a child needs the user, so does
         // the parent row.
         let shown_status = if depth == 0 {
@@ -340,6 +355,16 @@ impl App {
         let title = self
             .session_title(first.generation, REQUEST_LINE_TITLE_CHARS)
             .unwrap_or_else(|| "A session".to_string());
+        let title = first.parent.map_or_else(
+            || title.clone(),
+            |parent| {
+                format!(
+                    "(parent {}) {title}",
+                    parent.to_string().chars().take(8).collect::<String>()
+                )
+            },
+        );
+        let title = cut(&title, REQUEST_LINE_TITLE_CHARS);
         let mut spans = vec![
             "● ".cyan(),
             title.bold(),

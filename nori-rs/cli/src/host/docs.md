@@ -50,7 +50,10 @@ host ls / host stop ---------------+                   SessionManager
   control characters and colors status only on a terminal. Terminal rows fit
   the available display cells by truncating titles with an ellipsis at grapheme
   boundaries; if metadata alone exceeds the width, that prefix is clipped.
-  Piped output retains full titles without color or a width limit.
+  Piped output retains full titles without color or a width limit. Delegated
+  child rows retain their own ID, agent, status, and age columns; the hierarchy
+  marker and parent identity prefix TITLE, so long task titles do not displace
+  parent attribution and indentation never shifts the metadata columns.
 - Lifecycle requests prepare agents using the host's configuration. Resume
   uses the stored agent and working directory while retaining the conversation
   identity. Stop closes the server, shuts down the manager, removes discovery
@@ -66,6 +69,11 @@ host ls / host stop ---------------+                   SessionManager
 - The authenticated listener exposes only `/sessions`; it does not change the
   legacy interactive remote-control listener. See the
   [wire contract](../../../../docs/remote-control.md#11-background-host-and-attached-terminals).
+- Delegation requests pass through `ManagedRemoteHost` to the same manager
+  used by local sessions. Child sessions consume the ordinary session cap;
+  completing a child releases its process slot but preserves its listed record
+  and transcript. Closing a parent cancels descendants, while a parent crash
+  preserves children and holds their results for stable-ID resume.
 - The host has no persistent manager snapshot. Transcripts survive normally,
   but in-memory registry state and reconnect replay belong to the current host
   process. The token rotates when that process starts again.

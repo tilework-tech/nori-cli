@@ -352,6 +352,18 @@ fn a_fork_is_listed_under_its_parent_and_its_request_marks_the_parent() {
         parent_row.contains("waiting on you"),
         "the child's request marks the parent row:\n{screen}"
     );
+    let request_line = screen
+        .lines()
+        .find(|line| line.contains("is waiting on you"))
+        .unwrap();
+    assert!(
+        request_line.contains("to jump"),
+        "the attributed request stays on one row: {screen}"
+    );
+    let screen = regex::Regex::new(r"\(parent [0-9a-f]{8}\)")
+        .unwrap()
+        .replace_all(&screen, "(parent PARENTID)")
+        .into_owned();
     insta::assert_snapshot!(
         "session_list_fork_under_parent",
         normalize_for_input_snapshot(screen)

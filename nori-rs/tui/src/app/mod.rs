@@ -104,6 +104,7 @@ pub(crate) struct App {
     /// Every session this TUI holds, in navigation order. Sessions that are
     /// not on screen are parked here with their own widget and transcript.
     session_deck: session_deck::SessionDeck<Box<ChatWidget>>,
+    adopted_delegations: std::collections::HashSet<ConversationId>,
     /// The active session's transcript, taken when that session is about to be
     /// parked behind a new one. Set only with `[features] multi_session`.
     retiring_transcript: Option<Vec<Arc<dyn HistoryCell>>>,
@@ -242,6 +243,7 @@ struct SystemInfoRefreshRequest {
 }
 
 mod config_persistence;
+mod delegation;
 mod event_handling;
 mod resize_reflow;
 mod session_deck;
@@ -251,6 +253,8 @@ mod session_overview;
 mod session_resume;
 mod session_setup;
 mod session_view;
+#[cfg(test)]
+pub(crate) use session_view::route_session_history_event;
 
 impl App {
     #[allow(clippy::too_many_arguments)]
@@ -360,6 +364,7 @@ impl App {
             enhanced_keys_supported,
             transcript_cells: Vec::new(),
             session_deck: Default::default(),
+            adopted_delegations: Default::default(),
             retiring_transcript: None,
             session_reprint_pending: false,
             unseen_finishes: Default::default(),

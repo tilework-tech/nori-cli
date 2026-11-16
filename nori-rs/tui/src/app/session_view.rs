@@ -160,30 +160,21 @@ impl App {
         generation: SessionGeneration,
         event: AppEvent,
     ) -> Option<AppEvent> {
-        let Some(parked) = self.session_deck.parked_mut(generation) else {
-            return Some(event);
+        let candidate = match self.candidate_agent.as_mut() {
+            Some(super::CandidateAgent::Activating {
+                widget,
+                activation_error,
+                ..
+            }) => Some((widget.session_generation(), activation_error)),
+            _ => None,
         };
-        match event {
-            AppEvent::InsertHistoryCell(cell) => {
-                let cell: Arc<dyn HistoryCell> = cell.into();
-                parked.transcript.push(cell);
-            }
-            AppEvent::ConsolidateAgentMessage { source, cwd } => {
-                crate::transcript_reflow::consolidate_agent_message_cells(
-                    &mut parked.transcript,
-                    source,
-                    &cwd,
-                );
-            }
-            AppEvent::AgentConnecting { display_name } => {
-                parked.widget.show_connecting_status(&display_name);
-            }
-            AppEvent::AgentSpawnFailed { agent_name, error } => {
-                parked.widget.on_agent_spawn_failed(&agent_name, &error);
-            }
-            other => return Some(other),
-        }
-        None
+        route_session_history_event(
+            &mut self.chat_widget,
+            &mut self.session_deck,
+            candidate,
+            generation,
+            event,
+        )
     }
 
     /// Hand a session event to the parked widget it belongs to. Returns the
@@ -309,3 +300,57 @@ impl App {
             || self.primary_agent_preparation.is_some()
     }
 }
+
+pub(crate) fn route_session_history_event(
+    active: &mut ChatWidget,
+    deck: &mut super::session_deck::SessionDeck<Box<ChatWidget>>,
+    candidate: Option<(SessionGeneration, &mut Option<String>)>,
+    generation: SessionGeneration,
+    event: AppEvent,
+) -> Option<AppEvent> {
+    if let AppEvent::HarnessActionFailed(message) = event {
+        // The widget flushes buffered user/tool cells before its error, retaining
+        // chronological order and the separator before the next agent message.
+        if active.session_generation() == generation {
+            active.add_error_message(message);
+        } else if let Some(parked) = deck.parked_mut(generation) {
+            parked.widget.add_error_message(message);
+        } else if let Some((candidate_generation, activation_error)) = candidate
+            && candidate_generation == generation
+        {
+            *activation_error = Some(message);
+        }
+        // Removed or replaced generations no longer own a transcript here.
+        return None;
+    }
+    let Some(parked) = deck.parked_mut(generation) else {
+        let known_candidate =
+            candidate.is_some_and(|(candidate_generation, _)| candidate_generation == generation);
+        return (active.session_generation() == generation || known_candidate).then_some(event);
+    };
+    match event {
+        AppEvent::InsertHistoryCell(cell) => {
+            let cell: Arc<dyn HistoryCell> = cell.into();
+            parked.transcript.push(cell);
+        }
+        AppEvent::ConsolidateAgentMessage { source, cwd } => {
+            crate::transcript_reflow::consolidate_agent_message_cells(
+                &mut parked.transcript,
+                source,
+                &cwd,
+            );
+        }
+        AppEvent::AgentConnecting { display_name } => {
+            parked.widget.show_connecting_status(&display_name);
+        }
+        AppEvent::AgentSpawnFailed { agent_name, error } => {
+            parked.widget.on_agent_spawn_failed(&agent_name, &error);
+        }
+        other => return Some(other),
+    }
+    None
+}
+
+#[cfg(test)]
+#[path = "session_view_tests.rs"]
+mod action_failure_tests;

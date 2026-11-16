@@ -18,8 +18,16 @@ impl Runtime {
         if key.kind == KeyEventKind::Release {
             return true;
         }
+        // A later user action supersedes navigation waiting on a list refresh.
+        self.next_waiting_after_refresh = false;
         if key.code == KeyCode::Char('d') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return false;
+        }
+        if self.composer.is_empty()
+            && crate::nori::hotkey_match::matches_binding(&self.next_waiting_binding, &key)
+        {
+            self.next_waiting_session(true);
+            return true;
         }
         if crate::nori::hotkey_match::matches_binding(&self.session_list_binding, &key) {
             self.state.list_open = !self.state.list_open;
@@ -76,6 +84,9 @@ impl Runtime {
         if self.state.list_open && self.picker_key(key) {
             return true;
         }
+        if self.composer.is_empty() && !self.state.list_open && self.delegation_key(key) {
+            return true;
+        }
         if self.composer.is_empty() && !self.state.list_open && self.permission_key(key) {
             return true;
         }
@@ -101,6 +112,66 @@ impl Runtime {
         if let crate::ComposerAction::Submitted(text) = self.composer.input(key) {
             return self.submit(text);
         }
+        true
+    }
+
+    pub(super) fn next_waiting_session(&mut self, refresh_if_missing: bool) {
+        let rows = &self.state.sessions;
+        let start = rows
+            .iter()
+            .position(|row| Some(&row.session_id) == self.state.selected.as_ref())
+            .unwrap_or(rows.len().saturating_sub(1));
+        let target = (1..=rows.len())
+            .map(|offset| &rows[(start + offset) % rows.len()])
+            .find(|row| {
+                row.status == nori_protocol::SessionStatus::WaitingOnYou
+                    && Some(&row.session_id) != self.state.selected.as_ref()
+            })
+            .map(|row| row.session_id.clone());
+        if let Some(id) = target {
+            self.state.selected = Some(id);
+            self.state.list_open = false;
+            self.state.scroll = 0;
+            self.state.notice = None;
+            self.state.replay_error = None;
+            self.subscribe_selected();
+        } else if refresh_if_missing && self.state.connected {
+            self.next_waiting_after_refresh = true;
+            self.refresh_list();
+        }
+    }
+
+    fn delegation_key(&mut self, key: KeyEvent) -> bool {
+        let Some(id) = self.state.selected.clone() else {
+            return false;
+        };
+        let Some(delegation) = self
+            .state
+            .conversations
+            .get(&id)
+            .and_then(|conversation| {
+                conversation.delegations.iter().find(|delegation| {
+                    delegation.status == nori_protocol::DelegationStatus::AwaitingApproval
+                })
+            })
+            .cloned()
+        else {
+            return false;
+        };
+        let approved = match (key.code, key.modifiers) {
+            (KeyCode::Char('1'), KeyModifiers::NONE) | (KeyCode::Enter, KeyModifiers::NONE) => true,
+            (KeyCode::Char('2'), KeyModifiers::NONE) => false,
+            _ => return false,
+        };
+        if let Err(error) = self.require_mutation() {
+            self.state.show_notice(error.to_string());
+            return true;
+        }
+        self.send(
+            "_nori/session/delegation/resolve",
+            json!({"session_id":id,"request_id":delegation.request_id,"approved":approved}),
+            Pending::Mutation { draft: None },
+        );
         true
     }
 
@@ -230,6 +301,17 @@ impl Runtime {
                 .show_notice("Choose a session with /sessions or start one with /new.");
             return true;
         };
+        if let Some(command) = crate::delegation::parse_command(command) {
+            match command {
+                Ok((agent, task)) => self.send(
+                    "_nori/session/delegate",
+                    json!({"session_id":id,"agent":agent,"task":task}),
+                    Pending::Mutation { draft: Some(text) },
+                ),
+                Err(message) => self.state.show_notice(message),
+            }
+            return true;
+        }
         let method = match command {
             "/close" => Some("_nori/session/close"),
             "/cancel" => Some("_nori/session/cancel"),

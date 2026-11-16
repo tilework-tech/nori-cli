@@ -269,3 +269,107 @@ pub(super) fn forward_managed_session(
         conversation_id: Some(session.conversation_id),
     }
 }
+
+/// Connect a child history and live subscription to its widget.
+pub(super) fn forward_managed_view(
+    id: nori_harness::ConversationId,
+    mut subscription: nori_harness::remote_agent::ManagedSubscription,
+    tx: AppEventSender,
+    generation: crate::app_event::SessionGeneration,
+) {
+    tokio::spawn(async move {
+        let mut current = id.to_string();
+        let mut forward = |envelope: nori_protocol::SessionEnvelope| {
+            if let SessionEvent::Nori(NoriEvent::SessionForked(fork)) = &envelope.event
+                && fork.previous_conversation_id == current
+            {
+                current.clone_from(&fork.new_conversation_id);
+            }
+            if envelope.conversation_id == current {
+                tx.send(AppEvent::SessionEvent {
+                    generation,
+                    event: envelope.event,
+                });
+            }
+        };
+        for envelope in subscription.replay {
+            forward(envelope);
+        }
+        while let Some(envelope) = subscription.events.recv().await {
+            forward(envelope);
+        }
+    });
+}
+
+#[cfg(test)]
+mod delegated_view_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn delegated_view_follows_fork_and_excludes_other_conversations() {
+        let old = nori_harness::ConversationId::from_string("00000000-0000-0000-0000-000000000001")
+            .unwrap();
+        let new = "00000000-0000-0000-0000-000000000002";
+        let envelope = |id: &str, seq: i64, event| nori_protocol::SessionEnvelope {
+            conversation_id: id.into(),
+            agent: "mock-model".into(),
+            seq,
+            event,
+        };
+        let notice = |text: &str| {
+            SessionEvent::Nori(NoriEvent::Notice(nori_protocol::Notice {
+                message: text.into(),
+            }))
+        };
+        let (events, receiver) = tokio::sync::mpsc::channel(4);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        forward_managed_view(
+            old,
+            nori_harness::remote_agent::ManagedSubscription {
+                replay: vec![
+                    envelope(&old.to_string(), 1, notice("before fork")),
+                    envelope(
+                        new,
+                        1,
+                        SessionEvent::Nori(NoriEvent::SessionForked(
+                            nori_protocol::SessionForked {
+                                previous_conversation_id: old.to_string(),
+                                new_conversation_id: new.into(),
+                                new_acp_session_id: "fork-agent".into(),
+                            },
+                        )),
+                    ),
+                ],
+                events: receiver,
+            },
+            AppEventSender::new(tx),
+            7,
+        );
+        events
+            .send(envelope("unrelated", 1, notice("unrelated activity")))
+            .await
+            .unwrap();
+        events
+            .send(envelope(new, 2, notice("child needs permission")))
+            .await
+            .unwrap();
+        drop(events);
+        let mut received = Vec::new();
+        while let Some(event) = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+            .await
+            .unwrap()
+        {
+            if let AppEvent::SessionEvent { event, .. } = event {
+                received.push(event);
+            }
+        }
+        assert_eq!(
+            received.len(),
+            3,
+            "only the child process's events reach its view"
+        );
+        assert!(
+            matches!(received.last(), Some(SessionEvent::Nori(NoriEvent::Notice(notice))) if notice.message == "child needs permission")
+        );
+    }
+}

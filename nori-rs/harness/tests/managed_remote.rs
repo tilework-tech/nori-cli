@@ -52,6 +52,7 @@ impl Fixture {
                 .start(StartSession {
                     agent: SessionAgent::Prepare(AgentPrepareSpec {
                         config: Arc::new(NoriConfig {
+                            multi_session: true,
                             active_agent: if index == 0 {
                                 "mock-model"
                             } else {
@@ -720,5 +721,117 @@ async fn websocket_subscription_and_precrash_cursor_follow_the_same_id_after_res
         replayed, continued,
         "a pre-crash cursor replays across restart without gaps or duplicates"
     );
+    fixture.stop().await;
+}
+
+#[tokio::test]
+async fn delegation_remote_admission_approval_and_child_events_keep_their_identity() {
+    let fixture = Fixture::new(4096).await;
+    let mut controller = fixture.connect().await;
+    let parent = fixture.ids[0].to_string();
+    send(
+        &mut controller,
+        2,
+        "_nori/session/delegate",
+        json!({
+            "session_id":parent, "agent":"mock-model-alt", "task":"mock:request-permission"
+        }),
+    )
+    .await;
+    let requested = receive(&mut controller).await;
+    assert!(requested["error"].is_null(), "{requested}");
+    let delegation = &requested["result"];
+    assert_eq!(delegation["status"], "awaiting_approval");
+    assert_eq!(
+        fixture.manager.list().len(),
+        2,
+        "approval cannot spawn a process"
+    );
+    send(
+        &mut controller,
+        3,
+        "_nori/session/delegation/resolve",
+        json!({
+            "session_id":parent, "request_id":delegation["request_id"], "approved":true
+        }),
+    )
+    .await;
+    let approved = receive(&mut controller).await;
+    assert!(approved["error"].is_null(), "{approved}");
+    let child = approved["result"]["child_id"].as_str().unwrap().to_owned();
+    let child_id = ConversationId::from_string(&child).unwrap();
+    wait_status(&fixture.manager, child_id, SessionStatus::WaitingOnYou).await;
+    send(&mut controller, 4, "_nori/session/list", json!({})).await;
+    let listed = receive(&mut controller).await;
+    let rows = listed["result"]["sessions"].as_array().unwrap();
+    let row = rows.iter().find(|row| row["session_id"] == child).unwrap();
+    assert_eq!(row["parent"], parent);
+    assert_eq!(row["source"], "session");
+    assert_eq!(row["depth"], 1);
+    assert_eq!(row["status"], "waiting_on_you");
+    send(
+        &mut controller,
+        5,
+        "_nori/session/subscribe",
+        json!({"session_id":"*"}),
+    )
+    .await;
+    assert!(receive(&mut controller).await["error"].is_null());
+    let child_permission = tokio::time::timeout(WAIT, async {
+        loop {
+            let value = receive(&mut controller).await;
+            if let Some(envelope) = event(&value)
+                && envelope.conversation_id == child
+                && matches!(
+                    envelope.event,
+                    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Request { .. })
+                )
+            {
+                return envelope;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(child_permission.agent, "mock-model-alt");
+    assert!(
+        fixture
+            .manager
+            .get(&fixture.ids[0])
+            .unwrap()
+            .pending_requests
+            .is_empty()
+    );
+    fixture.stop().await;
+}
+
+#[tokio::test]
+async fn delegation_remote_decline_and_duplicate_approval_never_spawn_a_child() {
+    let fixture = Fixture::new(4096).await;
+    let mut socket = fixture.connect().await;
+    let parent = fixture.ids[0].to_string();
+    send(
+        &mut socket,
+        1,
+        "_nori/session/delegate",
+        json!({
+            "session_id":parent, "agent":"mock-model-alt", "task":"do not start"
+        }),
+    )
+    .await;
+    let requested = receive(&mut socket).await;
+    assert!(requested["error"].is_null(), "{requested}");
+    let params = json!({"session_id":parent, "request_id":requested["result"]["request_id"], "approved":false});
+    send(
+        &mut socket,
+        2,
+        "_nori/session/delegation/resolve",
+        params.clone(),
+    )
+    .await;
+    assert_eq!(receive(&mut socket).await["result"]["status"], "declined");
+    send(&mut socket, 3, "_nori/session/delegation/resolve", json!({"session_id":parent, "request_id":requested["result"]["request_id"], "approved":true})).await;
+    assert!(receive(&mut socket).await["error"].is_object());
+    assert_eq!(fixture.manager.list().len(), 2);
     fixture.stop().await;
 }

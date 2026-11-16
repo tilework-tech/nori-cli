@@ -475,7 +475,8 @@ async fn run_event_loop(state: Arc<Mutex<HostShared>>, mut events: mpsc::Receive
                 | NoriEvent::PromptSummaryUpdated(_)
                 | NoriEvent::Notice(_)
                 // Emitted by the session manager, never by a harness session.
-                | NoriEvent::RequestResolved(_),
+                | NoriEvent::RequestResolved(_)
+                | NoriEvent::DelegationChanged(_),
             ) => {}
         }
     }
