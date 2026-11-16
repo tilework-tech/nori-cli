@@ -67,6 +67,16 @@ const DUPLICATE_CREATE_GOAL_ERROR: &str = "cannot create a new goal because this
 #[derive(Deserialize, schemars::JsonSchema)]
 #[schemars(crate = "rmcp::schemars")]
 #[serde(deny_unknown_fields)]
+struct DelegateRequest {
+    /// Agent kind registered with Nori, for example claude-code or codex.
+    agent: String,
+    /// Complete task instructions for the child session.
+    task: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+#[serde(deny_unknown_fields)]
 struct CreateGoalRequest {
     /// Required. The concrete objective to start pursuing. This starts a new
     /// active goal only when no goal is currently defined; if a goal already
@@ -115,6 +125,7 @@ pub(crate) struct NoriClientShared {
     agent_capabilities: crate::normalized::AgentCapabilitiesView,
     nori_client_advertised: bool,
     goal_ext_advertised: bool,
+    delegation_context: Option<crate::session_manager::DelegationContext>,
 }
 
 impl NoriClientShared {
@@ -133,6 +144,7 @@ impl NoriClientShared {
             agent_capabilities,
             nori_client_advertised,
             goal_ext_advertised,
+            delegation_context: None,
         }
     }
 }
@@ -149,9 +161,31 @@ pub(crate) struct NoriClientService {
 #[tool_router]
 impl NoriClientService {
     fn new(shared: NoriClientShared) -> Self {
+        let mut tool_router = Self::tool_router();
+        if shared.delegation_context.is_none() {
+            tool_router.remove_route("delegate");
+        }
         Self {
             shared,
-            tool_router: Self::tool_router(),
+            tool_router,
+        }
+    }
+
+    #[tool(
+        description = "Delegate a task to a child Nori session. Same-kind children start immediately; a different agent kind waits for user approval. Results return automatically. At most two delegation levels below the top session are allowed."
+    )]
+    async fn delegate(
+        &self,
+        Parameters(DelegateRequest { agent, task }): Parameters<DelegateRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let Some(context) = &self.shared.delegation_context else {
+            return Ok(tool_error("delegation requires multi_session"));
+        };
+        match context.delegate(agent, task).await {
+            Ok(delegation) => Ok(tool_success(
+                serde_json::json!({ "delegation": delegation }),
+            )),
+            Err(error) => Ok(tool_error(error.to_string())),
         }
     }
 
@@ -526,20 +560,22 @@ pub(super) async fn register_for_session(
     thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
     backend_event_tx: mpsc::Sender<BackendEvent>,
     connected: Arc<AtomicBool>,
+    delegation_context: Option<crate::session_manager::DelegationContext>,
 ) -> Result<Option<PendingNoriClientServer>> {
     if !connection.capabilities().mcp_capabilities.http {
         return Ok(None);
     }
 
-    let next_server = NoriClientServer::spawn(NoriClientShared::new(
+    let mut shared = NoriClientShared::new(
         thread_goal_state,
         backend_event_tx,
         Arc::clone(&connected),
         agent_capabilities_view(connection),
         true,
         goal_ext::GoalExtCapability::from_initialize_meta(connection.initialize_meta()).is_some(),
-    ))
-    .await?;
+    );
+    shared.delegation_context = delegation_context;
+    let next_server = NoriClientServer::spawn(shared).await?;
     let advertised_server = next_server.as_mcp_server();
     let previous_connected = connected.swap(false, Ordering::Relaxed);
     mcp_servers.push(advertised_server);
@@ -819,6 +855,10 @@ mod tests {
         assert!(tool_names.contains(&"get_goal"));
         assert!(tool_names.contains(&"create_goal"));
         assert!(tool_names.contains(&"update_goal"));
+        assert!(
+            !tool_names.contains(&"delegate"),
+            "unmanaged sessions do not advertise delegation"
+        );
 
         let create = client
             .call_tool(

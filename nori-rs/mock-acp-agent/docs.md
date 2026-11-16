@@ -75,6 +75,17 @@ apart. `MOCK_AGENT_PERMISSION_DELAY_MS` waits before the request is sent, so a
 test can move to another session before the request arrives in the
 background.
 
+[`delegation.rs`](src/delegation.rs) exercises the real authenticated HTTP
+MCP boundary. A prompt beginning `mock:delegate <agent> <task>` calls `delegate`
+on the `nori-client` server advertised to that ACP session, using its advertised
+bearer header. `MOCK_AGENT_MCP_HTTP` enables the fixture's HTTP MCP capability.
+Nested task markers let a child issue its own delegation. Prompts carrying the
+manager's delegation-result prefix follow the result path instead of repeating
+a marker embedded in the returned text, so nested results do not recursively
+launch work. The [harness tests](../harness/tests/delegation.rs) and
+[PTY tests](../tui-pty-e2e/tests/delegation.rs) use this path to cover process
+lifetime, approvals, result continuation, and terminal navigation.
+
 The mock deliberately issues outbound client requests through the SDK rather
 than calling host internals. This makes the public `AcpEvent::Request` and
 `HarnessHandle::respond_to_agent` path observable end to end.

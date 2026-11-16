@@ -2,6 +2,7 @@
 
 mod browser_modify;
 mod context_usage;
+mod delegation;
 mod runaway_search;
 
 use std::collections::HashMap;
@@ -107,6 +108,7 @@ struct MockState {
     context_prompt_index: AtomicI64,
     cancel_requested: AtomicBool,
     session_configs: Mutex<HashMap<String, MockSessionConfig>>,
+    delegation_servers: Mutex<HashMap<String, acp::McpServerHttp>>,
 }
 
 #[derive(Clone)]
@@ -299,6 +301,29 @@ impl MockAgent {
         arguments: acp::PromptRequest,
     ) -> Result<acp::PromptResponse, acp::Error> {
         eprintln!("Mock agent: prompt");
+        if let Some(prompt) = last_prompt_text_block(&arguments.prompt) {
+            if prompt.starts_with("[Nori delegation result]") {
+                self.send_text_chunk(
+                    arguments.session_id.clone(),
+                    &format!("Delegation continuation received: {prompt}"),
+                )
+                .await?;
+                return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+            }
+            if let Some(request) = prompt.strip_prefix("mock:delegate ") {
+                let server = self
+                    .state
+                    .delegation_servers
+                    .lock()
+                    .unwrap()
+                    .get(&arguments.session_id.to_string())
+                    .cloned();
+                let output = delegation::call(server, request).await;
+                self.send_text_chunk(arguments.session_id.clone(), &output)
+                    .await?;
+                return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+            }
+        }
         if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK") {
             let actual = last_prompt_text_block(&arguments.prompt);
             if actual != Some(expected.as_str()) {
@@ -1734,6 +1759,10 @@ async fn main() -> acp::Result<()> {
                         }
                     }
                     let session_key = session_id.to_string();
+                    if let Some(server) = delegation::advertised(&arguments.mcp_servers) {
+                        state.delegation_servers.lock().unwrap().insert(session_key.clone(), server);
+                    }
+
                     let session_config = default_session_config();
                     state
                         .session_configs
@@ -1787,6 +1816,9 @@ async fn main() -> acp::Result<()> {
                 async move |arguments: acp::LoadSessionRequest,
                             responder: Responder<acp::LoadSessionResponse>,
                             cx: ConnectionTo<Client>| {
+                    if let Some(server) = delegation::advertised(&arguments.mcp_servers) {
+                        state.delegation_servers.lock().unwrap().insert(arguments.session_id.to_string(), server);
+                    }
                     let session_config = state
                         .session_configs
                         .lock()

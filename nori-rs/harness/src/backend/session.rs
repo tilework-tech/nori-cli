@@ -21,6 +21,7 @@ async fn session_mcp_servers(
         Arc::clone(thread_goal_state),
         backend_event_tx.clone(),
         Arc::clone(goal_mcp_connected),
+        config.delegation_context.clone(),
     )
     .await?;
     if let Some(server) = nori_client_server {
@@ -688,6 +689,7 @@ impl AcpBackend {
             thread_goal_state,
             goal_mcp_connected,
             goal_mcp_http_server,
+            delegation_context: config.delegation_context.clone(),
             goal_ext_capability,
             pending_hook_context: Arc::new(Mutex::new(pending_hook_context)),
             transcript_recorder: Arc::new(RwLock::new(transcript_recorder)),

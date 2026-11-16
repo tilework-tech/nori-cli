@@ -147,6 +147,10 @@ pub fn enhance_agent_error(
 pub struct AcpBackendConfig {
     /// Agent name used to look up agent in registry
     pub agent: String,
+    /// Enable manager-owned delegation for this session.
+    pub multi_session: bool,
+    /// Session/process-bound authority for the internal delegation tool.
+    pub delegation_context: Option<crate::session_manager::DelegationContext>,
     /// Working directory for the session
     pub cwd: PathBuf,
     /// Approval policy for command execution
@@ -282,6 +286,7 @@ pub struct AcpBackend {
     goal_mcp_connected: Arc<AtomicBool>,
     /// Loopback HTTP server exposing the backend-owned `nori-client` MCP tools.
     goal_mcp_http_server: Arc<Mutex<Option<nori_client_mcp::NoriClientServer>>>,
+    delegation_context: Option<crate::session_manager::DelegationContext>,
     /// Goal extension capability the agent advertised at initialize, parsed
     /// once. `Some` enables driving goals via `_session/goal`.
     goal_ext_capability: Option<goal_ext::GoalExtCapability>,

@@ -27,6 +27,18 @@ pub(super) fn format_table(listing: &Value, width: Option<usize>, color: bool) -
         let agent = clean("agent");
         let status = clean("status").replace('_', " ");
         let title = clean("title");
+        let title = match row["parent"].as_str() {
+            Some(_) if row["source"] == "session" => {
+                let parent = clean("parent");
+                let parent = if width.is_some() {
+                    parent.chars().take(8).collect::<String>()
+                } else {
+                    parent
+                };
+                format!("↳ (parent {parent}) {title}")
+            }
+            _ => title,
+        };
         let seconds = row["age_seconds"].as_i64().unwrap_or(0).max(0);
         let age = if seconds < 60 {
             format!("{seconds}s")
@@ -122,5 +134,33 @@ mod tests {
         let rendered = format_table(&listing, None, false);
         assert!(rendered.lines().nth(1).unwrap().ends_with(title));
         assert!(!rendered.contains('\u{1b}'));
+    }
+
+    #[test]
+    fn delegated_child_identity_stays_inside_title_column() {
+        let parent = "11111111-1111-1111-1111-111111111111";
+        let child = "22222222-2222-2222-2222-222222222222";
+        let listing = json!({"sessions":[
+            {"session_id":parent,"agent":"mock-model","status":"ready","title":"Parent"},
+            {"session_id":child,"agent":"mock-model-alt","status":"waiting_on_you","title":"Child task","parent":parent,"source":"session","depth":1}
+        ]});
+        let piped = format_table(&listing, None, false);
+        let rows = piped.lines().collect::<Vec<_>>();
+        assert_eq!(&rows[2][..36], child);
+        assert_eq!(&rows[2][38..54], "mock-model-alt  ");
+        assert_eq!(&rows[2][56..72], "waiting on you  ");
+        let title = &rows[2][82..];
+        assert!(title.contains("Child task"));
+        assert!(
+            title.contains(parent),
+            "child row must identify its parent: {title}"
+        );
+        let tty = format_table(&listing, Some(110), false);
+        assert!(tty.lines().all(|line| line.width() <= 110));
+        assert!(
+            tty.lines().nth(2).unwrap()[82..].contains("parent 11111111"),
+            "normal terminal width must retain parent identity"
+        );
+        assert_eq!(&tty.lines().nth(2).unwrap()[..82], &rows[2][..82]);
     }
 }

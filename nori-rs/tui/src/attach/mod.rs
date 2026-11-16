@@ -36,7 +36,7 @@ pub async fn run_attach(
     let mut tui = crate::tui::Tui::new(crate::tui::init()?);
     let result = async {
         tui.enter_alt_screen()?;
-        run(&mut tui, options, initial, config.hotkeys.open_session_list).await
+        run(&mut tui, options, initial, config.hotkeys).await
     }
     .await;
     let leave = tui.leave_alt_screen();
@@ -51,12 +51,13 @@ async fn run(
     tui: &mut crate::tui::Tui,
     options: AttachOptions,
     initial: ManagedClient,
-    session_list_binding: nori_config::HotkeyBinding,
+    hotkeys: nori_config::HotkeyConfig,
 ) -> anyhow::Result<()> {
     let (request_tx, request_rx) = tokio::sync::mpsc::unbounded_channel();
     let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime = runtime::Runtime::new(options.session_id.clone(), request_tx);
-    runtime.set_session_list_binding(session_list_binding);
+    runtime.set_session_list_binding(hotkeys.open_session_list);
+    runtime.set_next_waiting_binding(hotkeys.next_waiting_session);
     let connection = tokio::spawn(connection::drive(options, initial, request_rx, event_tx));
     let mut events = tui.event_stream();
     let mut refresh = tokio::time::interval(std::time::Duration::from_secs(1));

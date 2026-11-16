@@ -91,6 +91,10 @@ impl ChatWidget {
             return;
         }
 
+        if image_paths.is_empty() && self.handle_delegate_command(&text) {
+            return;
+        }
+
         if image_paths.is_empty() && self.handle_goal_user_message(&text) {
             self.persist_prompt_history(&text);
             return;
@@ -129,6 +133,21 @@ impl ChatWidget {
             self.submit_harness_action(crate::app_event::HarnessAction::RunUserShell(
                 cmd.to_string(),
             ));
+            return;
+        }
+
+        if self.delegated_child
+            && self
+                .managed_conversation_id
+                .and_then(|id| self.session_manager.get(&id))
+                .is_some_and(|record| {
+                    matches!(
+                        record.status,
+                        nori_protocol::SessionStatus::Closed | nori_protocol::SessionStatus::Failed
+                    )
+                })
+        {
+            self.add_error_message("This child session has ended. Its history remains available; return to its parent or start /new.".into());
             return;
         }
 

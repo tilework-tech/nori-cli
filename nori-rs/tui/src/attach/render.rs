@@ -144,6 +144,32 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
         Paragraph::new(" Waiting for session history…").render(area, buf);
         return;
     };
+    let delegation = conversation
+        .delegations
+        .iter()
+        .find(|delegation| delegation.status == nori_protocol::DelegationStatus::AwaitingApproval);
+    let delegation_lines = delegation
+        .map(|delegation| {
+            crate::wrapping::word_wrap_lines(
+                [
+                    Line::from("Start delegated session?".bold()),
+                    Line::from(format!(
+                        "Child {} ({}) · parent {} ({})",
+                        delegation.child_id,
+                        delegation.agent,
+                        delegation.parent_id,
+                        delegation.parent_agent
+                    )),
+                    Line::from(delegation.task.clone()),
+                    Line::from("1 Start · 2 Decline".green()),
+                ],
+                usize::from(area.width.saturating_sub(2)),
+            )
+        })
+        .unwrap_or_default();
+    let delegation_height = u16::try_from(delegation_lines.len())
+        .unwrap_or(u16::MAX)
+        .min(area.height);
     let permission = conversation.permissions.first();
     let permission_height = permission.map_or(0, |request| {
         u16::try_from(request.options.len() + 4)
@@ -154,7 +180,8 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
         area.x + 1,
         area.y,
         area.width.saturating_sub(2),
-        area.height.saturating_sub(permission_height),
+        area.height
+            .saturating_sub(permission_height + delegation_height),
     );
     let mut lines = Vec::new();
     for part in &conversation.parts {
@@ -215,6 +242,18 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
             .collect::<Vec<_>>(),
     )
     .render(history_area, buf);
+    if delegation_height > 0 {
+        Paragraph::new(delegation_lines).render(
+            Rect::new(
+                area.x + 1,
+                area.bottom()
+                    .saturating_sub(permission_height + delegation_height),
+                area.width.saturating_sub(2),
+                delegation_height,
+            ),
+            buf,
+        );
+    }
     if let Some(permission) = permission {
         let mut rows = vec![Line::from(
             format!("Permission · {}", permission.title).bold(),

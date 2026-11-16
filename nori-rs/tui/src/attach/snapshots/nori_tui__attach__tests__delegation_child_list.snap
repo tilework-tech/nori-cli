@@ -1,0 +1,21 @@
+---
+source: tui/src/attach/tests.rs
+expression: rendered
+---
+ Nori host  WATCHING · read-only · alt+t take control
+ mock-model · parent-session · ready
+
+
+  Sessions 2
+
+     ID        AGENT           STATUS            AGE    TITLE
+  ▏  parent-s  mock-model      ready             0s     (current) Parent task          ▕
+     child-se  mock-model-alt  waiting on you    0s     ↳ (parent parent-s) Child task
+
+
+
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt

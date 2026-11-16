@@ -601,6 +601,12 @@ impl BottomPane {
         }
     }
 
+    pub(crate) fn dismiss_selection(&mut self, stable_id: &str) {
+        self.view_stack
+            .retain(|view| !view.has_selection_item(stable_id));
+        self.request_redraw();
+    }
+
     pub(crate) fn remove_selection_item(&mut self, stable_id: &str) {
         if let Some(view) = self.view_stack.last_mut()
             && view.remove_selection_item(stable_id)

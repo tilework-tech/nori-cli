@@ -43,7 +43,8 @@ impl AppEventSender {
                 event @ (AppEvent::InsertHistoryCell(_)
                 | AppEvent::ConsolidateAgentMessage { .. }
                 | AppEvent::AgentConnecting { .. }
-                | AppEvent::AgentSpawnFailed { .. }),
+                | AppEvent::AgentSpawnFailed { .. }
+                | AppEvent::HarnessActionFailed(_)),
             ) => AppEvent::SessionHistory {
                 generation,
                 event: Box::new(event),

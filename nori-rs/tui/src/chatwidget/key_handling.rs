@@ -147,6 +147,9 @@ impl ChatWidget {
             SlashCommand::New => {
                 self.app_event_tx.send(AppEvent::NewSession);
             }
+            SlashCommand::Delegate => {
+                self.handle_delegate_command("/delegate");
+            }
             SlashCommand::Sessions => {
                 self.app_event_tx.send(AppEvent::OpenSessionList);
             }

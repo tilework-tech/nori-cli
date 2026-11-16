@@ -125,7 +125,19 @@ fn make_chatwidget_manual_for_mode(
     (widget, event_rx, unused_rx)
 }
 
+mod action_failures;
 mod agent_status;
 mod context;
+mod delegation;
 mod part10;
 mod part8;
+
+pub(crate) fn make_scoped_chatwidget_manual() -> (
+    ChatWidget,
+    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    tokio::sync::mpsc::UnboundedReceiver<()>,
+) {
+    let (mut widget, rx, op_rx) = make_chatwidget_manual();
+    widget.app_event_tx = widget.app_event_tx.for_session(widget.session_generation());
+    (widget, rx, op_rx)
+}

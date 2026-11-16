@@ -52,6 +52,7 @@ impl AcpBackend {
                 Arc::clone(&self.thread_goal_state),
                 self.backend_event_tx.clone(),
                 Arc::clone(&self.goal_mcp_connected),
+                self.delegation_context.clone(),
             )
             .await
             {

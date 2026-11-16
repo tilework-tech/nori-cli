@@ -11,6 +11,8 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use codex_rmcp_client::OAuthCredentialsStoreMode;
@@ -183,10 +185,17 @@ enum HarnessCommand {
     },
 }
 
+/// The command transport disappeared before accepting or answering an action.
+/// Backend errors retain their own types so shutdown never masks an ACP failure.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+struct HarnessTransportClosed(&'static str);
+
 /// Typed handle for controlling one Nori harness session.
 #[derive(Clone)]
 pub struct HarnessHandle {
     command_tx: mpsc::UnboundedSender<HarnessCommand>,
+    normal_shutdown: Arc<AtomicBool>,
     first_prompt_started: Option<Arc<FirstPromptStarted>>,
     agent_response_observer: Option<AgentResponseObserver>,
     responder: Arc<str>,
@@ -220,6 +229,14 @@ impl std::fmt::Debug for HarnessHandle {
 }
 
 impl HarnessHandle {
+    /// Whether an action lost its command transport during this process's
+    /// normal teardown. Actual backend failures remain reportable, including
+    /// failures returned before a subsequent shutdown.
+    pub fn is_expected_shutdown_error(&self, error: &anyhow::Error) -> bool {
+        self.normal_shutdown.load(Ordering::Acquire)
+            && error.downcast_ref::<HarnessTransportClosed>().is_some()
+    }
+
     /// Return the context observations captured at prompt boundaries.
     pub async fn context_timeline(
         &self,
@@ -309,10 +326,14 @@ impl HarnessHandle {
                 admission,
                 response_tx,
             })
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
-        let request_id = response_rx
-            .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not accept the prompt"))??;
+            .map_err(|_| {
+                anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
+            })?;
+        let request_id = response_rx.await.map_err(|_| {
+            anyhow::Error::new(HarnessTransportClosed(
+                "ACP agent did not accept the prompt",
+            ))
+        })??;
         if let Some(first_prompt_started) = &self.first_prompt_started
             && !first_prompt_started
                 .fired
@@ -340,10 +361,12 @@ impl HarnessHandle {
                 child_grace,
                 response_tx,
             })
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
-        response_rx
-            .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not shut down"))?
+            .map_err(|_| {
+                anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
+            })?;
+        response_rx.await.map_err(|_| {
+            anyhow::Error::new(HarnessTransportClosed("ACP agent did not shut down"))
+        })?
     }
 
     /// Complete a delegated ACP request using its original request ID.
@@ -362,10 +385,14 @@ impl HarnessHandle {
                 response,
                 response_tx,
             })
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
-        response_rx
-            .await
-            .map_err(|_| anyhow::anyhow!("ACP request response was not accepted"))?
+            .map_err(|_| {
+                anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
+            })?;
+        response_rx.await.map_err(|_| {
+            anyhow::Error::new(HarnessTransportClosed(
+                "ACP request response was not accepted",
+            ))
+        })?
     }
 
     pub async fn cancel(&self) -> anyhow::Result<()> {
@@ -417,10 +444,12 @@ impl HarnessHandle {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(HarnessCommand::CustomPrompts { response_tx })
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+            .map_err(|_| {
+                anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
+            })?;
         response_rx
             .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))
+            .map_err(|_| anyhow::Error::new(HarnessTransportClosed("ACP agent did not respond")))
     }
 
     pub async fn compact(&self) -> anyhow::Result<()> {
@@ -443,10 +472,12 @@ impl HarnessHandle {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(HarnessCommand::UndoSnapshots { response_tx })
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+            .map_err(|_| {
+                anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
+            })?;
         response_rx
             .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))
+            .map_err(|_| anyhow::Error::new(HarnessTransportClosed("ACP agent did not respond")))
     }
 
     pub async fn undo_to(&self, index: i64) -> anyhow::Result<()> {
@@ -477,10 +508,12 @@ impl HarnessHandle {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(HarnessCommand::Goal { response_tx })
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+            .map_err(|_| {
+                anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
+            })?;
         response_rx
             .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))
+            .map_err(|_| anyhow::Error::new(HarnessTransportClosed("ACP agent did not respond")))
     }
 
     pub async fn set_goal(
@@ -517,12 +550,12 @@ impl HarnessHandle {
         command: impl FnOnce(oneshot::Sender<anyhow::Result<T>>) -> HarnessCommand,
     ) -> anyhow::Result<T> {
         let (response_tx, response_rx) = oneshot::channel();
-        self.command_tx
-            .send(command(response_tx))
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        self.command_tx.send(command(response_tx)).map_err(|_| {
+            anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
+        })?;
         response_rx
             .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
+            .map_err(|_| anyhow::Error::new(HarnessTransportClosed("ACP agent did not respond")))?
     }
 
     /// Get the current ACP session config snapshot from the agent.
@@ -551,10 +584,12 @@ impl HarnessHandle {
                 value,
                 response_tx,
             })
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+            .map_err(|_| {
+                anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
+            })?;
         response_rx
             .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
+            .map_err(|_| anyhow::Error::new(HarnessTransportClosed("ACP agent did not respond")))?
     }
 
     /// List the agent's known sessions via ACP `session/list`.
@@ -562,10 +597,12 @@ impl HarnessHandle {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(HarnessCommand::ListSessions { cwd, response_tx })
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+            .map_err(|_| {
+                anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
+            })?;
         response_rx
             .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
+            .map_err(|_| anyhow::Error::new(HarnessTransportClosed("ACP agent did not respond")))?
     }
 
     /// Close (release) the active session via ACP `session/close`.
@@ -573,10 +610,12 @@ impl HarnessHandle {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(HarnessCommand::CloseSession { response_tx })
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+            .map_err(|_| {
+                anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
+            })?;
         response_rx
             .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
+            .map_err(|_| anyhow::Error::new(HarnessTransportClosed("ACP agent did not respond")))?
     }
 
     /// Subscribe to the ordered public event stream as an additional bounded
@@ -587,10 +626,12 @@ impl HarnessHandle {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(HarnessCommand::SubscribeEvents { response_tx })
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+            .map_err(|_| {
+                anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
+            })?;
         response_rx
             .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))
+            .map_err(|_| anyhow::Error::new(HarnessTransportClosed("ACP agent did not respond")))
     }
 
     /// Flush the session transcript to disk and wait for the write barrier.
@@ -701,6 +742,8 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
 
     AcpBackendConfig {
         agent: agent.clone(),
+        multi_session: config.multi_session,
+        delegation_context: None,
         cwd: config.cwd.clone(),
         approval_policy: config.approval_policy,
         sandbox_policy: config.sandbox_policy.clone(),
@@ -796,8 +839,10 @@ pub(crate) fn launch_session_from(
         SessionStart::New => crate::context_timeline::ContextTimelineState::default(),
     };
     let context_timeline = Arc::new(tokio::sync::RwLock::new(initial_timeline));
+    let normal_shutdown = Arc::new(AtomicBool::new(false));
     let handle = HarnessHandle {
         command_tx: agent_cmd_tx,
+        normal_shutdown: Arc::clone(&normal_shutdown),
         first_prompt_started: None,
         agent_response_observer: None,
         responder: Arc::from(DEFAULT_RESPONDER),
@@ -900,6 +945,7 @@ pub(crate) fn launch_session_from(
             command = agent_cmd_rx.recv() => {
                 match command {
                     Some(HarnessCommand::Shutdown { response_tx, .. }) => {
+                        normal_shutdown.store(true, Ordering::Release);
                         let _ = response_tx.send(Ok(()));
                         let _ = event_tx.send(SessionEvent::Nori(NoriEvent::SessionEnded(
                             SessionEnded {
@@ -980,6 +1026,7 @@ pub(crate) fn launch_session_from(
         }
         let backend_for_agent = Arc::clone(&backend);
         let event_fanout = event_tx.clone();
+        let command_normal_shutdown = Arc::clone(&normal_shutdown);
         tokio::spawn(async move {
             loop {
                 let cmd = match pending_commands.pop_front() {
@@ -1004,8 +1051,10 @@ pub(crate) fn launch_session_from(
                         child_grace,
                         response_tx,
                     } => {
+                        command_normal_shutdown.store(true, Ordering::Release);
                         let result = backend_for_agent.shutdown(child_grace).await;
                         let shutdown_complete = result.is_ok();
+                        command_normal_shutdown.store(shutdown_complete, Ordering::Release);
                         let _ = response_tx.send(result);
                         if shutdown_complete {
                             break;
@@ -1120,8 +1169,10 @@ pub(crate) fn launch_session_from(
                         let _ = response_tx.send(result);
                     }
                     HarnessCommand::CloseSession { response_tx } => {
+                        command_normal_shutdown.store(true, Ordering::Release);
                         let result = backend_for_agent.close_active_session().await;
                         let close_complete = result.is_ok();
+                        command_normal_shutdown.store(close_complete, Ordering::Release);
                         let _ = response_tx.send(result);
                         if close_complete {
                             break;
@@ -1143,6 +1194,15 @@ pub(crate) fn launch_session_from(
         let mut recorder_stopped = false;
         while let Some(BackendEvent::Public(event)) = backend_event_rx.recv().await {
             let session_ended = matches!(event, SessionEvent::Nori(NoriEvent::SessionEnded(_)));
+            if matches!(
+                &event,
+                SessionEvent::Nori(NoriEvent::SessionEnded(SessionEnded {
+                    reason: SessionEndReason::Shutdown | SessionEndReason::Closed,
+                    ..
+                }))
+            ) {
+                normal_shutdown.store(true, Ordering::Release);
+            }
             if matches!(event, SessionEvent::Nori(NoriEvent::ReplayStarted(_))) {
                 replaying = true;
             }
@@ -1236,6 +1296,7 @@ mod tests {
         });
         let handle = HarnessHandle {
             command_tx,
+            normal_shutdown: Arc::default(),
             first_prompt_started: None,
             agent_response_observer: None,
             responder: Arc::from(DEFAULT_RESPONDER),
@@ -1266,6 +1327,7 @@ mod tests {
         let callback_count_for_handle = Arc::clone(&callback_count);
         let handle = HarnessHandle {
             command_tx,
+            normal_shutdown: Arc::default(),
             first_prompt_started: None,
             agent_response_observer: None,
             responder: Arc::from(DEFAULT_RESPONDER),

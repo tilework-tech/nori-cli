@@ -109,6 +109,7 @@ impl App {
                     self.chat_widget.handle_paste(pasted);
                 }
                 TuiEvent::Draw => {
+                    self.adopt_delegated_sessions(tui);
                     self.refresh_session_overview();
                     self.chat_widget.pre_draw_tick();
                     self.chat_widget.maybe_post_pending_notification(tui);
@@ -664,6 +665,33 @@ impl App {
             }
             AppEvent::ConsolidateAgentMessage { source, cwd } => {
                 self.consolidate_active_agent_message(tui, source, cwd);
+            }
+            AppEvent::ResolveDelegation {
+                parent,
+                request_id,
+                approved,
+            } => {
+                let manager = self.session_manager.clone();
+                let tx = self.app_event_tx.clone();
+                let generation = self
+                    .session_facts()
+                    .into_iter()
+                    .find(|fact| fact.conversation_id == Some(parent))
+                    .map(|fact| fact.generation);
+                tokio::spawn(async move {
+                    if let Err(error) = manager
+                        .resolve_delegation(&parent, &request_id, approved)
+                        .await
+                    {
+                        let tx = generation
+                            .map_or_else(|| tx.clone(), |generation| tx.for_session(generation));
+                        tx.send(AppEvent::InsertHistoryCell(Box::new(
+                            crate::history_cell::new_error_event(format!(
+                                "Delegation failed: {error}"
+                            )),
+                        )));
+                    }
+                });
             }
             AppEvent::OpenSessionList => {
                 self.open_session_list();
