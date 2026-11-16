@@ -777,16 +777,18 @@ fn a_second_row_value_is_cut_to_its_own_column() {
 #[test]
 fn a_selected_session_keeps_its_status_and_agent_colours_over_its_highlight() {
     let state = two_row_sessions();
-    let theme = Theme::for_terminal_background(Some((0, 0, 0)));
-    let buffer = render_sessions(&state, theme, 87);
-    let status = find_ascii_text_at_or_below(&buffer, "working", 0).expect("status cell");
-    let agent = find_ascii_text_at_or_below(&buffer, "claude-code", 0).expect("agent cell");
-    assert_eq!(buffer[status].fg, Color::Cyan);
-    assert_eq!(buffer[agent].fg, Color::Yellow);
-    assert_eq!(
-        buffer[status].bg,
-        theme.selected.bg.expect("selected background")
-    );
+    for background in [(0, 0, 0), (250, 250, 250)] {
+        let theme = Theme::for_terminal_background(Some(background));
+        let buffer = render_sessions(&state, theme, 87);
+        let status = find_ascii_text_at_or_below(&buffer, "working", 0).expect("status cell");
+        let agent = find_ascii_text_at_or_below(&buffer, "claude-code", 0).expect("agent cell");
+        assert_eq!(buffer[status].fg, Color::Cyan);
+        assert_eq!(buffer[agent].fg, Color::Yellow);
+        assert_eq!(
+            buffer[status].bg,
+            theme.selected.bg.expect("selected background")
+        );
+    }
 }
 
 #[test]
@@ -834,7 +836,7 @@ fn session_table_lines_alternate_between_a_subtle_stripe_and_the_terminal_backgr
             assert_eq!(*stripe.get_or_insert(backgrounds[0]), backgrounds[0]);
         }
         // The stripe sits closer to the terminal background than the
-        // previous band, which used `row_alt`.
+        // `row_alt` band of other compact pickers.
         let distance = |colour: Option<Color>| match colour {
             Some(Color::Rgb(red, green, blue)) => [
                 (red, background.0),
@@ -860,21 +862,6 @@ fn session_table_lines_alternate_between_a_subtle_stripe_and_the_terminal_backgr
             );
         }
     }
-}
-
-#[test]
-fn a_selected_session_keeps_its_colours_on_a_light_terminal() {
-    let state = two_row_sessions();
-    let theme = Theme::for_terminal_background(Some((250, 250, 250)));
-    let buffer = render_sessions(&state, theme, 87);
-    let status = find_ascii_text_at_or_below(&buffer, "working", 0).expect("status cell");
-    let agent = find_ascii_text_at_or_below(&buffer, "claude-code", 0).expect("agent cell");
-    assert_eq!(buffer[status].fg, Color::Cyan);
-    assert_eq!(buffer[agent].fg, Color::Yellow);
-    assert_eq!(
-        buffer[status].bg,
-        theme.selected.bg.expect("selected background")
-    );
 }
 
 #[test]

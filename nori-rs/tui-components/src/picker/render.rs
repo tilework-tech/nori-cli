@@ -4,6 +4,7 @@ use ratatui::layout::Direction;
 use ratatui::layout::Layout;
 use ratatui::layout::Margin;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
@@ -496,7 +497,11 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 area.width,
                 row_height,
             );
-            let second_surface = if striped { Style::new() } else { surface };
+            let second_surface = if striped {
+                Style::new().bg(Color::Reset)
+            } else {
+                surface
+            };
             if striped && !selected {
                 buf.set_style(
                     Rect {
@@ -617,7 +622,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 let description_style = if selected {
                     style.patch(self.theme.muted)
                 } else {
-                    surface.patch(self.theme.muted)
+                    second_surface.patch(self.theme.muted)
                 };
                 Paragraph::new(truncate(&description, description_area.width as usize))
                     .style(description_style)
