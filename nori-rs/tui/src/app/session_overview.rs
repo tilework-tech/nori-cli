@@ -123,23 +123,30 @@ impl App {
         rows
     }
 
-    /// The title a session is listed under: the agent's summary, else the
-    /// first prompt, cut to `limit` characters.
+    /// The title a session is listed under: the first line of the agent's
+    /// summary, else of the first prompt.
+    fn session_full_title(&self, generation: SessionGeneration) -> Option<String> {
+        let widget = self.widget_for(generation);
+        self.session_previews
+            .title(generation)
+            .or_else(|| widget.and_then(ChatWidget::first_prompt_text))
+            .map(|title| title.lines().next().unwrap_or_default().trim().to_owned())
+            .filter(|title| !title.is_empty())
+    }
+
+    /// The session's title cut to `limit` characters.
     pub(super) fn session_title(
         &self,
         generation: SessionGeneration,
         limit: i32,
     ) -> Option<String> {
-        let widget = self.widget_for(generation);
-        self.session_previews
-            .title(generation)
-            .or_else(|| widget.and_then(ChatWidget::first_prompt_text))
-            .map(|title| cut(title.lines().next().unwrap_or_default().trim(), limit))
-            .filter(|title| !title.is_empty())
+        self.session_full_title(generation)
+            .map(|title| cut(&title, limit))
     }
 
+    /// The list cuts titles to its column width itself.
     pub(super) fn session_rows_title(&self, generation: SessionGeneration) -> Option<String> {
-        self.session_title(generation, TITLE_CHARS)
+        self.session_full_title(generation)
     }
 
     /// Sessions in the manager that descend from a session this TUI shows but
@@ -312,7 +319,7 @@ impl App {
         }
         for (generation, message) in pending {
             let title = self
-                .session_rows_title(generation)
+                .session_title(generation, TITLE_CHARS)
                 .unwrap_or_else(|| "A session".to_string());
             tui.notify(format!("{title}: {message}"));
         }

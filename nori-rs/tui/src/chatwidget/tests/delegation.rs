@@ -431,3 +431,57 @@ fn delegation_result_and_parent_continuation_preserve_composer_draft() {
     chat.on_task_complete(Some("Result received".into()));
     assert_eq!(chat.composer_text(), "/sessions");
 }
+
+#[test]
+fn a_shown_delegation_request_takes_enter_from_the_draft_and_keeps_it() {
+    let (mut chat, mut rx) = delegating_parent();
+    chat.set_composer_text("my draft".into());
+    let generation = chat.session_generation();
+    chat.handle_session_event(generation, delegation("awaiting_approval"));
+    chat.handle_key_event(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Enter,
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    let mut resolved = None;
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::ResolveDelegation { approved, .. } = event {
+            resolved = Some(approved);
+        }
+    }
+    assert_eq!(resolved, Some(true), "enter answers the request");
+    assert_eq!(
+        chat.composer_text(),
+        "my draft",
+        "the draft is neither sent nor changed"
+    );
+}
+
+#[test]
+fn a_running_card_fits_one_row_at_80_columns() {
+    let (mut chat, mut rx) = delegating_parent();
+    let generation = chat.session_generation();
+    let task = "shared prefix for the parser review: child side mock:request-permission:z";
+    chat.handle_session_event(generation, delegation_with("running", "agent", task, None));
+    let mut cards = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::InsertHistoryCell(cell) = event {
+            cards.push(cell);
+        }
+    }
+    let card = cards.first().expect("a card is inserted");
+    let at_80 = lines_to_single_string(&card.display_lines(80));
+    let header = at_80.lines().next().unwrap_or_default();
+    assert!(
+        header.contains("shared") && header.contains("permission:z") && header.ends_with("started"),
+        "the header keeps both ends of the name and its status on one row:\n{at_80}"
+    );
+    assert!(
+        unicode_width::UnicodeWidthStr::width(header.trim_end()) <= 80,
+        "{at_80}"
+    );
+    let wide = lines_to_single_string(&card.display_lines(140));
+    assert!(
+        wide.contains(task),
+        "the whole name shows when it fits:\n{wide}"
+    );
+}

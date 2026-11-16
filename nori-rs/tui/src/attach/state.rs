@@ -109,7 +109,13 @@ impl Default for AttachState {
                     PickerColumn::fixed("agent", "AGENT", 14).hide_below(55),
                     PickerColumn::fixed("status", "STATUS", 16),
                     PickerColumn::fixed("age", "AGE", 5).hide_below(45),
-                    PickerColumn::flexible("title", "TITLE"),
+                    PickerColumn::flexible("title", "TITLE")
+                        .width(nori_tui_components::PickerColumnWidth::Flexible {
+                            min: 8,
+                            max: 240,
+                            weight: 1,
+                        })
+                        .cut_middle(),
                 ],
                 Vec::new(),
             )

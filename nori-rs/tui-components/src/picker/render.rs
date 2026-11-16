@@ -452,7 +452,12 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 };
                 let room = usize::from(widths.get(tree_index).copied().unwrap_or(0))
                     .saturating_sub(guide.width() + badge.width());
-                let title = if badge.is_empty() {
+                let cut_middle = columns
+                    .get(tree_index)
+                    .is_some_and(|column| column.cut_middle);
+                let title = if cut_middle {
+                    crate::text::truncate_middle(primary, room)
+                } else if badge.is_empty() {
                     std::mem::take(primary)
                 } else {
                     truncate(primary, room)
@@ -541,7 +546,11 @@ impl<K: Clone + Eq> Picker<'_, K> {
         buf.set_string(x, area.y, marker, marker_style);
         x = x.saturating_add(marker_width);
         for ((column, width), (value, value_style)) in columns.iter().zip(widths).zip(values) {
-            let value = truncate(value, *width as usize);
+            let value = if column.cut_middle {
+                crate::text::truncate_middle(value, *width as usize)
+            } else {
+                truncate(value, *width as usize)
+            };
             buf.set_string(x, area.y, value, value_style);
             x = x.saturating_add(*width);
             if column.key

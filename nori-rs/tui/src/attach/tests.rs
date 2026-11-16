@@ -1268,3 +1268,197 @@ fn a_delivered_result_fits_one_row_at_80_columns() {
         "the whole line sits on one row: {rendered}"
     );
 }
+
+fn shared_prefix_families() -> serde_json::Value {
+    let task = |end: &str| {
+        format!("mock:delegate mock-model mock:delegate mock-model mock:request-permission:{end}")
+    };
+    json!({"sessions":[
+        {"session_id":"root-x","agent":"mock-model","status":"ready","family_status":"waiting_on_you","title":task("x"),"depth":0},
+        {"session_id":"child-x","agent":"mock-model","status":"waiting_on_you","title":task("x"),"parent":"root-x","depth":1,"source":"session"},
+        {"session_id":"root-y","agent":"mock-model","status":"ready","family_status":"waiting_on_you","title":task("y"),"depth":0},
+        {"session_id":"child-y","agent":"mock-model","status":"waiting_on_you","title":task("y"),"parent":"root-y","depth":1,"source":"session"}
+    ]})
+}
+
+#[test]
+fn list_titles_sharing_a_long_prefix_keep_their_distinct_ends() {
+    for width in [120, 80] {
+        let mut state = AttachState {
+            connected: true,
+            selected: Some("child-x".into()),
+            ..Default::default()
+        };
+        state.replace_sessions(shared_prefix_families()).unwrap();
+        let rendered = screen_at(&state, width);
+        let list = &rendered[rendered.find("TITLE").expect("list header")..];
+        for (id, end, other) in [
+            ("root-x ", ":x", ":y"),
+            ("child-x ", ":x", ":y"),
+            ("root-y ", ":y", ":x"),
+            ("child-y ", ":y", ":x"),
+        ] {
+            let row = list
+                .lines()
+                .find(|line| line.contains(id))
+                .unwrap_or_else(|| panic!("{id} is drawn at {width}:\n{rendered}"));
+            let title = row
+                .trim_end()
+                .trim_end_matches('▕')
+                .trim_end_matches(" (current)");
+            assert!(title.contains("mock"), "the start is kept: {row}");
+            assert!(
+                title.ends_with(end) && !title.contains(other),
+                "the end that tells {id} apart is kept at {width}: {row}"
+            );
+            assert_eq!(row.matches('…').count(), 1, "cut once at {width}: {row}");
+        }
+        let child = list.lines().find(|line| line.contains("child-x ")).unwrap();
+        assert!(
+            child.contains("└─") && child.contains("(current)"),
+            "{rendered}"
+        );
+    }
+}
+
+fn permission_event(seq: i64) -> SessionEnvelope {
+    use nori_protocol::acp::v1 as acp;
+    let request: acp::RequestPermissionRequest = serde_json::from_value(json!({
+        "sessionId":"agent-session", "toolCall":{"toolCallId":"tool", "title":"Write a file"},
+        "options":[
+            {"optionId":"allow", "name":"Allow once", "kind":"allow_once"},
+            {"optionId":"reject", "name":"Reject", "kind":"reject_once"}
+        ]
+    }))
+    .unwrap();
+    SessionEnvelope {
+        conversation_id: "parent-session".into(),
+        agent: "mock-model".into(),
+        seq,
+        event: nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Request {
+            request_id: acp::RequestId::Str("permission".into()),
+            request: acp::AgentRequest::RequestPermissionRequest(request),
+        }),
+    }
+}
+
+fn runtime_with_draft(
+    event: SessionEnvelope,
+) -> (
+    super::runtime::Runtime,
+    tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>,
+) {
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.role_changed("controller");
+    runtime.state.list_open = false;
+    runtime.state.apply(event).unwrap();
+    runtime.composer.handle_paste("my draft".into());
+    while rx.try_recv().is_ok() {}
+    (runtime, rx)
+}
+
+#[test]
+fn enter_answers_a_pending_permission_and_keeps_the_draft() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx) = runtime_with_draft(permission_event(1));
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
+    let sent = rx.try_recv().expect("an answer is sent");
+    assert_eq!(sent["method"], "_nori/session/respond", "{sent}");
+    assert_eq!(
+        sent["params"]["response"]["outcome"]["optionId"], "allow",
+        "{sent}"
+    );
+    assert!(rx.try_recv().is_err(), "the draft is not sent as a prompt");
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(
+        rendered.contains("my draft"),
+        "the draft stays:\n{rendered}"
+    );
+}
+
+#[test]
+fn a_number_answers_a_pending_permission_and_keeps_the_draft() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx) = runtime_with_draft(permission_event(1));
+    key(&mut runtime, KeyCode::Char('2'), KeyModifiers::NONE);
+    let sent = rx.try_recv().expect("an answer is sent");
+    assert_eq!(sent["method"], "_nori/session/respond", "{sent}");
+    assert_eq!(
+        sent["params"]["response"]["outcome"]["optionId"], "reject",
+        "{sent}"
+    );
+    assert!(rx.try_recv().is_err(), "the draft is not sent as a prompt");
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(
+        rendered.contains("my draft"),
+        "the draft stays:\n{rendered}"
+    );
+}
+
+#[test]
+fn a_number_approves_a_pending_delegation_and_keeps_the_draft() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx) = runtime_with_draft(delegation_event(1, "awaiting_approval"));
+    key(&mut runtime, KeyCode::Char('1'), KeyModifiers::NONE);
+    let sent = rx.try_recv().expect("an answer is sent");
+    assert_eq!(sent["method"], "_nori/session/delegation/resolve", "{sent}");
+    assert_eq!(sent["params"]["approved"], true, "{sent}");
+    assert!(rx.try_recv().is_err(), "the draft is not sent as a prompt");
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(
+        rendered.contains("my draft"),
+        "the draft stays:\n{rendered}"
+    );
+}
+
+#[test]
+fn with_no_request_shown_enter_still_sends_the_draft() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx) = runtime_with_draft(delegation_event(1, "running"));
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
+    let sent = rx.try_recv().expect("the draft is sent");
+    assert_eq!(sent["method"], "_nori/session/prompt", "{sent}");
+    assert_eq!(sent["params"]["prompt"][0]["text"], "my draft");
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(
+        !rendered.contains("my draft"),
+        "the sent draft leaves the composer"
+    );
+}
+
+#[test]
+fn enter_approves_a_pending_delegation_and_keeps_the_draft() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx) = runtime_with_draft(delegation_event(1, "awaiting_approval"));
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
+    let sent = rx.try_recv().expect("an answer is sent");
+    assert_eq!(sent["method"], "_nori/session/delegation/resolve", "{sent}");
+    assert_eq!(sent["params"]["approved"], true, "{sent}");
+    assert!(rx.try_recv().is_err(), "the draft is not sent as a prompt");
+}
+
+#[test]
+fn a_request_in_another_session_leaves_enter_to_the_draft() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx) = runtime_with_draft(permission_event(1));
+    runtime
+        .state
+        .replace_sessions(json!({"sessions":[
+            {"session_id":"parent-session","agent":"mock-model","status":"waiting_on_you","title":"Parent task"},
+            {"session_id":"other-session","agent":"mock-model","status":"ready","title":"Other task"}
+        ]}))
+        .unwrap();
+    runtime.state.selected = Some("other-session".into());
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
+    let sent = rx.try_recv().expect("the draft is sent");
+    assert_eq!(sent["method"], "_nori/session/prompt", "{sent}");
+    assert_eq!(sent["params"]["session_id"], "other-session", "{sent}");
+}

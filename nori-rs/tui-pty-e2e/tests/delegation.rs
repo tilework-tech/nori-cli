@@ -436,3 +436,55 @@ fn the_child_breadcrumb_fits_one_row_of_an_80_column_terminal() {
         "the current name stays whole; the key gives way first:\n{screen}"
     );
 }
+
+#[test]
+fn the_session_list_keeps_names_with_a_shared_prefix_apart_at_80_columns() {
+    let mut session = spawn_fresh(30, 80);
+    session
+        .submit_input("shared prefix for the parser review: parent side")
+        .unwrap();
+    session
+        .wait_for_text("parent final answer", TIMEOUT)
+        .unwrap();
+    session
+        .submit_input(
+            "/delegate mock-model-alt shared prefix for the parser review: child side mock:request-permission:z",
+        )
+        .unwrap();
+    session
+        .wait_for_text("start a mock-model-alt session", TIMEOUT)
+        .unwrap();
+    session.send_key(Key::Char('1')).unwrap();
+    session.wait_for_text("is waiting on you", TIMEOUT).unwrap();
+    session.settle(Duration::from_millis(200));
+    session.send_key(Key::Alt('s')).unwrap();
+    session
+        .wait_for(
+            |screen| screen.contains("Sessions 2") && screen.contains("(current)"),
+            TIMEOUT,
+        )
+        .unwrap();
+    let screen = session.screen_contents();
+    let list = &screen[screen.find("Sessions 2").expect("list header")..];
+    let parent = list
+        .lines()
+        .find(|line| line.contains("parent side"))
+        .unwrap_or_else(|| panic!("the parent row keeps its end:\n{screen}"));
+    let child = list
+        .lines()
+        .find(|line| line.contains("└─") && line.contains("permission:z"))
+        .unwrap_or_else(|| panic!("the child row keeps its end:\n{screen}"));
+    for row in [parent, child] {
+        assert!(row.contains("shared"), "{screen}");
+        assert!(
+            row.matches('…').count() <= 1,
+            "names are cut once:\n{screen}"
+        );
+    }
+    assert_eq!(
+        child.matches('…').count(),
+        1,
+        "the long child name is cut:\n{screen}"
+    );
+    assert!(parent.contains("(current)"), "{screen}");
+}

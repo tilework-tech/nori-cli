@@ -5,7 +5,6 @@
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
-use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 /// One session on the way from a top-level session to the one on screen.
@@ -39,32 +38,7 @@ pub(crate) fn fit(text: &str, cells: usize) -> String {
 /// `text` cut to at most `cells` display cells, keeping its start and end
 /// around `…`, so names that share a long prefix still read apart.
 pub(crate) fn fit_name(text: &str, cells: usize) -> String {
-    if text.width() <= cells {
-        return text.to_string();
-    }
-    if cells == 0 {
-        return String::new();
-    }
-    let room = cells - 1;
-    let graphemes: Vec<&str> = text.graphemes(true).collect();
-    let mut head = String::new();
-    for grapheme in &graphemes {
-        if head.width() + grapheme.width() > room.div_ceil(2) {
-            break;
-        }
-        head.push_str(grapheme);
-    }
-    let mut tail_width = 0;
-    let mut tail: Vec<&str> = Vec::new();
-    for grapheme in graphemes.iter().rev() {
-        if head.width() + tail_width + grapheme.width() > room {
-            break;
-        }
-        tail_width += grapheme.width();
-        tail.push(grapheme);
-    }
-    tail.reverse();
-    format!("{}…{}", head.trim_end(), tail.concat().trim_start())
+    nori_tui_components::text::truncate_middle(text, cells)
 }
 
 /// Share `room` cells between names, so a short name leaves its unused cells

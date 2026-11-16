@@ -73,13 +73,13 @@ fn status_span(status: DelegationStatus) -> Span<'static> {
 }
 
 /// The child as `agent · name`, the form every delegation surface uses.
-fn child_spans(delegation: &Delegation) -> Vec<Span<'static>> {
-    vec![
-        delegation.agent.clone().bold(),
-        " · ".dim(),
-        nori_protocol::delegation_child_name(delegation).into(),
-    ]
+fn child_spans(delegation: &Delegation, name: String) -> Vec<Span<'static>> {
+    vec![delegation.agent.clone().bold(), " · ".dim(), name.into()]
 }
+
+/// The fewest cells a card gives the child's name before it lets the
+/// header wrap instead.
+const MIN_CARD_NAME: usize = 8;
 
 /// The collapsed line a delivered result prompt reads as, after its `› `
 /// marker, in at most `width` cells when it can: ` · delivered to this
@@ -167,7 +167,17 @@ impl DelegationCell {
         Self { delegation, hints }
     }
 
-    fn header(&self) -> Line<'static> {
+    /// The header in one row of `width` cells when it can: the child's name
+    /// is cut in the middle to the room the rest leaves.
+    fn header(&self, width: u16) -> Line<'static> {
+        let full_name = nori_protocol::session_full_name(&self.delegation.task)
+            .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.to_owned());
+        let fixed = self.header_spans(String::new()).width();
+        let room = usize::from(width).saturating_sub(fixed).max(MIN_CARD_NAME);
+        self.header_spans(crate::session_path::fit_name(&full_name, room))
+    }
+
+    fn header_spans(&self, name: String) -> Line<'static> {
         let delegation = &self.delegation;
         let mut spans = match delegation.status {
             DelegationStatus::AwaitingApproval | DelegationStatus::Running => {
@@ -175,22 +185,22 @@ impl DelegationCell {
                     "↳ ".dim(),
                     format!("{} delegated to ", requester(delegation)).into(),
                 ];
-                spans.extend(child_spans(delegation));
+                spans.extend(child_spans(delegation, name));
                 spans
             }
             DelegationStatus::Completed => {
                 let mut spans = vec!["○ ".green(), "result from ".into()];
-                spans.extend(child_spans(delegation));
+                spans.extend(child_spans(delegation, name));
                 spans
             }
             DelegationStatus::Failed => {
                 let mut spans = vec!["✕ ".red()];
-                spans.extend(child_spans(delegation));
+                spans.extend(child_spans(delegation, name));
                 spans
             }
             DelegationStatus::Declined | DelegationStatus::Cancelled => {
                 let mut spans = vec!["✕ ".dim(), "delegation to ".dim()];
-                spans.extend(child_spans(delegation));
+                spans.extend(child_spans(delegation, name));
                 spans
             }
         };
@@ -276,14 +286,14 @@ impl DelegationCell {
 
 impl HistoryCell for DelegationCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let mut lines = vec![self.header()];
+        let mut lines = vec![self.header(width)];
         lines.extend(self.result_lines(width, Some(RESULT_PREVIEW_LINES)));
         lines.extend(self.footer());
         wrap_each(&lines, width)
     }
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let mut lines = vec![self.header()];
+        let mut lines = vec![self.header(width)];
         let mut brief = self.delegation.task.lines();
         lines.push(Line::from(vec![
             "  brief ".dim(),

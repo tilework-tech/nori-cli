@@ -4031,6 +4031,7 @@ dependencies = [
  "ratatui",
  "supports-color",
  "textwrap 0.16.2",
+ "unicode-segmentation",
  "unicode-width 0.2.1",
 ]
 

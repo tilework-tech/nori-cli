@@ -102,10 +102,12 @@ impl Runtime {
         if self.state.list_open && self.picker_key(key) {
             return true;
         }
-        if self.composer.is_empty() && !self.state.list_open && self.delegation_key(key) {
+        // A request shown for the session on screen takes its keys even
+        // while the composer holds a draft; the draft stays put.
+        if !self.state.list_open && self.delegation_key(key) {
             return true;
         }
-        if self.composer.is_empty() && !self.state.list_open && self.permission_key(key) {
+        if !self.state.list_open && self.permission_key(key) {
             return true;
         }
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {

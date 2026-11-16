@@ -34,6 +34,9 @@ pub struct PickerColumn {
     pub header: String,
     pub width: PickerColumnWidth,
     pub hide_below: Option<u16>,
+    /// Cut a value that does not fit in the middle, keeping its start and
+    /// end, instead of at its tail.
+    pub cut_middle: bool,
 }
 
 impl PickerColumn {
@@ -47,6 +50,7 @@ impl PickerColumn {
                 weight: 1,
             },
             hide_below: None,
+            cut_middle: false,
         }
     }
 
@@ -56,11 +60,17 @@ impl PickerColumn {
             header: header.into(),
             width: PickerColumnWidth::Fixed(width),
             hide_below: None,
+            cut_middle: false,
         }
     }
 
     pub fn width(mut self, width: PickerColumnWidth) -> Self {
         self.width = width;
+        self
+    }
+
+    pub fn cut_middle(mut self) -> Self {
+        self.cut_middle = true;
         self
     }
 

@@ -76,11 +76,13 @@ const STATUS: &str = "status";
 impl SessionListView {
     pub(crate) fn new(rows: Vec<SessionRow>, app_event_tx: AppEventSender) -> Self {
         let columns = [
-            PickerColumn::flexible(TITLE, "Session").width(PickerColumnWidth::Flexible {
-                min: 16,
-                max: 72,
-                weight: 4,
-            }),
+            PickerColumn::flexible(TITLE, "Session")
+                .width(PickerColumnWidth::Flexible {
+                    min: 16,
+                    max: 72,
+                    weight: 4,
+                })
+                .cut_middle(),
             PickerColumn::fixed(AGENT, "Agent", 14).hide_below(48),
             PickerColumn::fixed(STATUS, "Status", 16),
         ];
@@ -430,6 +432,44 @@ mod tests {
             .find(|line| line.contains("parent session"))
             .expect("parent row");
         assert!(parent_line.contains("● parent session"), "{screen}");
+    }
+
+    #[test]
+    fn titles_sharing_a_long_prefix_stay_distinct_with_one_cut() {
+        let mut parent = row(
+            1,
+            "shared prefix for the parser review: parent side",
+            SessionStatus::Ready,
+        );
+        parent.on_screen = true;
+        let mut child = row(
+            2,
+            "shared prefix for the parser review: child side mock:request-permission:z",
+            SessionStatus::WaitingOnYou,
+        );
+        child.depth = 1;
+        for width in [120, 80] {
+            let screen = render(&view(vec![parent.clone(), child.clone()]), width);
+            let parent_line = screen
+                .lines()
+                .find(|line| line.contains("parent side"))
+                .unwrap_or_else(|| panic!("parent end is shown at {width}: {screen}"));
+            let child_line = screen
+                .lines()
+                .find(|line| line.contains("permission:z"))
+                .unwrap_or_else(|| panic!("child end is shown at {width}: {screen}"));
+            for line in [parent_line, child_line] {
+                assert!(line.contains("shared"), "start kept at {width}: {line}");
+            }
+            assert_eq!(
+                child_line.matches('…').count(),
+                1,
+                "the long child name is cut once at {width}: {child_line}"
+            );
+            assert!(parent_line.matches('…').count() <= 1, "{parent_line}");
+            assert!(child_line.contains("└─"), "{child_line}");
+            assert!(parent_line.contains("(current)"), "{parent_line}");
+        }
     }
 
     #[test]
