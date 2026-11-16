@@ -154,6 +154,7 @@ impl ManagedRemoteHost {
                         "age_seconds":replay.as_ref().map_or(0, |info| info.age_seconds),
                         "title":replay.as_ref().and_then(|info| info.title.clone()),
                         "reply_preview":replay.as_ref().and_then(|info| info.reply_preview.clone()),
+                        "waiting_request":replay.as_ref().and_then(|info| info.waiting_request.clone()),
                         "idle_seconds":replay.as_ref().map(|info| info.idle_seconds),
                         "context_used":replay.as_ref().and_then(|info| info.context).map(|(used, _)| used),
                         "context_size":replay.as_ref().and_then(|info| info.context).map(|(_, size)| size),

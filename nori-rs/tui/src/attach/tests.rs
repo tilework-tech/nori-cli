@@ -484,13 +484,13 @@ fn delegation_approval_names_both_sessions_and_cannot_be_answered_by_watcher() {
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
     for (key, approved) in [('1', true), ('2', false)] {
+        let clock = crate::answer_guard::ManualClock::new();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+        let mut runtime =
+            super::runtime::Runtime::with_clock(Some("parent-session".into()), tx, clock.clock());
         runtime.state.connected = true;
-        runtime
-            .state
-            .apply(delegation_event(1, "awaiting_approval"))
-            .unwrap();
+        host_event(&mut runtime, delegation_event(1, "awaiting_approval"));
+        clock.pass_grace();
         let rendered = screen(&runtime.state);
         assert!(
             rendered.contains("mock-model-alt") && rendered.contains("Review the parser"),
@@ -583,6 +583,24 @@ fn next_waiting_opens_actual_child_and_keeps_parent_identity_in_list() {
     let request = rx.try_recv().unwrap();
     assert_eq!(request["method"], "_nori/session/subscribe");
     assert_eq!(request["params"]["session_id"], "child-session");
+}
+
+#[test]
+fn the_list_header_summarises_statuses_like_the_local_list() {
+    let mut state = AttachState {
+        connected: true,
+        ..Default::default()
+    };
+    state.replace_sessions(json!({"sessions":[
+        {"session_id":"root-one","agent":"mock-model","status":"working","title":"Ship tree picker"},
+        {"session_id":"root-two","agent":"mock-model","status":"ready","title":"Spike transport"},
+        {"session_id":"child-one","agent":"mock-model-alt","status":"waiting_on_you","title":"Port picker","parent":"root-one","depth":1,"source":"session"}
+    ]})).unwrap();
+    let rendered = screen_area(&state, &crate::ComposerInput::for_attachment(), 90, 30);
+    assert!(
+        rendered.contains("Sessions 3 · 1 waiting on you · 1 working · 1 ready"),
+        "{rendered}"
+    );
 }
 
 #[test]
@@ -792,14 +810,14 @@ fn refreshed_delegation_completion_removes_an_unseen_approval() {
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
+    let clock = crate::answer_guard::ManualClock::new();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    let mut runtime =
+        super::runtime::Runtime::with_clock(Some("parent-session".into()), tx, clock.clock());
     runtime.state.connected = true;
     runtime.state.role_changed("controller");
-    runtime
-        .state
-        .apply(delegation_event(1, "awaiting_approval"))
-        .unwrap();
+    host_event(&mut runtime, delegation_event(1, "awaiting_approval"));
+    clock.pass_grace();
     let nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::DelegationChanged(completed)) =
         delegation_event(2, "completed").event
     else {
@@ -1353,21 +1371,186 @@ fn permission_event(seq: i64) -> SessionEnvelope {
     }
 }
 
+/// A controller with `my draft` typed, after `event` arrived from the host
+/// and its request has been on screen for a while.
 fn runtime_with_draft(
     event: SessionEnvelope,
 ) -> (
     super::runtime::Runtime,
     tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>,
 ) {
+    let (runtime, rx, clock) = runtime_with_fresh_request(event);
+    clock.pass_grace();
+    (runtime, rx)
+}
+
+/// A controller with `my draft` typed, at the moment `event` arrives from
+/// the host. Time moves only through the returned clock.
+fn runtime_with_fresh_request(
+    event: SessionEnvelope,
+) -> (
+    super::runtime::Runtime,
+    tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>,
+    crate::answer_guard::ManualClock,
+) {
+    let clock = crate::answer_guard::ManualClock::new();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    let mut runtime =
+        super::runtime::Runtime::with_clock(Some("parent-session".into()), tx, clock.clock());
     runtime.state.connected = true;
     runtime.state.role_changed("controller");
     runtime.state.list_open = false;
-    runtime.state.apply(event).unwrap();
     runtime.composer.handle_paste("my draft".into());
+    host_event(&mut runtime, event);
     while rx.try_recv().is_ok() {}
-    (runtime, rx)
+    (runtime, rx, clock)
+}
+
+fn host_event(runtime: &mut super::runtime::Runtime, event: SessionEnvelope) {
+    runtime
+        .connection_event(super::connection::ConnectionEvent::Message(json!({
+            "jsonrpc":"2.0", "method":"_nori/session/event",
+            "params":serde_json::to_value(event).unwrap()
+        })))
+        .unwrap();
+}
+
+#[test]
+fn option_keys_typed_as_a_permission_appears_do_not_answer_it() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    for (code, option) in [
+        (KeyCode::Char('1'), "allow"),
+        (KeyCode::Char('2'), "reject"),
+        (KeyCode::Enter, "allow"),
+    ] {
+        let (mut runtime, mut rx, clock) = runtime_with_fresh_request(permission_event(1));
+        clock.advance(
+            crate::answer_guard::REQUEST_ANSWER_GRACE - std::time::Duration::from_millis(1),
+        );
+        key(&mut runtime, code, KeyModifiers::NONE);
+        assert!(rx.try_recv().is_err(), "{code:?} answered too early");
+        resolve_permission_view_check(&runtime, code);
+
+        clock.pass_grace();
+        key(&mut runtime, code, KeyModifiers::NONE);
+        let sent = rx
+            .try_recv()
+            .expect("an answer is sent once the grace ends");
+        assert_eq!(sent["method"], "_nori/session/respond", "{code:?}: {sent}");
+        assert_eq!(
+            sent["params"]["response"]["outcome"]["optionId"], option,
+            "{code:?}: {sent}"
+        );
+    }
+}
+
+/// The request is still on screen and the draft is untouched.
+fn resolve_permission_view_check(
+    runtime: &super::runtime::Runtime,
+    code: crossterm::event::KeyCode,
+) {
+    assert!(
+        runtime.state.request_on_screen(),
+        "{code:?} closed the request"
+    );
+    resolve_draft_check(runtime, code);
+}
+
+fn resolve_draft_check(runtime: &super::runtime::Runtime, code: crossterm::event::KeyCode) {
+    let area = ratatui::layout::Rect::new(0, 0, 60, runtime.composer.desired_height(60));
+    let mut buffer = ratatui::buffer::Buffer::empty(area);
+    runtime.composer.render_ref(area, &mut buffer);
+    let text: String = (0..area.height)
+        .map(|y| {
+            (0..area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        text.contains("my draft"),
+        "{code:?} changed the draft:\n{text}"
+    );
+    assert!(
+        !text.contains("my draft1") && !text.contains("my draft2"),
+        "{code:?} typed into the draft:\n{text}"
+    );
+}
+
+#[test]
+fn option_keys_typed_as_a_delegation_appears_do_not_answer_it() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx, clock) =
+        runtime_with_fresh_request(delegation_event(1, "awaiting_approval"));
+    key(&mut runtime, KeyCode::Char('1'), KeyModifiers::NONE);
+    assert!(rx.try_recv().is_err(), "1 answered too early");
+
+    clock.pass_grace();
+    key(&mut runtime, KeyCode::Char('1'), KeyModifiers::NONE);
+    let sent = rx
+        .try_recv()
+        .expect("an answer is sent once the grace ends");
+    assert_eq!(sent["method"], "_nori/session/delegation/resolve", "{sent}");
+    assert_eq!(sent["params"]["approved"], true, "{sent}");
+}
+
+#[test]
+fn opening_a_session_that_already_waits_restarts_the_grace_period() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx, clock) = runtime_with_fresh_request(permission_event(1));
+    runtime
+        .state
+        .replace_sessions(json!({"sessions":[
+            {"session_id":"parent-session","agent":"mock-model","status":"waiting_on_you","title":"Parent task"},
+            {"session_id":"other-session","agent":"mock-model","status":"ready","title":"Other task"}
+        ]}))
+        .unwrap();
+    runtime.state.selected = Some("other-session".into());
+    clock.pass_grace();
+    // The jump to the waiting session shows its request for the first time.
+    key(&mut runtime, KeyCode::Down, KeyModifiers::ALT);
+    while rx.try_recv().is_ok() {}
+    assert_eq!(runtime.state.selected.as_deref(), Some("parent-session"));
+
+    key(&mut runtime, KeyCode::Char('1'), KeyModifiers::NONE);
+    assert!(
+        rx.try_recv().is_err(),
+        "1 answered a request just brought on screen"
+    );
+
+    clock.pass_grace();
+    key(&mut runtime, KeyCode::Char('1'), KeyModifiers::NONE);
+    let sent = rx
+        .try_recv()
+        .expect("an answer is sent once the grace ends");
+    assert_eq!(sent["method"], "_nori/session/respond", "{sent}");
+}
+
+#[test]
+fn esc_and_ctrl_c_act_on_a_request_during_the_grace_period() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx, _clock) = runtime_with_fresh_request(permission_event(1));
+    key(&mut runtime, KeyCode::Esc, KeyModifiers::NONE);
+    let sent = rx.try_recv().expect("esc answers at once");
+    assert_eq!(
+        sent["params"]["response"]["outcome"]["optionId"], "reject",
+        "{sent}"
+    );
+
+    let (mut runtime, mut rx, _clock) = runtime_with_fresh_request(permission_event(1));
+    key(&mut runtime, KeyCode::Char('c'), KeyModifiers::CONTROL);
+    let sent = rx.try_recv().expect("ctrl+c answers at once");
+    assert_eq!(
+        sent["params"]["response"]["outcome"]["outcome"], "cancelled",
+        "{sent}"
+    );
 }
 
 #[test]
@@ -1684,6 +1867,140 @@ fn listed_sessions() -> AttachState {
         ]}))
         .unwrap();
     state
+}
+
+fn runtime_with_list() -> (
+    super::runtime::Runtime,
+    tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>,
+) {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(None, tx);
+    runtime.state = listed_sessions();
+    runtime.state.selected = None;
+    runtime.state.list_open = true;
+    (runtime, rx)
+}
+
+/// The title on the list row the marker points at.
+fn marked_title(runtime: &super::runtime::Runtime) -> String {
+    let rendered = screen_area(&runtime.state, &runtime.composer, 120, 24);
+    rendered
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("› ").map(|rest| {
+                rest.split("  ")
+                    .next()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string()
+            })
+        })
+        .unwrap_or_else(|| panic!("a marked row in {rendered}"))
+}
+
+#[test]
+fn j_and_k_move_through_the_attach_list_and_letters_do_not_filter() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, _rx) = runtime_with_list();
+    assert!(marked_title(&runtime).contains("Greeting in three words"));
+    key(&mut runtime, KeyCode::Char('j'), KeyModifiers::NONE);
+    assert!(
+        marked_title(&runtime).contains("inspect the parser"),
+        "j moves down"
+    );
+    key(&mut runtime, KeyCode::Char('k'), KeyModifiers::NONE);
+    assert!(
+        marked_title(&runtime).contains("Greeting in three words"),
+        "k moves up"
+    );
+    key(&mut runtime, KeyCode::Char('x'), KeyModifiers::NONE);
+    let rendered = screen_area(&runtime.state, &runtime.composer, 120, 24);
+    for title in [
+        "Greeting in three words",
+        "inspect the parser",
+        "say hi in 3 words",
+    ] {
+        assert!(
+            rendered.contains(title),
+            "a letter does not filter: {rendered}"
+        );
+    }
+}
+
+#[test]
+fn slash_searches_the_attach_list_and_esc_leaves_search_before_closing() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, _rx) = runtime_with_list();
+    key(&mut runtime, KeyCode::Char('/'), KeyModifiers::NONE);
+    for character in "say".chars() {
+        key(&mut runtime, KeyCode::Char(character), KeyModifiers::NONE);
+    }
+    let rendered = screen_area(&runtime.state, &runtime.composer, 120, 24);
+    assert!(rendered.contains("say hi in 3 words"), "{rendered}");
+    assert!(
+        !rendered.contains("inspect the parser"),
+        "typing filters while searching: {rendered}"
+    );
+    assert!(
+        runtime.composer.is_empty(),
+        "search text stays out of the composer"
+    );
+
+    key(&mut runtime, KeyCode::Esc, KeyModifiers::NONE);
+    assert!(runtime.state.list_open, "the first esc only leaves search");
+    let rendered = screen_area(&runtime.state, &runtime.composer, 120, 24);
+    assert!(
+        rendered.contains("inspect the parser"),
+        "the filter is gone: {rendered}"
+    );
+
+    key(&mut runtime, KeyCode::Esc, KeyModifiers::NONE);
+    assert!(!runtime.state.list_open, "the second esc closes the list");
+}
+
+#[test]
+fn the_attach_list_hints_name_j_k_and_slash() {
+    let (runtime, _rx) = runtime_with_list();
+    let rendered = screen_area(&runtime.state, &runtime.composer, 120, 24);
+    assert!(rendered.contains("↑↓/j/k move"), "{rendered}");
+    assert!(rendered.contains("/ search"), "{rendered}");
+}
+
+#[test]
+fn a_waiting_rows_second_line_says_what_it_asks_for() {
+    let mut state = AttachState {
+        connected: true,
+        ..Default::default()
+    };
+    state.replace_sessions(json!({"sessions":[
+        {"session_id":"asking","agent":"mock-model","status":"waiting_on_you","title":"Fix the parser",
+         "reply_preview":"Let me run the tests first.","waiting_request":"approve: cargo test -p parser","idle_seconds":3},
+        {"session_id":"answering","agent":"mock-model","status":"ready","title":"Spike transport",
+         "reply_preview":"The transport spike is done.","waiting_request":null,"idle_seconds":9}
+    ]})).unwrap();
+    let rendered = screen_area(&state, &crate::ComposerInput::for_attachment(), 120, 24);
+    let below = |title: &str| {
+        let lines: Vec<&str> = rendered.lines().collect();
+        let at = lines
+            .iter()
+            .position(|line| line.contains(title) && line.contains("mock-model"))
+            .unwrap_or_else(|| panic!("{title} in {rendered}"));
+        lines[at + 1].to_string()
+    };
+    assert!(
+        below("Fix the parser").contains("approve: cargo test -p parser"),
+        "{rendered}"
+    );
+    assert!(
+        !rendered.contains("Let me run the tests first."),
+        "{rendered}"
+    );
+    assert!(
+        below("Spike transport").contains("The transport spike is done."),
+        "{rendered}"
+    );
 }
 
 #[test]

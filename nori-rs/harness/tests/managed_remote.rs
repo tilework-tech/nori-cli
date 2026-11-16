@@ -900,3 +900,58 @@ async fn session_list_rows_carry_the_live_title_reply_model_activity_and_context
     );
     fixture.stop().await;
 }
+
+#[tokio::test]
+async fn a_waiting_sessions_list_row_says_what_it_asks_for() {
+    let fixture = Fixture::new(4096).await;
+    let id = fixture.ids[0];
+    let sent = fixture
+        .host
+        .request(
+            json!({"jsonrpc":"2.0","id":1,"method":"_nori/session/prompt","params":prompt(
+                id,
+                "mock:request-permission:cargo test -p parser",
+            )}),
+        )
+        .await;
+    assert!(sent.response.get("error").is_none(), "{}", sent.response);
+    let row = tokio::time::timeout(WAIT, async {
+        loop {
+            let listed = fixture
+                .host
+                .request(json!({"jsonrpc":"2.0","id":2,"method":"_nori/session/list"}))
+                .await;
+            let row = listed.response["result"]["sessions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["session_id"] == id.to_string())
+                .cloned()
+                .unwrap();
+            if row["status"] == "waiting_on_you" {
+                return row;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let request = row["waiting_request"].as_str().unwrap_or_default();
+    assert!(
+        request.starts_with("approve: ") && request.contains("cargo test -p parser"),
+        "{row}"
+    );
+    let idle = fixture
+        .host
+        .request(json!({"jsonrpc":"2.0","id":3,"method":"_nori/session/list"}))
+        .await;
+    let other = idle.response["result"]["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["session_id"] == fixture.ids[1].to_string())
+        .cloned()
+        .unwrap();
+    assert_eq!(other["waiting_request"], Value::Null, "{other}");
+    fixture.stop().await;
+}

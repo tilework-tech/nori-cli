@@ -2,7 +2,7 @@
 source: tui/src/bottom_pane/session_list_view.rs
 expression: "render(&list, width)"
 ---
-"  Sessions 3 · 2 working · 1 starting  tab: waiting only · type to search                                               "
+"Sessions 3 · 2 working · 1 starting  tab: waiting only · / search                                                       "
 "                                                                                                                        "
 "All  waiting on you                                                                                                     "
 "                                                                                                                        "
@@ -14,5 +14,5 @@ expression: "render(&list, width)"
 "  … say hi in 3 words                                                          gemini        starting                   "
 "    no reply yet                                                                             0s ago                     "
 "                                                                                                                        "
-"↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close                                                        "
+"↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close                                                    "
 "                                                                                                                        "

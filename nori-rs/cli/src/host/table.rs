@@ -232,21 +232,26 @@ fn terminal_table(
             serde_json::from_value(Value::String(status_key.to_string()))
                 .unwrap_or(nori_protocol::SessionStatus::Starting);
         let title = clean("title").unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.into());
-        let icon = nori_tui::session_status_glyph(status);
-        let title_room = session_cells.saturating_sub(guide.width() + 2);
+        let icon = format!("{} ", nori_tui::session_status_glyph(status));
+        // Cut the icon and title together, as the session lists' picker
+        // does, so every list cuts a title at the same point.
+        let room = session_cells.saturating_sub(guide.width());
+        let cell = nori_tui_components::text::truncate_middle(&format!("{icon}{title}"), room);
+        let (icon, title) = match cell.strip_prefix(&icon) {
+            Some(title) => (icon.clone(), title.to_string()),
+            None => (String::new(), cell),
+        };
         let mut first = vec![
             segment("  ", ""),
             segment(guide.clone(), ""),
-            segment(format!("{icon} "), status_codes(status_key)),
-            segment(
-                pad(
-                    &nori_tui_components::text::truncate_middle(&title, title_room),
-                    title_room,
-                ),
-                "",
-            ),
+            segment(icon.clone(), status_codes(status_key)),
+            segment(pad(&title, room.saturating_sub(icon.width())), ""),
         ];
-        let reply = clean("reply_preview").unwrap_or_else(|| session_table::NO_REPLY.into());
+        // A session waiting on the user shows what it asks for.
+        let reply = clean("waiting_request")
+            .filter(|_| row["status"] == "waiting_on_you")
+            .or_else(|| clean("reply_preview"))
+            .unwrap_or_else(|| session_table::NO_REPLY.into());
         let reply_room = session_cells.saturating_sub(continuation.width() + 2);
         let mut second = vec![
             segment("  ", ""),
@@ -458,6 +463,110 @@ mod tests {
     /// Display column where `needle` starts in `line`.
     fn cell_of(line: &str, needle: &str) -> Option<usize> {
         line.find(needle).map(|at| line[..at].width())
+    }
+
+    /// The Session cell of the first session as the shared picker draws it
+    /// at `width`.
+    fn picker_session_cell(glyph: &str, title: &str, width: u16) -> String {
+        use nori_tui_components::picker::Picker;
+        use nori_tui_components::picker::PickerItem;
+        use nori_tui_components::picker::PickerState;
+        use nori_tui_components::session_table;
+        let item = PickerItem::new(
+            "one".to_string(),
+            session_table::SESSION,
+            format!("{glyph} {title}"),
+        )
+        .cell(session_table::AGENT, "mock-model")
+        .cell(session_table::STATUS, "ready");
+        let state = PickerState::new("Sessions", session_table::session_columns(), [item]);
+        let area = ratatui::layout::Rect::new(0, 0, width, 6);
+        let mut buffer = ratatui::buffer::Buffer::empty(area);
+        ratatui::widgets::Widget::render(
+            Picker::new(&state)
+                .density(nori_tui_components::picker::PickerDensity::Compact)
+                .show_title(false)
+                .show_details(false)
+                .horizontal_margin(0),
+            area,
+            &mut buffer,
+        );
+        let line = (0..area.height)
+            .map(|y| {
+                (0..area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .find(|line| line.contains(glyph))
+            .unwrap_or_default();
+        session_cell(&line)
+    }
+
+    /// The Session cell of a table row: from the icon to the gap before the
+    /// next column.
+    fn session_cell(row: &str) -> String {
+        let cell = from_column(row, 2);
+        cell.split("  ").next().unwrap_or_default().to_string()
+    }
+
+    #[test]
+    fn long_titles_are_cut_where_the_session_lists_cut_them() {
+        let title = "why does the parser drop tokens after a missing brace? find the owners and propose a fix";
+        let glyph = nori_tui::session_status_glyph(nori_protocol::SessionStatus::Ready);
+        let listing = json!({"sessions":[
+            {"session_id":"one","agent":"mock-model","status":"ready","title":title}
+        ]});
+        for width in [80, 120] {
+            let rendered = format_table(&listing, Some(width), false, None);
+            let row = rendered.lines().nth(1).unwrap_or_default();
+            let table_cell = session_cell(row);
+            assert!(
+                table_cell.contains('…'),
+                "the title is cut at {width}: {row}"
+            );
+            assert_eq!(
+                table_cell,
+                picker_session_cell(glyph, title, u16::try_from(width).unwrap_or(80)),
+                "width {width}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_waiting_rows_second_line_says_what_it_asks_for() {
+        let listing = json!({"sessions":[
+            {"session_id":"asking","agent":"mock-model","status":"waiting_on_you","title":"Fix the parser",
+             "reply_preview":"Let me run the tests first.","waiting_request":"approve: cargo test -p parser"},
+            {"session_id":"answering","agent":"mock-model","status":"ready","title":"Spike transport",
+             "reply_preview":"The transport spike is done."}
+        ]});
+        let rendered = format_table(&listing, Some(120), false, None);
+        let rows: Vec<&str> = rendered.lines().skip(1).collect();
+        assert!(
+            rows[1].contains("approve: cargo test -p parser"),
+            "{rendered}"
+        );
+        assert!(
+            !rendered.contains("Let me run the tests first."),
+            "{rendered}"
+        );
+        assert!(
+            rows[3].contains("The transport spike is done."),
+            "{rendered}"
+        );
+    }
+
+    #[test]
+    fn context_text_is_never_cut() {
+        let listing = json!({"sessions":[
+            {"session_id":"one","agent":"mock-model","status":"ready","title":"Full",
+             "context_used":1_050_000,"context_size":1_050_000}
+        ]});
+        for width in [87, 120] {
+            let rendered = format_table(&listing, Some(width), false, None);
+            let row = rendered.lines().nth(1).unwrap_or_default();
+            assert!(row.trim_end().ends_with("100% / 1.1M"), "{rendered}");
+        }
     }
 
     #[test]

@@ -2,7 +2,7 @@
 source: tui/src/bottom_pane/session_list_view.rs
 expression: screen
 ---
-"  Sessions 1 · 1 ready  tab: all sessions · type to search                      "
+"Sessions 1 · 1 ready  tab: all sessions · / search                              "
 "                                                                                "
 "All  waiting on you                                                             "
 "                                                                                "
@@ -10,5 +10,5 @@ expression: screen
 "  Press tab to show all sessions.                                               "
 "                                                                                "
 "                                                                                "
-"↑↓ move  enter open  tab all sessions  esc close                                "
+"↑↓/j/k move  enter open  tab all sessions  esc close                            "
 "                                                                                "

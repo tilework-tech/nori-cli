@@ -631,6 +631,7 @@ impl ChatWidget {
     pub(crate) fn set_foreground(&mut self, foreground: bool) {
         self.foreground = foreground;
         if foreground {
+            self.bottom_pane.request_shown();
             self.last_terminal_title = None;
             self.refresh_terminal_title();
             self.frame_requester.schedule_frame();

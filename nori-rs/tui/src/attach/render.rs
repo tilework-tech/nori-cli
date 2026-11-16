@@ -98,10 +98,10 @@ pub(super) fn render(
                 .horizontal_margin(0)
                 .selection_keeps_tones(true)
                 .footer_hints([
-                    KeyHint::new("↑↓", "move"),
+                    KeyHint::new("↑↓/j/k", "move"),
                     KeyHint::new("enter", "open"),
                     KeyHint::new("ctrl+r", "resume"),
-                    KeyHint::new("ctrl+f", "search"),
+                    KeyHint::new("/", "search"),
                     KeyHint::new("esc", "back"),
                 ])
                 .render(body, buf);

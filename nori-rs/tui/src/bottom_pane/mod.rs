@@ -37,11 +37,14 @@ pub(crate) use component_picker_view::ComponentPickerParams;
 pub(crate) use list_selection_view::ListSelectionView;
 pub(crate) use list_selection_view::SelectionViewParams;
 mod paste_burst;
+pub(crate) mod picker_keys;
 pub mod popup_consts;
 mod queued_user_messages;
 mod scroll_state;
 mod session_list_view;
 pub(crate) use session_list_view::SessionRow;
+#[cfg(test)]
+mod request_key_tests;
 mod selection_popup_common;
 mod skill_popup;
 mod textarea;
@@ -92,6 +95,7 @@ pub(crate) struct BottomPane {
     /// Whether vim mode is enabled, used to configure selection view behavior.
     /// Whether ACP wire JSONL recording is enabled for future child subprocesses.
     acp_wire_recording_enabled: bool,
+    clock: crate::answer_guard::Clock,
 }
 
 pub(crate) struct BottomPaneParams {
@@ -109,6 +113,8 @@ pub(crate) struct BottomPaneParams {
     pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
     pub(crate) agent_display_name: String,
     pub(crate) agent_slug: String,
+    /// The time source for request answer grace periods.
+    pub(crate) clock: crate::answer_guard::Clock,
 }
 
 impl BottomPane {
@@ -128,6 +134,7 @@ impl BottomPane {
             footer_layout_config,
             agent_display_name,
             agent_slug,
+            clock,
         } = params;
         let mut composer = ChatComposer::new(
             has_input_focus,
@@ -157,6 +164,7 @@ impl BottomPane {
             agent_display_name,
             agent_slug,
             acp_wire_recording_enabled: false,
+            clock,
         };
 
         // Set description overrides for the slash command popup so that
@@ -167,6 +175,18 @@ impl BottomPane {
         }
 
         pane
+    }
+
+    /// Restarts the answer grace period of the request on screen, if any.
+    pub(crate) fn request_shown(&mut self) {
+        if let Some(view) = self.view_stack.last_mut() {
+            view.request_shown();
+        }
+    }
+
+    /// The time source request prompts measure their grace period with.
+    pub(crate) fn clock(&self) -> crate::answer_guard::Clock {
+        self.clock.clone()
     }
 
     pub fn status_widget(&self) -> Option<&StatusIndicatorWidget> {
@@ -798,6 +818,7 @@ impl BottomPane {
             request,
             self.app_event_tx.clone(),
             self.agent_display_name.clone(),
+            self.clock.clone(),
         );
         self.pause_status_timer_for_modal();
         self.push_view(Box::new(modal));
@@ -1027,6 +1048,7 @@ mod tests {
                 footer_layout_config: nori_config::FooterLayoutConfig::default(),
                 agent_display_name: String::new(),
                 agent_slug: String::new(),
+                clock: crate::answer_guard::Clock::system(),
             }),
             rx,
         )
@@ -1466,6 +1488,7 @@ mod tests {
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
+            clock: crate::answer_guard::Clock::system(),
         });
         pane.push_approval_request(exec_request());
         assert_eq!(CancellationEvent::Handled, pane.on_ctrl_c());
@@ -1494,6 +1517,7 @@ mod tests {
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
+            clock: crate::answer_guard::Clock::system(),
         });
 
         // Create an approval modal (active view).
@@ -1530,6 +1554,7 @@ mod tests {
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: "ElizACP".to_string(),
             agent_slug: "elizacp".to_string(),
+            clock: crate::answer_guard::Clock::system(),
         });
 
         pane.set_acp_wire_recording_enabled(false);
@@ -1574,6 +1599,7 @@ mod tests {
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
+            clock: crate::answer_guard::Clock::system(),
         });
 
         // Start a running task so the status indicator is active above the composer.
@@ -1651,6 +1677,7 @@ mod tests {
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
+            clock: crate::answer_guard::Clock::system(),
         });
 
         // Begin a task: show initial status.
@@ -1686,6 +1713,7 @@ mod tests {
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
+            clock: crate::answer_guard::Clock::system(),
         });
 
         // Activate spinner (status view replaces composer) with no live ring.
@@ -1724,6 +1752,7 @@ mod tests {
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
+            clock: crate::answer_guard::Clock::system(),
         });
 
         pane.set_task_running(true);
@@ -1758,6 +1787,7 @@ mod tests {
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
+            clock: crate::answer_guard::Clock::system(),
         });
 
         pane.set_task_running(true);
@@ -1792,6 +1822,7 @@ mod tests {
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
+            clock: crate::answer_guard::Clock::system(),
         });
 
         // Push the initial selection view.

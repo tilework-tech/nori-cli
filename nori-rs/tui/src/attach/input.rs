@@ -15,6 +15,13 @@ use super::runtime::Runtime;
 impl Runtime {
     /// False means detach. It never requests host or session shutdown.
     pub fn key(&mut self, key: KeyEvent) -> bool {
+        self.note_request_on_screen();
+        let handled = self.handle_key(key);
+        self.note_request_on_screen();
+        handled
+    }
+
+    fn handle_key(&mut self, key: KeyEvent) -> bool {
         if key.kind == KeyEventKind::Release {
             return true;
         }
@@ -115,6 +122,11 @@ impl Runtime {
         if !self.state.list_open && self.state.request_on_screen() {
             let passes = matches!(key.code, KeyCode::PageUp | KeyCode::PageDown);
             if !passes {
+                // A key typed just as the request appeared was meant for
+                // the composer.
+                if !self.answer_guard.allows(&key) {
+                    return true;
+                }
                 if !self.delegation_key(key) {
                     self.permission_key(key);
                 }
@@ -206,20 +218,19 @@ impl Runtime {
         true
     }
 
+    /// The shared picker keys. While the composer holds text, only the
+    /// arrows and Ctrl+F act on the list; other keys edit the draft.
     fn picker_key(&mut self, key: KeyEvent) -> bool {
-        let action = match (key.code, key.modifiers) {
-            (KeyCode::Char('f'), KeyModifiers::CONTROL) => PickerAction::ActivateSearch,
-            (KeyCode::Up, _) => PickerAction::MoveUp,
-            (KeyCode::Down, _) => PickerAction::MoveDown,
-            (KeyCode::Enter, _) if self.composer.is_empty() => PickerAction::Submit,
-            (KeyCode::Backspace, _) if self.state.picker.search_active => PickerAction::Backspace,
-            (KeyCode::Char(character), KeyModifiers::NONE | KeyModifiers::SHIFT)
-                if self.state.picker.search_active =>
-            {
-                PickerAction::AppendQuery(character)
-            }
-            _ => return false,
+        let search_active = self.state.picker.search_active;
+        let Some(action) = crate::bottom_pane::picker_keys::navigation_action(&key, search_active)
+        else {
+            return false;
         };
+        let list_only = matches!(key.code, KeyCode::Up | KeyCode::Down)
+            || key.modifiers == KeyModifiers::CONTROL;
+        if !search_active && !list_only && !self.composer.is_empty() {
+            return false;
+        }
         if let PickerOutcome::Selected(id) = self.state.picker.handle(action) {
             self.open_session(id);
         }

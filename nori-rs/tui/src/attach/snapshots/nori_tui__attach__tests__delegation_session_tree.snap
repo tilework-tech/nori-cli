@@ -6,7 +6,7 @@ expression: rendered
  Sessions · /new starts a session · ctrl+d detaches
  ● Ship tree picker › Port picker is waiting on you · alt+down to jump
 
-Sessions 5
+Sessions 5 · 1 waiting on you · 1 failed · 1 working · 2 ready
 
   Session                                        Agent         Status
 › ⠋ Ship tree picker                             mock-model    working
@@ -27,7 +27,7 @@ Sessions 5
 
 
 
-↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+↑↓/j/k move  enter open  ctrl+r resume  / search  esc back
 
 
 › Send a prompt

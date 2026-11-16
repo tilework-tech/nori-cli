@@ -452,6 +452,7 @@ fn watcher_cannot_answer_a_permission_request_but_controller_can() {
         controller.settle(Duration::from_millis(50));
     }
     let before = refusal_count(&mut watcher);
+    watcher.wait_out_answer_grace();
     watcher.send_key(Key::Enter).unwrap();
     wait_refusal(&mut watcher, before);
     assert!(
@@ -859,6 +860,7 @@ fn delegated_child_in_host_list_preserves_metadata_columns_and_can_be_opened() {
     client.send_key(Key::AltDown).unwrap();
     client.wait_for_text("child-column-check", TIMEOUT).unwrap();
     client.wait_for_text("Allow", TIMEOUT).unwrap();
+    client.wait_out_answer_grace();
     client.send_key(Key::Char('1')).unwrap();
     client
         .wait_for_text("Permission granted with option: allow", TIMEOUT)

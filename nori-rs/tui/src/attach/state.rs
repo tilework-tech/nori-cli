@@ -46,6 +46,9 @@ pub(super) struct SessionRow {
     /// the rest below.
     #[serde(default)]
     pub reply_preview: Option<String>,
+    /// What the session asks for while it waits on the user.
+    #[serde(default)]
+    pub waiting_request: Option<String>,
     /// The model's display name.
     #[serde(default)]
     pub model: Option<String>,
@@ -151,7 +154,13 @@ impl AttachState {
                     .clone_from(&row.delegations);
             }
         }
-        self.picker.title = format!("Sessions {}", self.sessions.len());
+        // The same summary as the local list's header.
+        self.picker.title =
+            match crate::session_status::status_summary(self.sessions.iter().map(|row| row.status))
+            {
+                Some(summary) => format!("Sessions {} · {summary}", self.sessions.len()),
+                None => format!("Sessions {}", self.sessions.len()),
+            };
         let links: Vec<(&str, Option<&str>)> = self
             .sessions
             .iter()
@@ -173,9 +182,12 @@ impl AttachState {
                     .unwrap_or(row.status);
                 // Older hosts send neither field; only a host that reports
                 // activity can say there is no reply yet.
+                // A session waiting on the user shows what it asks for.
                 let reply = row
-                    .reply_preview
+                    .waiting_request
                     .as_deref()
+                    .filter(|_| row.status == SessionStatus::WaitingOnYou)
+                    .or(row.reply_preview.as_deref())
                     .unwrap_or(if row.idle_seconds.is_some() {
                         session_table::NO_REPLY
                     } else {
@@ -267,6 +279,30 @@ impl AttachState {
                         delegation.status == nori_protocol::DelegationStatus::AwaitingApproval
                     })
             })
+    }
+
+    /// Which request the screen shows, if any: the session and the request
+    /// it answers.
+    pub fn request_on_screen_id(&self) -> Option<String> {
+        if self.list_open {
+            return None;
+        }
+        let id = self.selected.as_ref()?;
+        let conversation = self.conversations.get(id)?;
+        let request = conversation
+            .permissions
+            .first()
+            .map(|permission| permission.request_id.to_string())
+            .or_else(|| {
+                conversation
+                    .delegations
+                    .iter()
+                    .find(|delegation| {
+                        delegation.status == nori_protocol::DelegationStatus::AwaitingApproval
+                    })
+                    .map(|delegation| delegation.request_id.clone())
+            })?;
+        Some(format!("{id}/{request}"))
     }
 
     pub fn permission_count(&self, id: &str) -> usize {

@@ -103,10 +103,17 @@ pub fn context_text(
     window_tokens: Option<i64>,
     used_tokens: Option<i64>,
 ) -> Option<String> {
-    let window = window_tokens
-        .filter(|&tokens| tokens > 0)
-        .map(compact_tokens);
-    let used = used_tokens.filter(|&tokens| tokens > 0).map(compact_tokens);
+    context_with(percent, window_tokens, used_tokens, compact_tokens)
+}
+
+fn context_with(
+    percent: Option<i64>,
+    window_tokens: Option<i64>,
+    used_tokens: Option<i64>,
+    tokens: fn(i64) -> String,
+) -> Option<String> {
+    let window = window_tokens.filter(|&count| count > 0).map(tokens);
+    let used = used_tokens.filter(|&count| count > 0).map(tokens);
     match (percent.map(|percent| percent.clamp(0, 100)), window, used) {
         (Some(percent), Some(window), _) => Some(format!("{percent}% / {window}")),
         (Some(percent), None, _) => Some(format!("{percent}%")),
@@ -115,12 +122,47 @@ pub fn context_text(
     }
 }
 
-/// [`context_text`] from an agent's usage report: tokens in context and the
+/// [`context_text`] for the Context column, which it always fits: when the
+/// status bar's form is too wide, token counts keep at most one decimal, so
+/// `100% / 1.05M` reads `100% / 1.1M`.
+pub fn context_cell(
+    percent: Option<i64>,
+    window_tokens: Option<i64>,
+    used_tokens: Option<i64>,
+) -> Option<String> {
+    let full = context_text(percent, window_tokens, used_tokens)?;
+    if unicode_width::UnicodeWidthStr::width(full.as_str()) <= CONTEXT_CELLS as usize {
+        return Some(full);
+    }
+    context_with(percent, window_tokens, used_tokens, short_tokens)
+}
+
+/// Token counts with at most one decimal, such as `8.5k` or `1.1M`.
+fn short_tokens(value: i64) -> String {
+    let value = value.max(0);
+    if value < 1_000 {
+        return value.to_string();
+    }
+    for (scale, suffix) in [(1_000_i64, "k"), (1_000_000, "M"), (1_000_000_000, "G")] {
+        let scaled = value as f64 / scale as f64;
+        let digits = if scaled < 9.95 {
+            format!("{scaled:.1}")
+        } else if scaled < 999.5 {
+            format!("{scaled:.0}")
+        } else {
+            continue;
+        };
+        return format!("{}{suffix}", digits.trim_end_matches(".0"));
+    }
+    format!("{}G", value / 1_000_000_000)
+}
+
+/// [`context_cell`] from an agent's usage report: tokens in context and the
 /// context window size.
 pub fn context_from_usage(used: i64, size: i64) -> Option<String> {
     (size > 0).then(|| {
         let percent = used.saturating_mul(100).saturating_div(size);
-        context_text(Some(percent), Some(size), Some(used))
+        context_cell(Some(percent), Some(size), Some(used))
     })?
 }
 
@@ -186,6 +228,40 @@ mod tests {
             [0, 59, 60, 3599, 3600, 86_400 * 2].map(ago),
             ["0s ago", "59s ago", "1m ago", "59m ago", "1h ago", "2d ago"]
         );
+    }
+
+    #[test]
+    fn context_always_fits_its_column() {
+        assert_eq!(
+            context_from_usage(1_050_000, 1_050_000).as_deref(),
+            Some("100% / 1.1M")
+        );
+        assert_eq!(
+            context_from_usage(52_500, 1_050_000).as_deref(),
+            Some("5% / 1.05M"),
+            "a value that fits keeps the status bar's digits"
+        );
+        for size in [
+            999,
+            8_500,
+            99_950,
+            475_000,
+            999_600,
+            9_960_000,
+            1_000_000,
+            1_050_000,
+            12_340_000,
+            999_000_000,
+            5_000_000_000,
+        ] {
+            for used in [0, size / 20, size] {
+                let text = context_from_usage(used, size).unwrap_or_default();
+                assert!(
+                    unicode_width::UnicodeWidthStr::width(text.as_str()) <= CONTEXT_CELLS as usize,
+                    "{used} of {size}: {text}"
+                );
+            }
+        }
     }
 
     #[test]

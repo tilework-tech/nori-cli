@@ -12,6 +12,9 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use std::time::Instant;
 
+/// Longer than the TUI's request answer grace period (400 ms).
+pub const ANSWER_GRACE: Duration = Duration::from_millis(500);
+
 /// Debug styles for colored output. Uses owo-colors Style which respects
 /// color settings - when colors are disabled, styles become no-ops.
 struct DebugStyles {
@@ -561,6 +564,12 @@ trust_level = "trusted"
     /// followed by the visible screen.
     pub fn history_contents(&mut self) -> String {
         self.emulator.history_contents()
+    }
+
+    /// Waits out the grace period in which a newly shown request ignores
+    /// option keys, so the next key answers it.
+    pub fn wait_out_answer_grace(&mut self) {
+        self.settle(ANSWER_GRACE);
     }
 
     /// Keep reading output for `duration`, so the emulator catches up with

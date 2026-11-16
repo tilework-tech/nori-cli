@@ -116,9 +116,9 @@ impl SessionListView {
             text.push_str(&summary);
         }
         let hint = if self.state.active_category.is_some() {
-            "  tab: all sessions · type to search"
+            "  tab: all sessions · / search"
         } else {
-            "  tab: waiting only · type to search"
+            "  tab: waiting only · / search"
         };
         Line::from(vec![text.bold(), hint.dim()])
     }
@@ -261,25 +261,14 @@ impl BottomPaneView for SessionListView {
             return;
         }
         let action = match (key.code, key.modifiers) {
-            (KeyCode::Up, _) | (KeyCode::Char('p'), KeyModifiers::CONTROL) => PickerAction::MoveUp,
-            (KeyCode::Down, _) | (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
-                PickerAction::MoveDown
-            }
-            (KeyCode::PageUp, _) => PickerAction::PageUp,
-            (KeyCode::PageDown, _) => PickerAction::PageDown,
-            (KeyCode::Home, _) => PickerAction::First,
-            (KeyCode::End, _) => PickerAction::Last,
+            (KeyCode::Char('p'), KeyModifiers::CONTROL) => PickerAction::MoveUp,
+            (KeyCode::Char('n'), KeyModifiers::CONTROL) => PickerAction::MoveDown,
             (KeyCode::Tab, _) => PickerAction::NextCategory,
             (KeyCode::BackTab, _) => PickerAction::PreviousCategory,
-            (KeyCode::Enter, _) => PickerAction::Submit,
-            (KeyCode::Backspace, _) => PickerAction::Backspace,
-            (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
-                if !self.state.search_active {
-                    self.state.handle(PickerAction::ActivateSearch);
-                }
-                PickerAction::AppendQuery(c)
-            }
-            _ => return,
+            _ => match super::picker_keys::navigation_action(&key, self.state.search_active) {
+                Some(action) => action,
+                None => return,
+            },
         };
         self.apply(action);
     }
@@ -294,11 +283,10 @@ impl BottomPaneView for SessionListView {
     }
 
     fn on_escape(&mut self) -> CancellationEvent {
-        if self.state.query.is_empty() {
-            self.complete = true;
+        if self.state.search_active {
+            self.apply(PickerAction::DeactivateSearch);
         } else {
-            self.state.handle(PickerAction::ClearQuery);
-            self.state.handle(PickerAction::DeactivateSearch);
+            self.complete = true;
         }
         CancellationEvent::Handled
     }
@@ -318,12 +306,9 @@ impl Renderable for SessionListView {
         if area.height == 0 {
             return;
         }
-        let header_area = Rect::new(
-            area.x.saturating_add(2),
-            area.y,
-            area.width.saturating_sub(2),
-            1,
-        );
+        // The header starts at the list's left edge, with the tabs, the
+        // row marker and the footer below it.
+        let header_area = Rect::new(area.x, area.y, area.width, 1);
         self.header().render(header_area, buf);
         let list_area = Rect::new(
             area.x,
@@ -340,7 +325,7 @@ impl Renderable for SessionListView {
             .show_details(false)
             .footer_hints(
                 [
-                    Some(KeyHint::new("↑↓", "move")),
+                    Some(KeyHint::new("↑↓/j/k", "move")),
                     Some(KeyHint::new("enter", "open")),
                     self.selected_row()
                         .filter(|row| row.status == SessionStatus::Failed)
@@ -583,9 +568,96 @@ mod tests {
         list.replace_rows(vec![row(1, "session", SessionStatus::Ready)]);
         let screen = render(&list, 80);
         assert!(screen.contains("No sessions waiting on you"), "{screen}");
+        list.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         list.handle_key_event(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE));
         let screen = render(&list, 80);
         assert!(screen.contains("No matching options"), "{screen}");
+    }
+
+    /// The title on the row the marker points at.
+    fn selected_title(list: &SessionListView) -> String {
+        let screen = render(list, 80);
+        screen
+            .lines()
+            .find_map(|line| {
+                let line = line.trim_start_matches('"');
+                line.strip_prefix("› ").map(|rest| {
+                    rest.split("  ")
+                        .next()
+                        .unwrap_or_default()
+                        .trim()
+                        .to_string()
+                })
+            })
+            .unwrap_or_else(|| panic!("a selected row in {screen}"))
+    }
+
+    fn press(list: &mut SessionListView, code: KeyCode) {
+        list.handle_key_event(KeyEvent::new(code, KeyModifiers::NONE));
+    }
+
+    #[test]
+    fn j_and_k_move_through_the_list_and_letters_do_not_filter() {
+        let mut list = view(rich_rows());
+        assert!(selected_title(&list).contains("Greeting in three words"));
+        press(&mut list, KeyCode::Char('j'));
+        assert!(
+            selected_title(&list).contains("inspect the parser"),
+            "j moves down"
+        );
+        press(&mut list, KeyCode::Char('k'));
+        assert!(
+            selected_title(&list).contains("Greeting in three words"),
+            "k moves up"
+        );
+        press(&mut list, KeyCode::Char('x'));
+        let screen = render(&list, 80);
+        for title in [
+            "Greeting in three words",
+            "inspect the parser",
+            "say hi in 3 words",
+        ] {
+            assert!(screen.contains(title), "a letter does not filter: {screen}");
+        }
+    }
+
+    #[test]
+    fn slash_searches_and_esc_leaves_search_before_closing() {
+        let mut list = view(rich_rows());
+        press(&mut list, KeyCode::Char('/'));
+        for character in "say".chars() {
+            press(&mut list, KeyCode::Char(character));
+        }
+        let screen = render(&list, 80);
+        assert!(screen.contains("say hi in 3 words"), "{screen}");
+        assert!(
+            !screen.contains("inspect the parser"),
+            "typing filters while searching: {screen}"
+        );
+
+        list.on_escape();
+        assert!(!list.is_complete(), "the first esc only leaves search");
+        let screen = render(&list, 80);
+        assert!(
+            screen.contains("inspect the parser"),
+            "the filter is gone: {screen}"
+        );
+        press(&mut list, KeyCode::Char('j'));
+        assert!(
+            selected_title(&list).contains("inspect the parser"),
+            "j moves again"
+        );
+
+        list.on_escape();
+        assert!(list.is_complete(), "the second esc closes the list");
+    }
+
+    #[test]
+    fn the_hints_name_j_k_and_slash() {
+        let screen = render(&view(rich_rows()), 120);
+        assert!(screen.contains("↑↓/j/k move"), "{screen}");
+        assert!(screen.contains("/ search"), "{screen}");
+        assert!(!screen.contains("type to search"), "{screen}");
     }
 
     #[test]
@@ -646,6 +718,25 @@ mod tests {
                 .any(|line| line.contains("Sessions 3 · 2 working")),
             "{screen}"
         );
+    }
+
+    #[test]
+    fn the_header_lines_up_with_the_rows_below_it() {
+        let screen = render(&view(rich_rows()), 80);
+        let indent = |needle: &str| {
+            let line = screen
+                .lines()
+                .find(|line| line.contains(needle))
+                .unwrap_or_else(|| panic!("{needle} in {screen}"));
+            let line = line.trim_start_matches('"');
+            line.len() - line.trim_start().len()
+        };
+        assert_eq!(
+            indent("Sessions 3"),
+            indent("All  waiting on you"),
+            "{screen}"
+        );
+        assert_eq!(indent("Sessions 3"), indent("› "), "{screen}");
     }
 
     fn render_buffer(view: &SessionListView, width: u16) -> ratatui::buffer::Buffer {

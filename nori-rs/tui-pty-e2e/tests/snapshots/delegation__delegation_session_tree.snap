@@ -2,7 +2,7 @@
 source: tui-pty-e2e/tests/delegation.rs
 expression: normalize_for_input_snapshot(list)
 ---
-  Sessions 2 · 1 ready  tab: waiting only · type to search
+Sessions 2 · 1 ready  tab: waiting only · / search
 
 All  waiting on you
 
@@ -12,4 +12,4 @@ All  waiting on you
   └─ · mock:request-permission:write-child-file                                          mock-model-…  done
        Permission granted with option: allow                                             Mock D…Model  N ago
 
-↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close

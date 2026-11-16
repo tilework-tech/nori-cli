@@ -11,7 +11,6 @@ use std::time::Instant;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
 use nori_protocol::SessionEvent;
-use nori_protocol::SessionPhase;
 use nori_protocol::acp::v1 as acp;
 
 use crate::app_event::SessionGeneration;
@@ -24,8 +23,8 @@ struct Preview {
     /// names it. Stays open for more chunks until something else arrives.
     first_prompt: Option<String>,
     first_prompt_open: bool,
-    /// Requests waiting on the user, in arrival order.
-    pending: Vec<(acp::RequestId, String)>,
+    /// Requests waiting on the user.
+    pending: nori_protocol::PendingRequest,
     reply: nori_protocol::ReplyPreview,
     last_activity: Option<Instant>,
 }
@@ -41,6 +40,7 @@ impl SessionPreviews {
         let preview = self.sessions.entry(generation).or_default();
         preview.last_activity = Some(Instant::now());
         preview.reply.observe(event);
+        preview.pending.observe(event);
         let user_chunk = matches!(
             event,
             SessionEvent::Acp(AcpEvent::Notification(
@@ -54,34 +54,10 @@ impl SessionPreviews {
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::AgentNotification::SessionNotification(notification),
             )) => observe_update(preview, &notification.update),
-            SessionEvent::Acp(AcpEvent::Request {
-                request_id,
-                request: acp::AgentRequest::RequestPermissionRequest(request),
-            }) => {
-                let subject = first_text(request.tool_call.fields.content.as_deref())
-                    .or_else(|| request.tool_call.fields.title.clone())
-                    .unwrap_or_else(|| "a tool call".to_string());
-                preview.pending.push((
-                    request_id.clone(),
-                    format!("approve: {}", first_line(&subject)),
-                ));
-            }
-            SessionEvent::Acp(AcpEvent::Response { request_id, .. }) => {
-                preview.pending.retain(|(id, _)| id != request_id);
-            }
             SessionEvent::Acp(_) => {}
-            SessionEvent::Nori(NoriEvent::RequestResolved(resolved)) => {
-                preview.pending.retain(|(id, _)| *id != resolved.request_id);
-            }
             SessionEvent::Nori(NoriEvent::PromptSummaryUpdated(summary)) => {
                 preview.title = Some(summary.summary.clone());
             }
-            SessionEvent::Nori(NoriEvent::SessionPhaseChanged(phase)) => match phase {
-                SessionPhase::Idle => preview.pending.clear(),
-                SessionPhase::Prompting { .. }
-                | SessionPhase::Loading { .. }
-                | SessionPhase::Cancelling { .. } => {}
-            },
             // A `/delegate` sent before any prompt names the session by its
             // task. A child's own first prompt is that same task.
             SessionEvent::Nori(NoriEvent::DelegationChanged(delegation))
@@ -91,7 +67,6 @@ impl SessionPreviews {
                 preview.first_prompt = delegation.task.lines().next().map(str::to_owned);
                 preview.first_prompt_open = false;
             }
-            SessionEvent::Nori(NoriEvent::SessionEnded(_)) => preview.pending.clear(),
             SessionEvent::Nori(_) => {}
         }
     }
@@ -129,10 +104,7 @@ impl SessionPreviews {
 
     /// The request this session is waiting on, if any, as shown in its preview.
     pub(crate) fn pending_request(&self, generation: SessionGeneration) -> Option<String> {
-        self.sessions
-            .get(&generation)
-            .and_then(|preview| preview.pending.first())
-            .map(|(_, request)| request.clone())
+        self.sessions.get(&generation)?.pending.text()
     }
 }
 
@@ -161,23 +133,10 @@ fn observe_update(preview: &mut Preview, update: &acp::SessionUpdate) {
     }
 }
 
-fn first_text(content: Option<&[acp::ToolCallContent]>) -> Option<String> {
-    content?.iter().find_map(|item| match item {
-        acp::ToolCallContent::Content(content) => match &content.content {
-            acp::ContentBlock::Text(text) => Some(text.text.clone()),
-            _ => None,
-        },
-        _ => None,
-    })
-}
-
-fn first_line(text: &str) -> String {
-    text.lines().next().unwrap_or_default().trim().to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nori_protocol::SessionPhase;
     use pretty_assertions::assert_eq;
 
     fn update(update: acp::SessionUpdate) -> SessionEvent {

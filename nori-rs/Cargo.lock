@@ -3828,6 +3828,7 @@ dependencies = [
  "owo-colors",
  "predicates",
  "pretty_assertions",
+ "ratatui",
  "regex-lite",
  "serde",
  "serde_json",

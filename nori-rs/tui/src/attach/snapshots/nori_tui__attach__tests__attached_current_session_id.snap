@@ -6,7 +6,7 @@ expression: rendered
  mock-model · Review parser · ready
 
 
-Sessions 1
+Sessions 1 · 1 ready
 
   Session                                        Agent         Status
 › ○ Review parser (current)                      mock-model    ready
@@ -15,7 +15,7 @@ Sessions 1
 
 
 
-↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+↑↓/j/k move  enter open  ctrl+r resume  / search  esc back
 
 
 › Send a prompt

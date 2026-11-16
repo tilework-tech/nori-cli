@@ -31,6 +31,10 @@ pub(super) struct Runtime {
     /// The unsent edit of each session not on screen, restored when it
     /// returns.
     drafts: HashMap<String, crate::bottom_pane::ComposerDraft>,
+    /// Holds back option keys just after a request comes on screen.
+    pub(super) answer_guard: crate::answer_guard::AnswerGuard,
+    /// The request last seen on screen, to notice when another one appears.
+    request_on_screen: Option<String>,
 }
 
 impl Runtime {
@@ -57,6 +61,15 @@ impl Runtime {
     }
 
     pub fn new(selected: Option<String>, requests: mpsc::UnboundedSender<Value>) -> Self {
+        Self::with_clock(selected, requests, crate::answer_guard::Clock::system())
+    }
+
+    /// A runtime whose request grace periods read `clock`.
+    pub fn with_clock(
+        selected: Option<String>,
+        requests: mpsc::UnboundedSender<Value>,
+        clock: crate::answer_guard::Clock,
+    ) -> Self {
         let mut composer = crate::ComposerInput::for_attachment();
         composer.set_hint_items(vec![
             ("alt+s", "sessions"),
@@ -79,6 +92,20 @@ impl Runtime {
             next_waiting_binding: nori_config::HotkeyConfig::default().next_waiting_session,
             next_waiting_after_refresh: false,
             drafts: HashMap::new(),
+            answer_guard: crate::answer_guard::AnswerGuard::new(clock),
+            request_on_screen: None,
+        }
+    }
+
+    /// Starts the answer grace period when a request other than the last one
+    /// seen is now on screen.
+    pub(super) fn note_request_on_screen(&mut self) {
+        let shown = self.state.request_on_screen_id();
+        if shown != self.request_on_screen {
+            if shown.is_some() {
+                self.answer_guard.shown();
+            }
+            self.request_on_screen = shown;
         }
     }
 
@@ -100,6 +127,7 @@ impl Runtime {
         self.state.notice = None;
         self.state.replay_error = None;
         self.subscribe_selected();
+        self.note_request_on_screen();
     }
 
     pub fn send(&mut self, method: &str, params: Value, pending: Pending) {
@@ -169,6 +197,7 @@ impl Runtime {
             }
             ConnectionEvent::Message(message) => self.message(message)?,
         }
+        self.note_request_on_screen();
         Ok(())
     }
 

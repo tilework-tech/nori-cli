@@ -74,7 +74,28 @@ pub(crate) fn make_chatwidget_manual_with_footer_config(
     tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
     tokio::sync::mpsc::UnboundedReceiver<()>,
 ) {
-    make_chatwidget_manual_for_mode(footer_segment_config, footer_layout_config, false)
+    make_chatwidget_manual_for_mode(
+        footer_segment_config,
+        footer_layout_config,
+        false,
+        crate::answer_guard::Clock::system(),
+    )
+}
+
+/// A chat widget whose request prompts read `clock`.
+pub(crate) fn make_chatwidget_with_clock(
+    clock: crate::answer_guard::Clock,
+) -> (
+    ChatWidget,
+    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    tokio::sync::mpsc::UnboundedReceiver<()>,
+) {
+    make_chatwidget_manual_for_mode(
+        nori_config::FooterSegmentConfig::default(),
+        nori_config::FooterLayoutConfig::default(),
+        false,
+        clock,
+    )
 }
 
 pub(crate) fn make_cloud_chatwidget_manual() -> (
@@ -86,6 +107,7 @@ pub(crate) fn make_cloud_chatwidget_manual() -> (
         nori_config::FooterSegmentConfig::default(),
         nori_config::FooterLayoutConfig::default(),
         true,
+        crate::answer_guard::Clock::system(),
     )
 }
 
@@ -93,6 +115,7 @@ fn make_chatwidget_manual_for_mode(
     footer_segment_config: nori_config::FooterSegmentConfig,
     footer_layout_config: nori_config::FooterLayoutConfig,
     cloud_mode: bool,
+    clock: crate::answer_guard::Clock,
 ) -> (
     ChatWidget,
     tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
@@ -120,6 +143,7 @@ fn make_chatwidget_manual_for_mode(
         session_manager: nori_harness::session_manager::SessionManager::new(
             nori_harness::session_manager::SessionManagerConfig::default(),
         ),
+        clock,
     });
     let (_unused_tx, unused_rx) = unbounded_channel();
     (widget, event_rx, unused_rx)

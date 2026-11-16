@@ -28,6 +28,7 @@ use tracing_subscriber::prelude::*;
 pub use ui_types::TokenUsage;
 
 mod additional_dirs;
+mod answer_guard;
 mod app;
 mod app_backtrack;
 mod app_event;

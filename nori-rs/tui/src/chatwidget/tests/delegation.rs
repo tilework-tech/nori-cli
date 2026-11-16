@@ -60,10 +60,74 @@ fn render_bottom_pane(chat: &ChatWidget) -> String {
 }
 
 fn delegating_parent() -> (ChatWidget, tokio::sync::mpsc::UnboundedReceiver<AppEvent>) {
-    let (mut chat, mut rx, _) = make_chatwidget_manual();
+    let (chat, rx, _) = delegating_parent_with_clock();
+    (chat, rx)
+}
+
+/// A delegating parent whose prompts read a clock the test steps.
+fn delegating_parent_with_clock() -> (
+    ChatWidget,
+    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    crate::answer_guard::ManualClock,
+) {
+    let clock = crate::answer_guard::ManualClock::new();
+    let (mut chat, mut rx, _) = make_chatwidget_with_clock(clock.clock());
     chat.config.multi_session = true;
     while rx.try_recv().is_ok() {}
-    (chat, rx)
+    (chat, rx, clock)
+}
+
+fn resolved_delegation(rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>) -> Option<bool> {
+    let mut resolved = None;
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::ResolveDelegation { approved, .. } = event {
+            resolved = Some(approved);
+        }
+    }
+    resolved
+}
+
+#[test]
+fn option_keys_typed_as_a_delegation_request_appears_do_not_answer_it() {
+    for code in [
+        crossterm::event::KeyCode::Char('1'),
+        crossterm::event::KeyCode::Char('2'),
+        crossterm::event::KeyCode::Enter,
+    ] {
+        let (mut chat, mut rx, clock) = delegating_parent_with_clock();
+        chat.set_composer_text("my draft".into());
+        let generation = chat.session_generation();
+        chat.handle_session_event(generation, delegation("awaiting_approval"));
+        clock.advance(
+            crate::answer_guard::REQUEST_ANSWER_GRACE - std::time::Duration::from_millis(1),
+        );
+
+        chat.handle_key_event(crossterm::event::KeyEvent::new(
+            code,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+
+        assert_eq!(
+            resolved_delegation(&mut rx),
+            None,
+            "{code:?} answered too early"
+        );
+        assert_eq!(
+            chat.composer_text(),
+            "my draft",
+            "{code:?} changed the draft"
+        );
+        clock.pass_grace();
+        chat.handle_key_event(crossterm::event::KeyEvent::new(
+            code,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(
+            resolved_delegation(&mut rx),
+            Some(code != crossterm::event::KeyCode::Char('2')),
+            "{code:?} answers once the request has been visible for a moment"
+        );
+    }
 }
 
 #[test]
@@ -383,8 +447,7 @@ fn local_delegate_rejects_flag_off_without_prompting_agent() {
 
 #[test]
 fn forked_parent_refreshes_pending_approval_target() {
-    let (mut chat, mut rx, _) = make_chatwidget_manual();
-    chat.config.multi_session = true;
+    let (mut chat, mut rx, clock) = delegating_parent_with_clock();
     let generation = chat.session_generation();
     chat.handle_session_event(generation, delegation("awaiting_approval"));
     let nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::DelegationChanged(mut changed)) =
@@ -397,6 +460,7 @@ fn forked_parent_refreshes_pending_approval_target() {
         generation,
         nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::DelegationChanged(changed)),
     );
+    clock.pass_grace();
     chat.handle_key_event(crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Char('1'),
         crossterm::event::KeyModifiers::NONE,
@@ -434,10 +498,11 @@ fn delegation_result_and_parent_continuation_preserve_composer_draft() {
 
 #[test]
 fn a_shown_delegation_request_takes_enter_from_the_draft_and_keeps_it() {
-    let (mut chat, mut rx) = delegating_parent();
+    let (mut chat, mut rx, clock) = delegating_parent_with_clock();
     chat.set_composer_text("my draft".into());
     let generation = chat.session_generation();
     chat.handle_session_event(generation, delegation("awaiting_approval"));
+    clock.pass_grace();
     chat.handle_key_event(crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Enter,
         crossterm::event::KeyModifiers::NONE,

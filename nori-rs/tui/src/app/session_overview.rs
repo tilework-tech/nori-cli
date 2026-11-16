@@ -191,7 +191,7 @@ impl App {
         let widget = self.widget_for(fact.generation);
         let title = self
             .session_rows_title(fact.generation)
-            .unwrap_or_else(|| "New session".to_string());
+            .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.to_string());
         // A parent speaks for its family: if a child needs the user, so does
         // the parent row.
         let shown_status = if depth == 0 {
@@ -210,7 +210,11 @@ impl App {
                 self.unseen_finishes.is_unseen(fact.generation),
             ),
             family_status: shown_status,
-            reply: self.session_previews.reply(fact.generation),
+            // A session waiting on the user shows what it asks for.
+            reply: (fact.status == SessionStatus::WaitingOnYou)
+                .then(|| self.session_previews.pending_request(fact.generation))
+                .flatten()
+                .or_else(|| self.session_previews.reply(fact.generation)),
             model: widget.and_then(ChatWidget::model_name),
             idle_seconds: self
                 .session_previews

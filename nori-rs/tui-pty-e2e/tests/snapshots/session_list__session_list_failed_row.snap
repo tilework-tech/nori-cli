@@ -12,7 +12,7 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 • alpha agent answer
 
-  Sessions 2 · 1 failed · 1 ready  tab: waiting only · type to search
+Sessions 2 · 1 failed · 1 ready  tab: waiting only · / search
 
 All  waiting on you
 
@@ -22,4 +22,4 @@ All  waiting on you
 › ✕ doomed question                                                  mock-model    failed
     alpha agent answer                                               Mock D…Model  N ago
 
-↑↓ move  enter open  ctrl+r resume  ctrl+d close  tab waiting on you  esc close
+↑↓/j/k move  enter open  ctrl+r resume  ctrl+d close  tab waiting on you  esc close

@@ -2,7 +2,7 @@
 source: tui/src/bottom_pane/session_list_view.rs
 expression: screen
 ---
-"  Sessions 2 · 1 waiting on you · 1 ready  tab: all sessions · type to search   "
+"Sessions 2 · 1 waiting on you · 1 ready  tab: all sessions · / search           "
 "                                                                                "
 "All  waiting on you                                                             "
 "                                                                                "
@@ -10,5 +10,5 @@ expression: screen
 "› ● waiting session (current)                       Mock ACP      waiting on you"
 "    no reply yet                                                                "
 "                                                                                "
-"↑↓ move  enter open  ctrl+d close  tab all sessions  esc close                  "
+"↑↓/j/k move  enter open  ctrl+d close  tab all sessions  esc close              "
 "                                                                                "

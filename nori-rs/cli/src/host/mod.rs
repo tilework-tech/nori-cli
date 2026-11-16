@@ -1,6 +1,7 @@
 //! Background session host commands and local discovery.
 
 mod service;
+mod session_lookup;
 mod state;
 mod table;
 
@@ -80,12 +81,23 @@ pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow
             as Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>);
         (host.endpoint, token)
     };
+    // A session can be named by the start of its ID; the host knows only
+    // full IDs.
+    let session_id = match command.session_id {
+        Some(full) if uuid::Uuid::parse_str(&full).is_ok() => Some(full),
+        Some(query) => {
+            let mut client = connect_endpoint(&endpoint, &token).await?;
+            let listing = client.request("_nori/session/list", json!({})).await?;
+            Some(session_lookup::resolve_session(&listing, &query)?)
+        }
+        None => None,
+    };
     nori_tui::run_attach(
         config,
         nori_tui::AttachOptions {
             endpoint,
             token,
-            session_id: command.session_id,
+            session_id,
             refresh_local_token,
         },
     )
@@ -151,16 +163,21 @@ pub(crate) async fn run(command: HostCommand, config: Option<NoriConfig>) -> any
 
 async fn connect(files: &HostFiles) -> anyhow::Result<(ManagedClient, HostState)> {
     let (host, token) = files.read()?;
-    let client = tokio::time::timeout(Duration::from_secs(3), async {
-        let mut client = ManagedClient::connect(&host.endpoint, &token).await?;
+    let client = connect_endpoint(&host.endpoint, &token).await?;
+    Ok((client, host))
+}
+
+/// A watching client of the host at `endpoint`.
+async fn connect_endpoint(endpoint: &str, token: &str) -> anyhow::Result<ManagedClient> {
+    tokio::time::timeout(Duration::from_secs(3), async {
+        let mut client = ManagedClient::connect(endpoint, token).await?;
         client
             .request("initialize", json!({"observe":true}))
             .await?;
         anyhow::Ok(client)
     })
     .await
-    .context("host did not answer")??;
-    Ok((client, host))
+    .context("host did not answer")?
 }
 
 async fn start(files: &HostFiles) -> anyhow::Result<()> {

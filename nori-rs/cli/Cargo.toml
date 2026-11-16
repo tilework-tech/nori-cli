@@ -58,6 +58,7 @@ which = { workspace = true }
 codex_windows_sandbox = { package = "codex-windows-sandbox", path = "../windows-sandbox-rs" }
 
 [dev-dependencies]
+ratatui = { workspace = true }
 insta = { workspace = true }
 assert_cmd = { workspace = true }
 assert_matches = { workspace = true }

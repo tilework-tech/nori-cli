@@ -106,6 +106,7 @@ fn different_kind_child_needs_start_and_its_permission_stays_in_child() {
             .screen_contents()
             .contains("Would you like to allow")
     );
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for(
@@ -124,6 +125,7 @@ fn different_kind_child_needs_start_and_its_permission_stays_in_child() {
         .wait_for_text("Would you like to allow", TIMEOUT)
         .unwrap();
     session.wait_for_text("write-child-file", TIMEOUT).unwrap();
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for_text("Permission granted with option: allow", TIMEOUT)
@@ -155,6 +157,7 @@ fn declining_different_kind_does_not_start_child() {
     session
         .wait_for_text("start a mock-model-alt session", TIMEOUT)
         .unwrap();
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('2')).unwrap();
     session
         .wait_for_text("The user declined this delegation.", TIMEOUT)
@@ -206,6 +209,7 @@ fn delegation_reads_clearly_from_request_to_result() {
         normalize_for_input_snapshot(session.screen_contents())
     );
 
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for(
@@ -240,6 +244,7 @@ fn delegation_reads_clearly_from_request_to_result() {
         .wait_for_text("alt + up to parent", TIMEOUT)
         .expect("the child shows the way back to its parent");
 
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for_text("Permission granted with option: allow", TIMEOUT)
@@ -297,6 +302,7 @@ fn start_waiting_child(session: &mut TuiSession) {
     session
         .wait_for_text("start a mock-model-alt session", TIMEOUT)
         .unwrap();
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for_text("is waiting on you", TIMEOUT)
@@ -321,6 +327,7 @@ fn alt_down_reaches_a_waiting_child_even_with_a_draft_in_the_parent() {
         "the draft stays with the parent:\n{}",
         session.screen_contents()
     );
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for_text("Permission granted with option: allow", TIMEOUT)
@@ -465,6 +472,7 @@ fn the_session_list_keeps_names_with_a_shared_prefix_apart_at_80_columns() {
     session
         .wait_for_text("start a mock-model-alt session", TIMEOUT)
         .unwrap();
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session.wait_for_text("is waiting on you", TIMEOUT).unwrap();
     session.settle(Duration::from_millis(200));

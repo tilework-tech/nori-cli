@@ -117,6 +117,16 @@ fn left_on_an_empty_prompt_lists_sessions_with_status_and_reply() {
     ] {
         assert!(screen.contains(expected), "{expected:?} missing:\n{screen}");
     }
+    // A waiting session's second row says what it asks for.
+    let lines: Vec<&str> = screen.lines().collect();
+    let waiting = lines
+        .iter()
+        .position(|line| line.contains("waiting on you") && line.contains("rm -rf"))
+        .expect("the waiting row");
+    assert!(
+        lines[waiting + 1].contains("approve: rm -rf target/debug"),
+        "{screen}"
+    );
     insta::assert_snapshot!(
         "session_list_three_sessions",
         normalize_for_input_snapshot(screen)
@@ -146,6 +156,7 @@ fn tab_shows_only_sessions_waiting_on_you_and_typing_filters() {
     );
     session.send_key(Key::Tab).unwrap();
 
+    session.send_key(Key::Char('/')).unwrap();
     for c in "gamma".chars() {
         session.send_key(Key::Char(c)).unwrap();
     }
@@ -154,7 +165,7 @@ fn tab_shows_only_sessions_waiting_on_you_and_typing_filters() {
             |screen| screen.contains("○ gamma question") && !screen.contains("○ alpha question"),
             Duration::from_secs(3),
         )
-        .expect("typing filters by title");
+        .expect("after /, typing filters by title");
 
     session.send_key(Key::Escape).unwrap();
     session
@@ -247,6 +258,7 @@ fn a_background_request_is_named_and_one_key_jumps_to_it_for_an_answer() {
             Duration::from_secs(5),
         )
         .expect("next_waiting_session shows the waiting request");
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for_text(
@@ -290,8 +302,11 @@ fn an_agent_that_dies_fails_only_its_session_which_can_be_resumed() {
         .expect("the failed session is listed as failed");
     session.send_key(Key::Down).unwrap();
     session
-        .wait_for_text("ctrl+r resume", Duration::from_secs(3))
-        .expect("the key hint names the resume key on a failed row");
+        .wait_for(
+            |screen| screen.contains("ctrl+r resume") && screen.contains("esc close"),
+            Duration::from_secs(3),
+        )
+        .expect("the key hints, with the resume key on a failed row, are drawn");
     insta::assert_snapshot!(
         "session_list_failed_row",
         normalize_for_input_snapshot(session.screen_contents())

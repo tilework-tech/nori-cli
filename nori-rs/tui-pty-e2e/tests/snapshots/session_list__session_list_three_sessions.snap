@@ -8,7 +8,7 @@ expression: normalize_for_input_snapshot(screen)
 
   ● mock:request-permission:rm -rf target/debug is waiting on you · approve: rm -rf targ… · alt + down to jump
 
-  Sessions 3 · 1 waiting on you · 2 ready  tab: waiting only · type to search
+Sessions 3 · 1 waiting on you · 2 ready  tab: waiting only · type to search
 
 All  waiting on you
 

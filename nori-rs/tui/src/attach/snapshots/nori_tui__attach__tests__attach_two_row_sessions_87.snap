@@ -6,7 +6,7 @@ expression: "screen_area(&state, &crate::ComposerInput::for_attachment(), width,
  claude-code · Greeting in three words · working
 
 
-Sessions 3
+Sessions 3 · 2 working · 1 starting
 
   Session                                     Agent         Status
 › ⠋ Greeting in three words (current)         claude-code   working         8% / 475k
@@ -21,7 +21,7 @@ Sessions 3
 
 
 
-↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+↑↓/j/k move  enter open  ctrl+r resume  / search  esc back
 
 
 › Send a prompt
