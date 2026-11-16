@@ -172,12 +172,15 @@ impl DelegationCell {
     fn header(&self, width: u16) -> Line<'static> {
         let full_name = nori_protocol::session_full_name(&self.delegation.task)
             .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.to_owned());
-        let fixed = self.header_spans(String::new()).width();
+        let fixed = self.header_spans(String::new(), false).width();
         let room = usize::from(width).saturating_sub(fixed).max(MIN_CARD_NAME);
-        self.header_spans(crate::session_path::fit_name(&full_name, room))
+        self.header_spans(crate::session_path::fit_name(&full_name, room), true)
     }
 
-    fn header_spans(&self, name: String) -> Line<'static> {
+    /// The header with `name` for the child; a failure or cancellation reason
+    /// follows only `with_reason`, and wraps rather than taking the name's
+    /// room.
+    fn header_spans(&self, name: String, with_reason: bool) -> Line<'static> {
         let delegation = &self.delegation;
         let mut spans = match delegation.status {
             DelegationStatus::AwaitingApproval | DelegationStatus::Running => {
@@ -210,10 +213,12 @@ impl DelegationCell {
             spans.push(" by you".dim());
         }
         let reason = first_line(delegation.result.as_deref().unwrap_or_default());
-        if matches!(
-            delegation.status,
-            DelegationStatus::Failed | DelegationStatus::Cancelled
-        ) && !reason.is_empty()
+        if with_reason
+            && matches!(
+                delegation.status,
+                DelegationStatus::Failed | DelegationStatus::Cancelled
+            )
+            && !reason.is_empty()
         {
             spans.push(format!(" · {reason}").dim());
         }

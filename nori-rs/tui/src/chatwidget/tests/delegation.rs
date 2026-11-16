@@ -457,7 +457,7 @@ fn a_shown_delegation_request_takes_enter_from_the_draft_and_keeps_it() {
 }
 
 #[test]
-fn a_running_card_fits_one_row_at_80_columns() {
+fn a_running_cards_header_keeps_both_name_ends_on_one_row_at_80_columns() {
     let (mut chat, mut rx) = delegating_parent();
     let generation = chat.session_generation();
     let task = "shared prefix for the parser review: child side mock:request-permission:z";
@@ -479,9 +479,38 @@ fn a_running_card_fits_one_row_at_80_columns() {
         unicode_width::UnicodeWidthStr::width(header.trim_end()) <= 80,
         "{at_80}"
     );
+    assert_eq!(header.matches('…').count(), 1, "{at_80}");
     let wide = lines_to_single_string(&card.display_lines(140));
     assert!(
         wide.contains(task),
         "the whole name shows when it fits:\n{wide}"
+    );
+}
+
+#[test]
+fn a_long_failure_reason_wraps_instead_of_squeezing_the_child_name() {
+    let (mut chat, mut rx) = delegating_parent();
+    let generation = chat.session_generation();
+    let task = "shared prefix for the parser review: child side mock:request-permission:z";
+    let reason = "agent exited during prompt after the connection to its tool server dropped twice";
+    chat.handle_session_event(
+        generation,
+        delegation_with("failed", "agent", task, Some(reason)),
+    );
+    let mut cards = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::InsertHistoryCell(cell) = event {
+            cards.push(cell);
+        }
+    }
+    let card = lines_to_single_string(&cards.first().expect("a card").display_lines(80));
+    let header = card.lines().next().unwrap_or_default();
+    assert!(
+        header.contains("shared prefix") && header.contains("permission:z"),
+        "the name keeps the room it would have without the reason:\n{card}"
+    );
+    assert!(
+        card.contains("tool server"),
+        "the reason is still shown:\n{card}"
     );
 }

@@ -100,13 +100,12 @@ Path: @/nori-rs/tui/src/attach
   no transcript view or local session-list key here, so the cell is built with
   empty `DelegationHints` and shows no key hints. An `awaiting_approval` change
   adds no part; the approval prompt covers it.
-- A request shown for the session on screen (a permission prompt or a
-  delegation approval) takes its keys while the session list is closed, even
-  when the composer holds a draft: Enter, digits, and Up/Down for permission
-  choices; 1, 2, and Enter for a delegation approval. The draft stays
-  untouched, matching the local TUI where the approval overlay takes keys and
-  the composer keeps its text. Other keys still edit the composer. A request
-  in a session that is not on screen does not capture keys.
+- A permission prompt or delegation approval on the on-screen session is modal
+  while the session list is closed, like the local approval overlay. Its keys
+  answer it (permission: Up/Down, plain Enter, 1-9; delegation: 1 or plain
+  Enter approves, 2 declines); PageUp/PageDown and Ctrl+C work as usual; every
+  other key is swallowed, so the draft is never edited or sent. Earlier
+  hotkeys and pastes are unaffected; off-screen requests capture nothing.
 - Child permissions stay in the child's conversation. The configured
   `next_waiting_session` binding (Alt+Down by default) navigates there, even
   with a draft in the composer, as in the local TUI. With nothing waiting in

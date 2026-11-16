@@ -1442,6 +1442,11 @@ fn enter_approves_a_pending_delegation_and_keeps_the_draft() {
     assert_eq!(sent["method"], "_nori/session/delegation/resolve", "{sent}");
     assert_eq!(sent["params"]["approved"], true, "{sent}");
     assert!(rx.try_recv().is_err(), "the draft is not sent as a prompt");
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(
+        rendered.contains("my draft"),
+        "the draft stays:\n{rendered}"
+    );
 }
 
 #[test]
@@ -1461,4 +1466,33 @@ fn a_request_in_another_session_leaves_enter_to_the_draft() {
     let sent = rx.try_recv().expect("the draft is sent");
     assert_eq!(sent["method"], "_nori/session/prompt", "{sent}");
     assert_eq!(sent["params"]["session_id"], "other-session", "{sent}");
+    assert_eq!(sent["params"]["prompt"][0]["text"], "my draft");
+    assert!(
+        rx.try_recv().is_err(),
+        "the other session's request is not answered"
+    );
+}
+
+#[test]
+fn while_a_request_shows_typing_leaves_both_the_request_and_the_draft_alone() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (mut runtime, mut rx) = runtime_with_draft(permission_event(1));
+    for character in " fix bugs".chars() {
+        key(&mut runtime, KeyCode::Char(character), KeyModifiers::NONE);
+    }
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::SHIFT);
+    assert!(rx.try_recv().is_err(), "nothing is answered or sent");
+    let rendered = screen_with_composer(&runtime.state, &runtime.composer);
+    assert!(rendered.contains("my draft"), "{rendered}");
+    assert!(
+        !rendered.contains("fix"),
+        "the request keeps the keys:\n{rendered}"
+    );
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
+    let sent = rx.try_recv().expect("plain enter still answers");
+    assert_eq!(
+        sent["params"]["response"]["outcome"]["optionId"], "allow",
+        "{sent}"
+    );
 }

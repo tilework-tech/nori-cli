@@ -102,13 +102,19 @@ impl Runtime {
         if self.state.list_open && self.picker_key(key) {
             return true;
         }
-        // A request shown for the session on screen takes its keys even
-        // while the composer holds a draft; the draft stays put.
-        if !self.state.list_open && self.delegation_key(key) {
-            return true;
-        }
-        if !self.state.list_open && self.permission_key(key) {
-            return true;
+        // A request shown for the session on screen holds the keyboard, as
+        // the local approval overlay does: its keys answer it, scrolling and
+        // Ctrl+C still work, and anything else leaves the draft untouched.
+        if !self.state.list_open && self.request_shown() {
+            let passes = matches!(key.code, KeyCode::PageUp | KeyCode::PageDown)
+                || (key.code == KeyCode::Char('c')
+                    && key.modifiers.contains(KeyModifiers::CONTROL));
+            if !passes {
+                if !self.delegation_key(key) {
+                    self.permission_key(key);
+                }
+                return true;
+            }
         }
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             if self.composer.is_empty() {
@@ -158,6 +164,21 @@ impl Runtime {
             self.refresh_list();
         }
         false
+    }
+
+    /// Whether the session on screen shows a permission request or a
+    /// delegation waiting for approval.
+    fn request_shown(&self) -> bool {
+        self.state
+            .selected
+            .as_ref()
+            .and_then(|id| self.state.conversations.get(id))
+            .is_some_and(|conversation| {
+                !conversation.permissions.is_empty()
+                    || conversation.delegations.iter().any(|delegation| {
+                        delegation.status == nori_protocol::DelegationStatus::AwaitingApproval
+                    })
+            })
     }
 
     fn delegation_key(&mut self, key: KeyEvent) -> bool {
@@ -236,7 +257,7 @@ impl Runtime {
                     (permission.selected + 1).min(permission.options.len().saturating_sub(1));
                 return true;
             }
-            KeyCode::Enter => permission.selected,
+            KeyCode::Enter if key.modifiers.is_empty() => permission.selected,
             KeyCode::Char(character @ '1'..='9') if key.modifiers.is_empty() => {
                 usize::try_from(character.to_digit(10).unwrap_or(1)).unwrap_or(1) - 1
             }

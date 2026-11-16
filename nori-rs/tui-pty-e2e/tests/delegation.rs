@@ -460,7 +460,12 @@ fn the_session_list_keeps_names_with_a_shared_prefix_apart_at_80_columns() {
     session.send_key(Key::Alt('s')).unwrap();
     session
         .wait_for(
-            |screen| screen.contains("Sessions 2") && screen.contains("(current)"),
+            |screen| {
+                screen.contains("Sessions 2")
+                    && screen.contains("(current)")
+                    && screen.contains("parent side")
+                    && screen.contains("permission:z")
+            },
             TIMEOUT,
         )
         .unwrap();
