@@ -10,9 +10,9 @@ Sessions 2
 
   Session                                        Agent         Status
 › ○ Parent task (current)                        mock-model    ready
-    no reply yet
+
   └─ ● Child task                                mock-model-…  waiting on you
-       no reply yet
+
 
 
 ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back

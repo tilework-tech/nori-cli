@@ -788,16 +788,23 @@ fn host_list_truncates_tty_title_without_losing_piped_title() {
         .lines()
         .find(|line| line.contains("Long title"))
         .expect("session row");
-    let row = row.split("  mock-model").next().unwrap_or_default();
-    assert!(row.contains("Long title") && row.contains('…'), "{screen}");
+    let title_cell = row.split("  mock-model").next().unwrap_or_default();
     assert!(
-        row.trim_end().ends_with("ID column"),
+        title_cell.contains("Long title") && title_cell.contains('…'),
+        "{screen}"
+    );
+    assert!(
+        title_cell.trim_end().ends_with("ID column"),
         "a cut title keeps its end: {screen}"
     );
-    assert_eq!(
-        screen.matches("continuation text").count(),
-        1,
-        "the title never spills onto another row: {screen}"
+    let below = screen
+        .lines()
+        .skip_while(|line| !line.contains("Long title"))
+        .nth(1)
+        .unwrap_or_default();
+    assert!(
+        below.contains(" ago"),
+        "the row under the title is its reply row, not a wrapped title: {screen}"
     );
 }
 

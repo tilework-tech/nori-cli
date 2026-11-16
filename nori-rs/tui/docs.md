@@ -967,9 +967,9 @@ in the prompt still moves the cursor.
   pending requests (used by the background-request line), and the
   last-activity time from session events only, never a call to the agent. The
   reply comes from the shared `nori_protocol::ReplyPreview`, which the host
-  journal also uses: the previous turn's reply stays until the next turn's
-  first agent text; a tool call or request between texts starts a new
-  sentence; whitespace collapses to one line of at most 200 characters.
+  journal also uses: it is the agent text since the last user message, tool
+  call or request, kept until the next agent text replaces it; whitespace
+  collapses to one line of at most 200 characters.
 - The header counts sessions by status. Tab toggles a "waiting on you" filter
   and back (the footer then offers "tab all sessions"); typing filters by title
   or agent; Esc clears the query first, then closes; Enter shows the selected

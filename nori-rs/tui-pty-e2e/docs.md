@@ -165,8 +165,8 @@ typed `HarnessHandle` methods available to headless embedders.
 - Snapshot normalization removes dynamic session IDs, timestamps, status
   text, and disposable temp roots: `/tmp` on Linux plus `/private/tmp`,
   `/var/folders`, and canonicalized `/private/var/folders` on macOS. The
-  session lists' last-activity times (`12s ago`, `3m ago`) have their digits
-  replaced with `N`, keeping the width. Meaningful terminal ordering and
+  session lists' last-activity times (`12s ago`, `3m ago`) all become
+  `N ago`, so snapshots do not depend on how long a test took. Meaningful terminal ordering and
   content remain intact.
 - Transcript pickers treat a v3 transcript as non-empty only when it has at
   least one user turn; lifecycle records alone do not make it resumable.

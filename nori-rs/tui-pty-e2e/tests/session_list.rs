@@ -101,7 +101,7 @@ fn three_sessions() -> TuiSession {
 
 #[test]
 #[cfg(target_os = "linux")]
-fn left_on_an_empty_prompt_lists_sessions_with_status_and_preview() {
+fn left_on_an_empty_prompt_lists_sessions_with_status_and_reply() {
     let mut session = three_sessions();
     session.send_key(Key::Left).unwrap();
     session
@@ -440,9 +440,15 @@ fn the_list_shows_the_title_the_agent_sends_its_reply_and_one_summary() {
     ask(&mut session, "second question", ALPHA_ANSWER);
     session.send_key(Key::Left).unwrap();
     session
-        .wait_for_text("Sessions 2", Duration::from_secs(3))
-        .expect("Left on an empty prompt opens the session list");
-    session.settle(Duration::from_millis(300));
+        .wait_for(
+            |screen| {
+                screen.contains("Sessions 2")
+                    && screen.contains("Greeting in three words")
+                    && screen.contains("8% / 475k")
+            },
+            Duration::from_secs(5),
+        )
+        .expect("the list shows the agent's title and context");
     let screen = session.screen_contents();
     let lines: Vec<&str> = screen.lines().collect();
     let titled = lines

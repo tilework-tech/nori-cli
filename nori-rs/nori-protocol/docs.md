@@ -143,10 +143,12 @@ agent's latest reply for session lists. The host journal in the
 [harness](../harness/docs.md) and the local TUI's session previews both use it,
 so `nori attach`, `nori host ls`, and the local list show the same reply.
 
-- A `Prompting` or `Loading` phase marks the reply stale; the previous turn's
-  reply stays until the new turn's first agent text replaces it.
-- A tool call or agent request after text makes the next text start a new
-  sentence (joined with a space), so separate messages are not glued together.
+- The reply is the agent text since the last user message, tool call, agent
+  request, or `Prompting`/`Loading` phase. Each of those marks the reply
+  stale; the previous reply stays until the next agent text replaces it, so a
+  session running a tool still shows what it last said.
+- A user message counts because a loaded history replays its turns with no
+  phase changes between them; the list then shows the last turn's reply.
 - `text()` collapses whitespace to one line, keeps at most 200 characters
   (lists cut further to their column), and is `None` before any agent text.
 

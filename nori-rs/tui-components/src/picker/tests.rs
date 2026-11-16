@@ -752,7 +752,11 @@ fn a_second_row_value_is_cut_to_its_own_column() {
         .iter()
         .find(|line| line.contains("I traced"))
         .expect("preview row");
-    let agent_start = 52;
+    let header = lines
+        .iter()
+        .find(|line| line.contains("Agent"))
+        .expect("header");
+    let agent_start = cell_of(header, "Agent").expect("Agent column");
     // The reply starts at its beginning and stops before the Agent column.
     let session_cells: String = preview_row.chars().take(agent_start).collect();
     assert!(session_cells.trim_end().ends_with('…'), "{preview_row}");

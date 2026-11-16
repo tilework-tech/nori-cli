@@ -62,6 +62,7 @@ impl Runtime {
             return true;
         }
         if key.code == KeyCode::Esc && !self.state.list_open && self.state.request_on_screen() {
+            self.state.notice = None;
             if !self.delegation_key(key) {
                 self.permission_key(key);
             }

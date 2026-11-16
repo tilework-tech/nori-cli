@@ -1696,35 +1696,3 @@ fn the_attach_list_shows_two_rows_per_session_at_each_layout_width() {
         );
     }
 }
-
-#[test]
-fn the_attach_list_second_row_holds_reply_model_and_last_activity() {
-    let rendered = screen_area(
-        &listed_sessions(),
-        &crate::ComposerInput::for_attachment(),
-        120,
-        24,
-    );
-    let root = rendered
-        .lines()
-        .position(|line| line.contains("⠋ Greeting in three words"))
-        .expect("root row");
-    let first = rendered.lines().nth(root).unwrap_or_default();
-    let second = rendered.lines().nth(root + 1).unwrap_or_default();
-    assert!(first.contains("8% / 475k"), "{rendered}");
-    assert!(second.contains("Hi there, friend!"), "{rendered}");
-    assert!(second.contains("opus 5.5"), "{rendered}");
-    assert!(second.contains("2m ago"), "{rendered}");
-    let fresh = rendered
-        .lines()
-        .position(|line| line.contains("say hi in 3 words"))
-        .expect("fresh row");
-    assert!(
-        rendered
-            .lines()
-            .nth(fresh + 1)
-            .unwrap_or_default()
-            .contains("no reply yet"),
-        "{rendered}"
-    );
-}

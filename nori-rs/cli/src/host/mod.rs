@@ -105,7 +105,8 @@ pub(crate) async fn run(command: HostCommand, config: Option<NoriConfig>) -> any
             let tty = std::io::stdout().is_terminal();
             let width = tty
                 .then(|| crossterm::terminal::size().map_or(80, |(width, _)| usize::from(width)));
-            let shade = if tty {
+            // Reading the terminal's background answers on stdin.
+            let shade = if tty && std::io::stdin().is_terminal() {
                 nori_tui::session_list_shade()
             } else {
                 None

@@ -355,7 +355,9 @@ impl Registry {
                 if let Some(model) = advertised_model(&started.config_options) {
                     entry.settings.model = Some(model);
                 }
-                entry.model_name = advertised_model_name(&started.config_options);
+                if let Some(name) = advertised_model_name(&started.config_options) {
+                    entry.model_name = Some(name);
+                }
             }
             SessionEvent::Nori(NoriEvent::SessionPhaseChanged(phase)) => match phase {
                 SessionPhase::Idle => {
@@ -396,7 +398,9 @@ impl Registry {
                     if let Some(model) = advertised_model(&update.config_options) {
                         entry.settings.model = Some(model);
                     }
-                    entry.model_name = advertised_model_name(&update.config_options);
+                    if let Some(name) = advertised_model_name(&update.config_options) {
+                        entry.model_name = Some(name);
+                    }
                 }
             }
             SessionEvent::Acp(AcpEvent::Request { .. } | AcpEvent::Response { .. })

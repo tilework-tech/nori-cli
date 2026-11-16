@@ -67,7 +67,9 @@ pub(super) fn format_table(
             .as_str()
             .filter(|_| depth == 0)
             .unwrap_or_else(|| row["status"].as_str().unwrap_or("-"))
-            .replace('_', " ");
+            .chars()
+            .map(|c| if c == '_' || c.is_control() { ' ' } else { c })
+            .collect::<String>();
         let name = clean("title");
         let title = if row["parent"].is_string() {
             format!("{guide}{name}  (parent {})", clean("parent"))
@@ -218,10 +220,14 @@ fn terminal_table(
         };
         // A top-level session speaks for its family: its row shows the
         // status of the member that most needs the user.
-        let status_key = row["family_status"]
+        let status_key: String = row["family_status"]
             .as_str()
             .filter(|_| depth == 0)
-            .unwrap_or_else(|| row["status"].as_str().unwrap_or("-"));
+            .unwrap_or_else(|| row["status"].as_str().unwrap_or("-"))
+            .chars()
+            .filter(|c| !c.is_control())
+            .collect();
+        let status_key = status_key.as_str();
         let status: nori_protocol::SessionStatus =
             serde_json::from_value(Value::String(status_key.to_string()))
                 .unwrap_or(nori_protocol::SessionStatus::Starting);
@@ -532,7 +538,8 @@ mod tests {
              "model":"claude-opus-5-5-with-a-long-model-name"}
         ]});
         let rendered = format_table(&listing, Some(80), false, None);
-        let agent_at = 52;
+        let agent_at =
+            cell_of(rendered.lines().next().unwrap_or_default(), "Agent").expect("Agent column");
         let rows = rendered.lines().skip(1).collect::<Vec<_>>();
         let session_part = |row: &str| row.chars().take(agent_at).collect::<String>();
         assert!(

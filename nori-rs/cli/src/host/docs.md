@@ -56,8 +56,9 @@ host ls / host stop ---------------+                   SessionManager
 
   On a terminal the glyph and status word are coloured, row 2 is dimmed, and
   every other session (both its rows) is shaded when the terminal reports its
-  background; [dispatch](mod.rs) asks `nori_tui::session_list_shade` for that
-  colour only on a TTY, and with no known background no row is shaded. Titles
+  background and supports 24-bit colour; [dispatch](mod.rs) asks
+  `nori_tui::session_list_shade` for that colour only when stdin and stdout are
+  both terminals (the query is answered on stdin), and with no known background no row is shaded. Titles
   are cut in the middle at grapheme boundaries so titles sharing a long prefix
   still read apart; other cells are cut from the end with `…`.
 - A top-level row (tree depth 0) shows the row's `family_status` when the host

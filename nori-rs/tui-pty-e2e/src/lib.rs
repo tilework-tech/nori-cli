@@ -1056,8 +1056,8 @@ fn strip_git_stats_segment(line: &str) -> String {
     line.to_string()
 }
 
-/// Normalize dynamic content in screen output for snapshot testing
-/// `text` with the digits of every `12s ago`-style time replaced by `N`.
+/// `text` with every `12s ago`-style time replaced by `N ago`, so a session
+/// list snapshot does not depend on how long the test took.
 fn mask_activity_times(text: &str) -> String {
     let chars: Vec<char> = text.chars().collect();
     let mut masked = String::with_capacity(text.len());
@@ -1068,15 +1068,12 @@ fn mask_activity_times(text: &str) -> String {
             .iter()
             .take_while(|character| character.is_ascii_digit())
             .count();
-        let rest: String = chars[index + digits..].iter().take(5).collect();
-        let is_time = starts_word
-            && digits > 0
-            && rest.len() == 5
-            && rest[1..] == *" ago"
-            && matches!(rest.chars().next(), Some('s' | 'm' | 'h' | 'd'));
-        if is_time {
-            masked.push_str(&"N".repeat(digits));
-            index += digits;
+        let unit = chars.get(index + digits).copied();
+        let ago: String = chars.iter().skip(index + digits + 1).take(4).collect();
+        if starts_word && digits > 0 && matches!(unit, Some('s' | 'm' | 'h' | 'd')) && ago == " ago"
+        {
+            masked.push_str("N ago");
+            index += digits + 5;
         } else {
             masked.push(chars[index]);
             index += 1;
@@ -1085,9 +1082,8 @@ fn mask_activity_times(text: &str) -> String {
     masked
 }
 
+/// Normalize dynamic content in screen output for snapshot testing
 pub fn normalize_for_snapshot(contents: String) -> String {
-    // Session lists show the time since a session's last activity, such as
-    // `12s ago`; keep the width and hide the digits.
     let mut normalized = mask_activity_times(&contents);
 
     // Replace temp directories: /tmp/claude-*/.tmpXXXXXX, /tmp/claude/.tmpXXXXXX,
@@ -1345,6 +1341,14 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn activity_times_mask_to_one_token() {
+        assert_eq!(
+            super::mask_activity_times("0s ago | 12s ago | 3m ago | 2d ago | a12s ago | 5 ago"),
+            "N ago | N ago | N ago | N ago | a12s ago | 5 ago"
+        );
+    }
+
     use super::*;
     use pretty_assertions::assert_eq;
 

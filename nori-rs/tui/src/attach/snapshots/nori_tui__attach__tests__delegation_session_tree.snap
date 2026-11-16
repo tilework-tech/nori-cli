@@ -10,15 +10,15 @@ Sessions 5
 
   Session                                        Agent         Status
 › ⠋ Ship tree picker                             mock-model    working
-    no reply yet
+
   ├─ ● Port picker                               mock-model-…  waiting on you
-  │    no reply yet
+  │
   │  └─ ✕ Write snapshot tests                   mock-model    failed
-  │       no reply yet
+  │
   └─ ○ Update docs                               mock-model    ready
-       no reply yet
+
   ○ Spike transport                              mock-model    ready
-    no reply yet
+
 
 
 

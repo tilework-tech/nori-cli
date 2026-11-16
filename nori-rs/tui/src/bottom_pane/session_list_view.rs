@@ -625,7 +625,7 @@ mod tests {
     }
 
     #[test]
-    fn a_session_without_a_reply_says_so_faintly() {
+    fn a_session_without_a_reply_says_so() {
         let screen = render(&view(rich_rows()), 80);
         let fresh = screen
             .lines()
@@ -634,21 +634,6 @@ mod tests {
         let below = screen.lines().nth(fresh + 1).unwrap_or_default();
         assert!(below.contains("no reply yet"), "{screen}");
         assert!(below.contains("0s ago"), "{screen}");
-    }
-
-    #[test]
-    fn the_second_row_holds_the_reply_model_and_last_activity() {
-        let screen = render(&view(rich_rows()), 120);
-        let parent = screen
-            .lines()
-            .position(|line| line.contains("Greeting in three words"))
-            .expect("parent row");
-        let first = screen.lines().nth(parent).unwrap_or_default();
-        let second = screen.lines().nth(parent + 1).unwrap_or_default();
-        assert!(first.contains("8% / 475k"), "{screen}");
-        assert!(second.contains("Hi there, friend!"), "{screen}");
-        assert!(second.contains("opus 5.5"), "{screen}");
-        assert!(second.contains("2m ago"), "{screen}");
     }
 
     #[test]

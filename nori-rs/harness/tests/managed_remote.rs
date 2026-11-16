@@ -891,7 +891,7 @@ async fn session_list_rows_carry_the_live_title_reply_model_activity_and_context
         "{row}"
     );
     let reply = row["reply_preview"].as_str().unwrap();
-    assert!(!reply.is_empty() && !reply.contains('\n'), "{row}");
+    assert!(reply.starts_with("Test message 1"), "{row}");
     assert!(
         row["idle_seconds"]
             .as_i64()

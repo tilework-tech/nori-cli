@@ -253,7 +253,6 @@ mod tests {
     #[test]
     fn the_title_follows_the_prompt_summary() {
         let mut previews = SessionPreviews::default();
-        previews.observe(1, &text("old answer"));
         previews.observe(
             1,
             &SessionEvent::Nori(NoriEvent::SessionPhaseChanged(SessionPhase::Prompting {
@@ -370,44 +369,12 @@ mod tests {
     }
 
     #[test]
-    fn the_reply_reads_from_the_start_of_the_agents_answer_on_one_line() {
+    fn the_list_reply_is_the_agents_latest_reply() {
         let mut previews = SessionPreviews::default();
-        for event in [
-            text("First, I read the parser.\n\n"),
-            tool("t", "rg recover"),
-            tool_done("t"),
-            text("Then   I fixed\tthe brace."),
-        ] {
+        for event in [text("Let me look."), tool("t", "rg"), text("Found   it.")] {
             previews.observe(1, &event);
         }
-        assert_eq!(
-            previews.reply(1),
-            Some("First, I read the parser. Then I fixed the brace.".to_string())
-        );
-    }
-
-    #[test]
-    fn a_new_turn_keeps_the_last_reply_until_the_agent_answers_again() {
-        let mut previews = SessionPreviews::default();
-        previews.observe(1, &text("Old answer"));
-        previews.observe(1, &prompting(2));
-        previews.observe(1, &user_text("and now?"));
-        let while_waiting = previews.reply(1);
-        previews.observe(1, &text("New answer"));
-        assert_eq!(
-            (while_waiting, previews.reply(1)),
-            (
-                Some("Old answer".to_string()),
-                Some("New answer".to_string())
-            )
-        );
-    }
-
-    #[test]
-    fn a_session_without_a_reply_has_none() {
-        let mut previews = SessionPreviews::default();
-        previews.observe(1, &user_text("hello"));
-        assert_eq!(previews.reply(1), None);
+        assert_eq!(previews.reply(1), Some("Found it.".to_string()));
     }
 
     #[test]

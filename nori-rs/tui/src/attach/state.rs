@@ -171,10 +171,16 @@ impl AttachState {
                     .family_status
                     .filter(|_| depth == 0)
                     .unwrap_or(row.status);
+                // Older hosts send neither field; only a host that reports
+                // activity can say there is no reply yet.
                 let reply = row
                     .reply_preview
                     .as_deref()
-                    .unwrap_or(session_table::NO_REPLY);
+                    .unwrap_or(if row.idle_seconds.is_some() {
+                        session_table::NO_REPLY
+                    } else {
+                        ""
+                    });
                 let mut item = PickerItem::new(
                     row.session_id.clone(),
                     session_table::SESSION,
