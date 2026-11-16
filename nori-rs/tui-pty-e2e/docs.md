@@ -82,7 +82,8 @@ commit.
 
 The [host attachment scenarios](tests/host_attach.rs) run a detached host and
 independent attached PTYs sharing a disposable Nori home. They cover the flat
-script-facing list, session creation, controller/watcher handoff, refused
+script-facing list, session creation (including `/new` in the attaching
+terminal's folder or a Tab-completed one), controller/watcher handoff, refused
 watcher prompts and permission answers, detach/reattach, and host survival
 after its last session closes. A local TCP proxy either drops one terminal's
 connection or silently stops forwarding traffic while the controller continues,

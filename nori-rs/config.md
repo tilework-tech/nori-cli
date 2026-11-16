@@ -110,6 +110,13 @@ session keeps working in the background and your next prompt goes to the new
 one. One session is on screen at a time, and the terminal scrollback always
 shows only that session's history.
 
+The multi-session features in the TUI are interactive conveniences for one
+terminal. For long-lived sessions under remote or programmatic control, use
+`nori host`, which keeps sessions running with no terminal attached and
+accepts scripts (for example `nori host new --cwd DIR --prompt TEXT`); attach
+with `nori attach`. Nori deliberately does not build a full terminal
+multiplexer into the TUI's hot path.
+
 `[tui] max_sessions` (default 8; values below 1 count as 1) is the most
 sessions that may run at once. At the cap, `/new` and `/agent` refuse to start
 another session and say how to close one.
