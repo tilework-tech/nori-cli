@@ -6,7 +6,6 @@ use super::App;
 use crate::transcript_reflow::REFLOW_DEBOUNCE;
 use crate::transcript_reflow::WidthChange;
 use crate::transcript_reflow::has_unconsolidated_agent_message;
-use crate::transcript_reflow::render_transcript_tail;
 use crate::tui;
 
 impl App {
@@ -54,20 +53,7 @@ impl App {
             return Ok(());
         }
 
-        let lines = render_transcript_tail(&self.transcript_cells, width);
-        tui.clear_pending_history_lines();
-        tui.terminal
-            .clear_scrollback_and_visible_screen_for_reflow()?;
-        let mut area = tui.terminal.viewport_area;
-        area.y = 0;
-        area.width = width;
-        tui.terminal.set_viewport_area(area);
-        self.deferred_history_lines.clear();
-        self.has_emitted_history_lines = !lines.is_empty();
-        if !lines.is_empty() {
-            tui.insert_history_lines(lines);
-        }
-        self.transcript_reflow.mark_reflowed(width);
+        self.reprint_active_transcript(tui)?;
         Ok(())
     }
 }

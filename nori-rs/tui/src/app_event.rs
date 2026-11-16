@@ -75,9 +75,12 @@ pub(crate) enum AppEvent {
         message: String,
     },
 
-    /// A `/close` succeeded: the session is released. Return to the agent
-    /// session picker instead of auto-claiming a fresh session.
-    SessionClosed,
+    /// A `/close` succeeded: session `generation` is released. With one
+    /// session, return to the agent session picker instead of auto-claiming
+    /// a fresh session; with others still open, show the next one.
+    SessionClosed {
+        generation: SessionGeneration,
+    },
 
     /// Manage the app-owned remote ACP listener lifecycle.
     RemoteControlRequested(crate::remote_control::RemoteControlRequest),
@@ -156,6 +159,38 @@ pub(crate) enum AppEvent {
     DiffResult(String),
 
     InsertHistoryCell(Box<dyn HistoryCell>),
+
+    /// Open the list of sessions (`[features] multi_session`).
+    OpenSessionList,
+
+    /// Start a failed session again from its transcript, in its place in the
+    /// session list, and bring it on screen.
+    ResumeFailedSession {
+        generation: SessionGeneration,
+    },
+
+    /// Shut down a session's agent process. The session stays listed as
+    /// closed.
+    CloseSession {
+        generation: SessionGeneration,
+    },
+
+    /// Drop a closed session from the session list.
+    RemoveSession {
+        generation: SessionGeneration,
+    },
+
+    /// Bring a session on screen.
+    ShowSession {
+        generation: SessionGeneration,
+    },
+
+    /// History (`InsertHistoryCell` or `ConsolidateAgentMessage`) sent by
+    /// the widget of session `generation`.
+    SessionHistory {
+        generation: SessionGeneration,
+        event: Box<AppEvent>,
+    },
 
     /// Replace the just-finished assistant stream cells with one raw-Markdown cell.
     ConsolidateAgentMessage {
@@ -425,6 +460,8 @@ pub(crate) enum AppEvent {
     /// Start the next loop iteration with a fresh conversation.
     /// Sent by ChatWidget::on_task_complete when loop mode is active.
     LoopIteration {
+        /// The session whose turn finished.
+        generation: SessionGeneration,
         /// The prompt text to replay.
         prompt: String,
         /// Remaining iterations after this one.

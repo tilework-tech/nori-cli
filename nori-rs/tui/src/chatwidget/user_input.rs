@@ -251,6 +251,13 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    /// Take the notification this widget wants to post, as display text.
+    pub(crate) fn take_pending_notification(&mut self) -> Option<String> {
+        self.pending_notification
+            .take()
+            .map(|notification| notification.display())
+    }
+
     pub(crate) fn maybe_post_pending_notification(&mut self, tui: &mut crate::tui::Tui) {
         if let Some(notif) = self.pending_notification.take() {
             tui.notify(notif.display());

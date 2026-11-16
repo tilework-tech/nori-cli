@@ -241,10 +241,14 @@ impl ChatWidget {
                 }
                 match ended.reason {
                     nori_protocol::SessionEndReason::Shutdown => {
-                        self.app_event_tx.send(AppEvent::ExitRequest);
+                        if !self.closed_by_user {
+                            self.app_event_tx.send(AppEvent::ExitRequest);
+                        }
                     }
                     nori_protocol::SessionEndReason::Closed => {
-                        self.app_event_tx.send(AppEvent::SessionClosed);
+                        self.app_event_tx.send(AppEvent::SessionClosed {
+                            generation: self.session_generation,
+                        });
                     }
                     nori_protocol::SessionEndReason::ConnectionLost
                     | nori_protocol::SessionEndReason::SpawnFailed
@@ -324,9 +328,12 @@ impl ChatWidget {
                 self.replay_source = None;
             }
             nori_protocol::NoriEvent::Undo(_) | nori_protocol::NoriEvent::UserShell(_) => {}
-            // This widget answers its own requests; answers from other clients
-            // are shown by the multi-session view.
-            nori_protocol::NoriEvent::RequestResolved(_) => {}
+            // A request another client answered stops waiting here too.
+            nori_protocol::NoriEvent::RequestResolved(resolved) => {
+                if self.bottom_pane.dismiss_request(&resolved.request_id) {
+                    self.request_redraw();
+                }
+            }
             // TODO(#557): render forked-transcript lineage in the TUI history.
             nori_protocol::NoriEvent::SessionForked(forked) => {
                 self.on_session_forked(forked);
@@ -515,6 +522,7 @@ impl ChatWidget {
         {
             let total = self.loop_total.unwrap_or(0);
             self.app_event_tx.send(AppEvent::LoopIteration {
+                generation: self.session_generation(),
                 prompt,
                 remaining: remaining - 1,
                 total,

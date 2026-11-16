@@ -13,6 +13,12 @@ pub(crate) trait BottomPaneView: Renderable {
     /// scheduled after this call.
     fn handle_key_event(&mut self, _key_event: KeyEvent) {}
 
+    /// Return `true` while the view needs every key, including App-level
+    /// hotkeys, for example while it records a new key binding.
+    fn captures_all_keys(&self) -> bool {
+        false
+    }
+
     /// Return `true` if the view has finished and should be removed.
     fn is_complete(&self) -> bool {
         false
@@ -44,6 +50,12 @@ pub(crate) trait BottomPaneView: Renderable {
         Some(request)
     }
 
+    /// Stop asking for a request that was answered elsewhere. Returns true
+    /// when this view held it.
+    fn dismiss_request(&mut self, _request_id: &nori_protocol::acp::v1::RequestId) -> bool {
+        false
+    }
+
     /// Update MCP server auth statuses. Only meaningful for the MCP server
     /// picker; other views ignore this.
     fn update_mcp_auth_statuses(&mut self, _statuses: &HashMap<String, McpAuthStatus>) {}
@@ -60,6 +72,16 @@ pub(crate) trait BottomPaneView: Renderable {
         _description: Option<String>,
         _search_value: String,
     ) -> bool {
+        false
+    }
+
+    /// Replace the rows of the session list. Only the session list uses this;
+    /// other views ignore it.
+    fn update_session_list(&mut self, _rows: &[super::SessionRow]) -> bool {
+        false
+    }
+
+    fn is_session_list(&self) -> bool {
         false
     }
 

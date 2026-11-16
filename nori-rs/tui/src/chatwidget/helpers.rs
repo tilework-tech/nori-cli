@@ -259,6 +259,10 @@ impl ChatWidget {
         self.bottom_pane.has_active_view()
     }
 
+    pub(crate) fn view_captures_all_keys(&self) -> bool {
+        self.bottom_pane.view_captures_all_keys()
+    }
+
     pub(crate) fn has_active_overlay_or_popup(&self) -> bool {
         self.bottom_pane.has_active_overlay_or_popup()
     }
@@ -500,6 +504,16 @@ impl ChatWidget {
                 PlanDrawerMode::Off => {}
             }
         }
+        if !self.session_lines.is_empty() {
+            flex.push(
+                0,
+                RenderableItem::Owned(Box::new(
+                    ratatui::widgets::Paragraph::new(self.session_lines.clone())
+                        .wrap(ratatui::widgets::Wrap { trim: false }),
+                ))
+                .inset(Insets::tlbr(1, 2, 0, 0)),
+            );
+        }
         flex.push(
             0,
             RenderableItem::Borrowed(&self.bottom_pane).inset(Insets::tlbr(1, 0, 0, 0)),
@@ -531,6 +545,9 @@ impl ChatWidget {
     /// Recompute and write the terminal title. Schedules the next animation
     /// frame if the spinner is active.
     pub(crate) fn refresh_terminal_title(&mut self) {
+        if !self.foreground {
+            return;
+        }
         let now = Instant::now();
         let spinner_frame = if self.should_animate_terminal_title_spinner() {
             Some(crate::terminal_title::spinner_frame_at(
@@ -566,6 +583,41 @@ impl ChatWidget {
         if spinner_frame.is_some() {
             self.frame_requester
                 .schedule_frame_in(crate::terminal_title::SPINNER_INTERVAL);
+        }
+    }
+
+    pub(crate) fn show_session_list(&mut self, rows: Vec<crate::bottom_pane::SessionRow>) {
+        self.bottom_pane.show_session_list(rows);
+        self.request_redraw();
+    }
+
+    pub(crate) fn session_list_in_front(&self) -> bool {
+        self.bottom_pane.session_list_in_front()
+    }
+
+    pub(crate) fn close_session_list(&mut self) {
+        self.bottom_pane.close_session_list();
+    }
+
+    pub(crate) fn update_session_list(&mut self, rows: &[crate::bottom_pane::SessionRow]) {
+        self.bottom_pane.update_session_list(rows);
+    }
+
+    /// Replace the lines about other sessions shown above the bottom pane.
+    pub(crate) fn set_session_lines(&mut self, lines: Vec<Line<'static>>) {
+        if self.session_lines != lines {
+            self.session_lines = lines;
+            self.frame_requester.schedule_frame();
+        }
+    }
+
+    /// Bring the session on screen, or park it behind another session.
+    pub(crate) fn set_foreground(&mut self, foreground: bool) {
+        self.foreground = foreground;
+        if foreground {
+            self.last_terminal_title = None;
+            self.refresh_terminal_title();
+            self.frame_requester.schedule_frame();
         }
     }
 
