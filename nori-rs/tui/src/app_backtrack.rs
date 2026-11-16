@@ -143,7 +143,8 @@ impl App {
     }
 
     /// Re-render the full transcript into the terminal scrollback in one call.
-    /// Useful when switching sessions to ensure prior history remains visible.
+    /// Used after a fork to an earlier message to print the history kept
+    /// before the fork point. Session jumps use `show_session` instead.
     pub(crate) fn render_transcript_once(&mut self, tui: &mut tui::Tui) {
         if !self.transcript_cells.is_empty() {
             let width = tui.terminal.last_known_screen_size.width;
@@ -323,7 +324,7 @@ impl App {
         let fork_parent = self.chat_widget.managed_conversation_id();
         self.shutdown_current_conversation();
         let init = self.chat_widget_init(tui.frame_requester(), None, Vec::new(), None, true, None);
-        self.chat_widget = crate::chatwidget::ChatWidget::new(init);
+        self.install_active_widget(crate::chatwidget::ChatWidget::new(init));
         self.configure_new_chat_widget();
         self.pending_session_activation = Some(crate::app::PendingSessionActivation::New);
         self.begin_agent_preparation_with_context(

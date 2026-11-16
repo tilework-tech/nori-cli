@@ -352,6 +352,8 @@ pub struct SandboxWorkspaceWrite {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct FeaturesToml {
     pub enable_experimental_windows_sandbox: Option<bool>,
+    /// Run several sessions in one TUI and move between them.
+    pub multi_session: Option<bool>,
 }
 
 /// Persisted safety notice acknowledgements.
@@ -815,6 +817,14 @@ pub enum HotkeyAction {
     HistorySearch,
     /// Toggle the pinned plan drawer between collapsed and expanded.
     TogglePlanDrawer,
+    /// Move to the previous session (multi-session only).
+    PreviousSession,
+    /// Move to the next session (multi-session only).
+    NextSession,
+    /// Move to the next session waiting on the user (multi-session only).
+    NextWaitingSession,
+    /// Open the session list (multi-session only).
+    OpenSessionList,
 }
 
 impl HotkeyAction {
@@ -837,6 +847,10 @@ impl HotkeyAction {
             Self::Yank => "Yank",
             Self::HistorySearch => "History Search",
             Self::TogglePlanDrawer => "Toggle Plan Drawer",
+            Self::PreviousSession => "Previous Session",
+            Self::NextSession => "Next Session",
+            Self::NextWaitingSession => "Next Waiting Session",
+            Self::OpenSessionList => "Open Session List",
         }
     }
 
@@ -861,6 +875,12 @@ impl HotkeyAction {
             Self::TogglePlanDrawer => {
                 "Toggle the pinned plan drawer between collapsed and expanded"
             }
+            Self::PreviousSession => "Move to the previous session",
+            Self::NextSession => "Move to the next session",
+            Self::NextWaitingSession => {
+                "Move to the next session waiting on you (empty prompt only)"
+            }
+            Self::OpenSessionList => "Open the list of sessions",
         }
     }
 
@@ -883,6 +903,10 @@ impl HotkeyAction {
             Self::Yank => "yank",
             Self::HistorySearch => "history_search",
             Self::TogglePlanDrawer => "toggle_plan_drawer",
+            Self::PreviousSession => "previous_session",
+            Self::NextSession => "next_session",
+            Self::NextWaitingSession => "next_waiting_session",
+            Self::OpenSessionList => "open_session_list",
         }
     }
 
@@ -905,6 +929,10 @@ impl HotkeyAction {
             Self::Yank => "ctrl+y",
             Self::HistorySearch => "ctrl+r",
             Self::TogglePlanDrawer => "ctrl+o",
+            Self::PreviousSession => "alt+,",
+            Self::NextSession => "alt+.",
+            Self::NextWaitingSession => "alt+down",
+            Self::OpenSessionList => "alt+s",
         }
     }
 
@@ -927,7 +955,38 @@ impl HotkeyAction {
             Self::Yank,
             Self::HistorySearch,
             Self::TogglePlanDrawer,
+            Self::PreviousSession,
+            Self::NextSession,
+            Self::NextWaitingSession,
+            Self::OpenSessionList,
         ]
+    }
+
+    /// Whether the action moves between sessions, which only exists when
+    /// `[features] multi_session` is on.
+    pub fn is_multi_session(&self) -> bool {
+        match self {
+            Self::PreviousSession
+            | Self::NextSession
+            | Self::NextWaitingSession
+            | Self::OpenSessionList => true,
+            Self::OpenTranscript
+            | Self::OpenEditor
+            | Self::MoveBackwardChar
+            | Self::MoveForwardChar
+            | Self::MoveBeginningOfLine
+            | Self::MoveEndOfLine
+            | Self::MoveBackwardWord
+            | Self::MoveForwardWord
+            | Self::DeleteBackwardChar
+            | Self::DeleteForwardChar
+            | Self::DeleteBackwardWord
+            | Self::KillToEndOfLine
+            | Self::KillToBeginningOfLine
+            | Self::Yank
+            | Self::HistorySearch
+            | Self::TogglePlanDrawer => false,
+        }
     }
 }
 
@@ -1046,6 +1105,14 @@ pub struct HotkeyConfigToml {
     pub history_search: Option<HotkeyBinding>,
     /// Hotkey for toggling the pinned plan drawer.
     pub toggle_plan_drawer: Option<HotkeyBinding>,
+    /// Hotkey: move to the previous session.
+    pub previous_session: Option<HotkeyBinding>,
+    /// Hotkey: move to the next session.
+    pub next_session: Option<HotkeyBinding>,
+    /// Hotkey: move to the next session waiting on you (empty prompt only).
+    pub next_waiting_session: Option<HotkeyBinding>,
+    /// Hotkey: open the list of sessions.
+    pub open_session_list: Option<HotkeyBinding>,
 }
 
 /// Resolved hotkey configuration with defaults applied.
@@ -1083,6 +1150,14 @@ pub struct HotkeyConfig {
     pub history_search: HotkeyBinding,
     /// Hotkey for toggling the pinned plan drawer.
     pub toggle_plan_drawer: HotkeyBinding,
+    /// Hotkey: move to the previous session.
+    pub previous_session: HotkeyBinding,
+    /// Hotkey: move to the next session.
+    pub next_session: HotkeyBinding,
+    /// Hotkey: move to the next session waiting on you (empty prompt only).
+    pub next_waiting_session: HotkeyBinding,
+    /// Hotkey: open the list of sessions.
+    pub open_session_list: HotkeyBinding,
 }
 
 impl Default for HotkeyConfig {
@@ -1129,6 +1204,16 @@ impl Default for HotkeyConfig {
             history_search: HotkeyBinding::from_str(HotkeyAction::HistorySearch.default_binding()),
             toggle_plan_drawer: HotkeyBinding::from_str(
                 HotkeyAction::TogglePlanDrawer.default_binding(),
+            ),
+            previous_session: HotkeyBinding::from_str(
+                HotkeyAction::PreviousSession.default_binding(),
+            ),
+            next_session: HotkeyBinding::from_str(HotkeyAction::NextSession.default_binding()),
+            next_waiting_session: HotkeyBinding::from_str(
+                HotkeyAction::NextWaitingSession.default_binding(),
+            ),
+            open_session_list: HotkeyBinding::from_str(
+                HotkeyAction::OpenSessionList.default_binding(),
             ),
         }
     }
@@ -1197,6 +1282,19 @@ impl HotkeyConfig {
                 .toggle_plan_drawer
                 .clone()
                 .unwrap_or(defaults.toggle_plan_drawer),
+            previous_session: toml
+                .previous_session
+                .clone()
+                .unwrap_or(defaults.previous_session),
+            next_session: toml.next_session.clone().unwrap_or(defaults.next_session),
+            next_waiting_session: toml
+                .next_waiting_session
+                .clone()
+                .unwrap_or(defaults.next_waiting_session),
+            open_session_list: toml
+                .open_session_list
+                .clone()
+                .unwrap_or(defaults.open_session_list),
         }
     }
 
@@ -1219,6 +1317,10 @@ impl HotkeyConfig {
             HotkeyAction::Yank => &self.yank,
             HotkeyAction::HistorySearch => &self.history_search,
             HotkeyAction::TogglePlanDrawer => &self.toggle_plan_drawer,
+            HotkeyAction::PreviousSession => &self.previous_session,
+            HotkeyAction::NextSession => &self.next_session,
+            HotkeyAction::NextWaitingSession => &self.next_waiting_session,
+            HotkeyAction::OpenSessionList => &self.open_session_list,
         }
     }
 
@@ -1241,6 +1343,10 @@ impl HotkeyConfig {
             HotkeyAction::Yank => self.yank = binding,
             HotkeyAction::HistorySearch => self.history_search = binding,
             HotkeyAction::TogglePlanDrawer => self.toggle_plan_drawer = binding,
+            HotkeyAction::PreviousSession => self.previous_session = binding,
+            HotkeyAction::NextSession => self.next_session = binding,
+            HotkeyAction::NextWaitingSession => self.next_waiting_session = binding,
+            HotkeyAction::OpenSessionList => self.open_session_list = binding,
         }
     }
 
@@ -1269,6 +1375,10 @@ impl HotkeyConfig {
             (HotkeyAction::Yank, &self.yank),
             (HotkeyAction::HistorySearch, &self.history_search),
             (HotkeyAction::TogglePlanDrawer, &self.toggle_plan_drawer),
+            (HotkeyAction::PreviousSession, &self.previous_session),
+            (HotkeyAction::NextSession, &self.next_session),
+            (HotkeyAction::NextWaitingSession, &self.next_waiting_session),
+            (HotkeyAction::OpenSessionList, &self.open_session_list),
         ]
     }
 }
@@ -1907,6 +2017,9 @@ pub struct TuiConfigToml {
     /// `None` or absent means disabled.
     pub loop_count: Option<i32>,
 
+    /// Most sessions that may run at once with `[features] multi_session`.
+    pub max_sessions: Option<i32>,
+
     /// Automatically create a git worktree at session start.
     pub auto_worktree: Option<AutoWorktree>,
 
@@ -2041,6 +2154,9 @@ pub struct ProjectConfig {
     pub trust_level: Option<TrustLevel>,
 }
 
+/// Sessions allowed at once when `[tui] max_sessions` is not set.
+pub const DEFAULT_MAX_SESSIONS: i32 = 8;
+
 /// Resolved configuration with defaults applied
 #[derive(Debug, Clone)]
 pub struct NoriConfig {
@@ -2068,6 +2184,8 @@ pub struct NoriConfig {
 
     /// Whether the experimental Windows sandbox is enabled in user config.
     pub windows_sandbox_enabled: bool,
+    /// Several sessions in one TUI (`[features] multi_session`).
+    pub multi_session: bool,
 
     /// Environment inherited by sandboxed commands.
     pub shell_environment_policy: ShellEnvironmentPolicy,
@@ -2126,6 +2244,9 @@ pub struct NoriConfig {
     /// Number of times to re-run the first prompt in fresh sessions.
     /// `None` means disabled (default).
     pub loop_count: Option<i32>,
+
+    /// Most sessions that may run at once with `[features] multi_session`.
+    pub max_sessions: i32,
 
     /// Automatically create a git worktree at session start.
     pub auto_worktree: AutoWorktree,
@@ -2232,6 +2353,7 @@ impl Default for NoriConfig {
             has_explicit_approval_or_sandbox_policy: false,
             forced_auto_mode_downgraded_on_windows: false,
             windows_sandbox_enabled: false,
+            multi_session: false,
             shell_environment_policy: ShellEnvironmentPolicy::default(),
             active_project: ProjectConfig::default(),
             notices: Notice::default(),
@@ -2254,6 +2376,7 @@ impl Default for NoriConfig {
             hotkeys: HotkeyConfig::default(),
             script_timeout: ScriptTimeout::default(),
             loop_count: None,
+            max_sessions: DEFAULT_MAX_SESSIONS,
             auto_worktree: AutoWorktree::Off,
             skillset_per_session: false,
             file_manager: None,

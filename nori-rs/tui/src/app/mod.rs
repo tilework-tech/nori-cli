@@ -101,6 +101,22 @@ pub(crate) struct App {
 
     pub(crate) transcript_cells: Vec<Arc<dyn HistoryCell>>,
 
+    /// Every session this TUI holds, in navigation order. Sessions that are
+    /// not on screen are parked here with their own widget and transcript.
+    session_deck: session_deck::SessionDeck<Box<ChatWidget>>,
+    /// The active session's transcript, taken when that session is about to be
+    /// parked behind a new one. Set only with `[features] multi_session`.
+    retiring_transcript: Option<Vec<Arc<dyn HistoryCell>>>,
+    /// The active session changed and the terminal must be reprinted on the
+    /// next draw. Several jumps before a draw reprint once.
+    session_reprint_pending: bool,
+    /// Sessions that finished a turn while off screen and were not viewed.
+    unseen_finishes: crate::session_status::UnseenFinishes,
+    /// What each session is doing, for the session list.
+    session_previews: crate::session_preview::SessionPreviews,
+    /// Agent display names for the session list, looked up once per agent.
+    agent_display_names: std::cell::RefCell<std::collections::HashMap<String, String>>,
+
     // Pager overlay state (Transcript or Static like Diff)
     pub(crate) overlay: Option<Overlay>,
     pub(crate) deferred_history_lines: Vec<Line<'static>>,
@@ -213,6 +229,8 @@ enum CandidateAgent {
         display_name: String,
         widget: Box<ChatWidget>,
         activation_error: Option<String>,
+        /// The candidate resumes an existing session and replays its history.
+        resumes: bool,
     },
 }
 
@@ -226,7 +244,13 @@ struct SystemInfoRefreshRequest {
 mod config_persistence;
 mod event_handling;
 mod resize_reflow;
+mod session_deck;
+mod session_keys;
+mod session_lifecycle;
+mod session_overview;
+mod session_resume;
 mod session_setup;
+mod session_view;
 
 impl App {
     #[allow(clippy::too_many_arguments)]
@@ -254,9 +278,15 @@ impl App {
         // a later user/session decision, after any per-session skillset setup.
         let needs_deferred_spawn = true;
         let mut pending_session_activation = None;
-        let session_manager = nori_harness::session_manager::SessionManager::new(
-            nori_harness::session_manager::SessionManagerConfig::default(),
-        );
+        let session_manager =
+            nori_harness::session_manager::SessionManager::new(if config.multi_session {
+                nori_harness::session_manager::SessionManagerConfig {
+                    max_sessions: config.max_sessions,
+                    ..nori_harness::session_manager::SessionManagerConfig::default()
+                }
+            } else {
+                nori_harness::session_manager::SessionManagerConfig::default()
+            });
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -325,6 +355,12 @@ impl App {
             file_search,
             enhanced_keys_supported,
             transcript_cells: Vec::new(),
+            session_deck: Default::default(),
+            retiring_transcript: None,
+            session_reprint_pending: false,
+            unseen_finishes: Default::default(),
+            session_previews: Default::default(),
+            agent_display_names: Default::default(),
             overlay: None,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,
@@ -364,6 +400,9 @@ impl App {
                 crate::history_cell::new_remote_control_event(report.lines()),
             ));
         }
+
+        app.session_deck.add(app.chat_widget.session_generation());
+        crate::slash_command::set_multi_session_commands(app.config.multi_session);
 
         // Propagate NoriConfig settings to the textarea.
         app.hotkey_config = app.config.hotkeys.clone();

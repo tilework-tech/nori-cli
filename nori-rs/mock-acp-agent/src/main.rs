@@ -53,6 +53,9 @@ fn spawn_descendant_if_requested() {
     std::fs::write(pid_file, child_pid.to_string()).expect("write mock descendant pid");
 }
 
+/// Command shown in a permission request when the prompt names none.
+const DEFAULT_PERMISSION_COMMAND: &str = "echo 'Hello from permission test'";
+
 /// Incoming byte stream that exits the process when the peer closes stdin.
 ///
 /// The SDK's connection future never resolves on a clean stdin EOF: its
@@ -374,7 +377,14 @@ impl MockAgent {
                 ));
             }
         }
-        if std::env::var("MOCK_AGENT_EXIT_DURING_PROMPT").is_ok() {
+        let prompt_is = |marker: &str| {
+            arguments.prompt.iter().any(|block| {
+                matches!(block, acp::ContentBlock::Text(text) if text.text.trim() == marker)
+            })
+        };
+        if std::env::var("MOCK_AGENT_EXIT_DURING_PROMPT").is_ok()
+            || prompt_is("mock:exit-during-prompt")
+        {
             eprintln!("Mock agent: exiting during prompt");
             std::process::exit(17);
         }
@@ -448,11 +458,28 @@ impl MockAgent {
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 
-        let request_permission = arguments.prompt.iter().any(|block| {
-            matches!(
-                block,
-                acp::ContentBlock::Text(text) if text.text == "mock:request-permission"
-            )
+        // `mock:request-permission` asks for permission for the default
+        // command; `mock:request-permission:<command>` names the command, so
+        // requests from different sessions can be told apart.
+        let permission_command = arguments.prompt.iter().find_map(|block| match block {
+            acp::ContentBlock::Text(text) => {
+                let (_, marked) = text.text.split_once("mock:request-permission")?;
+                Some(
+                    marked
+                        .strip_prefix(':')
+                        .map(|command| command.trim().to_string())
+                        .filter(|command| !command.is_empty()),
+                )
+            }
+            _ => None,
+        });
+        let request_permission = permission_command.is_some();
+        let permission_command = permission_command
+            .flatten()
+            .or_else(|| std::env::var("MOCK_AGENT_PERMISSION_COMMAND").ok())
+            .unwrap_or_else(|| DEFAULT_PERMISSION_COMMAND.to_string());
+        let stream_until_cancel = arguments.prompt.iter().any(|block| {
+            matches!(block, acp::ContentBlock::Text(text) if text.text.contains("mock:stream-until-cancel"))
         });
         // Support configurable stderr output for testing stderr capture
         if let Ok(count_str) = std::env::var("MOCK_AGENT_STDERR_COUNT")
@@ -1078,6 +1105,12 @@ impl MockAgent {
 
         // Support requesting permission from client for testing approval bridging
         if request_permission || std::env::var("MOCK_AGENT_REQUEST_PERMISSION").is_ok() {
+            if let Some(delay) = std::env::var("MOCK_AGENT_PERMISSION_DELAY_MS")
+                .ok()
+                .and_then(|value| value.parse::<u64>().ok())
+            {
+                sleep(Duration::from_millis(delay)).await;
+            }
             eprintln!("Mock agent: requesting permission from client");
 
             // Create a tool call update describing the operation
@@ -1089,11 +1122,13 @@ impl MockAgent {
                     .kind(acp::ToolKind::Execute)
                     .status(acp::ToolCallStatus::Pending)
                     .content(vec![acp::ToolCallContent::Content(acp::Content::new(
-                        acp::ContentBlock::Text(acp::TextContent::new(
-                            "echo 'Hello from permission test'",
-                        )),
+                        acp::ContentBlock::Text(acp::TextContent::new(permission_command.clone())),
                     ))])
-                    .raw_input(json!({"command": "echo", "args": ["Hello from permission test"]})),
+                    .raw_input(if permission_command == DEFAULT_PERMISSION_COMMAND {
+                        json!({"command": "echo", "args": ["Hello from permission test"]})
+                    } else {
+                        json!({"command": permission_command})
+                    }),
             );
 
             // Create permission options: allow once and reject once
@@ -1303,7 +1338,7 @@ impl MockAgent {
             }
         }
 
-        if std::env::var("MOCK_AGENT_STREAM_UNTIL_CANCEL").is_ok() {
+        if stream_until_cancel || std::env::var("MOCK_AGENT_STREAM_UNTIL_CANCEL").is_ok() {
             let mut iterations = 0usize;
             while !self.cancel_requested() && iterations < 10_000 {
                 self.send_text_chunk(session_id.clone(), "Streaming...")

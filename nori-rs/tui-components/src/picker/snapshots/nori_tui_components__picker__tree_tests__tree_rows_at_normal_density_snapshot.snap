@@ -1,0 +1,23 @@
+---
+source: tui-components/src/picker/tree_tests.rs
+assertion_line: 74
+expression: "render(&family_picker(), 72, 18, PickerDensity::Normal)"
+---
+"                                                                        "
+"                                                                        "
+"    Session                                           Status            "
+"  › Fix flaky login test                              waiting on you    "
+"    approve: rm -rf target/debug                                        "
+"    Port picker                                       working           "
+"    running: cargo build                                                "
+"    ├─ Write snapshot tests                           working           "
+"    │  running: cargo insta test                                        "
+"    │  └─ Check fixtures                              ready             "
+"    │     Fixtures match                                                "
+"    └─ Update docs.md                                 ready · new       "
+"       Updated the tree row API                                         "
+"    Spike remote transport                            failed            "
+"    agent exited (code 1)                                               "
+"                                                                        "
+"  ↑↓/j/k move  / search  enter select  esc close                        "
+"                                                                        "

@@ -20,9 +20,27 @@ PTY -> nori-tui -> nori-harness -> nori-acp-host -> mock ACP agent
 
 ### Core Implementation
 
-`portable_pty` supplies the terminal, `vt100` maintains a virtual screen, and
-test helpers send keys, type and submit composer input, wait for stable text,
-capture output, and enforce exit deadlines.
+`portable_pty` supplies the terminal and the crate's
+[`Emulator`](src/emulator.rs) maintains the virtual screen. Test helpers send
+keys, type and submit composer input, wait for stable text, capture output, and
+enforce exit deadlines.
+
+The `Emulator` wraps a `vt100` parser with `SCROLLBACK_ROWS` lines of
+history. `vt100` ignores `ESC[3J`, which the TUI sends whenever it reprints a
+session, so the emulator applies it itself: the visible screen stays and the
+history is dropped. It holds back a trailing partial `ESC[3J` so a sequence
+split across PTY reads still applies. On top of it, `TuiSession` offers:
+
+| Helper | Purpose |
+| --- | --- |
+| `history_contents()` | Every scrollback line, oldest first, then the visible screen |
+| `raw_output()` | Every byte the TUI wrote, including sequences the emulator drops, such as notifications |
+| `resize(rows, cols)` | Resizes the PTY and emulator, as a user dragging the window would |
+| `settle(duration)` | Keeps reading output for a fixed time so the emulator catches up |
+
+`Key` adds `Alt(char)` (ESC prefix), `AltDown`, `BackTab`, and the terminal
+focus reports `FocusIn` and `FocusOut`, used by session hotkeys and
+notification tests.
 
 Scenarios cover representative raw ACP messages, tools, plans, permissions and
 responses; Nori lifecycle and failure behavior; query-driven pickers; cloud
@@ -91,6 +109,30 @@ and per-session-skillset policies independently. Each must still reach the
 Handroll session picker without showing a local gate, creating a local
 worktree, or delaying agent preparation.
 
+Multi-session scenarios enable `[features] multi_session` through extra
+config TOML and run each session on its own mock agent process, using the
+mock's per-prompt markers so sessions behave differently on one binary.
+[`multi_session.rs`](tests/multi_session.rs) asserts on full history, not only
+the screen: a session move must reprint only the target's history and keep
+unsent input, `/new` keeps the previous session running, a burst of moves
+lands on the last target, configured bindings are honored, and nothing
+changes without the flag. [`session_list.rs`](tests/session_list.rs) covers
+the list's status words, previews, filter, and jumps, a background request
+answered through `next_waiting_session`, a dead agent failing only its own
+session and resuming in place, forks listed under their parent, and
+notifications gated on terminal focus. [`session_transcripts.rs`](tests/session_transcripts.rs)
+covers the always-on fix that `/new` then `/resume` shows each turn once,
+including after a resize, and a cloud scenario lists two cloud sessions side
+by side. [`session_lifecycle.rs`](tests/session_lifecycle.rs) covers the
+`[tui] max_sessions` refusal, closing from the list with Ctrl+D (including the
+second press a busy session needs) and from `/close`, starting a session beside
+a busy one, a background loop staying in its own row, a restarted session
+keeping its title, `/agent` preparation leaving no line in the old session, the
+background-request line fitting one row, and an approval answered over a real
+remote-control WebSocket clearing the TUI modal. A cloud-mode scenario checks
+that `/close` beside another open session lists the released one as closed. The ignored `jump_timing_on_a_long_history` test reports how long a
+jump to a long history takes; run it with `--ignored --nocapture`.
+
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same
 typed `HarnessHandle` methods available to headless embedders.
@@ -98,8 +140,10 @@ typed `HarnessHandle` methods available to headless embedders.
 ### Things to Know
 
 - Build the mock agent before local runs when CI has not supplied its path.
-- The crate uses its own `vt100` parser and does not require the TUI
+- The crate uses its own `vt100`-based emulator and does not require the TUI
   `vt100-tests` feature; build the real `nori` binary before running it.
+- Assertions about reprinting must read `history_contents()`. The screen alone
+  cannot show a turn printed twice once the duplicate has scrolled off.
 - Snapshot normalization removes dynamic session IDs, timestamps, status
   text, and disposable temp roots: `/tmp` on Linux plus `/private/tmp`,
   `/var/folders`, and canonicalized `/private/var/folders` on macOS. Meaningful

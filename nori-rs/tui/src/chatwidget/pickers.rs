@@ -468,6 +468,7 @@ impl ChatWidget {
     pub(crate) fn open_hotkey_picker(&mut self, hotkey_config: nori_config::HotkeyConfig) {
         let view = crate::nori::hotkey_picker::HotkeyPickerView::new(
             &hotkey_config,
+            self.config.multi_session,
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_view(Box::new(view));

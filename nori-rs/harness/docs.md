@@ -551,7 +551,10 @@ distinct Transcript fallback batch; it never combines two sources under one
 marker. A resume without a local transcript must preserve the requested remote
 session identity, so load failure is terminal rather than calling
 `session/new`. Private v2 compatibility types remain in the transcript loader;
-storage enums are not exported. Public readers use `Transcript::records()` and
+storage enums are not exported. `transcript::load_transcript_from_path` is the
+public entry for reading a saved transcript file; the TUI uses it to resume a
+failed session from its manager record's transcript path. Public readers use
+`Transcript::records()` and
 `TranscriptRecord` for conversation events, or `Transcript::context_timeline()`
 for checkpoint history. Resume copies only the raw evidence needed by the
 timeline into the new transcript, preserving original observation identity and

@@ -110,8 +110,12 @@ impl ChatWidget {
         {
             return server.clone();
         }
-        if let Some(reason) =
-            scope_unavailable_reason(command, self.cloud_mode, &self.session_agent_capabilities)
+        // With several sessions, a local /close closes the session on screen.
+        let local_close =
+            command == SlashCommand::Close && self.config.multi_session && !self.cloud_mode;
+        if !local_close
+            && let Some(reason) =
+                scope_unavailable_reason(command, self.cloud_mode, &self.session_agent_capabilities)
         {
             return nori_protocol::CommandAvailability {
                 enabled: false,

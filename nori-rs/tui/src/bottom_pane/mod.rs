@@ -40,6 +40,8 @@ mod paste_burst;
 pub mod popup_consts;
 mod queued_user_messages;
 mod scroll_state;
+mod session_list_view;
+pub(crate) use session_list_view::SessionRow;
 mod selection_popup_common;
 mod skill_popup;
 mod textarea;
@@ -178,6 +180,12 @@ impl BottomPane {
     /// Returns true if a popup or custom view is currently active.
     pub(crate) fn has_active_view(&self) -> bool {
         !self.view_stack.is_empty()
+    }
+
+    pub(crate) fn view_captures_all_keys(&self) -> bool {
+        self.view_stack
+            .last()
+            .is_some_and(|view| view.captures_all_keys())
     }
 
     fn push_view(&mut self, view: Box<dyn BottomPaneView>) {
@@ -524,6 +532,39 @@ impl BottomPane {
 
     /// Show a domain-free picker from the shared component crate, adapting
     /// typed outcomes into this application's event callbacks.
+    /// Open the session list over the composer.
+    pub(crate) fn show_session_list(&mut self, rows: Vec<SessionRow>) {
+        let view = session_list_view::SessionListView::new(rows, self.app_event_tx.clone());
+        self.push_view(Box::new(view));
+    }
+
+    pub(crate) fn session_list_in_front(&self) -> bool {
+        self.view_stack
+            .last()
+            .is_some_and(|view| view.is_session_list())
+    }
+
+    /// Close the session list if it is the view in front.
+    pub(crate) fn close_session_list(&mut self) {
+        if self
+            .view_stack
+            .last()
+            .is_some_and(|view| view.is_session_list())
+        {
+            self.view_stack.pop();
+            self.request_redraw();
+        }
+    }
+
+    /// Refresh the session list if it is open.
+    pub(crate) fn update_session_list(&mut self, rows: &[SessionRow]) {
+        if let Some(view) = self.view_stack.last_mut()
+            && view.update_session_list(rows)
+        {
+            self.request_redraw();
+        }
+    }
+
     pub(crate) fn show_component_picker(&mut self, params: ComponentPickerParams) {
         let view =
             component_picker_view::ComponentPickerView::new(params, self.app_event_tx.clone());
@@ -704,6 +745,27 @@ impl BottomPane {
             view.handle_mcp_oauth_complete(server_name, success);
             self.request_redraw();
         }
+    }
+
+    /// Drop a request that another client answered from every open view.
+    /// Returns true when a view held it.
+    pub(crate) fn dismiss_request(
+        &mut self,
+        request_id: &nori_protocol::acp::v1::RequestId,
+    ) -> bool {
+        let mut dismissed = false;
+        for view in &mut self.view_stack {
+            dismissed |= view.dismiss_request(request_id);
+        }
+        let open = self.view_stack.len();
+        self.view_stack.retain(|view| !view.is_complete());
+        if self.view_stack.len() != open {
+            self.on_active_view_complete();
+        }
+        if dismissed {
+            self.request_redraw();
+        }
+        dismissed
     }
 
     /// Called when the agent requests user approval.

@@ -150,13 +150,20 @@ impl App {
     /// Start preparing a switch candidate immediately. Replacing this state
     /// drops and tears down any older candidate without touching the active session.
     pub(crate) fn begin_agent_candidate(&mut self, agent_name: String, display_name: String) {
+        if self.chat_widget.has_harness_session() && self.refuse_at_session_cap() {
+            return;
+        }
         self.discard_candidate();
         self.chat_widget
             .set_login_agent_override(Some(agent_name.clone()));
         let generation = crate::chatwidget::agent::next_session_generation();
         let config = self.config_for_agent(&agent_name);
-        self.chat_widget
-            .add_info_message(format!("Preparing {display_name}…"), None);
+        // With several sessions the session lines say this instead, so the
+        // session on screen keeps no line about another session.
+        if !self.config.multi_session {
+            self.chat_widget
+                .add_info_message(format!("Preparing {display_name}…"), None);
+        }
 
         let spec = crate::chatwidget::agent::agent_prepare_spec(config, None);
         let tx = self.app_event_tx.clone();
@@ -203,22 +210,27 @@ impl App {
     /// prepared for an already-selected resume directive.
     pub(super) fn defer_resume_activation(
         &mut self,
-        frame_requester: crate::tui::FrameRequester,
+        tui: &mut crate::tui::Tui,
         acp_session_id: Option<String>,
         title: Option<String>,
         transcript: Option<nori_harness::transcript::Transcript>,
     ) {
         let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
         self.shutdown_current_conversation();
+        // The resumed session starts on a clean screen now, so messages shown
+        // while its agent is prepared stay with it.
+        if let Err(error) = self.begin_replacing_session_transcript(tui) {
+            tracing::warn!(%error, "failed to clear the screen for a resumed session");
+        }
         let init = self.chat_widget_init(
-            frame_requester,
+            tui.frame_requester(),
             initial_prompt,
             initial_images,
             None,
             true,
             None,
         );
-        self.chat_widget = ChatWidget::new(init);
+        self.install_active_widget(ChatWidget::new(init));
         self.configure_new_chat_widget();
         self.pending_session_activation = Some(PendingSessionActivation::Resume {
             acp_session_id,
@@ -235,8 +247,15 @@ impl App {
         config
     }
 
+    /// Let go of the active session before another widget takes its place.
+    /// With `[features] multi_session` a live session keeps running and is
+    /// parked when the next widget is installed; otherwise it shuts down.
     pub(crate) fn shutdown_current_conversation(&mut self) {
-        self.chat_widget.shutdown_harness_session();
+        if self.config.multi_session && self.chat_widget.has_harness_session() {
+            self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
+        } else {
+            self.chat_widget.shutdown_harness_session();
+        }
     }
 
     /// Display a loaded transcript in the history view.

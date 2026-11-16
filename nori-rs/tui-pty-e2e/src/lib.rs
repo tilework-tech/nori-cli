@@ -11,7 +11,6 @@ use std::io::Write;
 use std::sync::LazyLock;
 use std::time::Duration;
 use std::time::Instant;
-use vt100::Parser;
 
 /// Debug styles for colored output. Uses owo-colors Style which respects
 /// color settings - when colors are disabled, styles become no-ops.
@@ -100,10 +99,16 @@ pub struct TuiSession {
     _master: Box<dyn portable_pty::MasterPty + Send>,
     reader: Box<dyn Read + Send>,
     writer: Box<dyn Write + Send>,
-    parser: Parser,
+    emulator: Emulator,
+    /// Every byte the TUI wrote, before control-sequence interception.
+    raw_output: Vec<u8>,
     child: Box<dyn portable_pty::Child + Send>,
     _temp_dir: Option<tempfile::TempDir>,
 }
+
+pub use emulator::Emulator;
+pub use emulator::SCROLLBACK_ROWS;
+mod emulator;
 
 impl Drop for TuiSession {
     fn drop(&mut self) {
@@ -407,7 +412,8 @@ trust_level = "trusted"
             _master: pair.master,
             reader,
             writer,
-            parser: Parser::new(rows, cols, 0),
+            emulator: Emulator::new(rows, cols),
+            raw_output: Vec::new(),
             child,
             _temp_dir: temp_dir,
         })
@@ -487,8 +493,9 @@ trust_level = "trusted"
                     );
                 }
                 // Intercept and respond to control sequences before parsing
+                self.raw_output.extend_from_slice(&buf[..n]);
                 let processed = self.intercept_control_sequences(&buf[..n])?;
-                self.parser.process(&processed);
+                self.emulator.process(&processed);
                 Ok(())
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -541,6 +548,40 @@ trust_level = "trusted"
             }
         }
         Ok(result)
+    }
+
+    /// The whole terminal history: every scrollback line, oldest first,
+    /// followed by the visible screen.
+    pub fn history_contents(&mut self) -> String {
+        self.emulator.history_contents()
+    }
+
+    /// Keep reading output for `duration`, so the emulator catches up with
+    /// everything the TUI drew in that time.
+    pub fn settle(&mut self, duration: Duration) {
+        let deadline = std::time::Instant::now() + duration;
+        while std::time::Instant::now() < deadline {
+            let _ = self.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// Every byte the TUI has written so far, including escape sequences the
+    /// emulator does not keep, such as notifications.
+    pub fn raw_output(&self) -> &[u8] {
+        &self.raw_output
+    }
+
+    /// Resize the terminal, as a user dragging the window would.
+    pub fn resize(&mut self, rows: u16, cols: u16) -> Result<()> {
+        self._master.resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })?;
+        self.emulator.resize(rows, cols);
+        Ok(())
     }
 
     /// Wait for predicate with timeout
@@ -644,7 +685,7 @@ trust_level = "trusted"
 
     /// Get current screen contents as string
     pub fn screen_contents(&self) -> String {
-        self.parser.screen().contents()
+        self.emulator.screen_contents()
     }
 
     /// Type a string

@@ -137,6 +137,9 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 | **Session status**   | A managed session's coarse state: starting, working, waiting on you, ready, failed, or closed.         | Phase, turn status |
 | **Session family**   | A top-level **session** plus all of its descendants, whose **session statuses** roll up into one. | Thread, tree       |
 | **Request resolved** | A **session envelope** announcing that a client answered a pending agent request, and which one.  | Approval event     |
+| **Active session**   | The one **session** the TUI shows; the prompt, terminal title, and scrollback belong to it.        | Current tab        |
+| **Parked session**   | A live **session** the TUI holds off screen with its own transcript, input, and pending requests. | Hidden, paused     |
+| **Session cap**      | The most managed **sessions** that may run at once, set by `[tui] max_sessions`.                  | Limit, quota       |
 
 ### Session lifecycle
 
@@ -171,10 +174,12 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 - **Undo** changes files, not conversation state; **Rewind to message** changes conversation direction, not files.
 - A **session envelope's** sequence starts at 1 for each **conversation ID**; **branch at head** starts a new sequence for the child.
 - **Session status** is derived from the event stream; it is not the harness phase or a **Nori agent-turn status**.
+- Closing a local **session** in the multi-session TUI stops its agent process; it is not ACP **Close**. The closed session stays listed with **session status** closed until the user removes it.
 - **Branch at head** closes the parent and adds the child to the parent's **session family**.
 - **Rewind to message** starts a new agent process but still registers the child in the parent's **session family**.
 - A **request resolved** envelope removes that request from the ones keeping a **session status** at "waiting on you"; requests cleared by idle, cancel, or session end get none.
 - When the **session manager** restarts a failed session on a new **conversation ID**, closing the old ID reaches the replacement.
+- With `[features] multi_session`, replacing the **active session** parks it instead of closing it; a **parked session** keeps running and receiving its events.
 
 ### Example dialogue
 

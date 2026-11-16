@@ -202,6 +202,9 @@ The app attaches the stable host only after an active session publishes
 `SessionStarted`, whether or not any listener is currently enabled. This makes
 session identity explicit, keeps runtime enable independent of launch timing,
 and applies the same commit boundary to ordinary launches and agent switches.
+With `[features] multi_session`, moving between sessions does not re-attach the
+host, so it serves the most recently started session rather than the one on
+screen.
 
 ## 7. Runtime control and bind policy
 

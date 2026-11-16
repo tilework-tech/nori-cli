@@ -511,7 +511,7 @@ fn format_label(label: &str, label_style: DetailLabelStyle) -> String {
     }
 }
 
-fn tone_style(tone: DetailTone, theme: Theme) -> Style {
+pub(crate) fn tone_style(tone: DetailTone, theme: Theme) -> Style {
     match tone {
         DetailTone::Default => theme.text,
         DetailTone::Muted => theme.muted,

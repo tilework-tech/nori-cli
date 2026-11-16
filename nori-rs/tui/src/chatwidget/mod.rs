@@ -70,6 +70,7 @@ mod key_handling;
 mod login;
 mod pickers;
 mod remote_control;
+mod session_close;
 mod session_config_mode;
 mod user_input;
 use crate::nori::session_header::CloudSessionInfo;
@@ -236,6 +237,9 @@ pub(crate) struct ChatWidget {
     // session-switching commands so the deferred NewSession can't clobber a
     // conversation the user switched to mid-close.
     session_close_in_flight: bool,
+    /// True once the user closed this session beside others, so its agent
+    /// shutting down ends only this session, not Nori.
+    closed_by_user: bool,
     /// True once the user asked to quit: input is refused, and a hard-exit
     /// watchdog guarantees the process leaves within ~a second even if the
     /// backend teardown stalls. On cloud agents this exit is a detach — the
@@ -306,6 +310,12 @@ pub(crate) struct ChatWidget {
     terminal_title_animation_origin: Instant,
     // Terminal title state: cache to avoid redundant OSC writes.
     last_terminal_title: Option<String>,
+    /// False while the session is parked behind another one. A parked
+    /// session never writes the terminal title.
+    foreground: bool,
+    /// Lines about other sessions, drawn above the bottom pane so they stay
+    /// visible while a view is open. Set by the App.
+    session_lines: Vec<Line<'static>>,
 }
 
 struct UserMessage {
@@ -349,7 +359,9 @@ impl ChatWidget {}
 
 impl Drop for ChatWidget {
     fn drop(&mut self) {
-        if let Err(err) = self.clear_managed_terminal_title() {
+        if self.foreground
+            && let Err(err) = self.clear_managed_terminal_title()
+        {
             tracing::debug!(error = %err, "failed to clear terminal title on drop");
         }
     }
