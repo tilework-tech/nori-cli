@@ -40,22 +40,45 @@ pub struct ReplayInfo {
     pub first_available_seq: i64,
     pub age_seconds: i64,
     pub title: Option<String>,
+    /// The start of the agent's latest reply.
+    pub reply_preview: Option<String>,
+    /// What the session asks the user for while it waits, such as
+    /// `approve: cargo test -p parser`.
+    pub waiting_request: Option<String>,
+    /// Seconds since the session's latest event.
+    pub idle_seconds: i64,
+    /// Tokens in context and the context window, from the agent's latest
+    /// usage report.
+    pub context: Option<(i64, i64)>,
 }
 
 struct History {
     registered: Instant,
+    last_activity: Instant,
     latest_seq: i64,
     evicted_through: i64,
+    /// The agent's own title or the prompt summary, whichever came last.
     title: Option<String>,
+    /// The first prompt's first line, or the `/delegate` task a session
+    /// started with, which titles the session until it has a title.
+    first_prompt: Option<String>,
+    reply: nori_protocol::ReplyPreview,
+    pending: nori_protocol::PendingRequest,
+    context: Option<(i64, i64)>,
 }
 
 impl Default for History {
     fn default() -> Self {
         Self {
             registered: Instant::now(),
+            last_activity: Instant::now(),
             latest_seq: 0,
             evicted_through: 0,
             title: None,
+            first_prompt: None,
+            reply: nori_protocol::ReplyPreview::default(),
+            pending: nori_protocol::PendingRequest::default(),
+            context: None,
         }
     }
 }
@@ -92,17 +115,20 @@ impl Journal {
             .entry(envelope.conversation_id.clone())
             .or_default();
         history.latest_seq = envelope.seq;
+        history.last_activity = Instant::now();
+        history.reply.observe(&envelope.event);
+        history.pending.observe(&envelope.event);
         match &envelope.event {
             SessionEvent::Nori(NoriEvent::PromptSummaryUpdated(summary)) => {
                 history.title = Some(summary.summary.clone())
             }
             // A session whose first input is `/delegate` is named by that task.
             SessionEvent::Nori(NoriEvent::DelegationChanged(delegation))
-                if history.title.is_none()
+                if history.first_prompt.is_none()
                     && delegation.origin == nori_protocol::DelegationOrigin::User
                     && delegation.parent_id == envelope.conversation_id =>
             {
-                history.title = Some(title_line(&delegation.task));
+                history.first_prompt = Some(title_line(&delegation.task));
             }
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::AgentNotification::SessionNotification(notification),
@@ -112,11 +138,17 @@ impl Journal {
                         history.title = title.cloned();
                     }
                 }
-                acp::SessionUpdate::UserMessageChunk(chunk) if history.title.is_none() => {
+                acp::SessionUpdate::UsageUpdate(usage) => {
+                    history.context = Some((
+                        i64::try_from(usage.used).unwrap_or(i64::MAX),
+                        i64::try_from(usage.size).unwrap_or(i64::MAX),
+                    ));
+                }
+                acp::SessionUpdate::UserMessageChunk(chunk) if history.first_prompt.is_none() => {
                     if let acp::ContentBlock::Text(text) = &chunk.content
                         && nori_protocol::delegation_result_summary(&text.text).is_none()
                     {
-                        history.title = Some(title_line(&text.text));
+                        history.first_prompt = Some(title_line(&text.text));
                     }
                 }
                 _ => {}
@@ -156,7 +188,15 @@ impl Journal {
             latest_seq: history.latest_seq,
             first_available_seq: history.evicted_through + 1,
             age_seconds: i64::try_from(history.registered.elapsed().as_secs()).unwrap_or(i64::MAX),
-            title: history.title.clone(),
+            title: history
+                .title
+                .clone()
+                .or_else(|| history.first_prompt.clone()),
+            reply_preview: history.reply.text(),
+            waiting_request: history.pending.text(),
+            idle_seconds: i64::try_from(history.last_activity.elapsed().as_secs())
+                .unwrap_or(i64::MAX),
+            context: history.context,
         })
     }
 
@@ -232,4 +272,51 @@ fn title_line(text: &str) -> String {
         .chars()
         .take(120)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn envelope(seq: i64, update: acp::SessionUpdate) -> SessionEnvelope {
+        SessionEnvelope {
+            conversation_id: "s".into(),
+            agent: "mock-model".into(),
+            seq,
+            event: SessionEvent::Acp(AcpEvent::Notification(
+                acp::AgentNotification::SessionNotification(acp::SessionNotification::new(
+                    acp::SessionId::new("s"),
+                    update,
+                )),
+            )),
+        }
+    }
+
+    fn agent_title(title: Option<&str>) -> acp::SessionUpdate {
+        acp::SessionUpdate::SessionInfoUpdate(
+            acp::SessionInfoUpdate::new().title(title.map(str::to_owned)),
+        )
+    }
+
+    #[test]
+    fn a_cleared_agent_title_falls_back_to_the_first_prompt() {
+        let mut journal = Journal::new(16);
+        journal.publish(&envelope(
+            1,
+            acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(acp::ContentBlock::Text(
+                acp::TextContent::new("say hi in 3 words"),
+            ))),
+        ));
+        journal.publish(&envelope(2, agent_title(Some("Greeting in three words"))));
+        let renamed = journal.info("s").and_then(|info| info.title);
+        journal.publish(&envelope(3, agent_title(None)));
+        assert_eq!(
+            (renamed, journal.info("s").and_then(|info| info.title)),
+            (
+                Some("Greeting in three words".to_string()),
+                Some("say hi in 3 words".to_string())
+            )
+        );
+    }
 }

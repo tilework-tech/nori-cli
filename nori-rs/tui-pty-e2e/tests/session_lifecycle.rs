@@ -558,10 +558,11 @@ fn ctrl_r_preserves_session_identity_and_its_remote_subscription() {
         has_row(&screen, "restart identity marker", "ready"),
         "{screen}"
     );
+    let list = &screen[screen.find("Sessions 2").unwrap_or(0)..];
     assert_eq!(
-        screen.matches("restart identity marker").count(),
+        list.matches("restart identity marker").count(),
         1,
-        "{screen}"
+        "the restarted session is listed once: {screen}"
     );
     session.send_key(Key::Escape).unwrap();
     session

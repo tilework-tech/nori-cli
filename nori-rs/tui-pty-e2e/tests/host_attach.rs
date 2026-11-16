@@ -452,6 +452,7 @@ fn watcher_cannot_answer_a_permission_request_but_controller_can() {
         controller.settle(Duration::from_millis(50));
     }
     let before = refusal_count(&mut watcher);
+    watcher.wait_out_answer_grace();
     watcher.send_key(Key::Enter).unwrap();
     wait_refusal(&mut watcher, before);
     assert!(
@@ -781,20 +782,31 @@ fn host_list_truncates_tty_title_without_losing_piped_title() {
     let title = "Long title aligned columns should preserve the entire title without putting continuation text into the ID column";
     ask(&mut client, title);
     assert!(host.list().contains(title));
-    let id = host.session_id();
     let mut listing = host.terminal(&["host", "ls"]);
     assert!(listing.wait_for_process_exit(TIMEOUT));
     let screen = listing.screen_contents();
     let row = screen
         .lines()
-        .find(|line| line.contains(&id))
+        .find(|line| line.contains("Long title"))
         .expect("session row");
-    assert!(row.contains("Long title") && row.contains('…'), "{screen}");
+    let title_cell = row.split("  mock-model").next().unwrap_or_default();
     assert!(
-        row.trim_end().ends_with("ID column"),
+        title_cell.contains("Long title") && title_cell.contains('…'),
+        "{screen}"
+    );
+    assert!(
+        title_cell.trim_end().ends_with("ID column"),
         "a cut title keeps its end: {screen}"
     );
-    assert!(!screen.contains("continuation text"), "{screen}");
+    let below = screen
+        .lines()
+        .skip_while(|line| !line.contains("Long title"))
+        .nth(1)
+        .unwrap_or_default();
+    assert!(
+        below.contains(" ago"),
+        "the row under the title is its reply row, not a wrapped title: {screen}"
+    );
 }
 
 #[test]
@@ -848,6 +860,7 @@ fn delegated_child_in_host_list_preserves_metadata_columns_and_can_be_opened() {
     client.send_key(Key::AltDown).unwrap();
     client.wait_for_text("child-column-check", TIMEOUT).unwrap();
     client.wait_for_text("Allow", TIMEOUT).unwrap();
+    client.wait_out_answer_grace();
     client.send_key(Key::Char('1')).unwrap();
     client
         .wait_for_text("Permission granted with option: allow", TIMEOUT)

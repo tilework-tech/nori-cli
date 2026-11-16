@@ -170,6 +170,7 @@ fn test_acp_approval_full_flow() {
     eprintln!("Approval UI appeared:\n{}", session.screen_contents());
 
     // Approve by pressing 'y'
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('y')).unwrap();
 
     // Wait for the agent to continue after approval

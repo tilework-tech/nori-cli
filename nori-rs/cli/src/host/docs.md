@@ -46,24 +46,25 @@ host ls / host stop ---------------+                   SessionManager
   Discovery state contains the endpoint and PID; the lock decides liveness.
 - Each start generates a token and binds loopback before publishing discovery
   state. Administrative clients initialize with `observe: true`, so list and
-  stop do not claim the controller slot. [List formatting](table.rs) sanitizes
-  control characters and colors status only on a terminal. On a terminal the
-  ID, AGENT, STATUS, and AGE columns take one of three fixed layouts, chosen
-  as the widest that still leaves TITLE at least 24 cells:
+  stop do not claim the controller slot. [List formatting](table.rs)
+  sanitizes control characters and has two shapes:
 
-  | Layout | ID | AGENT | STATUS | AGE | Used when |
-  | --- | --- | --- | --- | --- | --- |
-  | Wide | 36 | 16 | 16 | 6 | TITLE keeps 24 cells; also every piped listing |
-  | Compact | 8 | 14 | 16 | 5 | Wide does not fit; matches the `nori attach` list |
-  | Tight | 8 | 10 | 14 | 4 | Neither fits |
+  | Output | Shape |
+  | --- | --- |
+  | Terminal | The shared two-row session layout from [`session_table`](../../../tui-components/src/session_table.rs), the same as the local session list and the `nori attach` list: a `Session`/`Agent`/`Status` header, then per session a row with status glyph, tree guide and title, agent, status word, and header-less context (`8% / 475k`), and a faint row with the start of the agent's last reply (`no reply yet` when absent; a row whose own status is `waiting_on_you` shows its `waiting_request` instead), the model, and `2m ago` from `idle_seconds`. No ID column; `nori host ls \| cat` prints full IDs. Column widths follow the terminal width as described in the [tui-components docs](../../../tui-components/docs.md). |
+  | Piped | One row per session under `ID  AGENT  STATUS  AGE  TITLE`, with full IDs, full values, no width limit, and no colour. AGE comes from `age_seconds`. |
 
-  The ID is shortened to the column, AGENT and STATUS are cut with `…`, and
-  AGE is never cut. TITLE, with its tree guides, gets whatever cells remain
-  (none only below the tight layout's metadata width). The guide stays whole
-  and the name is cut in the middle (start, `…`, end) at grapheme boundaries,
-  so titles sharing a long prefix still read apart; only when the room is no
-  wider than the guide is the whole title cut from the end. Status color applies on every row. Piped output
-  keeps full values in the wide layout, without color or a width limit.
+  On a terminal the glyph and status word are coloured, row 2 is dimmed, and
+  each session's first row is shaded (its second keeps the terminal's own
+  background, so every other line is striped) when the terminal reports its
+  background and supports 24-bit colour; [dispatch](mod.rs) asks
+  `nori_tui::session_list_shade` (the theme's `row_stripe` colour, matching the
+  TUI session lists) for that colour only when stdin and stdout are
+  both terminals (the query is answered on stdin), and with no known background no row is shaded. The
+  status glyph and title are cut together, in the middle at grapheme
+  boundaries, to the same room the shared picker gives its Session cell, so a
+  title is cut at the same point here as in the TUI lists and titles sharing a
+  long prefix still read apart; other cells are cut from the end with `…`.
 - A top-level row (tree depth 0) shows the row's `family_status` when the host
   sends one, so a parent reads `waiting on you` while anything under it does;
   child rows always show their own `status`. Older hosts omit
@@ -72,8 +73,8 @@ host ls / host stop ---------------+                   SessionManager
   [picker helpers](../../../tui-components/docs.md): `tree_order` builds a
   depth-first order from each row's `session_id` and `parent` (a missing
   parent makes the row top level), and `tree_guides` supplies `├─`, `└─`, and
-  `│` prefixes. The guides are written inside TITLE, after the fixed ID, AGENT,
-  STATUS, and AGE columns, so nesting never shifts metadata. Piped output appends
+  `│` prefixes plus the continuation used on row 2. The guides sit inside the
+  title column, so nesting never shifts metadata. Piped output appends
   `  (parent <full parent ID>)` to every row that has a parent, including a
   child whose parent is no longer listed and so prints at top level, so scripts
   keep the exact link; terminal output omits it.
@@ -86,6 +87,16 @@ host ls / host stop ---------------+                   SessionManager
   | failed | red |
   | done | default color, so a finished child reads apart from a closed one |
   | others (starting, closed) | dimmed |
+- `nori attach <id>` accepts any unique start of a session ID.
+  [Dispatch](mod.rs) passes an ID already in the host's spelling (lowercase,
+  hyphenated UUID) through unchanged; anything else is resolved before the
+  attach TUI starts by an observing `_nori/session/list` request (3 s timeout)
+  to the same endpoint (local or `--host`) and
+  [`session_lookup`](session_lookup.rs), which matches case-insensitively and
+  normalises a full ID typed in any case, with or without hyphens. An
+  exact ID wins; several matches fail with the candidates (ID, agent, title)
+  listed; no match fails with a pointer to `nori host ls | cat` (full IDs) and
+  to `nori attach` without an ID. The host itself only knows full IDs.
 - Lifecycle requests prepare agents using the host's configuration. Resume
   uses the stored agent and working directory while retaining the conversation
   identity. Stop closes the server, shuts down the manager, removes discovery

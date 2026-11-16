@@ -77,6 +77,7 @@ impl ChatWidget {
             prepared_agent,
             analytics,
             session_manager,
+            clock,
         } = common;
         let activating_prepared_cloud_session = cloud_mode && prepared_agent.is_some();
         let mut rng = rand::rng();
@@ -136,6 +137,7 @@ impl ChatWidget {
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.active_agent.clone()),
                 agent_slug: config.active_agent.clone(),
+                clock,
             }),
             active_cell: None,
             active_user_message_id: None,
@@ -270,6 +272,7 @@ impl ChatWidget {
             prepared_agent,
             analytics,
             session_manager,
+            clock,
         } = common;
         let activating_prepared_cloud_session = cloud_mode && prepared_agent.is_some();
         let mut rng = rand::rng();
@@ -328,6 +331,7 @@ impl ChatWidget {
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.active_agent.clone()),
                 agent_slug: config.active_agent.clone(),
+                clock,
             }),
             active_cell: None,
             active_user_message_id: None,

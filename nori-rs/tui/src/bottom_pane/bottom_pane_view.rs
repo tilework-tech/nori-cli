@@ -35,6 +35,10 @@ pub(crate) trait BottomPaneView: Renderable {
         self.on_ctrl_c()
     }
 
+    /// The view's request has just come on screen again, for example when
+    /// its session is brought to the front.
+    fn request_shown(&mut self) {}
+
     /// Optional paste handler. Return true if the view modified its state and
     /// needs a redraw.
     fn handle_paste(&mut self, _pasted: String) -> bool {

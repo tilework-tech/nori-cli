@@ -45,6 +45,7 @@ pub(crate) struct ApprovalOverlay {
     options: Vec<ApprovalOption>,
     current_complete: bool,
     done: bool,
+    answer_guard: crate::answer_guard::AnswerGuard,
 }
 
 impl ApprovalOverlay {
@@ -52,6 +53,7 @@ impl ApprovalOverlay {
         request: ApprovalRequest,
         app_event_tx: AppEventSender,
         _agent_display_name: String,
+        clock: crate::answer_guard::Clock,
     ) -> Self {
         let mut view = Self {
             current_request: None,
@@ -61,6 +63,7 @@ impl ApprovalOverlay {
             options: Vec::new(),
             current_complete: false,
             done: false,
+            answer_guard: crate::answer_guard::AnswerGuard::new(clock),
         };
         view.set_current(request);
         view
@@ -99,7 +102,11 @@ impl ApprovalOverlay {
                     key_hint::plain(KeyCode::Enter).into(),
                     " to confirm or ".into(),
                     key_hint::plain(KeyCode::Esc).into(),
-                    " to cancel".into(),
+                    if crate::answer_guard::esc_reject_option(&request.options).is_some() {
+                        " to reject".into()
+                    } else {
+                        " to cancel".into()
+                    },
                 ])),
                 items,
                 header: Box::new(ColumnRenderable::with([
@@ -113,6 +120,7 @@ impl ApprovalOverlay {
         );
         self.current_request = Some(request);
         self.current_complete = false;
+        self.answer_guard.shown();
     }
 
     fn apply_selection(&mut self, index: usize) {
@@ -213,6 +221,9 @@ impl ApprovalOverlay {
 
 impl BottomPaneView for ApprovalOverlay {
     fn handle_key_event(&mut self, event: KeyEvent) {
+        if !self.answer_guard.allows(&event) {
+            return;
+        }
         if self.try_handle_shortcut(&event) {
             return;
         }
@@ -220,6 +231,25 @@ impl BottomPaneView for ApprovalOverlay {
         if let Some(index) = self.list.take_last_selected_index() {
             self.apply_selection(index);
         }
+    }
+
+    fn on_escape(&mut self) -> CancellationEvent {
+        let reject = self
+            .current_request
+            .as_ref()
+            .filter(|_| !self.done && !self.current_complete)
+            .and_then(|request| crate::answer_guard::esc_reject_option(&request.options));
+        match reject {
+            Some(index) => {
+                self.apply_selection(index);
+                CancellationEvent::Handled
+            }
+            None => self.on_ctrl_c(),
+        }
+    }
+
+    fn request_shown(&mut self) {
+        self.answer_guard.shown();
     }
 
     fn on_ctrl_c(&mut self) -> CancellationEvent {

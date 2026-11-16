@@ -106,6 +106,7 @@ fn different_kind_child_needs_start_and_its_permission_stays_in_child() {
             .screen_contents()
             .contains("Would you like to allow")
     );
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for(
@@ -124,6 +125,7 @@ fn different_kind_child_needs_start_and_its_permission_stays_in_child() {
         .wait_for_text("Would you like to allow", TIMEOUT)
         .unwrap();
     session.wait_for_text("write-child-file", TIMEOUT).unwrap();
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for_text("Permission granted with option: allow", TIMEOUT)
@@ -155,6 +157,7 @@ fn declining_different_kind_does_not_start_child() {
     session
         .wait_for_text("start a mock-model-alt session", TIMEOUT)
         .unwrap();
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('2')).unwrap();
     session
         .wait_for_text("The user declined this delegation.", TIMEOUT)
@@ -206,6 +209,7 @@ fn delegation_reads_clearly_from_request_to_result() {
         normalize_for_input_snapshot(session.screen_contents())
     );
 
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for(
@@ -240,6 +244,7 @@ fn delegation_reads_clearly_from_request_to_result() {
         .wait_for_text("alt + up to parent", TIMEOUT)
         .expect("the child shows the way back to its parent");
 
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for_text("Permission granted with option: allow", TIMEOUT)
@@ -270,11 +275,19 @@ fn delegation_reads_clearly_from_request_to_result() {
     let screen = session.screen_contents();
     assert!(!screen.contains("(parent"), "{screen}");
     // Only the list itself; the transcript above it is covered elsewhere.
+    // The child's reply row starts after its permission request when the
+    // request reached the list's preview live, and includes the text before
+    // it when the child was adopted later; either is right, so the snapshot
+    // keeps only the reply after the request.
     let list = screen
         .lines()
         .skip_while(|line| !line.contains("Sessions 2"))
         .collect::<Vec<_>>()
-        .join("\n");
+        .join("\n")
+        .replace(
+            "child final answer Permission granted with option: allow",
+            "Permission granted with option: allow                   ",
+        );
     insta::assert_snapshot!(
         "delegation_session_tree",
         normalize_for_input_snapshot(list)
@@ -289,6 +302,7 @@ fn start_waiting_child(session: &mut TuiSession) {
     session
         .wait_for_text("start a mock-model-alt session", TIMEOUT)
         .unwrap();
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for_text("is waiting on you", TIMEOUT)
@@ -313,6 +327,7 @@ fn alt_down_reaches_a_waiting_child_even_with_a_draft_in_the_parent() {
         "the draft stays with the parent:\n{}",
         session.screen_contents()
     );
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for_text("Permission granted with option: allow", TIMEOUT)
@@ -386,8 +401,11 @@ fn a_session_that_starts_with_a_delegation_is_titled_by_its_task() {
         .find(|line| line.contains("(current)"))
         .unwrap_or_else(|| panic!("parent row missing:\n{screen}"));
     assert!(parent.contains("inspect the parser"), "{screen}");
+    // Title rows hold the glyph; the second rows hold replies, which may
+    // quote the result.
     assert!(
         rows.iter()
+            .filter(|row| row.contains("(current)") || row.contains("└─ "))
             .all(|row| !row.contains("[Nori delegation result]")),
         "{screen}"
     );
@@ -454,6 +472,7 @@ fn the_session_list_keeps_names_with_a_shared_prefix_apart_at_80_columns() {
     session
         .wait_for_text("start a mock-model-alt session", TIMEOUT)
         .unwrap();
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session.wait_for_text("is waiting on you", TIMEOUT).unwrap();
     session.settle(Duration::from_millis(200));
@@ -479,15 +498,22 @@ fn the_session_list_keeps_names_with_a_shared_prefix_apart_at_80_columns() {
         .lines()
         .find(|line| line.contains("└─") && line.contains("permission:z"))
         .unwrap_or_else(|| panic!("the child row keeps its end:\n{screen}"));
+    // The Session column ends where the Agent column starts.
+    let name = |row: &str| {
+        row.split("  mock-model")
+            .next()
+            .unwrap_or_default()
+            .to_string()
+    };
     for row in [parent, child] {
         assert!(row.contains("shared"), "{screen}");
         assert!(
-            row.matches('…').count() <= 1,
+            name(row).matches('…').count() <= 1,
             "names are cut once:\n{screen}"
         );
     }
     assert_eq!(
-        child.matches('…').count(),
+        name(child).matches('…').count(),
         1,
         "the long child name is cut:\n{screen}"
     );

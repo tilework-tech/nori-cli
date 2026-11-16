@@ -64,6 +64,8 @@ pub struct SessionRecord {
     pub source: SessionSource,
     pub cwd: PathBuf,
     pub model: Option<String>,
+    /// The display name of the model the agent says it runs.
+    pub model_name: Option<String>,
     pub approval_policy: AskForApproval,
     pub transcript_path: Option<PathBuf>,
     pub acp_session_id: Option<String>,

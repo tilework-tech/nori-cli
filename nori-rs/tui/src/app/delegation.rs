@@ -19,6 +19,16 @@ impl App {
             {
                 continue;
             }
+            // The manager lists a child before its launch hands over the
+            // session handle. Adopting it then would leave the child's view
+            // unable to answer its requests, so wait for a later draw; a
+            // child that already ended is adopted without one.
+            let handle = self.session_manager.handle(&record.conversation_id);
+            let ended =
+                record.status.is_closed() || record.status == nori_protocol::SessionStatus::Failed;
+            if handle.is_none() && !ended {
+                continue;
+            }
             // Follow forks of this process while skipping unrelated histories.
             let mut cursors = self.session_manager.replay_cursors();
             let records = self.session_manager.list();
@@ -58,12 +68,8 @@ impl App {
             );
             init.config = self.config_for_agent(&record.agent);
             init.config.cwd = record.cwd;
-            let widget = ChatWidget::from_managed_view(
-                init,
-                record.conversation_id,
-                self.session_manager.handle(&record.conversation_id),
-                subscription,
-            );
+            let widget =
+                ChatWidget::from_managed_view(init, record.conversation_id, handle, subscription);
             self.adopted_delegations.insert(record.conversation_id);
             self.session_deck.park(
                 widget.session_generation(),

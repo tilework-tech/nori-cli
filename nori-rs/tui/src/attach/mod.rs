@@ -91,7 +91,7 @@ async fn run(
             tui.draw(height, |frame| {
                 let area = frame.area();
                 render::render(&runtime.state, &runtime.composer, area, frame.buffer_mut());
-                if let Some(position) = runtime.composer.cursor_pos(render::composer_area(&runtime.state, &runtime.composer, area)) {
+                if let Some(position) = render::cursor_position(&runtime.state, &runtime.composer, area) {
                     frame.set_cursor_position(position);
                 }
             })?;

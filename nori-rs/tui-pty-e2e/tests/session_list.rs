@@ -101,7 +101,7 @@ fn three_sessions() -> TuiSession {
 
 #[test]
 #[cfg(target_os = "linux")]
-fn left_on_an_empty_prompt_lists_sessions_with_status_and_preview() {
+fn left_on_an_empty_prompt_lists_sessions_with_status_and_reply() {
     let mut session = three_sessions();
     session.send_key(Key::Left).unwrap();
     session
@@ -111,13 +111,22 @@ fn left_on_an_empty_prompt_lists_sessions_with_status_and_preview() {
     let screen = session.screen_contents();
     for expected in [
         "alpha question",
-        "approve: rm -rf target/debug",
         "waiting on you",
         "gamma question",
         "(current)",
     ] {
         assert!(screen.contains(expected), "{expected:?} missing:\n{screen}");
     }
+    // A waiting session's second row says what it asks for.
+    let lines: Vec<&str> = screen.lines().collect();
+    let waiting = lines
+        .iter()
+        .position(|line| line.contains("mock-model-") && line.contains("rm -rf"))
+        .expect("the waiting row");
+    assert!(
+        lines[waiting + 1].contains("approve: rm -rf target/debug"),
+        "{screen}"
+    );
     insta::assert_snapshot!(
         "session_list_three_sessions",
         normalize_for_input_snapshot(screen)
@@ -147,6 +156,7 @@ fn tab_shows_only_sessions_waiting_on_you_and_typing_filters() {
     );
     session.send_key(Key::Tab).unwrap();
 
+    session.send_key(Key::Char('/')).unwrap();
     for c in "gamma".chars() {
         session.send_key(Key::Char(c)).unwrap();
     }
@@ -155,7 +165,7 @@ fn tab_shows_only_sessions_waiting_on_you_and_typing_filters() {
             |screen| screen.contains("○ gamma question") && !screen.contains("○ alpha question"),
             Duration::from_secs(3),
         )
-        .expect("typing filters by title");
+        .expect("after /, typing filters by title");
 
     session.send_key(Key::Escape).unwrap();
     session
@@ -248,6 +258,7 @@ fn a_background_request_is_named_and_one_key_jumps_to_it_for_an_answer() {
             Duration::from_secs(5),
         )
         .expect("next_waiting_session shows the waiting request");
+    session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session
         .wait_for_text(
@@ -285,16 +296,17 @@ fn an_agent_that_dies_fails_only_its_session_which_can_be_resumed() {
     session.send_key(Key::Alt('s')).unwrap();
     session
         .wait_for(
-            |screen| {
-                screen.contains("failed") && screen.contains("agent exited · resume available")
-            },
+            |screen| screen.contains("Sessions 2") && screen.contains("✕ doomed question"),
             Duration::from_secs(3),
         )
-        .expect("the failed row offers a resume");
+        .expect("the failed session is listed as failed");
     session.send_key(Key::Down).unwrap();
     session
-        .wait_for_text("ctrl+r resume", Duration::from_secs(3))
-        .expect("the key hint names the resume key on a failed row");
+        .wait_for(
+            |screen| screen.contains("ctrl+r resume") && screen.contains("esc close"),
+            Duration::from_secs(3),
+        )
+        .expect("the key hints, with the resume key on a failed row, are drawn");
     insta::assert_snapshot!(
         "session_list_failed_row",
         normalize_for_input_snapshot(session.screen_contents())
@@ -427,4 +439,59 @@ fn left_with_text_in_the_prompt_moves_the_cursor_instead_of_opening_the_list() {
         .wait_for_text("drafXt", Duration::from_secs(3))
         .expect("Left moves the cursor in a non-empty prompt");
     assert!(!session.screen_contents().contains("Sessions 2"));
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn the_list_shows_the_title_the_agent_sends_its_reply_and_one_summary() {
+    let mut session = spawn();
+    ask(
+        &mut session,
+        "mock:title Greeting in three words",
+        ALPHA_ANSWER,
+    );
+    ask(&mut session, "mock:usage 38000 475000", ALPHA_ANSWER);
+    start_new_session(&mut session);
+    ask(&mut session, "second question", ALPHA_ANSWER);
+    session.send_key(Key::Left).unwrap();
+    session
+        .wait_for(
+            |screen| {
+                screen.contains("Sessions 2")
+                    && screen.contains("Greeting in three words")
+                    && screen.contains("8% / 475k")
+            },
+            Duration::from_secs(5),
+        )
+        .expect("the list shows the agent's title and context");
+    let screen = session.screen_contents();
+    let lines: Vec<&str> = screen.lines().collect();
+    let titled = lines
+        .iter()
+        .position(|line| line.contains("Greeting in three words"))
+        .unwrap_or_else(|| panic!("the agent's title names the session:\n{screen}"));
+    assert!(!screen.contains("mock:title"), "{screen}");
+    let reply_row = lines.get(titled + 1).copied().unwrap_or_default();
+    assert!(
+        reply_row.contains(ALPHA_ANSWER),
+        "row 2 holds the reply:\n{screen}"
+    );
+    assert!(
+        reply_row.contains("ago"),
+        "row 2 holds the last activity:\n{screen}"
+    );
+    assert!(
+        reply_row.contains("Mock") && reply_row.contains("Model"),
+        "row 2 holds the model, cut to its column:\n{screen}"
+    );
+    let title_row = lines[titled];
+    assert!(
+        title_row.contains("8% / 475k"),
+        "row 1 ends with context:\n{screen}"
+    );
+    assert_eq!(
+        screen.matches("2 ready").count(),
+        1,
+        "one summary:\n{screen}"
+    );
 }

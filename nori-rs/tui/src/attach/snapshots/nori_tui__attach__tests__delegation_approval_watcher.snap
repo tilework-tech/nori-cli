@@ -16,6 +16,4 @@ expression: rendered
  asked by  mock-model (this session)
  runs on   mock-model-alt · a different agent from this session
  task      Review the parser
- 1 Yes, start it · 2 No, decline
-
-› Send a prompt
+ 1 Yes, start it · 2 No, decline · esc or ctrl+c declines

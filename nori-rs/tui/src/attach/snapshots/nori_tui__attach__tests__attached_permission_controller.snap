@@ -14,8 +14,4 @@ expression: screen(&state)
 
  Permission · Write a file
  › 1  Allow once
- ↑↓ choose · enter answer · number selects an option
-
-
-
-› Send a prompt
+ ↑↓ choose · enter answer · number selects · esc reject · ctrl+c cancel

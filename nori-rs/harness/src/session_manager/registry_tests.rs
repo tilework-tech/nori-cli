@@ -573,6 +573,7 @@ fn session_started_fills_in_the_record() {
             source: SessionSource::User,
             cwd: PathBuf::from("/work"),
             model: Some("opus".to_string()),
+            model_name: Some("Opus".to_string()),
             approval_policy: AskForApproval::OnRequest,
             transcript_path: Some(PathBuf::from("/transcripts/acp-a.jsonl")),
             acp_session_id: Some("acp-a".to_string()),

@@ -15,6 +15,13 @@ use super::runtime::Runtime;
 impl Runtime {
     /// False means detach. It never requests host or session shutdown.
     pub fn key(&mut self, key: KeyEvent) -> bool {
+        self.note_request_on_screen();
+        let handled = self.handle_key(key);
+        self.note_request_on_screen();
+        handled
+    }
+
+    fn handle_key(&mut self, key: KeyEvent) -> bool {
         if key.kind == KeyEventKind::Release {
             return true;
         }
@@ -61,6 +68,13 @@ impl Runtime {
             }
             return true;
         }
+        if key.code == KeyCode::Esc && !self.state.list_open && self.state.request_on_screen() {
+            self.state.notice = None;
+            if !self.delegation_key(key) {
+                self.permission_key(key);
+            }
+            return true;
+        }
         if key.code == KeyCode::Esc {
             if self.state.list_open && self.state.picker.search_active {
                 self.state.picker.handle(PickerAction::ClearQuery);
@@ -103,13 +117,16 @@ impl Runtime {
             return true;
         }
         // A request shown for the session on screen holds the keyboard, as
-        // the local approval overlay does: its keys answer it, scrolling and
-        // Ctrl+C still work, and anything else leaves the draft untouched.
-        if !self.state.list_open && self.request_shown() {
-            let passes = matches!(key.code, KeyCode::PageUp | KeyCode::PageDown)
-                || (key.code == KeyCode::Char('c')
-                    && key.modifiers.contains(KeyModifiers::CONTROL));
+        // the local approval overlay does: its keys answer it, Ctrl+C cancels
+        // it, scrolling still works, and the hidden draft is left untouched.
+        if !self.state.list_open && self.state.request_on_screen() {
+            let passes = matches!(key.code, KeyCode::PageUp | KeyCode::PageDown);
             if !passes {
+                // A key typed just as the request appeared was meant for
+                // the composer; it is dropped rather than answering.
+                if !self.answer_guard.allows(&key) {
+                    return true;
+                }
                 if !self.delegation_key(key) {
                     self.permission_key(key);
                 }
@@ -166,21 +183,6 @@ impl Runtime {
         false
     }
 
-    /// Whether the session on screen shows a permission request or a
-    /// delegation waiting for approval.
-    fn request_shown(&self) -> bool {
-        self.state
-            .selected
-            .as_ref()
-            .and_then(|id| self.state.conversations.get(id))
-            .is_some_and(|conversation| {
-                !conversation.permissions.is_empty()
-                    || conversation.delegations.iter().any(|delegation| {
-                        delegation.status == nori_protocol::DelegationStatus::AwaitingApproval
-                    })
-            })
-    }
-
     fn delegation_key(&mut self, key: KeyEvent) -> bool {
         let Some(id) = self.state.selected.clone() else {
             return false;
@@ -200,7 +202,8 @@ impl Runtime {
         };
         let approved = match (key.code, key.modifiers) {
             (KeyCode::Char('1'), KeyModifiers::NONE) | (KeyCode::Enter, KeyModifiers::NONE) => true,
-            (KeyCode::Char('2'), KeyModifiers::NONE) => false,
+            (KeyCode::Char('2') | KeyCode::Esc, KeyModifiers::NONE)
+            | (KeyCode::Char('c'), KeyModifiers::CONTROL) => false,
             _ => return false,
         };
         if let Err(error) = self.require_mutation() {
@@ -215,20 +218,22 @@ impl Runtime {
         true
     }
 
+    /// The shared picker keys. While the composer holds text, only the
+    /// arrows, PageUp/PageDown and Ctrl+F act on the list; other keys edit
+    /// the draft.
     fn picker_key(&mut self, key: KeyEvent) -> bool {
-        let action = match (key.code, key.modifiers) {
-            (KeyCode::Char('f'), KeyModifiers::CONTROL) => PickerAction::ActivateSearch,
-            (KeyCode::Up, _) => PickerAction::MoveUp,
-            (KeyCode::Down, _) => PickerAction::MoveDown,
-            (KeyCode::Enter, _) if self.composer.is_empty() => PickerAction::Submit,
-            (KeyCode::Backspace, _) if self.state.picker.search_active => PickerAction::Backspace,
-            (KeyCode::Char(character), KeyModifiers::NONE | KeyModifiers::SHIFT)
-                if self.state.picker.search_active =>
-            {
-                PickerAction::AppendQuery(character)
-            }
-            _ => return false,
+        let search_active = self.state.picker.search_active;
+        let Some(action) = crate::bottom_pane::picker_keys::navigation_action(&key, search_active)
+        else {
+            return false;
         };
+        let list_only = matches!(
+            key.code,
+            KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown
+        ) || key.modifiers == KeyModifiers::CONTROL;
+        if !search_active && !list_only && !self.composer.is_empty() {
+            return false;
+        }
         if let PickerOutcome::Selected(id) = self.state.picker.handle(action) {
             self.open_session(id);
         }
@@ -247,7 +252,10 @@ impl Runtime {
         else {
             return false;
         };
+        let reject = crate::answer_guard::esc_reject_option(&permission.options);
         let selected = match key.code {
+            KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => None,
+            KeyCode::Esc => reject,
             KeyCode::Up => {
                 permission.selected = permission.selected.saturating_sub(1);
                 return true;
@@ -257,24 +265,28 @@ impl Runtime {
                     (permission.selected + 1).min(permission.options.len().saturating_sub(1));
                 return true;
             }
-            KeyCode::Enter if key.modifiers.is_empty() => permission.selected,
+            KeyCode::Enter if key.modifiers.is_empty() => Some(permission.selected),
             KeyCode::Char(character @ '1'..='9') if key.modifiers.is_empty() => {
-                usize::try_from(character.to_digit(10).unwrap_or(1)).unwrap_or(1) - 1
+                let index = usize::try_from(character.to_digit(10).unwrap_or(1)).unwrap_or(1) - 1;
+                if index >= permission.options.len() {
+                    return true;
+                }
+                Some(index)
             }
             _ => return false,
         };
-        let Some(option) = permission.options.get(selected) else {
-            return true;
+        let outcome = match selected.and_then(|index| permission.options.get(index)) {
+            Some(option) => acp::RequestPermissionOutcome::Selected(
+                acp::SelectedPermissionOutcome::new(option.option_id.clone()),
+            ),
+            None => acp::RequestPermissionOutcome::Cancelled,
         };
         let request_id = permission.request_id.clone();
-        let option_id = option.option_id.clone();
         if let Err(error) = self.require_mutation() {
             self.state.show_notice(error.to_string());
             return true;
         }
-        let response = acp::RequestPermissionResponse::new(
-            acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(option_id)),
-        );
+        let response = acp::RequestPermissionResponse::new(outcome);
         self.send(
             "_nori/session/respond",
             json!({"session_id":id, "request_id":request_id, "response":response}),

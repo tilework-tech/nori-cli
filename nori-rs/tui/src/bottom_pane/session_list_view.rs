@@ -1,7 +1,9 @@
 //! The session list: every session this TUI holds, in navigation order.
 //!
-//! Rows show a status glyph, the title, the agent and a status word, with a
-//! one-line preview below. Children sit indented under their parent. Tab
+//! Rows use the shared two-row session layout
+//! (`nori_tui_components::session_table`): a status glyph and the title, the
+//! agent, the status word and the context use, then the start of the agent's
+//! last reply, the model and the time since the last activity. Children sit indented under their parent. Tab
 //! toggles between every session and only those waiting on the user, and
 //! typing filters by title or agent. Ctrl+D closes the selected session (a
 //! busy one takes a second press) and removes a closed one from the list. Rows are replaced while the list is open
@@ -16,13 +18,12 @@ use nori_tui_components::DetailTone;
 use nori_tui_components::KeyHint;
 use nori_tui_components::Picker;
 use nori_tui_components::PickerAction;
-use nori_tui_components::PickerColumn;
-use nori_tui_components::PickerColumnWidth;
 use nori_tui_components::PickerDensity;
 use nori_tui_components::PickerItem;
 use nori_tui_components::PickerOutcome;
 use nori_tui_components::PickerState;
 use nori_tui_components::ProviderKind;
+use nori_tui_components::session_table;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -54,7 +55,14 @@ pub(crate) struct SessionRow {
     /// The status shown by the glyph and the status tone. For a parent this
     /// follows its whole family.
     pub(crate) family_status: SessionStatus,
-    pub(crate) preview: Option<String>,
+    /// The start of the agent's latest reply.
+    pub(crate) reply: Option<String>,
+    /// The model the agent runs, as the status bar names it.
+    pub(crate) model: Option<String>,
+    /// Seconds since the session last did anything.
+    pub(crate) idle_seconds: Option<i64>,
+    /// Context use in the status bar's short form.
+    pub(crate) context: Option<String>,
     pub(crate) depth: i32,
     pub(crate) on_screen: bool,
 }
@@ -69,23 +77,14 @@ pub(crate) struct SessionListView {
     close_armed: Option<SessionGeneration>,
 }
 
-const TITLE: &str = "title";
-const AGENT: &str = "agent";
-const STATUS: &str = "status";
+const TITLE: &str = session_table::SESSION;
+const AGENT: &str = session_table::AGENT;
+const STATUS: &str = session_table::STATUS;
+const CONTEXT: &str = session_table::CONTEXT;
 
 impl SessionListView {
     pub(crate) fn new(rows: Vec<SessionRow>, app_event_tx: AppEventSender) -> Self {
-        let columns = [
-            PickerColumn::flexible(TITLE, "Session")
-                .width(PickerColumnWidth::Flexible {
-                    min: 16,
-                    max: 72,
-                    weight: 4,
-                })
-                .cut_middle(),
-            PickerColumn::fixed(AGENT, "Agent", 14).hide_below(48),
-            PickerColumn::fixed(STATUS, "Status", 16),
-        ];
+        let columns = session_table::session_columns();
         let mut state = PickerState::new("Sessions", columns, items(&rows))
             .categories([WAITING_FILTER_LABEL])
             .search_placeholder("Title or agent");
@@ -117,9 +116,9 @@ impl SessionListView {
             text.push_str(&summary);
         }
         let hint = if self.state.active_category.is_some() {
-            "  tab: all sessions · type to search"
+            "  tab: all sessions · / search"
         } else {
-            "  tab: waiting only · type to search"
+            "  tab: waiting only · / search"
         };
         Line::from(vec![text.bold(), hint.dim()])
     }
@@ -194,24 +193,17 @@ impl SessionListView {
     }
 }
 
-fn glyph(status: SessionStatus) -> &'static str {
-    match status {
-        SessionStatus::WaitingOnYou => "●",
-        SessionStatus::Working => "⠋",
-        SessionStatus::Ready => "○",
-        SessionStatus::Failed => "✕",
-        SessionStatus::Closed | SessionStatus::Done => "·",
-        SessionStatus::Starting => "…",
-    }
-}
-
 fn items(rows: &[SessionRow]) -> Vec<PickerItem<SessionGeneration>> {
     rows.iter()
         .map(|row| {
             let mut item = PickerItem::new(
                 row.generation,
                 TITLE,
-                format!("{} {}", glyph(row.family_status), row.title),
+                format!(
+                    "{} {}",
+                    crate::session_status::status_glyph(row.family_status),
+                    row.title
+                ),
             )
             .cell(AGENT, row.agent.clone())
             .cell(STATUS, row.status_word.clone())
@@ -231,10 +223,18 @@ fn items(rows: &[SessionRow]) -> Vec<PickerItem<SessionGeneration>> {
             if row.family_status == SessionStatus::WaitingOnYou {
                 item = item.category(WAITING_FILTER_LABEL);
             }
-            if let Some(preview) = &row.preview {
-                item = item.description(preview.clone());
+            if let Some(context) = &row.context {
+                item = item.cell(CONTEXT, context.clone());
             }
-            item
+            if let Some(model) = &row.model {
+                item = item.second_row_cell(AGENT, model.clone());
+            }
+            if let Some(idle) = row.idle_seconds {
+                item = item.second_row_cell(STATUS, session_table::ago(idle));
+            }
+            // The reply lines up with the title, after the status glyph.
+            let reply = row.reply.as_deref().unwrap_or(session_table::NO_REPLY);
+            item.second_row_cell(TITLE, format!("  {reply}"))
         })
         .collect()
 }
@@ -261,25 +261,14 @@ impl BottomPaneView for SessionListView {
             return;
         }
         let action = match (key.code, key.modifiers) {
-            (KeyCode::Up, _) | (KeyCode::Char('p'), KeyModifiers::CONTROL) => PickerAction::MoveUp,
-            (KeyCode::Down, _) | (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
-                PickerAction::MoveDown
-            }
-            (KeyCode::PageUp, _) => PickerAction::PageUp,
-            (KeyCode::PageDown, _) => PickerAction::PageDown,
-            (KeyCode::Home, _) => PickerAction::First,
-            (KeyCode::End, _) => PickerAction::Last,
+            (KeyCode::Char('p'), KeyModifiers::CONTROL) => PickerAction::MoveUp,
+            (KeyCode::Char('n'), KeyModifiers::CONTROL) => PickerAction::MoveDown,
             (KeyCode::Tab, _) => PickerAction::NextCategory,
             (KeyCode::BackTab, _) => PickerAction::PreviousCategory,
-            (KeyCode::Enter, _) => PickerAction::Submit,
-            (KeyCode::Backspace, _) => PickerAction::Backspace,
-            (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
-                if !self.state.search_active {
-                    self.state.handle(PickerAction::ActivateSearch);
-                }
-                PickerAction::AppendQuery(c)
-            }
-            _ => return,
+            _ => match super::picker_keys::navigation_action(&key, self.state.search_active) {
+                Some(action) => action,
+                None => return,
+            },
         };
         self.apply(action);
     }
@@ -294,11 +283,10 @@ impl BottomPaneView for SessionListView {
     }
 
     fn on_escape(&mut self) -> CancellationEvent {
-        if self.state.query.is_empty() {
-            self.complete = true;
+        if self.state.search_active {
+            self.apply(PickerAction::DeactivateSearch);
         } else {
-            self.state.handle(PickerAction::ClearQuery);
-            self.state.handle(PickerAction::DeactivateSearch);
+            self.complete = true;
         }
         CancellationEvent::Handled
     }
@@ -318,12 +306,9 @@ impl Renderable for SessionListView {
         if area.height == 0 {
             return;
         }
-        let header_area = Rect::new(
-            area.x.saturating_add(2),
-            area.y,
-            area.width.saturating_sub(2),
-            1,
-        );
+        // The header starts at the list's left edge, with the tabs, the
+        // row marker and the footer below it.
+        let header_area = Rect::new(area.x, area.y, area.width, 1);
         self.header().render(header_area, buf);
         let list_area = Rect::new(
             area.x,
@@ -334,12 +319,13 @@ impl Renderable for SessionListView {
         let picker = Picker::new(&self.state)
             .theme(crate::style::component_theme())
             .density(PickerDensity::Compact)
-            .compact_descriptions(true)
+            .horizontal_margin(0)
+            .selection_keeps_tones(true)
             .show_title(false)
             .show_details(false)
             .footer_hints(
                 [
-                    Some(KeyHint::new("↑↓", "move")),
+                    Some(KeyHint::new("↑↓/j/k", "move")),
                     Some(KeyHint::new("enter", "open")),
                     self.selected_row()
                         .filter(|row| row.status == SessionStatus::Failed)
@@ -368,11 +354,7 @@ impl Renderable for SessionListView {
 
     fn desired_height(&self, _width: u16) -> u16 {
         let rows = self.state.visible_indices().len().clamp(1, 8) as u16;
-        let row_height = if self.rows.iter().any(|row| row.preview.is_some()) {
-            2
-        } else {
-            1
-        };
+        let row_height = 2;
         // Header, category tabs and their gap, column headings, and the key
         // hints with their gap.
         let chrome = 1 + 2 + 1 + 1 + 2 + 1 + u16::from(self.state.search_active);
@@ -399,10 +381,44 @@ mod tests {
             status,
             status_word: crate::session_status::status_label(status).to_string(),
             family_status: status,
-            preview: None,
+            reply: None,
+            model: None,
+            idle_seconds: None,
+            context: None,
             depth: 0,
             on_screen: false,
         }
+    }
+
+    fn rich_rows() -> Vec<SessionRow> {
+        let mut parent = row(1, "Greeting in three words", SessionStatus::Working);
+        parent.agent = "claude-code".to_string();
+        parent.provider = Some(ProviderKind::Claude);
+        parent.family_status = SessionStatus::Working;
+        parent.status_word = "working".to_string();
+        parent.reply = Some(
+            "Hi there, friend! Anything else you would like me to help with today?".to_string(),
+        );
+        parent.model = Some("opus 5.5".to_string());
+        parent.idle_seconds = Some(125);
+        parent.context = Some("8% / 475k".to_string());
+        parent.on_screen = true;
+        let mut child = row(
+            2,
+            "inspect the parser recovery path",
+            SessionStatus::Working,
+        );
+        child.agent = "codex".to_string();
+        child.provider = Some(ProviderKind::Codex);
+        child.reply = Some("Reading src/parser.rs".to_string());
+        child.model = Some("gpt-5.5".to_string());
+        child.idle_seconds = Some(4);
+        child.context = Some("31% / 272k".to_string());
+        child.depth = 1;
+        let mut fresh = row(3, "say hi in 3 words", SessionStatus::Starting);
+        fresh.agent = "gemini".to_string();
+        fresh.idle_seconds = Some(0);
+        vec![parent, child, fresh]
     }
 
     fn view(rows: Vec<SessionRow>) -> SessionListView {
@@ -552,9 +568,96 @@ mod tests {
         list.replace_rows(vec![row(1, "session", SessionStatus::Ready)]);
         let screen = render(&list, 80);
         assert!(screen.contains("No sessions waiting on you"), "{screen}");
+        list.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         list.handle_key_event(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE));
         let screen = render(&list, 80);
         assert!(screen.contains("No matching options"), "{screen}");
+    }
+
+    /// The title on the row the marker points at.
+    fn selected_title(list: &SessionListView) -> String {
+        let screen = render(list, 80);
+        screen
+            .lines()
+            .find_map(|line| {
+                let line = line.trim_start_matches('"');
+                line.strip_prefix("› ").map(|rest| {
+                    rest.split("  ")
+                        .next()
+                        .unwrap_or_default()
+                        .trim()
+                        .to_string()
+                })
+            })
+            .unwrap_or_else(|| panic!("a selected row in {screen}"))
+    }
+
+    fn press(list: &mut SessionListView, code: KeyCode) {
+        list.handle_key_event(KeyEvent::new(code, KeyModifiers::NONE));
+    }
+
+    #[test]
+    fn j_and_k_move_through_the_list_and_letters_do_not_filter() {
+        let mut list = view(rich_rows());
+        assert!(selected_title(&list).contains("Greeting in three words"));
+        press(&mut list, KeyCode::Char('j'));
+        assert!(
+            selected_title(&list).contains("inspect the parser"),
+            "j moves down"
+        );
+        press(&mut list, KeyCode::Char('k'));
+        assert!(
+            selected_title(&list).contains("Greeting in three words"),
+            "k moves up"
+        );
+        press(&mut list, KeyCode::Char('x'));
+        let screen = render(&list, 80);
+        for title in [
+            "Greeting in three words",
+            "inspect the parser",
+            "say hi in 3 words",
+        ] {
+            assert!(screen.contains(title), "a letter does not filter: {screen}");
+        }
+    }
+
+    #[test]
+    fn slash_searches_and_esc_leaves_search_before_closing() {
+        let mut list = view(rich_rows());
+        press(&mut list, KeyCode::Char('/'));
+        for character in "say".chars() {
+            press(&mut list, KeyCode::Char(character));
+        }
+        let screen = render(&list, 80);
+        assert!(screen.contains("say hi in 3 words"), "{screen}");
+        assert!(
+            !screen.contains("inspect the parser"),
+            "typing filters while searching: {screen}"
+        );
+
+        list.on_escape();
+        assert!(!list.is_complete(), "the first esc only leaves search");
+        let screen = render(&list, 80);
+        assert!(
+            screen.contains("inspect the parser"),
+            "the filter is gone: {screen}"
+        );
+        press(&mut list, KeyCode::Char('j'));
+        assert!(
+            selected_title(&list).contains("inspect the parser"),
+            "j moves again"
+        );
+
+        list.on_escape();
+        assert!(list.is_complete(), "the second esc closes the list");
+    }
+
+    #[test]
+    fn the_hints_name_j_k_and_slash() {
+        let screen = render(&view(rich_rows()), 120);
+        assert!(screen.contains("↑↓/j/k move"), "{screen}");
+        assert!(screen.contains("/ search"), "{screen}");
+        assert!(!screen.contains("type to search"), "{screen}");
     }
 
     #[test]
@@ -583,5 +686,99 @@ mod tests {
         let after_second = closes();
         assert!(screen.contains("ctrl+d again to close"), "{screen}");
         assert_eq!((after_first, after_second), (Vec::new(), vec![1]));
+    }
+
+    #[test]
+    fn every_session_takes_two_rows_at_each_layout_width() {
+        let list = view(rich_rows());
+        for width in [58, 80, 87, 120] {
+            assert_snapshot!(format!("two_row_sessions_{width}"), render(&list, width));
+        }
+    }
+
+    #[test]
+    fn a_session_without_a_reply_says_so() {
+        let screen = render(&view(rich_rows()), 80);
+        let fresh = screen
+            .lines()
+            .position(|line| line.contains("say hi in 3 words"))
+            .expect("fresh row");
+        let below = screen.lines().nth(fresh + 1).unwrap_or_default();
+        assert!(below.contains("no reply yet"), "{screen}");
+        assert!(below.contains("0s ago"), "{screen}");
+    }
+
+    #[test]
+    fn the_header_carries_the_only_status_summary() {
+        let screen = render(&view(rich_rows()), 120);
+        assert_eq!(screen.matches("2 working").count(), 1, "{screen}");
+        assert!(
+            screen
+                .lines()
+                .any(|line| line.contains("Sessions 3 · 2 working")),
+            "{screen}"
+        );
+    }
+
+    #[test]
+    fn the_header_lines_up_with_the_rows_below_it() {
+        let screen = render(&view(rich_rows()), 80);
+        let indent = |needle: &str| {
+            let line = screen
+                .lines()
+                .find(|line| line.contains(needle))
+                .unwrap_or_else(|| panic!("{needle} in {screen}"));
+            let line = line.trim_start_matches('"');
+            line.len() - line.trim_start().len()
+        };
+        assert_eq!(
+            indent("Sessions 3"),
+            indent("All  waiting on you"),
+            "{screen}"
+        );
+        assert_eq!(indent("Sessions 3"), indent("› "), "{screen}");
+    }
+
+    fn render_buffer(view: &SessionListView, width: u16) -> ratatui::buffer::Buffer {
+        let height = view.desired_height(width);
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("terminal");
+        terminal
+            .draw(|frame| view.render(frame.area(), frame.buffer_mut()))
+            .expect("draw");
+        terminal.backend().buffer().clone()
+    }
+
+    /// The style of `text` on the first list row that shows it.
+    fn style_at(buffer: &ratatui::buffer::Buffer, text: &str) -> ratatui::style::Style {
+        (0..buffer.area.height)
+            .find_map(|y| {
+                let line: String = (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect();
+                if line.contains("Sessions ") {
+                    return None;
+                }
+                let at = line.find(text)?;
+                let x = unicode_width::UnicodeWidthStr::width(&line[..at]) as u16;
+                Some(buffer[(x, y)].style())
+            })
+            .unwrap_or_else(|| panic!("{text} is shown"))
+    }
+
+    #[test]
+    fn second_rows_are_faint_and_the_selected_row_keeps_its_colours() {
+        use ratatui::style::Color;
+        use ratatui::style::Modifier;
+        let buffer = render_buffer(&view(rich_rows()), 120);
+        for faint in ["no reply yet", "Hi there", "opus 5.5", "2m ago"] {
+            let style = style_at(&buffer, faint);
+            assert!(
+                style.add_modifier.contains(Modifier::DIM) || style.fg == Some(Color::DarkGray),
+                "{faint} is faint: {style:?}"
+            );
+        }
+        // The session on screen is selected when the list opens.
+        assert_eq!(style_at(&buffer, "working").fg, Some(Color::Cyan));
+        assert_eq!(style_at(&buffer, "claude-code").fg, Some(Color::Yellow));
     }
 }

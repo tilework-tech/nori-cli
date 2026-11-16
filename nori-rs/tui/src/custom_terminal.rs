@@ -472,7 +472,11 @@ fn diff_buffers(a: &Buffer, b: &Buffer) -> Vec<DrawCommand> {
             column += width.max(1); // treat zero-width symbols as width 1
         }
 
-        if last_nonblank_column + 1 < row.len() {
+        // A shaded tail is drawn cell by cell: terminals and capture tools
+        // without background-colour erase would leave a cleared tail unshaded.
+        if bg != Color::Reset {
+            last_nonblank_column = row.len().saturating_sub(1);
+        } else if last_nonblank_column + 1 < row.len() {
             let (x, y) = a.pos_of(row_start + last_nonblank_column + 1);
             updates.push(DrawCommand::ClearToEnd { x, y, bg });
         }
@@ -771,6 +775,42 @@ mod tests {
                 .iter()
                 .any(|command| matches!(command, DrawCommand::Put { x: 2, y: 0, .. })),
             "expected diff_buffers to update the final cell; commands: {commands:?}",
+        );
+    }
+
+    #[test]
+    fn a_shaded_row_draws_its_background_to_the_right_edge() {
+        // Terminals and capture tools without background-colour erase leave a
+        // cleared tail unshaded, so a shaded tail is drawn cell by cell.
+        let area = Rect::new(0, 0, 8, 2);
+        let previous = Buffer::empty(area);
+        let mut next = Buffer::empty(area);
+        let shade = Style::default().bg(Color::DarkGray);
+        next.set_style(Rect::new(0, 0, 8, 1), shade);
+        next.set_string(0, 0, "ab", shade);
+        next.set_string(0, 1, "cd", Style::default());
+
+        let commands = diff_buffers(&previous, &next);
+
+        let shaded: Vec<u16> = commands
+            .iter()
+            .filter_map(|command| match command {
+                DrawCommand::Put { x, y: 0, cell } if cell.bg == Color::DarkGray => Some(*x),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(shaded, (0..8).collect::<Vec<u16>>(), "{commands:?}");
+        assert!(
+            !commands
+                .iter()
+                .any(|command| matches!(command, DrawCommand::ClearToEnd { y: 0, .. })),
+            "{commands:?}"
+        );
+        assert!(
+            commands.iter().any(
+                |command| matches!(command, DrawCommand::ClearToEnd { x: 2, y: 1, bg } if *bg == Color::Reset)
+            ),
+            "an unshaded row still clears its tail: {commands:?}"
         );
     }
 

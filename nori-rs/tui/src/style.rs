@@ -13,6 +13,15 @@ pub(crate) fn component_theme() -> Theme {
     Theme::for_terminal_background(relative_terminal_background())
 }
 
+/// The background of every other line in a session list printed outside the
+/// TUI, such as `nori host ls`, when the terminal reports its own background.
+pub fn session_list_shade() -> Option<(u8, u8, u8)> {
+    match component_theme().row_stripe.bg? {
+        ratatui::style::Color::Rgb(red, green, blue) => Some((red, green, blue)),
+        _ => None,
+    }
+}
+
 /// Returns the style for a user-authored message using the provided terminal background.
 pub fn user_message_style_for(terminal_bg: Option<(u8, u8, u8)>) -> Style {
     match terminal_bg {

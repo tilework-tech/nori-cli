@@ -49,7 +49,7 @@ PostHog identity or organization membership itself.
 - TUI flags such as `--agent`, approval-bypass options, prompts, images, `-c`, and working-directory overrides can be passed after `resume`; they are merged into the normal interactive CLI configuration before `nori_tui::run_main()`
 
 **Host and attach:** `nori host` starts a detached Unix process owning an empty
-session manager; `host ls` prints its sessions as a tree-ordered table and `host stop` shuts it down.
+session manager; `host ls` prints its sessions tree-ordered (the shared two-row session-list layout on a terminal, a plain one-row-per-session table when piped; see [host docs](src/host/docs.md)) and `host stop` shuts it down.
 The host outlives both attached terminals and its final session. `nori attach`
 requires `multi_session`, discovers the local host and token, then opens the
 session list or a supplied conversation ID. Explicit `--host` and

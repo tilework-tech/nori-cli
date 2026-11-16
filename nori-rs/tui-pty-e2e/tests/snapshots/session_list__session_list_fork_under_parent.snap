@@ -9,16 +9,15 @@ expression: normalize_for_input_snapshot(screen)
 • alpha agent answer
 
   ● parent question › mock:request-p…f target/debug is waiting on you · approve: rm -rf… · alt + down to jump
-  1 waiting on you · 1 ready
 
-  Sessions 2 · 1 waiting on you · 1 ready  tab: waiting only · type to search
+Sessions 2 · 1 waiting on you · 1 ready  tab: waiting only · / search
 
-  All  waiting on you
+All  waiting on you
 
-    Session                                                                 Agent           Status
-  › ● parent question (current)                                             mock-model      waiting on you
-    alpha agent answer
-    └─ ● mock:request-permission:rm -rf target/debug                        mock-model      waiting on you
-       approve: rm -rf target/debug
+  Session                                                            Agent         Status
+› ● parent question (current)                                        mock-model    waiting on you
+    alpha agent answer                                               Mock D…Model  N ago
+  └─ ● mock:request-permission:rm -rf target/debug                   mock-model    waiting on you
+       approve: rm -rf target/debug                                  Mock D…Model  N ago
 
-  ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close

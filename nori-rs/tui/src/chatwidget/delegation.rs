@@ -128,6 +128,9 @@ impl ChatWidget {
                 crate::key_hint::plain(crossterm::event::KeyCode::Esc).into(),
                 " to decline".into(),
             ])),
+            answer_guard: Some(crate::answer_guard::AnswerGuard::new(
+                self.bottom_pane.clock(),
+            )),
             ..Default::default()
         });
         true

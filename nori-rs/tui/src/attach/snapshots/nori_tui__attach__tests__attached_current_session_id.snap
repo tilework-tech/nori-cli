@@ -6,16 +6,16 @@ expression: rendered
  mock-model · Review parser · ready
 
 
-  Sessions 1
+Sessions 1 · 1 ready
 
-     ID        AGENT           STATUS            AGE    TITLE
-  ▏  abcd1234  mock-model      ready             2m     Review parser (current)        ▕
-
-
-
+  Session                                        Agent         Status
+› ○ Review parser (current)                      mock-model    ready
+    no reply yet                                               2m ago
 
 
-  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+↑↓/j/k move  enter open  ctrl+r resume  / search  esc back
 
 
 › Send a prompt

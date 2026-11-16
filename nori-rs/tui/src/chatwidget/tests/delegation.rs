@@ -60,10 +60,74 @@ fn render_bottom_pane(chat: &ChatWidget) -> String {
 }
 
 fn delegating_parent() -> (ChatWidget, tokio::sync::mpsc::UnboundedReceiver<AppEvent>) {
-    let (mut chat, mut rx, _) = make_chatwidget_manual();
+    let (chat, rx, _) = delegating_parent_with_clock();
+    (chat, rx)
+}
+
+/// A delegating parent whose prompts read a clock the test steps.
+fn delegating_parent_with_clock() -> (
+    ChatWidget,
+    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    crate::answer_guard::ManualClock,
+) {
+    let clock = crate::answer_guard::ManualClock::new();
+    let (mut chat, mut rx, _) = make_chatwidget_with_clock(clock.clock());
     chat.config.multi_session = true;
     while rx.try_recv().is_ok() {}
-    (chat, rx)
+    (chat, rx, clock)
+}
+
+fn resolved_delegation(rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>) -> Option<bool> {
+    let mut resolved = None;
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::ResolveDelegation { approved, .. } = event {
+            resolved = Some(approved);
+        }
+    }
+    resolved
+}
+
+#[test]
+fn option_keys_typed_as_a_delegation_request_appears_do_not_answer_it() {
+    for code in [
+        crossterm::event::KeyCode::Char('1'),
+        crossterm::event::KeyCode::Char('2'),
+        crossterm::event::KeyCode::Enter,
+    ] {
+        let (mut chat, mut rx, clock) = delegating_parent_with_clock();
+        chat.set_composer_text("my draft".into());
+        let generation = chat.session_generation();
+        chat.handle_session_event(generation, delegation("awaiting_approval"));
+        clock.advance(
+            crate::answer_guard::REQUEST_ANSWER_GRACE - std::time::Duration::from_millis(1),
+        );
+
+        chat.handle_key_event(crossterm::event::KeyEvent::new(
+            code,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+
+        assert_eq!(
+            resolved_delegation(&mut rx),
+            None,
+            "{code:?} answered too early"
+        );
+        assert_eq!(
+            chat.composer_text(),
+            "my draft",
+            "{code:?} changed the draft"
+        );
+        clock.pass_grace();
+        chat.handle_key_event(crossterm::event::KeyEvent::new(
+            code,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(
+            resolved_delegation(&mut rx),
+            Some(code != crossterm::event::KeyCode::Char('2')),
+            "{code:?} answers once the request has been visible for a moment"
+        );
+    }
 }
 
 #[test]
@@ -98,6 +162,61 @@ fn user_requested_approval_says_the_user_asked() {
     let rendered = render_bottom_pane(&chat);
     assert!(rendered.contains("you, with /delegate"), "{rendered}");
     insta::assert_snapshot!("user_delegation_approval", rendered);
+}
+
+#[test]
+fn a_delegation_prompt_revealed_by_a_closed_request_waits_out_its_own_grace() {
+    let (mut chat, mut rx, clock) = delegating_parent_with_clock();
+    let generation = chat.session_generation();
+    chat.handle_session_event(generation, delegation("awaiting_approval"));
+    clock.pass_grace();
+    // A permission request opens above the waiting delegation prompt.
+    chat.bottom_pane
+        .push_approval_request(crate::bottom_pane::ApprovalRequest {
+            request_id: "permission".to_string().into(),
+            title: "Run echo ok".to_string(),
+            kind: crate::presentation::ToolKind::Execute,
+            cwd: std::env::current_dir().expect("current directory"),
+            snapshot: Box::new(crate::presentation::ToolSnapshot {
+                call_id: "call".to_string(),
+                title: "Run echo ok".to_string(),
+                kind: crate::presentation::ToolKind::Execute,
+                phase: crate::presentation::ToolPhase::PendingApproval,
+                locations: Vec::new(),
+                invocation: None,
+                artifacts: Vec::new(),
+                raw_input: None,
+                raw_output: None,
+                owner_request_id: None,
+            }),
+            options: vec![nori_protocol::acp::v1::PermissionOption::new(
+                nori_protocol::acp::v1::PermissionOptionId::new("reject-once"),
+                "Reject",
+                nori_protocol::acp::v1::PermissionOptionKind::RejectOnce,
+            )],
+        });
+    clock.pass_grace();
+    chat.handle_key_event(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Esc,
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    while rx.try_recv().is_ok() {}
+
+    chat.handle_key_event(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('1'),
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    assert_eq!(
+        resolved_delegation(&mut rx),
+        None,
+        "the revealed prompt just appeared"
+    );
+    clock.pass_grace();
+    chat.handle_key_event(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('1'),
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    assert_eq!(resolved_delegation(&mut rx), Some(true));
 }
 
 #[test]
@@ -383,8 +502,7 @@ fn local_delegate_rejects_flag_off_without_prompting_agent() {
 
 #[test]
 fn forked_parent_refreshes_pending_approval_target() {
-    let (mut chat, mut rx, _) = make_chatwidget_manual();
-    chat.config.multi_session = true;
+    let (mut chat, mut rx, clock) = delegating_parent_with_clock();
     let generation = chat.session_generation();
     chat.handle_session_event(generation, delegation("awaiting_approval"));
     let nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::DelegationChanged(mut changed)) =
@@ -397,6 +515,7 @@ fn forked_parent_refreshes_pending_approval_target() {
         generation,
         nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::DelegationChanged(changed)),
     );
+    clock.pass_grace();
     chat.handle_key_event(crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Char('1'),
         crossterm::event::KeyModifiers::NONE,
@@ -434,10 +553,11 @@ fn delegation_result_and_parent_continuation_preserve_composer_draft() {
 
 #[test]
 fn a_shown_delegation_request_takes_enter_from_the_draft_and_keeps_it() {
-    let (mut chat, mut rx) = delegating_parent();
+    let (mut chat, mut rx, clock) = delegating_parent_with_clock();
     chat.set_composer_text("my draft".into());
     let generation = chat.session_generation();
     chat.handle_session_event(generation, delegation("awaiting_approval"));
+    clock.pass_grace();
     chat.handle_key_event(crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Enter,
         crossterm::event::KeyModifiers::NONE,

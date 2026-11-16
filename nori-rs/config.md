@@ -124,8 +124,9 @@ another session and say how to close one.
 The `[tui.hotkeys]` values above are the defaults, and the actions appear in
 the Hotkeys view only with the feature on. Moving between sessions skips
 closed and done ones. In the session list, Tab shows only sessions waiting on you (Tab
-again shows all), typing filters by title or agent, Enter jumps, Esc clears
-the filter and then closes, and Ctrl+R restarts a failed session from its
+again shows all), arrows or `j`/`k` move, `/` (or `f`, Ctrl+F) starts a search
+that filters by title or agent, Enter jumps, Esc leaves the search and then
+closes, and Ctrl+R restarts a failed session from its
 transcript in the same place, keeping its title. A session is titled by the
 agent's summary, else its first message, else the task of a `/delegate` sent
 first; a delegation result never titles a session. Rows show the agent slug
