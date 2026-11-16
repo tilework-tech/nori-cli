@@ -54,6 +54,7 @@ tempfile = { workspace = true }
 libc = { workspace = true }
 
 [dev-dependencies]
+tokio-tungstenite = { workspace = true }
 filetime = "0.2"
 pretty_assertions = { workspace = true }
 rmcp = { workspace = true, features = [

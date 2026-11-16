@@ -3858,6 +3858,7 @@ dependencies = [
  "nori-harness",
  "nori-installed",
  "nori-protocol",
+ "serde_json",
  "tokio",
  "tokio-util",
 ]
@@ -3894,6 +3895,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-test",
+ "tokio-tungstenite",
  "tokio-util",
  "toml",
  "toml_edit",

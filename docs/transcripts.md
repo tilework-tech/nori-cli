@@ -21,10 +21,13 @@ $NORI_HOME/transcripts/by-project/{project-id}/
       └── {session-id}.jsonl
 ```
 
-- `{session-id}` is a UUIDv4 generated when recording starts.
+- `{session-id}` is the Nori conversation UUID. The session manager assigns it
+  before launch and retains it when restarting a failed managed session.
 - Session files are created with mode `0600` on Unix.
-- The writer creates a fresh file, appends one JSON object per line, and flushes
-  each line. It does not `fsync`, so a crashed session can lose its tail.
+- New conversations create a fresh file. The writer appends one JSON object per
+  line and flushes each line without `fsync`, so a machine crash can lose its
+  tail. Same-ID resume seeds a replacement file before atomically installing
+  it at the existing path, as described below.
 
 ### Project IDs and `project.json`
 
@@ -228,6 +231,42 @@ repeat side effects, and historical responses cannot complete live requests.
 Agent-sourced `session/load` replay follows the same outward rule: the markers
 bracket the load-time ACP notifications in agent order, while the current load
 response remains outside the brackets and before `SessionStarted`.
+
+## Restarting the same managed conversation
+
+[`SessionManager::resume`](../nori-rs/harness/src/session_manager/mod.rs) keeps
+the failed conversation's Nori ID and passes it into
+[`AcpBackend::resume_session`](../nori-rs/harness/src/backend/session.rs).
+Native ACP load uses the recorded ACP session ID when available. If Nori must
+create a new ACP session, only that downstream identity changes.
+
+[`TranscriptRecorder::resume_same_session`](../nori-rs/harness/src/transcript/recorder.rs)
+keeps the canonical transcript path and original metadata, updating
+`acp_session_id`. It seeds a temporary file in the same directory, flushes and
+syncs its contents, then atomically renames it over the canonical path. Readers
+never see an empty or partially seeded replacement, and a writer holding the
+old file cannot append into the replacement. Failure to create this continuation
+recorder fails activation instead of resuming without history persistence.
+
+The seed depends on the history source:
+
+| Resume history | Canonical transcript seed |
+| --- | --- |
+| Successful native load with conversation content | Agent replay, bracketed as replay, plus archived local context evidence |
+| Transcript fallback or native load without conversation content | Existing local entries with their observation identities and times |
+
+Native load can supply messages newer than the local file, so its content is
+authoritative when present. Failed-load partial replay does not replace the
+local seed. The [runtime](../nori-rs/harness/src/runtime.rs) still publishes
+replay to rebuild frontend views and feed managed subscribers, but skips writing
+that seeded replay again. New live events append normally. Transport envelopes
+continue the in-memory sequence for the stable conversation ID; transcript
+replay does not restore transport sequence numbers across a host restart.
+
+Before publishing `SessionEnded`, the runtime drains and closes the transcript
+writer. An immediate Ctrl+R therefore reads the completed prior stream and
+cannot race the old writer's pending entries. Recorder errors remain logged;
+the lifecycle boundary is still delivered.
 
 ## Private v1/v2 compatibility
 

@@ -406,6 +406,235 @@ fn read_until(
     }
 }
 
+fn read_managed_until(
+    client: &mut tungstenite::WebSocket<impl std::io::Read + std::io::Write>,
+    events: &mut Vec<Value>,
+    wanted: impl Fn(&Value) -> bool,
+) -> Value {
+    loop {
+        let Message::Text(text) = client.read().expect("read managed session message") else {
+            continue;
+        };
+        let value: Value = serde_json::from_str(text.as_str()).expect("managed session JSON");
+        assert!(value.get("error").is_none(), "{value}");
+        if value["method"] == "_nori/session/event" {
+            events.push(value["params"].clone());
+        }
+        if wanted(&value) {
+            return value;
+        }
+    }
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn ctrl_r_preserves_session_identity_and_its_remote_subscription() {
+    let port = reserve_loopback_port();
+    let mut session = spawn_with(
+        config("")
+            .with_arg("--remote")
+            .with_arg(port.to_string())
+            .with_excluded_binary("tailscale"),
+    );
+    ask(&mut session, "unaffected session", ANSWER);
+    start_new_session(&mut session, "2 ready");
+    ask(&mut session, "restart identity marker", ANSWER);
+    let (mut client, _) = connect(format!("ws://127.0.0.1:{port}/sessions").as_str()).unwrap();
+    if let tungstenite::stream::MaybeTlsStream::Plain(stream) = client.get_ref() {
+        stream.set_read_timeout(Some(TIMEOUT)).unwrap();
+    }
+    let mut events = Vec::new();
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}),
+    );
+    read_managed_until(&mut client, &mut events, |value| value["id"] == 1);
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":2,"method":"_nori/session/list","params":{}}),
+    );
+    let before = read_managed_until(&mut client, &mut events, |value| value["id"] == 2);
+    let original_id = before["result"]["selected_session_id"]
+        .as_str()
+        .expect("on-screen session has an ID")
+        .to_string();
+    let rows_before = before["result"]["sessions"].as_array().unwrap();
+    assert_eq!(rows_before.len(), 2);
+    let cursor = rows_before
+        .iter()
+        .find(|row| row["session_id"] == original_id)
+        .expect("on-screen session is listed")["latest_seq"]
+        .as_i64()
+        .unwrap();
+    session.submit_input("/status").unwrap();
+    session
+        .wait_for(
+            |screen| has_row(screen, "Session ID", &original_id),
+            TIMEOUT,
+        )
+        .expect("the TUI shows the remote-addressable ID before the crash");
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":3,"method":"_nori/session/subscribe",
+            "params":{"session_id":original_id,"cursors":{original_id.clone():cursor}}}),
+    );
+    read_managed_until(&mut client, &mut events, |value| value["id"] == 3);
+
+    session.submit_input("mock:exit-during-prompt").unwrap();
+    session
+        .wait_for_text("1 failed · 1 ready", TIMEOUT)
+        .unwrap();
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":4,"method":"_nori/session/list","params":{}}),
+    );
+    let failed = read_managed_until(&mut client, &mut events, |value| value["id"] == 4);
+    assert!(
+        failed["result"]["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["session_id"] == original_id && row["status"] == "failed")
+    );
+    let crash_cursor = failed["result"]["replay_cursors"][&original_id]
+        .as_i64()
+        .unwrap();
+
+    open_list(&mut session, "Sessions 2");
+    assert!(has_row(
+        &session.screen_contents(),
+        "restart identity marker",
+        "failed"
+    ));
+    session.send_key(Key::Ctrl('r')).unwrap();
+    session
+        .wait_for_text("2 ready", TIMEOUT)
+        .expect("Ctrl+R resumes the failed session");
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":5,"method":"_nori/session/list","params":{}}),
+    );
+    let after = read_managed_until(&mut client, &mut events, |value| value["id"] == 5);
+    assert_eq!(after["result"]["selected_session_id"], original_id);
+    let rows_after = after["result"]["sessions"].as_array().unwrap();
+    let resumed_cursor = rows_after
+        .iter()
+        .find(|row| row["session_id"] == original_id)
+        .unwrap()["latest_seq"]
+        .as_i64()
+        .unwrap();
+    let ids_before = rows_before
+        .iter()
+        .map(|row| row["session_id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    let ids_after = rows_after
+        .iter()
+        .map(|row| row["session_id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        ids_after, ids_before,
+        "restart preserves both list identities and their order"
+    );
+
+    session.submit_input("/status").unwrap();
+    session
+        .wait_for(
+            |screen| has_row(screen, "Session ID", &original_id),
+            TIMEOUT,
+        )
+        .expect("the TUI keeps the same visible session ID after Ctrl+R");
+    let status_screen = session.screen_contents();
+    assert!(
+        status_screen
+            .lines()
+            .rev()
+            .find(|line| line.contains("Session ID"))
+            .is_some_and(|line| line.contains(&original_id)),
+        "the newest status output keeps the original ID:\n{status_screen}"
+    );
+    open_list(&mut session, "Sessions 2");
+    let screen = session.screen_contents();
+    assert!(
+        has_row(&screen, "restart identity marker", "ready"),
+        "{screen}"
+    );
+    assert_eq!(
+        screen.matches("restart identity marker").count(),
+        1,
+        "{screen}"
+    );
+    session.send_key(Key::Escape).unwrap();
+    session
+        .wait_for(|screen| !screen.contains("Sessions 2"), TIMEOUT)
+        .unwrap();
+
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":6,"method":"_nori/session/prompt",
+            "params":{"session_id":original_id,
+                "prompt":[{"type":"text","text":"remote prompt after restart"}]}}),
+    );
+    let prompted = read_managed_until(&mut client, &mut events, |value| value["id"] == 6);
+    assert_eq!(prompted["result"]["session_id"], original_id);
+    let request_id = &prompted["result"]["request_id"];
+    let is_prompt_response = |envelope: &Value| {
+        envelope["seq"]
+            .as_i64()
+            .is_some_and(|seq| seq > resumed_cursor)
+            && envelope["event"]["source"] == "acp"
+            && envelope["event"]["event"]["message_type"] == "response"
+            && &envelope["event"]["event"]["request_id"] == request_id
+    };
+    if !events.iter().any(is_prompt_response) {
+        read_managed_until(&mut client, &mut events, |value| {
+            value["method"] == "_nori/session/event" && is_prompt_response(&value["params"])
+        });
+    }
+    let response = events
+        .iter()
+        .find(|event| is_prompt_response(event))
+        .unwrap();
+    assert!(
+        response["event"]["event"]["response"].get("Ok").is_some(),
+        "the prompt addressed to the original ID completes successfully: {response}"
+    );
+    session
+        .wait_for_text("remote prompt after restart", TIMEOUT)
+        .unwrap();
+    assert!(
+        events.iter().any(|envelope| {
+            envelope["seq"].as_i64().unwrap() > crash_cursor
+                && envelope["event"]["source"] == "nori"
+                && envelope["event"]["event"]["event_type"] == "session_started"
+                && envelope["event"]["event"]["event"]["transcript_id"] == original_id
+        }),
+        "the existing subscription sees restart with the original identity: {events:?}"
+    );
+    assert!(
+        events
+            .iter()
+            .all(|envelope| envelope["conversation_id"] == original_id)
+    );
+    let sequences = events
+        .iter()
+        .map(|envelope| envelope["seq"].as_i64().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        sequences,
+        (cursor + 1..=cursor + i64::try_from(events.len()).unwrap()).collect::<Vec<_>>(),
+        "the subscription continues across Ctrl+R without a gap or duplicate"
+    );
+    eprintln!(
+        "Ctrl+R proof: before={original_id}, after={}, list order unchanged, /status ID unchanged, title retained",
+        after["result"]["selected_session_id"].as_str().unwrap()
+    );
+    eprintln!(
+        "Ctrl+R proof: existing WebSocket subscription received contiguous sequences {}..={}, including restarted SessionStarted; targeted prompt to {original_id} completed",
+        cursor + 1,
+        sequences.last().unwrap()
+    );
+}
+
 #[test]
 #[cfg(target_os = "linux")]
 fn a_request_answered_by_remote_control_clears_the_approval_in_the_tui() {
@@ -489,4 +718,212 @@ fn a_request_answered_by_remote_control_clears_the_approval_in_the_tui() {
         !screen.contains("Would you like"),
         "the answered request is still asked:\n{screen}"
     );
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn at_the_cap_resume_preserves_the_current_session_and_explains_how_to_make_room() {
+    let mut session = spawn_with(config("[tui]\nmax_sessions = 1\n"));
+    ask(&mut session, "keep this conversation", ANSWER);
+    session.submit_input("/resume").unwrap();
+    session
+        .wait_for_text("1 sessions are open", TIMEOUT)
+        .expect("resume refuses before opening another picker");
+    let screen = session.screen_contents();
+    assert!(
+        screen.contains("ctrl+d") && screen.contains("/close"),
+        "{screen}"
+    );
+    assert!(screen.contains("keep this conversation"), "{screen}");
+    ask(&mut session, "still usable after refusal", ANSWER);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn at_the_cap_a_transcript_fork_preserves_the_current_session() {
+    let mut session = spawn_with(config("[tui]\nmax_sessions = 1\n"));
+    ask(&mut session, "keep this parent", ANSWER);
+    session.submit_input("/fork").unwrap();
+    session
+        .wait_for_text("1 sessions are open", TIMEOUT)
+        .expect("fork refuses before preparing another process");
+    let screen = session.screen_contents();
+    assert!(
+        screen.contains("ctrl+d") && screen.contains("/close"),
+        "{screen}"
+    );
+    assert!(screen.contains("keep this parent"), "{screen}");
+    ask(&mut session, "parent still usable", ANSWER);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn restarting_a_failed_parent_keeps_its_child_under_the_replacement() {
+    let mut session = spawn_with(config(""));
+    ask(&mut session, "parent question", ANSWER);
+    session.submit_input("/fork").unwrap();
+    session
+        .wait_for_text("Select a message to rewind to", TIMEOUT)
+        .unwrap();
+    session.send_key(Key::Enter).unwrap();
+    session.wait_for_text("2 ready", TIMEOUT).unwrap();
+    session.settle(TIMEOUT_INPUT);
+    session.send_key(Key::Ctrl('u')).unwrap();
+    ask(&mut session, "child question", ANSWER);
+    session.send_key(Key::Alt(',')).unwrap();
+    session.wait_for_text("parent question", TIMEOUT).unwrap();
+    session.submit_input("mock:exit-during-prompt").unwrap();
+    session.wait_for_text("1 failed", TIMEOUT).unwrap();
+    open_list(&mut session, "Sessions 2");
+    session.send_key(Key::Ctrl('r')).unwrap();
+    session.wait_for_text("2 ready", TIMEOUT).unwrap();
+    open_list(&mut session, "Sessions 2");
+    let screen = session.screen_contents();
+    assert!(
+        screen
+            .lines()
+            .any(|line| line.contains("└─") && line.contains("child question")),
+        "{screen}"
+    );
+    session.send_key(Key::Escape).unwrap();
+    session
+        .wait_for(|screen| !screen.contains("Sessions 2"), TIMEOUT)
+        .expect("the session list closes before typing into the composer");
+    ask(&mut session, "restarted parent usable", ANSWER);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn legacy_remote_control_follows_the_session_on_screen() {
+    let port = reserve_loopback_port();
+    let mut session = spawn_with(
+        config("")
+            .with_arg("--remote")
+            .with_arg(port.to_string())
+            .with_excluded_binary("tailscale"),
+    );
+    ask(&mut session, "first session marker", ANSWER);
+    let (mut first_client, _) = connect(format!("ws://127.0.0.1:{port}/acp").as_str()).unwrap();
+    if let tungstenite::stream::MaybeTlsStream::Plain(stream) = first_client.get_ref() {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(15)))
+            .unwrap();
+    }
+    send(
+        &mut first_client,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize",
+        "params":{"protocolVersion":1,"clientCapabilities":{}}}),
+    );
+    read_until(&mut first_client, |value| value["id"] == json!(1));
+    send(
+        &mut first_client,
+        json!({"jsonrpc":"2.0","id":2,"method":"session/list","params":{}}),
+    );
+    let first_catalog = read_until(&mut first_client, |value| value["id"] == json!(2));
+    let first_id = first_catalog["result"]["sessions"][0]["sessionId"].clone();
+    drop(first_client);
+    start_new_session(&mut session, "2 ready");
+    ask(&mut session, "second session marker", ANSWER);
+    session.send_key(Key::Alt(',')).unwrap();
+    session
+        .wait_for_text("first session marker", TIMEOUT)
+        .unwrap();
+    let (mut client, _) = connect(format!("ws://127.0.0.1:{port}/acp").as_str()).unwrap();
+    if let tungstenite::stream::MaybeTlsStream::Plain(stream) = client.get_ref() {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(15)))
+            .unwrap();
+    }
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize",
+        "params":{"protocolVersion":1,"clientCapabilities":{}}}),
+    );
+    read_until(&mut client, |value| value["id"] == json!(1));
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":2,"method":"session/list","params":{}}),
+    );
+    let catalog = read_until(&mut client, |value| value["id"] == json!(2));
+    assert_eq!(
+        catalog["result"]["sessions"][0]["sessionId"], first_id,
+        "a fresh legacy connection defaults to the session on screen"
+    );
+    let id = catalog["result"]["sessions"][0]["sessionId"]
+        .as_str()
+        .unwrap();
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":3,"method":"session/prompt",
+        "params":{"sessionId":id,"prompt":[{"type":"text","text":"remote selected-session marker"}]}}),
+    );
+    read_until(&mut client, |value| value["id"] == json!(3));
+    session
+        .wait_for_text("remote selected-session marker", TIMEOUT)
+        .expect("the remote prompt reaches the older session on screen");
+    session.send_key(Key::Alt('.')).unwrap();
+    session
+        .wait_for_text("second session marker", TIMEOUT)
+        .unwrap();
+    assert!(
+        !session
+            .history_contents()
+            .contains("remote selected-session marker")
+    );
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn managed_remote_endpoint_requires_multi_session() {
+    for multi_session in [false, true] {
+        let port = reserve_loopback_port();
+        let settings = if multi_session {
+            config("")
+        } else {
+            SessionConfig::new()
+        };
+        let mut session = spawn_with(
+            settings
+                .with_arg("--remote")
+                .with_arg(port.to_string())
+                .with_excluded_binary("tailscale"),
+        );
+        session
+            .wait_for_text("ACP URLs:", TIMEOUT)
+            .expect("listener enabled");
+        let connected = connect(format!("ws://127.0.0.1:{port}/sessions").as_str());
+        assert_eq!(
+            connected.is_ok(),
+            multi_session,
+            "endpoint exposure follows the feature flag"
+        );
+    }
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn a_same_process_head_fork_is_allowed_at_the_cap_but_a_transcript_fork_is_not() {
+    let mut session = spawn_with(
+        config("[tui]\nmax_sessions = 1\n").with_agent_env("MOCK_AGENT_SUPPORT_SESSION_FORK", "1"),
+    );
+    ask(&mut session, "original question", ANSWER);
+    session.submit_input("/fork").unwrap();
+    session
+        .wait_for_text("Branch from current point", TIMEOUT)
+        .unwrap();
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Session forked.", TIMEOUT)
+        .expect("head fork shares the existing process");
+    ask(&mut session, "after head fork", ANSWER);
+    session.submit_input("/fork").unwrap();
+    session
+        .wait_for_text("Branch from current point", TIMEOUT)
+        .unwrap();
+    session.send_key(Key::Down).unwrap();
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("1 sessions are open", TIMEOUT)
+        .expect("a transcript fork still needs another process slot");
+    ask(&mut session, "still here after refused fork", ANSWER);
 }

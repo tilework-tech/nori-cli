@@ -28,6 +28,7 @@ pub mod hooks;
 pub mod message_history;
 pub(crate) mod normalized;
 pub use nori_acp_host::registry;
+mod managed_remote;
 pub mod remote_agent;
 pub mod runtime;
 pub(crate) mod session_event_fanout;

@@ -125,7 +125,6 @@ impl Entry {
             agent: self.settings.agent.clone(),
             parent: self.settings.parent,
             source: self.settings.source,
-            resumed_from: self.settings.resumed_from,
             cwd: self.settings.cwd.clone(),
             model: self.settings.model.clone(),
             approval_policy: self.settings.approval_policy,
@@ -152,8 +151,6 @@ fn advertised_model(options: &[acp::v1::SessionConfigOption]) -> Option<String> 
 pub(crate) struct Registry {
     sessions: HashMap<ConversationId, Entry>,
     processes: HashMap<AgentProcessId, ConversationId>,
-    /// Failed sessions that a resume replaced, mapped to their replacement.
-    superseded: HashMap<ConversationId, ConversationId>,
     capacity: Arc<Semaphore>,
     limit: i32,
     next_order: i64,
@@ -165,7 +162,6 @@ impl Registry {
         Self {
             sessions: HashMap::new(),
             processes: HashMap::new(),
-            superseded: HashMap::new(),
             capacity: Arc::new(Semaphore::new(permits)),
             limit: max_sessions.max(1),
             next_order: 0,
@@ -201,7 +197,8 @@ impl Registry {
         self.capacity.is_closed()
     }
 
-    /// Register a session that is about to start on a new agent process.
+    /// Register a new session or restart a failed identity on a new process.
+    /// Restart admission and replacement happen in the same registry mutation.
     pub(crate) fn register(
         &mut self,
         settings: SessionSettings,
@@ -212,13 +209,35 @@ impl Registry {
         {
             return Err(StartError::UnknownParent(parent));
         }
+        let conversation_id = settings.conversation_id;
+        if self
+            .sessions
+            .get(&conversation_id)
+            .is_some_and(|entry| entry.status() != SessionStatus::Failed)
+        {
+            return Err(StartError::NotFailed(conversation_id));
+        }
         let order = self.next_order;
         self.next_order += 1;
         let process = AgentProcessId(order);
-        let conversation_id = settings.conversation_id;
-        let mut entry = Entry::new(settings, order, Some(process));
-        entry.reservation = Some(reservation);
-        self.sessions.insert(conversation_id, entry);
+        if let Some(entry) = self.sessions.get_mut(&conversation_id) {
+            tracing::debug!(resumed_from = ?settings.resumed_from, ?process, "restarting failed session");
+            // The retired pump can still reach EOF after the replacement has
+            // started. It must no longer address this session's state.
+            self.processes.retain(|_, id| *id != conversation_id);
+            entry.settings = settings;
+            entry.process = Some(process);
+            entry.reservation = Some(reservation);
+            entry.started = false;
+            entry.busy = false;
+            entry.pending_requests.clear();
+            entry.early_answers.clear();
+            entry.ended = None;
+        } else {
+            let mut entry = Entry::new(settings, order, Some(process));
+            entry.reservation = Some(reservation);
+            self.sessions.insert(conversation_id, entry);
+        }
         self.processes.insert(process, conversation_id);
         Ok(process)
     }
@@ -403,6 +422,7 @@ impl Registry {
             .processes
             .remove(&process)
             .and_then(|id| self.sessions.get_mut(&id))
+            && entry.process == Some(process)
         {
             entry.end(SessionStatus::Failed);
         }
@@ -414,18 +434,14 @@ impl Registry {
     }
 
     /// The live agent process of a session, following branch-at-head forks
-    /// to the child that took over the parent's process and resumes to the
-    /// session that replaced a failed one.
+    /// to the child that took over the parent's process.
     pub(crate) fn process_following_forks(
         &self,
         conversation_id: &ConversationId,
     ) -> Option<AgentProcessId> {
         let mut current = *conversation_id;
         loop {
-            let Some(entry) = self.sessions.get(&current) else {
-                current = *self.superseded.get(&current)?;
-                continue;
-            };
+            let entry = self.sessions.get(&current)?;
             match (entry.process, entry.forked_into) {
                 (Some(process), _) => return Some(process),
                 (None, Some(child)) => current = child,
@@ -484,29 +500,6 @@ impl Registry {
                 SessionStatus::Ready => 4,
                 SessionStatus::Closed => 5,
             })
-    }
-
-    /// Replace a failed session with the session that resumes it. Its
-    /// children move to the replacement, a parent that forked into it now
-    /// leads to the replacement, and its ID keeps reaching the replacement.
-    pub(crate) fn supersede(&mut self, failed: &ConversationId, replacement: &ConversationId) {
-        if self.sessions.remove(failed).is_none() {
-            return;
-        }
-        for entry in self.sessions.values_mut() {
-            if entry.settings.parent == Some(*failed) {
-                entry.settings.parent = Some(*replacement);
-            }
-            if entry.forked_into == Some(*failed) {
-                entry.forked_into = Some(*replacement);
-            }
-        }
-        for target in self.superseded.values_mut() {
-            if target == failed {
-                *target = *replacement;
-            }
-        }
-        self.superseded.insert(*failed, *replacement);
     }
 }
 

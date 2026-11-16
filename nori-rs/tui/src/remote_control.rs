@@ -1,5 +1,6 @@
 //! Runtime ownership and presentation for Nori's remote ACP listeners.
 
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
@@ -7,7 +8,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::app_event::SessionGeneration;
+use nori_harness::ConversationId;
 use nori_harness::remote_agent::HarnessRemoteHost;
+use nori_harness::remote_agent::ManagedRemoteHost;
 use nori_harness::remote_agent::RemoteAcpServer;
 use nori_harness::runtime::HarnessHandle;
 
@@ -52,8 +56,17 @@ impl RemoteControlReport {
     }
 }
 
+struct HostedSession {
+    handle: HarnessHandle,
+    nori_home: PathBuf,
+    started: nori_protocol::SessionStarted,
+}
+
 pub(crate) struct RemoteControlManager {
     host: Arc<HarnessRemoteHost>,
+    managed: Option<Arc<ManagedRemoteHost>>,
+    sessions: HashMap<SessionGeneration, HostedSession>,
+    selected: Option<(SessionGeneration, Option<ConversationId>)>,
     server: Option<RemoteAcpServer>,
     target: Option<RemoteControlTarget>,
 }
@@ -62,8 +75,72 @@ impl RemoteControlManager {
     pub(crate) fn new() -> Self {
         Self {
             host: Arc::new(HarnessRemoteHost::new()),
+            managed: None,
+            sessions: HashMap::new(),
+            selected: None,
             server: None,
             target: None,
+        }
+    }
+
+    pub(crate) fn with_sessions(manager: nori_harness::session_manager::SessionManager) -> Self {
+        Self {
+            managed: Some(Arc::new(ManagedRemoteHost::new(manager))),
+            ..Self::new()
+        }
+    }
+
+    /// Navigation changes the next connection's default. A connected legacy
+    /// controller keeps the session it chose until it reconnects.
+    pub(crate) fn select_session(
+        &mut self,
+        generation: SessionGeneration,
+        id: Option<ConversationId>,
+    ) {
+        let Some(managed) = &self.managed else {
+            return;
+        };
+        let id = id.filter(|_| self.sessions.contains_key(&generation));
+        managed.set_selected_session(id);
+        if self.selected == Some((generation, id)) {
+            return;
+        }
+        self.selected = Some((generation, id));
+        if let Some(session) = self.sessions.get(&generation) {
+            let mut started = session.started.clone();
+            if let Some(id) = id {
+                started.transcript_id = Some(id.to_string());
+            }
+            self.host.set_default_started(
+                session.handle.clone(),
+                session.nori_home.clone(),
+                started,
+            );
+        } else {
+            self.host.clear_default_session();
+        }
+    }
+
+    pub(crate) fn forget_session(&mut self, generation: SessionGeneration) {
+        self.sessions.remove(&generation);
+        if self
+            .selected
+            .is_some_and(|(selected, _)| selected == generation)
+        {
+            self.selected = None;
+            self.select_session(generation, None);
+        }
+    }
+
+    async fn bind(
+        &self,
+        addrs: impl IntoIterator<Item = SocketAddr>,
+    ) -> anyhow::Result<RemoteAcpServer> {
+        match &self.managed {
+            Some(managed) => {
+                RemoteAcpServer::bind_many_managed(addrs, self.host.clone(), managed.clone()).await
+            }
+            None => RemoteAcpServer::bind_many(addrs, self.host.clone()).await,
         }
     }
 
@@ -101,11 +178,11 @@ impl RemoteControlManager {
         } else {
             None
         };
-        let server = match RemoteAcpServer::bind_many(addrs, self.host.clone()).await {
+        let server = match self.bind(addrs).await {
             Ok(server) => server,
             Err(error) => {
                 if let Some((previous_target, previous_addrs)) = displaced {
-                    match RemoteAcpServer::bind_many(previous_addrs, self.host.clone()).await {
+                    match self.bind(previous_addrs).await {
                         Ok(previous) => {
                             self.server = Some(previous);
                             self.target = previous_target;
@@ -172,6 +249,33 @@ impl RemoteControlManager {
         self.enable(RemoteControlTarget::Explicit(addr), false)
             .await
             .map_or_else(RemoteControlOutcome::Error, RemoteControlOutcome::Report)
+    }
+
+    pub(crate) async fn remember_started(
+        &mut self,
+        generation: SessionGeneration,
+        handle: HarnessHandle,
+        nori_home: PathBuf,
+        started: nori_protocol::SessionStarted,
+    ) -> Result<(), String> {
+        if self.managed.is_none() {
+            return self.attach_started(handle, nori_home, started).await;
+        }
+        self.sessions.insert(
+            generation,
+            HostedSession {
+                handle,
+                nori_home,
+                started,
+            },
+        );
+        if let Some((selected, id)) = self.selected
+            && selected == generation
+        {
+            self.selected = None;
+            self.select_session(generation, id);
+        }
+        Ok(())
     }
 
     pub(crate) async fn attach_started(
@@ -886,6 +990,44 @@ Hint: Tailscale is available; use /remote-control on tailnet.
             .await
             .unwrap_or_else(|_| panic!("listener remains at {addr}"));
         }
+    }
+
+    #[tokio::test]
+    async fn an_unstarted_selection_clears_the_next_remote_default_without_interrupting_the_controller()
+     {
+        let sessions = nori_harness::session_manager::SessionManager::new(Default::default());
+        let mut manager = RemoteControlManager::with_sessions(sessions);
+        let home = tempfile::tempdir().expect("home");
+        let mut current = launch_mock_session(&home).await;
+        let started = wait_started(&mut current).await;
+        let id = ConversationId::from_string(started.transcript_id.as_ref().expect("id")).unwrap();
+        manager
+            .remember_started(
+                1,
+                current.handle.clone(),
+                home.path().to_path_buf(),
+                started,
+            )
+            .await
+            .unwrap();
+        manager.select_session(1, Some(id));
+        let host = manager.host();
+        let first = host.subscribe().await;
+        assert_eq!(host.list_sessions().await.unwrap().len(), 1);
+        manager.select_session(2, None);
+        assert_eq!(
+            host.list_sessions().await.unwrap().len(),
+            1,
+            "existing controller stays pinned"
+        );
+        let second = host.subscribe().await;
+        assert!(
+            host.list_sessions().await.unwrap().is_empty(),
+            "a fresh controller must not inherit the previous session"
+        );
+        host.detach(first.id).await;
+        host.detach(second.id).await;
+        current.handle.shutdown().await.unwrap();
     }
 
     #[tokio::test]

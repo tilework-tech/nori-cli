@@ -12,7 +12,8 @@ session-product state.
 It also owns the optional remote ACP transport (`remote/`): a WebSocket server
 implementing the WebSocket profile of the upstream ACP "Streamable HTTP &
 WebSocket Transport" RFD, serving the hosted harness session outward as an ACP
-Agent (see `@/docs/remote-control.md`).
+Agent. The optional `/sessions` endpoint carries managed session commands and
+full manager envelopes (see [the wire contract](../../docs/remote-control.md)).
 
 ### How it fits into the larger codebase
 
@@ -40,7 +41,11 @@ The remote server inverts the runtime call direction (a remote client drives
 the harness through this crate) without inverting the crate dependency:
 `remote/hosted_agent.rs` defines the downward-facing `HostedAgent` trait in
 `nori-protocol` types, and `nori-harness` implements it over `HarnessHandle`.
-The dependency direction stays `nori-harness -> nori-acp-host`.
+[`remote/managed.rs`](src/remote/managed.rs) defines a parallel `ManagedAgent`
+boundary for session-addressed JSON-RPC requests and atomic replay/live
+subscriptions. The harness implements both interfaces; this crate owns neither
+the session registry nor replay retention. The dependency direction stays
+`nori-harness -> nori-acp-host`.
 
 ### Core Implementation
 
@@ -78,6 +83,14 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   listener's allocated port. The listeners share one active-connection slot
   and generation, so one connection is live across the whole surface and a
   newer connection on any address replaces it (last connect wins).
+- `bind_many_managed` adds `/sessions` to those same listeners. Both endpoints
+  share the controller slot and shutdown token, so a new connection replaces
+  either protocol's prior controller. [`managed_wire.rs`](src/remote/managed_wire.rs)
+  requires initialization before commands, sends a subscription response before
+  replay, and drains replay before live envelopes. It rejects binary frames;
+  bounded live queues and timed socket writes prevent a slow client from
+  blocking manager publication. The frontend opts into this route only with
+  runtime `multi_session` enabled.
 - Each `/acp` listener sends a fresh `Acp-Connection-Id` on a 101 upgrade and
   `426 Upgrade Required` for plain HTTP. One JSON-RPC message occupies each
   UTF-8 text frame, adapted into the SDK's `Lines` transport
@@ -200,17 +213,20 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   the TUI can disable and later re-enable listeners around one continuing
   harness session.
 - A remote disconnect detaches the controller but never ends the harness
-  session. Per the RFD's v1 reliability model there are no sequence numbers and
-  no replay of missed messages; `session/load` from the transcript is the
-  recovery path after reconnect, so the server must advertise `loadSession`.
+  session. Legacy `/acp` has no envelope replay; `session/load` from the
+  transcript remains its recovery path. Managed `/sessions` sends full
+  `SessionEnvelope` values through `_nori/session/event` and delegates cursor
+  validation and replay to the harness. It preserves pending permissions on
+  disconnect so a reconnecting client can answer them.
 - `session/cancel` has no response envelope, so the connection must not treat
   successful notification dispatch as proof that prompt ownership was already
   registered. Its ordering lock covers only the correlation boundary; the
   hosted harness remains responsible for deciding whether the controller owns
   the target turn.
-- `nori exec --acp` remains a separate, bounded stdio facade (see
-  `@/nori-rs/exec/docs.md`); the remote module instead exposes the long-lived
-  interactive harness session.
+- [`nori exec --acp`](../exec/docs.md) owns a separate stdio lifecycle. Its
+  flag-on path reuses `ManagedAgent` for extension requests and manager
+  envelopes; its standard ACP projection and flag-off bounded facade remain
+  separate from the WebSocket adapter.
 - The `agent-client-protocol` SDK is built with the `unstable` feature so the
   host can call `session/fork` (branch-at-head). See `fork_session` in
   `@/nori-rs/acp-host/src/connection/docs.md`.

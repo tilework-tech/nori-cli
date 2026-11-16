@@ -15,5 +15,6 @@ nori-config = { workspace = true }
 nori-harness = { workspace = true }
 nori-installed = { workspace = true }
 nori-protocol = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["io-std", "macros", "rt-multi-thread", "sync"] }
 tokio-util = { workspace = true, features = ["compat"] }

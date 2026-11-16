@@ -346,7 +346,11 @@ impl App {
             app_event_tx,
             chat_widget,
             auth_manager: auth_manager.clone(),
-            remote_control: crate::remote_control::RemoteControlManager::new(),
+            remote_control: if config.multi_session {
+                crate::remote_control::RemoteControlManager::with_sessions(session_manager.clone())
+            } else {
+                crate::remote_control::RemoteControlManager::new()
+            },
             session_manager,
             config,
             vertical_footer,
@@ -517,6 +521,10 @@ impl App {
 
         tui.frame_requester().schedule_frame();
 
+        app.remote_control.select_session(
+            app.chat_widget.session_generation(),
+            app.chat_widget.managed_conversation_id(),
+        );
         while select! {
             Some(event) = app_event_rx.recv() => {
                 app.handle_event(tui, event).await?
@@ -524,7 +532,12 @@ impl App {
             Some(event) = tui_events.next() => {
                 app.handle_tui_event(tui, event).await?
             }
-        } {}
+        } {
+            app.remote_control.select_session(
+                app.chat_widget.session_generation(),
+                app.chat_widget.managed_conversation_id(),
+            );
+        }
 
         app.cancel_primary_agent_preparation();
         if let Some(agent) = app.prepared_agent.take() {

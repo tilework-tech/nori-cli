@@ -7,6 +7,25 @@ impl ChatWidget {
         Self::new_inner(common)
     }
 
+    /// Display a session already resumed by the manager, retaining its registry identity.
+    pub(crate) fn from_managed_session(
+        mut common: ChatWidgetInit,
+        session: nori_harness::session_manager::ManagedSession,
+    ) -> Self {
+        common.deferred_spawn = true;
+        let analytics = common.analytics.clone();
+        let mut widget = Self::new(common);
+        let spawn = super::agent::forward_managed_session(
+            session,
+            widget.app_event_tx.clone(),
+            widget.session_generation,
+            analytics,
+        );
+        widget.harness_handle = spawn.handle;
+        widget.managed_conversation_id = spawn.conversation_id;
+        widget
+    }
+
     /// Build a hidden switch candidate. The app commits it only after its
     /// `SessionStarted` event.
     pub(crate) fn new_candidate(common: ChatWidgetInit) -> Self {
