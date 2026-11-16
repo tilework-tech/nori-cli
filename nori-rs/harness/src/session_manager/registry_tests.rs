@@ -571,7 +571,6 @@ fn session_started_fills_in_the_record() {
             agent: "claude".to_string(),
             parent: None,
             source: SessionSource::User,
-            resumed_from: None,
             cwd: PathBuf::from("/work"),
             model: Some("opus".to_string()),
             approval_policy: AskForApproval::OnRequest,
@@ -636,35 +635,94 @@ fn a_fork_moves_the_agent_process_to_a_new_child_conversation() {
 }
 
 #[test]
-fn a_resumed_session_takes_the_place_of_the_failed_one() {
+fn a_resumed_session_keeps_its_identity_order_children_and_sequence() {
     let mut registry = Registry::new(4);
-    let (failed, failed_process) = start(&mut registry, "codex", None);
+    let (failed, failed_process) = start(&mut registry, "claude", None);
     let (child, _) = start(&mut registry, "pi", Some(failed));
-    registry.observe(failed_process, ended(SessionEndReason::ConnectionLost));
-    let mut replacement_settings = settings("codex", None);
+    registry.observe(failed_process, started("old-acp"));
+    let last = registry
+        .observe(failed_process, ended(SessionEndReason::ConnectionLost))
+        .expect("terminal envelope");
+    let mut replacement_settings = settings("claude", None);
+    replacement_settings.conversation_id = failed;
     replacement_settings.resumed_from = Some(failed);
-    let replacement = replacement_settings.conversation_id;
     let reservation = registry.reserve().expect("slot available");
-    registry
+    let replacement_process = registry
         .register(replacement_settings, reservation)
-        .expect("replacement registers");
-
-    registry.supersede(&failed, &replacement);
-
-    let ids: Vec<ConversationId> = registry
-        .records()
-        .into_iter()
-        .map(|record| record.conversation_id)
-        .collect();
+        .expect("failed session restarts");
+    let restarted = registry
+        .observe(replacement_process, started("new-acp"))
+        .expect("restart envelope");
     assert_eq!(
         (
-            ids,
-            registry.record(&child).and_then(|record| record.parent),
             registry
-                .record(&replacement)
-                .and_then(|record| record.resumed_from),
+                .records()
+                .into_iter()
+                .map(|record| (record.conversation_id, record.parent))
+                .collect::<Vec<_>>(),
+            restarted.conversation_id,
+            restarted.seq
         ),
-        (vec![child, replacement], Some(replacement), Some(failed))
+        (
+            vec![(failed, None), (child, Some(failed))],
+            failed.to_string(),
+            last.seq + 1
+        ),
+    );
+}
+
+#[test]
+fn stale_process_events_and_eof_cannot_change_a_resumed_session() {
+    let mut registry = Registry::new(1);
+    let (id, old_process) = start(&mut registry, "claude", None);
+    registry.observe(old_process, started("old-acp"));
+    registry.observe(old_process, ended(SessionEndReason::ConnectionLost));
+    let mut replacement_settings = settings("claude", None);
+    replacement_settings.conversation_id = id;
+    let reservation = registry.reserve().expect("failed process released slot");
+    let new_process = registry
+        .register(replacement_settings, reservation)
+        .expect("restart");
+    assert_ne!(new_process, old_process);
+    registry.observe(new_process, started("new-acp"));
+    assert!(
+        registry
+            .observe(old_process, ended(SessionEndReason::ConnectionLost))
+            .is_none(),
+        "retired process cannot publish into the replacement"
+    );
+    registry.process_exited(old_process);
+    assert_eq!(
+        (
+            registry
+                .record(&id)
+                .map(|record| (record.status, record.acp_session_id)),
+            registry.live_process(&id),
+            registry.free_slots()
+        ),
+        (
+            Some((SessionStatus::Ready, Some("new-acp".to_string()))),
+            Some(new_process),
+            0
+        )
+    );
+}
+
+#[test]
+fn a_live_session_cannot_be_registered_as_a_second_incarnation() {
+    let mut registry = Registry::new(2);
+    let (id, process) = start(&mut registry, "claude", None);
+    registry.observe(process, started("original-acp"));
+    let mut duplicate = settings("claude", None);
+    duplicate.conversation_id = id;
+    let reservation = registry.reserve().expect("second capacity slot exists");
+    assert!(
+        registry.register(duplicate, reservation).is_err(),
+        "one live process owns a session ID"
+    );
+    assert_eq!(
+        (registry.live_process(&id), registry.free_slots()),
+        (Some(process), 1)
     );
 }
 
@@ -710,13 +768,12 @@ fn after_a_resume_the_old_ids_lead_to_the_replacement() {
     let mut replacement_settings = settings("claude", Some(parent));
     replacement_settings.source = SessionSource::Fork;
     replacement_settings.resumed_from = Some(child);
-    let replacement = replacement_settings.conversation_id;
+    replacement_settings.conversation_id = child;
+    let replacement = child;
     let reservation = registry.reserve().expect("slot available");
     let replacement_process = registry
         .register(replacement_settings, reservation)
         .expect("replacement registers");
-
-    registry.supersede(&child, &replacement);
 
     assert_eq!(
         (

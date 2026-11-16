@@ -10,6 +10,8 @@
 
 mod connection;
 mod hosted_agent;
+mod managed;
+mod managed_wire;
 mod server;
 mod wire;
 
@@ -19,3 +21,8 @@ pub use hosted_agent::HostedSubscription;
 pub use hosted_agent::LoadedSession;
 pub use server::RemoteAcpServer;
 pub use server::parse_bind_addr;
+
+pub use managed::ManagedAgent;
+pub use managed::ManagedReply;
+pub use managed::ManagedSubscription;
+pub use managed::managed_event;

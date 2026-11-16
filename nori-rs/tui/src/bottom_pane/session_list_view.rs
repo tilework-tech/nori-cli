@@ -335,7 +335,7 @@ impl Renderable for SessionListView {
             area.width,
             area.height.saturating_sub(1),
         );
-        Picker::new(&self.state)
+        let picker = Picker::new(&self.state)
             .theme(crate::style::component_theme())
             .density(PickerDensity::Compact)
             .compact_descriptions(true)
@@ -358,8 +358,16 @@ impl Renderable for SessionListView {
                 ]
                 .into_iter()
                 .flatten(),
+            );
+        let picker = if self.state.active_category.is_some() && self.state.query.is_empty() {
+            picker.empty_state(
+                "No sessions waiting on you",
+                "Press tab to show all sessions.",
             )
-            .render(list_area, buf);
+        } else {
+            picker
+        };
+        picker.render(list_area, buf);
     }
 
     fn desired_height(&self, _width: u16) -> u16 {
@@ -440,6 +448,27 @@ mod tests {
         assert!(screen.contains("tab all sessions"), "{screen}");
         assert!(!screen.contains("tab waiting on you"), "{screen}");
         assert_snapshot!(screen);
+    }
+
+    #[test]
+    fn waiting_filter_explains_when_nobody_needs_attention() {
+        let mut list = view(vec![row(1, "ready session", SessionStatus::Ready)]);
+        list.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        let screen = render(&list, 80);
+        assert!(screen.contains("No sessions waiting on you"), "{screen}");
+        assert_snapshot!(screen);
+    }
+
+    #[test]
+    fn waiting_filter_updates_when_the_last_request_is_answered() {
+        let mut list = view(vec![row(1, "session", SessionStatus::WaitingOnYou)]);
+        list.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        list.replace_rows(vec![row(1, "session", SessionStatus::Ready)]);
+        let screen = render(&list, 80);
+        assert!(screen.contains("No sessions waiting on you"), "{screen}");
+        list.handle_key_event(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE));
+        let screen = render(&list, 80);
+        assert!(screen.contains("No matching options"), "{screen}");
     }
 
     #[test]

@@ -30,7 +30,7 @@ const ACP_CONNECTION_ID_HEADER: &str = "Acp-Connection-Id";
 
 /// The live connection slot: a cancellation token per accepted socket, tagged
 /// with a generation so a finished connection only clears its own entry.
-type ActiveConnection = Arc<tokio::sync::Mutex<Option<(i64, CancellationToken)>>>;
+pub(super) type ActiveConnection = Arc<tokio::sync::Mutex<Option<(i64, CancellationToken)>>>;
 
 struct RemoteState<H> {
     hosted: Arc<H>,
@@ -61,6 +61,9 @@ pub struct RemoteAcpServer {
     shutdown: CancellationToken,
 }
 
+type ManagedRouterFactory =
+    Box<dyn FnOnce(ActiveConnection, Arc<AtomicI64>, CancellationToken) -> axum::Router + Send>;
+
 impl RemoteAcpServer {
     /// Bind the listener and start serving `/acp`.
     pub async fn bind<H: HostedAgent>(addr: SocketAddr, hosted: Arc<H>) -> anyhow::Result<Self> {
@@ -72,6 +75,30 @@ impl RemoteAcpServer {
     pub async fn bind_many<H: HostedAgent>(
         addrs: impl IntoIterator<Item = SocketAddr>,
         hosted: Arc<H>,
+    ) -> anyhow::Result<Self> {
+        Self::bind_many_inner(addrs, hosted, None).await
+    }
+
+    /// Expose the managed protocol beside ACP. Call only when multi-session is enabled.
+    pub async fn bind_many_managed<H: HostedAgent, M: super::ManagedAgent>(
+        addrs: impl IntoIterator<Item = SocketAddr>,
+        hosted: Arc<H>,
+        managed: Arc<M>,
+    ) -> anyhow::Result<Self> {
+        Self::bind_many_inner(
+            addrs,
+            hosted,
+            Some(Box::new(move |active, generation, shutdown| {
+                super::managed_wire::router(managed, active, generation, shutdown)
+            })),
+        )
+        .await
+    }
+
+    async fn bind_many_inner<H: HostedAgent>(
+        addrs: impl IntoIterator<Item = SocketAddr>,
+        hosted: Arc<H>,
+        managed: Option<ManagedRouterFactory>,
     ) -> anyhow::Result<Self> {
         let mut requested = addrs.into_iter();
         let Some(first_addr) = requested.next() else {
@@ -102,12 +129,19 @@ impl RemoteAcpServer {
             generation: Arc::new(AtomicI64::new(0)),
             shutdown: shutdown.clone(),
         };
+        let managed_router =
+            managed.map(|make| make(active.clone(), state.generation.clone(), shutdown.clone()));
         let serve_tasks = listeners
             .into_iter()
             .map(|listener| {
                 let router = axum::Router::new()
                     .route("/acp", axum::routing::any(acp_route::<H>))
                     .with_state(state.clone());
+                let router = if let Some(managed) = &managed_router {
+                    router.merge(managed.clone())
+                } else {
+                    router
+                };
                 tokio::spawn(async move {
                     if let Err(error) = axum::serve(listener, router).await {
                         tracing::warn!("remote ACP server exited: {error}");

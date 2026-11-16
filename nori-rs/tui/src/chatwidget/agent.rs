@@ -209,7 +209,7 @@ fn start_managed_session(
     } else {
         SessionSource::User
     };
-    let mut session = match manager.start(StartSession {
+    let session = match manager.start(StartSession {
         agent,
         start,
         parent,
@@ -240,6 +240,16 @@ fn start_managed_session(
             };
         }
     };
+    forward_managed_session(session, app_event_tx, generation, analytics)
+}
+
+/// Connect a managed session to the widget's ordered event stream.
+pub(super) fn forward_managed_session(
+    mut session: nori_harness::session_manager::ManagedSession,
+    app_event_tx: AppEventSender,
+    generation: crate::app_event::SessionGeneration,
+    analytics: Option<AnalyticsReporter>,
+) -> SpawnAgentResult {
     if let Some(reporter) = analytics.as_ref() {
         session.handle = reporter.attach(session.handle);
     }

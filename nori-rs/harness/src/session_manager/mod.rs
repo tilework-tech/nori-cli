@@ -1,6 +1,10 @@
 //! Session manager: one registry of live sessions per Nori process.
 
 mod registry;
+mod replay;
+
+pub use replay::ReplayError;
+pub use replay::ReplayInfo;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -16,6 +20,7 @@ use nori_protocol::RequestResolved;
 use nori_protocol::SessionEnvelope;
 use nori_protocol::SessionEvent;
 use nori_protocol::SessionStatus;
+use tokio::sync::Notify;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
@@ -53,8 +58,6 @@ pub struct SessionRecord {
     pub agent: String,
     pub parent: Option<ConversationId>,
     pub source: SessionSource,
-    /// The failed session this one resumed, if any.
-    pub resumed_from: Option<ConversationId>,
     pub cwd: PathBuf,
     pub model: Option<String>,
     pub approval_policy: AskForApproval,
@@ -75,6 +78,8 @@ pub enum StartError {
     UnknownParent(ConversationId),
     #[error("the prepared agent already carries a session")]
     AgentAlreadyActivated,
+    #[error("session {0} has not failed; only failed sessions can be resumed")]
+    NotFailed(ConversationId),
 }
 
 /// Limits applied by a [`SessionManager`].
@@ -168,12 +173,13 @@ pub struct SessionManager {
 struct Shared {
     config: SessionManagerConfig,
     state: Mutex<State>,
-    subscribers: Mutex<Vec<mpsc::Sender<SessionEnvelope>>>,
+    process_ended: Notify,
 }
 
 struct State {
     registry: Registry,
     handles: HashMap<AgentProcessId, HarnessHandle>,
+    journal: replay::Journal,
 }
 
 impl Shared {
@@ -183,17 +189,48 @@ impl Shared {
 }
 
 impl SessionManager {
+    /// Retain at most 4096 envelopes across this manager's sessions.
     pub fn new(config: SessionManagerConfig) -> Self {
+        Self::with_replay_capacity(config, 4096)
+    }
+
+    /// Configure the bounded in-process reconnect history, independently of live queue sizes.
+    pub fn with_replay_capacity(config: SessionManagerConfig, capacity: i32) -> Self {
         Self {
             shared: Arc::new(Shared {
                 config,
+                process_ended: Notify::new(),
                 state: Mutex::new(State {
                     registry: Registry::new(config.max_sessions),
                     handles: HashMap::new(),
+                    journal: replay::Journal::new(capacity),
                 }),
-                subscribers: Mutex::new(Vec::new()),
             }),
         }
+    }
+
+    /// Replay strictly after each cursor and follow live events at one atomic boundary.
+    /// `None` selects all sessions, including sessions subsequently started.
+    pub fn subscribe_from(
+        &self,
+        session: Option<ConversationId>,
+        cursors: &HashMap<String, i64>,
+        capacity: i32,
+    ) -> Result<nori_acp_host::remote::ManagedSubscription, ReplayError> {
+        self.shared.state().journal.subscribe_from(
+            session.map(|id| id.to_string()),
+            cursors,
+            capacity,
+        )
+    }
+
+    /// Current cursors include ended conversations whose events remain replayable.
+    pub fn replay_cursors(&self) -> HashMap<String, i64> {
+        self.shared.state().journal.cursors()
+    }
+
+    pub fn replay_info(&self, session: &ConversationId) -> Option<ReplayInfo> {
+        self.shared.state().journal.info(&session.to_string())
     }
 
     /// Start a session on its own agent process.
@@ -215,7 +252,7 @@ impl SessionManager {
             parent,
             source,
         } = spec;
-        let conversation_id = ConversationId::new();
+        let conversation_id = resumed_from.unwrap_or_default();
         let settings_from = |config: &AcpBackendConfig| SessionSettings {
             conversation_id,
             agent: config.agent.clone(),
@@ -245,7 +282,9 @@ impl SessionManager {
         let process = {
             let mut state = self.shared.state();
             let reservation = state.registry.reserve()?;
-            state.registry.register(settings, reservation)?
+            let process = state.registry.register(settings, reservation)?;
+            state.journal.register(conversation_id.to_string());
+            process
         };
 
         let launched = launch_session_from(agent_source, start);
@@ -296,6 +335,9 @@ impl SessionManager {
                 let envelopes = {
                     let mut state = shared.state();
                     let envelopes = state.registry.observe_all(process, event);
+                    for envelope in &envelopes {
+                        state.journal.publish(envelope);
+                    }
                     let ended = state
                         .registry
                         .conversation_of(process)
@@ -305,15 +347,11 @@ impl SessionManager {
                         // Holding a handle to an ended session would keep its
                         // runtime, and so this stream, alive.
                         state.handles.remove(&process);
+                        shared.process_ended.notify_waiters();
                     }
                     envelopes
                 };
                 for envelope in envelopes {
-                    shared
-                        .subscribers
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .retain(|subscriber| subscriber.try_send(envelope.clone()).is_ok());
                     // The client may stop reading; status and subscribers
                     // still follow the session.
                     let _ = primary_tx.send(envelope);
@@ -322,6 +360,7 @@ impl SessionManager {
             let mut state = shared.state();
             state.registry.process_exited(process);
             state.handles.remove(&process);
+            shared.process_ended.notify_waiters();
         });
 
         Ok(ManagedSession {
@@ -333,8 +372,8 @@ impl SessionManager {
 
     /// Resume a failed session from its transcript on a new agent process.
     ///
-    /// The resumed session gets a new conversation ID, takes the failed
-    /// session's place in the registry, and records it in `resumed_from`.
+    /// The session keeps its conversation ID, position, family links and
+    /// envelope sequence while its agent process is replaced.
     pub async fn resume(
         &self,
         failed: &ConversationId,
@@ -361,22 +400,23 @@ impl SessionManager {
                     id: *failed,
                     source,
                 })?;
-        let resumed = self.start_session(
-            StartSession {
-                agent: SessionAgent::Prepare(spec),
-                start: SessionStart::Resume(SessionResume {
-                    acp_session_id: record.acp_session_id,
-                    transcript: Some(transcript),
-                }),
-                parent: record.parent,
-                source: record.source,
-            },
-            Some(*failed),
-        )?;
-        self.shared
-            .state()
-            .registry
-            .supersede(failed, &resumed.conversation_id);
+        let resumed = self
+            .start_session(
+                StartSession {
+                    agent: SessionAgent::Prepare(spec),
+                    start: SessionStart::Resume(SessionResume {
+                        acp_session_id: record.acp_session_id,
+                        transcript: Some(transcript),
+                    }),
+                    parent: record.parent,
+                    source: record.source,
+                },
+                Some(*failed),
+            )
+            .map_err(|error| match error {
+                StartError::NotFailed(id) => ResumeError::NotFailed(id),
+                error => ResumeError::Start(error),
+            })?;
         Ok(resumed)
     }
 
@@ -417,40 +457,54 @@ impl SessionManager {
     /// `capacity` envelopes behind is dropped and its receiver closes; the
     /// sessions are never slowed down.
     pub fn subscribe(&self, capacity: i32) -> mpsc::Receiver<SessionEnvelope> {
-        let (tx, rx) = mpsc::channel(usize::try_from(capacity.max(1)).unwrap_or(1));
-        self.shared
-            .subscribers
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(tx);
-        rx
+        self.shared.state().journal.subscribe(None, capacity)
     }
 
     /// Shut down one session, waiting at most the configured time limit.
     /// Closing a session that has already ended does nothing. Closing a
     /// session that was forked at head closes the child that took over its
-    /// agent process.
+    /// agent process. On success the registry has observed its end and its
+    /// capacity slot is available for a replacement.
     pub async fn close(
         &self,
         conversation_id: &ConversationId,
         child_grace: Duration,
     ) -> anyhow::Result<()> {
-        let handle = {
+        let process_and_handle = {
             let state = self.shared.state();
             state
                 .registry
                 .process_following_forks(conversation_id)
-                .and_then(|process| state.handles.get(&process).cloned())
+                .and_then(|process| {
+                    state
+                        .handles
+                        .get(&process)
+                        .cloned()
+                        .map(|handle| (process, handle))
+                })
         };
-        let Some(handle) = handle else {
+        let Some((process, handle)) = process_and_handle else {
             return Ok(());
         };
         let limit = self.shared.config.shutdown_timeout;
-        tokio::time::timeout(limit, handle.shutdown_with_grace(child_grace))
-            .await
-            .map_err(|_| {
-                anyhow::anyhow!("session {conversation_id} did not shut down within {limit:?}")
-            })?
+        tokio::time::timeout(limit, async {
+            handle.shutdown_with_grace(child_grace).await?;
+            loop {
+                // Register before reading state so an end observed between
+                // the check and await cannot leave this close waiting forever.
+                let ended = self.shared.process_ended.notified();
+                tokio::pin!(ended);
+                ended.as_mut().enable();
+                if !self.shared.state().handles.contains_key(&process) {
+                    return Ok(());
+                }
+                ended.await;
+            }
+        })
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!("session {conversation_id} did not shut down within {limit:?}")
+        })?
     }
 
     /// Refuse new sessions and shut every live session down in parallel, each

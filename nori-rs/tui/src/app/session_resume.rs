@@ -29,21 +29,23 @@ impl App {
         else {
             return Ok(());
         };
-        let Some(path) = record.transcript_path.clone() else {
-            self.chat_widget
-                .add_error_message("This session has no transcript to resume from.".to_string());
-            return Ok(());
-        };
-        let transcript = match nori_harness::transcript::load_transcript_from_path(&path).await {
-            Ok(transcript) => transcript,
+        let title = self.session_rows_title(generation);
+        let config = self.config_for_agent(&record.agent);
+        let session = match self
+            .session_manager
+            .resume(
+                &record.conversation_id,
+                crate::chatwidget::agent::agent_prepare_spec(config.clone(), None),
+            )
+            .await
+        {
+            Ok(session) => session,
             Err(error) => {
                 self.chat_widget
-                    .add_error_message(format!("Couldn't read the session transcript: {error}"));
+                    .add_error_message(format!("Couldn't resume this session: {error}"));
                 return Ok(());
             }
         };
-        let title = self.session_rows_title(generation);
-        let config = self.config_for_agent(&record.agent);
         let mut init = self.chat_widget_init(
             tui.frame_requester(),
             None,
@@ -54,8 +56,7 @@ impl App {
         );
         init.config = config;
         self.begin_replacing_session_transcript(tui)?;
-        let widget =
-            ChatWidget::new_resumed_acp(init, record.acp_session_id, None, Some(transcript));
+        let widget = ChatWidget::from_managed_session(init, session);
         if let Some(title) = title {
             self.session_previews
                 .inherit_title(widget.session_generation(), title);

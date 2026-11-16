@@ -151,7 +151,7 @@ impl ChatWidget {
                 self.app_event_tx.send(AppEvent::OpenSessionList);
             }
             SlashCommand::Resume => {
-                self.open_resume_session_picker();
+                self.app_event_tx.send(AppEvent::OpenAgentSessionPicker);
             }
             SlashCommand::ResumeViewonly => {
                 self.open_viewonly_session_picker();

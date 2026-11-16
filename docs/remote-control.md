@@ -1,8 +1,8 @@
 # Remote ACP Transport
 
-**Status:** Implemented (v1)
+**Status:** Implemented ACP transport plus feature-gated managed-session transport
 
-**Date:** 2026-08-23 (revised 2026-08-26)
+**Date:** 2026-08-23 (revised 2026-11-15)
 
 **Upstream:** [ACP Streamable HTTP & WebSocket Transport RFD](https://agentclientprotocol.com/rfds/streamable-http-websocket-transport)
 
@@ -18,9 +18,12 @@ disabled unless startup configuration or a runtime command explicitly enables
 it. Every enabled surface binds exact addresses and includes loopback; no
 wildcard listener or separate session-host crate is introduced.
 
-This is separate from `nori exec --acp`. That command remains a bounded,
-terminal-independent stdio facade. Remote mode exposes the long-lived harness
-used by the interactive Nori TUI.
+Without `[features] multi_session`, `nori exec --acp` remains a bounded,
+terminal-independent stdio facade and `/acp` exposes the interactive harness.
+With the flag, `/sessions` and the existing exec facade share the managed
+session commands described in section 10. This adds transport primitives only;
+it does not introduce host/attach commands or a persistent host lifecycle.
+Sections 3–6 describe the legacy `/acp` projection unless stated otherwise.
 
 ## 2. Topology
 
@@ -123,8 +126,9 @@ remote-control surface advertises version 1 in
 `loadSession` attaches directly with `session/load`; other ACP clients can
 continue to discover the session through `session/list`.
 
-The transport adapts WebSocket frames to the same ACP Agent handler used by
-the host. It does not introduce a Nori-specific message envelope.
+The `/acp` transport adapts WebSocket frames to the same ACP Agent handler
+used by the host. The separate `/sessions` endpoint carries manager envelopes
+when `multi_session` is enabled.
 
 ## 5. Detach, reconnect, and close
 
@@ -202,9 +206,14 @@ The app attaches the stable host only after an active session publishes
 `SessionStarted`, whether or not any listener is currently enabled. This makes
 session identity explicit, keeps runtime enable independent of launch timing,
 and applies the same commit boundary to ordinary launches and agent switches.
-With `[features] multi_session`, moving between sessions does not re-attach the
-host, so it serves the most recently started session rather than the one on
-screen.
+With `[features] multi_session`, the app remembers committed identities for
+both visible and parked sessions. Navigation stages the on-screen session as
+the default for the next `/acp` connection. A connected legacy controller stays
+pinned to the session it attached to; local navigation does not retarget its
+prompts or pending permissions. An unstarted or ended on-screen session clears
+the next connection's default instead of falling back to an earlier session.
+Managed clients use explicit session IDs to address any session independently
+of the screen.
 
 ## 7. Runtime control and bind policy
 
@@ -264,7 +273,7 @@ nori-rs/
 │   ├── remote_control.rs                 # Runtime policy and app-owned lifecycle
 │   ├── app/                              # Commands and SessionStarted attachment
 │   └── chatwidget/                       # Input parsing and exposure confirmation
-└── exec/src/lib.rs                        # Existing facade remains unchanged
+└── exec/src/managed.rs                    # Flag-on stdio manager/extension adapter
 ```
 
 The `--remote` flag lives on the interactive CLI surface and is normalized into
@@ -284,9 +293,6 @@ v1 transport:
   request and race contradictory decisions.
 - `session/close` can cancel the WebSocket after `SessionEnded` but before its
   JSON-RPC success response is delivered.
-- The remote surface rejects mandatory ACP `session/new` requests and instead
-  requires clients to discover and attach to the running session through
-  `session/list` and `session/load`.
 - Initialization echoes unsupported requested protocol versions instead of
   negotiating the latest protocol version the server supports.
 - `session/list`, `session/load`, and `session/resume` return success without
@@ -296,5 +302,122 @@ v1 transport:
   attaches to the session through `session/load` or `session/resume`.
 
 Authentication, TLS, endpoint discovery, broker routing, Handroll federation,
-capability aggregation across hosts, Streamable HTTP/SSE, and reliable replay
-after disconnect are outside this spec.
+capability aggregation across hosts, Streamable HTTP/SSE, and replay across a
+host-process restart remain outside this implementation. Legacy `/acp` retains
+its transcript-based recovery; managed envelopes add bounded reconnect replay
+within the current manager lifetime.
+
+## 10. Managed session wire (`multi_session`)
+
+The TUI adds `GET /sessions` WebSocket upgrades on the same exact listener
+addresses as `/acp` only with `[features] multi_session`. The same flag selects
+managed operation for `nori exec --acp`. Flag-off behavior and loopback defaults
+are unchanged. `ManagedAgent` in
+[`acp-host`](../nori-rs/acp-host/src/remote/managed.rs) defines the transport
+boundary; [`ManagedRemoteHost`](../nori-rs/harness/src/managed_remote.rs)
+implements it over the app's `SessionManager`, keeping mutation and policy in
+the harness.
+
+Each WebSocket text frame is a JSON-RPC 2.0 request with an ID and object
+params. `initialize` must come first and advertises
+`result.capabilities.nori_sessions` with version 1, envelopes, and reconnect.
+The stdio facade retains standard ACP initialization and advertises version 1
+at `agentCapabilities._meta["nori/multiSession"]`. It additionally accepts
+standard `session/new` for independent managed sessions and repeated standard
+prompts; the WebSocket extension controls sessions already owned by the TUI.
+
+| Method | Params | Result |
+| --- | --- | --- |
+| `_nori/session/list` | `{}` | `selected_session_id`, `sessions`, `replay_cursors` |
+| `_nori/session/subscribe` | Optional `session_id`, optional `cursors` map | `{ "subscribed": true }`, then envelope notifications |
+| `_nori/session/prompt` | Optional `session_id`, ACP `prompt` content blocks, optional `meta` | `session_id`, admitted harness `request_id` |
+| `_nori/session/respond` | Optional `session_id`, permission `request_id`, ACP permission `response` | `session_id`, `answered: true` |
+
+A list row reports identity, agent, status, cwd, lineage, pending request IDs,
+sequence bounds (`latest_seq`, `first_available_seq`), age in seconds, and a
+title derived from observed session activity. `replay_cursors` includes every
+conversation known to the journal. Restarting a failed session with Ctrl+R keeps
+its Nori conversation ID, list row, and sequence counter. Existing subscriptions
+and saved cursors continue to address that ID after the new agent process
+starts; clients do not migrate to a replacement ID. The downstream ACP session
+ID can change when native load is unavailable or fails. `resumed_from` remains
+internal manager metadata and is omitted from the remote list.
+
+An explicit `session_id` always wins. Omitting it uses the currently selected
+TUI session (the first successfully started session in exec). Subscriptions pin that choice
+at subscription time; later commands that omit the ID use the current default.
+Use explicit IDs to keep mutations pinned across screen changes. Only subscribe
+accepts `"*"`, meaning all current and subsequently created sessions.
+
+Events are notifications named `_nori/session/event`; `params` is the complete
+unchanged `SessionEnvelope`: `conversation_id`, `agent`, `seq`, and `event`.
+The envelope supplies routing identity even when an embedded ACP payload uses
+the downstream agent's own session ID. Both ACP and Nori lifecycle events cross
+this boundary. A prompt result acknowledges admission, not completion; observe
+the correlated response in the event stream for the completed turn. Busy
+sessions reject remote prompts instead of queuing them. Permission replies
+address the pair of conversation and request IDs, and a repeated managed answer
+is rejected once claimed. `RequestResolved` tells subscribers that the request
+has been answered. In managed exec, an extension answer can also resolve a
+permission forwarded by a standard ACP prompt: the prompt collector observes
+the matching manager resolution and continues to the original prompt result
+without waiting for a second answer from the standard ACP caller.
+
+Keep event payloads as raw JSON when storing or forwarding envelopes. ACP
+response types are untagged; interpret a response using its correlated request
+method rather than a generic deserialize/serialize round trip, which can choose
+an empty response variant and discard fields. The transport serializes the
+original manager event without that round trip.
+
+### Reconnect and retention
+
+The manager journals at most 4096 envelopes **total across sessions** in memory.
+History is available only for the current manager lifetime, independently of
+transcript persistence. Each session's sequence begins at 1. A cursor means
+"last envelope the client has processed"; subscribe replays strictly greater
+sequences. Omitted cursor entries mean zero, including newly created sessions.
+
+The manager takes the replay snapshot and registers the live subscriber under
+the same mutex used to number and publish events. The transport sends the
+subscribe response, then the ordered replay, then live envelopes. There is no
+gap between replay and live delivery and no overlap at that boundary. Persist
+cursors after processing each envelope, then reconnect, initialize, and
+resubscribe using those cursors. Replaying events does not retry mutations; a
+client must not blindly resubmit a prompt whose acknowledgement was lost.
+
+Example frames (replace the illustrative conversation IDs with list results):
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+{"jsonrpc":"2.0","id":2,"method":"_nori/session/list","params":{}}
+{"jsonrpc":"2.0","id":3,"method":"_nori/session/subscribe","params":{"session_id":"*","cursors":{"<session-a>":42,"<session-b>":17}}}
+```
+
+After a disconnect, send the same initialization and subscription with the last
+processed cursor for each conversation. A successful new subscription replaces
+the connection's previous one. For a single-session subscription, send only
+that session's cursor.
+
+Negative, future, unknown-session, mismatched-session, and expired cursors fail
+with `-32003`; missing or unknown command targets fail with `-32002`. Expiry is
+explicit: a cursor older than `first_available_seq - 1` cannot be recovered
+from this journal. To intentionally skip unavailable history, list again and
+supply `replay_cursors` for all-session live following, or the chosen row's
+`latest_seq` for one session. This is an explicit new observation point, not
+recovery of the missing prefix.
+
+`/acp` and `/sessions` share one controller slot across all exact listeners;
+last connect wins. Whether future clients can both control, or one can control
+while another watches, remains a pending D2 decision. Disconnect or listener
+shutdown detaches managed clients without stopping sessions, cancelling admitted turns, or answering pending
+permissions. Those permissions remain visible and answerable after reconnect
+or from the TUI. A slow managed consumer is dropped when its bounded live queue
+fills. The WebSocket adapter closes that connection after draining buffered
+events; socket writes also have a deadline. The stdio adapter instead sends
+`_nori/session/subscription_ended` with `{"reason":"replay_required"}` after
+buffered events and keeps the ACP connection usable. On that notification,
+resubscribe using the last processed cursor for each session. Reconnect and
+resubscribe share the same cursor validation, so expiry cannot silently lose
+history. Stdio encoding or writer failure cannot guarantee an ending
+notification. At the exec process boundary, stdin EOF shuts down all managed
+sessions.

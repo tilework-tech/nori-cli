@@ -593,23 +593,62 @@ impl AcpBackend {
         let (history_log_id, history_entry_count) =
             crate::message_history::history_metadata(&config.nori_home).await;
 
-        let transcript_recorder = match TranscriptRecorder::new_with_session_id(
-            &config.nori_home,
-            &cwd,
-            Some(config.agent.clone()),
-            &config.cli_version,
-            Some(session_id.to_string()),
-            config.conversation_id.map(|id| id.to_string()),
-        )
-        .await
-        {
-            Ok(recorder) => Some(Arc::new(recorder)),
-            Err(e) => {
-                warn!("Failed to initialize transcript recorder: {e}");
-                None
+        let continuing_transcript = transcript.filter(|transcript| {
+            config
+                .conversation_id
+                .is_some_and(|id| id.to_string() == transcript.meta.session_id)
+        });
+        let transcript_recorder = if let Some(transcript) = continuing_transcript {
+            let agent_history = deferred_replay_batches
+                .iter()
+                .find(|batch| {
+                    used_fallback.is_none()
+                    && matches!(batch.source, nori_protocol::ReplaySource::Agent)
+                    && batch.events.iter().any(|event| matches!(
+                        event,
+                        nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                            acp::AgentNotification::SessionNotification(notification)
+                        )) if matches!(notification.update,
+                            acp::SessionUpdate::UserMessageChunk(_)
+                                | acp::SessionUpdate::AgentMessageChunk(_)
+                                | acp::SessionUpdate::AgentThoughtChunk(_)
+                                | acp::SessionUpdate::ToolCall(_)
+                                | acp::SessionUpdate::ToolCallUpdate(_)
+                                | acp::SessionUpdate::Plan(_)
+                        )
+                    ))
+                })
+                .map(|batch| batch.events.clone());
+            Some(Arc::new(
+                TranscriptRecorder::resume_same_session(
+                    &config.nori_home,
+                    transcript,
+                    session_id.to_string(),
+                    agent_history,
+                )
+                .await?,
+            ))
+        } else {
+            match TranscriptRecorder::new_with_session_id(
+                &config.nori_home,
+                &cwd,
+                Some(config.agent.clone()),
+                &config.cli_version,
+                Some(session_id.to_string()),
+                config.conversation_id.map(|id| id.to_string()),
+            )
+            .await
+            {
+                Ok(recorder) => Some(Arc::new(recorder)),
+                Err(e) => {
+                    warn!("Failed to initialize transcript recorder: {e}");
+                    None
+                }
             }
         };
-        if let (Some(recorder), Some(transcript)) = (&transcript_recorder, transcript) {
+        if continuing_transcript.is_none()
+            && let (Some(recorder), Some(transcript)) = (&transcript_recorder, transcript)
+        {
             for evidence in transcript.archived_context_evidence() {
                 if let Err(error) = recorder.record_session_event(&evidence).await {
                     warn!(%error, "Failed to archive context timeline evidence");

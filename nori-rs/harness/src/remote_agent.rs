@@ -9,6 +9,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::PoisonError;
 
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
@@ -19,9 +20,13 @@ use nori_protocol::acp::v1 as acp;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 
+pub use crate::managed_remote::ManagedRemoteHost;
 pub use nori_acp_host::remote::HostedAgent;
 pub use nori_acp_host::remote::HostedSubscription;
 pub use nori_acp_host::remote::LoadedSession;
+pub use nori_acp_host::remote::ManagedAgent;
+pub use nori_acp_host::remote::ManagedReply;
+pub use nori_acp_host::remote::ManagedSubscription;
 pub use nori_acp_host::remote::RemoteAcpServer;
 pub use nori_acp_host::remote::parse_bind_addr;
 
@@ -76,17 +81,50 @@ struct HostShared {
 /// Responder label on answers that a remote-control client sends.
 pub const REMOTE_CONTROL_RESPONDER: &str = "remote_control";
 
+#[derive(Default)]
+enum PendingDefault {
+    #[default]
+    Unchanged,
+    Clear,
+    Started(HarnessHandle, PathBuf, Box<SessionStarted>),
+}
+
 /// Harness-side host for the remote ACP transport. Create one per owning app,
 /// attach it to each launched harness session, and hand it to
 /// [`RemoteAcpServer::bind`].
 #[derive(Default)]
 pub struct HarnessRemoteHost {
     state: Arc<Mutex<HostShared>>,
+    pending_default: std::sync::Mutex<PendingDefault>,
 }
 
 impl HarnessRemoteHost {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Choose the default for the next controller without interrupting the
+    /// session already chosen by the connected controller.
+    pub fn set_default_started(
+        &self,
+        handle: HarnessHandle,
+        nori_home: PathBuf,
+        started: SessionStarted,
+    ) {
+        *self
+            .pending_default
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) =
+            PendingDefault::Started(handle, nori_home, Box::new(started));
+    }
+
+    /// Leave the next controller unattached when the on-screen session has
+    /// not started or has ended. An existing controller keeps its attachment.
+    pub fn clear_default_session(&self) {
+        *self
+            .pending_default
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = PendingDefault::Clear;
     }
 
     /// Follow a newly launched harness session. Call immediately after
@@ -624,6 +662,33 @@ impl HostedAgent for HarnessRemoteHost {
     }
 
     async fn subscribe(&self) -> HostedSubscription {
+        let pending = std::mem::take(
+            &mut *self
+                .pending_default
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner),
+        );
+        let clear = match pending {
+            PendingDefault::Unchanged => false,
+            PendingDefault::Clear => true,
+            PendingDefault::Started(handle, home, started) => {
+                match self.attach_started(handle, home, *started).await {
+                    Ok(()) => false,
+                    Err(error) => {
+                        tracing::warn!(%error, "could not attach the selected remote session");
+                        true
+                    }
+                }
+            }
+        };
+        if clear {
+            let mut state = self.state.lock().await;
+            drop_sink(&mut state);
+            state.session = None;
+            if let Some(task) = state.event_task.take() {
+                task.abort();
+            }
+        }
         let (sink, events) = mpsc::channel(REMOTE_SINK_EVENTS);
         let mut state = self.state.lock().await;
         // Last connect wins: the replaced controller's connection closes and
