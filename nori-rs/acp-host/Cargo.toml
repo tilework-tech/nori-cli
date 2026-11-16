@@ -42,13 +42,13 @@ tokio = { workspace = true, features = [
     "time",
 ] }
 tokio-util = { workspace = true, features = ["compat"] }
+tokio-tungstenite = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 uuid = { workspace = true, features = ["v4"] }
 which = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
-tokio-tungstenite = { workspace = true }
 rmcp = { workspace = true, features = [
     "client",
     "transport-streamable-http-client-reqwest",

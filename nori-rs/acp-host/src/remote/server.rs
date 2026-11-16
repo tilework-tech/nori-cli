@@ -1,10 +1,8 @@
 //! Listener and WebSocket upgrade for the remote ACP transport.
 //!
-//! One `/acp` endpoint, WebSocket-only (the RFD permits WS-only servers).
-//! Plain HTTP requests get `426 Upgrade Required`. Each upgrade response
-//! carries a fresh `Acp-Connection-Id`; the server keeps a single live
-//! connection, and a newer connection replaces the current one (last connect
-//! wins).
+//! Legacy `/acp` listeners keep one live connection; a newer connection
+//! replaces it. Background hosts use authenticated `/sessions` listeners
+//! with separate controller and watcher connections.
 
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -58,6 +56,7 @@ pub struct RemoteAcpServer {
     local_addrs: Vec<SocketAddr>,
     serve_tasks: Vec<tokio::task::JoinHandle<()>>,
     active: ActiveConnection,
+    host_control: Option<Arc<tokio::sync::Mutex<super::host_control::HostControl>>>,
     shutdown: CancellationToken,
 }
 
@@ -65,6 +64,35 @@ type ManagedRouterFactory =
     Box<dyn FnOnce(ActiveConnection, Arc<AtomicI64>, CancellationToken) -> axum::Router + Send>;
 
 impl RemoteAcpServer {
+    /// Bind an authenticated managed-only background host. Legacy ACP is not
+    /// exposed on this listener, and every connection requires the token.
+    pub async fn bind_host<M: super::ManagedAgent>(
+        addr: SocketAddr,
+        managed: Arc<M>,
+        token: String,
+    ) -> anyhow::Result<Self> {
+        anyhow::ensure!(!token.trim().is_empty(), "host token must not be empty");
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        let local_addr = listener.local_addr()?;
+        let shutdown = CancellationToken::new();
+        let control = Arc::new(tokio::sync::Mutex::new(
+            super::host_control::HostControl::default(),
+        ));
+        let router = super::host_wire::router(managed, token, control.clone(), shutdown.clone());
+        let task = tokio::spawn(async move {
+            if let Err(error) = axum::serve(listener, router).await {
+                tracing::warn!(%error, "managed host listener exited");
+            }
+        });
+        Ok(Self {
+            local_addrs: vec![local_addr],
+            serve_tasks: vec![task],
+            active: Arc::new(tokio::sync::Mutex::new(None)),
+            host_control: Some(control),
+            shutdown,
+        })
+    }
+
     /// Bind the listener and start serving `/acp`.
     pub async fn bind<H: HostedAgent>(addr: SocketAddr, hosted: Arc<H>) -> anyhow::Result<Self> {
         Self::bind_many([addr], hosted).await
@@ -153,6 +181,7 @@ impl RemoteAcpServer {
             local_addrs,
             serve_tasks,
             active,
+            host_control: None,
             shutdown,
         })
     }
@@ -164,7 +193,11 @@ impl RemoteAcpServer {
 
     /// Whether a remote controller currently owns the WebSocket connection.
     pub async fn controller_connected(&self) -> bool {
-        self.active.lock().await.is_some()
+        if let Some(control) = &self.host_control {
+            control.lock().await.connected()
+        } else {
+            self.active.lock().await.is_some()
+        }
     }
 
     /// The address the listener actually bound (resolves port 0).

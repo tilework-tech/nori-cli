@@ -28,10 +28,15 @@ used in production.
 
 ### Core Implementation
 
-- `cli/` dispatches the `nori` binary and sandbox debug commands.
+- `cli/` dispatches the `nori` binary and sandbox debug commands. Its
+  [host module](cli/src/host/docs.md) owns the detached process, private token,
+  and session manager used by `nori host`.
 - `exec/` projects the harness into a final-answer plaintext command or a
   bounded standard ACP-over-stdio agent facade.
 - `tui/` renders events and forwards user intent through typed harness methods.
+  Its [attach frontend](tui/src/attach/docs.md) instead consumes host-owned
+  envelopes and sends managed commands; closing that terminal never ends the
+  host's sessions.
 - `harness/` owns session orchestration, private reduction, transcripts, goals,
   undo, hooks, worktrees, history, and the embeddable runtime API. Its public
   event stream is an ordered fan-out: one primary frontend receiver plus
@@ -45,7 +50,9 @@ used in production.
   through a `HostedAgent` trait that `harness/` implements, preserving the
   `nori-harness -> nori-acp-host` dependency direction. The TUI owns startup
   `--remote` and runtime `/remote-control` listener policy around that server
-  (see `@/docs/remote-control.md`).
+  (see [the wire contract](../docs/remote-control.md)). A separate authenticated
+  managed listener serves the background host with controller/watcher roles;
+  its server and client retain the same downward dependency boundary.
 - `nori-protocol/` owns no behavior. It exports `nori_protocol::acp`,
   `SessionEvent::{Acp, Nori}`, and the session manager's `SessionEnvelope` and
   `SessionStatus` types.
@@ -81,11 +88,10 @@ product crates.
 - Product analytics distinguishes `interactive`, `cloud`, `exec`, and `acp`
   session modes. Resume is not a mode or event; a resumed interactive session
   reports only if a new prompt reaches the transport.
-- There are two outward ACP agent surfaces: `nori exec --acp` (a bounded,
-  one-session stdio facade) and the remote WebSocket transport (the long-lived
-  interactive session, enabled at startup or runtime, loopback by default,
-  stable Nori conversation ids as outward session ids). They are deliberately
-  separate; neither replaces the other.
+- The outward ACP surfaces are `nori exec --acp` and the interactive remote
+  WebSocket projection. With `multi_session`, exec also exposes managed-session
+  commands. The background host serves authenticated managed envelopes without
+  a legacy ACP projection; its lifetime is independent of connected terminals.
 - Rust 2024 and strict workspace lints apply. Add only the derive traits a
   public boundary type actually needs.
 

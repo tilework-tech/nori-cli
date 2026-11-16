@@ -1,0 +1,21 @@
+---
+source: tui/src/attach/tests.rs
+expression: rendered
+---
+ Nori host  CONTROLLING
+ Sessions · /new starts a session · ctrl+d detaches
+
+
+  Sessions 2
+
+     ID        AGENT           STATUS            AGE    TITLE
+  ▏  session-  mock-model      ready             2m     Review the parser              ▕
+     session-  other-agent     waiting on you    1m     Update tests
+
+
+
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt
