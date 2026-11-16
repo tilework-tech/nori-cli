@@ -31,6 +31,16 @@ environment variables select deterministic streams for:
   interleaved tool/message ordering; and
 - cloud, MCP, browser, transcript, and presentation regressions.
 
+The prompt handler in [`main.rs`](src/main.rs) clears the cancellation flag
+before spawning prompt work. SDK incoming handlers run in wire order, while
+spawned work runs separately so dispatch can deliver cancellations and client
+responses during streaming. A cancel received after prompt admission remains
+set even if the prompt task has not started; the task must not reset it. The
+next prompt admission clears the previous turn's cancellation. The shared
+agent builder also lets [`cancellation_tests.rs`](src/cancellation_tests.rs)
+queue prompt and cancel messages before polling the SDK connection, checking
+both this ordering and a subsequent turn's ability to stream.
+
 Prompt-fidelity fixtures may require the final text block, its matching-block
 count, image count, image MIME type, and image data through the
 `MOCK_AGENT_EXPECT_*` prompt variables. A mismatch returns a structured prompt
