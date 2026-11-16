@@ -1,0 +1,21 @@
+---
+source: tui/src/attach/tests.rs
+expression: rendered
+---
+ Nori host  WATCHING · read-only · alt+t take control
+ Sessions · /new starts a session · ctrl+d detaches
+ ● Ship tree picker › Port picker is waiting on you · alt+down to jump
+
+  Sessions 5
+
+     ID        AGENT           STATUS            AGE    TITLE
+  ▏  root-one  mock-model      working           5m     Ship tree picker               ▕
+     child-on  mock-model-alt  waiting on you    1m     ├─ Port picker
+     grandchi  mock-model      failed            50s    │  └─ Write snapshot tests
+     child-tw  mock-model      ready             20s    └─ Update docs
+     root-two  mock-model      ready             3m     Spike transport
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt

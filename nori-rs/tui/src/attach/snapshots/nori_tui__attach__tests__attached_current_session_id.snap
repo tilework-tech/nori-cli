@@ -1,16 +1,15 @@
 ---
 source: tui/src/attach/tests.rs
-assertion_line: 372
 expression: rendered
 ---
  Nori host  WATCHING · read-only · alt+t take control
- mock-model · abcd1234-session · ready
+ mock-model · Review parser · ready
 
 
   Sessions 1
 
      ID        AGENT           STATUS            AGE    TITLE
-  ▏  abcd1234  mock-model      ready             2m     (current) Review parser        ▕
+  ▏  abcd1234  mock-model      ready             2m     Review parser (current)        ▕
 
 
 

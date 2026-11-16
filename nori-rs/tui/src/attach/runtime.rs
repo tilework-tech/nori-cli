@@ -28,10 +28,14 @@ pub(super) struct Runtime {
     pub session_list_binding: nori_config::HotkeyBinding,
     pub next_waiting_binding: nori_config::HotkeyBinding,
     pub(super) next_waiting_after_refresh: bool,
+    /// The unsent edit of each session not on screen, restored when it
+    /// returns.
+    drafts: HashMap<String, crate::bottom_pane::ComposerDraft>,
 }
 
 impl Runtime {
     pub fn set_next_waiting_binding(&mut self, binding: nori_config::HotkeyBinding) {
+        self.state.jump_binding = binding.clone();
         self.next_waiting_binding = binding;
         self.composer.set_hint_items(vec![
             (self.session_list_binding.as_str(), "sessions"),
@@ -74,7 +78,28 @@ impl Runtime {
             session_list_binding: nori_config::HotkeyConfig::default().open_session_list,
             next_waiting_binding: nori_config::HotkeyConfig::default().next_waiting_session,
             next_waiting_after_refresh: false,
+            drafts: HashMap::new(),
         }
+    }
+
+    /// Put `id` on screen. The edit in the composer stays with the session
+    /// it was typed in, and `id`'s own edit comes back. Text typed while no
+    /// session was open goes with the session opened next.
+    pub(super) fn open_session(&mut self, id: String) {
+        if let Some(previous) = self.state.selected.take()
+            && previous != id
+        {
+            self.drafts.insert(previous, self.composer.take_draft());
+            if let Some(draft) = self.drafts.remove(&id) {
+                self.composer.restore_draft(draft);
+            }
+        }
+        self.state.selected = Some(id);
+        self.state.list_open = false;
+        self.state.scroll = 0;
+        self.state.notice = None;
+        self.state.replay_error = None;
+        self.subscribe_selected();
     }
 
     pub fn send(&mut self, method: &str, params: Value, pending: Pending) {
@@ -238,12 +263,7 @@ impl Runtime {
                 let id = result["session_id"]
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Host did not return the new session ID"))?;
-                self.state.selected = Some(id.into());
-                self.state.list_open = false;
-                self.state.scroll = 0;
-                self.state.notice = None;
-                self.state.replay_error = None;
-                self.subscribe_selected();
+                self.open_session(id.into());
                 self.refresh_list();
             }
             Pending::TakeControl => {

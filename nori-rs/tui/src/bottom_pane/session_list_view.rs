@@ -76,11 +76,13 @@ const STATUS: &str = "status";
 impl SessionListView {
     pub(crate) fn new(rows: Vec<SessionRow>, app_event_tx: AppEventSender) -> Self {
         let columns = [
-            PickerColumn::flexible(TITLE, "Session").width(PickerColumnWidth::Flexible {
-                min: 16,
-                max: 72,
-                weight: 4,
-            }),
+            PickerColumn::flexible(TITLE, "Session")
+                .width(PickerColumnWidth::Flexible {
+                    min: 16,
+                    max: 72,
+                    weight: 4,
+                })
+                .cut_middle(),
             PickerColumn::fixed(AGENT, "Agent", 14).hide_below(48),
             PickerColumn::fixed(STATUS, "Status", 16),
         ];
@@ -138,7 +140,7 @@ impl SessionListView {
             return;
         }
         match row.status {
-            SessionStatus::Closed => {
+            SessionStatus::Closed | SessionStatus::Done => {
                 self.app_event_tx
                     .send(AppEvent::RemoveSession { generation });
             }
@@ -162,7 +164,7 @@ impl SessionListView {
     fn close_hint(&self) -> Option<KeyHint<'static>> {
         let row = self.selected_row().filter(|row| row.generation >= 0)?;
         Some(match row.status {
-            SessionStatus::Closed => KeyHint::new("ctrl+d", "remove"),
+            SessionStatus::Closed | SessionStatus::Done => KeyHint::new("ctrl+d", "remove"),
             _ if self.close_armed == Some(row.generation) => {
                 KeyHint::new("ctrl+d", "again to close")
             }
@@ -198,17 +200,8 @@ fn glyph(status: SessionStatus) -> &'static str {
         SessionStatus::Working => "⠋",
         SessionStatus::Ready => "○",
         SessionStatus::Failed => "✕",
-        SessionStatus::Closed => "·",
+        SessionStatus::Closed | SessionStatus::Done => "·",
         SessionStatus::Starting => "…",
-    }
-}
-
-fn tone(status: SessionStatus) -> DetailTone {
-    match status {
-        SessionStatus::WaitingOnYou => DetailTone::Warning,
-        SessionStatus::Failed => DetailTone::Error,
-        SessionStatus::Closed | SessionStatus::Starting => DetailTone::Muted,
-        SessionStatus::Working | SessionStatus::Ready => DetailTone::Default,
     }
 }
 
@@ -222,14 +215,17 @@ fn items(rows: &[SessionRow]) -> Vec<PickerItem<SessionGeneration>> {
             )
             .cell(AGENT, row.agent.clone())
             .cell(STATUS, row.status_word.clone())
-            .cell_detail_tone(STATUS, tone(row.family_status))
+            .cell_detail_tone(
+                STATUS,
+                crate::session_status::status_tone(row.family_status),
+            )
             .search_text(format!("{} {}", row.title, row.agent))
             .depth(row.depth)
             .current(row.on_screen);
             if let Some(provider) = row.provider {
                 item = item.cell_tone(AGENT, provider);
             }
-            if row.status == SessionStatus::Closed {
+            if row.status.is_closed() {
                 item = item.cell_detail_tone(TITLE, DetailTone::Muted);
             }
             if row.family_status == SessionStatus::WaitingOnYou {
@@ -436,6 +432,96 @@ mod tests {
             .find(|line| line.contains("parent session"))
             .expect("parent row");
         assert!(parent_line.contains("● parent session"), "{screen}");
+    }
+
+    #[test]
+    fn titles_sharing_a_long_prefix_stay_distinct_with_one_cut() {
+        let mut parent = row(
+            1,
+            "shared prefix for the parser review: parent side",
+            SessionStatus::Ready,
+        );
+        parent.on_screen = true;
+        let mut child = row(
+            2,
+            "shared prefix for the parser review: child side mock:request-permission:z",
+            SessionStatus::WaitingOnYou,
+        );
+        child.depth = 1;
+        for width in [120, 80] {
+            let screen = render(&view(vec![parent.clone(), child.clone()]), width);
+            let parent_line = screen
+                .lines()
+                .find(|line| line.contains("parent side"))
+                .unwrap_or_else(|| panic!("parent end is shown at {width}: {screen}"));
+            let child_line = screen
+                .lines()
+                .find(|line| line.contains("permission:z"))
+                .unwrap_or_else(|| panic!("child end is shown at {width}: {screen}"));
+            for line in [parent_line, child_line] {
+                assert!(line.contains("shared"), "start kept at {width}: {line}");
+            }
+            assert_eq!(
+                child_line.matches('…').count(),
+                1,
+                "the long child name is cut once at {width}: {child_line}"
+            );
+            assert!(parent_line.matches('…').count() <= 1, "{parent_line}");
+            assert!(child_line.contains("└─"), "{child_line}");
+            assert!(parent_line.contains("(current)"), "{parent_line}");
+        }
+    }
+
+    #[test]
+    fn status_words_are_colored_by_what_the_session_needs() {
+        use ratatui::style::Color;
+        let rows = vec![
+            row(1, "asks", SessionStatus::WaitingOnYou),
+            row(2, "busy", SessionStatus::Working),
+            row(3, "done", SessionStatus::Ready),
+            row(4, "broke", SessionStatus::Failed),
+            SessionRow {
+                on_screen: true,
+                ..row(5, "selected", SessionStatus::Closed)
+            },
+        ];
+        let titles = [
+            ("waiting on you", "asks"),
+            ("working", "busy"),
+            ("ready", "done"),
+            ("failed", "broke"),
+        ];
+        let list = view(rows);
+        let height = list.desired_height(80);
+        let mut terminal = Terminal::new(TestBackend::new(80, height)).expect("terminal");
+        terminal
+            .draw(|frame| list.render(frame.area(), frame.buffer_mut()))
+            .expect("draw");
+        let buffer = terminal.backend().buffer();
+        let color_of = |word: &str| {
+            let title = titles
+                .iter()
+                .find(|(status, _)| *status == word)
+                .map(|(_, title)| *title)
+                .expect("row title");
+            (0..buffer.area.height)
+                .find_map(|y| {
+                    let line: String = (0..buffer.area.width)
+                        .map(|x| buffer[(x, y)].symbol())
+                        .collect();
+                    if !line.contains(title) {
+                        return None;
+                    }
+                    let column = line.rfind(word)?;
+                    let x = line[..column].chars().count() as u16;
+                    Some(buffer[(x, y)].fg)
+                })
+                .unwrap_or_else(|| panic!("{word} is shown"))
+        };
+        assert_eq!(color_of("waiting on you"), Color::Yellow);
+        assert_eq!(color_of("working"), Color::Cyan);
+        assert_eq!(color_of("ready"), Color::Green);
+        assert_eq!(color_of("failed"), Color::Red);
     }
 
     #[test]

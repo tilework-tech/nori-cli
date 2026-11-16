@@ -138,6 +138,7 @@ impl ManagedRemoteHost {
                         "session_id":record.conversation_id.to_string(),
                         "agent":record.agent,
                         "status":record.status,
+                        "family_status":self.manager.family_status(&record.conversation_id).unwrap_or(record.status),
                         "cwd":record.cwd,
                         "parent":record.parent.map(|id| id.to_string()),
                         "pending_requests":record.pending_requests,

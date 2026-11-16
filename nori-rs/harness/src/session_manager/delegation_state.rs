@@ -15,6 +15,9 @@ pub(super) struct Entry {
     pub(super) pending_turns: HashSet<acp::v1::RequestId>,
     pub(super) completed_turns: HashSet<acp::v1::RequestId>,
     pub(super) output: String,
+    /// Something other than message text happened since the last chunk, so
+    /// the next chunk starts a new paragraph of the result.
+    pub(super) output_break: bool,
     pub(super) last_result: String,
     pub(super) failure: Option<String>,
     pub(super) cancelled: bool,
@@ -91,16 +94,25 @@ impl DelegationState {
         match &envelope.event {
             SessionEvent::Nori(NoriEvent::SessionPhaseChanged(SessionPhase::Prompting {
                 ..
-            })) => entry.output.clear(),
+            })) => {
+                entry.output.clear();
+                entry.output_break = false;
+            }
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::v1::AgentNotification::SessionNotification(n),
             )) => {
                 if let acp::v1::SessionUpdate::AgentMessageChunk(chunk) = &n.update
                     && let acp::v1::ContentBlock::Text(text) = &chunk.content
                 {
+                    if std::mem::take(&mut entry.output_break) && !entry.output.is_empty() {
+                        entry.output.push_str("\n\n");
+                    }
                     entry.output.push_str(&text.text);
+                } else {
+                    entry.output_break = true;
                 }
             }
+            SessionEvent::Acp(AcpEvent::Request { .. }) => entry.output_break = true,
             SessionEvent::Acp(AcpEvent::Response {
                 request_id,
                 response,
@@ -183,10 +195,18 @@ impl State {
         let Ok(parent) = ConversationId::from_string(&value.parent_id) else {
             return;
         };
+        let parent_name = self
+            .journal
+            .info(&value.parent_id)
+            .and_then(|info| info.title)
+            .and_then(|title| nori_protocol::session_display_name(&title))
+            .unwrap_or_else(|| "this session".to_owned());
         let event = SessionEvent::Nori(NoriEvent::Notice(nori_protocol::Notice {
             message: format!(
-                "Child session {} ({}) of parent session {} ({}) needs your answer. Switch to the child with Alt+Down.",
-                value.child_id, value.agent, value.parent_id, value.parent_agent
+                "{} · {} is waiting on you (delegated by {} · {parent_name}). Press Alt+Down to answer it.",
+                value.agent,
+                nori_protocol::delegation_child_name(&value),
+                value.parent_agent,
             ),
         }));
         if let Some(envelope) = self.registry.emit(&parent, event) {
@@ -219,10 +239,13 @@ impl State {
         if self.delegation.closed.contains(&parent) {
             return;
         }
-        let result = value.result.as_deref().unwrap_or("");
         self.delegation.deliveries.push_back(Delivery {
-            request: value.request_id.clone(), parent, in_flight: false, submitted: None, process: None,
-            text: format!("[Nori delegation result]\nChild session {} ({}) for parent session {} ({}): {:?}\n{}", value.child_id, value.agent, value.parent_id, value.parent_agent, value.status, result),
+            request: value.request_id.clone(),
+            parent,
+            in_flight: false,
+            submitted: None,
+            process: None,
+            text: nori_protocol::delegation_result_prompt(value),
         });
     }
 

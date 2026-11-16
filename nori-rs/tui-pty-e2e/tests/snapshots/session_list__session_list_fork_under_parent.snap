@@ -8,7 +8,7 @@ expression: normalize_for_input_snapshot(screen)
 
 • alpha agent answer
 
-  ● (parent PARENTID) mock:… is waiting on you · approve: rm -rf target/debug · alt + down to jump
+  ● parent question › mock:request-p…f target/debug is waiting on you · approve: rm -rf… · alt + down to jump
   1 waiting on you · 1 ready
 
   Sessions 2 · 1 waiting on you · 1 ready  tab: waiting only · type to search
@@ -16,9 +16,9 @@ expression: normalize_for_input_snapshot(screen)
   All  waiting on you
 
     Session                                                                 Agent           Status
-  › ● parent question (current)                                             Mock ACP        waiting on you
+  › ● parent question (current)                                             mock-model      waiting on you
     alpha agent answer
-    └─ ● mock:request-permission:rm -rf target/debug                        Mock ACP        waiting on you
+    └─ ● mock:request-permission:rm -rf target/debug                        mock-model      waiting on you
        approve: rm -rf target/debug
 
   ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close

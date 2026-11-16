@@ -1,0 +1,15 @@
+---
+source: tui-pty-e2e/tests/delegation.rs
+expression: normalize_for_input_snapshot(list)
+---
+  Sessions 2 · 1 ready  tab: waiting only · type to search
+
+  All  waiting on you
+
+    Session                                                                   Agent           Status
+  › ○ parent task identity (current)                                          mock-model      ready
+    Permission granted with option: allow
+    └─ · mock:request-permission:write-child-file                             mock-model-alt  done
+       Permission granted with option: allow
+
+  ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close

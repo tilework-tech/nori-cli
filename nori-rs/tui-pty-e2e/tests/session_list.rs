@@ -227,7 +227,7 @@ fn a_background_request_is_named_and_one_key_jumps_to_it_for_an_answer() {
     session
         .wait_for(
             |screen| {
-                screen.contains("waiting on you · approve: rm -rf target/debug")
+                screen.contains("waiting on you · approve: rm -rf")
                     && screen.contains("(+1 more)")
                     && screen.contains("to jump")
             },

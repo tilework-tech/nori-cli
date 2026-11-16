@@ -789,7 +789,11 @@ fn host_list_truncates_tty_title_without_losing_piped_title() {
         .lines()
         .find(|line| line.contains(&id))
         .expect("session row");
-    assert!(row.trim_end().ends_with('…'), "{screen}");
+    assert!(row.contains("Long title") && row.contains('…'), "{screen}");
+    assert!(
+        row.trim_end().ends_with("ID column"),
+        "a cut title keeps its end: {screen}"
+    );
     assert!(!screen.contains("continuation text"), "{screen}");
 }
 
@@ -835,14 +839,12 @@ fn delegated_child_in_host_list_preserves_metadata_columns_and_can_be_opened() {
             .any(|row| row.get(82..).unwrap().contains("child-column-check")),
         "{listing}"
     );
-    client.wait_for_text("needs your answer", TIMEOUT).unwrap();
+    client.wait_for_text("is waiting on you", TIMEOUT).unwrap();
     let parent_screen = client.screen_contents();
-    for row in &rows {
-        assert!(
-            parent_screen.contains(row.get(..36).unwrap()),
-            "notice names parent and child: {parent_screen}"
-        );
-    }
+    assert!(
+        parent_screen.contains("child-column-ch") && parent_screen.contains("parent host task"),
+        "notice names child and parent by their tasks: {parent_screen}"
+    );
     client.send_key(Key::AltDown).unwrap();
     client.wait_for_text("child-column-check", TIMEOUT).unwrap();
     client.wait_for_text("Allow", TIMEOUT).unwrap();

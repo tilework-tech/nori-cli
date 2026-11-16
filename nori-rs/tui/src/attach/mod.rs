@@ -58,6 +58,7 @@ async fn run(
     let mut runtime = runtime::Runtime::new(options.session_id.clone(), request_tx);
     runtime.set_session_list_binding(hotkeys.open_session_list);
     runtime.set_next_waiting_binding(hotkeys.next_waiting_session);
+    runtime.state.parent_binding = hotkeys.parent_session;
     let connection = tokio::spawn(connection::drive(options, initial, request_rx, event_tx));
     let mut events = tui.event_stream();
     let mut refresh = tokio::time::interval(std::time::Duration::from_secs(1));

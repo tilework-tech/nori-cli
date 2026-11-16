@@ -57,7 +57,13 @@ impl ChatWidget {
             self.bottom_pane.dismiss_selection(&delegation.request_id);
             self.delegation_approval = None;
         }
-        self.add_info_message(crate::delegation::summary(&delegation), None);
+        if delegation.status != DelegationStatus::AwaitingApproval {
+            let hints = self.delegation_hints();
+            self.add_boxed_history(Box::new(crate::delegation::DelegationCell::new(
+                delegation.clone(),
+                hints,
+            )));
+        }
         self.delegations
             .insert(delegation.request_id.clone(), delegation);
         self.show_delegation_approval();
@@ -78,7 +84,7 @@ impl ChatWidget {
         let Ok(parent) = ConversationId::from_string(&delegation.parent_id) else {
             return false;
         };
-        let items = [("Start", true), ("Decline", false)]
+        let items = [("Yes, start it", true), ("No, decline", false)]
             .into_iter()
             .map(|(name, approved)| {
                 let request_id = delegation.request_id.clone();
@@ -100,6 +106,7 @@ impl ChatWidget {
             .collect();
         self.delegation_approval = Some(delegation.request_id.clone());
         let request_id = delegation.request_id.clone();
+        let (title, rows) = crate::delegation::approval_lines(&delegation);
         self.bottom_pane.show_selection_view(SelectionViewParams {
             on_dismiss: Some(Box::new(move |tx| {
                 tx.send(AppEvent::ResolveDelegation {
@@ -109,27 +116,31 @@ impl ChatWidget {
                 })
             })),
             header: Box::new(ColumnRenderable::with(vec![
-                Box::new(Line::from("Start delegated session?").bold()) as Box<dyn Renderable>,
-                Box::new(
-                    Paragraph::new(format!(
-                        "Child {} ({})",
-                        delegation.child_id, delegation.agent
-                    ))
-                    .wrap(Wrap { trim: false }),
-                ),
-                Box::new(
-                    Paragraph::new(format!(
-                        "parent {} ({})",
-                        delegation.parent_id, delegation.parent_agent
-                    ))
-                    .wrap(Wrap { trim: false }),
-                ),
-                Box::new(Paragraph::new(delegation.task).wrap(Wrap { trim: false })),
+                Box::new(Line::from(title.bold())) as Box<dyn Renderable>,
+                Box::new(Line::from("")),
+                Box::new(Paragraph::new(rows).wrap(Wrap { trim: false })),
             ])),
             items,
-            footer_hint: Some(standard_popup_hint_line()),
+            footer_hint: Some(Line::from(vec![
+                "Press ".into(),
+                crate::key_hint::plain(crossterm::event::KeyCode::Enter).into(),
+                " to confirm or ".into(),
+                crate::key_hint::plain(crossterm::event::KeyCode::Esc).into(),
+                " to decline".into(),
+            ])),
             ..Default::default()
         });
         true
+    }
+
+    fn delegation_hints(&self) -> crate::delegation::DelegationHints {
+        let key = |action| {
+            let binding = self.config.hotkeys.binding_for(action);
+            (!binding.is_none()).then(|| binding.display_name())
+        };
+        crate::delegation::DelegationHints {
+            transcript: key(nori_config::HotkeyAction::OpenTranscript),
+            sessions: key(nori_config::HotkeyAction::OpenSessionList),
+        }
     }
 }

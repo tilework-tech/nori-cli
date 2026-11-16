@@ -1,0 +1,24 @@
+---
+source: tui/src/session_path.rs
+expression: "render(&[(\"three levels\", 120, breadcrumb_line(&three, \"\", KEY, 120)),\n(\"three levels\", 78, breadcrumb_line(&three, \"\", KEY, 78)),\n(\"shared prefix\", 120, breadcrumb_line(&shared, \"\", KEY, 120)),\n(\"shared prefix\", 78, breadcrumb_line(&shared, \"\", KEY, 78)),\n(\"long names\", 118, breadcrumb_line(&long, \"\", KEY, 118)),\n(\"long names\", 78, breadcrumb_line(&long, \"\", KEY, 78)),\n(\"long names\", 40, breadcrumb_line(&long, \"\", KEY, 40)),])"
+---
+three levels @120
+claude-code · Ship tree-row picker › codex · Port picker › pi · Write snapshot tests · alt + up to parent
+
+three levels @78
+claude-code · Ship…icker › … › pi · Write snapshot tests · alt + up to parent
+
+shared prefix @120
+mock-model · mock:del…e parser › mock-model-alt · mock:delegate mock-model inspect the parser again · alt + up to parent
+
+shared prefix @78
+mock:delegate…t the parser › mock:delegate mock-model inspect the parser again
+
+long names @118
+mock-model · A parent…e indeed › … › mock-model · A grandchild whose title is also very long here · alt + up to parent
+
+long names @78
+A parent ses…itle indeed › … › A grandchild whose title is also very long here
+
+long names @40
+A pa…eed › … › A grandchild…ry long here

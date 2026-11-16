@@ -60,7 +60,8 @@ impl DelegationContext {
 }
 
 impl SessionManager {
-    /// Request a child session. A different agent kind waits for user approval.
+    /// Request a child session for the user. A different agent kind waits for
+    /// user approval.
     pub async fn delegate(
         &self,
         parent: &ConversationId,
@@ -143,6 +144,11 @@ impl SessionManager {
                 status,
                 depth,
                 result: None,
+                origin: if expected_process.is_some() {
+                    nori_protocol::DelegationOrigin::Agent
+                } else {
+                    nori_protocol::DelegationOrigin::User
+                },
             };
             state.delegation.entries.push(Entry {
                 value: value.clone(),
@@ -151,6 +157,7 @@ impl SessionManager {
                 pending_turns: HashSet::new(),
                 completed_turns: HashSet::new(),
                 output: String::new(),
+                output_break: false,
                 last_result: String::new(),
                 failure: None,
                 cancelled: false,

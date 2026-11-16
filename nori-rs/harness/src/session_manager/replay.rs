@@ -96,6 +96,14 @@ impl Journal {
             SessionEvent::Nori(NoriEvent::PromptSummaryUpdated(summary)) => {
                 history.title = Some(summary.summary.clone())
             }
+            // A session whose first input is `/delegate` is named by that task.
+            SessionEvent::Nori(NoriEvent::DelegationChanged(delegation))
+                if history.title.is_none()
+                    && delegation.origin == nori_protocol::DelegationOrigin::User
+                    && delegation.parent_id == envelope.conversation_id =>
+            {
+                history.title = Some(title_line(&delegation.task));
+            }
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::AgentNotification::SessionNotification(notification),
             )) => match &notification.update {
@@ -105,16 +113,10 @@ impl Journal {
                     }
                 }
                 acp::SessionUpdate::UserMessageChunk(chunk) if history.title.is_none() => {
-                    if let acp::ContentBlock::Text(text) = &chunk.content {
-                        history.title = Some(
-                            text.text
-                                .lines()
-                                .next()
-                                .unwrap_or_default()
-                                .chars()
-                                .take(120)
-                                .collect(),
-                        );
+                    if let acp::ContentBlock::Text(text) = &chunk.content
+                        && nori_protocol::delegation_result_summary(&text.text).is_none()
+                    {
+                        history.title = Some(title_line(&text.text));
                     }
                 }
                 _ => {}
@@ -220,4 +222,14 @@ impl Journal {
         let events = self.subscribe(session, capacity);
         Ok(ManagedSubscription { replay, events })
     }
+}
+
+/// The title a session gets from text the user gave it: its first line.
+fn title_line(text: &str) -> String {
+    text.lines()
+        .next()
+        .unwrap_or_default()
+        .chars()
+        .take(120)
+        .collect()
 }

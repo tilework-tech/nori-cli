@@ -14,6 +14,8 @@ use crate::ProviderKind;
 
 mod render;
 mod tree;
+pub use tree::tree_guides;
+pub use tree::tree_order;
 
 pub use render::Picker;
 
@@ -32,6 +34,9 @@ pub struct PickerColumn {
     pub header: String,
     pub width: PickerColumnWidth,
     pub hide_below: Option<u16>,
+    /// Cut a value that does not fit in the middle, keeping its start and
+    /// end, instead of at its tail.
+    pub cut_middle: bool,
 }
 
 impl PickerColumn {
@@ -45,6 +50,7 @@ impl PickerColumn {
                 weight: 1,
             },
             hide_below: None,
+            cut_middle: false,
         }
     }
 
@@ -54,11 +60,17 @@ impl PickerColumn {
             header: header.into(),
             width: PickerColumnWidth::Fixed(width),
             hide_below: None,
+            cut_middle: false,
         }
     }
 
     pub fn width(mut self, width: PickerColumnWidth) -> Self {
         self.width = width;
+        self
+    }
+
+    pub fn cut_middle(mut self) -> Self {
+        self.cut_middle = true;
         self
     }
 
@@ -329,6 +341,9 @@ pub struct PickerState<K> {
     pub page_size: usize,
     pub load_state: PickerLoadState,
     pub search_placeholder: String,
+    /// Column that carries tree guides and row badges; the first visible
+    /// column when unset or hidden.
+    pub tree_column: Option<String>,
 }
 
 impl<K: Clone + Eq> PickerState<K> {
@@ -354,6 +369,7 @@ impl<K: Clone + Eq> PickerState<K> {
             page_size: 8,
             load_state: PickerLoadState::Ready,
             search_placeholder: "Type to search".to_string(),
+            tree_column: None,
         };
         state.select_first_available();
         state
@@ -386,6 +402,13 @@ impl<K: Clone + Eq> PickerState<K> {
     /// Apply an agent/provider tone to one category tab.
     pub fn category_tone(mut self, category: impl Into<String>, provider: ProviderKind) -> Self {
         self.category_tones.insert(category.into(), provider);
+        self
+    }
+
+    /// Draw tree guides and badges in this column, so earlier fixed columns
+    /// keep their alignment.
+    pub fn tree_column(mut self, key: impl Into<String>) -> Self {
+        self.tree_column = Some(key.into());
         self
     }
 

@@ -156,12 +156,116 @@ async fn same_kind_starts_immediately_and_retains_child_history_after_releasing_
     let done = terminal(&m, &p.conversation_id, &d.request_id).await;
     assert_eq!(done.status, DelegationStatus::Completed);
     assert!(done.result.is_some());
-    status(&m, &id(&d), SessionStatus::Closed).await;
+    status(&m, &id(&d), SessionStatus::Done).await;
     assert_eq!(m.free_slots(), 1);
     let child = m.get(&id(&d)).unwrap();
     assert_eq!(child.parent, Some(p.conversation_id));
     assert_eq!(child.source, SessionSource::Session);
     assert!(child.transcript_path.is_some());
+    m.shutdown(Duration::ZERO).await;
+}
+#[tokio::test]
+#[serial]
+async fn a_declined_delegation_reaches_the_parent_agent_without_a_session_id() {
+    let _echo = Env::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let home = tempfile::tempdir().unwrap();
+    let m = manager(3);
+    let mut p = start(&m, home.path(), true);
+    status(&m, &p.conversation_id, SessionStatus::Ready).await;
+    let d = m
+        .delegate(
+            &p.conversation_id,
+            "mock-model-alt".into(),
+            "Review the parser".into(),
+        )
+        .await
+        .unwrap();
+    m.resolve_delegation(&p.conversation_id, &d.request_id, false)
+        .await
+        .unwrap();
+    let reply = wait_parent_reply(&mut p, "· declined").await;
+    assert!(
+        reply.contains("from mock-model-alt · Review the parser · declined"),
+        "{reply}"
+    );
+    assert!(
+        reply.contains("The user declined this delegation."),
+        "{reply}"
+    );
+    assert!(!reply.contains(&d.child_id), "{reply}");
+    assert!(!reply.contains("Child session"), "{reply}");
+    m.shutdown(Duration::ZERO).await;
+}
+#[tokio::test]
+#[serial]
+async fn a_delegation_as_first_input_titles_the_parent_with_its_task_not_the_result() {
+    let _echo = Env::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let home = tempfile::tempdir().unwrap();
+    let m = manager(3);
+    let mut p = start(&m, home.path(), true);
+    status(&m, &p.conversation_id, SessionStatus::Ready).await;
+    let d = m
+        .delegate(
+            &p.conversation_id,
+            "mock-model".into(),
+            "Inspect the parser\nand report back".into(),
+        )
+        .await
+        .unwrap();
+    wait_parent_reply(&mut p, &d.child_id).await;
+    status(&m, &p.conversation_id, SessionStatus::Ready).await;
+    let listed = ManagedRemoteHost::new(m.clone())
+        .request(serde_json::json!({"jsonrpc":"2.0","id":1,"method":"_nori/session/list"}))
+        .await;
+    let rows = listed.response["result"]["sessions"].as_array().unwrap();
+    let title_of = |session: &str| {
+        rows.iter()
+            .find(|row| row["session_id"] == session)
+            .and_then(|row| row["title"].as_str())
+            .map(str::to_owned)
+    };
+    assert_eq!(
+        title_of(&p.conversation_id.to_string()).as_deref(),
+        Some("Inspect the parser"),
+        "{rows:?}"
+    );
+    assert_eq!(
+        m.replay_info(&p.conversation_id)
+            .and_then(|info| info.title)
+            .as_deref(),
+        Some("Inspect the parser")
+    );
+    m.shutdown(Duration::ZERO).await;
+}
+#[tokio::test]
+#[serial]
+async fn the_session_list_marks_a_top_level_session_whose_child_waits_on_you() {
+    let home = tempfile::tempdir().unwrap();
+    let m = manager(3);
+    let p = start(&m, home.path(), true);
+    status(&m, &p.conversation_id, SessionStatus::Ready).await;
+    let d = m
+        .delegate(
+            &p.conversation_id,
+            "mock-model".into(),
+            "mock:request-permission:cargo test".into(),
+        )
+        .await
+        .unwrap();
+    status(&m, &id(&d), SessionStatus::WaitingOnYou).await;
+    let listed = ManagedRemoteHost::new(m.clone())
+        .request(serde_json::json!({"jsonrpc":"2.0","id":1,"method":"_nori/session/list"}))
+        .await;
+    let rows = listed.response["result"]["sessions"].as_array().unwrap();
+    let row = |session: &str| {
+        rows.iter()
+            .find(|row| row["session_id"] == session)
+            .unwrap_or_else(|| panic!("{session} in {rows:?}"))
+    };
+    let parent = row(&p.conversation_id.to_string());
+    assert_eq!(parent["status"], "ready", "{rows:?}");
+    assert_eq!(parent["family_status"], "waiting_on_you", "{rows:?}");
+    assert_eq!(row(&d.child_id)["status"], "waiting_on_you", "{rows:?}");
     m.shutdown(Duration::ZERO).await;
 }
 #[tokio::test]
@@ -275,6 +379,28 @@ async fn child_permission_belongs_to_child_and_family_reports_waiting() {
     })
     .await
     .unwrap();
+    let notice = tokio::time::timeout(WAIT, async {
+        loop {
+            let e = events.recv().await.unwrap();
+            if e.conversation_id == p.conversation_id.to_string()
+                && let SessionEvent::Nori(NoriEvent::Notice(notice)) = e.event
+                && notice.message.contains("waiting on you")
+            {
+                return notice.message;
+            }
+        }
+    })
+    .await
+    .expect("parent hears that its child is waiting");
+    assert!(
+        notice.contains("mock:request-permission:echo child") && notice.contains("mock-model"),
+        "the notice names the asking child by its task: {notice}"
+    );
+    assert!(
+        !notice.contains(&d.child_id) && !notice.contains(&d.parent_id),
+        "the notice uses readable names: {notice}"
+    );
+    assert!(notice.contains("Alt+Down"), "{notice}");
     assert_eq!(m.get(&id(&d)).unwrap().parent, Some(p.conversation_id));
     assert!(
         m.get(&p.conversation_id)
@@ -298,7 +424,14 @@ async fn child_permission_belongs_to_child_and_family_reports_waiting() {
         )
         .await
         .unwrap();
-    terminal(&m, &p.conversation_id, &d.request_id).await;
+    let done = terminal(&m, &p.conversation_id, &d.request_id).await;
+    let result = done.result.unwrap_or_default();
+    assert!(
+        result
+            .lines()
+            .any(|line| line.starts_with("Permission request was cancelled")),
+        "text after the permission request starts its own paragraph: {result:?}"
+    );
     m.shutdown(Duration::ZERO).await;
 }
 #[tokio::test]
@@ -327,14 +460,27 @@ async fn result_is_automatically_submitted_as_attributed_parent_input() {
                 && let acp::v1::ContentBlock::Text(t) = c.content
                 && t.text.contains("unique child payload")
             {
-                assert!(t.text.contains(&d.child_id));
-                assert!(t.text.contains(&d.parent_id));
+                assert!(
+                    t.text.contains(&d.child_id),
+                    "the agent can still address the child: {}",
+                    t.text
+                );
+                assert!(
+                    t.text.contains("from mock-model · unique child payload"),
+                    "the result names the child readably: {}",
+                    t.text
+                );
                 break;
             }
         }
     })
     .await
     .expect("automatic result reaches parent agent");
+    assert_eq!(
+        d.origin,
+        nori_protocol::DelegationOrigin::User,
+        "a manager call made for the user is attributed to the user"
+    );
     m.shutdown(Duration::ZERO).await;
 }
 #[tokio::test]
@@ -415,8 +561,10 @@ async fn child_crash_returns_failure_without_failing_parent() {
     );
     assert!(m.handle(&p.conversation_id).is_some());
     let reply = wait_parent_reply(&mut p, &d.child_id).await;
-    assert!(reply.contains(&d.parent_id));
-    assert!(reply.contains("Failed"));
+    assert!(
+        reply.contains("from mock-model · mock:exit-during-prompt · failed"),
+        "{reply}"
+    );
     assert!(reply.contains("Agent process exited unexpectedly (exit code 17)."));
     assert!(!reply.contains("RequestFailure"), "{reply}");
     m.shutdown(Duration::ZERO).await;
@@ -489,6 +637,11 @@ async fn actual_agent_mcp_request_starts_child_and_nested_results_finish_once() 
     .await
     .expect("nested delegation completes");
     let top = m.delegations(&p.conversation_id).pop().unwrap();
+    assert_eq!(
+        top.origin,
+        nori_protocol::DelegationOrigin::Agent,
+        "an MCP request is attributed to the agent"
+    );
     let nested = m.delegations(&id(&top));
     assert_eq!(nested.len(), 1);
     assert_eq!(nested[0].status, DelegationStatus::Completed);
@@ -669,7 +822,7 @@ async fn child_result_waits_in_busy_parent_queue() {
         DelegationStatus::Completed
     );
     let reply = wait_parent_reply(&mut p, &d.child_id).await;
-    assert!(reply.contains(&d.parent_id));
+    assert!(reply.contains("· done"), "{reply}");
     m.shutdown(Duration::ZERO).await;
 }
 

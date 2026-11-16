@@ -29,7 +29,7 @@ impl App {
         else {
             return Ok(());
         };
-        let title = self.session_rows_title(generation);
+        let title = self.session_title(generation, super::session_overview::WHOLE_NAME);
         let config = self.config_for_agent(&record.agent);
         let session = match self
             .session_manager

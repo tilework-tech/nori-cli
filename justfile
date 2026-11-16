@@ -53,7 +53,7 @@ test *args:
         cd nori-rs && cargo test -p codex-core "$@"
         ;;
       protocol)
-        cd nori-rs && cargo test -p codex-protocol "$@"
+        cd nori-rs && cargo test -p nori-protocol "$@"
         ;;
       e2e)
         cd nori-rs && cargo build --bin nori && cargo test -p tui-pty-e2e "$@"

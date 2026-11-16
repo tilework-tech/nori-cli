@@ -274,6 +274,19 @@ pub struct Delegation {
     pub status: DelegationStatus,
     pub depth: i32,
     pub result: Option<String>,
+    /// Who asked for the child. Events from older hosts omit it.
+    #[serde(default)]
+    pub origin: DelegationOrigin,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DelegationOrigin {
+    /// The parent agent called the `delegate` tool.
+    #[default]
+    Agent,
+    /// The user ran `/delegate` or a client called the manager directly.
+    User,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
