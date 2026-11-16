@@ -935,27 +935,41 @@ default, behind `LEFT_ON_EMPTY_PROMPT_OPENS_SESSION_LIST`), `open_session_list`,
 or `/sessions` (hidden from the slash popup without the flag). Left with text
 in the prompt still moves the cursor.
 
-- Each row is a status glyph and title, the agent slug (the name `/delegate`
-  takes; "Nori Cloud" in cloud mode) with its provider tone, and a status
-  word, with a preview line below. The title is the agent's prompt summary,
-  else the session's first user message as seen in `UserMessageChunk` updates
-  (so a prompt sent by a remote-control client also titles it), else the
-  widget's first prompt, cut to its first line. Rows carry that whole line;
-  the TITLE column (`cut_middle`) cuts it once, in the middle, to the column
-  width, so sibling names sharing a long prefix keep their distinct ends.
-  Notifications that name a session still use a 60-character cut
-  (`session_title` with `TITLE_CHARS`). A user-origin
-  `DelegationChanged` that arrives before any prompt (a `/delegate` sent first)
-  titles the session with the first line of its task, the same rule the host
-  journal uses, so `nori attach` and `nori host ls` name it alike. A
-  delegation result prompt never counts as the first message. Previews
-  come from [`session_preview.rs`](src/session_preview.rs) using only session
-  events, never a call to the agent, in priority order: pending request
-  (`approve: ...`), running tool, how the session ended (connection lost,
-  spawn failure, or timeout; an ordinary close or shutdown adds nothing, since
-  the status column already says so), then the latest line of agent text.
-  Agent text after a request or tool starts a new line, so the preview never
-  glues the two together.
+- Rows use the shared two-row session layout from
+  [`session_table`](../tui-components/src/session_table.rs), the same as the
+  `nori attach` list and `nori host ls` on a terminal (column widths are
+  described in the [tui-components docs](../tui-components/docs.md)). Row 1 is
+  the status glyph and title (Session), the agent slug (Agent; the name
+  `/delegate` takes, "Nori Cloud" in cloud mode) with its provider tone, the
+  status word (Status), and a header-less Context cell (`8% / 475k`). Row 2,
+  faint, is the start of the agent's last reply (`no reply yet` before one),
+  the model's display name (cut in the middle), and the time since the
+  session's last event (`2m ago`). The model and context are the status bar's
+  own values (`ChatWidget::model_name`, `ChatWidget::context_summary`), so the
+  list and footer always agree; the footer's context segment formats through
+  the same `session_table::context_text`. The picker uses
+  `horizontal_margin(0)` and keeps status and agent tones on the selected row.
+- The title is the agent's own title from an ACP `session_info_update` or the
+  prompt summary, whichever came last (a cleared agent title falls back to the
+  first prompt), else the session's first user message as seen in
+  `UserMessageChunk` updates (so a prompt sent by a remote-control client also
+  titles it), else the widget's first prompt, cut to its first line. The host
+  journal follows the same rule. Rows carry that whole line; the Session
+  column (`cut_middle`) cuts it once, in the middle, to the column width, so
+  sibling names sharing a long prefix keep their distinct ends. Notifications
+  that name a session still use a 60-character cut (`session_title` with
+  `TITLE_CHARS`). A user-origin `DelegationChanged` that arrives before any
+  prompt (a `/delegate` sent first) titles the session with the first line of
+  its task, the same rule the host journal uses, so `nori attach` and
+  `nori host ls` name it alike. A delegation result prompt never counts as the
+  first message.
+- [`session_preview.rs`](src/session_preview.rs) derives titles, the reply,
+  pending requests (used by the background-request line), and the
+  last-activity time from session events only, never a call to the agent. The
+  reply comes from the shared `nori_protocol::ReplyPreview`, which the host
+  journal also uses: the previous turn's reply stays until the next turn's
+  first agent text; a tool call or request between texts starts a new
+  sentence; whitespace collapses to one line of at most 200 characters.
 - The header counts sessions by status. Tab toggles a "waiting on you" filter
   and back (the footer then offers "tab all sessions"); typing filters by title
   or agent; Esc clears the query first, then closes; Enter shows the selected
@@ -998,7 +1012,9 @@ it is viewed), `failed`, `closed` (closed or shut down by the user), and
 session has ended uses `SessionStatus::is_closed()`, which covers both closed
 and done. Statuses come from the harness `SessionManager`; a widget without a
 managed record reads `starting`. Lines drawn above the bottom pane
-(`ChatWidget::set_session_lines`) stay visible while a view is open.
+(`ChatWidget::set_session_lines`) stay visible while a view is open, except
+the status summary line, which is hidden while the session list is in front
+because the list header already counts sessions.
 `App::refresh_session_overview` receives the terminal width from the draw
 handler and fits each line to one row, two cells narrower than the terminal:
 
@@ -1025,7 +1041,7 @@ Both path lines are built by [`session_path.rs`](src/session_path.rs), which
 | `breadcrumb_line(path, status, key, width)` | Never drops the top-level session or the current one. Tries layouts in order (whole path with key, middle steps elided to one `…` with key, whole path without key, elided without key, elided without key or agent labels) and takes the first where the current name is whole and every other name keeps at least min(its width, 8) cells. The last layout always renders, giving the current name priority while others keep at least 4 cells. So the key gives way before the current name is cut, and the current name is cut last; a final clip guarantees the width. The local TUI passes an empty status and ` · <key> to parent` |
 | `waiting_line(path_names, request, more, jump_key, width)` | Names come first. The request text gets the cells left after the full names when it fits there or at least 20 cells remain; otherwise it is cut to 20 cells only if each name can still keep 16, and dropped if not |
 | `fit(text, cells)` | Cuts by display cells, ending in `…` |
-| `fit_name(text, cells)` | Cuts by display cells in the middle (start, `…`, end), so names sharing a long prefix stay distinct; used for every session name on these lines. Delegates to `nori_tui_components::text::truncate_middle`, the same cut the session lists' TITLE columns use |
+| `fit_name(text, cells)` | Cuts by display cells in the middle (start, `…`, end), so names sharing a long prefix stay distinct; used for every session name on these lines. Delegates to `nori_tui_components::text::truncate_middle`, the same cut the session lists' Session columns use |
 
 While an `/agent` candidate is preparing, a dim `Preparing <agent>…` line sits
 above these. With the flag this replaces the history cell that single-session

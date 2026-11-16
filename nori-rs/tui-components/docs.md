@@ -162,16 +162,15 @@ consumer application
   a matching continuation prefixes the row's description line, at every depth.
 - `PickerState::tree_column(key)` names the column that carries tree guides and
   badges. It defaults to the first visible column, and falls back to it when
-  the named column is hidden. Pointing it at a later column (the attached
-  session list uses TITLE) keeps the earlier fixed-width columns aligned at
-  every depth.
+  the named column is hidden. The session lists point it at their Session
+  column, so the fixed-width columns after it stay aligned at every depth.
 - `tree_guides` and `tree_order` are public so non-picker output can draw the
   same tree. `tree_order` takes `(id, parent)` pairs and returns each row's
   index and depth in depth-first order: children follow their parent and
   siblings keep their given order. A row whose parent is absent (or is itself)
   becomes top level, and rows caught in a parent cycle are listed at top level
-  rather than dropped. `nori host ls` uses both helpers for its plain-text
-  table.
+  rather than dropped. `nori host ls` uses both helpers for its text
+  output.
 - An item's `current`, `default`, and `read_only` flags render as a badge such
   as `(current)` after the tree column's text. When that column is too narrow,
   the renderer cuts the title (with `…`) to make room, so the tree guide and the
@@ -179,15 +178,46 @@ consumer application
 - `PickerColumn::cut_middle()` makes a column cut overlong values in the
   middle (start, `…`, end) instead of at the tail, so values sharing a long
   prefix stay distinguishable. In the tree column the title is cut once, to the
-  room left after the guide and badges. Both TUI session lists use it for
-  TITLE. The cut comes from the public
+  room left after the guide and badges. The session lists use it for the
+  Session column. `PickerColumn::second_row_cut_middle()` does the same for
+  the column's second-row value (the session lists' model names). The cut comes from the public
   [`text::truncate_middle`](src/text.rs), which works in display cells, never
   splits a grapheme, and gives the start the larger half; the TUI's
   `session_path::fit_name` delegates to it.
 - `Picker::compact_descriptions(true)` keeps each row's description on a
-  second line in compact density as well, for lists whose descriptions carry a
-  live preview. Compact rows become two lines tall only when at least one
-  visible row has a description.
+  second line in compact density as well. Compact rows become two lines tall
+  only when at least one visible row has a description (with that option) or
+  a second-row cell.
+- `PickerItem::second_row_cell(column, value)` puts a value on the row's
+  second line under a given column instead of one free-form description. The
+  line is drawn faint (muted over the selection or row surface); under the tree
+  column it starts with the tree continuation guide and is fitted to the room
+  after it. In compact density row shading alternates per item, so both lines
+  of one item share a shade.
+- `Picker::selection_keeps_tones(true)` keeps provider and detail tones (agent
+  and status colours) on the selected row over its highlight; by default the
+  selection style replaces them. `Picker::horizontal_margin(cells)` sets the
+  empty cells on each side (default 2); the session lists pass 0 so their
+  column widths follow the terminal width.
+- [`session_table`](src/session_table.rs) owns the one two-row layout shared
+  by the TUI's local session list, the `nori attach` list, and `nori host ls`
+  on a terminal. It defines the column keys, `session_columns()` for pickers,
+  `session_widths(width)` for plain-text output, and the cell formatters
+  `ago()` (`2m ago`), `context_text()` / `context_from_usage()` /
+  `compact_tokens()` (`8% / 475k`, also used by the TUI footer's context
+  segment), and `NO_REPLY` (`no reply yet`). Row 1 is status glyph and title,
+  agent, status word, and a header-less context column; row 2 is the start of
+  the agent's last reply, the model, and the time since the last activity.
+
+  | Column | Width |
+  | --- | --- |
+  | marker + status icon | 4 |
+  | Session | at least 24; takes every extra cell |
+  | Agent | 12; hidden below 58 columns |
+  | Status | 14 |
+  | Context | 11; shown from 87 columns |
+
+  Columns are separated by two cells.
 - `Picker::empty_state` supplies caller-owned title and detail text when no
   rows are visible. The shared component keeps generic empty and unmatched
   search messages by default; domain-specific consumers choose when a custom

@@ -100,9 +100,9 @@ task, depth, `DelegationStatus`, optional result, and `DelegationOrigin`
 so events from hosts that predate the field still deserialize; a user's
 `/delegate` relayed by such a host therefore reads as the agent's request.
 
-[`delegation.rs`](src/delegation.rs) holds the only text logic in the crate:
-the shared naming and result-prompt wording that the harness, the local TUI,
-and `nori attach` must agree on.
+[`delegation.rs`](src/delegation.rs) holds the shared naming and
+result-prompt wording that the harness, the local TUI, and `nori attach` must
+agree on.
 
 | Function | Produces |
 | --- | --- |
@@ -111,7 +111,7 @@ and `nori attach` must agree on.
 | `session_display_name` | `session_full_name` shortened to 40 characters with `shorten_name` |
 | `delegation_child_name` | The child's display name from its task, else `UNTITLED_SESSION_NAME` |
 | `delegation_status_word` | `waiting on you`, `working`, `done`, `failed`, `declined`, or `cancelled`, matching session status words |
-| `delegation_result_prompt` | The prompt delivered to the parent: `[Nori delegation result] from <agent> · <child name> · <status word>` (the child name is the task's whole first line, else `UNTITLED_SESSION_NAME`), then `Child session: <child id>`, then the result text. A declined delegation omits the `Child session:` line because its child never started |
+| `delegation_result_prompt` | The prompt delivered to the parent: `[Nori delegation result] from <agent> · <child name> · <status word>` (the child name is the task's whole first line, else `UNTITLED_SESSION_NAME`), then `Child session: <child id>`, then, for a user-origin delegation, `The user started this delegation with /delegate; you did not request it.` (so the parent agent does not deny starting it), then the result text. A declined delegation omits the `Child session:` line because its child never started |
 | `delegation_result_summary` | The text after `DELEGATION_RESULT_HEADER` on a prompt's first line, when the second line starts with `Child session: ` or the first line ends in ` · declined`; `None` for any other text |
 | `delegation_result_parts` | `DelegationResultParts` (agent, child name, status word) parsed from a result prompt's summary; the name is everything between the first and last ` · `, so a name containing ` · ` survives. `None` for any other text |
 
@@ -136,6 +136,19 @@ draw the collapsed result line they read the agent, name, and status back out
 with `delegation_result_parts` instead of rebuilding the header, so the header
 wording exists only in `delegation_result_prompt`. Both strings are a
 cross-crate contract.
+
+[`ReplyPreview`](src/reply_preview.rs) is the other piece of shared text
+logic: it observes one session's `SessionEvent`s and keeps the start of the
+agent's latest reply for session lists. The host journal in the
+[harness](../harness/docs.md) and the local TUI's session previews both use it,
+so `nori attach`, `nori host ls`, and the local list show the same reply.
+
+- A `Prompting` or `Loading` phase marks the reply stale; the previous turn's
+  reply stays until the new turn's first agent text replaces it.
+- A tool call or agent request after text makes the next text start a new
+  sentence (joined with a space), so separate messages are not glued together.
+- `text()` collapses whitespace to one line, keeps at most 200 characters
+  (lists cut further to their column), and is `None` before any agent text.
 
 Session termination reasons are `Shutdown`, `Closed`, `ConnectionLost`,
 `SpawnFailed`, and `TimedOut`. Raw ACP request and response envelopes retain the

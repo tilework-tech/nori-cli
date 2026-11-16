@@ -374,7 +374,9 @@ not keep a process-global host or own listener policy.
 [`ManagedRemoteHost`](src/managed_remote.rs) shares one command boundary
 between the WebSocket `/sessions` adapter and managed ACP stdio. It lists
 manager records and journal cursors (each row also carries `family_status`,
-the record's `SessionManager::family_status`, else its own status), resolves explicit conversation IDs before
+the record's `SessionManager::family_status`, else its own status, plus the
+additive display fields `reply_preview`, `idle_seconds`, `context_used`, and
+`context_size` from the replay journal and `model` from the record), resolves explicit conversation IDs before
 using the frontend's selected default, and opens one-session or all-session
 subscriptions. Its `_nori/session/event` notifications retain the complete
 manager envelope, including Nori events; legacy ACP projection stays separate.
@@ -669,6 +671,13 @@ processes.
   not a source of transport sequence numbers. Resume preserves the journal,
   sequence counter, and subscribers for the same conversation ID, so both
   single-session and all-session clients continue across process replacement.
+  Alongside the envelopes the journal keeps per-session display facts for
+  session lists: the title (the agent's `session_info_update` title or the
+  prompt summary, whichever came last; without one, or once the agent clears
+  its title, the first user message's first line), the start of
+  the latest reply through the shared `nori_protocol::ReplyPreview`, the last
+  `usage_update` (tokens used and context size), and the time of the latest
+  envelope (reported as idle seconds).
 - **Status.** Each record carries a `SessionStatus`:
 
   | Status | When |
@@ -762,7 +771,9 @@ processes.
   ACP session ID, status, and `pending_requests` (open agent request IDs in
   arrival order). The model starts as the config default and is
   replaced by the agent-advertised model-category config option from
-  `SessionStarted` or a config option update.
+  `SessionStarted` or a config option update. `model_name` keeps that
+  option's display name (the selected choice's name, else its raw value) for
+  session lists.
 
 `SessionManagerConfig` defaults to eight sessions and a five-second shutdown
 timeout.
@@ -845,8 +856,8 @@ remote /session/delegate ----------+         |
   record and transcript.
 - A result prompt never titles the parent that receives it. The
   [replay journal](src/session_manager/replay.rs) skips user-message chunks
-  that are result prompts when it derives a title, and titles a still-untitled
-  parent from the task of a user-origin `DelegationChanged` it requested, so a
+  that are result prompts when it derives the first-prompt title, and takes
+  that title for a parent from the task of a user-origin `DelegationChanged` it requested, so a
   session whose first input is `/delegate` is named by that task. The
   first-prompt summary hook in [user input](src/backend/user_input.rs) likewise
   ignores result prompts, leaving the summary for the user's own first prompt.
