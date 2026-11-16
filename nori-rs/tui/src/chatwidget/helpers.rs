@@ -293,7 +293,7 @@ impl ChatWidget {
     }
 
     pub(crate) fn shutdown_harness_session(&self) {
-        let Some(handle) = self.harness_handle.clone() else {
+        let Some(conversation_id) = self.managed_conversation_id else {
             return;
         };
         let child_grace = if self.cloud_mode {
@@ -301,8 +301,9 @@ impl ChatWidget {
         } else {
             std::time::Duration::ZERO
         };
+        let manager = self.session_manager.clone();
         tokio::spawn(async move {
-            if let Err(error) = handle.shutdown_with_grace(child_grace).await {
+            if let Err(error) = manager.close(&conversation_id, child_grace).await {
                 tracing::warn!(%error, "failed to shut down replaced harness session");
             }
         });
@@ -418,6 +419,11 @@ impl ChatWidget {
 
     pub(crate) fn token_usage(&self) -> crate::ui_types::TokenUsage {
         crate::ui_types::TokenUsage::default()
+    }
+
+    /// The session manager key of the session this widget drives.
+    pub(crate) fn managed_conversation_id(&self) -> Option<ConversationId> {
+        self.managed_conversation_id
     }
 
     pub(crate) fn conversation_id(&self) -> Option<ConversationId> {

@@ -73,6 +73,9 @@ struct HostShared {
     event_task: Option<tokio::task::JoinHandle<()>>,
 }
 
+/// Responder label on answers that a remote-control client sends.
+pub const REMOTE_CONTROL_RESPONDER: &str = "remote_control";
+
 /// Harness-side host for the remote ACP transport. Create one per owning app,
 /// attach it to each launched harness session, and hand it to
 /// [`RemoteAcpServer::bind`].
@@ -118,6 +121,7 @@ impl HarnessRemoteHost {
         nori_home: PathBuf,
         started: Option<SessionStarted>,
     ) -> anyhow::Result<()> {
+        let handle = handle.with_responder(REMOTE_CONTROL_RESPONDER);
         let events = handle.subscribe_events().await?;
         let (conversation_id, cwd) = started.map_or((None, None), |started| {
             (
@@ -430,7 +434,9 @@ async fn run_event_loop(state: Arc<Mutex<HostShared>>, mut events: mpsc::Receive
                 | NoriEvent::UserShell(_)
                 | NoriEvent::HookOutput(_)
                 | NoriEvent::PromptSummaryUpdated(_)
-                | NoriEvent::Notice(_),
+                | NoriEvent::Notice(_)
+                // Emitted by the session manager, never by a harness session.
+                | NoriEvent::RequestResolved(_),
             ) => {}
         }
     }

@@ -161,6 +161,8 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) prepared_agent: Option<nori_harness::runtime::PreparedAgent>,
     /// Emits one authenticated activity after this session's first prompt reaches ACP.
     pub(crate) analytics: Option<nori_installed::AnalyticsReporter>,
+    /// The app's session registry; this widget's session starts through it.
+    pub(crate) session_manager: nori_harness::session_manager::SessionManager,
 }
 
 /// Controls the pinned plan drawer visibility and display mode.
@@ -226,6 +228,10 @@ pub(crate) struct ChatWidget {
     session_configured_received: bool,
     // Typed handle for the active harness session.
     harness_handle: Option<HarnessHandle>,
+    session_manager: nori_harness::session_manager::SessionManager,
+    /// This widget's session in the session manager. Follows branch-at-head
+    /// forks, which move the agent process to the child conversation.
+    managed_conversation_id: Option<nori_harness::ConversationId>,
     // True while /close awaits the agent's session/close response. Blocks
     // session-switching commands so the deferred NewSession can't clobber a
     // conversation the user switched to mid-close.

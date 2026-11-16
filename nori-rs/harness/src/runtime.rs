@@ -188,8 +188,18 @@ enum HarnessCommand {
 pub struct HarnessHandle {
     command_tx: mpsc::UnboundedSender<HarnessCommand>,
     first_prompt_started: Option<Arc<FirstPromptStarted>>,
+    agent_response_observer: Option<AgentResponseObserver>,
+    responder: Arc<str>,
     context_timeline: Arc<tokio::sync::RwLock<crate::context_timeline::ContextTimelineState>>,
 }
+
+/// Called with the request ID and the answering handle's responder label just
+/// before any clone of a handle sends an answer to an agent request, so the
+/// observer sees the answer before anything the agent does in reaction to it.
+pub(crate) type AgentResponseObserver = Arc<dyn Fn(&acp::v1::RequestId, &str) + Send + Sync>;
+
+/// Responder label of a handle that was never given one.
+pub const DEFAULT_RESPONDER: &str = "client";
 
 struct FirstPromptStarted {
     fired: std::sync::atomic::AtomicBool,
@@ -243,6 +253,18 @@ impl HarnessHandle {
             fired: std::sync::atomic::AtomicBool::new(false),
             callback: Box::new(callback),
         }));
+        self
+    }
+
+    /// Label this handle's answers to agent requests with `responder`, so
+    /// clients following the session can tell who answered.
+    pub fn with_responder(mut self, responder: impl Into<String>) -> Self {
+        self.responder = Arc::from(responder.into());
+        self
+    }
+
+    pub(crate) fn with_agent_response_observer(mut self, observer: AgentResponseObserver) -> Self {
+        self.agent_response_observer = Some(observer);
         self
     }
 
@@ -329,6 +351,9 @@ impl HarnessHandle {
         request_id: acp::v1::RequestId,
         response: Result<acp::v1::ClientResponse, acp::v1::Error>,
     ) -> anyhow::Result<()> {
+        if let Some(observer) = &self.agent_response_observer {
+            observer(&request_id, &self.responder);
+        }
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(HarnessCommand::RespondToAgent {
@@ -643,7 +668,7 @@ pub fn refresh_prepared_agent(
     agent.replace_activation_config(build_backend_config(spec))
 }
 
-fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
+pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
     let AgentPrepareSpec {
         config,
         cli_version,
@@ -710,6 +735,7 @@ fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
         session_context,
         mcp_servers: config.mcp_servers.clone(),
         mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode::default(),
+        conversation_id: None,
     }
 }
 
@@ -730,15 +756,21 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
 /// session choice and therefore do not need to render a pre-session picker.
 /// Preparation still happens separately and its connection is never respawned.
 pub fn prepare_and_launch_session(spec: AgentPrepareSpec, start: SessionStart) -> LaunchedSession {
-    launch_session_from(SessionAgentSource::Prepare(spec), start)
+    launch_session_from(
+        SessionAgentSource::Prepare(Box::new(build_backend_config(spec))),
+        start,
+    )
 }
 
-enum SessionAgentSource {
+pub(crate) enum SessionAgentSource {
     Prepared(Box<PreparedAgent>),
-    Prepare(AgentPrepareSpec),
+    Prepare(Box<AcpBackendConfig>),
 }
 
-fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> LaunchedSession {
+pub(crate) fn launch_session_from(
+    source: SessionAgentSource,
+    start: SessionStart,
+) -> LaunchedSession {
     let (agent_cmd_tx, mut agent_cmd_rx) = unbounded_channel::<HarnessCommand>();
     let (primary_event_tx, event_rx) = unbounded_channel::<SessionEvent>();
     let event_tx = SessionEventFanout::new(primary_event_tx);
@@ -759,6 +791,8 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
     let handle = HarnessHandle {
         command_tx: agent_cmd_tx,
         first_prompt_started: None,
+        agent_response_observer: None,
+        responder: Arc::from(DEFAULT_RESPONDER),
         context_timeline: Arc::clone(&context_timeline),
     };
 
@@ -770,8 +804,8 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
         let connect = async move {
             let agent = match source {
                 SessionAgentSource::Prepared(agent) => *agent,
-                SessionAgentSource::Prepare(spec) => {
-                    match PreparedAgent::prepare(build_backend_config(spec)).await {
+                SessionAgentSource::Prepare(config) => {
+                    match PreparedAgent::prepare(*config).await {
                         Ok(agent) => agent,
                         Err(failure) => {
                             for event in failure.setup_events {
@@ -1154,6 +1188,8 @@ mod tests {
         let handle = HarnessHandle {
             command_tx,
             first_prompt_started: None,
+            agent_response_observer: None,
+            responder: Arc::from(DEFAULT_RESPONDER),
             context_timeline: Arc::default(),
         };
 
@@ -1182,6 +1218,8 @@ mod tests {
         let handle = HarnessHandle {
             command_tx,
             first_prompt_started: None,
+            agent_response_observer: None,
+            responder: Arc::from(DEFAULT_RESPONDER),
             context_timeline: Arc::default(),
         }
         .with_first_prompt_started_callback(move || {

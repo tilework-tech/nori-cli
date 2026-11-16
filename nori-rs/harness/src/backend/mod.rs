@@ -219,6 +219,9 @@ pub struct AcpBackendConfig {
     pub mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credentials store mode for MCP auth status computation
     pub mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
+    /// Conversation ID assigned before launch, used as the transcript ID.
+    /// `None` lets the transcript recorder choose one.
+    pub conversation_id: Option<ConversationId>,
 }
 
 /// First-prompt product context selected from the agent's actual MCP support.

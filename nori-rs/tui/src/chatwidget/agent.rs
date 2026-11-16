@@ -1,9 +1,10 @@
 //! Thin adapter between the harness session runtime and the TUI event loop.
 //!
 //! All session orchestration (backend config assembly, connect/shutdown/
-//! timeout race and session control) lives in
-//! `nori_harness::runtime`; this module only builds a launch spec from the codex
-//! resolved Nori config and maps session events onto [`AppEvent`]s.
+//! timeout race and session control) lives in `nori_harness`. Every session,
+//! including the hidden `/agent` switch candidate, starts through the app's
+//! [`SessionManager`]; this module only builds a launch spec from the resolved
+//! Nori config and maps the session's envelopes onto [`AppEvent`]s.
 
 use nori_config::NoriConfig as Config;
 use nori_harness::SessionContext;
@@ -12,12 +13,19 @@ use nori_harness::list_available_agents;
 use nori_harness::runtime::AgentPrepareSpec;
 pub(crate) use nori_harness::runtime::HarnessHandle;
 use nori_harness::runtime::PreparedAgent;
-use nori_harness::runtime::SessionLaunchSpec;
 use nori_harness::runtime::SessionResume;
 use nori_harness::runtime::SessionStart;
-use nori_harness::runtime::launch_session;
-use nori_harness::runtime::prepare_and_launch_session;
+use nori_harness::session_manager::SessionAgent;
+use nori_harness::session_manager::SessionManager;
+use nori_harness::session_manager::SessionSource;
+use nori_harness::session_manager::StartSession;
 use nori_installed::AnalyticsReporter;
+use nori_protocol::NoriEvent;
+use nori_protocol::RequestFailure;
+use nori_protocol::RequestFailureKind;
+use nori_protocol::SessionEndReason;
+use nori_protocol::SessionEnded;
+use nori_protocol::SessionEvent;
 use std::sync::Arc;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
@@ -34,6 +42,8 @@ pub(crate) fn next_session_generation() -> crate::app_event::SessionGeneration {
 /// Result of spawning a harness session.
 pub(crate) struct SpawnAgentResult {
     pub handle: Option<HarnessHandle>,
+    /// The session's key in the session manager.
+    pub conversation_id: Option<nori_harness::ConversationId>,
 }
 
 /// Spawn the agent bootstrapper and return its typed handle.
@@ -41,6 +51,7 @@ pub(crate) struct SpawnAgentResult {
 /// Looks up the agent in the ACP registry. If found, spawns an ACP agent.
 /// Otherwise, emits an error and opens the agent picker.
 pub(crate) fn spawn_agent(
+    manager: &SessionManager,
     config: Config,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
@@ -49,6 +60,7 @@ pub(crate) fn spawn_agent(
 ) -> SpawnAgentResult {
     match nori_harness::get_agent_config(&config.active_agent) {
         Ok(_) => prepare_and_launch_acp_agent(
+            manager,
             config,
             app_event_tx,
             generation,
@@ -68,7 +80,10 @@ pub(crate) fn spawn_agent(
                 known.join(", ")
             );
             spawn_error_agent(agent_name, error_msg, app_event_tx);
-            SpawnAgentResult { handle: None }
+            SpawnAgentResult {
+                handle: None,
+                conversation_id: None,
+            }
         }
     }
 }
@@ -78,6 +93,7 @@ pub(crate) fn spawn_agent(
 /// If the agent supports `session/load`, server-side resume is used.
 /// Otherwise, falls back to client-side replay using the provided transcript.
 pub(crate) fn spawn_acp_agent_resume(
+    manager: &SessionManager,
     config: Config,
     acp_session_id: Option<String>,
     transcript: Option<nori_harness::transcript::Transcript>,
@@ -86,6 +102,7 @@ pub(crate) fn spawn_acp_agent_resume(
     analytics: Option<AnalyticsReporter>,
 ) -> SpawnAgentResult {
     prepare_and_launch_acp_agent(
+        manager,
         config,
         app_event_tx,
         generation,
@@ -115,6 +132,7 @@ fn spawn_error_agent(agent_name: String, error_msg: String, app_event_tx: AppEve
 /// Launch a session via the harness runtime and forward its events into the
 /// TUI event loop.
 fn prepare_and_launch_acp_agent(
+    manager: &SessionManager,
     config: Config,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
@@ -126,8 +144,14 @@ fn prepare_and_launch_acp_agent(
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     let prepare_spec = agent_prepare_spec(config, fork_context);
-    let session = prepare_and_launch_session(prepare_spec, start);
-    forward_launched_session(session, app_event_tx, generation, analytics)
+    start_managed_session(
+        manager,
+        SessionAgent::Prepare(prepare_spec),
+        start,
+        app_event_tx,
+        generation,
+        analytics,
+    )
 }
 
 pub(crate) fn agent_prepare_spec(
@@ -147,32 +171,91 @@ pub(crate) fn agent_prepare_spec(
 
 /// Activate an already prepared connection and forward its session events.
 pub(crate) fn launch_prepared_agent(
+    manager: &SessionManager,
     agent: PreparedAgent,
     start: SessionStart,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
     analytics: Option<AnalyticsReporter>,
 ) -> SpawnAgentResult {
-    let session = launch_session(SessionLaunchSpec { agent, start });
-    forward_launched_session(session, app_event_tx, generation, analytics)
+    start_managed_session(
+        manager,
+        SessionAgent::Prepared(agent),
+        start,
+        app_event_tx,
+        generation,
+        analytics,
+    )
 }
 
-fn forward_launched_session(
-    mut session: nori_harness::runtime::LaunchedSession,
+/// Start a session in the session manager and forward its events, tagged
+/// with `generation`, into the TUI event loop. An agent prepared for a fork
+/// starts a fork of that parent; any other agent starts a user session.
+fn start_managed_session(
+    manager: &SessionManager,
+    agent: SessionAgent,
+    start: SessionStart,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
     analytics: Option<AnalyticsReporter>,
 ) -> SpawnAgentResult {
+    let parent = match &agent {
+        SessionAgent::Prepared(agent) => agent.fork_parent(),
+        SessionAgent::Prepare(_) => None,
+    }
+    .filter(|parent| manager.get(parent).is_some());
+    let source = if parent.is_some() {
+        SessionSource::Fork
+    } else {
+        SessionSource::User
+    };
+    let mut session = match manager.start(StartSession {
+        agent,
+        start,
+        parent,
+        source,
+    }) {
+        Ok(session) => session,
+        Err(error) => {
+            let message = format!("Failed to start ACP session: {error}");
+            for event in [
+                NoriEvent::RequestFailed(RequestFailure {
+                    request_id: None,
+                    message: message.clone(),
+                    kind: RequestFailureKind::Fatal,
+                }),
+                NoriEvent::SessionEnded(SessionEnded {
+                    reason: SessionEndReason::SpawnFailed,
+                    message: Some(message),
+                }),
+            ] {
+                app_event_tx.send(AppEvent::SessionEvent {
+                    generation,
+                    event: SessionEvent::Nori(event),
+                });
+            }
+            return SpawnAgentResult {
+                handle: None,
+                conversation_id: None,
+            };
+        }
+    };
     if let Some(reporter) = analytics.as_ref() {
         session.handle = reporter.attach(session.handle);
     }
     let handle = Some(session.handle.clone());
 
     tokio::spawn(async move {
-        while let Some(event) = session.events.recv().await {
-            app_event_tx.send(AppEvent::SessionEvent { generation, event });
+        while let Some(envelope) = session.events.recv().await {
+            app_event_tx.send(AppEvent::SessionEvent {
+                generation,
+                event: envelope.event,
+            });
         }
     });
 
-    SpawnAgentResult { handle }
+    SpawnAgentResult {
+        handle,
+        conversation_id: Some(session.conversation_id),
+    }
 }

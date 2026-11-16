@@ -35,7 +35,9 @@ used in production.
 - `harness/` owns session orchestration, private reduction, transcripts, goals,
   undo, hooks, worktrees, history, and the embeddable runtime API. Its public
   event stream is an ordered fan-out: one primary frontend receiver plus
-  bounded subscribers such as the remote ACP host.
+  bounded subscribers such as the remote ACP host. Its `session_manager` module
+  keeps a registry of live sessions (one agent process each) keyed by
+  conversation ID; the TUI starts all of its sessions through it.
 - `acp-host/` owns the client-side ACP SDK, subprocess lifecycle, JSON-RPC
   connection, agent registry, delegated requests, and host-handled filesystem
   operations. It also owns the optional remote ACP transport: a WebSocket
@@ -44,8 +46,9 @@ used in production.
   `nori-harness -> nori-acp-host` dependency direction. The TUI owns startup
   `--remote` and runtime `/remote-control` listener policy around that server
   (see `@/docs/remote-control.md`).
-- `nori-protocol/` owns no behavior. It exports `nori_protocol::acp` and
-  `SessionEvent::{Acp, Nori}`.
+- `nori-protocol/` owns no behavior. It exports `nori_protocol::acp`,
+  `SessionEvent::{Acp, Nori}`, and the session manager's `SessionEnvelope` and
+  `SessionStatus` types.
 - `nori-config/` owns CLI configuration and the approval, sandbox, MCP, trust,
   and shell-policy types consumed at runtime.
 - `installed/` keeps local installation/launch state and owns the authenticated

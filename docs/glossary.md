@@ -18,6 +18,7 @@
 | **ACP host**        | Nori's low-level client-side boundary that owns the ACP SDK connection, agent process, wire lifecycle, and delegated-request routing. | Client, harness, agent           |
 | **Session harness** | Nori's headless runtime that composes the **ACP host** with product lifecycle and one ordered event stream.                           | ACP host, client, session broker |
 | **Session broker**  | The Nori service that shares a **session**, acting as agent downstream and client toward the upstream agent.                          | Provider, turn owner, transport  |
+| **Session manager** | Nori's registry of live **sessions** keyed by **conversation ID**, running one agent process per session.                             | Broker, session broker, harness  |
 
 ### Protocol boundaries
 
@@ -32,6 +33,7 @@
 - A **client** and an **agent** exchange ACP messages over a **transport**.
 - On each **client connection**, one client communicates with one agent about a **session**.
 - A **session harness** composes an **ACP host**, which owns the active connection and transport.
+- A **session manager** runs one **session harness** and one agent process per **session**.
 - A **session broker** is the agent on downstream connections and the client on its upstream connection.
 - An **agent** may call a **provider**, but provider-internal work crosses no ACP boundary unless the agent exposes it through ACP.
 
@@ -49,7 +51,8 @@
 
 - "Client" names the ACP role, not the **user**, UI, **ACP host**, or **client connection**.
 - "Agent" names the ACP server, not its model or **provider**.
-- **ACP host** and **session harness** are internal parts of Nori's client implementation, not additional ACP actors.
+- **ACP host**, **session harness**, and **session manager** are internal parts of Nori's client implementation, not additional ACP actors.
+- The **session manager** runs inside a client process; the **session broker** is a separate service.
 - **Transport**, **client connection**, and **session** mean channel, relationship, and conversation respectively.
 - A **session broker** has no single ACP role; its role depends on the connection boundary.
 
@@ -126,6 +129,15 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 | **Conversation ID** | Nori's local UUID for a transcript-backed conversation, independent of its ACP session ID. | Session ID, ACP session ID |
 | **Continuity**      | Nori's preservation of prior work across session and context changes.                      | Persistence, replay        |
 
+### Managed sessions
+
+| Term                 | Definition                                                                                        | Aliases to avoid   |
+| -------------------- | ------------------------------------------------------------------------------------------------- | ------------------ |
+| **Session envelope** | A session event tagged with its **conversation ID**, agent, and per-conversation sequence number. | Frame, message     |
+| **Session status**   | A managed session's coarse state: starting, working, waiting on you, ready, failed, or closed.         | Phase, turn status |
+| **Session family**   | A top-level **session** plus all of its descendants, whose **session statuses** roll up into one. | Thread, tree       |
+| **Request resolved** | A **session envelope** announcing that a client answered a pending agent request, and which one.  | Approval event     |
+
 ### Session lifecycle
 
 | Term            | Definition                                                                                                                 | Aliases to avoid          |
@@ -157,6 +169,12 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 - A **Transcript** records selected session traffic but is not the agent-maintained **conversation history**.
 - **Close** ends an active session; later resumability is agent-specific, while quitting may only detach.
 - **Undo** changes files, not conversation state; **Rewind to message** changes conversation direction, not files.
+- A **session envelope's** sequence starts at 1 for each **conversation ID**; **branch at head** starts a new sequence for the child.
+- **Session status** is derived from the event stream; it is not the harness phase or a **Nori agent-turn status**.
+- **Branch at head** closes the parent and adds the child to the parent's **session family**.
+- **Rewind to message** starts a new agent process but still registers the child in the parent's **session family**.
+- A **request resolved** envelope removes that request from the ones keeping a **session status** at "waiting on you"; requests cleared by idle, cancel, or session end get none.
+- When the **session manager** restarts a failed session on a new **conversation ID**, closing the old ID reaches the replacement.
 
 ### Example dialogue
 
@@ -175,6 +193,7 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 - "History" may mean **conversation history**, a **Transcript**, the session list, or composer prompt history; qualify it.
 - `/fork` exposes both **Branch at head** and **Rewind to message**, but only the former uses ACP **Fork**.
 - **Compaction** may replace the ACP session without creating a new Nori conversation, while **Undo** never rewinds agent context.
+- "Session status" names the managed **session status**, not **Nori agent-turn status** or **tool call status**.
 
 ## Tools, Execution, and Permissions
 

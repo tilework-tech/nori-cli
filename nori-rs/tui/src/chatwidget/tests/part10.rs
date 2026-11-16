@@ -1428,12 +1428,33 @@ fn stale_session_events_do_not_reach_the_current_widget() {
 }
 
 #[tokio::test]
-async fn session_shutdown_uses_live_handle_without_a_conversation_id() {
-    let mut session = start_mock_session().await;
-
+async fn session_shutdown_reaches_the_live_session_before_it_reports_a_conversation_id() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = nori_config::NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = chat
+        .session_manager
+        .start(nori_harness::session_manager::StartSession {
+            agent: nori_harness::session_manager::SessionAgent::Prepare(
+                nori_harness::runtime::AgentPrepareSpec {
+                    config: std::sync::Arc::new(config),
+                    cli_version: "tui-test".to_string(),
+                    session_context: None,
+                    initial_context: None,
+                },
+            ),
+            start: nori_harness::runtime::SessionStart::New,
+            parent: None,
+            source: nori_harness::session_manager::SessionSource::User,
+        })
+        .expect("start mock session");
     assert_eq!(chat.conversation_id(), None);
-    chat.harness_handle = Some(session.handle.clone());
+    chat.managed_conversation_id = Some(session.conversation_id);
 
     chat.shutdown_harness_session();
 
@@ -1441,7 +1462,7 @@ async fn session_shutdown_uses_live_handle_without_a_conversation_id() {
         loop {
             if let Some(nori_protocol::SessionEvent::Nori(
                 nori_protocol::NoriEvent::SessionEnded(ended),
-            )) = session.events.recv().await
+            )) = session.events.recv().await.map(|envelope| envelope.event)
             {
                 break ended;
             }
@@ -1450,6 +1471,60 @@ async fn session_shutdown_uses_live_handle_without_a_conversation_id() {
     .await
     .expect("shutdown should reach the live harness session");
     assert_eq!(ended.reason, nori_protocol::SessionEndReason::Shutdown);
+}
+
+#[tokio::test]
+async fn a_session_on_an_agent_prepared_for_a_fork_is_registered_as_a_fork_of_its_parent() {
+    let (chat, _rx, _op_rx) = make_chatwidget_manual();
+    let temp = tempfile::tempdir().expect("create session directory");
+    let spec = || nori_harness::runtime::AgentPrepareSpec {
+        config: std::sync::Arc::new(nori_config::NoriConfig {
+            active_agent: "mock-model".to_string(),
+            cwd: temp.path().to_path_buf(),
+            nori_home: temp.path().to_path_buf(),
+            ..Default::default()
+        }),
+        cli_version: "tui-test".to_string(),
+        session_context: None,
+        initial_context: Some("earlier conversation".to_string()),
+    };
+    let parent = chat
+        .session_manager
+        .start(nori_harness::session_manager::StartSession {
+            agent: nori_harness::session_manager::SessionAgent::Prepare(spec()),
+            start: nori_harness::runtime::SessionStart::New,
+            parent: None,
+            source: nori_harness::session_manager::SessionSource::User,
+        })
+        .expect("start parent session");
+    let agent = nori_harness::runtime::prepare_agent(spec())
+        .await
+        .expect("prepare fork agent")
+        .with_fork_parent(parent.conversation_id);
+
+    let fork = crate::chatwidget::agent::launch_prepared_agent(
+        &chat.session_manager,
+        agent,
+        nori_harness::runtime::SessionStart::New,
+        chat.app_event_tx.clone(),
+        crate::chatwidget::agent::next_session_generation(),
+        None,
+    );
+
+    let record = fork
+        .conversation_id
+        .and_then(|id| chat.session_manager.get(&id))
+        .map(|record| (record.parent, record.source));
+    assert_eq!(
+        record,
+        Some((
+            Some(parent.conversation_id),
+            nori_harness::session_manager::SessionSource::Fork,
+        ))
+    );
+    chat.session_manager
+        .shutdown(std::time::Duration::ZERO)
+        .await;
 }
 
 /// A transient (retryable) turn failure must leave the loop armed: the next
