@@ -202,15 +202,6 @@ mod tests {
         ))
     }
 
-    fn tool_done(id: &str) -> SessionEvent {
-        update(acp::SessionUpdate::ToolCallUpdate(
-            acp::ToolCallUpdate::new(
-                acp::ToolCallId::new(id),
-                acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::Completed),
-            ),
-        ))
-    }
-
     fn permission(id: i64, command: &str) -> SessionEvent {
         SessionEvent::Acp(AcpEvent::Request {
             request_id: acp::RequestId::Number(id),
@@ -354,12 +345,6 @@ mod tests {
         );
         previews.observe(1, &user_text("now fix it"));
         assert_eq!(previews.title(1), Some("inspect the parser".to_string()));
-    }
-
-    fn prompting(id: i64) -> SessionEvent {
-        SessionEvent::Nori(NoriEvent::SessionPhaseChanged(SessionPhase::Prompting {
-            request_id: acp::RequestId::Number(id),
-        }))
     }
 
     fn agent_title(title: Option<&str>) -> SessionEvent {
