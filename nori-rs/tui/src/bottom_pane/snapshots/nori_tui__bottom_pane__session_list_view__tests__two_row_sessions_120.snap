@@ -1,0 +1,18 @@
+---
+source: tui/src/bottom_pane/session_list_view.rs
+expression: "render(&list, width)"
+---
+"Sessions 3 · 2 working · 1 starting  tab: waiting only · / search                                                       "
+"                                                                                                                        "
+"All  waiting on you                                                                                                     "
+"                                                                                                                        "
+"  Session                                                                      Agent         Status                     "
+"› ⠋ Greeting in three words (current)                                          claude-code   working         8% / 475k  "
+"    Hi there, friend! Anything else you would like me to help with today?      opus 5.5      2m ago                     "
+"  └─ ⠋ inspect the parser recovery path                                        codex         working         31% / 272k "
+"       Reading src/parser.rs                                                   gpt-5.5       4s ago                     "
+"  … say hi in 3 words                                                          gemini        starting                   "
+"    no reply yet                                                                             0s ago                     "
+"                                                                                                                        "
+"↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close                                                    "
+"                                                                                                                        "

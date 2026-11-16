@@ -37,6 +37,7 @@ split across PTY reads still applies. On top of it, `TuiSession` offers:
 | `raw_output()` | Every byte the TUI wrote, including sequences the emulator drops, such as notifications |
 | `resize(rows, cols)` | Resizes the PTY and emulator, as a user dragging the window would |
 | `settle(duration)` | Keeps reading output for a fixed time so the emulator catches up |
+| `wait_out_answer_grace()` | Settles for `ANSWER_GRACE`, longer than the TUI's request answer grace period, so the next option key answers a request that just appeared |
 
 `Key` adds `Alt(char)` (ESC prefix), `AltDown`, `BackTab`, and the terminal
 focus reports `FocusIn` and `FocusOut`, used by session hotkeys and
@@ -127,7 +128,8 @@ the screen: a session move must reprint only the target's history and keep
 unsent input, `/new` keeps the previous session running, a burst of moves
 lands on the last target, configured bindings are honored, and nothing
 changes without the flag. [`session_list.rs`](tests/session_list.rs) covers
-the list's status words, previews, filter, and jumps, a background request
+the list's status words, agent-sent titles, reply and context rows, the
+single status summary while the list is open, filter, and jumps, a background request
 answered through `next_waiting_session`, a dead agent failing only its own
 session and resuming in place, forks listed under their parent, and
 notifications gated on terminal focus. [`session_transcripts.rs`](tests/session_transcripts.rs)
@@ -163,8 +165,10 @@ typed `HarnessHandle` methods available to headless embedders.
   cannot show a turn printed twice once the duplicate has scrolled off.
 - Snapshot normalization removes dynamic session IDs, timestamps, status
   text, and disposable temp roots: `/tmp` on Linux plus `/private/tmp`,
-  `/var/folders`, and canonicalized `/private/var/folders` on macOS. Meaningful
-  terminal ordering and content remain intact.
+  `/var/folders`, and canonicalized `/private/var/folders` on macOS. The
+  session lists' last-activity times (`12s ago`, `3m ago`) all become
+  `N ago`, so snapshots do not depend on how long a test took. Meaningful terminal ordering and
+  content remain intact.
 - Transcript pickers treat a v3 transcript as non-empty only when it has at
   least one user turn; lifecycle records alone do not make it resumable.
 - Composer input goes through `TuiSession::type_input` and

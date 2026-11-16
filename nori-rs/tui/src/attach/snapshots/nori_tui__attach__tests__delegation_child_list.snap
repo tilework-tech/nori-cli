@@ -6,16 +6,16 @@ expression: rendered
  mock-model · Parent task · ready
  ● Parent task › Child task is waiting on you · alt+down to jump
 
-  Sessions 2
+Sessions 2 · 1 waiting on you · 1 ready
 
-     ID        AGENT           STATUS            AGE    TITLE
-  ▏  parent-s  mock-model      ready             0s     Parent task (current)          ▕
-     child-se  mock-model-alt  waiting on you    0s     └─ Child task
+  Session                                        Agent         Status
+› ○ Parent task (current)                        mock-model    ready
+
+  └─ ● Child task                                mock-model-…  waiting on you
 
 
 
-
-  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+↑↓/j/k move  enter open  ctrl+r resume  / search  esc back
 
 
 › Send a prompt

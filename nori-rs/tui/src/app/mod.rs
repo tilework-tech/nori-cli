@@ -309,6 +309,7 @@ impl App {
                 prepared_agent: None,
                 analytics: analytics.clone(),
                 session_manager: session_manager.clone(),
+                clock: crate::answer_guard::Clock::system(),
             };
             match resume_selection {
                 ResumeSelection::Resume(target) => {
@@ -589,6 +590,7 @@ impl App {
             prepared_agent: None,
             analytics: self.analytics.clone(),
             session_manager: self.session_manager.clone(),
+            clock: crate::answer_guard::Clock::system(),
         }
     }
 

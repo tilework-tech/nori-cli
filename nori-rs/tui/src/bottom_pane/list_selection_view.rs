@@ -83,6 +83,9 @@ pub(crate) struct SelectionViewParams {
     pub menu_density: MenuDensity,
     pub menu_row_pattern: MenuRowPattern,
     pub menu_placement: MenuPlacement,
+    /// Set for a request prompt: option keys wait out a grace period after
+    /// the prompt appears.
+    pub answer_guard: Option<crate::answer_guard::AnswerGuard>,
 }
 
 impl SelectionViewParams {
@@ -127,6 +130,7 @@ impl Default for SelectionViewParams {
             menu_density: MenuDensity::Normal,
             menu_row_pattern: MenuRowPattern::Plain,
             menu_placement: MenuPlacement::Centered,
+            answer_guard: None,
         }
     }
 }
@@ -148,6 +152,7 @@ pub(crate) struct ListSelectionView {
     on_dismiss: Option<SelectionAction>,
     on_shift_tab: Option<SelectionAction>,
     search_active: bool,
+    answer_guard: Option<crate::answer_guard::AnswerGuard>,
 }
 
 impl ListSelectionView {
@@ -187,6 +192,10 @@ impl ListSelectionView {
             on_dismiss: params.on_dismiss,
             on_shift_tab: params.on_shift_tab,
             search_active: false,
+            answer_guard: params.answer_guard.map(|mut guard| {
+                guard.shown();
+                guard
+            }),
         };
         s.apply_filter();
         s
@@ -475,7 +484,20 @@ fn search_value_id(search_value: &str) -> &str {
 }
 
 impl BottomPaneView for ListSelectionView {
+    fn request_shown(&mut self) {
+        if let Some(guard) = self.answer_guard.as_mut() {
+            guard.shown();
+        }
+    }
+
     fn handle_key_event(&mut self, key_event: KeyEvent) {
+        if self
+            .answer_guard
+            .as_ref()
+            .is_some_and(|guard| !guard.allows(&key_event))
+        {
+            return;
+        }
         match key_event {
             KeyEvent {
                 code: KeyCode::Up, ..

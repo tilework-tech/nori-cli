@@ -165,6 +165,8 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) analytics: Option<nori_installed::AnalyticsReporter>,
     /// The app's session registry; this widget's session starts through it.
     pub(crate) session_manager: nori_harness::session_manager::SessionManager,
+    /// The time source for request answer grace periods.
+    pub(crate) clock: crate::answer_guard::Clock,
 }
 
 /// Controls the pinned plan drawer visibility and display mode.

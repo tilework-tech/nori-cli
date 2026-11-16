@@ -12,6 +12,9 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use std::time::Instant;
 
+/// Longer than the TUI's request answer grace period (400 ms).
+pub const ANSWER_GRACE: Duration = Duration::from_millis(500);
+
 /// Debug styles for colored output. Uses owo-colors Style which respects
 /// color settings - when colors are disabled, styles become no-ops.
 struct DebugStyles {
@@ -563,6 +566,12 @@ trust_level = "trusted"
         self.emulator.history_contents()
     }
 
+    /// Waits out the grace period in which a newly shown request ignores
+    /// option keys, so the next key answers it.
+    pub fn wait_out_answer_grace(&mut self) {
+        self.settle(ANSWER_GRACE);
+    }
+
     /// Keep reading output for `duration`, so the emulator catches up with
     /// everything the TUI drew in that time.
     pub fn settle(&mut self, duration: Duration) {
@@ -1056,9 +1065,35 @@ fn strip_git_stats_segment(line: &str) -> String {
     line.to_string()
 }
 
+/// `text` with every `12s ago`-style time replaced by `N ago`, so a session
+/// list snapshot does not depend on how long the test took.
+fn mask_activity_times(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut masked = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < chars.len() {
+        let starts_word = index == 0 || !chars[index - 1].is_alphanumeric();
+        let digits = chars[index..]
+            .iter()
+            .take_while(|character| character.is_ascii_digit())
+            .count();
+        let unit = chars.get(index + digits).copied();
+        let ago: String = chars.iter().skip(index + digits + 1).take(4).collect();
+        if starts_word && digits > 0 && matches!(unit, Some('s' | 'm' | 'h' | 'd')) && ago == " ago"
+        {
+            masked.push_str("N ago");
+            index += digits + 5;
+        } else {
+            masked.push(chars[index]);
+            index += 1;
+        }
+    }
+    masked
+}
+
 /// Normalize dynamic content in screen output for snapshot testing
 pub fn normalize_for_snapshot(contents: String) -> String {
-    let mut normalized = contents;
+    let mut normalized = mask_activity_times(&contents);
 
     // Replace temp directories: /tmp/claude-*/.tmpXXXXXX, /tmp/claude/.tmpXXXXXX,
     // or /tmp/.tmpXXXXXX -> [TMP_DIR]. macOS can canonicalize /tmp to
@@ -1315,6 +1350,14 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn activity_times_mask_to_one_token() {
+        assert_eq!(
+            super::mask_activity_times("0s ago | 12s ago | 3m ago | 2d ago | a12s ago | 5 ago"),
+            "N ago | N ago | N ago | N ago | a12s ago | 5 ago"
+        );
+    }
+
     use super::*;
     use pretty_assertions::assert_eq;
 

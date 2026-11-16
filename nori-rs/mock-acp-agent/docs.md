@@ -85,6 +85,15 @@ apart. `MOCK_AGENT_PERMISSION_DELAY_MS` waits before the request is sent, so a
 test can move to another session before the request arrives in the
 background.
 
+Two line markers make the agent report session metadata before its normal
+reply, one update per matching prompt line, so session-list tests can drive
+titles and context use from a prompt:
+
+| Prompt line | Sends |
+| --- | --- |
+| `mock:title <title>` | `session_info_update` with that title |
+| `mock:usage <used> <size>` | `usage_update` with those token counts (ignored unless both parse) |
+
 [`delegation.rs`](src/delegation.rs) exercises the real authenticated HTTP
 MCP boundary. A prompt beginning `mock:delegate <agent> <task>` calls `delegate`
 on the `nori-client` server advertised to that ACP session, using its advertised

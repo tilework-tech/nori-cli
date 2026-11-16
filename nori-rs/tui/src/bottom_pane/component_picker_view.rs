@@ -214,40 +214,7 @@ impl BottomPaneView for ComponentPickerView {
             } if modifiers.contains(KeyModifiers::CONTROL) => PickerAction::Cancel,
             KeyEvent {
                 code: KeyCode::Esc, ..
-            } if search_active => PickerAction::DeactivateSearch,
-            KeyEvent {
-                code: KeyCode::Esc, ..
-            } => PickerAction::Cancel,
-            KeyEvent {
-                code: KeyCode::Up, ..
-            } => PickerAction::MoveUp,
-            KeyEvent {
-                code: KeyCode::Down,
-                ..
-            } => PickerAction::MoveDown,
-            KeyEvent {
-                code: KeyCode::PageUp,
-                ..
-            } => PickerAction::PageUp,
-            KeyEvent {
-                code: KeyCode::PageDown,
-                ..
-            } => PickerAction::PageDown,
-            KeyEvent {
-                code: KeyCode::Home,
-                ..
-            } => PickerAction::First,
-            KeyEvent {
-                code: KeyCode::End, ..
-            } => PickerAction::Last,
-            KeyEvent {
-                code: KeyCode::Enter,
-                ..
-            } => PickerAction::Submit,
-            KeyEvent {
-                code: KeyCode::Backspace,
-                ..
-            } if search_active => PickerAction::Backspace,
+            } if !search_active => PickerAction::Cancel,
             KeyEvent {
                 code: KeyCode::BackTab,
                 ..
@@ -280,28 +247,6 @@ impl BottomPaneView for ComponentPickerView {
                 code: KeyCode::Tab, ..
             } => PickerAction::NextCategory,
             KeyEvent {
-                code: KeyCode::Char('f'),
-                modifiers,
-                ..
-            } if modifiers == KeyModifiers::CONTROL && !search_active => {
-                PickerAction::ActivateSearch
-            }
-            KeyEvent {
-                code: KeyCode::Char('f' | '/'),
-                modifiers: KeyModifiers::NONE,
-                ..
-            } if !search_active => PickerAction::ActivateSearch,
-            KeyEvent {
-                code: KeyCode::Char('k'),
-                modifiers: KeyModifiers::NONE,
-                ..
-            } if !search_active => PickerAction::MoveUp,
-            KeyEvent {
-                code: KeyCode::Char('j'),
-                modifiers: KeyModifiers::NONE,
-                ..
-            } if !search_active => PickerAction::MoveDown,
-            KeyEvent {
                 code: KeyCode::Char(character @ '1'..='9'),
                 modifiers: KeyModifiers::NONE,
                 ..
@@ -323,14 +268,10 @@ impl BottomPaneView for ComponentPickerView {
                 self.handle_action(PickerAction::Submit);
                 return;
             }
-            KeyEvent {
-                code: KeyCode::Char(character),
-                modifiers,
-                ..
-            } if search_active && (modifiers.is_empty() || modifiers == KeyModifiers::SHIFT) => {
-                PickerAction::AppendQuery(character)
-            }
-            _ => return,
+            key_event => match super::picker_keys::navigation_action(&key_event, search_active) {
+                Some(action) => action,
+                None => return,
+            },
         };
         self.handle_action(action);
     }

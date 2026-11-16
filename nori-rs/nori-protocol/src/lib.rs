@@ -4,11 +4,15 @@
 //! notifications that ACP does not define.
 
 mod delegation;
+mod pending_request;
+mod reply_preview;
 mod session_envelope;
 mod session_event;
 
 pub use agent_client_protocol_schema as acp;
 pub use delegation::*;
+pub use pending_request::PendingRequest;
+pub use reply_preview::ReplyPreview;
 pub use session_envelope::*;
 pub use session_event::*;
 

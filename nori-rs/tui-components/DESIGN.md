@@ -46,7 +46,9 @@ as they move into this crate.
 
 12. Alternate close neutral background shades in compact, data-dense lists or
     when a bounded menu explicitly opts into zebra item surfaces. Normal lists
-    use the page background and vertical spacing.
+    use the page background and vertical spacing. Two-line session tables
+    stripe per line instead: shade each session's first line with the subtle
+    `row_stripe` token and leave its second line on the terminal background.
 13. Highlight the selected row with a neutral background only slightly brighter
     than compact row shades, terminal-foreground primary text, and the
     theme's green pointer accent. Fill the complete data row,

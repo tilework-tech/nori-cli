@@ -470,6 +470,12 @@ async fn result_is_automatically_submitted_as_attributed_parent_input() {
                     "the result names the child readably: {}",
                     t.text
                 );
+                assert!(
+                    t.text
+                        .contains("The user started this delegation with /delegate"),
+                    "the agent learns it did not ask for this child: {}",
+                    t.text
+                );
                 break;
             }
         }

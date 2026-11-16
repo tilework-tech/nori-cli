@@ -72,21 +72,47 @@ Path: @/nori-rs/tui/src/attach
   binding). It uses the shared `session_path::waiting_line` without request
   text, passing whole names that it cuts in the middle by width, and the row
   stays empty when nothing waits.
-- The session list is tree-ordered: [AttachState](state.rs) runs the listed
+- The session list uses the shared two-row session layout from
+  [`session_table`](../../../tui-components/src/session_table.rs), the same as
+  the local session list and `nori host ls` on a terminal (see the
+  [tui-components docs](../../../tui-components/docs.md)). Row 1 holds the
+  status glyph and title (Session), agent, status word, and a header-less
+  context column; row 2 holds the start of the agent's last reply (faint,
+  `no reply yet` when absent), the model under Agent, and the time since the
+  last activity under Status. A row whose own status is `waiting_on_you`
+  shows what the session asks for (`waiting_request`, such as `approve:
+  cargo test -p parser`) in place of the reply. These come from the additive
+  `_nori/session/list` fields `reply_preview`, `waiting_request`, `model`,
+  `idle_seconds`, `context_used`, and `context_size`; older hosts omit them
+  and the cells stay empty (a missing `waiting_request` falls back to the
+  reply). There is no ID column. The list header reads `Sessions N · <status
+  summary>` through the shared `session_status::status_summary`, like the
+  local list's header. The picker is built with `horizontal_margin(0)` so widths follow
+  the terminal and `selection_keeps_tones(true)` so the highlighted row keeps
+  its status colours; the list has no fullscreen selection rails.
+- The list is tree-ordered: [AttachState](state.rs) runs the listed
   `(session_id, parent)` pairs through the shared picker `tree_order` and gives
-  each item its depth, and the picker is built with `tree_column("title")`.
-  Tree guides and the `(current)` badge therefore sit inside TITLE while ID,
-  AGENT, STATUS, and AGE stay aligned at every depth. Status words take the
-  shared `session_status::status_tone` colors (waiting on you amber, working
-  cyan, ready green, failed red, done in the default color; starting and
-  closed muted). A row at
-  depth 0 shows the host's `family_status` when present, so a parent reads
-  `waiting on you` while anything under it does; older hosts omit the field
-  and the row shows its own status. A row without a title reads
-  `UNTITLED_SESSION_NAME`. TITLE is a wide `cut_middle` column, so it takes
-  the room the terminal leaves and cuts long titles once in the middle,
-  keeping the ends that tell sibling sessions apart. The list ignores the host's `depth` field and
-  derives depth from parent links.
+  each item its depth, and the picker's tree column is the Session column.
+  Tree guides (and their continuation on row 2) and the `(current)` badge
+  therefore sit inside Session while the other columns stay aligned at every
+  depth. Status words take the shared `session_status::status_tone` colors
+  (waiting on you amber, working cyan, ready green, failed red, done in the
+  default color; starting and closed muted). A row at depth 0 shows the host's
+  `family_status` when present, so a parent reads `waiting on you` while
+  anything under it does; older hosts omit the field and the row shows its own
+  status. A row without a title reads `UNTITLED_SESSION_NAME`. Titles are cut
+  once in the middle, keeping the ends that tell sibling sessions apart. The
+  list ignores the host's `depth` field and derives depth from parent links.
+- List keys come from the shared
+  [`picker_keys::navigation_action`](../bottom_pane/picker_keys.rs), the same
+  mapping as the local session list and other pickers: arrows and `j`/`k`
+  move, PageUp/PageDown/Home/End page, Enter opens, `/`, `f`, or Ctrl+F start
+  a search, typing filters only while searching, Backspace edits the query,
+  and Esc leaves the search. The list shares the screen with the composer, so
+  while the composer holds text (and no search is active) only the arrows,
+  PageUp/PageDown, and Ctrl-modified keys act on the list; every other key edits the draft. The
+  footer reads `↑↓/j/k move · enter open · ctrl+r resume · / search · esc
+  back`.
 
 - Delegation uses the shared [command parser and presentation](../delegation.rs):
   `/delegate <agent> <task>` sends the selected parent to the manager's remote
@@ -100,12 +126,34 @@ Path: @/nori-rs/tui/src/attach
   no transcript view or local session-list key here, so the cell is built with
   empty `DelegationHints` and shows no key hints. An `awaiting_approval` change
   adds no part; the approval prompt covers it.
-- A permission prompt or delegation approval on the on-screen session is modal
-  while the session list is closed, like the local approval overlay. Its keys
-  answer it (permission: Up/Down, plain Enter, 1-9; delegation: 1 or plain
-  Enter approves, 2 declines); PageUp/PageDown and Ctrl+C work as usual; every
-  other key is swallowed, so the draft is never edited or sent. Earlier
-  hotkeys and pastes are unaffected; off-screen requests capture nothing.
+- A permission prompt or delegation approval on the on-screen session
+  (`AttachState::request_on_screen`) is modal while the session list is
+  closed, like the local approval overlay. The composer and its cursor are
+  hidden until the request is answered; the draft is kept untouched. Request
+  keys answer it:
+
+  | Key | Permission | Delegation |
+  | --- | --- | --- |
+  | Up/Down, plain Enter, 1-9 | Up/Down move the choice; Enter answers it; a digit answers that option (out-of-range digits do nothing) | 1 or plain Enter approves, 2 declines |
+  | Esc | `reject_once` when offered, else `reject_always`, else `cancelled` (shared `answer_guard::esc_reject_option`) | declines |
+  | Ctrl+C (once) | outcome `cancelled` | declines |
+
+  PageUp/PageDown still scroll; every other key is swallowed. The hint rows
+  read `↑↓ choose · enter answer · number selects · esc reject · ctrl+c
+  cancel` and `· esc or ctrl+c declines`. Earlier hotkeys and pastes are
+  unaffected; off-screen requests capture nothing.
+- Option keys (digits, Enter, and plain letters other than `j`/`k`) are
+  dropped until a request has been on screen for the shared answer grace
+  period ([`answer_guard`](../answer_guard.rs), `REQUEST_ANSWER_GRACE`), so a
+  key typed into the composer just as a request appears cannot answer it.
+  Esc, Ctrl+C, arrows, and `j`/`k` always act. The [Runtime](runtime.rs)
+  records the on-screen request identity (`AttachState::request_on_screen_id`,
+  the session plus its awaiting delegation, else its first permission, the
+  order in which request keys answer them; `None` while the list is open)
+  after each host event (even one that fails to apply), session switch, and
+  key, and restarts
+  the grace whenever that identity changes. `Runtime::with_clock` injects the
+  time source so tests step time instead of sleeping.
 - Child permissions stay in the child's conversation. The configured
   `next_waiting_session` binding (Alt+Down by default) navigates there, even
   with a draft in the composer, as in the local TUI. With nothing waiting in

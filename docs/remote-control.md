@@ -339,7 +339,17 @@ prompts; the WebSocket extension controls sessions already owned by the TUI.
 A list row reports identity, agent, status, `family_status` (the most urgent
 status across the row's whole session family, rooted at its top-level session),
 cwd, lineage, pending request IDs, `source`, delegation `depth`, the parent's `delegations`, sequence bounds (`latest_seq`, `first_available_seq`), age in seconds, and a
-title derived from observed session activity. `replay_cursors` includes every
+title derived from observed session activity (the agent's `session_info_update`
+title or the prompt summary, whichever came last; without one, or once the
+agent clears its title, the first prompt's first line). Rows
+also carry additive display fields that older hosts omit: `reply_preview` (the
+start of the agent's latest reply, up to 200 characters on one line),
+`waiting_request` (the oldest open permission request or delegation awaiting
+approval, as `approve: <subject>` or `approve: start <agent> · <task>`; lists
+show it instead of the reply on a row whose own status is `waiting_on_you`),
+`model` (the display name of the agent's model option), `idle_seconds` (since
+the session's latest event), and `context_used` / `context_size` (from the
+agent's latest `usage_update`). `replay_cursors` includes every
 conversation known to the journal. Restarting a failed session with Ctrl+R keeps
 its Nori conversation ID, list row, and sequence counter. Existing subscriptions
 and saved cursors continue to address that ID after the new agent process
@@ -426,7 +436,9 @@ input to the parent, including when the parent is busy. That prompt's first
 line is `[Nori delegation result] from <agent> · <child name> · <outcome>`
 (`done`, `failed`, `declined`, or `cancelled`; the child name here is the
 task's whole first line), its second is
-`Child session: <child id>`, and the rest is the child's result text (its last
+`Child session: <child id>`; a delegation the user started with `/delegate`
+then adds `The user started this delegation with /delegate; you did not
+request it.` so the parent agent does not deny starting it; the rest is the child's result text (its last
 turn's message text, with a paragraph break wherever a tool call, permission
 request, or other update interrupted it; for a crashed child, the first line of
 its failure). A declined delegation never started a child, so its prompt has no
@@ -512,9 +524,9 @@ released after cleanup. Startup and stop do not require a terminal.
 | Command | Behavior |
 | --- | --- |
 | `nori host` | Start the background host, or report the already-running host. |
-| `nori host ls` | Print the `ID AGENT STATUS AGE TITLE` table with delegated children listed under their parent and `├─`/`└─`/`│` tree guides inside TITLE. Top-level rows show their `family_status` when the host sends it. TTY output colors status (waiting on you yellow, working cyan, ready green, failed red, done in the default color, starting and closed dimmed) and fits the terminal: IDs shorten and AGENT and STATUS cut with `…` as the width shrinks, AGE is never cut, and TITLE always gets the remaining cells, keeping its tree guide whole and cutting the name in the middle; piped output keeps full values without color and appends `  (parent <full id>)` to every row with a parent, including a child whose parent is no longer listed and so prints at top level. |
+| `nori host ls` | List host sessions with delegated children under their parent and `├─`/`└─`/`│` tree guides inside the title column. Top-level rows show their `family_status` when the host sends it. On a TTY it prints the same two-row layout as the attached and local session lists (no ID column): status glyph, title, agent, status, and context, then a faint row with the reply start (or, while waiting on you, what the session asks for), model, and time since last activity; status words are colored (waiting on you yellow, working cyan, ready green, failed red, done in the default color, starting and closed dimmed) and every other session is shaded when stdin and stdout are terminals that report their background and support 24-bit colour. Piped output is one plain `ID AGENT STATUS AGE TITLE` row per session with full values, no color, and `  (parent <full id>)` on every row with a parent, including a child whose parent is no longer listed and so prints at top level. |
 | `nori attach` | Open the host session list; requires `[features] multi_session = true`. |
-| `nori attach <id>` | Open the named Nori conversation. |
+| `nori attach <id>` | Open the named Nori conversation. Any unique start of the ID works, and a full ID may be typed in any case, with or without hyphens: the CLI resolves it against `_nori/session/list` (3 s timeout) before the terminal opens, lists the candidates (ID, agent, title) when several match, and points at `nori host ls \| cat` when none does. |
 | `nori attach --host <URL> --token-file <path>` | Connect to an explicit managed endpoint using a private token file. |
 | `nori host stop` | Stop the listener and all host-owned sessions. |
 
@@ -542,7 +554,8 @@ before initialization or replay so an old cursor cannot silently target a new
 manager.
 
 The terminal table budgets display cells, preserving grapheme boundaries and
-adding an ellipsis when a title exceeds the remaining width. If the terminal
+adding an ellipsis when a title exceeds the remaining width; it cuts the status
+glyph and title together at the same point the TUI session lists do. If the terminal
 cannot fit the metadata columns, the row prefix is clipped too. Piped output
 has no width limit; control characters are sanitized in either mode.
 
@@ -593,7 +606,12 @@ cursors, never the host's agent processes. Alt+T takes control; Ctrl+D or
 an empty composer, or `/sessions` opens the session list. Ctrl+R resumes its
 highlighted failed session with the same conversation ID. The status line shows
 controlling, watching/read-only, reconnecting, or disconnected state. The
-current session marker appears inside TITLE, leaving its short ID visible.
+list uses the shared two-row session layout (title, agent, status, context;
+then reply start, model, time since last activity) and marks the current
+session inside the Session column. Its keys match the other pickers: arrows
+and `j`/`k` move, `/`, `f`, or Ctrl+F search, and Esc leaves a search; while
+the composer holds text, only arrows, PageUp/PageDown, and Ctrl keys act on
+the list.
 Session commands address the host; they do not launch local agents.
 `/delegate <agent> <task>` is the delegation entry point; the list does not
 start delegations. The configured `hotkeys.next_waiting_session` binding
@@ -602,8 +620,18 @@ with an unsent draft (with nothing waiting, a draft keeps the key for the
 composer), and
 `hotkeys.parent_session` (Alt+Up by default) returns from a delegated child to
 its parent. Both the attached list and `nori host ls` order children directly
-under their parent and draw tree guides inside TITLE, so the ID, AGENT, STATUS,
-and AGE columns stay aligned, and both show a top-level row's `family_status`.
+under their parent and draw tree guides inside the title column, so the other
+columns stay aligned, and both show a top-level row's `family_status`.
+While a permission prompt or delegation approval shows for the on-screen
+session, the composer and its cursor are hidden and only request keys and
+PageUp/PageDown act. Esc rejects (a permission's reject-once option, else
+reject-always, else `cancelled`; a delegation is declined); one Ctrl+C cancels (permission outcome
+`cancelled`; a delegation is declined). The draft is kept either way.
+Option keys (digits, Enter, plain letters other than `j`/`k`) are ignored until a request has
+been on screen for a short grace period (400 ms), so a key typed into the
+composer just as the request appears does not answer it; Esc, Ctrl+C,
+arrows, and `j`/`k` act at once. The local TUI's approval overlay and `/delegate` approval
+prompt follow the same rules, and its overlay's Esc picks the same reject option.
 Each session keeps its own unsent draft: switching sessions parks the
 composer text with the session it was typed in and restores the target's.
 The identity line names the selected session; a top-level session shows its

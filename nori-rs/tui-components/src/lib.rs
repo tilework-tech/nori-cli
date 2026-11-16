@@ -10,6 +10,7 @@ pub mod markdown;
 pub mod menu;
 pub mod picker;
 pub mod primitives;
+pub mod session_table;
 pub mod text;
 pub mod theme;
 
