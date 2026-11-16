@@ -344,6 +344,9 @@ title or the prompt summary, whichever came last; without one, or once the
 agent clears its title, the first prompt's first line). Rows
 also carry additive display fields that older hosts omit: `reply_preview` (the
 start of the agent's latest reply, up to 200 characters on one line),
+`waiting_request` (the oldest open permission request or delegation awaiting
+approval, as `approve: <subject>` or `approve: start <agent> · <task>`; lists
+show it instead of the reply on a row whose own status is `waiting_on_you`),
 `model` (the display name of the agent's model option), `idle_seconds` (since
 the session's latest event), and `context_used` / `context_size` (from the
 agent's latest `usage_update`). `replay_cursors` includes every
@@ -521,9 +524,9 @@ released after cleanup. Startup and stop do not require a terminal.
 | Command | Behavior |
 | --- | --- |
 | `nori host` | Start the background host, or report the already-running host. |
-| `nori host ls` | List host sessions with delegated children under their parent and `├─`/`└─`/`│` tree guides inside the title column. Top-level rows show their `family_status` when the host sends it. On a TTY it prints the same two-row layout as the attached and local session lists (no ID column): status glyph, title, agent, status, and context, then a faint row with the reply start, model, and time since last activity; status words are colored (waiting on you yellow, working cyan, ready green, failed red, done in the default color, starting and closed dimmed) and every other session is shaded when stdin and stdout are terminals that report their background and support 24-bit colour. Piped output is one plain `ID AGENT STATUS AGE TITLE` row per session with full values, no color, and `  (parent <full id>)` on every row with a parent, including a child whose parent is no longer listed and so prints at top level. |
+| `nori host ls` | List host sessions with delegated children under their parent and `├─`/`└─`/`│` tree guides inside the title column. Top-level rows show their `family_status` when the host sends it. On a TTY it prints the same two-row layout as the attached and local session lists (no ID column): status glyph, title, agent, status, and context, then a faint row with the reply start (or, while waiting on you, what the session asks for), model, and time since last activity; status words are colored (waiting on you yellow, working cyan, ready green, failed red, done in the default color, starting and closed dimmed) and every other session is shaded when stdin and stdout are terminals that report their background and support 24-bit colour. Piped output is one plain `ID AGENT STATUS AGE TITLE` row per session with full values, no color, and `  (parent <full id>)` on every row with a parent, including a child whose parent is no longer listed and so prints at top level. |
 | `nori attach` | Open the host session list; requires `[features] multi_session = true`. |
-| `nori attach <id>` | Open the named Nori conversation. |
+| `nori attach <id>` | Open the named Nori conversation. Any unique start of the ID works: the CLI resolves it against `_nori/session/list` before the terminal opens, lists the candidates (ID, agent, title) when several match, and points at `nori host ls \| cat` when none does. |
 | `nori attach --host <URL> --token-file <path>` | Connect to an explicit managed endpoint using a private token file. |
 | `nori host stop` | Stop the listener and all host-owned sessions. |
 
@@ -551,7 +554,8 @@ before initialization or replay so an old cursor cannot silently target a new
 manager.
 
 The terminal table budgets display cells, preserving grapheme boundaries and
-adding an ellipsis when a title exceeds the remaining width. If the terminal
+adding an ellipsis when a title exceeds the remaining width; it cuts the status
+glyph and title together at the same point the TUI session lists do. If the terminal
 cannot fit the metadata columns, the row prefix is clipped too. Piped output
 has no width limit; control characters are sanitized in either mode.
 
@@ -604,7 +608,9 @@ highlighted failed session with the same conversation ID. The status line shows
 controlling, watching/read-only, reconnecting, or disconnected state. The
 list uses the shared two-row session layout (title, agent, status, context;
 then reply start, model, time since last activity) and marks the current
-session inside the Session column.
+session inside the Session column. Its keys match the other pickers: arrows
+and `j`/`k` move, `/`, `f`, or Ctrl+F search, and Esc leaves a search; while
+the composer holds text, only arrows and Ctrl keys act on the list.
 Session commands address the host; they do not launch local agents.
 `/delegate <agent> <task>` is the delegation entry point; the list does not
 start delegations. The configured `hotkeys.next_waiting_session` binding
@@ -620,6 +626,12 @@ session, the composer and its cursor are hidden and only request keys and
 PageUp/PageDown act. Esc rejects (a permission's first reject option, else
 `cancelled`; a delegation is declined); one Ctrl+C cancels (permission outcome
 `cancelled`; a delegation is declined). The draft is kept either way.
+Option keys (digits, Enter, plain letters) are ignored until a request has
+been on screen for a short grace period (400 ms), so a key typed into the
+composer just as the request appears does not answer it; Esc, Ctrl+C, and
+arrows act at once. The local TUI's approval overlay and `/delegate` approval
+prompt follow the same rules, and its overlay's Esc likewise picks the first
+reject option.
 Each session keeps its own unsent draft: switching sessions parks the
 composer text with the session it was typed in and restores the target's.
 The identity line names the selected session; a top-level session shows its

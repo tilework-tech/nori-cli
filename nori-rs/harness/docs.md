@@ -375,8 +375,8 @@ not keep a process-global host or own listener policy.
 between the WebSocket `/sessions` adapter and managed ACP stdio. It lists
 manager records and journal cursors (each row also carries `family_status`,
 the record's `SessionManager::family_status`, else its own status, plus the
-additive display fields `reply_preview`, `idle_seconds`, `context_used`, and
-`context_size` from the replay journal and `model` from the record), resolves explicit conversation IDs before
+additive display fields `reply_preview`, `waiting_request`, `idle_seconds`,
+`context_used`, and `context_size` from the replay journal and `model` from the record), resolves explicit conversation IDs before
 using the frontend's selected default, and opens one-session or all-session
 subscriptions. Its `_nori/session/event` notifications retain the complete
 manager envelope, including Nori events; legacy ACP projection stays separate.
@@ -675,7 +675,10 @@ processes.
   session lists: the title (the agent's `session_info_update` title or the
   prompt summary, whichever came last; without one, or once the agent clears
   its title, the first user message's first line), the start of
-  the latest reply through the shared `nori_protocol::ReplyPreview`, the last
+  the latest reply through the shared `nori_protocol::ReplyPreview`, the
+  oldest open request through the shared `nori_protocol::PendingRequest`
+  (reported as `waiting_request`, such as `approve: cargo test -p parser`;
+  lists show it in place of the reply while the session waits on you), the last
   `usage_update` (tokens used and context size), and the time of the latest
   envelope (reported as idle seconds).
 - **Status.** Each record carries a `SessionStatus`:

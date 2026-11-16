@@ -137,7 +137,7 @@ with `delegation_result_parts` instead of rebuilding the header, so the header
 wording exists only in `delegation_result_prompt`. Both strings are a
 cross-crate contract.
 
-[`ReplyPreview`](src/reply_preview.rs) is the other piece of shared text
+[`ReplyPreview`](src/reply_preview.rs) is another piece of shared text
 logic: it observes one session's `SessionEvent`s and keeps the start of the
 agent's latest reply for session lists. The host journal in the
 [harness](../harness/docs.md) and the local TUI's session previews both use it,
@@ -151,6 +151,22 @@ so `nori attach`, `nori host ls`, and the local list show the same reply.
   phase changes between them; the list then shows the last turn's reply.
 - `text()` collapses whitespace to one line, keeps at most 200 characters
   (lists cut further to their column), and is `None` before any agent text.
+
+[`PendingRequest`](src/pending_request.rs) follows events the same way and
+keeps what a session waiting on the user asks for. Session lists show it on
+row 2 of a row whose own status is waiting on you, instead of the reply; the
+harness journal reports it as `waiting_request`, and the local TUI's session
+previews use it directly.
+
+| Event | Effect |
+| --- | --- |
+| ACP permission request | Opens `approve: <first line of the tool call's first text content, else its title>` |
+| `DelegationChanged` with `awaiting_approval` | Opens `approve: start <agent> · <first task line>` |
+| ACP response or `RequestResolved` with the same request ID | Closes that permission request |
+| Any other `DelegationChanged` for the same delegation | Closes that delegation |
+| `Idle` phase or `SessionEnded` | Closes every permission request; awaiting delegations stay |
+
+`text()` is the oldest open request, or `None` when nothing is open.
 
 Session termination reasons are `Shutdown`, `Closed`, `ConnectionLost`,
 `SpawnFailed`, and `TimedOut`. Raw ACP request and response envelopes retain the

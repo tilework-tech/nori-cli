@@ -203,11 +203,16 @@ consumer application
   by the TUI's local session list, the `nori attach` list, and `nori host ls`
   on a terminal. It defines the column keys, `session_columns()` for pickers,
   `session_widths(width)` for plain-text output, and the cell formatters
-  `ago()` (`2m ago`), `context_text()` / `context_from_usage()` /
-  `compact_tokens()` (`8% / 475k`, also used by the TUI footer's context
-  segment), and `NO_REPLY` (`no reply yet`). Row 1 is status glyph and title,
-  agent, status word, and a header-less context column; row 2 is the start of
-  the agent's last reply, the model, and the time since the last activity.
+  `ago()` (`2m ago`), `context_text()` / `compact_tokens()` (`8% / 475k`, the
+  TUI footer's context segment), `context_cell()` / `context_from_usage()`
+  (the same text fitted to the Context column), and `NO_REPLY` (`no reply
+  yet`). `context_cell` keeps `context_text`'s form when it fits the column's
+  cells and otherwise re-formats token counts with at most one decimal, so
+  `100% / 1.05M` reads `100% / 1.1M`; the Context column therefore never cuts
+  its value. Row 1 is status glyph and title, agent, status word, and a
+  header-less context column; row 2 is the start of the agent's last reply
+  (or, for a session waiting on the user, what it asks for), the model, and
+  the time since the last activity.
 
   | Column | Width |
   | --- | --- |
@@ -331,7 +336,10 @@ consumer application
   explicitly map activation and deactivation keys to picker actions; printable
   query input has no effect until activation, so navigation shortcuts remain
   available while search is inactive. Nori's picker adapters support `/`, `f`,
-  and Ctrl-F even though the visible inactive hint names only `/`.
+  and Ctrl-F even though the visible inactive hint names only `/`; the TUI
+  keeps that raw-key mapping in one place
+  ([`picker_keys`](../tui/src/bottom_pane/picker_keys.rs)) shared by its
+  pickers and both session lists.
 - The storybook event adapters demonstrate the inverse routing invariant:
   while picker search is active, every printable character belongs to the
   query, so page navigation, quit, density, mode, and state shortcuts remain

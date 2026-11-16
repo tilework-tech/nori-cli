@@ -51,16 +51,18 @@ host ls / host stop ---------------+                   SessionManager
 
   | Output | Shape |
   | --- | --- |
-  | Terminal | The shared two-row session layout from [`session_table`](../../../tui-components/src/session_table.rs), the same as the local session list and the `nori attach` list: a `Session`/`Agent`/`Status` header, then per session a row with status glyph, tree guide and title, agent, status word, and header-less context (`8% / 475k`), and a faint row with the start of the agent's last reply (`no reply yet` when absent), the model, and `2m ago` from `idle_seconds`. No ID column. Column widths follow the terminal width as described in the [tui-components docs](../../../tui-components/docs.md). |
+  | Terminal | The shared two-row session layout from [`session_table`](../../../tui-components/src/session_table.rs), the same as the local session list and the `nori attach` list: a `Session`/`Agent`/`Status` header, then per session a row with status glyph, tree guide and title, agent, status word, and header-less context (`8% / 475k`), and a faint row with the start of the agent's last reply (`no reply yet` when absent; a row whose own status is `waiting_on_you` shows its `waiting_request` instead), the model, and `2m ago` from `idle_seconds`. No ID column; `nori host ls \| cat` prints full IDs. Column widths follow the terminal width as described in the [tui-components docs](../../../tui-components/docs.md). |
   | Piped | One row per session under `ID  AGENT  STATUS  AGE  TITLE`, with full IDs, full values, no width limit, and no colour. AGE comes from `age_seconds`. |
 
   On a terminal the glyph and status word are coloured, row 2 is dimmed, and
   every other session (both its rows) is shaded when the terminal reports its
   background and supports 24-bit colour; [dispatch](mod.rs) asks
   `nori_tui::session_list_shade` for that colour only when stdin and stdout are
-  both terminals (the query is answered on stdin), and with no known background no row is shaded. Titles
-  are cut in the middle at grapheme boundaries so titles sharing a long prefix
-  still read apart; other cells are cut from the end with `…`.
+  both terminals (the query is answered on stdin), and with no known background no row is shaded. The
+  status glyph and title are cut together, in the middle at grapheme
+  boundaries, to the same room the shared picker gives its Session cell, so a
+  title is cut at the same point here as in the TUI lists and titles sharing a
+  long prefix still read apart; other cells are cut from the end with `…`.
 - A top-level row (tree depth 0) shows the row's `family_status` when the host
   sends one, so a parent reads `waiting on you` while anything under it does;
   child rows always show their own `status`. Older hosts omit
@@ -83,6 +85,14 @@ host ls / host stop ---------------+                   SessionManager
   | failed | red |
   | done | default color, so a finished child reads apart from a closed one |
   | others (starting, closed) | dimmed |
+- `nori attach <id>` accepts any unique start of a session ID.
+  [Dispatch](mod.rs) passes a full UUID through unchanged; anything else is
+  resolved before the attach TUI starts by an observing `_nori/session/list`
+  request to the same endpoint (local or `--host`) and
+  [`session_lookup`](session_lookup.rs), which matches case-insensitively. An
+  exact ID wins; several matches fail with the candidates (ID, agent, title)
+  listed; no match fails with a pointer to `nori host ls | cat` (full IDs) and
+  to `nori attach` without an ID. The host itself only knows full IDs.
 - Lifecycle requests prepare agents using the host's configuration. Resume
   uses the stored agent and working directory while retaining the conversation
   identity. Stop closes the server, shuts down the manager, removes discovery

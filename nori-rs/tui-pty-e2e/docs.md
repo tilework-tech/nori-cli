@@ -37,6 +37,7 @@ split across PTY reads still applies. On top of it, `TuiSession` offers:
 | `raw_output()` | Every byte the TUI wrote, including sequences the emulator drops, such as notifications |
 | `resize(rows, cols)` | Resizes the PTY and emulator, as a user dragging the window would |
 | `settle(duration)` | Keeps reading output for a fixed time so the emulator catches up |
+| `wait_out_answer_grace()` | Settles for `ANSWER_GRACE`, longer than the TUI's request answer grace period, so the next option key answers a request that just appeared |
 
 `Key` adds `Alt(char)` (ESC prefix), `AltDown`, `BackTab`, and the terminal
 focus reports `FocusIn` and `FocusOut`, used by session hotkeys and

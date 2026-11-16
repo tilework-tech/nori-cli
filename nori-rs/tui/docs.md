@@ -249,6 +249,12 @@ then dismisses the picker if pressed again. The input row is present only while
 search is active. Inactive footers intentionally show only the compact
 `/ search` affordance; `f` and Ctrl-F remain supported aliases rather than
 additional visible hint text. Active footers describe typing and search exit.
+[`picker_keys::navigation_action`](src/bottom_pane/picker_keys.rs) is the one
+mapping of these shared keys (arrows, `j`/`k`, PageUp/PageDown, Home/End,
+Enter, `/`/`f`/Ctrl-F, query typing and Backspace while searching, Esc leaving
+search). `ComponentPickerView`, the local session list, and the `nori attach`
+list all route through it and keep only their own extra keys (categories,
+digits, Ctrl-D, Esc outside search) locally.
 
 - [`BottomPane`](src/bottom_pane/mod.rs) routes Escape through the active
   [`BottomPaneView::on_escape`](src/bottom_pane/bottom_pane_view.rs) hook before
@@ -366,7 +372,25 @@ support see only those.
 
 When an ACP permission request arrives, the overlay renders the ACP subject and
 options, then calls `respond_to_agent(request_id, response)` with the exact ID
-from the request. Filesystem requests do not enter this path because the host
+from the request. Esc picks the first `RejectOnce`/`RejectAlways` option, as
+`nori attach` does, and the footer then reads `esc to reject`; with no reject
+option Esc sends `Cancelled` and the footer reads `esc to cancel`. Ctrl-C
+always sends `Cancelled`.
+
+Request prompts hold back option keys (digits, Enter, and plain letters such as
+the `y`/`a`/`n`/`d` shortcuts) until the request has been visible for
+`REQUEST_ANSWER_GRACE` (400 ms) from [`answer_guard.rs`](src/answer_guard.rs),
+so a key typed into the composer just as a request appears does not answer it.
+Esc, Ctrl-C, and arrows act immediately. The `AnswerGuard` reads an injectable
+`Clock` (the system clock in production, `ManualClock` in tests) that flows
+`ChatWidgetInit` -> `BottomPaneParams` -> `BottomPane::clock()`. The
+`ApprovalOverlay` restarts the grace when a queued request becomes current,
+and `BottomPaneView::request_shown` restarts it when the session is brought to
+the foreground (`ChatWidget::set_foreground`). The `/delegate` approval prompt
+opts in through `SelectionViewParams.answer_guard`; other selection views
+carry no guard. This applies with or without `[features] multi_session`, since
+the overlay is shared. `nori attach` applies the same guard to its own request
+prompts (see the [attach docs](src/attach/docs.md)). Filesystem requests do not enter this path because the host
 handles them. Terminal and extension request families are not advertised by
 the current host.
 
@@ -497,6 +521,14 @@ Having drained the pipe, the CLI re-points file descriptor 0 at the controlling
 terminal before the UI starts. This matters to every child the TUI spawns with
 inherited stdin -- the external editor and the file browser -- which would
 otherwise be handed an EOF'd pipe and exit immediately.
+
+The frame diff in [`custom_terminal.rs`](src/custom_terminal.rs) clears the
+blank tail of a changed row with one clear-to-end command only when that tail's
+background is the terminal default. A tail with any other background (shaded
+session-list rows, for example) is drawn cell by cell, because terminals and
+capture tools without background-colour erase (such as `tmux capture-pane`)
+leave a cleared tail unshaded, so shading bands would stop short of the right
+edge.
 
 #### Inline transcript reflow
 
@@ -945,9 +977,14 @@ in the prompt still moves the cursor.
   faint, is the start of the agent's last reply (`no reply yet` before one),
   the model's display name (cut in the middle), and the time since the
   session's last event (`2m ago`). The model and context are the status bar's
-  own values (`ChatWidget::model_name`, `ChatWidget::context_summary`), so the
-  list and footer always agree; the footer's context segment formats through
-  the same `session_table::context_text`. The picker uses
+  own values (`ChatWidget::model_name`, `ChatWidget::context_summary`). The
+  list's context goes through `session_table::context_cell`, which keeps the
+  footer's `context_text` form when it fits the Context column and otherwise
+  keeps at most one decimal (`1.05M` reads `1.1M`); the footer's own segment
+  still uses `context_text`. A row whose own status is waiting on you shows
+  what the session asks for on row 2 (`approve: <command>` or `approve: start
+  <agent> · <task>`) instead of the reply. Untitled rows read
+  `nori_protocol::UNTITLED_SESSION_NAME`. The picker uses
   `horizontal_margin(0)` and keeps status and agent tones on the selected row.
 - The title is the agent's own title from an ACP `session_info_update` or the
   prompt summary, whichever came last (a cleared agent title falls back to the
@@ -964,16 +1001,23 @@ in the prompt still moves the cursor.
   `nori host ls` name it alike. A delegation result prompt never counts as the
   first message.
 - [`session_preview.rs`](src/session_preview.rs) derives titles, the reply,
-  pending requests (used by the background-request line), and the
-  last-activity time from session events only, never a call to the agent. The
-  reply comes from the shared `nori_protocol::ReplyPreview`, which the host
-  journal also uses: it is the agent text since the last user message, tool
-  call or request, kept until the next agent text replaces it; whitespace
+  pending requests (used by row 2 of a waiting session and by the
+  background-request line), and the last-activity time from session events
+  only, never a call to the agent. The pending request comes from the shared
+  `nori_protocol::PendingRequest` and the reply from the shared
+  `nori_protocol::ReplyPreview`; the host journal uses both, so all three
+  lists show the same text. The reply is the agent text since the last user
+  message, tool call or request, kept until the next agent text replaces it; whitespace
   collapses to one line of at most 200 characters.
-- The header counts sessions by status. Tab toggles a "waiting on you" filter
-  and back (the footer then offers "tab all sessions"); typing filters by title
-  or agent; Esc clears the query first, then closes; Enter shows the selected
-  session. When nobody needs attention, the waiting filter displays
+- The header (`Sessions N · <status summary>`) starts at the list's left
+  edge, aligned with the tabs, row marker, and footer, and hints `tab: waiting
+  only · / search`. Tab toggles a "waiting on you" filter and back (the footer
+  then offers "tab all sessions"). Keys follow the shared picker mapping:
+  arrows, `j`/`k`, and Ctrl-P/Ctrl-N move; `/`, `f`, or Ctrl-F starts a search
+  that filters by title or agent (plain letters do not filter outside it);
+  Esc while searching leaves the search and clears its query, otherwise closes
+  the list; Enter shows the selected session. The footer reads `↑↓/j/k
+  move`. When nobody needs attention, the waiting filter displays
   "No sessions waiting on you" with a Tab hint; an unmatched text query keeps
   the normal search-empty message.
 - Ctrl+D closes the selected session through `AppEvent::CloseSession`. A
@@ -1147,6 +1191,8 @@ view built from `approval_lines`: a question worded by origin ("Would you like
 <parent agent> to start a <agent> session?" or "Would you like to start a
 <agent> session for your task?"), then `asked by`, `runs on`, and `task` rows.
 The choices are "Yes, start it" and "No, decline"; Esc (dismiss) declines.
+The prompt carries an `AnswerGuard`, so option keys wait out the request
+answer grace period described under permission requests.
 These choices control child creation, separately from a child's later ACP
 permission request.
 
