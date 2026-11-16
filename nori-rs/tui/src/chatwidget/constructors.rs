@@ -30,6 +30,7 @@ impl ChatWidget {
             fork_context,
             prepared_agent,
             analytics,
+            session_manager,
         } = common;
         let activating_prepared_cloud_session = cloud_mode && prepared_agent.is_some();
         let mut rng = rand::rng();
@@ -39,6 +40,7 @@ impl ChatWidget {
         let session_generation = next_session_generation();
         let spawn_result = if let Some(agent) = prepared_agent {
             super::agent::launch_prepared_agent(
+                &session_manager,
                 agent,
                 nori_harness::runtime::SessionStart::New,
                 app_event_tx.clone(),
@@ -46,9 +48,13 @@ impl ChatWidget {
                 analytics,
             )
         } else if deferred_spawn {
-            SpawnAgentResult { handle: None }
+            SpawnAgentResult {
+                handle: None,
+                conversation_id: None,
+            }
         } else {
             spawn_agent(
+                &session_manager,
                 config.clone(),
                 app_event_tx.clone(),
                 session_generation,
@@ -115,6 +121,8 @@ impl ChatWidget {
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             session_configured_received: false,
             harness_handle: spawn_result.handle,
+            session_manager,
+            managed_conversation_id: spawn_result.conversation_id,
             session_close_in_flight: false,
             exiting: false,
             agent_config: crate::nori::agent_config_state::AgentConfigState::default(),
@@ -204,6 +212,7 @@ impl ChatWidget {
             fork_context: _,
             prepared_agent,
             analytics,
+            session_manager,
         } = common;
         let activating_prepared_cloud_session = cloud_mode && prepared_agent.is_some();
         let mut rng = rand::rng();
@@ -213,6 +222,7 @@ impl ChatWidget {
         let session_generation = next_session_generation();
         let spawn_result = if let Some(agent) = prepared_agent {
             super::agent::launch_prepared_agent(
+                &session_manager,
                 agent,
                 nori_harness::runtime::SessionStart::Resume(nori_harness::runtime::SessionResume {
                     acp_session_id: acp_session_id.clone(),
@@ -224,6 +234,7 @@ impl ChatWidget {
             )
         } else {
             spawn_acp_agent_resume(
+                &session_manager,
                 config.clone(),
                 acp_session_id.clone(),
                 transcript,
@@ -291,6 +302,8 @@ impl ChatWidget {
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             session_configured_received: false,
             harness_handle: spawn_result.handle,
+            session_manager,
+            managed_conversation_id: spawn_result.conversation_id,
             session_close_in_flight: false,
             exiting: false,
             agent_config: crate::nori::agent_config_state::AgentConfigState::default(),

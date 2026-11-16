@@ -86,6 +86,9 @@ pub(crate) struct App {
     pub(crate) chat_widget: ChatWidget,
     pub(crate) auth_manager: Arc<AuthManager>,
     remote_control: crate::remote_control::RemoteControlManager,
+    /// Registry of every session this process runs. The active widget's
+    /// session and a hidden `/agent` switch candidate are both entries.
+    session_manager: nori_harness::session_manager::SessionManager,
 
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: NoriConfig,
@@ -174,6 +177,17 @@ struct PrimaryAgentPreparation {
     initial_context: Option<String>,
 }
 
+/// Where a session about to be prepared comes from when it forks an earlier
+/// point of another session.
+#[derive(Clone, Default)]
+pub(crate) struct ForkOrigin {
+    /// Conversation history up to the fork point, injected into the first
+    /// prompt.
+    pub(crate) context: Option<String>,
+    /// The session being forked.
+    pub(crate) parent: Option<nori_harness::ConversationId>,
+}
+
 pub(crate) enum PendingSessionActivation {
     New,
     Resume {
@@ -240,6 +254,9 @@ impl App {
         // a later user/session decision, after any per-session skillset setup.
         let needs_deferred_spawn = true;
         let mut pending_session_activation = None;
+        let session_manager = nori_harness::session_manager::SessionManager::new(
+            nori_harness::session_manager::SessionManagerConfig::default(),
+        );
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -257,6 +274,7 @@ impl App {
                 fork_context: None,
                 prepared_agent: None,
                 analytics: analytics.clone(),
+                session_manager: session_manager.clone(),
             };
             match resume_selection {
                 ResumeSelection::Resume(target) => {
@@ -299,6 +317,7 @@ impl App {
             chat_widget,
             auth_manager: auth_manager.clone(),
             remote_control: crate::remote_control::RemoteControlManager::new(),
+            session_manager,
             config,
             vertical_footer,
             cloud_mode,
@@ -512,6 +531,7 @@ impl App {
             fork_context,
             prepared_agent: None,
             analytics: self.analytics.clone(),
+            session_manager: self.session_manager.clone(),
         }
     }
 

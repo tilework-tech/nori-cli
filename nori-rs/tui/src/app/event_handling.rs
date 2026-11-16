@@ -1828,6 +1828,7 @@ impl App {
                     Some(summary)
                 };
 
+                let fork_parent = self.chat_widget.managed_conversation_id();
                 self.shutdown_current_conversation();
                 let init = self.chat_widget_init(
                     tui.frame_requester(),
@@ -1842,7 +1843,10 @@ impl App {
                 self.pending_session_activation = Some(PendingSessionActivation::New);
                 self.begin_agent_preparation_with_context(
                     crate::app_event::AgentPrepareIntent::Idle,
-                    fork_context,
+                    super::ForkOrigin {
+                        context: fork_context,
+                        parent: fork_parent,
+                    },
                 );
 
                 // Trim transcript to preserve history before the fork point

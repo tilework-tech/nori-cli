@@ -324,6 +324,9 @@ impl ChatWidget {
                 self.replay_source = None;
             }
             nori_protocol::NoriEvent::Undo(_) | nori_protocol::NoriEvent::UserShell(_) => {}
+            // This widget answers its own requests; answers from other clients
+            // are shown by the multi-session view.
+            nori_protocol::NoriEvent::RequestResolved(_) => {}
             // TODO(#557): render forked-transcript lineage in the TUI history.
             nori_protocol::NoriEvent::SessionForked(forked) => {
                 self.on_session_forked(forked);
@@ -336,6 +339,9 @@ impl ChatWidget {
         // resumable and is surfaced as `forked from:` on the status card.
         self.conversation_id =
             nori_harness::ConversationId::from_string(&forked.new_conversation_id).ok();
+        if self.conversation_id.is_some() {
+            self.managed_conversation_id = self.conversation_id;
+        }
         self.forked_from =
             nori_harness::ConversationId::from_string(&forked.previous_conversation_id).ok();
 

@@ -54,14 +54,18 @@ impl App {
     /// retries on a deferred widget. Bounded by a wall-clock timeout so a
     /// hung broker can never wedge the boot with no way forward.
     pub(crate) fn begin_agent_preparation(&mut self, intent: crate::app_event::AgentPrepareIntent) {
-        self.begin_agent_preparation_with_context(intent, None);
+        self.begin_agent_preparation_with_context(intent, ForkOrigin::default());
     }
 
     pub(crate) fn begin_agent_preparation_with_context(
         &mut self,
         intent: crate::app_event::AgentPrepareIntent,
-        initial_context: Option<String>,
+        origin: ForkOrigin,
     ) {
+        let ForkOrigin {
+            context: initial_context,
+            parent: fork_parent,
+        } = origin;
         if let Some(preparation) = &mut self.primary_agent_preparation {
             if matches!(&intent, crate::app_event::AgentPrepareIntent::ResumePicker)
                 && !matches!(
@@ -94,7 +98,12 @@ impl App {
         let tx = self.app_event_tx.clone();
         let event_intent = intent.clone();
         let task = tokio::spawn(async move {
-            let agent = prepare_agent_with_timeout(spec).await;
+            let agent = prepare_agent_with_timeout(spec)
+                .await
+                .map(|agent| match fork_parent {
+                    Some(parent) => agent.with_fork_parent(parent),
+                    None => agent,
+                });
             tx.send(AppEvent::AgentPrepared {
                 generation,
                 agent,
@@ -119,6 +128,7 @@ impl App {
             return Ok(None);
         };
         let initial_context = self.prepared_agent_initial_context.take();
+        let fork_parent = agent.fork_parent();
         let spec = crate::chatwidget::agent::agent_prepare_spec(
             self.config.clone(),
             initial_context.clone(),
@@ -127,7 +137,10 @@ impl App {
             tokio::spawn(agent.shutdown());
             self.begin_agent_preparation_with_context(
                 crate::app_event::AgentPrepareIntent::Idle,
-                initial_context,
+                ForkOrigin {
+                    context: initial_context,
+                    parent: fork_parent,
+                },
             );
             return Err(format!("prepared agent configuration changed: {error}"));
         }

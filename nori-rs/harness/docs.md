@@ -4,7 +4,7 @@ Path: @/nori-rs/harness
 
 ### Overview
 
-`nori-harness` is the headless, embeddable runtime for one Nori ACP session. It
+`nori-harness` is the headless, embeddable runtime for Nori ACP sessions. It
 composes the low-level ACP host with session lifecycle, private reduction,
 transcripts, queueing, history, goals, undo, hooks, user-shell operations, and
 worktree behavior. It has no terminal dependency.
@@ -15,6 +15,11 @@ prepared owner with an explicit session choice, then control the active session
 through typed methods and one ordered stream of `nori_protocol::SessionEvent`
 values. Additional bounded subscribers can follow the same ordered stream
 without disturbing the primary consumer.
+
+The session manager sits above that per-session runtime. It keeps a registry of
+live sessions keyed by conversation ID, runs each session on its own agent
+process, tags every event as a `nori_protocol::SessionEnvelope`, and tracks a
+coarse `SessionStatus` for each session and each session family.
 
 ### How it fits into the larger codebase
 
@@ -43,6 +48,12 @@ and event stream to implement both a finite plaintext projection and a bounded
 ACP agent facade. The facade preserves ACP request/response semantics where the
 shell caller participates, rather than serializing the private reducer or
 inventing a second public event vocabulary.
+
+`nori-tui` starts every session through one app-owned `SessionManager`. The
+manager calls the same launch internals as `launch_session`, so a managed
+session behaves exactly like a directly launched one. `nori-exec`, the remote
+ACP host, and the public `launch_session`/`prepare_and_launch_session` entry
+points still use the per-session runtime directly and see only one session.
 
 The remote ACP transport (`@/docs/remote-control.md`) is the other
 headless consumer. `nori-acp-host` owns the WebSocket server and defines the
@@ -379,7 +390,10 @@ and `update_goal` tools must not control Nori continuation.
 ACP permission requests that require a consumer decision are emitted as
 `SessionEvent::Acp(AcpEvent::Request { request_id, request })`. A consumer
 responds through `respond_to_agent` with the same ID and a schema-native success
-or error. `AskForApproval::Never` resolves permission requests inside the
+or error. Each handle carries a responder label (`with_responder`, default
+`runtime::DEFAULT_RESPONDER` = `client`; the remote host labels its attached
+handle `remote_agent::REMOTE_CONTROL_RESPONDER` = `remote_control`) that the
+session manager uses to say who answered. `AskForApproval::Never` resolves permission requests inside the
 harness, and setup-time permission requests are cancelled internally because no
 consumer session exists yet. Filesystem requests are handled in
 `nori-acp-host`; they do not appear as duplicate delegated requests. Terminal
@@ -547,6 +561,119 @@ local transcript. Fork copies the parent transcript and retains those same
 identities. See the [transcript format](../../docs/transcripts.md) for optional
 storage metadata and compatibility rules.
 
+#### Session manager and envelopes
+
+[`session_manager`](src/session_manager/mod.rs) is the multi-session layer.
+Its public type `SessionManager` is cheap to clone; clones share one registry.
+The registry itself ([`registry.rs`](src/session_manager/registry.rs)) is pure
+state with no I/O, so status and family rules are unit-tested without agent
+processes.
+
+```text
+ client (TUI)                    SessionManager
+     | start / resume / close        |  registry: conversation ID -> record
+     v                               |  capacity semaphore (max_sessions)
+  StartSession ----------------------+
+                                     |  one pump task per agent process
+                 per-session runtime |  applies event -> status, seq
+                 (HarnessHandle) ----+--> session's own stream (unbounded)
+                                     +--> subscribe() streams (bounded, all sessions)
+```
+
+- **Start.** `start` takes an agent (already `Prepared`, or a `Prepare` spec to
+  spawn one), a `SessionStart`, an optional parent, and a `SessionSource`
+  (`User`, `Fork`, or `Session`). The manager reserves a capacity slot, mints
+  the conversation ID before launch, and passes it down through
+  `AcpBackendConfig.conversation_id`; the transcript recorder uses it as the
+  transcript ID. It returns a `ManagedSession` with the ID, a `HarnessHandle`,
+  and the session's own envelope stream. Start fails with `CapacityReached`,
+  `ShuttingDown`, `UnknownParent`, or `AgentAlreadyActivated`.
+  `max_sessions()` and `free_slots()` report the cap and the slots left, so
+  a client can refuse a new session before it starts an agent process. A
+  slot comes back when the session's agent process ends.
+- **Envelopes.** One pump task per agent process applies each event to the
+  registry first, then publishes the envelope to all-session subscribers and to
+  the session's own stream. The pump reads two sources with a biased select:
+  the handle's answer queue first, then the agent's event stream (see
+  "Answered requests" below). The own stream is unbounded and lossless, matching
+  the primary receiver of a directly launched session. `subscribe(capacity)`
+  follows every session; a subscriber that falls `capacity` envelopes behind is
+  dropped and its receiver closes, and sessions are never slowed.
+- **Status.** Each record carries a `SessionStatus`:
+
+  | Status | When |
+  | --- | --- |
+  | `Starting` | Before `SessionStarted` |
+  | `Working` | Phase is `Prompting`, `Loading`, or `Cancelling` |
+  | `WaitingOnYou` | An ACP permission request is pending |
+  | `Ready` | Idle |
+  | `Failed` | `SessionEnded` with `ConnectionLost`, `SpawnFailed`, or `TimedOut`, or the stream closed with no end event |
+  | `Closed` | `SessionEnded` with `Shutdown` or `Closed`, or superseded by a fork |
+
+  A pending request clears when any `HarnessHandle` clone answers it, when the
+  phase returns to `Idle` or enters `Cancelling`, or when the session ends.
+- **Answered requests.** `respond_to_agent` on any handle clone calls a
+  crate-private observer with the request ID and the handle's responder label
+  just before it sends the answer. The manager turns that into
+  `NoriEvent::RequestResolved { request_id, answered_by }` on its answer queue;
+  because the pump drains that queue ahead of agent events, the announcement is
+  numbered before anything the agent does in reaction to the answer. The
+  registry publishes it only if the request was still pending, so it appears
+  once per request on the session's own stream and on `subscribe()` streams.
+  A client can read a request straight from the harness and answer it before
+  the pump has numbered the request. The registry holds such an early answer
+  and publishes it right after the request's own envelope; held answers are
+  dropped when the turn ends, is cancelled, or the session ends.
+  Requests cleared by `Idle`, `Cancelling`, or session end produce no
+  `RequestResolved`; the phase or end event already conveys it. An answer the
+  backend then rejects may still have been announced. Harness sessions never
+  emit this event themselves, so it is absent from directly launched streams
+  and from transcripts; it exists only on manager envelopes so that every
+  client following a session learns the request no longer waits on the user.
+- **Families.** A session family is a top-level session plus all of its
+  descendants. `family_status` rolls member statuses up with priority
+  `WaitingOnYou` > `Failed` > `Working` > `Starting` > `Ready` > `Closed`.
+- **Fork.** On `NoriEvent::SessionForked` (branch at head) the parent becomes
+  `Closed` and a child record (source `Fork`, parent = previous conversation)
+  takes over the same agent process and capacity slot. `SessionForked` is
+  delivered as sequence 1 of the child conversation. A fork to an earlier
+  message instead starts a new agent process: the caller marks the
+  `PreparedAgent` with `with_fork_parent(id)`, and the client starts it with
+  source `Fork` and that parent. Such a fork does not close its parent or set
+  the parent's `forked_into`; the client closes the old session separately.
+- **Resume.** `resume(failed_id, spec)` restarts a `Failed` session from its
+  transcript on a new agent process. The new session gets a new conversation
+  ID, records the old one in `resumed_from`, keeps the parent and source,
+  replaces the old record, and adopts the old record's children. A parent
+  whose `forked_into` pointed at the failed session now points at the
+  replacement, and the failed ID is remembered as superseded, so `close` on the
+  failed ID or on that parent reaches the live replacement. `get(failed_id)`
+  still returns `None` because the failed record is gone. Errors are
+  `Unknown`, `NotFailed`, `NoTranscript`, `AgentMismatch`, and `Transcript`.
+- **Close and shutdown.** `close(id, child_grace)` shuts one session down,
+  bounded by `shutdown_timeout`; closing an ended session does nothing.
+  `close` follows the session's lineage to the live process: a parent forked at
+  head leads to the child that took over its agent process, and a resumed
+  session's old ID leads to its replacement. `shutdown(child_grace)` stops admission, then shuts every live
+  session down in parallel, each with the same timeout, and returns a
+  `ShutdownReport` of closed, timed-out, and failed sessions. A session whose
+  launch was in flight when admission closed is shut down as soon as it
+  registers its handle.
+- **Handle lifetime.** The manager drops its handle to a session as soon as the
+  session ends. A dead agent process therefore does not keep the session's
+  runtime alive: once clients drop their handles too, the session's event
+  stream closes.
+- **Queries.** `get`, `list` (registration order, ended sessions kept), and
+  `handle` (live sessions only) read the registry. A record holds the agent,
+  parent, source, `resumed_from`, cwd, model, approval policy, transcript path,
+  ACP session ID, status, and `pending_requests` (open agent request IDs in
+  arrival order). The model starts as the config default and is
+  replaced by the agent-advertised model-category config option from
+  `SessionStarted` or a config option update.
+
+`SessionManagerConfig` defaults to eight sessions and a five-second shutdown
+timeout.
+
 #### Browser sessions and profile tiers
 
 `backend/browser_session.rs` (`#[cfg(unix)]`) launches a headed Chrome browser
@@ -609,6 +736,17 @@ temp dir is removed.
   (last connect wins), and a consumer whose bounded queue overflows is dropped,
   which closes its connection. Remote-host behavior is exercised in
   `@/nori-rs/harness/tests/remote_host.rs` against the mock ACP agent.
+- Session manager invariants: one agent process per session; conversation ID
+  = transcript ID = envelope `conversation_id`; envelope `seq` starts at 1 per
+  conversation with no gaps, and a fork starts a new sequence; a capacity slot
+  is held from before spawn until the session ends, and a fork moves it to the
+  child.
+- A dead agent process fails only the session it carries. Other sessions keep
+  their status, sequence, and slot.
+- The manager record does not mirror approval-policy changes made later
+  through the raw `HarnessHandle`. Prepared agents held outside the manager
+  (such as a TUI warm-up before any session exists) do not count against the
+  cap.
 - Remote and local frontends share notifications but not request ownership.
   Local prompts may queue; remote prompts reject while busy, remote cancel is
   scoped to the registered harness request id, and only the remote submitter
