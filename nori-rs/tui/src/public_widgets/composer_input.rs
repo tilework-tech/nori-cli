@@ -67,6 +67,17 @@ impl ComposerInput {
         self.drain_app_events();
     }
 
+    /// The input text.
+    pub fn text(&self) -> String {
+        self.inner.current_text()
+    }
+
+    /// Replace the input text, leaving the cursor at its end.
+    pub fn set_text(&mut self, text: String) {
+        self.inner.set_text_content(text);
+        self.drain_app_events();
+    }
+
     /// Clear the input text.
     pub fn clear(&mut self) {
         self.inner.set_text_content(String::new());

@@ -86,6 +86,43 @@ pub fn session_columns() -> Vec<PickerColumn> {
     ]
 }
 
+/// Longest home-relative form a list shows before falling back to the
+/// folder's own name.
+const SHORT_FOLDER_CELLS: usize = 20;
+
+/// A session's folder as the lists show it: `~` or `~/code/app` when short,
+/// otherwise the folder's own name.
+pub fn short_folder(path: &std::path::Path, home: Option<&std::path::Path>) -> String {
+    if let Some(relative) = home.and_then(|home| path.strip_prefix(home).ok()) {
+        let short = if relative.as_os_str().is_empty() {
+            "~".to_string()
+        } else {
+            format!("~/{}", relative.display())
+        };
+        if short.chars().count() <= SHORT_FOLDER_CELLS {
+            return short;
+        }
+    }
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
+}
+
+/// A list's second row text: the session's short folder, when known, then
+/// its reply, if any.
+pub fn folder_and_reply(
+    cwd: Option<&std::path::Path>,
+    home: Option<&std::path::Path>,
+    reply: &str,
+) -> String {
+    match cwd {
+        Some(cwd) if reply.is_empty() => short_folder(cwd, home),
+        Some(cwd) => format!("{} · {reply}", short_folder(cwd, home)),
+        None => reply.to_string(),
+    }
+}
+
 /// Time since a session's last activity, such as `2m ago`.
 pub fn ago(seconds: i64) -> String {
     let seconds = seconds.max(0);
@@ -201,6 +238,25 @@ mod tests {
             status: STATUS_CELLS,
             context,
         }
+    }
+
+    #[test]
+    fn short_folder_names_a_folder_by_home_relative_path_or_basename() {
+        use std::path::Path;
+        let home = Some(Path::new("/home/ada"));
+        assert_eq!(short_folder(Path::new("/home/ada"), home), "~");
+        assert_eq!(
+            short_folder(Path::new("/home/ada/code/app"), home),
+            "~/code/app"
+        );
+        assert_eq!(
+            short_folder(Path::new("/home/ada/code/clients/acme-billing"), home),
+            "acme-billing"
+        );
+        assert_eq!(short_folder(Path::new("/srv/checkouts/api"), home), "api");
+        assert_eq!(short_folder(Path::new("/home/adam/api"), home), "api");
+        assert_eq!(short_folder(Path::new("/"), home), "/");
+        assert_eq!(short_folder(Path::new("/srv/api"), None), "api");
     }
 
     #[test]

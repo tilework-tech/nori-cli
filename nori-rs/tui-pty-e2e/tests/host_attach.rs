@@ -67,6 +67,10 @@ impl Host {
     }
 
     fn terminal(&self, args: &[&str]) -> Client {
+        self.terminal_in(&self.home.path().join("project"), args)
+    }
+
+    fn terminal_in(&self, cwd: &std::path::Path, args: &[&str]) -> Client {
         let home = self.home.path().to_string_lossy();
         let mut config = SessionConfig::new()
             .with_command_args(Self::args(args))
@@ -75,7 +79,7 @@ impl Host {
             .with_agent_env("NORI_NO_ANALYTICS", "1")
             .with_agent_env("MOCK_AGENT_RESPONSE", ANSWER)
             .with_extra_path(self.binary.parent().unwrap().to_path_buf());
-        config.cwd = Some(self.home.path().join("project"));
+        config.cwd = Some(cwd.to_path_buf());
         Client(TuiSession::spawn_with_config(40, 120, config).unwrap())
     }
 
@@ -158,7 +162,7 @@ impl Host {
                 .unwrap_or_default()
                 .split_whitespace()
                 .collect::<Vec<_>>(),
-            ["ID", "AGENT", "STATUS", "AGE", "TITLE"],
+            ["ID", "AGENT", "STATUS", "AGE", "CWD", "TITLE"],
             "host ls exposes the accepted flat table"
         );
         text
@@ -886,4 +890,68 @@ fn watcher_cannot_delegate_a_child() {
         2,
         "watcher cannot create a child"
     );
+}
+
+#[test]
+fn new_sessions_start_in_the_attaching_folder_or_a_tab_completed_one() {
+    let host = Host::new();
+    host.start();
+    let elsewhere = host.home.path().join("elsewhere");
+    let third = host.home.path().join("third-folder");
+    std::fs::create_dir(&elsewhere).unwrap();
+    std::fs::create_dir(&third).unwrap();
+    let mut client = host.terminal_in(&elsewhere, &["attach"]);
+    client.wait_for_text("Sessions", TIMEOUT).unwrap();
+    client.send_key(Key::Escape).unwrap();
+    client
+        .wait_for(
+            |screen| screen.contains("No session selected. Use"),
+            TIMEOUT,
+        )
+        .unwrap();
+
+    client.submit_input("/new").unwrap();
+    client
+        .wait_for(
+            |screen| {
+                screen
+                    .lines()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .contains("elsewhere")
+            },
+            TIMEOUT,
+        )
+        .expect("plain /new starts in the attaching terminal's folder, shown on the header");
+    client.wait_for_text("ready", TIMEOUT).unwrap();
+
+    client.type_input("/new ../thi").unwrap();
+    client.send_key(Key::Tab).unwrap();
+    client
+        .wait_for_text("../third-folder/", TIMEOUT)
+        .expect("Tab completes the folder");
+    client.send_key(Key::Enter).unwrap();
+    client
+        .wait_for(
+            |screen| {
+                screen
+                    .lines()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .contains("third-folder")
+            },
+            TIMEOUT,
+        )
+        .expect("the new session's header names its folder");
+    ask(&mut client, "hello");
+
+    let listing = host.list();
+    for folder in [&elsewhere, &third] {
+        let folder = folder.canonicalize().unwrap().display().to_string();
+        assert!(listing.contains(&folder), "{listing}");
+    }
+    client.send_key(Key::Alt('s')).unwrap();
+    client
+        .wait_for_text(&format!("third-folder · {ANSWER}"), TIMEOUT)
+        .expect("the list shows each session's folder before its reply");
 }

@@ -35,6 +35,11 @@ pub(super) struct Runtime {
     pub(super) answer_guard: crate::answer_guard::AnswerGuard,
     /// The request last seen on screen, to notice when another one appears.
     request_on_screen: Option<String>,
+    /// The attaching terminal's directory: where `/new` starts a session
+    /// and where its relative folders begin.
+    pub(super) cwd: std::path::PathBuf,
+    /// Whether the host starts sessions in a requested folder.
+    pub(super) session_folders: bool,
 }
 
 impl Runtime {
@@ -94,6 +99,8 @@ impl Runtime {
             drafts: HashMap::new(),
             answer_guard: crate::answer_guard::AnswerGuard::new(clock),
             request_on_screen: None,
+            cwd: std::env::current_dir().unwrap_or_default(),
+            session_folders: false,
         }
     }
 
@@ -270,6 +277,8 @@ impl Runtime {
         let result = &message["result"];
         match pending {
             Pending::Initialize => {
+                self.session_folders =
+                    result["capabilities"]["nori_sessions"]["session_cwd"] == true;
                 self.state
                     .role_changed(result["control"]["role"].as_str().unwrap_or("watcher"));
                 self.state.connected = true;

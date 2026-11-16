@@ -11,7 +11,7 @@ use serde_json::Value;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-/// Piped columns: complete IDs, then AGENT, STATUS, AGE and TITLE.
+/// Piped columns: complete IDs, then AGENT, STATUS, AGE, CWD and TITLE.
 const ID_CELLS: usize = 36;
 const AGENT_CELLS: usize = 16;
 const STATUS_CELLS: usize = 16;
@@ -28,15 +28,21 @@ pub(super) fn format_table(
     if let Some(width) = width {
         return terminal_table(listing, width, color, shade);
     }
-    let mut output = format!(
-        "{:<ID_CELLS$}  {:<AGENT_CELLS$}  {:<STATUS_CELLS$}  {:>AGE_CELLS$}  TITLE\n",
-        "ID", "AGENT", "STATUS", "AGE"
-    );
     let rows: Vec<&Value> = listing["sessions"]
         .as_array()
         .into_iter()
         .flatten()
         .collect();
+    let cwd_cells = rows
+        .iter()
+        .map(|row| row["cwd"].as_str().map_or(1, UnicodeWidthStr::width))
+        .max()
+        .unwrap_or(0)
+        .max("CWD".len());
+    let mut output = format!(
+        "{:<ID_CELLS$}  {:<AGENT_CELLS$}  {:<STATUS_CELLS$}  {:>AGE_CELLS$}  {:<cwd_cells$}  TITLE\n",
+        "ID", "AGENT", "STATUS", "AGE", "CWD"
+    );
     let links: Vec<(&str, Option<&str>)> = rows
         .iter()
         .map(|row| {
@@ -84,8 +90,11 @@ pub(super) fn format_table(
         } else {
             format!("{}h", seconds / 3600)
         };
+        let cwd = clean("cwd");
         let line = format!(
-            "{id:<ID_CELLS$}  {agent:<AGENT_CELLS$}  {status:<STATUS_CELLS$}  {age:>AGE_CELLS$}  {title}"
+            "{id:<ID_CELLS$}  {agent:<AGENT_CELLS$}  {status:<STATUS_CELLS$}  {age:>AGE_CELLS$}  {}{}  {title}",
+            cwd,
+            " ".repeat(cwd_cells.saturating_sub(cwd.width()))
         );
         output.push_str(line.trim_end());
         output.push('\n');
@@ -206,6 +215,7 @@ fn terminal_table(
     let order = nori_tui_components::picker::tree_order(&links);
     let depths: Vec<i32> = order.iter().map(|(_, depth)| *depth).collect();
     let guides = nori_tui_components::picker::tree_guides(&depths);
+    let home = dirs::home_dir();
     for ((index, depth), (guide, continuation)) in order.into_iter().zip(guides) {
         let row = rows[index];
         let clean = |key: &str| {
@@ -250,6 +260,11 @@ fn terminal_table(
             .filter(|_| row["status"] == "waiting_on_you")
             .or_else(|| clean("reply_preview"))
             .unwrap_or_else(|| session_table::NO_REPLY.into());
+        let reply = session_table::folder_and_reply(
+            clean("cwd").as_deref().map(std::path::Path::new),
+            home.as_deref(),
+            &reply,
+        );
         let reply_room = session_cells.saturating_sub(continuation.width() + 2);
         let mut second = vec![
             segment("  ", ""),
@@ -439,14 +454,43 @@ mod tests {
         let child = "22222222-2222-2222-2222-222222222222";
         json!({"sessions":[
             {"session_id":root,"agent":"claude-code","status":"working","family_status":"waiting_on_you",
-             "title":"Greeting in three words","reply_preview":"Hi there, friend! Anything else you would like me to help with today?",
+             "title":"Greeting in three words","cwd":"/work/greeter","reply_preview":"Hi there, friend! Anything else you would like me to help with today?",
              "model":"opus 5.5","idle_seconds":125,"context_used":38000,"context_size":475000},
             {"session_id":child,"agent":"codex","status":"waiting_on_you","title":"inspect the parser recovery path",
-             "parent":root,"source":"session","depth":1,"reply_preview":"Reading src/parser.rs","model":"gpt-5.5",
+             "parent":root,"source":"session","depth":1,"cwd":"/work/greeter","reply_preview":"Reading src/parser.rs","model":"gpt-5.5",
              "idle_seconds":4,"context_used":84320,"context_size":272000},
             {"session_id":"33333333-3333-3333-3333-333333333333","agent":"gemini","status":"starting",
              "title":"say hi in 3 words","idle_seconds":0}
         ]})
+    }
+
+    #[test]
+    fn rows_name_each_sessions_folder() {
+        let listing = json!({"sessions":[{"session_id":"one","agent":"mock-model","status":"ready",
+            "title":"Fix the parser","cwd":"/work/parser-service","reply_preview":"Patched the lexer"}]});
+        let piped = format_table(&listing, None, false, None);
+        assert_eq!(
+            piped
+                .lines()
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .collect::<Vec<_>>(),
+            ["ID", "AGENT", "STATUS", "AGE", "CWD", "TITLE"]
+        );
+        assert!(
+            piped
+                .lines()
+                .nth(1)
+                .unwrap()
+                .contains("/work/parser-service"),
+            "{piped}"
+        );
+        let terminal = format_table(&listing, Some(120), false, None);
+        assert!(
+            terminal.contains("parser-service · Patched the lexer"),
+            "{terminal}"
+        );
     }
 
     #[test]

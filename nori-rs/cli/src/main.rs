@@ -378,14 +378,21 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
     match subcommand {
         Some(Subcommand::Host(command)) => {
             let config = if command.needs_config() {
-                Some(host_config(interactive, root_config_overrides)?)
+                let overrides = host_overrides(interactive, root_config_overrides)?;
+                Some((
+                    nori_config::NoriConfig::load_with_overrides(overrides.clone())?,
+                    overrides,
+                ))
             } else {
                 None
             };
             host::run(command, config).await?;
         }
         Some(Subcommand::Attach(command)) => {
-            let config = host_config(interactive, root_config_overrides)?;
+            let config = nori_config::NoriConfig::load_with_overrides(host_overrides(
+                interactive,
+                root_config_overrides,
+            )?)?;
             host::attach(command, config).await?;
         }
         None if print => {
@@ -565,20 +572,27 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
     Ok(())
 }
 
-fn host_config(
+/// Settings from the command line of `nori host` or `nori attach`. Paths are
+/// absolute, so a host can reapply them to a session in another folder.
+fn host_overrides(
     interactive: TuiCli,
     root: CliConfigOverrides,
-) -> anyhow::Result<nori_config::NoriConfig> {
+) -> anyhow::Result<NoriConfigOverrides> {
     let mut raw_overrides = root.raw_overrides;
     raw_overrides.extend(interactive.config_overrides.raw_overrides);
     let raw_overrides = CliConfigOverrides { raw_overrides }
         .parse_overrides()
         .map_err(anyhow::Error::msg)?;
-    nori_config::NoriConfig::load_with_overrides(NoriConfigOverrides {
+    let absolute = |path| std::path::absolute(path);
+    Ok(NoriConfigOverrides {
         agent: interactive.agent,
-        cwd: interactive.cwd,
+        cwd: interactive.cwd.map(absolute).transpose()?,
         raw_overrides,
-        additional_writable_roots: interactive.add_dir,
+        additional_writable_roots: interactive
+            .add_dir
+            .into_iter()
+            .map(absolute)
+            .collect::<Result<_, _>>()?,
         approval_policy: interactive
             .dangerously_bypass_approvals_and_sandbox
             .then_some(AskForApproval::Never),
