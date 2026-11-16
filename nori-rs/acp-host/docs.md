@@ -103,8 +103,9 @@ the session registry nor replay retention. The dependency direction stays
   are refused. Slow backend operations cannot lock out other clients' control
   or administrative requests. Role notifications preserve every connection.
   Watcher mutations fail before reaching `ManagedAgent`; listing,
-  subscribing, taking control, starting a new session (`_nori/session/new`
-  changes no existing session), and authenticated host stop remain
+  subscribing, taking control, starting a new session (it changes no
+  existing session, though it becomes the host's selected one), and
+  authenticated host stop remain
   available.
   Successful authenticated upgrades include `x-nori-host-instance`, a UUID
   generated once per router lifetime independently of the bearer token. Clients

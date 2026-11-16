@@ -528,7 +528,7 @@ released after cleanup. Startup and stop do not require a terminal.
 | `nori attach` | Open the host session list; requires `[features] multi_session = true`. |
 | `nori attach <id>` | Open the named Nori conversation. Any unique start of the ID works, and a full ID may be typed in any case, with or without hyphens: the CLI resolves it against `_nori/session/list` (3 s timeout) before the terminal opens, lists the candidates (ID, agent, title) when several match, and points at `nori host ls \| cat` when none does. |
 | `nori attach --host <URL> --token-file <path>` | Connect to an explicit managed endpoint using a private token file. |
-| `nori host new [--cwd DIR] [--agent AGENT] [--prompt TEXT] [--json]` | Start a session on the running host (local, or `--host <URL> --token-file <path>`) and print its ID, or the `{session_id, cwd}` reply with `--json`. `--cwd` and its default, the current directory, resolve against the caller's directory; the host checks the folder exists on its machine. An older host without `session_cwd` refuses `--cwd`. |
+| `nori host new [--cwd DIR] [--agent AGENT] [--prompt TEXT] [--json]` | Start a session on the running host (local, or `--host <URL> --token-file <path>`) and print its ID, or the `{session_id, cwd}` reply with `--json`. `--cwd` resolves against the caller's directory, and the host checks the folder exists on its machine. Without `--cwd` the local host uses the caller's directory and a `--host` host uses its own folder. Refuses a host that does not advertise `session_cwd`. |
 | `nori host stop` | Stop the listener and all host-owned sessions. |
 
 The CLI stores discovery state, token, log, and lock under `$NORI_HOME/host`.
@@ -585,7 +585,7 @@ per-session folders. Clients send `cwd` only when it is advertised.
 | --- | --- |
 | `_nori/control/status` | Return this connection's role and whether a controller is connected. |
 | `_nori/control/take` | Transfer control to the caller without closing another connection. |
-| `_nori/session/new` | Start a session; any authenticated initialized client may call it, since it changes no existing session. Optional `cwd` (absolute; canonicalized, and refused when relative, missing, or not a directory) loads the host's configuration in that folder with the host's command-line overrides, so the folder's own project trust and approval settings apply; without it the host's start configuration is used. Optional `agent` selects the agent; optional `prompt` is sent as the first prompt after the session starts, without delaying the reply. Replies `{session_id, cwd}`. Resume reloads configuration from the record's cwd the same way. |
+| `_nori/session/new` | Start a session; any authenticated initialized client may call it, since it changes no existing session; the new session becomes the host's selected session. Optional `cwd` (absolute; canonicalized, and refused when relative, missing, or not a directory) loads the host's configuration in that folder with the host's command-line overrides, so the folder's own project trust and approval settings apply; without it the host's start configuration is used. Optional `agent` selects the agent; optional `prompt` is sent as the first prompt after the session starts, without delaying the reply. Replies `{session_id, cwd}`. Resume reloads configuration from the record's cwd the same way. |
 | `_nori/session/close`, `_nori/session/cancel`, `_nori/session/resume` | Apply the operation to the required `session_id`; resume retains the Nori conversation ID. |
 | `_nori/host/stop` | Request host shutdown; any authenticated initialized client may call it. |
 
@@ -617,7 +617,7 @@ the composer holds text, only arrows, PageUp/PageDown, and Ctrl keys act on
 the list.
 Session commands address the host; they do not launch local agents.
 `/new [DIR] [AGENT]` (which still requires control in the terminal) starts a
-session in the attaching terminal's directory, or in `DIR`, made absolute
+session in the attaching terminal's directory (the host's own folder for a `--host` host), or in `DIR`, made absolute
 first. A lone argument is a folder when it starts with `/`, `~`, or `.`,
 contains `/`, or names an existing folder under the attaching directory;
 otherwise it is an agent. Tab completes the folder against the attaching

@@ -59,6 +59,7 @@ async fn run(
     let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime = runtime::Runtime::new(options.session_id.clone(), request_tx);
     runtime.cwd = cwd;
+    runtime.remote = options.refresh_local_token.is_none();
     runtime.set_session_list_binding(hotkeys.open_session_list);
     runtime.set_next_waiting_binding(hotkeys.next_waiting_session);
     runtime.state.parent_binding = hotkeys.parent_session;

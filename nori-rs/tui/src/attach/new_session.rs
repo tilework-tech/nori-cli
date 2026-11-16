@@ -12,9 +12,14 @@ const USAGE: &str = "Usage: /new [folder] [agent]";
 
 /// `_nori/session/new` parameters for the arguments after `/new`. A lone
 /// argument names a folder when it looks like a path or is a folder under
-/// `base`, and an agent otherwise. Without a folder, a session starts in
-/// `base` when the host supports `folders`.
-pub(super) fn params(args: &str, base: &Path, folders: bool) -> Result<Value, String> {
+/// `base`, and an agent otherwise. Without a folder, a session on a local
+/// host that supports `folders` starts in `base`.
+pub(super) fn params(
+    args: &str,
+    base: &Path,
+    folders: bool,
+    remote: bool,
+) -> Result<Value, String> {
     let words: Vec<&str> = args.split_whitespace().collect();
     let (folder, agent) = match words.as_slice() {
         [] => (None, None),
@@ -28,8 +33,13 @@ pub(super) fn params(args: &str, base: &Path, folders: bool) -> Result<Value, St
         _ => return Err(USAGE.into()),
     };
     let mut params = json!({});
-    if folders {
-        params["cwd"] = json!(folder.map_or_else(|| base.to_path_buf(), |f| resolve(f, base)));
+    // A remote host need not have this terminal's directory, so a session
+    // there starts in the host's own folder unless one is named.
+    let default = (!remote).then(|| base.to_path_buf());
+    if let Some(cwd) = folder.map(|folder| resolve(folder, base)).or(default)
+        && folders
+    {
+        params["cwd"] = json!(cwd.to_str().ok_or("The folder is not valid UTF-8.")?);
     } else if folder.is_some() {
         return Err(
             "This host does not support session folders; restart it with a newer nori.".into(),
@@ -63,6 +73,8 @@ pub(super) fn complete(text: &str, base: &Path) -> Option<(String, Vec<String>)>
         .flatten()
         .filter(|entry| entry.path().is_dir())
         .filter_map(|entry| entry.file_name().into_string().ok())
+        // `/new` arguments split on whitespace, so such names cannot be typed.
+        .filter(|name| !name.contains(char::is_whitespace))
         .filter(|name| {
             name.starts_with(prefix) && (prefix.starts_with('.') || !name.starts_with('.'))
         })

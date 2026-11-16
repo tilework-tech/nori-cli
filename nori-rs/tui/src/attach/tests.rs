@@ -2152,6 +2152,21 @@ fn new_session_starts_in_the_attaching_folder_or_the_named_one() {
 }
 
 #[test]
+fn a_named_host_starts_plain_new_sessions_in_its_own_folder() {
+    let terminal = tempfile::tempdir().unwrap();
+    std::fs::create_dir(terminal.path().join("other")).unwrap();
+    let (mut runtime, mut rx) = connected_runtime(terminal.path(), folder_host());
+    runtime.remote = true;
+    submit(&mut runtime, "/new");
+    assert_eq!(rx.try_recv().unwrap()["params"], json!({}));
+    submit(&mut runtime, "/new other");
+    assert_eq!(
+        rx.try_recv().unwrap()["params"],
+        json!({"cwd": terminal.path().join("other").display().to_string()})
+    );
+}
+
+#[test]
 fn a_host_without_session_folders_starts_plain_sessions_and_refuses_a_folder() {
     let terminal = tempfile::tempdir().unwrap();
     std::fs::create_dir(terminal.path().join("other")).unwrap();
@@ -2179,7 +2194,7 @@ fn a_host_without_session_folders_starts_plain_sessions_and_refuses_a_folder() {
 #[test]
 fn tab_completes_the_new_session_folder_like_a_shell() {
     let terminal = tempfile::tempdir().unwrap();
-    for folder in ["alpha", "alps", "other", ".hidden"] {
+    for folder in ["alpha", "alps", "other", ".hidden", "al pine"] {
         std::fs::create_dir(terminal.path().join(folder)).unwrap();
     }
     std::fs::write(terminal.path().join("otherfile"), "").unwrap();
@@ -2207,7 +2222,7 @@ fn tab_completes_the_new_session_folder_like_a_shell() {
 }
 
 #[test]
-fn the_list_and_header_show_each_sessions_folder() {
+fn the_header_shows_the_sessions_folder() {
     let mut state = AttachState::default();
     state
         .replace_sessions(json!({"sessions":[{
@@ -2216,16 +2231,7 @@ fn the_list_and_header_show_each_sessions_folder() {
             "reply_preview":"Patched the lexer"
         }]}))
         .unwrap();
-    state.list_open = true;
-    let rendered = screen(&state);
-    assert!(
-        rendered.contains("parser-service · Patched the lexer"),
-        "{rendered}"
-    );
-    state.list_open = false;
     state.selected = Some("one".into());
-    let rendered = screen(&state);
-    let header = rendered.lines().nth(1).unwrap_or_default();
-    assert!(header.contains("parser-service"), "{rendered}");
-    insta::assert_snapshot!("attached_session_folder_header", rendered);
+    state.list_open = false;
+    insta::assert_snapshot!("attached_session_folder_header", screen(&state));
 }

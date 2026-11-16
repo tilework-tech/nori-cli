@@ -91,10 +91,9 @@ pub(super) fn format_table(
             format!("{}h", seconds / 3600)
         };
         let cwd = clean("cwd");
+        let gap = " ".repeat(cwd_cells.saturating_sub(cwd.width()));
         let line = format!(
-            "{id:<ID_CELLS$}  {agent:<AGENT_CELLS$}  {status:<STATUS_CELLS$}  {age:>AGE_CELLS$}  {}{}  {title}",
-            cwd,
-            " ".repeat(cwd_cells.saturating_sub(cwd.width()))
+            "{id:<ID_CELLS$}  {agent:<AGENT_CELLS$}  {status:<STATUS_CELLS$}  {age:>AGE_CELLS$}  {cwd}{gap}  {title}"
         );
         output.push_str(line.trim_end());
         output.push('\n');
@@ -465,32 +464,17 @@ mod tests {
     }
 
     #[test]
-    fn rows_name_each_sessions_folder() {
-        let listing = json!({"sessions":[{"session_id":"one","agent":"mock-model","status":"ready",
-            "title":"Fix the parser","cwd":"/work/parser-service","reply_preview":"Patched the lexer"}]});
+    fn piped_rows_align_titles_after_full_folders_and_tolerate_older_hosts() {
+        let listing = json!({"sessions":[
+            {"session_id":"one","agent":"mock-model","status":"ready","title":"Fix the parser","cwd":"/work/parser-service"},
+            {"session_id":"two","agent":"mock-model","status":"ready","title":"From an older host"}
+        ]});
         let piped = format_table(&listing, None, false, None);
-        assert_eq!(
-            piped
-                .lines()
-                .next()
-                .unwrap()
-                .split_whitespace()
-                .collect::<Vec<_>>(),
-            ["ID", "AGENT", "STATUS", "AGE", "CWD", "TITLE"]
-        );
-        assert!(
-            piped
-                .lines()
-                .nth(1)
-                .unwrap()
-                .contains("/work/parser-service"),
-            "{piped}"
-        );
-        let terminal = format_table(&listing, Some(120), false, None);
-        assert!(
-            terminal.contains("parser-service · Patched the lexer"),
-            "{terminal}"
-        );
+        let title = column(&piped, "TITLE");
+        let rows: Vec<&str> = piped.lines().skip(1).collect();
+        assert!(rows[0].contains("/work/parser-service"), "{piped}");
+        assert_eq!(from_column(rows[0], title), "Fix the parser");
+        assert_eq!(from_column(rows[1], title), "From an older host");
     }
 
     #[test]

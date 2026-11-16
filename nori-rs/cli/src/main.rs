@@ -583,15 +583,14 @@ fn host_overrides(
     let raw_overrides = CliConfigOverrides { raw_overrides }
         .parse_overrides()
         .map_err(anyhow::Error::msg)?;
-    let absolute = |path| std::path::absolute(path);
     Ok(NoriConfigOverrides {
         agent: interactive.agent,
-        cwd: interactive.cwd.map(absolute).transpose()?,
+        cwd: interactive.cwd.map(std::path::absolute).transpose()?,
         raw_overrides,
         additional_writable_roots: interactive
             .add_dir
             .into_iter()
-            .map(absolute)
+            .map(std::path::absolute)
             .collect::<Result<_, _>>()?,
         approval_policy: interactive
             .dangerously_bypass_approvals_and_sandbox

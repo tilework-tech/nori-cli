@@ -40,6 +40,8 @@ pub(super) struct Runtime {
     pub(super) cwd: std::path::PathBuf,
     /// Whether the host starts sessions in a requested folder.
     pub(super) session_folders: bool,
+    /// Whether the host was named with `--host` and may be another machine.
+    pub(super) remote: bool,
 }
 
 impl Runtime {
@@ -101,6 +103,7 @@ impl Runtime {
             request_on_screen: None,
             cwd: std::env::current_dir().unwrap_or_default(),
             session_folders: false,
+            remote: false,
         }
     }
 

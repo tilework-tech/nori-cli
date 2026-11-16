@@ -144,11 +144,6 @@ async fn watcher_cannot_mutate_and_takeover_notifies_both_without_disconnecting(
     }
     send(&mut first, 3, "_nori/session/list", json!({})).await;
     assert_eq!(receive(&mut first).await["result"]["mutations"], 0);
-    send(&mut second, 8, "_nori/session/new", json!({})).await;
-    assert!(
-        receive(&mut second).await.get("result").is_some(),
-        "a watcher may start a session of its own"
-    );
     send(&mut second, 4, "_nori/control/take", json!({})).await;
     assert_eq!(receive(&mut second).await["result"]["role"], "controller");
     assert_eq!(receive(&mut second).await["params"]["role"], "controller");
@@ -158,9 +153,22 @@ async fn watcher_cannot_mutate_and_takeover_notifies_both_without_disconnecting(
     send(&mut first, 5, "_nori/session/prompt", json!({})).await;
     assert_eq!(receive(&mut first).await["error"]["code"], -32016);
     send(&mut second, 6, "_nori/session/prompt", json!({})).await;
-    assert_eq!(receive(&mut second).await["result"]["mutations"], 2);
+    assert_eq!(receive(&mut second).await["result"]["mutations"], 1);
     send(&mut first, 7, "_nori/host/stop", json!({})).await;
     assert!(receive(&mut first).await.get("result").is_some());
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn watchers_and_observers_may_start_a_session_of_their_own() {
+    let server = start().await;
+    let (_controller, _) = initialized(&server, false).await;
+    for observe in [false, true] {
+        let (mut client, response) = initialized(&server, observe).await;
+        assert_eq!(response["result"]["control"]["role"], "watcher");
+        send(&mut client, 2, "_nori/session/new", json!({})).await;
+        assert!(receive(&mut client).await.get("result").is_some());
+    }
     server.shutdown().await;
 }
 

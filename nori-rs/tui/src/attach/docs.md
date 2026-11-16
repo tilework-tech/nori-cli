@@ -197,7 +197,8 @@ Path: @/nori-rs/tui/src/attach
 
 - [`/new [DIR] [AGENT]`](new_session.rs) starts a host session, and like
   other mutations requires control in this terminal. Plain `/new` starts in
-  the attaching terminal's directory, not the host's. A lone argument is a
+  the attaching terminal's directory, not the host's; on a host named with
+  `--host`, which may be another machine, it starts in the host's folder. A lone argument is a
   folder when it starts with `/`, `~`, or `.`, contains `/`, or names an
   existing folder under the attaching directory; otherwise it is an agent, so
   `/new <agent>` keeps working. Folders are made absolute (`~` expanded,

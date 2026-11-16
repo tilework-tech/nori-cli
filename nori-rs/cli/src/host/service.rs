@@ -57,12 +57,15 @@ fn session_folder(requested: &str) -> anyhow::Result<PathBuf> {
 impl HostService {
     /// The host's configuration as it applies in `folder`, so the folder's
     /// own project trust and settings hold for its sessions.
-    fn config_in(&self, folder: PathBuf) -> anyhow::Result<NoriConfig> {
-        NoriConfig::load_with_overrides(NoriConfigOverrides {
+    async fn config_in(&self, folder: PathBuf) -> anyhow::Result<NoriConfig> {
+        let overrides = NoriConfigOverrides {
             cwd: Some(folder),
             ..self.overrides.clone()
-        })
-        .context("could not load configuration for the session folder")
+        };
+        // Loading reads files and may ask git for the folder's repository.
+        tokio::task::spawn_blocking(move || NoriConfig::load_with_overrides(overrides))
+            .await?
+            .context("could not load configuration for the session folder")
     }
 
     fn prepare(config: NoriConfig) -> AgentPrepareSpec {
@@ -90,21 +93,26 @@ impl HostService {
                     })
                     .transpose()
             };
-            let mut config = match string("cwd")? {
-                Some(cwd) => self.config_in(session_folder(cwd)?)?,
+            let (cwd, agent, prompt) = (string("cwd")?, string("agent")?, string("prompt")?);
+            let mut config = match cwd {
+                Some(cwd) => self.config_in(session_folder(cwd)?).await?,
                 None => (*self.config).clone(),
             };
-            if let Some(agent) = string("agent")? {
+            if let Some(agent) = agent {
                 config.active_agent = agent.to_owned();
             }
-            let cwd = config.cwd.clone();
+            let cwd = config
+                .cwd
+                .to_str()
+                .context("session folder is not valid UTF-8")?
+                .to_owned();
             let session = self.manager.start(StartSession {
                 agent: SessionAgent::Prepare(Self::prepare(config)),
                 start: SessionStart::New,
                 parent: None,
                 source: SessionSource::User,
             })?;
-            if let Some(prompt) = string("prompt")? {
+            if let Some(prompt) = prompt {
                 let handle = session.handle.clone();
                 let prompt = vec![ContentBlock::Text(TextContent::new(prompt))];
                 tokio::spawn(async move {
@@ -135,7 +143,7 @@ impl HostService {
                     .await?
             }
             "_nori/session/resume" => {
-                let mut config = self.config_in(record.cwd)?;
+                let mut config = self.config_in(record.cwd).await?;
                 config.active_agent = record.agent;
                 self.manager.resume(&id, Self::prepare(config)).await?;
             }

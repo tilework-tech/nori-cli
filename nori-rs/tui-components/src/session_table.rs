@@ -99,7 +99,7 @@ pub fn short_folder(path: &std::path::Path, home: Option<&std::path::Path>) -> S
         } else {
             format!("~/{}", relative.display())
         };
-        if short.chars().count() <= SHORT_FOLDER_CELLS {
+        if unicode_width::UnicodeWidthStr::width(short.as_str()) <= SHORT_FOLDER_CELLS {
             return short;
         }
     }

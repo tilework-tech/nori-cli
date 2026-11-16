@@ -118,15 +118,19 @@ host ls / stop / new --------------+                   SessionManager
   releases the lock.
 - The host advertises folder support by adding `session_cwd: true` to
   `capabilities.nori_sessions` in its `initialize` reply. Clients send `cwd`
-  only when it is advertised; against an older host a plain start sends no
-  folder and an explicit folder is refused client-side ("does not support
-  session folders").
+  only when it is advertised; in `nori attach` against an older host a plain
+  `/new` sends no folder and a named folder is refused client-side ("does not
+  support session folders"). `nori host new` refuses to run against such a
+  host, which would also refuse its observing client.
+- A new session becomes the host's selected session (the target of requests
+  that omit `session_id`), whoever started it.
 - `nori host new [--cwd DIR] [--agent AGENT] [--prompt TEXT] [--json]`
   connects as an observer (locally discovered, or `--host` with
   `--token-file`), starts one session, and prints its ID, or the reply object
-  with `--json`. `--cwd` and its default (the current directory) are resolved
-  against the caller's directory before sending, so scripts address remote
-  hosts the same way; the host still checks the folder exists on its machine.
+  with `--json`. `--cwd` is resolved against the caller's directory before
+  sending, and the host checks the folder exists on its machine. Without
+  `--cwd` the local host starts the session in the caller's directory; a host
+  named with `--host` may be another machine, so it uses its own folder.
 
 ### Things to Know
 

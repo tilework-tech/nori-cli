@@ -344,7 +344,7 @@ impl Runtime {
             .strip_prefix("/new")
             .filter(|args| args.is_empty() || args.starts_with(' '))
         {
-            match super::new_session::params(args, &self.cwd, self.session_folders) {
+            match super::new_session::params(args, &self.cwd, self.session_folders, self.remote) {
                 Ok(params) => self.send("_nori/session/new", params, Pending::New),
                 Err(message) => {
                     self.composer.handle_paste(text);

@@ -323,25 +323,63 @@ fn new_session_in_a_missing_folder_or_a_file_fails_without_starting_one() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn the_host_refuses_a_relative_or_missing_session_folder_from_any_client() {
+async fn the_host_refuses_a_malformed_new_session_without_starting_one() {
     let host = Host::writing_files();
     let mut client = tokio::task::block_in_place(|| host.client());
-    for (cwd, expected) in [
-        ("relative/path", "absolute"),
-        ("/nonexistent/nori-folder", "does not exist"),
+    for (params, expected) in [
+        (serde_json::json!({"cwd": "relative/path"}), "absolute"),
+        (
+            serde_json::json!({"prompt": [{"type": "text", "text": "hi"}]}),
+            "prompt must be a string",
+        ),
     ] {
         let error = client
-            .request("_nori/session/new", serde_json::json!({"cwd": cwd}))
+            .request("_nori/session/new", params.clone())
             .await
             .unwrap_err()
             .to_string();
-        assert!(error.contains(expected), "{cwd}: {error}");
+        assert!(error.contains(expected), "{params}: {error}");
     }
     let listing = client
         .request("_nori/session/list", serde_json::json!({}))
         .await
         .unwrap();
     assert_eq!(listing["sessions"], serde_json::json!([]));
+}
+
+#[test]
+fn a_named_host_starts_in_its_own_folder_unless_one_is_given() {
+    let host = Host::writing_files();
+    let state: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(host.0.path().join("host/state.json")).unwrap(),
+    )
+    .unwrap();
+    let token = host.0.path().join("host/token");
+    let caller = TempDir::new().unwrap();
+    std::fs::create_dir(caller.path().join("nested")).unwrap();
+    let new_on_host = |args: &[&str]| -> serde_json::Value {
+        let remote = [
+            "host",
+            "new",
+            "--json",
+            "--host",
+            state["endpoint"].as_str().unwrap(),
+            "--token-file",
+            token.to_str().unwrap(),
+        ];
+        let output = success(bounded_output(
+            host.command(&[&remote[..], args].concat())
+                .current_dir(caller.path()),
+        ));
+        serde_json::from_str(&output).unwrap()
+    };
+
+    let host_folder = canonical(&std::env::current_dir().unwrap());
+    assert_eq!(new_on_host(&[])["cwd"], host_folder);
+    assert_eq!(
+        new_on_host(&["--cwd", "nested"])["cwd"],
+        canonical(&caller.path().join("nested"))
+    );
 }
 
 /// Send `text` to session `id`, waiting while it is still busy with the
@@ -359,7 +397,7 @@ async fn send_prompt(client: &mut nori_harness::remote_agent::ManagedClient, id:
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn resumed_and_delegated_sessions_keep_the_session_folder() {
+async fn a_resumed_session_keeps_its_folder() {
     let host = Host::writing_files();
     let folder = TempDir::new().unwrap();
     let marker = folder.path().join("marker.txt");
@@ -407,8 +445,26 @@ async fn resumed_and_delegated_sessions_keep_the_session_folder() {
         .unwrap();
     send_prompt(&mut client, id, "write again").await;
     tokio::task::block_in_place(|| wait_for_file(&marker));
+}
 
+#[tokio::test(flavor = "multi_thread")]
+async fn a_delegated_child_works_in_its_parents_folder() {
+    let host = Host::writing_files();
+    let folder = TempDir::new().unwrap();
+    let marker = folder.path().join("marker.txt");
+    let id = success(host.run(&[
+        "host",
+        "new",
+        "--cwd",
+        folder.path().to_str().unwrap(),
+        "--prompt",
+        "write a marker",
+    ]));
+    let id = id.trim();
+    wait_for_file(&marker);
     std::fs::remove_file(&marker).unwrap();
+
+    let mut client = tokio::task::block_in_place(|| host.client());
     client
         .request(
             "_nori/session/delegate",

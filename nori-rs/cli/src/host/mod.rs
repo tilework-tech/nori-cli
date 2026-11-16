@@ -52,7 +52,8 @@ enum HostAction {
 #[derive(Debug, Parser)]
 struct NewCommand {
     /// Folder the session works in; relative paths start from the current
-    /// directory, which is also the default.
+    /// directory, which is also the default for the local host. A host named
+    /// with --host uses its own folder by default.
     #[arg(long)]
     cwd: Option<PathBuf>,
     /// Agent to run instead of the host's default.
@@ -81,6 +82,9 @@ impl HostCommand {
 /// Start a session as `command` describes and print it. The folder is
 /// resolved here, against the caller's directory, and checked by the host.
 async fn new_session(command: NewCommand, files: &HostFiles) -> anyhow::Result<()> {
+    // A named host may be another machine, where this directory need not
+    // exist, so only a folder given explicitly is sent to it.
+    let remote = command.host.is_some();
     let (mut client, initialized) = match (command.host, command.token_file) {
         (Some(endpoint), Some(path)) => {
             connect_endpoint(&endpoint, &state::read_token(&path)?).await?
@@ -90,15 +94,17 @@ async fn new_session(command: NewCommand, files: &HostFiles) -> anyhow::Result<(
             connect_endpoint(&host.endpoint, &token).await?
         }
     };
+    anyhow::ensure!(
+        initialized["capabilities"]["nori_sessions"]["session_cwd"] == true,
+        "this host is too old for `nori host new`; restart it with this nori"
+    );
     let mut params = json!({});
-    if initialized["capabilities"]["nori_sessions"]["session_cwd"] == true {
-        let cwd = command.cwd.unwrap_or_else(|| PathBuf::from("."));
-        params["cwd"] = json!(std::path::absolute(cwd)?);
-    } else {
-        anyhow::ensure!(
-            command.cwd.is_none(),
-            "this host does not support session folders; restart it with a newer nori"
-        );
+    let cwd = command
+        .cwd
+        .or_else(|| (!remote).then(|| PathBuf::from(".")));
+    if let Some(cwd) = cwd {
+        let cwd = std::path::absolute(cwd)?;
+        params["cwd"] = json!(cwd.to_str().context("folder is not valid UTF-8")?);
     }
     if let Some(agent) = command.agent {
         params["agent"] = json!(agent);
