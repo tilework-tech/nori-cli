@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use nori_config::ToolOutput;
 use nori_config::TrustLevel;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -38,6 +39,8 @@ pub(crate) struct NoriTrustDirectoryWidget {
     /// User's selection, if any.
     pub selection: Option<TrustDirectorySelection>,
     menu: MenuState<TrustDirectorySelection>,
+    /// Second, skippable question shown after the trust choice.
+    tool_output_menu: Option<MenuState<ToolOutput>>,
     /// Error message to display, if any.
     pub error: Option<String>,
 }
@@ -49,22 +52,47 @@ impl WidgetRef for &NoriTrustDirectoryWidget {
         } else {
             "Since this folder is not version controlled, we recommend requiring approval of all edits and commands."
         };
-        let subtitle = self.error.as_deref().unwrap_or(guidance);
-        let mut state = self.menu.clone();
-        OverlayMenu::new(format!("You are running Nori in {}", self.cwd.display()))
-            .subtitle(subtitle.to_string())
-            .theme(crate::style::component_theme())
-            .max_width(76)
-            .density(MenuDensity::Dense)
-            .row_pattern(MenuRowPattern::Zebra)
-            .fullscreen_selection_rails(true)
-            .key_hints([
-                KeyHint::new("↑↓/j/k", "move"),
+        let subtitle = |text: &str| self.error.as_deref().unwrap_or(text).to_string();
+        let navigation = KeyHint::new("↑↓/j/k", "move");
+        if let Some(menu) = &self.tool_output_menu {
+            styled_menu(
+                "How should tool calls appear?".to_string(),
+                subtitle("Change it later with [tui] tool_output in config.toml."),
+                [
+                    navigation,
+                    KeyHint::new("enter", "select"),
+                    KeyHint::new("esc", "skip"),
+                ],
+            )
+            .render(area, buf, &mut menu.clone());
+            return;
+        }
+        styled_menu(
+            format!("You are running Nori in {}", self.cwd.display()),
+            subtitle(guidance),
+            [
+                navigation,
                 KeyHint::new("1-2", "select"),
                 KeyHint::new("enter", "select"),
-            ])
-            .render(area, buf, &mut state);
+            ],
+        )
+        .render(area, buf, &mut self.menu.clone());
     }
+}
+
+fn styled_menu<'a, K>(
+    title: String,
+    subtitle: String,
+    hints: [KeyHint<'a>; 3],
+) -> OverlayMenu<'a, K> {
+    OverlayMenu::new(title)
+        .subtitle(subtitle)
+        .theme(crate::style::component_theme())
+        .max_width(76)
+        .density(MenuDensity::Dense)
+        .row_pattern(MenuRowPattern::Zebra)
+        .fullscreen_selection_rails(true)
+        .key_hints(hints)
 }
 
 impl KeyboardHandler for NoriTrustDirectoryWidget {
@@ -76,20 +104,39 @@ impl KeyboardHandler for NoriTrustDirectoryWidget {
         let Some(action) = crate::overlay_menu::action_from_key_event(key_event) else {
             return;
         };
-        if let MenuOutcome::Activated(selection) = self.menu.handle(action) {
-            match selection {
-                TrustDirectorySelection::Trust => self.handle_trust(),
-                TrustDirectorySelection::DontTrust => self.handle_dont_trust(),
+        if let Some(menu) = &mut self.tool_output_menu {
+            match menu.handle(action) {
+                MenuOutcome::Activated(tool_output) => {
+                    let value = if tool_output == ToolOutput::Full {
+                        "full"
+                    } else {
+                        "compact"
+                    };
+                    if let Err(e) = NoriConfigEdits::new(&self.nori_home)
+                        .set_path(&["tui", "tool_output"], value)
+                        .apply_blocking()
+                    {
+                        tracing::error!("Failed to save tool_output: {e:?}");
+                    }
+                    self.tool_output_menu = None;
+                }
+                MenuOutcome::Cancelled => self.tool_output_menu = None,
+                MenuOutcome::Unchanged | MenuOutcome::SelectionChanged(_) => {}
             }
+            return;
+        }
+        if let MenuOutcome::Activated(selection) = self.menu.handle(action) {
+            self.save_trust(selection);
         }
     }
 }
 
 impl StepStateProvider for NoriTrustDirectoryWidget {
     fn get_step_state(&self) -> StepState {
-        match self.selection {
-            Some(_) => StepState::Complete,
-            None => StepState::InProgress,
+        if self.selection.is_some() && self.tool_output_menu.is_none() {
+            StepState::Complete
+        } else {
+            StepState::InProgress
         }
     }
 }
@@ -122,41 +169,41 @@ impl NoriTrustDirectoryWidget {
             is_git_repo,
             selection: None,
             menu,
+            tool_output_menu: None,
             error: None,
         }
     }
 
-    fn handle_trust(&mut self) {
+    fn save_trust(&mut self, selection: TrustDirectorySelection) {
         let target =
             resolve_root_git_project_for_trust(&self.cwd).unwrap_or_else(|| self.cwd.clone());
-
+        let (level, preselected) = match selection {
+            TrustDirectorySelection::Trust => (TrustLevel::Trusted, ToolOutput::Compact),
+            TrustDirectorySelection::DontTrust => (TrustLevel::Untrusted, ToolOutput::Full),
+        };
         if let Err(e) = NoriConfigEdits::new(&self.nori_home)
-            .set_project_trust_level(&target, TrustLevel::Trusted)
+            .set_project_trust_level(&target, level)
             .apply_blocking()
         {
-            tracing::error!("Failed to set project trusted: {e:?}");
-            self.error = Some(format!("Failed to set trust for {}: {e}", target.display()));
-        }
-
-        self.selection = Some(TrustDirectorySelection::Trust);
-    }
-
-    fn handle_dont_trust(&mut self) {
-        let target =
-            resolve_root_git_project_for_trust(&self.cwd).unwrap_or_else(|| self.cwd.clone());
-
-        if let Err(e) = NoriConfigEdits::new(&self.nori_home)
-            .set_project_trust_level(&target, TrustLevel::Untrusted)
-            .apply_blocking()
-        {
-            tracing::error!("Failed to set project untrusted: {e:?}");
+            tracing::error!("Failed to save trust level: {e:?}");
             self.error = Some(format!(
-                "Failed to set untrusted for {}: {e}",
+                "Failed to save trust for {}: {e}",
                 target.display()
             ));
         }
+        self.selection = Some(selection);
 
-        self.selection = Some(TrustDirectorySelection::DontTrust);
+        let items = [
+            MenuItem::new(ToolOutput::Compact, "Compact")
+                .description("One line per tool call with its last output line")
+                .mnemonic('c'),
+            MenuItem::new(ToolOutput::Full, "Full")
+                .description("Every command in full with its output")
+                .mnemonic('f'),
+        ];
+        let mut menu = crate::overlay_menu::state_from_items(items, "tool output");
+        menu.select_key(&preselected);
+        self.tool_output_menu = Some(menu);
     }
 }
 
@@ -251,28 +298,84 @@ mod tests {
         assert!(output.contains("1-2 select"));
     }
 
-    #[test]
-    fn completes_on_enter_trust() {
-        let (mut widget, _tmp) = create_widget(true);
-        widget.menu.select_key(&TrustDirectorySelection::Trust);
+    fn press(widget: &mut NoriTrustDirectoryWidget, code: KeyCode) {
+        widget.handle_key_event(KeyEvent::new(code, KeyModifiers::NONE));
+    }
 
-        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
-        widget.handle_key_event(enter);
-
-        assert_eq!(widget.get_step_state(), StepState::Complete);
-        assert_eq!(widget.selection, Some(TrustDirectorySelection::Trust));
+    fn written_tool_output(nori_home: &TempDir) -> Option<nori_config::ToolOutput> {
+        let path = nori_home.path().join("config.toml");
+        let toml: nori_config::NoriConfigToml =
+            toml::from_str(&std::fs::read_to_string(path).expect("config written"))
+                .expect("valid config");
+        toml.tui.tool_output
     }
 
     #[test]
-    fn completes_on_enter_dont_trust() {
-        let (mut widget, _tmp) = create_widget(true);
+    fn trust_then_tool_output_question_preselects_compact() {
+        let (mut widget, tmp) = create_widget(true);
+        widget.menu.select_key(&TrustDirectorySelection::Trust);
+        press(&mut widget, KeyCode::Enter);
+
+        assert_eq!(widget.get_step_state(), StepState::InProgress);
+        assert_eq!(widget.selection, Some(TrustDirectorySelection::Trust));
+        insta::assert_snapshot!(
+            "nori_trust_tool_output_after_trust",
+            render_widget(&widget, 70, 12)
+        );
+
+        press(&mut widget, KeyCode::Enter);
+        assert_eq!(widget.get_step_state(), StepState::Complete);
+        assert_eq!(
+            written_tool_output(&tmp),
+            Some(nori_config::ToolOutput::Compact)
+        );
+    }
+
+    #[test]
+    fn dont_trust_preselects_full_tool_output() {
+        let (mut widget, tmp) = create_widget(true);
         widget.menu.select_key(&TrustDirectorySelection::DontTrust);
+        press(&mut widget, KeyCode::Enter);
+        assert_eq!(widget.get_step_state(), StepState::InProgress);
+        insta::assert_snapshot!(
+            "nori_trust_tool_output_after_dont_trust",
+            render_widget(&widget, 70, 12)
+        );
 
-        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
-        widget.handle_key_event(enter);
-
+        press(&mut widget, KeyCode::Enter);
         assert_eq!(widget.get_step_state(), StepState::Complete);
         assert_eq!(widget.selection, Some(TrustDirectorySelection::DontTrust));
+        assert_eq!(
+            written_tool_output(&tmp),
+            Some(nori_config::ToolOutput::Full)
+        );
+    }
+
+    #[test]
+    fn trusted_directory_can_still_choose_full_tool_output() {
+        let (mut widget, tmp) = create_widget(true);
+        widget.menu.select_key(&TrustDirectorySelection::Trust);
+        press(&mut widget, KeyCode::Enter);
+        press(&mut widget, KeyCode::Down);
+        press(&mut widget, KeyCode::Enter);
+
+        assert_eq!(
+            written_tool_output(&tmp),
+            Some(nori_config::ToolOutput::Full)
+        );
+    }
+
+    #[test]
+    fn tool_output_question_can_be_skipped() {
+        let (mut widget, tmp) = create_widget(true);
+        widget.menu.select_key(&TrustDirectorySelection::Trust);
+        press(&mut widget, KeyCode::Enter);
+        press(&mut widget, KeyCode::Esc);
+
+        assert_eq!(widget.get_step_state(), StepState::Complete);
+        assert_eq!(written_tool_output(&tmp), None);
+        let config = std::fs::read_to_string(tmp.path().join("config.toml")).expect("config");
+        assert!(config.contains("trust_level = \"trusted\""), "{config}");
     }
 
     #[test]

@@ -1,0 +1,10 @@
+---
+source: tui/src/nori/onboarding/trust_directory.rs
+expression: "render_widget(&widget, 70, 12)"
+---
+  How should tool calls appear?
+  ▏ Compact                                                        ▕
+  ▏ One line per tool call with its last output line               ▕
+    Full
+    Every command in full with its output
+  ↑↓/j/k move  enter select  esc skip

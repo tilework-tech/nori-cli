@@ -533,6 +533,42 @@ capture tools without background-colour erase (such as `tmux capture-pane`)
 leave a cleared tail unshaded, so shading bands would stop short of the right
 edge.
 
+#### Tool call rendering
+
+Every ACP tool call renders through
+[`ClientToolCell`](src/client_tool_cell.rs), with shell-command helpers in
+[`exec_cell`](src/exec_cell/render.rs) built on the harness's tolerant
+[`bash::summarize`](../harness/src/bash.rs) parser. The cell's
+`display_lines` is the compact inline view and `transcript_lines` the full
+view; `[tui] tool_output = "full"` (`NoriConfig::tool_output`, passed in by the
+chat widget through `with_tool_output`) makes the inline view full as well.
+`nori attach` builds cells without that setting, so it always renders compact.
+
+Compact output is one scannable line per call: a status dot that is the only
+status indicator (green, red, or a spinner), `Ran`/`Running` plus a command
+summary with bold command names and arguments elided to `…`, and one `└` line
+holding the last non-blank output line. Read-only Execute calls join `Read`,
+`Search`, and list-files calls in one `Explored` group with read/search/failed
+counts; edits show only their header. The full view shows the highlighted
+command, all output, every exploring step, and diffs. Snapshot routing, the
+pending/completed bookkeeping, and exploring-group lifetime are described in
+[EXEC_CELL_LIFECYCLE.md](src/chatwidget/EXEC_CELL_LIFECYCLE.md).
+
+The transcript overlay ([`pager_overlay`](src/pager_overlay.rs)) caps each
+cell's rows and marks the cut with a faint italic `┄ N more lines` row so it
+cannot be mistaken for output. The configured `open_transcript` key (Ctrl+T)
+opens it. The `toggle_plan_drawer` key (Ctrl+O) also opens it when no plan is
+pinned (`ChatWidget::has_pinned_plan`) and otherwise keeps toggling the plan
+drawer. Inside the overlay, `q`, Ctrl+C, Ctrl+T, and Ctrl+O close it.
+
+The directory-trust onboarding step
+([`trust_directory`](src/nori/onboarding/trust_directory.rs)) asks a second,
+skippable question after the trust choice: how tool calls should appear.
+Compact is preselected after choosing to work without approval and Full after
+requiring approval. Enter writes the global `[tui] tool_output`; Esc skips
+without writing. The step completes only after this question is answered or
+skipped.
+
 #### Inline transcript reflow
 
 In inline mode, terminal width changes rebuild the visible transcript at the

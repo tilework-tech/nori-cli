@@ -74,6 +74,7 @@ const KEY_Q: KeyBinding = key_hint::plain(KeyCode::Char('q'));
 const KEY_ESC: KeyBinding = key_hint::plain(KeyCode::Esc);
 const KEY_ENTER: KeyBinding = key_hint::plain(KeyCode::Enter);
 const KEY_CTRL_T: KeyBinding = key_hint::ctrl(KeyCode::Char('t'));
+const KEY_CTRL_O: KeyBinding = key_hint::ctrl(KeyCode::Char('o'));
 const KEY_CTRL_C: KeyBinding = key_hint::ctrl(KeyCode::Char('c'));
 const TRANSCRIPT_HISTORY_MAX_LINES: usize = 20;
 
@@ -366,7 +367,7 @@ fn transcript_overlay_lines(cell: &dyn HistoryCell, width: u16) -> Vec<Line<'sta
 
     let omitted = lines.len() - (TRANSCRIPT_HISTORY_MAX_LINES - 1);
     lines.truncate(TRANSCRIPT_HISTORY_MAX_LINES - 1);
-    lines.push(Line::from(format!("… {omitted} more lines")).dim());
+    lines.push(Line::from(format!("┄ {omitted} more lines")).dim().italic());
     lines
 }
 
@@ -502,7 +503,11 @@ impl TranscriptOverlay {
     pub(crate) fn handle_event(&mut self, tui: &mut tui::Tui, event: TuiEvent) -> Result<()> {
         match event {
             TuiEvent::Key(key_event) => match key_event {
-                e if KEY_Q.is_press(e) || KEY_CTRL_C.is_press(e) || KEY_CTRL_T.is_press(e) => {
+                e if KEY_Q.is_press(e)
+                    || KEY_CTRL_C.is_press(e)
+                    || KEY_CTRL_T.is_press(e)
+                    || KEY_CTRL_O.is_press(e) =>
+                {
                     self.is_done = true;
                     Ok(())
                 }
@@ -703,7 +708,17 @@ mod tests {
         let rendered = buffer_to_text(&buf, area);
         assert!(rendered.contains("non-patch-row-18"));
         assert!(!rendered.contains("non-patch-row-19"));
-        assert!(rendered.contains("… 6 more lines"));
+        assert!(rendered.contains("┄ 6 more lines"));
+        let marker = (0..area.height)
+            .flat_map(|y| (0..area.width).map(move |x| (x, y)))
+            .find(|&pos| buf[pos].symbol() == "┄");
+        assert!(marker.is_some(), "{rendered}");
+        let style = marker.map(|pos| buf[pos].style()).unwrap_or_default();
+        assert!(
+            style
+                .add_modifier
+                .contains(ratatui::style::Modifier::ITALIC | ratatui::style::Modifier::DIM)
+        );
     }
 
     fn buffer_to_text(buf: &Buffer, area: Rect) -> String {

@@ -156,7 +156,7 @@ fn build_name_line(row: &GenericDisplayRow, width: usize) -> Line<'static> {
 /// Truncate a styled line to `max_width` cells, appending a single ellipsis
 /// when it does not fit. Truncation is span-aware so styling (match bolding,
 /// coloured markers) survives.
-fn truncate_line(line: &Line<'static>, max_width: usize) -> Line<'static> {
+pub(crate) fn truncate_line(line: &Line<'static>, max_width: usize) -> Line<'static> {
     if line.width() <= max_width {
         return line.clone();
     }

@@ -1,0 +1,10 @@
+---
+source: tui/src/exec_cell/tests.rs
+expression: compact(&cell)
+---
+--- 120 ---
+• Ran cargo …
+  └ error: test failed, to rerun pass `-p parser --lib`
+--- 80 ---
+• Ran cargo …
+  └ error: test failed, to rerun pass `-p parser --lib`

@@ -1,0 +1,10 @@
+---
+source: tui/src/exec_cell/tests.rs
+expression: compact(&group)
+---
+--- 120 ---
+• Explored 1 read · 3 searches · 1 failed
+  └ rg … | sort … | uniq … | sort … | head …
+--- 80 ---
+• Explored 1 read · 3 searches · 1 failed
+  └ rg … | sort … | uniq … | sort … | head …

@@ -921,6 +921,25 @@ the `BrowserSession`'s last field so, on drop, the child is killed (the manual
 `Drop` SIGTERMs Chrome, and `kill_on_drop` backs it) before a throwaway profile's
 temp dir is removed.
 
+#### Shell command structure
+
+[`bash`](src/bash.rs) exposes `summarize(src)`, a display-oriented view of a
+shell command line built on tree-sitter-bash. It returns top-level
+`ShellSegment`s (each with the `&&`, `||`, or `;` separator joining it to the
+previous one; newlines count as `;`) made of pipeline `ShellStage`s. A stage
+carries byte ranges into the source for its command name, the script an
+interpreter runs (`python3 tools/gen.py`), and its whole text including
+redirections, plus whether arguments follow, the line count of a heredoc body,
+and whether output is redirected to a file other than `/dev/null`. `VAR=`
+assignment prefixes are not part of the name range.
+
+Parsing is tolerant: segments inside tree-sitter `ERROR` nodes are still
+collected, and `None` means no command was recovered at all. The module makes
+no safety or execution decisions; its consumer is the TUI's tool call
+rendering ([`exec_cell`](../tui/src/exec_cell/render.rs)), which uses the
+ranges to summarize commands, bold command names, and decide whether an
+Execute call is read-only.
+
 ### Things to Know
 
 - All public ACP types are reached through `nori_protocol::acp`.
