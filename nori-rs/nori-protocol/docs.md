@@ -144,7 +144,7 @@ agent's latest reply for session lists. The host journal in the
 so `nori attach`, `nori host ls`, and the local list show the same reply.
 
 - The reply is the agent text since the last user message, tool call, agent
-  request, or `Prompting`/`Loading` phase. Each of those marks the reply
+  request or its answer, or `Prompting`/`Loading` phase. Each of those marks the reply
   stale; the previous reply stays until the next agent text replaces it, so a
   session running a tool still shows what it last said.
 - A user message counts because a loaded history replays its turns with no

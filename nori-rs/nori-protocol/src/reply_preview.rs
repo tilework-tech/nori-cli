@@ -10,7 +10,8 @@ use crate::acp::v1 as acp;
 const REPLY_CHARS: usize = 200;
 
 /// Follows one session's events and keeps the start of the agent's latest
-/// reply: the text it sent since the last user message, tool call or request.
+/// reply: the text it sent since the last user message, tool call, request or
+/// answered request.
 /// The previous reply stays until the next one's first text, so a session
 /// that is thinking or running a tool still shows what it last said.
 #[derive(Debug, Default, Clone)]
@@ -45,7 +46,10 @@ impl ReplyPreview {
                 }
                 _ => {}
             },
-            SessionEvent::Acp(AcpEvent::Request { .. })
+            // A request, or its answer when the request itself was seen
+            // elsewhere, also ends the reply.
+            SessionEvent::Acp(AcpEvent::Request { .. } | AcpEvent::Response { .. })
+            | SessionEvent::Nori(NoriEvent::RequestResolved(_))
             | SessionEvent::Nori(NoriEvent::SessionPhaseChanged(
                 SessionPhase::Prompting { .. } | SessionPhase::Loading { .. },
             )) => self.stale = true,
@@ -145,6 +149,22 @@ mod tests {
         assert_eq!(
             after(&[agent("Asking."), request, agent("Done.")]),
             Some("Done.".to_string())
+        );
+    }
+
+    #[test]
+    fn text_after_an_answered_request_is_the_new_reply() {
+        let resolved = SessionEvent::Nori(NoriEvent::RequestResolved(crate::RequestResolved {
+            request_id: acp::RequestId::Number(1),
+            answered_by: "client".to_string(),
+        }));
+        assert_eq!(
+            after(&[
+                agent("Asking first."),
+                resolved,
+                agent("Permission granted.")
+            ]),
+            Some("Permission granted.".to_string())
         );
     }
 

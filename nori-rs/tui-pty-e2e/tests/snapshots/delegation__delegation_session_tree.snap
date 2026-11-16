@@ -10,6 +10,6 @@ All  waiting on you
 › ○ parent task identity (current)                                                       mock-model    ready
     Delegation continuation received: [Nori delegation result] from mock-model-alt · m…  Mock D…Model  N ago
   └─ · mock:request-permission:write-child-file                                          mock-model-…  done
-       child final answer Permission granted with option: allow                          Mock D…Model  N ago
+       Permission granted with option: allow                                             Mock D…Model  N ago
 
 ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close

@@ -270,11 +270,19 @@ fn delegation_reads_clearly_from_request_to_result() {
     let screen = session.screen_contents();
     assert!(!screen.contains("(parent"), "{screen}");
     // Only the list itself; the transcript above it is covered elsewhere.
+    // The child's reply row starts after its permission request when the
+    // request reached the list's preview live, and includes the text before
+    // it when the child was adopted later; either is right, so the snapshot
+    // keeps only the reply after the request.
     let list = screen
         .lines()
         .skip_while(|line| !line.contains("Sessions 2"))
         .collect::<Vec<_>>()
-        .join("\n");
+        .join("\n")
+        .replace(
+            "child final answer Permission granted with option: allow",
+            "Permission granted with option: allow                   ",
+        );
     insta::assert_snapshot!(
         "delegation_session_tree",
         normalize_for_input_snapshot(list)
