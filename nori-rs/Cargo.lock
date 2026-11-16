@@ -3617,6 +3617,7 @@ dependencies = [
  "env_logger",
  "futures",
  "nori-protocol",
+ "pretty_assertions",
  "rmcp",
  "serde_json",
  "tokio",

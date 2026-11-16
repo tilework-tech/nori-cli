@@ -444,6 +444,44 @@ async fn shutting_down_prepared_agent_promptly_reaps_an_eof_ignoring_child() {
 
 #[tokio::test]
 #[serial]
+#[cfg(unix)]
+async fn auth_exit_during_initialize_fails_preparation_with_login_hint() {
+    let temp = tempfile::tempdir().expect("create test directory");
+    let agent = serde_json::from_value(serde_json::json!({
+        "name": "Unauthenticated agent",
+        "slug": "unauthenticated-agent",
+        "auth_hint": "run: nori-handroll login",
+        "distribution": {
+            "local": {
+                "command": "/bin/sh",
+                "args": [
+                    "-c",
+                    "IFS= read -r initialize_request || exit 2\n\
+                     echo 'Error: not authenticated — run: nori-handroll login' >&2\n\
+                     exit 1"
+                ]
+            }
+        }
+    }))
+    .expect("valid auth-failing agent configuration");
+    nori_acp_host::registry::initialize_registry(vec![agent]).expect("register auth-failing agent");
+    let mut spec = prepare_spec(temp.path(), temp.path().join("wire-logs"));
+    Arc::make_mut(&mut spec.config).active_agent = "unauthenticated-agent".to_string();
+
+    let result = tokio::time::timeout(Duration::from_secs(5), prepare_agent(spec)).await;
+    nori_acp_host::registry::initialize_registry(Vec::new()).expect("restore agent registry");
+    let error = result
+        .expect("child exit during initialize must finish preparation")
+        .expect_err("an unauthenticated agent must fail preparation");
+
+    assert!(
+        format!("{error:#}").contains("nori-handroll login"),
+        "preparation must report an actionable auth error: {error:#}"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn advertised_session_list_failure_is_not_treated_as_unsupported() {
     // SAFETY: environment-mutating mock-agent tests run serially.
     unsafe {

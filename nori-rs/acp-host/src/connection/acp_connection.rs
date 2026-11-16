@@ -22,6 +22,7 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
+use tokio_util::task::AbortOnDropHandle;
 use tracing::debug;
 use tracing::warn;
 
@@ -89,7 +90,7 @@ pub struct AcpConnection {
     session_config_state: std::sync::Arc<std::sync::RwLock<AcpSessionConfigState>>,
 
     /// Handle to the background task driving the ACP connection.
-    connection_task: tokio::task::JoinHandle<()>,
+    connection_task: AbortOnDropHandle<()>,
 
     /// Handles to the child process for teardown (None for remote connections).
     child: Option<ChildHandle>,
@@ -129,7 +130,9 @@ async fn establish_connection(
         )>,
     >();
 
-    let connection_task = tokio::spawn(async move {
+    // Initialization can be cancelled before an AcpConnection exists. Keep
+    // task ownership here so cancellation also releases its event senders.
+    let connection_task = AbortOnDropHandle::new(tokio::spawn(async move {
         let result = Client
             .builder()
             .on_receive_notification(
@@ -384,7 +387,7 @@ async fn establish_connection(
         if let Err(e) = result {
             debug!("ACP connection task ended: {e}");
         }
-    });
+    }));
 
     let (cx, capabilities, initialize_meta) = init_rx
         .await
