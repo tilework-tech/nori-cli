@@ -41,6 +41,23 @@ pub(crate) fn status_label(status: SessionStatus) -> &'static str {
         SessionStatus::Ready => "ready",
         SessionStatus::Failed => "failed",
         SessionStatus::Closed => "closed",
+        SessionStatus::Done => "done",
+    }
+}
+
+/// The color of a status word and glyph in session lists: amber for what
+/// needs the user, cyan for work in progress, green for ready, red for
+/// failed, the default color for a child that finished its task, and muted
+/// for closed and starting sessions.
+pub(crate) fn status_tone(status: SessionStatus) -> nori_tui_components::DetailTone {
+    use nori_tui_components::DetailTone;
+    match status {
+        SessionStatus::WaitingOnYou => DetailTone::Warning,
+        SessionStatus::Working => DetailTone::Info,
+        SessionStatus::Ready => DetailTone::Success,
+        SessionStatus::Failed => DetailTone::Error,
+        SessionStatus::Done => DetailTone::Default,
+        SessionStatus::Closed | SessionStatus::Starting => DetailTone::Muted,
     }
 }
 

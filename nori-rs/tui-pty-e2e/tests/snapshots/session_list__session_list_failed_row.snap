@@ -19,9 +19,9 @@ expression: normalize_for_input_snapshot(session.screen_contents())
   All  waiting on you
 
     Session                                                                 Agent           Status
-    ○ alpha question (current)                                              Mock ACP        ready
+    ○ alpha question (current)                                              mock-model      ready
     alpha agent answer
-  › ✕ doomed question                                                       Mock ACP        failed
+  › ✕ doomed question                                                       mock-model      failed
     agent exited · resume available
 
   ↑↓ move  enter open  ctrl+r resume  ctrl+d close  tab waiting on you  esc close

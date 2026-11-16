@@ -126,7 +126,7 @@ impl App {
         let closed: Vec<SessionGeneration> = self
             .session_facts()
             .into_iter()
-            .filter(|fact| fact.status == nori_protocol::SessionStatus::Closed)
+            .filter(|fact| fact.status.is_closed())
             .map(|fact| fact.generation)
             .collect();
         if let Some(target) = self

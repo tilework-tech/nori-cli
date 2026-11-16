@@ -379,7 +379,7 @@ impl ChatWidget {
             && self
                 .managed_conversation_id
                 .and_then(|id| self.session_manager.get(&id))
-                .is_some_and(|record| record.status == nori_protocol::SessionStatus::Closed);
+                .is_some_and(|record| record.status.is_closed());
         if !historical_child {
             self.submit_harness_action(crate::app_event::HarnessAction::LoadCustomPrompts);
         }

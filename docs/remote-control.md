@@ -336,8 +336,9 @@ prompts; the WebSocket extension controls sessions already owned by the TUI.
 | `_nori/session/delegate` | Optional parent `session_id`, `agent`, `task` | Delegation record |
 | `_nori/session/delegation/resolve` | Optional parent `session_id`, delegation `request_id`, `approved` boolean | Updated delegation record |
 
-A list row reports identity, agent, status, cwd, lineage, pending request IDs,
-`source`, delegation `depth`, the parent's `delegations`, sequence bounds (`latest_seq`, `first_available_seq`), age in seconds, and a
+A list row reports identity, agent, status, `family_status` (the most urgent
+status across the row's whole session family, rooted at its top-level session),
+cwd, lineage, pending request IDs, `source`, delegation `depth`, the parent's `delegations`, sequence bounds (`latest_seq`, `first_available_seq`), age in seconds, and a
 title derived from observed session activity. `replay_cursors` includes every
 conversation known to the journal. Restarting a failed session with Ctrl+R keeps
 its Nori conversation ID, list row, and sequence counter. Existing subscriptions
@@ -384,7 +385,11 @@ Agents without HTTP MCP support retain user-driven `/delegate`, but have no
 stdio agent-tool fallback.
 
 A delegation record contains `request_id`, `parent_id`, `child_id`,
-`parent_agent`, `agent`, `task`, `depth`, `status`, and optional `result`.
+`parent_agent`, `agent`, `task`, `depth`, `status`, optional `result`, and
+`origin`. `origin` is `agent` when the parent agent called the MCP `delegate`
+tool and `user` when the request came through the manager directly (`/delegate`
+or `_nori/session/delegate`); records from hosts that predate the field
+deserialize as `agent`. Clients use it only to word who asked for the child.
 The child conversation ID is reserved before approval. The statuses are
 `awaiting_approval`, `running`, `declined`, `completed`, `failed`, and
 `cancelled`; these describe delegation state, separately from session status.
@@ -395,7 +400,8 @@ parent-only subscription does not become a subscription to every descendant.
 
 Same-kind children start immediately. A different-kind request returns
 `awaiting_approval`; resolve it for the requesting parent and request ID with
-`approved: true` (Start) or `approved: false` (Decline). Only the controller may
+`approved: true` or `approved: false` (the terminals label these
+"Yes, start it" and "No, decline"). Only the controller may
 request or resolve delegation. Unknown, resolved, or wrongly attributed
 requests fail rather than starting another child. Approval does not reserve a
 process indefinitely: actual startup must pass the shared session cap. Depth
@@ -409,10 +415,23 @@ the new parent identity.
 
 A child's ACP permission request belongs to that child's conversation and
 request ID. Answer it after selecting the child, with Alt+Down in the terminal
-for next waiting session. Parent notices name the child and parent rather than
-opening the child's permission popup in the parent. A completed child's result
-is automatically queued as attributed input to the parent, including when the
-parent is busy. The manager retains delivery until that parent's correlated
+for next waiting session. Instead of opening the child's permission popup in
+the parent, the parent receives a notice that names both sessions readably:
+`<agent> · <child name> is waiting on you (delegated by <parent agent> · <parent
+name>). Press Alt+Down to answer it.` The child name is the first non-empty
+line of the task (else `new session`) and the parent name is its recorded
+title, each cut to 40 characters in the middle (start, `…`, end) so names
+sharing a long prefix stay distinct. A completed child's result is automatically queued as attributed
+input to the parent, including when the parent is busy. That prompt's first
+line is `[Nori delegation result] from <agent> · <child name> · <outcome>`
+(`done`, `failed`, `declined`, or `cancelled`; the child name here is the
+task's whole first line), its second is
+`Child session: <child id>`, and the rest is the child's result text (its last
+turn's message text, with a paragraph break wherever a tool call, permission
+request, or other update interrupted it; for a crashed child, the first line of
+its failure). A declined delegation never started a child, so its prompt has no
+`Child session:` line. The parent's own ID is not included, and the prompt
+never becomes the parent's title. The manager retains delivery until that parent's correlated
 ACP prompt response, rather than treating queue admission as acknowledgment.
 If the parent process crashes before acknowledgment, stable-ID resume submits
 the result again. A delegated child with descendants waits for them and its
@@ -424,6 +443,9 @@ the parent's process has already failed. Parent crash preserves running
 children and holds results until stable-ID resume (Ctrl+R). Child failure
 returns a failure result without failing the parent. This state belongs to the
 current manager lifetime; host restart does not restore it from transcripts.
+After a restart a finished child is not listed by `nori host ls` or
+`nori attach`, and `/resume` on its transcript reopens it as a live top-level
+`ready` session without its parent link.
 
 ### Reconnect and retention
 
@@ -490,7 +512,7 @@ released after cleanup. Startup and stop do not require a terminal.
 | Command | Behavior |
 | --- | --- |
 | `nori host` | Start the background host, or report the already-running host. |
-| `nori host ls` | Print the flat `ID AGENT STATUS AGE TITLE` table; TTY output colors status and truncates titles to the terminal width, while piped output keeps full titles without color. |
+| `nori host ls` | Print the `ID AGENT STATUS AGE TITLE` table with delegated children listed under their parent and `├─`/`└─`/`│` tree guides inside TITLE. Top-level rows show their `family_status` when the host sends it. TTY output colors status (waiting on you yellow, working cyan, ready green, failed red, done in the default color, starting and closed dimmed) and fits the terminal: IDs shorten and AGENT and STATUS cut with `…` as the width shrinks, AGE is never cut, and TITLE always gets the remaining cells, keeping its tree guide whole and cutting the name in the middle; piped output keeps full values without color and appends `  (parent <full id>)` to every row with a parent, including a child whose parent is no longer listed and so prints at top level. |
 | `nori attach` | Open the host session list; requires `[features] multi_session = true`. |
 | `nori attach <id>` | Open the named Nori conversation. |
 | `nori attach --host <URL> --token-file <path>` | Connect to an explicit managed endpoint using a private token file. |
@@ -575,10 +597,29 @@ current session marker appears inside TITLE, leaving its short ID visible.
 Session commands address the host; they do not launch local agents.
 `/delegate <agent> <task>` is the delegation entry point; the list does not
 start delegations. The configured `hotkeys.next_waiting_session` binding
-(Alt+Down by default) selects the next waiting child or other session.
-Delegated child rows prefix TITLE with the parent identity and hierarchy marker,
-so long task titles cannot displace that identity; metadata columns remain fixed
-in the attached list and `nori host ls`.
+(Alt+Down by default) selects the next waiting child or other session, even
+with an unsent draft (with nothing waiting, a draft keeps the key for the
+composer), and
+`hotkeys.parent_session` (Alt+Up by default) returns from a delegated child to
+its parent. Both the attached list and `nori host ls` order children directly
+under their parent and draw tree guides inside TITLE, so the ID, AGENT, STATUS,
+and AGE columns stay aligned, and both show a top-level row's `family_status`.
+Each session keeps its own unsent draft: switching sessions parks the
+composer text with the session it was typed in and restores the target's.
+The identity line names the selected session; a top-level session shows its
+family status, as the lists do. Inside a delegated child (not a fork), it reads
+as a breadcrumb of agents and names from the top-level session down to the
+child. Both are fitted to the terminal width: the parent key gives way before
+the current name is cut, and names are cut in the middle. A second line names
+the next other session waiting on you, under its parent, with the jump key. A
+delegated child whose task finished lists as `done` (default color); `closed`
+(muted) means a session the user closed or shut down. A child's history ends
+with `This child finished its task` or `This child session ended`, plus the
+parent key. An attached parent shows a delivered result prompt as one
+`› delegation result from <agent> · <name> · <status> · delivered to this
+session` line, which drops the delivered suffix and then cuts the name to fit
+one row. A running child's delegation card reads `started`, because cards are
+printed once and do not update.
 
 Socket loss or a receive-liveness deadline starts recovery. Periodic session
 list requests keep idle connections observable; receiving JSON renews the

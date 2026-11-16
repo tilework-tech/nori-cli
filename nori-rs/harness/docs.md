@@ -373,7 +373,8 @@ not keep a process-global host or own listener policy.
 
 [`ManagedRemoteHost`](src/managed_remote.rs) shares one command boundary
 between the WebSocket `/sessions` adapter and managed ACP stdio. It lists
-manager records and journal cursors, resolves explicit conversation IDs before
+manager records and journal cursors (each row also carries `family_status`,
+the record's `SessionManager::family_status`, else its own status), resolves explicit conversation IDs before
 using the frontend's selected default, and opens one-session or all-session
 subscriptions. Its `_nori/session/event` notifications retain the complete
 manager envelope, including Nori events; legacy ACP projection stays separate.
@@ -678,6 +679,17 @@ processes.
   | `Ready` | Idle |
   | `Failed` | `SessionEnded` with `ConnectionLost`, `SpawnFailed`, or `TimedOut`, or the stream closed with no end event |
   | `Closed` | `SessionEnded` with `Shutdown` or `Closed`, or superseded by a fork |
+  | `Done` | A delegated child's `SessionEnded(Closed)` after its task completed |
+
+  The [delegation driver](src/session_manager/delegation_driver.rs) marks a
+  child's registry entry task-done (`Registry::mark_task_done`) when its
+  delegation reaches `Completed`, before closing the child; the entry then
+  records that close as `Done`. Every other end keeps its ordinary status.
+  `Done`, like the parent link and the rest of the registry, lives only in
+  the in-memory manager; the host keeps no snapshot of it. After a host
+  restart a finished child is not listed at all (`nori host ls` and the
+  `nori attach` list omit it), and reopening its transcript with `/resume`
+  starts it as a live top-level `ready` session with no parent link.
 
   A pending request clears when any `HarnessHandle` clone answers it, when the
   phase returns to `Idle` or enters `Cancelling`, or when the session ends.
@@ -701,7 +713,8 @@ processes.
   client following a session learns the request no longer waits on the user.
 - **Families.** A session family is a top-level session plus all of its
   descendants. `family_status` rolls member statuses up with priority
-  `WaitingOnYou` > `Failed` > `Working` > `Starting` > `Ready` > `Closed`.
+  `WaitingOnYou` > `Failed` > `Working` > `Starting` > `Ready` > `Closed` /
+  `Done` (equal rank).
 - **Fork.** On `NoriEvent::SessionForked` (branch at head) the parent becomes
   `Closed` and a child record (source `Fork`, parent = previous conversation)
   takes over the same agent process and capacity slot. `SessionForked` is
@@ -769,7 +782,7 @@ is unchanged.
 parent agent -- HTTP MCP delegate --+
 local /delegate -------------------+--> SessionManager
 remote /session/delegate ----------+         |
-                                   different agent? -> Start / Decline
+                                   different agent? -> approve / decline
                                              |
                                       child ACP process
                                              |
@@ -780,7 +793,7 @@ remote /session/delegate ----------+         |
 
 - Delegation records reserve a child conversation identity before approval.
   Same-kind children start immediately; different-kind children stay
-  `awaiting_approval` until Start or Decline. Approval is scoped to the
+  `awaiting_approval` until the user approves or declines. Approval is scoped to the
   requesting parent and request ID. Spawn admission uses the manager's shared
   session cap, including children, and is checked when a child actually starts.
 - Depth counts delegation edges, separately from fork ancestry. A top-level
@@ -792,15 +805,36 @@ remote /session/delegate ----------+         |
   stable. [State reduction](src/session_manager/delegation_state.rs) republishes
   the changed attribution for observers.
 - `DelegationChanged` carries request, parent, and child identities, agent
-  names, task, depth, status, and optional result. Manager envelopes make those
+  names, task, depth, status, optional result, and origin. The MCP tool path
+  passes the calling process as its expected process and records origin
+  `agent`; the public `SessionManager::delegate` (local and remote `/delegate`)
+  records `user`. Frontends use origin only to word who asked. Manager envelopes make those
   changes observable through ordinary subscriptions and reconnect replay,
   including events published while a failed parent has no process. Child-start
   approval contributes to the parent's `WaitingOnYou` status separately from
   its ACP permission request IDs.
   ACP permission requests remain owned by the child conversation; permission
-  responses must target that child, not its parent.
+  responses must target that child, not its parent. When a child sends an ACP
+  permission request, [state reduction](src/session_manager/delegation_state.rs)
+  emits a `Notice` into the parent:
+  `<agent> · <child name> is waiting on you (delegated by <parent agent> · <parent name>). Press Alt+Down to answer it.`
+  The child name comes from `nori_protocol::delegation_child_name`; the parent
+  name is the parent's replay-journal title through
+  `nori_protocol::session_display_name` (40 characters, cut in the middle),
+  else `this session`.
 - A child's final output or failure becomes an attributed prompt queued into
-  its parent automatically, without a review step. A busy parent consumes it
+  its parent automatically, without a review step. Its text is
+  `nori_protocol::delegation_result_prompt`: a readable first line naming the
+  child agent, the child's whole first task line, and outcome, then the child ID, then the result.
+  It does not repeat the parent's own ID. The result is the text of the
+  child's agent message chunks from its last prompting turn; when a tool call,
+  permission request, or other session update arrived between chunks, the next
+  chunk starts a new paragraph (`\n\n`) rather than being joined directly. A
+  child that crashed reports only the first non-empty line of its
+  `RequestFailed` message (for example `Agent process exited unexpectedly
+  (exit code 17).`); the agent's stderr tail stays in the child's own history.
+  Frontends recognize these prompts through
+  `nori_protocol::delegation_result_summary`. A busy parent consumes it
   through its normal prompt queue. The [result driver](src/session_manager/delegation_driver.rs)
   retains that delivery until the parent's correlated ACP `PromptResponse`,
   not merely queue admission. If the process crashes first, stable-ID resume
@@ -809,6 +843,13 @@ remote /session/delegate ----------+         |
   turns before returning its own final result. Terminal completion stops the
   child process and releases its capacity slot while retaining the registry
   record and transcript.
+- A result prompt never titles the parent that receives it. The
+  [replay journal](src/session_manager/replay.rs) skips user-message chunks
+  that are result prompts when it derives a title, and titles a still-untitled
+  parent from the task of a user-origin `DelegationChanged` it requested, so a
+  session whose first input is `/delegate` is named by that task. The
+  first-prompt summary hook in [user input](src/backend/user_input.rs) likewise
+  ignores result prompts, leaving the summary for the user's own first prompt.
 - Explicit parent close cancels descendants and invalidates pending delegation
   approvals, including when the parent has already failed. A parent process
   crash leaves children running; results wait for the parent's stable-ID

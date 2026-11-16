@@ -72,6 +72,7 @@ mod remote_control;
 mod render;
 mod resume_picker;
 mod session_log;
+mod session_path;
 mod session_preview;
 pub mod session_stats;
 mod session_status;

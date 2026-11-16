@@ -5,6 +5,7 @@ use insta::assert_snapshot;
 use pretty_assertions::assert_eq;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use unicode_width::UnicodeWidthStr;
 
 fn family_picker() -> PickerState<String> {
     let columns = [
@@ -192,4 +193,53 @@ fn a_badge_survives_when_a_long_title_is_cut() {
         row.contains("(current)") && row.contains('…') && row.contains("ready"),
         "{screen}"
     );
+}
+
+fn shared_prefix_picker() -> PickerState<String> {
+    let columns = [
+        PickerColumn::fixed("status", "Status", 16),
+        PickerColumn::flexible("title", "Title").cut_middle(),
+    ];
+    let row = |key: &str, depth| {
+        PickerItem::new(
+            key.to_string(),
+            "title",
+            format!("shared prefix for the parser review and its long tail {key}"),
+        )
+        .depth(depth)
+        .cell("status", "ready")
+    };
+    PickerState::new(
+        "Sessions",
+        columns,
+        [row("parent side", 0), row("child side", 1).current(true)],
+    )
+    .tree_column("title")
+}
+
+#[test]
+fn middle_cut_titles_keep_their_distinct_ends_once_cut() {
+    for width in [80, 60] {
+        let screen = render(&shared_prefix_picker(), width, 8, PickerDensity::Compact);
+        let parent = screen
+            .lines()
+            .find(|line| line.contains("parent side"))
+            .unwrap_or_else(|| panic!("parent end is shown at {width}: {screen}"));
+        let child = screen
+            .lines()
+            .find(|line| line.contains("child side"))
+            .unwrap_or_else(|| panic!("child end is shown at {width}: {screen}"));
+        for row in [parent, child] {
+            assert!(row.contains("shared"), "start is kept at {width}: {row}");
+            assert_eq!(row.matches('…').count(), 1, "cut once at {width}: {row}");
+            assert!(
+                row.trim_matches('"').trim_end().width() <= usize::from(width),
+                "{row}"
+            );
+        }
+        assert!(
+            child.contains("└─") && child.contains("(current)"),
+            "{child}"
+        );
+    }
 }

@@ -15,6 +15,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
 
+use crate::history_cell::HistoryCell;
 use crate::presentation::ClientEvent;
 use crate::presentation::ClientEventNormalizer;
 use crate::presentation::MessageStream;
@@ -34,10 +35,15 @@ pub(super) struct SessionRow {
     pub age_seconds: i64,
     #[serde(default)]
     pub parent: Option<String>,
+    /// `session` for a delegated child, `fork` or `user` otherwise.
     #[serde(default)]
-    pub depth: i32,
+    pub source: Option<String>,
     #[serde(default)]
     pub delegations: Vec<nori_protocol::Delegation>,
+    /// The status of the whole family under the top-level session: waiting
+    /// on you if any member is. Older hosts omit it.
+    #[serde(default)]
+    pub family_status: Option<SessionStatus>,
 }
 
 pub(super) enum Part {
@@ -49,6 +55,9 @@ pub(super) enum Part {
     Tool(Box<ToolSnapshot>),
     Plan(PlanSnapshot),
     Notice(String),
+    Delegation(nori_protocol::Delegation),
+    /// Where the session ended, with the host's message when it sent one.
+    Ended(Option<String>),
 }
 
 pub(super) struct Permission {
@@ -81,6 +90,10 @@ pub(super) struct AttachState {
     pub notice: Option<String>,
     pub replay_error: Option<String>,
     pub scroll: usize,
+    /// Key that moves from a delegated child to its parent.
+    pub parent_binding: nori_config::HotkeyBinding,
+    /// Key that opens the next session waiting on the user.
+    pub jump_binding: nori_config::HotkeyBinding,
 }
 
 impl Default for AttachState {
@@ -96,11 +109,18 @@ impl Default for AttachState {
                     PickerColumn::fixed("agent", "AGENT", 14).hide_below(55),
                     PickerColumn::fixed("status", "STATUS", 16),
                     PickerColumn::fixed("age", "AGE", 5).hide_below(45),
-                    PickerColumn::flexible("title", "TITLE"),
+                    PickerColumn::flexible("title", "TITLE")
+                        .width(nori_tui_components::PickerColumnWidth::Flexible {
+                            min: 8,
+                            max: 240,
+                            weight: 1,
+                        })
+                        .cut_middle(),
                 ],
                 Vec::new(),
             )
-            .search_placeholder("Title or agent"),
+            .search_placeholder("Title or agent")
+            .tree_column("title"),
             watching: true,
             connected: false,
             stopped: None,
@@ -109,6 +129,8 @@ impl Default for AttachState {
             notice: None,
             replay_error: None,
             scroll: 0,
+            parent_binding: nori_config::HotkeyConfig::default().parent_session,
+            jump_binding: nori_config::HotkeyConfig::default().next_waiting_session,
         }
     }
 }
@@ -128,45 +150,48 @@ impl AttachState {
             }
         }
         self.picker.title = format!("Sessions {}", self.sessions.len());
-        self.picker.replace_items(self.sessions.iter().map(|row| {
-            let seconds = row.age_seconds.max(0);
-            let age = if seconds < 60 {
-                format!("{seconds}s")
-            } else if seconds < 3600 {
-                format!("{}m", seconds / 60)
-            } else {
-                format!("{}h", seconds / 3600)
-            };
-            let title = row.title.clone().unwrap_or_else(|| "New session".into());
-            let title = row.parent.as_ref().map_or_else(
-                || title.clone(),
-                |parent| {
-                    format!(
-                        "{}↳ (parent {}) {title}",
-                        "  ".repeat(
-                            usize::try_from(row.depth.saturating_sub(1).clamp(0, 2)).unwrap_or(0)
-                        ),
-                        parent.chars().take(8).collect::<String>()
-                    )
-                },
-            );
-            let title = if self.selected.as_ref() == Some(&row.session_id) {
-                format!("(current) {title}")
-            } else {
-                title
-            };
-            PickerItem::new(row.session_id.clone(), "title", title)
-                .cell("id", row.session_id.chars().take(8).collect::<String>())
-                .cell("agent", row.agent.clone())
-                .cell("status", crate::session_status::status_label(row.status))
-                .cell("age", age)
-                .search_text(format!(
-                    "{} {} {}",
-                    row.title.as_deref().unwrap_or_default(),
-                    row.agent,
-                    row.session_id
-                ))
-        }));
+        let links: Vec<(&str, Option<&str>)> = self
+            .sessions
+            .iter()
+            .map(|row| (row.session_id.as_str(), row.parent.as_deref()))
+            .collect();
+        let order = nori_tui_components::picker::tree_order(&links);
+        self.picker
+            .replace_items(order.into_iter().map(|(index, depth)| {
+                let row = &self.sessions[index];
+                let seconds = row.age_seconds.max(0);
+                let age = if seconds < 60 {
+                    format!("{seconds}s")
+                } else if seconds < 3600 {
+                    format!("{}m", seconds / 60)
+                } else {
+                    format!("{}h", seconds / 3600)
+                };
+                let title = row
+                    .title
+                    .clone()
+                    .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.into());
+                // A top-level session shows the status of the family member
+                // that most needs the user, as in the local list.
+                let status = row
+                    .family_status
+                    .filter(|_| depth == 0)
+                    .unwrap_or(row.status);
+                PickerItem::new(row.session_id.clone(), "title", title)
+                    .cell("id", row.session_id.chars().take(8).collect::<String>())
+                    .cell("agent", row.agent.clone())
+                    .cell("status", crate::session_status::status_label(status))
+                    .cell_detail_tone("status", crate::session_status::status_tone(status))
+                    .cell("age", age)
+                    .depth(depth)
+                    .current(self.selected.as_ref() == Some(&row.session_id))
+                    .search_text(format!(
+                        "{} {} {}",
+                        row.title.as_deref().unwrap_or_default(),
+                        row.agent,
+                        row.session_id
+                    ))
+            }));
         Ok(())
     }
 
@@ -181,7 +206,14 @@ impl AttachState {
                     .iter()
                     .map(|part| match part {
                         Part::Message { text, .. } | Part::Notice(text) => text.clone(),
+                        Part::Ended(message) => self.end_notice(id, message.as_deref()),
                         Part::Tool(tool) => tool.title.clone(),
+                        Part::Delegation(delegation) => delegation_cell(delegation)
+                            .display_lines(u16::MAX)
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join("\n"),
                         Part::Plan(plan) => plan
                             .entries
                             .iter()
@@ -221,6 +253,30 @@ impl AttachState {
     pub fn prompt(&self, id: &str, text: &str) -> anyhow::Result<Value> {
         self.require_control()?;
         Ok(json!({"session_id":id,"prompt":[{"type":"text","text":text}]}))
+    }
+
+    /// The line that ends session `id`'s history. A delegated child points
+    /// back to its parent and says whether it finished its task; the words
+    /// follow the session's current status, which the host may report after
+    /// the end itself.
+    pub fn end_notice(&self, id: &str, message: Option<&str>) -> String {
+        if let Some(message) = message {
+            return message.to_owned();
+        }
+        let row = self.sessions.iter().find(|row| row.session_id == id);
+        let Some(row) = row.filter(|row| row.delegating_parent().is_some()) else {
+            return "Session ended. Use /new to start another session.".into();
+        };
+        let ending = if row.status == nori_protocol::SessionStatus::Done {
+            "This child finished its task"
+        } else {
+            "This child session ended"
+        };
+        if self.parent_binding.is_none() {
+            format!("{ending}.")
+        } else {
+            format!("{ending} · {} to its parent", self.parent_binding.as_str())
+        }
     }
 
     pub fn show_notice(&mut self, message: impl Into<String>) {
@@ -305,9 +361,11 @@ impl AttachState {
                     conversation
                         .delegations
                         .retain(|current| current.request_id != delegation.request_id);
-                    conversation
-                        .parts
-                        .push(Part::Notice(crate::delegation::summary(&delegation)));
+                    if delegation.status != nori_protocol::DelegationStatus::AwaitingApproval {
+                        conversation
+                            .parts
+                            .push(Part::Delegation(delegation.clone()));
+                    }
                     conversation.delegations.push(delegation);
                     conversation.message_boundary = true;
                 }
@@ -321,11 +379,7 @@ impl AttachState {
                     .retain(|permission| permission.request_id != resolved.request_id);
             }
             SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
-                conversation
-                    .parts
-                    .push(Part::Notice(ended.message.unwrap_or_else(|| {
-                        "Session ended. Use /new to start another session.".into()
-                    })));
+                conversation.parts.push(Part::Ended(ended.message));
                 conversation.permissions.clear();
                 conversation.message_boundary = true;
             }
@@ -399,5 +453,25 @@ impl Conversation {
             }
             _ => {}
         }
+    }
+}
+
+/// Attached clients have no transcript view or local session list key, so
+/// delegation cells show no key hints.
+pub(super) fn delegation_cell(
+    delegation: &nori_protocol::Delegation,
+) -> crate::delegation::DelegationCell {
+    crate::delegation::DelegationCell::new(
+        delegation.clone(),
+        crate::delegation::DelegationHints::default(),
+    )
+}
+
+impl SessionRow {
+    /// The parent of a delegated child; forks and top-level sessions have none.
+    pub(super) fn delegating_parent(&self) -> Option<&str> {
+        self.parent
+            .as_deref()
+            .filter(|_| self.source.as_deref() == Some("session"))
     }
 }

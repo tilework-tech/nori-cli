@@ -1,0 +1,8 @@
+---
+source: tui/src/chatwidget/tests/delegation.rs
+expression: screen
+---
+○ result from mock-model-alt · Review the parser · done
+  ▏ Found two bugs in parse_command.
+  ▏ Both have regression tests now.
+  returns to mock-model on its own · its history: alt + s

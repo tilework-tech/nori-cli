@@ -134,12 +134,14 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 | Term                 | Definition                                                                                        | Aliases to avoid   |
 | -------------------- | ------------------------------------------------------------------------------------------------- | ------------------ |
 | **Session envelope** | A session event tagged with its **conversation ID**, agent, and per-conversation sequence number. | Frame, message     |
-| **Session status**   | A managed session's coarse state: starting, working, waiting on you, ready, failed, or closed.         | Phase, turn status |
+| **Session status**   | A managed session's coarse state: starting, working, waiting on you, ready, failed, closed, or done (a delegated child whose task finished). | Phase, turn status |
 | **Session family**   | A top-level **session** plus all of its descendants, whose **session statuses** roll up into one. | Thread, tree       |
 | **Request resolved** | A **session envelope** announcing that a client answered a pending agent request, and which one.  | Approval event     |
 | **Active session**   | The one **session** the TUI shows; the prompt, terminal title, and scrollback belong to it.        | Current tab        |
 | **Parked session**   | A live **session** the TUI holds off screen with its own transcript, input, and pending requests. | Hidden, paused     |
 | **Session cap**      | The most managed **sessions** that may run at once, set by `[tui] max_sessions`.                  | Limit, quota       |
+| **Delegated child**  | A **session** the **session manager** starts for a parent through `/delegate` or the MCP `delegate` tool; named by the first line of its task. | Subagent, worker   |
+| **Delegation origin** | Who asked for a **delegated child**: the parent's agent (`agent`) or the user (`user`).          | Requester, source  |
 
 ### Session lifecycle
 
@@ -180,6 +182,7 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 - A **request resolved** envelope removes that request from the ones keeping a **session status** at "waiting on you"; requests cleared by idle, cancel, or session end get none.
 - When the **session manager** restarts a failed session, its **conversation ID**, family position, and envelope sequence continue across the new agent process. Remote targets, subscriptions, and replay cursors keep using that ID.
 - With `[features] multi_session`, replacing the **active session** parks it instead of closing it; a **parked session** keeps running and receiving its events.
+- A **delegated child** belongs to its parent's **session family** and, in the local TUI, is a **parked session** until the user moves to it; its result returns to the parent as a queued prompt.
 
 ### Example dialogue
 

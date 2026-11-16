@@ -141,10 +141,8 @@ impl ChatWidget {
                 .managed_conversation_id
                 .and_then(|id| self.session_manager.get(&id))
                 .is_some_and(|record| {
-                    matches!(
-                        record.status,
-                        nori_protocol::SessionStatus::Closed | nori_protocol::SessionStatus::Failed
-                    )
+                    record.status.is_closed()
+                        || record.status == nori_protocol::SessionStatus::Failed
                 })
         {
             self.add_error_message("This child session has ended. Its history remains available; return to its parent or start /new.".into());

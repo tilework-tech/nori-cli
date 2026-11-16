@@ -57,20 +57,10 @@ pub(super) fn render(
         header.push("RECONNECTING · sessions continue on the host".cyan());
     }
     Line::from(header).render(Rect::new(area.x, area.y, area.width, 1), buf);
-    let identity = state
-        .selected
-        .as_ref()
-        .map(|id| {
-            let row = state.sessions.iter().find(|row| &row.session_id == id);
-            format!(
-                " {} · {} · {}",
-                row.map_or("session", |row| row.agent.as_str()),
-                id,
-                row.map_or("", |row| crate::session_status::status_label(row.status))
-            )
-        })
-        .unwrap_or_else(|| " Sessions · /new starts a session · ctrl+d detaches".into());
-    Line::from(identity.dim()).render(Rect::new(area.x, area.y + 1, area.width, 1), buf);
+    identity_line(state, area.width).render(Rect::new(area.x, area.y + 1, area.width, 1), buf);
+    if let Some(line) = waiting_line(state, area.width) {
+        line.render(Rect::new(area.x, area.y + 2, area.width, 1), buf);
+    }
     let input = composer_area(state, composer, area);
     let notice_lines = notice_lines(state, area.width);
     let notice_height = u16::try_from(notice_lines.len())
@@ -124,6 +114,90 @@ pub(super) fn render(
     composer.render_ref(input, buf);
 }
 
+/// A listed session's name, whole: the lines that show it fit it to the
+/// terminal width.
+fn row_name(row: &super::state::SessionRow) -> String {
+    row.title
+        .as_deref()
+        .and_then(nori_protocol::session_full_name)
+        .unwrap_or_else(|| nori_protocol::UNTITLED_SESSION_NAME.to_string())
+}
+
+/// The selected session's agent, name, and status. Inside a delegated child
+/// it is a breadcrumb from the top-level session, with the key that returns
+/// to the parent.
+fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
+    let Some(id) = state.selected.as_ref() else {
+        return Line::from(" Sessions · /new starts a session · ctrl+d detaches".dim());
+    };
+    let row = |id: &str| state.sessions.iter().find(|row| row.session_id == id);
+    let Some(current) = row(id) else {
+        return Line::from(format!(" session · {id}").dim());
+    };
+    let top_level = current.delegating_parent().and_then(row).is_none();
+    // A top-level session speaks for its family, as in the session lists.
+    let shown = if top_level {
+        current.family_status.unwrap_or(current.status)
+    } else {
+        current.status
+    };
+    let status = format!(" · {}", crate::session_status::status_label(shown));
+    let mut path = vec![current];
+    while let Some(parent) = path
+        .last()
+        .and_then(|row| row.delegating_parent())
+        .and_then(row)
+        .filter(|parent| !path.iter().any(|seen| seen.session_id == parent.session_id))
+    {
+        path.push(parent);
+    }
+    let path: Vec<crate::session_path::PathStep> = path
+        .into_iter()
+        .rev()
+        .map(|row| crate::session_path::PathStep {
+            agent: row.agent.clone(),
+            name: row_name(row),
+        })
+        .collect();
+    let key = if top_level || state.parent_binding.is_none() {
+        String::new()
+    } else {
+        format!(" · {} parent", state.parent_binding.as_str())
+    };
+    let mut line =
+        crate::session_path::breadcrumb_line(&path, &status, &key, width.saturating_sub(1));
+    line.spans.insert(0, " ".into());
+    line
+}
+
+/// The next session, other than the one on screen, that waits on the user,
+/// named under its parent, with the key that jumps to it.
+fn waiting_line(state: &AttachState, width: u16) -> Option<Line<'static>> {
+    let row = |id: &str| state.sessions.iter().find(|row| row.session_id == id);
+    let waiting: Vec<&super::state::SessionRow> = state
+        .sessions
+        .iter()
+        .filter(|row| row.status == nori_protocol::SessionStatus::WaitingOnYou)
+        .filter(|row| state.selected.as_deref() != Some(row.session_id.as_str()))
+        .collect();
+    let first = waiting.first()?;
+    let mut path = Vec::new();
+    if let Some(parent) = first.parent.as_deref().and_then(row) {
+        path.push(row_name(parent));
+    }
+    path.push(row_name(first));
+    let key = (!state.jump_binding.is_none()).then(|| state.jump_binding.as_str().to_string());
+    let mut line = crate::session_path::waiting_line(
+        &path,
+        None,
+        waiting.len() - 1,
+        key.as_deref(),
+        width.saturating_sub(1),
+    );
+    line.spans.insert(0, " ".into());
+    Some(line)
+}
+
 fn notice_lines(state: &AttachState, width: u16) -> Vec<Line<'static>> {
     state
         .stopped
@@ -150,19 +224,16 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
         .find(|delegation| delegation.status == nori_protocol::DelegationStatus::AwaitingApproval);
     let delegation_lines = delegation
         .map(|delegation| {
+            let (title, rows) = crate::delegation::approval_lines(delegation);
+            let mut lines = vec![Line::from(title.bold())];
+            lines.extend(rows);
+            lines.push(Line::from(vec![
+                "1 Yes, start it".green(),
+                " · ".dim(),
+                "2 No, decline".into(),
+            ]));
             crate::wrapping::word_wrap_lines(
-                [
-                    Line::from("Start delegated session?".bold()),
-                    Line::from(format!(
-                        "Child {} ({}) · parent {} ({})",
-                        delegation.child_id,
-                        delegation.agent,
-                        delegation.parent_id,
-                        delegation.parent_agent
-                    )),
-                    Line::from(delegation.task.clone()),
-                    Line::from("1 Start · 2 Decline".green()),
-                ],
+                lines.iter(),
                 usize::from(area.width.saturating_sub(2)),
             )
         })
@@ -186,6 +257,21 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
     let mut lines = Vec::new();
     for part in &conversation.parts {
         match part {
+            Part::Message {
+                stream: MessageStream::User,
+                text,
+                ..
+            } if nori_protocol::delegation_result_parts(text).is_some() => {
+                let mut line = Line::from(vec!["› ".bold()]);
+                line.spans.extend(
+                    crate::delegation::delivered_result_spans(
+                        text,
+                        usize::from(history_area.width).saturating_sub(2),
+                    )
+                    .unwrap_or_default(),
+                );
+                lines.push(line);
+            }
             Part::Message { stream, text, .. } => {
                 match stream {
                     MessageStream::User => lines.push(Line::from("› You".bold())),
@@ -218,9 +304,20 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
                     lines.push(Line::from(format!("{marker} {}", entry.step)));
                 }
             }
+            Part::Delegation(delegation) => {
+                lines.extend(
+                    super::state::delegation_cell(delegation).display_lines(history_area.width),
+                );
+            }
             Part::Notice(notice) => {
                 lines.extend(crate::wrapping::word_wrap_lines(
                     [Line::from(notice.clone().cyan())],
+                    usize::from(history_area.width),
+                ));
+            }
+            Part::Ended(message) => {
+                lines.extend(crate::wrapping::word_wrap_lines(
+                    [Line::from(state.end_notice(id, message.as_deref()).cyan())],
                     usize::from(history_area.width),
                 ));
             }

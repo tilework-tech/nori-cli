@@ -55,6 +55,18 @@ impl ComposerInput {
         self.inner.is_empty()
     }
 
+    /// Take the whole edit (text, pastes, attachments, cursor), leaving the
+    /// input empty.
+    pub(crate) fn take_draft(&mut self) -> crate::bottom_pane::ComposerDraft {
+        self.inner.take_draft()
+    }
+
+    /// Put back an edit taken with [`Self::take_draft`].
+    pub(crate) fn restore_draft(&mut self, draft: crate::bottom_pane::ComposerDraft) {
+        self.inner.restore_draft(draft);
+        self.drain_app_events();
+    }
+
     /// Clear the input text.
     pub fn clear(&mut self) {
         self.inner.set_text_content(String::new());

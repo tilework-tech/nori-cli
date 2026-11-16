@@ -6,7 +6,7 @@ expression: normalize_for_input_snapshot(screen)
 
 • alpha agent answer
 
-  ● mock:request-permission… is waiting on you · approve: rm -rf target/debug · alt + down to jump
+  ● mock:request-permission:rm -rf target/debug is waiting on you · approve: rm -rf targ… · alt + down to jump
   1 waiting on you · 2 ready
 
   Sessions 3 · 1 waiting on you · 2 ready  tab: waiting only · type to search
@@ -14,11 +14,11 @@ expression: normalize_for_input_snapshot(screen)
   All  waiting on you
 
     Session                                                                 Agent           Status
-    ○ alpha question                                                        Mock ACP        ready
+    ○ alpha question                                                        mock-model      ready
     alpha agent answer
-    ● mock:request-permission:rm -rf target/debug                           Mock ACP Alt    waiting on you
+    ● mock:request-permission:rm -rf target/debug                           mock-model-alt  waiting on you
     approve: rm -rf target/debug
-  › ○ gamma question (current)                                              Mock ACP        ready
+  › ○ gamma question (current)                                              mock-model      ready
     alpha agent answer
 
   ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close

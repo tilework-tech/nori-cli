@@ -10,6 +10,7 @@ pub mod markdown;
 pub mod menu;
 pub mod picker;
 pub mod primitives;
+pub mod text;
 pub mod theme;
 
 pub use block_meter::BlockMeter;

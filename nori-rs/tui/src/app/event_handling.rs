@@ -110,7 +110,7 @@ impl App {
                 }
                 TuiEvent::Draw => {
                     self.adopt_delegated_sessions(tui);
-                    self.refresh_session_overview();
+                    self.refresh_session_overview(tui.terminal.size()?.width);
                     self.chat_widget.pre_draw_tick();
                     self.chat_widget.maybe_post_pending_notification(tui);
                     self.post_parked_session_notifications(tui);

@@ -44,7 +44,7 @@ impl App {
         let closed: Vec<SessionGeneration> = self
             .session_facts()
             .into_iter()
-            .filter(|fact| fact.status == SessionStatus::Closed)
+            .filter(|fact| fact.status.is_closed())
             .map(|fact| fact.generation)
             .collect();
         self.session_deck
@@ -68,7 +68,10 @@ impl App {
             );
             return;
         }
-        if self.session_status(generation) == Some(SessionStatus::Closed) {
+        if self
+            .session_status(generation)
+            .is_some_and(SessionStatus::is_closed)
+        {
             return;
         }
         let grace = if self.cloud_mode {
@@ -109,7 +112,9 @@ impl App {
     /// Drop a closed session from the deck and the session list.
     pub(super) fn remove_session(&mut self, generation: SessionGeneration) {
         if generation == self.chat_widget.session_generation()
-            || self.session_status(generation) != Some(SessionStatus::Closed)
+            || !self
+                .session_status(generation)
+                .is_some_and(SessionStatus::is_closed)
         {
             return;
         }
@@ -180,7 +185,7 @@ impl App {
             if !parked.widget.is_closed_by_user()
                 && let Some(id) = parked.widget.managed_conversation_id()
                 && self.session_manager.get(&id).is_some_and(|record| {
-                    !matches!(record.status, SessionStatus::Closed | SessionStatus::Failed)
+                    !(record.status.is_closed() || record.status == SessionStatus::Failed)
                 })
             {
                 parked.widget.mark_closed_by_user();

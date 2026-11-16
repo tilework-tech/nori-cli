@@ -107,16 +107,27 @@ impl SessionPreviews {
                 }
                 SessionPhase::Cancelling { .. } => {}
             },
+            // A `/delegate` sent before any prompt names the session by its
+            // task. A child's own first prompt is that same task.
+            SessionEvent::Nori(NoriEvent::DelegationChanged(delegation))
+                if preview.first_prompt.is_none()
+                    && delegation.origin == nori_protocol::DelegationOrigin::User =>
+            {
+                preview.first_prompt = delegation.task.lines().next().map(str::to_owned);
+                preview.first_prompt_open = false;
+            }
             SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
                 preview.pending.clear();
                 preview.running.clear();
+                // The status column already says a session closed; its
+                // description keeps the last thing the agent said.
                 preview.ended = Some(match ended.reason {
+                    SessionEndReason::Shutdown | SessionEndReason::Closed => return,
                     SessionEndReason::ConnectionLost => {
                         "agent exited · resume available".to_string()
                     }
                     SessionEndReason::SpawnFailed => "agent failed to start".to_string(),
                     SessionEndReason::TimedOut => "agent timed out · resume available".to_string(),
-                    SessionEndReason::Shutdown | SessionEndReason::Closed => "closed".to_string(),
                 });
             }
             SessionEvent::Nori(_) => {}
@@ -169,6 +180,8 @@ fn observe_update(preview: &mut Preview, update: &acp::SessionUpdate) {
         acp::SessionUpdate::UserMessageChunk(chunk) => {
             if let acp::ContentBlock::Text(text) = &chunk.content {
                 match &mut preview.first_prompt {
+                    // A child's result is not the user's own first prompt.
+                    None if nori_protocol::delegation_result_summary(&text.text).is_some() => {}
                     None => {
                         preview.first_prompt = Some(text.text.clone());
                         preview.first_prompt_open = true;
@@ -464,5 +477,64 @@ mod tests {
                 Some("Fix the login test".to_string())
             )
         );
+    }
+
+    #[test]
+    fn a_delegation_result_never_titles_the_session_that_receives_it() {
+        let mut previews = SessionPreviews::default();
+        previews.observe(
+            1,
+            &user_text(
+                "[Nori delegation result] from mock-model · inspect the parser · done\n\
+                 Child session: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\nAll good.",
+            ),
+        );
+        previews.observe(1, &text("Thanks"));
+        assert_eq!(previews.title(1), None);
+        previews.observe(
+            1,
+            &SessionEvent::Nori(NoriEvent::SessionPhaseChanged(SessionPhase::Prompting {
+                request_id: acp::RequestId::Number(2),
+            })),
+        );
+        previews.observe(1, &user_text("now fix it"));
+        assert_eq!(previews.title(1), Some("now fix it".to_string()));
+    }
+
+    #[test]
+    fn a_session_closed_after_its_work_keeps_its_last_answer_as_preview() {
+        assert_eq!(
+            feed(&[
+                text("All tests pass."),
+                SessionEvent::Nori(NoriEvent::SessionEnded(nori_protocol::SessionEnded {
+                    reason: SessionEndReason::Closed,
+                    message: None,
+                })),
+            ]),
+            Some("All tests pass.".to_string())
+        );
+    }
+
+    #[test]
+    fn a_delegation_sent_before_any_prompt_names_the_session_by_its_task() {
+        let delegation = nori_protocol::Delegation {
+            request_id: "request-1".into(),
+            parent_id: "parent".into(),
+            child_id: "child".into(),
+            parent_agent: "mock-model".into(),
+            agent: "mock-model".into(),
+            task: "inspect the parser\nand report".into(),
+            status: nori_protocol::DelegationStatus::Running,
+            depth: 1,
+            result: None,
+            origin: nori_protocol::DelegationOrigin::User,
+        };
+        let mut previews = SessionPreviews::default();
+        previews.observe(
+            1,
+            &SessionEvent::Nori(NoriEvent::DelegationChanged(delegation)),
+        );
+        previews.observe(1, &user_text("now fix it"));
+        assert_eq!(previews.title(1), Some("inspect the parser".to_string()));
     }
 }
