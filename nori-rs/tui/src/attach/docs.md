@@ -83,7 +83,9 @@ Path: @/nori-rs/tui/src/attach
   depth 0 shows the host's `family_status` when present, so a parent reads
   `waiting on you` while anything under it does; older hosts omit the field
   and the row shows its own status. A row without a title reads
-  `UNTITLED_SESSION_NAME`. The list ignores the host's `depth` field and
+  `UNTITLED_SESSION_NAME`. TITLE is a wide `cut_middle` column, so it takes
+  the room the terminal leaves and cuts long titles once in the middle,
+  keeping the ends that tell sibling sessions apart. The list ignores the host's `depth` field and
   derives depth from parent links.
 
 - Delegation uses the shared [command parser and presentation](../delegation.rs):
@@ -98,6 +100,13 @@ Path: @/nori-rs/tui/src/attach
   no transcript view or local session-list key here, so the cell is built with
   empty `DelegationHints` and shows no key hints. An `awaiting_approval` change
   adds no part; the approval prompt covers it.
+- A request shown for the session on screen (a permission prompt or a
+  delegation approval) takes its keys while the session list is closed, even
+  when the composer holds a draft: Enter, digits, and Up/Down for permission
+  choices; 1, 2, and Enter for a delegation approval. The draft stays
+  untouched, matching the local TUI where the approval overlay takes keys and
+  the composer keeps its text. Other keys still edit the composer. A request
+  in a session that is not on screen does not capture keys.
 - Child permissions stay in the child's conversation. The configured
   `next_waiting_session` binding (Alt+Down by default) navigates there, even
   with a draft in the composer, as in the local TUI. With nothing waiting in

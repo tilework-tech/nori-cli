@@ -940,7 +940,11 @@ in the prompt still moves the cursor.
   word, with a preview line below. The title is the agent's prompt summary,
   else the session's first user message as seen in `UserMessageChunk` updates
   (so a prompt sent by a remote-control client also titles it), else the
-  widget's first prompt, cut to its first line. A user-origin
+  widget's first prompt, cut to its first line. Rows carry that whole line;
+  the TITLE column (`cut_middle`) cuts it once, in the middle, to the column
+  width, so sibling names sharing a long prefix keep their distinct ends.
+  Notifications that name a session still use a 60-character cut
+  (`session_title` with `TITLE_CHARS`). A user-origin
   `DelegationChanged` that arrives before any prompt (a `/delegate` sent first)
   titles the session with the first line of its task, the same rule the host
   journal uses, so `nori attach` and `nori host ls` name it alike. A
@@ -1021,7 +1025,7 @@ Both path lines are built by [`session_path.rs`](src/session_path.rs), which
 | `breadcrumb_line(path, status, key, width)` | Never drops the top-level session or the current one. Tries layouts in order (whole path with key, middle steps elided to one `…` with key, whole path without key, elided without key, elided without key or agent labels) and takes the first where the current name is whole and every other name keeps at least min(its width, 8) cells. The last layout always renders, giving the current name priority while others keep at least 4 cells. So the key gives way before the current name is cut, and the current name is cut last; a final clip guarantees the width. The local TUI passes an empty status and ` · <key> to parent` |
 | `waiting_line(path_names, request, more, jump_key, width)` | Names come first. The request text gets the cells left after the full names when it fits there or at least 20 cells remain; otherwise it is cut to 20 cells only if each name can still keep 16, and dropped if not |
 | `fit(text, cells)` | Cuts by display cells, ending in `…` |
-| `fit_name(text, cells)` | Cuts by display cells in the middle (start, `…`, end), so names sharing a long prefix stay distinct; used for every session name on these lines |
+| `fit_name(text, cells)` | Cuts by display cells in the middle (start, `…`, end), so names sharing a long prefix stay distinct; used for every session name on these lines. Delegates to `nori_tui_components::text::truncate_middle`, the same cut the session lists' TITLE columns use |
 
 While an `/agent` candidate is preparing, a dim `Preparing <agent>…` line sits
 above these. With the flag this replaces the history cell that single-session
@@ -1113,7 +1117,11 @@ child ID.
 | failed | `✕ <agent> · <child name> · failed · <reason>` and `sent to <parent agent> as a failure` |
 | declined, cancelled | `✕ delegation to <agent> · <child name> · declined by you` / `cancelled · <reason>` |
 
-The requester is `you` for origin `user` and the parent agent for origin
+The card header is width-aware: it measures the other spans and cuts the
+child's whole first task line (`nori_protocol::session_full_name`) in the
+middle with `session_path::fit_name` to the remaining room, never below a small
+minimum, so the header stays one row at 80 columns and long sibling names stay
+apart. The requester is `you` for origin `user` and the parent agent for origin
 `agent`. Key hints come from `DelegationHints`, filled from the configured
 `open_transcript` and `open_session_list` bindings; an unbound key, or the
 attached frontend, hides its hint.

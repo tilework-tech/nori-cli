@@ -176,6 +176,14 @@ consumer application
   as `(current)` after the tree column's text. When that column is too narrow,
   the renderer cuts the title (with `…`) to make room, so the tree guide and the
   badge always stay visible.
+- `PickerColumn::cut_middle()` makes a column cut overlong values in the
+  middle (start, `…`, end) instead of at the tail, so values sharing a long
+  prefix stay distinguishable. In the tree column the title is cut once, to the
+  room left after the guide and badges. Both TUI session lists use it for
+  TITLE. The cut comes from the public
+  [`text::truncate_middle`](src/text.rs), which works in display cells, never
+  splits a grapheme, and gives the start the larger half; the TUI's
+  `session_path::fit_name` delegates to it.
 - `Picker::compact_descriptions(true)` keeps each row's description on a
   second line in compact density as well, for lists whose descriptions carry a
   live preview. Compact rows become two lines tall only when at least one
