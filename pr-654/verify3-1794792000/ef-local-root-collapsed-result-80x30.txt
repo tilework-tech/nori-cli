@@ -1,0 +1,30 @@
+  ctrl + t shows the brief
+
+⚠ mock-model-alt · shared prefix for th…equest-permission:z is waiting on you
+  (delegated by mock-model · shared prefix for th…review: parent side). Press
+  Alt+Down to answer it.
+
+○ result from mock-model-alt · shared prefix for th…equest-permission:z · done
+  ▏ Test message 1Test message 2
+  ▏
+  ▏ Permission granted with option: allow
+  returns to mock-model on its own · its history: alt + s
+
+
+› delegation result from mock-model-alt · shared prefix f…st-permission:z · done
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model-alt
+  · shared prefix for the parser review: child side mock:request-permission:z
+  · done
+  Child session: a9525da6-0bdb-4683-9dd9-bafb4fbefca8
+  Test message 1Test message 2
+
+  Permission granted with option: allow
+
+  1 ready
+
+
+› ? for shortcuts
+
+                                                                        ⎇ master

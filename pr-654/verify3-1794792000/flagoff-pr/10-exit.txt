@@ -1,0 +1,1 @@
+no server running on /tmp/tmux-1000/nori-agent-sock

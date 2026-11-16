@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · shared prefix for the parser review: parent side · waiting on you
+ ● shared prefix for t…review: parent side › shared prefix for t…quest-permission:z is waiting on you · alt+down to jump
+ › You
+ shared prefix for the parser review: parent side
+
+ Test message 1Test message 2
+
+ ↳ you delegated to mock-model-alt · shared prefix for th…equest-permission:z · started
+
+ mock-model-alt · shared prefix for th…equest-permission:z is waiting on you (delegated by mock-model · shared prefix
+ for th…review: parent side). Press Alt+Down to answer it.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

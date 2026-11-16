@@ -1,0 +1,30 @@
+ID        AGENT           STATUS              AGE  TITLE
+2ce507e6  mock-model      ready                4m  mock:delegate…t-permission:x
+330f894b  mock-model      done                 4m  └─ mock:delegate…permission:x
+5da5ef7d  mock-model      done                 4m     └─ mock:reques…ermission:x
+92d77b7a  mock-model      ready                2m  mock:delegate…t-permission:y
+1867bbee  mock-model      done                 2m  └─ mock:delegate…permission:y
+7a63b48d  mock-model      done                 2m     └─ mock:reques…ermission:y
+239a0037  mock-model      closed              46s  a session that…e closed by me
+fada167d  mock-model      waiting on you      38s  shared prefix…w: parent side
+b5529e36  mock-model-alt  waiting on you      28s  └─ shared prefix…permission:z
+sprite@modal:~/org/workspace/.worktrees/pr654/nori-rs$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

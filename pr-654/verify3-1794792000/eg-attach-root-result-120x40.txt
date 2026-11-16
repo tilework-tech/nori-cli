@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · mock:delegate mock-model mock:delegate mock-model mock:request-permission:r · ready
+
+ › You
+ mock:delegate mock-model mock:delegate mock-model mock:request-permission:r
+
+ ↳ mock-model delegated to mock-model · mock:delegate mock-m…equest-permission:r · started
+
+ {"delegation":{"request_id":"7bfb1607-6cfb-4f1d-820f-0f584ee7d912","parent_id":"b1bc544e-e8fa-
+ 4cb2-88dc-434415be6dbe","child_id":"318b05e6-e027-45e4-9862-b30c31509601","parent_agent":"mock-
+ model","agent":"mock-model","task":"mock:delegate mock-model mock:request-
+ permission:r","status":"running","depth":1,"result":null,"origin":"agent"}}
+
+ ○ result from mock-model · mock:delegate mock-m…equest-permission:r · done
+   ▏ Delegation continuation received: [Nori delegation result] from mock-model · mock:request-permission:r · done
+   ▏ Child session: 2388b2d2-9242-4963-94e9-de30c593f331
+   ▏ Test message 1Test message 2
+   ▏
+   ▏ Permission granted with option: allow
+   returns to mock-model on its own
+
+ › delegation result from mock-model · mock:delegate mock-model mock:request-permission:r · done
+
+ Delegation continuation received: [Nori delegation result] from mock-model · mock:delegate mock-model mock:request-
+ permission:r · done
+ Child session: 318b05e6-e027-45e4-9862-b30c31509601
+ Delegation continuation received: [Nori delegation result] from mock-model · mock:request-permission:r · done
+ Child session: 2388b2d2-9242-4963-94e9-de30c593f331
+ Test message 1Test message 2
+
+ Permission granted with option: allow
+
+
+
+
+
+
+› my draft [Pasted Content 3599 chars]
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

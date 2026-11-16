@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP Alt options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› shared prefix for the parser review: child side mock:request-permission:z
+
+
+• Test message 1Test message 2
+
+  mock-model · shared…side › mock-model-alt · shared prefix for the parser review: child side mock:request-permission:z
+  1 waiting on you · 1 ready
+
+
+  Would you like to allow execute: Execute shell command?
+
+  Execute shell command
+  Command: z
+  z
+
+› 1. Allow (y)
+  2. Reject (esc)
+
+  Press enter to confirm or esc to cancel

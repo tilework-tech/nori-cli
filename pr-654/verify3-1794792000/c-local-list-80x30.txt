@@ -1,0 +1,30 @@
+
+
+› shared prefix for the parser review: parent side
+
+
+• Test message 1Test message 2
+
+↳ you delegated to mock-model-alt · shared prefix for th…equest-permission:z
+    · started
+  ctrl + t shows the brief
+
+⚠ mock-model-alt · shared prefix for th…equest-permission:z is waiting on you
+  (delegated by mock-model · shared prefix for th…review: parent side). Press
+  Alt+Down to answer it.
+
+  ● shared p…ent side › shared p…ission:z is waiting on you · alt + down to jump
+  1 waiting on you · 1 ready
+
+  Sessions 2 · 1 waiting on you · 1 ready  tab: waiting only · type to search
+
+  All  waiting on you
+
+    Session                                   Agent           Status
+  › ● shared prefix for the parse… (current)  mock-model      waiting on you
+    Test message 1Test message 2
+    └─ ● shared prefix for the parser r…ide…  mock-model-alt  waiting on you
+       approve: z
+
+  ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close
+

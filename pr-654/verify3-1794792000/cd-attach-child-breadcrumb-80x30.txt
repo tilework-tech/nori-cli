@@ -1,0 +1,30 @@
+ Nori host  CONTROLLING
+ shar…ide › shared prefix for the par…mock:request-permission:z · waiting on you
+
+ › You
+ shared prefix for the parser review: child side mock:request-permission:z
+
+ Test message 1Test message 2
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Permission · Execute shell command
+ › 1  Allow
+   2  Reject
+ ↑↓ choose · enter answer · number selects an option
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detac

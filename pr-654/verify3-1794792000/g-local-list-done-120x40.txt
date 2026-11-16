@@ -1,0 +1,40 @@
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› first session task
+
+
+• Test message 1Test message 2
+
+↳ you delegated to mock-model · a quick child task · started
+  ctrl + t shows the brief
+
+○ result from mock-model · a quick child task · done
+  ▏ Test message 1Test message 2
+  returns to mock-model on its own · its history: alt + s
+
+
+› delegation result from mock-model · a quick child task · done · delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model · a quick child task · done
+  Child session: fd9e392f-23f2-4810-89c2-4c8db018d765
+  Test message 1Test message 2
+
+  1 ready
+
+  Sessions 3 · 1 ready  tab: waiting only · type to search
+
+  All  waiting on you
+
+    Session                                                                   Agent           Status
+  › ○ first session task (current)                                            mock-model      ready
+    Test message 1Test message 2
+    └─ · a quick child task                                                   mock-model      done
+       Test message 1Test message 2
+    · a local session that will be closed                                     mock-model      closed
+    Test message 1Test message 2
+
+  ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close
+

@@ -1,0 +1,30 @@
+ Nori host  CONTROLLING
+ mock-model · mock:de…sion:y › … › mock-model · mock:request-permission:y · done
+
+ › You
+ mock:request-permission:y
+
+ Test message 1Test message 2
+
+ session already has an active turn
+
+ Permission granted with option: allow
+
+ This child finished its task · alt+up to its parent
+
+
+
+
+
+
+
+
+
+
+
+
+ session already has an active turn
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detac

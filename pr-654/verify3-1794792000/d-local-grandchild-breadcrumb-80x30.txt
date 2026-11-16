@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config
+to change)
+
+
+› mock:request-permission:q
+
+
+• Test message 1Test message 2
+
+  mock-model · mock:deleg…mission:q › … › mock-model · mock:request-permission:q
+  1 waiting on you · 3 ready
+
+
+  Would you like to allow execute: Execute shell command?
+
+  Execute shell command
+  Command: q
+  q
+
+› 1. Allow (y)
+  2. Reject (esc)
+
+  Press enter to confirm or esc to cancel

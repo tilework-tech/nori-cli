@@ -1,0 +1,30 @@
+ Nori host  CONTROLLING
+ mock:delegate mock-model mock:deleg…ock-model mock:request-permission:y · ready
+
+ permission:y","status":"running","depth":1,"result":null,"origin":"agent"}}
+
+ ○ result from mock-model · mock:delegate mock-m…equest-permission:y · done
+   ▏ Delegation continuation received: [Nori delegation result] from mock-model
+   ▏ · mock:request-permission:y · done
+   ▏ Child session: 7a63b48d-6235-4612-869e-868236784d86
+   ▏ Test message 1Test message 2
+   ▏
+   ▏ Permission granted with option: allow
+   returns to mock-model on its own
+
+ › delegation result from mock-model · mock:delegate mo…est-permission:y · done
+
+ Delegation continuation received: [Nori delegation result] from mock-model ·
+ mock:delegate mock-model mock:request-permission:y · done
+ Child session: 1867bbee-c800-4de3-ab1c-81dd66295628
+ Delegation continuation received: [Nori delegation result] from mock-model ·
+ mock:request-permission:y · done
+ Child session: 7a63b48d-6235-4612-869e-868236784d86
+ Test message 1Test message 2
+
+ Permission granted with option: allow
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detac

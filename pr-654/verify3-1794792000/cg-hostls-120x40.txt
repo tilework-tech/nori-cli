@@ -1,0 +1,40 @@
+ID                                    AGENT             STATUS               AGE  TITLE
+2ce507e6-c02d-4b98-844a-9e792807b6d3  mock-model        ready                 4m  mock:delegate mock-…quest-permission:x
+330f894b-d081-4c37-86bd-148280c41078  mock-model        done                  4m  └─ mock:delegate moc…uest-permission:x
+5da5ef7d-1226-4cc6-9ba0-fba4ad1d2c5a  mock-model        done                  4m     └─ mock:request-permission:x
+92d77b7a-c2ac-48e6-bd4e-6f717830c23f  mock-model        ready                 2m  mock:delegate mock-…quest-permission:y
+1867bbee-c800-4de3-ab1c-81dd66295628  mock-model        done                  2m  └─ mock:delegate moc…uest-permission:y
+7a63b48d-6235-4612-869e-868236784d86  mock-model        done                  2m     └─ mock:request-permission:y
+239a0037-f599-49df-bad3-00a1b076d338  mock-model        closed               42s  a session that will be closed by me
+fada167d-f485-46ca-ace0-3dba0f13816a  mock-model        waiting on you       34s  shared prefix for t…eview: parent side
+b5529e36-5c21-40a7-8bc9-c8f502c4837f  mock-model-alt    waiting on you       25s  └─ shared prefix for…uest-permission:z
+sprite@modal:~/org/workspace/.worktrees/pr654/nori-rs$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

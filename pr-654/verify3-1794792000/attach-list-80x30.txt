@@ -1,0 +1,30 @@
+ Nori host  CONTROLLING
+ Sessions · /new starts a session · ctrl+d detaches
+ ● mock:dele…mission:y › mock:requ…ission:y is waiting on you · alt+down to jump
+
+  Sessions 6
+
+     ID        AGENT           STATUS            AGE    TITLE
+  ▏  2ce507e6  mock-model      ready             2m     mock:delegate mock-m…▕
+     330f894b  mock-model      done              1m     └─ mock:delegate moc…
+     5da5ef7d  mock-model      done              1m        └─ mock:request-p…
+     92d77b7a  mock-model      waiting on you    6s     mock:delegate mock-m…
+     1867bbee  mock-model      ready             4s     └─ mock:delegate moc…
+     7a63b48d  mock-model      waiting on you    4s        └─ mock:request-p…
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detac

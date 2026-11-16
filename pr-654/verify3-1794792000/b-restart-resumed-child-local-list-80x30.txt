@@ -1,0 +1,30 @@
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to c
+hange)
+
+
+› mock:request-permission:y
+
+
+────────────────────────────────────────────────────────────────────────────────
+────────────────────────────────────────
+
+• Test message 1Test message 2Permission granted with option: allow
+
+  2 ready
+
+  Sessions 2 · 2 ready  tab: waiting only · type to search
+
+  2 ready
+
+  Sessions 2 · 2 ready  tab: waiting only · type to search
+
+  All  waiting on you
+
+    Session                                   Agent           Status
+    ○ New session                             mock-model      ready
+
+  › ○ mock:request-permission:y (current)     mock-model      ready
+    Test message 1Test message 2Permission granted with option: allow
+
+  ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close
+

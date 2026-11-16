@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ shared prefix…parent side › shared prefix for the parser review: child side mock:request-permission:z · waiting on you
+
+
+  Sessions 9
+
+     ID        AGENT           STATUS            AGE    TITLE
+  ▏  2ce507e6  mock-model      ready             4m     mock:delegate mock-model mock:delegate mock-mod…             ▕
+     330f894b  mock-model      done              4m     └─ mock:delegate mock-model mock:request-permis…
+     5da5ef7d  mock-model      done              4m        └─ mock:request-permission:x
+     92d77b7a  mock-model      ready             2m     mock:delegate mock-model mock:delegate mock-mod…
+     1867bbee  mock-model      done              2m     └─ mock:delegate mock-model mock:request-permis…
+     7a63b48d  mock-model      done              2m        └─ mock:request-permission:y
+     239a0037  mock-model      closed            58s    a session that will be closed by me
+     fada167d  mock-model      waiting on you    50s    shared prefix for the parser review: parent side
+     b5529e36  mock-model-alt  waiting on you    40s    └─ shared prefix for the parser revie… (current)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
