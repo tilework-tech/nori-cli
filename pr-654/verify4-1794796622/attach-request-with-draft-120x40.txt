@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · mock…n:x › mock-model · mock…n:x › mock-model · mock:request-permission:x · waiting on you · alt+up parent
+ ● mock:delegate mock-model mock:request-permission:y › mock:request-permission:y is waiting on you · alt+down to jump
+ › You
+ mock:request-permission:x
+
+ parent final answer
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Permission · Execute shell command
+ › 1  Allow
+   2  Reject
+ ↑↓ choose · enter answer · number selects an option
+
+
+
+› pre-select 2 text
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

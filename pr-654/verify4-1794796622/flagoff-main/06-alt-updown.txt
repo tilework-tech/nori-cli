@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/v4/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› hello
+
+
+• parent final answer
+
+
+/
+
+  /agent            switch between available ACP agents (current: Mock ACP) (○ rec off)
+  /model            choose what model and reasoning effort to use (current: Mock ACP)
+  /config           configure ACP agent settings (if exposed by the agent)
+  /approvals        choose what Nori can do without approval (current: Agent)
+  /settings         configure Nori CLI settings (theme, hotkeys, layout, …)
+  /vim              configure Vim mode and Enter key behavior
+  /goal             set or view the goal for a long-running task
+  /new              start a new chat during a conversation
+  /resume           resume a previous session
+  /resume-viewonly  view a previous session transcript (read-only)

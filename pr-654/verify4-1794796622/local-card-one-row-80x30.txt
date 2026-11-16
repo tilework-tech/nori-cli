@@ -1,0 +1,30 @@
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/v4/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config
+to change)
+
+
+› shared prefix for the parser review: parent side
+
+
+• parent final answer
+
+↳ you delegated to mock-model-alt · shared prefix for…est-permission:z · started
+  ctrl + t shows the brief
+
+⚠ mock-model-alt · shared prefix for th…equest-permission:z is waiting on you
+  (delegated by mock-model · shared prefix for th…review: parent side). Press
+  Alt+Down to answer it.
+
+  ● shared p…ent side › shared p…ission:z is waiting on you · alt + down to jump
+  1 waiting on you · 1 ready
+
+
+› @ for file mentions
+
+                                                                        ⎇ master

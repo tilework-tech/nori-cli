@@ -1,0 +1,30 @@
+ Nori host  CONTROLLING
+ mock-model · mock:de…sion:y › … › mock-model · mock:request-permission:y · done
+
+ › You
+ mock:request-permission:y
+
+ parent final answer
+
+ Permission granted with option: reject
+
+ This child finished its task · alt+up to its parent
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› pre-select text bugs
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detac

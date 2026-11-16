@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/v4/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› mock:request-permission:z
+
+
+• parent final answer
+
+
+  Would you like to allow execute: Execute shell command?
+
+  Execute shell command
+  Command: z
+  z
+
+› 1. Allow (y)
+  2. Reject (esc)
+
+  Press enter to confirm or esc to cancel
