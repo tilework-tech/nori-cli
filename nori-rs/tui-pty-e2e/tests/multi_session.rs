@@ -292,7 +292,7 @@ fn jump_timing_on_a_long_history() {
 #[cfg(target_os = "linux")]
 fn session_moves_follow_the_bindings_in_config() {
     let config = multi_session_config().with_extra_config_toml(
-        "[features]\nmulti_session = true\n\n[tui.hotkeys]\nprevious_session = \"alt+p\"\n",
+        "[features]\nmulti_session = true\n\n[tui.hotkeys]\nprevious_session = \"alt+j\"\n",
     );
     let mut session = spawn(config);
     ask(&mut session, "first alpha question", ALPHA_ANSWER);
@@ -305,7 +305,7 @@ fn session_moves_follow_the_bindings_in_config() {
         !session.history_contents().contains("first alpha question"),
         "the default binding no longer moves once rebound"
     );
-    session.send_key(Key::Alt('p')).unwrap();
+    session.send_key(Key::Alt('j')).unwrap();
     wait_for_history(
         &mut session,
         |h| h.contains("first alpha question") && !h.contains("first beta question"),
