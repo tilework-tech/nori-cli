@@ -84,10 +84,14 @@ pub(crate) fn is_exploring_snapshot(snapshot: &crate::presentation::ToolSnapshot
     matches!(
         snapshot.kind,
         crate::presentation::ToolKind::Read | crate::presentation::ToolKind::Search
-    ) || matches!(
-        snapshot.invocation,
-        Some(crate::presentation::Invocation::ListFiles { .. })
-    )
+    ) || match &snapshot.invocation {
+        Some(crate::presentation::Invocation::ListFiles { .. }) => true,
+        Some(crate::presentation::Invocation::Command { command }) => {
+            snapshot.kind == crate::presentation::ToolKind::Execute
+                && crate::exec_cell::is_read_only(command)
+        }
+        _ => false,
+    }
 }
 
 pub(crate) fn format_invocation(

@@ -2,19 +2,19 @@
 source: tui-pty-e2e/tests/acp_tool_calls.rs
 expression: normalize_for_input_snapshot(contents)
 ---
+to change)
+
 › Analyze the codebase
 
-• Explored
-  └ Read file1.rs, file2.rs
+• Explored 2 reads
+  └ Read file2.rs
 
 ────────────────────────────────────────────────────────────────────────────────
 
 • Here is my analysis of the codebase.
 
-• Explored
-  └ Read SKILL.md
-    Search undefined
-    Read config.toml
+• Explored 2 reads · 1 search
+  └ Read config.toml
 
 ────────────────────────────────────────────────────────────────────────────────
 

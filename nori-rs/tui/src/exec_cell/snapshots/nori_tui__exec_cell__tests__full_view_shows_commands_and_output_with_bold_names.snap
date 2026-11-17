@@ -1,0 +1,36 @@
+---
+source: tui/src/exec_cell/tests.rs
+expression: "format!(\"{}\\n\\n{}\", full(&chained), full(&heredoc))"
+---
+--- 120 ---
+• Ran cd /home/dev/projects/nori && export RUST_LOG=debug && cargo build --release -p nori-tui && cargo test -p nori-tui
+    -- --nocapture; ./scripts/notify.sh "build finished" && git status --short && docker compose -f deploy/compose.yml
+    up -d
+  └ Compiling nori-tui
+       Finished release
+--- 80 ---
+• Ran cd /home/dev/projects/nori && export RUST_LOG=debug && cargo build
+    --release -p nori-tui && cargo test -p nori-tui -- --nocapture; ./scripts/
+    notify.sh "build finished" && git status --short && docker compose -f
+    deploy/compose.yml up -d
+  └ Compiling nori-tui
+       Finished release
+
+--- 120 ---
+• Ran python3 - <<'EOF'
+    import json
+    with open('report.json') as f:
+        data = json.load(f)
+    print(len(data['rows']), 'rows')
+    EOF
+  └ Traceback (most recent call last):
+    FileNotFoundError: report.json
+--- 80 ---
+• Ran python3 - <<'EOF'
+    import json
+    with open('report.json') as f:
+        data = json.load(f)
+    print(len(data['rows']), 'rows')
+    EOF
+  └ Traceback (most recent call last):
+    FileNotFoundError: report.json

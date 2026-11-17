@@ -300,6 +300,12 @@ fn test_trust_directory_saves_to_config() {
         .send_key(Key::Char('y'))
         .expect("Failed to send 'y' key");
 
+    // Step 4b: Accept the preselected tool output style (Compact after Trust)
+    session
+        .wait_for_text("How should tool calls appear", TIMEOUT)
+        .expect("Tool output question did not appear after trust selection");
+    session.send_key(Key::Enter).expect("Failed to send Enter");
+
     // Step 5: Wait for the main prompt to appear (onboarding complete). The
     // idle footer no longer carries an approvals chip by default, so the trust
     // screen giving way to the composer is the signal.
@@ -333,6 +339,10 @@ fn test_trust_directory_saves_to_config() {
             && config_content.contains("trust_level = \"trusted\""),
         "config.toml should mark {project_key} as trusted, got:\n{}",
         config_content
+    );
+    assert!(
+        config_content.contains("tool_output = \"compact\""),
+        "config.toml should record the tool output choice, got:\n{config_content}"
     );
 }
 

@@ -16,19 +16,21 @@ use crate::client_event_format::is_invocation_redundant;
 use crate::client_event_format::relativize_paths_in_text;
 use crate::client_event_format::strip_code_fences;
 use crate::diff_render::create_diff_summary;
-use crate::exec_cell::OutputLinesParams;
-use crate::exec_cell::TOOL_CALL_MAX_LINES;
-use crate::exec_cell::limit_lines_from_start;
-use crate::exec_cell::output_lines;
+use crate::exec_cell::compact_command;
+use crate::exec_cell::full_command_lines;
+use crate::exec_cell::last_output_line;
+use crate::exec_cell::reads_files;
 use crate::exec_cell::spinner;
-use crate::exec_cell::truncate_lines_middle;
 use crate::history_cell::HistoryCell;
-use crate::render::highlight::highlight_bash_to_lines;
+use crate::presentation::Invocation;
+use crate::presentation::ToolKind;
+use crate::presentation::ToolSnapshot;
 use crate::render::line_utils::prefix_lines;
 use crate::render::line_utils::push_owned_lines;
 use crate::wrapping::RtOptions;
 use crate::wrapping::word_wrap_line;
 use crate::wrapping::word_wrap_lines;
+use nori_config::ToolOutput;
 
 #[derive(Debug)]
 pub(crate) struct ClientToolCell {
@@ -38,6 +40,7 @@ pub(crate) struct ClientToolCell {
     edit_changes: HashMap<PathBuf, crate::ui_types::FileChange>,
     animations_enabled: bool,
     start_time: Option<Instant>,
+    tool_output: ToolOutput,
 }
 
 impl ClientToolCell {
@@ -59,7 +62,13 @@ impl ClientToolCell {
             edit_changes,
             animations_enabled,
             start_time,
+            tool_output: ToolOutput::Compact,
         }
+    }
+
+    pub(crate) fn with_tool_output(mut self, tool_output: ToolOutput) -> Self {
+        self.tool_output = tool_output;
+        self
     }
 
     pub(crate) fn call_id(&self) -> &str {
@@ -68,6 +77,18 @@ impl ClientToolCell {
 
     pub(crate) fn is_active(&self) -> bool {
         is_active_phase(&self.snapshot.phase)
+            || self
+                .exploring_snapshots
+                .iter()
+                .any(|step| is_active_phase(&step.phase))
+    }
+
+    pub(crate) fn holds_call(&self, call_id: &str) -> bool {
+        self.snapshot.call_id == call_id
+            || self
+                .exploring_snapshots
+                .iter()
+                .any(|s| s.call_id == call_id)
     }
 
     pub(crate) fn snapshot_kind(&self) -> &crate::presentation::ToolKind {
@@ -98,7 +119,7 @@ impl ClientToolCell {
     /// Add another exploring snapshot to this cell's group, or update an
     /// existing one if the call_id is already present.
     pub(crate) fn merge_exploring(&mut self, snapshot: crate::presentation::ToolSnapshot) {
-        // Update in place if the call_id already exists in the group
+        self.mark_exploring();
         if let Some(existing) = self
             .exploring_snapshots
             .iter_mut()
@@ -112,6 +133,9 @@ impl ClientToolCell {
 
     pub(crate) fn apply_snapshot(&mut self, snapshot: crate::presentation::ToolSnapshot) {
         if self.snapshot.call_id != snapshot.call_id {
+            if self.holds_call(&snapshot.call_id) {
+                self.merge_exploring(snapshot);
+            }
             return;
         }
         if self.start_time.is_none() && is_active_phase(&snapshot.phase) {
@@ -141,167 +165,135 @@ impl ClientToolCell {
         }
     }
 
-    fn render_exploring_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let mut out: Vec<Line<'static>> = Vec::new();
+    fn render(&self, width: u16, full: bool) -> Vec<Line<'static>> {
+        if self.is_exploring() {
+            return self.render_exploring_lines(width, full);
+        }
+        match self.snapshot.kind {
+            ToolKind::Execute => {
+                let bullet = match exit_code_success(&self.snapshot) {
+                    None => spinner(self.start_time, self.animations_enabled),
+                    Some(_) => step_bullet(&self.snapshot),
+                };
+                execute_lines(&self.snapshot, bullet, width, full)
+            }
+            ToolKind::Create | ToolKind::Edit | ToolKind::Delete | ToolKind::Move => {
+                self.render_edit_lines(width, full)
+            }
+            ToolKind::Read
+            | ToolKind::Search
+            | ToolKind::Fetch
+            | ToolKind::Think
+            | ToolKind::Other(_) => self.render_generic_lines(),
+        }
+    }
 
-        // Header: Exploring/Explored with bullet
-        out.push(Line::from(vec![
-            if self.is_active() {
-                spinner(self.start_time, self.animations_enabled)
-            } else {
-                "\u{2022}".dim() // bullet
-            },
-            " ".into(),
-            if self.is_active() {
-                "Exploring".bold()
-            } else {
-                "Explored".bold()
-            },
-        ]));
-
-        // Build sub-items from exploring snapshots. When exploring_snapshots
-        // is empty (single-snapshot exploring cell), use the primary snapshot.
-        let mut sub_items: Vec<Line<'static>> = Vec::new();
-        let mut i = 0;
-        let single_fallback;
-        let snapshots = if self.exploring_snapshots.is_empty() {
-            single_fallback = [self.snapshot.clone()];
-            &single_fallback[..]
+    fn render_exploring_lines(&self, width: u16, full: bool) -> Vec<Line<'static>> {
+        let steps = if self.exploring_snapshots.is_empty() {
+            std::slice::from_ref(&self.snapshot)
         } else {
             &self.exploring_snapshots[..]
         };
-        while i < snapshots.len() {
-            let snap = &snapshots[i];
+        let active = steps.iter().any(|step| is_active_phase(&step.phase));
+        let reads = steps
+            .iter()
+            .filter(|step| match (&step.kind, &step.invocation) {
+                (ToolKind::Read, _) => true,
+                (ToolKind::Execute, Some(Invocation::Command { command })) => reads_files(command),
+                _ => false,
+            })
+            .count();
+        let searches = steps.len() - reads;
+        let failed = steps
+            .iter()
+            .filter(|step| exit_code_success(step) == Some(false))
+            .count();
 
-            // Group consecutive reads by filename
-            if snap.kind == crate::presentation::ToolKind::Read {
-                let mut names: Vec<String> = Vec::new();
-                if let Some(crate::presentation::Invocation::Read { path }) = &snap.invocation {
-                    names.push(read_display_name(path));
-                } else {
-                    names.push(relativize_paths_in_text(&snap.title, &self.cwd));
-                }
-                let mut j = i + 1;
-                while j < snapshots.len()
-                    && snapshots[j].kind == crate::presentation::ToolKind::Read
-                {
-                    let next = &snapshots[j];
-                    if let Some(crate::presentation::Invocation::Read { path }) = &next.invocation {
-                        names.push(read_display_name(path));
-                    } else {
-                        names.push(relativize_paths_in_text(&next.title, &self.cwd));
-                    }
-                    j += 1;
-                }
-                i = j;
-
-                // Build "Read file1.rs, file2.rs" line
-                let mut spans: Vec<Span<'static>> = vec!["Read".cyan(), " ".into()];
-                for (idx, path) in names.into_iter().enumerate() {
-                    if idx > 0 {
-                        spans.push(", ".dim());
-                    }
-                    spans.push(path.into());
-                }
-                sub_items.push(Line::from(spans));
-                continue;
-            }
-
-            // Search sub-item
-            if snap.kind == crate::presentation::ToolKind::Search {
-                if let Some(crate::presentation::Invocation::Search { query, path }) =
-                    &snap.invocation
-                {
-                    let mut spans: Vec<Span<'static>> = vec!["Search".cyan(), " ".into()];
-                    if let Some(q) = query {
-                        spans.push(q.clone().into());
-                    }
-                    if let Some(p) = path {
-                        spans.push(" in ".dim());
-                        spans.push(
-                            relativize_paths_in_text(&p.display().to_string(), &self.cwd).into(),
-                        );
-                    }
-                    sub_items.push(Line::from(spans));
-                } else if let Some(crate::presentation::Invocation::ListFiles { path }) =
-                    &snap.invocation
-                {
-                    let mut spans: Vec<Span<'static>> = vec!["List".cyan(), " ".into()];
-                    if let Some(p) = path {
-                        spans.push(
-                            relativize_paths_in_text(&p.display().to_string(), &self.cwd).into(),
-                        );
-                    }
-                    sub_items.push(Line::from(spans));
-                } else {
-                    sub_items.push(Line::from(vec![
-                        "Search".cyan(),
-                        " ".into(),
-                        relativize_paths_in_text(&snap.title, &self.cwd).into(),
-                    ]));
-                }
-                i += 1;
-                continue;
-            }
-
-            // ListFiles invocation (from Read/Search tools classified as exploring)
-            if matches!(
-                &snap.invocation,
-                Some(crate::presentation::Invocation::ListFiles { .. })
-            ) {
-                if let Some(crate::presentation::Invocation::ListFiles { path }) = &snap.invocation
-                {
-                    let mut spans: Vec<Span<'static>> = vec!["List".cyan(), " ".into()];
-                    if let Some(p) = path {
-                        spans.push(
-                            relativize_paths_in_text(&p.display().to_string(), &self.cwd).into(),
-                        );
-                    }
-                    sub_items.push(Line::from(spans));
-                }
-                i += 1;
-                continue;
-            }
-
-            // Fallback: generic sub-item. Skip the kind label if the title
-            // already starts with it (e.g., kind="List", title="List /path"
-            // → show "List /path" not "List List /path").
-            let kind_label = format_tool_kind(&snap.kind);
-            let title = relativize_paths_in_text(&snap.title, &self.cwd);
-            if title.to_lowercase().starts_with(&kind_label.to_lowercase()) {
-                sub_items.push(Line::from(vec![title.into()]));
+        let mut header: Vec<Span<'static>> = vec![
+            if active {
+                spinner(self.start_time, self.animations_enabled)
             } else {
-                sub_items.push(Line::from(vec![
-                    kind_label.to_string().cyan(),
-                    " ".into(),
-                    title.into(),
-                ]));
+                "•".green().bold()
+            },
+            " ".into(),
+            if active { "Exploring" } else { "Explored" }.bold(),
+            " ".into(),
+        ];
+        let counts: Vec<String> = [(reads, "read", "reads"), (searches, "search", "searches")]
+            .into_iter()
+            .filter(|(count, ..)| *count > 0)
+            .map(|(count, one, many)| format!("{count} {}", if count == 1 { one } else { many }))
+            .collect();
+        header.push(counts.join(" · ").dim());
+        if failed > 0 {
+            header.push(" · ".dim());
+            header.push(format!("{failed} failed").red());
+        }
+        let mut out = vec![Line::from(header)];
+
+        let label_width = usize::from(width).saturating_sub(4);
+        if !full {
+            if let Some(last) = steps.last() {
+                let label = self.explore_step_label(last, label_width).dim();
+                out.extend(prefix_lines(vec![label], "  └ ".dim(), "    ".into()));
             }
-            i += 1;
+            return out;
         }
-
-        // Apply tree-style prefix (└ for first, spaces for subsequent)
-        let wrap_width = width.saturating_sub(4).max(1);
-        let wrap_opts =
-            RtOptions::new(wrap_width as usize).word_splitter(WordSplitter::NoHyphenation);
-        let mut wrapped_items: Vec<Line<'static>> = Vec::new();
-        for item in sub_items {
-            push_owned_lines(
-                &word_wrap_line(&item, wrap_opts.clone()),
-                &mut wrapped_items,
-            );
+        for step in steps {
+            if step.kind == ToolKind::Execute {
+                let lines = execute_lines(step, step_bullet(step), width.saturating_sub(2), true);
+                out.extend(prefix_lines(lines, "  ".into(), "  ".into()));
+                continue;
+            }
+            let label = self.explore_step_label(step, usize::MAX);
+            out.extend(word_wrap_lines(
+                &[label],
+                RtOptions::new(usize::from(width).max(1))
+                    .initial_indent(Line::from(vec!["  ".into(), step_bullet(step), " ".into()]))
+                    .subsequent_indent("    ".into()),
+            ));
         }
-
-        out.extend(prefix_lines(
-            wrapped_items,
-            "  \u{2514} ".dim(),
-            "    ".into(),
-        ));
-
         out
     }
 
-    fn render_edit_lines(&self, width: u16) -> Vec<Line<'static>> {
+    fn explore_step_label(&self, step: &ToolSnapshot, max_width: usize) -> Line<'static> {
+        let path =
+            |p: &std::path::Path| relativize_paths_in_text(&p.display().to_string(), &self.cwd);
+        let spans: Vec<Span<'static>> = match (&step.kind, &step.invocation) {
+            (ToolKind::Execute, Some(Invocation::Command { command })) => {
+                compact_command(command, max_width)
+            }
+            (ToolKind::Read, Some(Invocation::Read { path })) => {
+                vec!["Read".cyan(), " ".into(), read_display_name(path).into()]
+            }
+            (_, Some(Invocation::Search { query, path: dir })) => {
+                let mut spans = vec!["Search".cyan(), " ".into()];
+                spans.extend(query.clone().map(Span::from));
+                if let Some(dir) = dir {
+                    spans.push(" in ".dim());
+                    spans.push(path(dir).into());
+                }
+                spans
+            }
+            (_, Some(Invocation::ListFiles { path: dir })) => {
+                let mut spans = vec!["List".cyan(), " ".into()];
+                spans.extend(dir.as_deref().map(|dir| Span::from(path(dir))));
+                spans
+            }
+            (kind, _) => {
+                let kind_label = format_tool_kind(kind);
+                let title = relativize_paths_in_text(&step.title, &self.cwd);
+                if title.to_lowercase().starts_with(&kind_label.to_lowercase()) {
+                    vec![title.into()]
+                } else {
+                    vec![kind_label.to_string().cyan(), " ".into(), title.into()]
+                }
+            }
+        };
+        crate::bottom_pane::truncate_line(&Line::from(spans), max_width)
+    }
+
+    fn render_edit_lines(&self, width: u16, full: bool) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
 
         // Bullet: green for completed, red for failed, spinner for active
@@ -345,7 +337,9 @@ impl ClientToolCell {
                     }
                 }
                 lines.push(Line::from(header_spans));
-                lines.extend(rest.to_vec());
+                if full {
+                    lines.extend(rest.to_vec());
+                }
             }
         } else {
             // No diff data: use the format_edit_tool_header as sole header
@@ -413,187 +407,64 @@ impl ClientToolCell {
 
         lines
     }
+}
 
-    fn render_execute_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let success = exit_code_success(&self.snapshot);
-        let bullet = match success {
-            Some(true) => "•".green().bold(),
-            Some(false) => "•".red().bold(),
-            None => spinner(self.start_time, self.animations_enabled),
-        };
-        let title = if self.is_active() { "Running" } else { "Ran" };
-
-        let command = match &self.snapshot.invocation {
-            Some(crate::presentation::Invocation::Command { command }) => command.clone(),
-            _ => self.snapshot.title.clone(),
-        };
-
-        let mut header_line =
-            Line::from(vec![bullet.clone(), " ".into(), title.bold(), " ".into()]);
-        let header_prefix_width = header_line.width();
-
-        let highlighted_lines = highlight_bash_to_lines(&command);
-
-        let continuation_wrap_width = usize::from(width)
-            .saturating_sub(CMD_CONTINUATION_PREFIX_WIDTH)
-            .max(1);
-        let continuation_opts =
-            RtOptions::new(continuation_wrap_width).word_splitter(WordSplitter::NoHyphenation);
-
-        let mut continuation_lines: Vec<Line<'static>> = Vec::new();
-
-        if let Some((first, rest)) = highlighted_lines.split_first() {
-            let available_first_width = (width as usize).saturating_sub(header_prefix_width).max(1);
-            let first_opts =
-                RtOptions::new(available_first_width).word_splitter(WordSplitter::NoHyphenation);
-            let mut first_wrapped: Vec<Line<'static>> = Vec::new();
-            push_owned_lines(&word_wrap_line(first, first_opts), &mut first_wrapped);
-            let mut first_wrapped_iter = first_wrapped.into_iter();
-            if let Some(first_segment) = first_wrapped_iter.next() {
-                header_line.extend(first_segment);
-            }
-            continuation_lines.extend(first_wrapped_iter);
-
-            for line in rest {
-                push_owned_lines(
-                    &word_wrap_line(line, continuation_opts.clone()),
-                    &mut continuation_lines,
-                );
-            }
-        }
-
-        let mut lines: Vec<Line<'static>> = vec![header_line];
-
-        let continuation_lines = limit_lines_from_start(&continuation_lines, CMD_CONTINUATION_MAX);
-        if !continuation_lines.is_empty() {
-            lines.extend(prefix_lines(
-                continuation_lines,
-                Span::from(CMD_CONTINUATION_PREFIX).dim(),
-                Span::from(CMD_CONTINUATION_PREFIX).dim(),
-            ));
-        }
-
-        // Render output
-        let output_text = execute_output_text(&self.snapshot);
-
-        if let Some(text) = output_text {
-            if text.is_empty() {
-                lines.extend(prefix_lines(
-                    vec![Line::from("(no output)".dim())],
-                    Span::from(OUTPUT_INITIAL_PREFIX).dim(),
-                    Span::from(OUTPUT_SUBSEQUENT_PREFIX),
-                ));
-            } else {
-                let output = crate::exec_cell::CommandOutput {
-                    exit_code: extract_exit_code(&self.snapshot).unwrap_or_else(|| {
-                        if self.snapshot.phase == crate::presentation::ToolPhase::Failed {
-                            1
-                        } else {
-                            0
-                        }
-                    }),
-                    aggregated_output: text,
-                };
-                let raw_output = output_lines(
-                    Some(&output),
-                    OutputLinesParams {
-                        line_limit: TOOL_CALL_MAX_LINES,
-                        only_err: false,
-                        include_angle_pipe: false,
-                        include_prefix: false,
-                    },
-                );
-
-                let trimmed_output =
-                    truncate_lines_middle(&raw_output.lines, OUTPUT_MAX_LINES, raw_output.omitted);
-
-                let output_wrap_width = usize::from(width)
-                    .saturating_sub(OUTPUT_PREFIX_WIDTH)
-                    .max(1);
-                let output_opts =
-                    RtOptions::new(output_wrap_width).word_splitter(WordSplitter::NoHyphenation);
-                let mut wrapped_output: Vec<Line<'static>> = Vec::new();
-                for line in trimmed_output {
-                    push_owned_lines(
-                        &word_wrap_line(&line, output_opts.clone()),
-                        &mut wrapped_output,
-                    );
-                }
-
-                if !wrapped_output.is_empty() {
-                    lines.extend(prefix_lines(
-                        wrapped_output,
-                        Span::from(OUTPUT_INITIAL_PREFIX).dim(),
-                        Span::from(OUTPUT_SUBSEQUENT_PREFIX),
-                    ));
-                }
-            }
-        } else if !self.is_active() {
-            // Only show "(no output)" for completed/failed commands, not in-progress ones.
-            lines.extend(prefix_lines(
-                vec![Line::from("(no output)".dim())],
-                Span::from(OUTPUT_INITIAL_PREFIX).dim(),
-                Span::from(OUTPUT_SUBSEQUENT_PREFIX),
-            ));
-        }
-
-        lines
-    }
-
-    /// Transcript rendering for Execute tools: `$ command` shell-style format,
-    /// matching the style used in the upstream Codex ExecCell transcript view.
-    fn render_execute_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let command = match &self.snapshot.invocation {
-            Some(crate::presentation::Invocation::Command { command }) => command.clone(),
-            _ => self.snapshot.title.clone(),
-        };
-
-        let highlighted_lines = highlight_bash_to_lines(&command);
-        let cmd_display = word_wrap_lines(
-            &highlighted_lines,
-            RtOptions::new(width as usize)
-                .initial_indent("$ ".magenta().into())
-                .subsequent_indent("    ".into()),
-        );
-        let mut lines: Vec<Line<'static>> = cmd_display;
-
-        // Output
-        if let Some(text) = execute_output_text(&self.snapshot)
-            && !text.is_empty()
-        {
-            for line_str in text.lines() {
-                lines.push(Line::from(format!("    {line_str}")).dim());
-            }
-        }
-
-        // Exit status
-        if !is_active_phase(&self.snapshot.phase) {
-            let success = exit_code_success(&self.snapshot);
-            let result: Line = match success {
-                Some(true) => Line::from("\u{2713}".green().bold()),
-                Some(false) => {
-                    let code = extract_exit_code(&self.snapshot).unwrap_or(1);
-                    Line::from(vec!["\u{2717}".red().bold(), format!(" ({code})").into()])
-                }
-                None => Line::default(),
-            };
-            if !result.spans.is_empty() {
-                lines.push(result);
-            }
-        }
-
-        lines
+fn step_bullet(step: &ToolSnapshot) -> Span<'static> {
+    match exit_code_success(step) {
+        Some(true) => "•".green().bold(),
+        Some(false) => "•".red().bold(),
+        None => "•".dim(),
     }
 }
 
-// Layout constants matching ExecCell display layout
-const CMD_CONTINUATION_PREFIX: &str = "  │ ";
-const CMD_CONTINUATION_PREFIX_WIDTH: usize = 4;
-const CMD_CONTINUATION_MAX: usize = 2;
-const OUTPUT_INITIAL_PREFIX: &str = "  └ ";
-const OUTPUT_SUBSEQUENT_PREFIX: &str = "    ";
-const OUTPUT_PREFIX_WIDTH: usize = 4;
-const OUTPUT_MAX_LINES: usize = 5;
+/// `• Ran <command>` plus output: the last output line in compact form, all
+/// of it in full form.
+fn execute_lines(
+    snapshot: &ToolSnapshot,
+    bullet: Span<'static>,
+    width: u16,
+    full: bool,
+) -> Vec<Line<'static>> {
+    let verb = if is_active_phase(&snapshot.phase) {
+        "Running"
+    } else {
+        "Ran"
+    };
+    let command = match &snapshot.invocation {
+        Some(Invocation::Command { command }) => command.clone(),
+        _ => snapshot.title.clone(),
+    };
+    let failed = exit_code_success(snapshot) == Some(false);
+    let output = execute_output_text(snapshot).unwrap_or_default();
+    let header: Line<'static> = vec![bullet, " ".into(), verb.bold(), " ".into()].into();
+    let output_width = usize::from(width).saturating_sub(4).max(1);
+
+    if !full {
+        let available = usize::from(width).saturating_sub(header.width());
+        let mut header = header;
+        header.extend(compact_command(&command, available));
+        let mut lines = vec![header];
+        if let Some(last) = last_output_line(&output, failed, output_width) {
+            lines.extend(prefix_lines(vec![last], "  └ ".dim(), "    ".into()));
+        }
+        return lines;
+    }
+
+    let mut lines = word_wrap_lines(
+        full_command_lines(&command),
+        RtOptions::new(usize::from(width).max(1))
+            .initial_indent(header)
+            .subsequent_indent("    ".into()),
+    );
+    let output_opts = RtOptions::new(output_width).word_splitter(WordSplitter::NoHyphenation);
+    let mut wrapped = Vec::new();
+    for raw in output.lines() {
+        let line = codex_ansi_escape::ansi_escape_line(raw).dim();
+        push_owned_lines(&word_wrap_line(&line, output_opts.clone()), &mut wrapped);
+    }
+    lines.extend(prefix_lines(wrapped, "  └ ".dim(), "    ".into()));
+    lines
+}
 
 fn exit_code_success(snapshot: &crate::presentation::ToolSnapshot) -> Option<bool> {
     if let Some(exit_code) = extract_exit_code(snapshot) {
@@ -784,45 +655,15 @@ fn create_contextual_patch(
 
 impl HistoryCell for ClientToolCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if !self.exploring_snapshots.is_empty() || is_exploring_snapshot(&self.snapshot) {
-            self.render_exploring_lines(width)
-        } else if self.snapshot.kind == crate::presentation::ToolKind::Execute {
-            self.render_execute_lines(width)
-        } else if matches!(
-            self.snapshot.kind,
-            crate::presentation::ToolKind::Create
-                | crate::presentation::ToolKind::Edit
-                | crate::presentation::ToolKind::Delete
-                | crate::presentation::ToolKind::Move
-        ) {
-            self.render_edit_lines(width)
-        } else {
-            self.render_generic_lines()
-        }
+        self.render(width, self.tool_output == ToolOutput::Full)
     }
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if !self.exploring_snapshots.is_empty() || is_exploring_snapshot(&self.snapshot) {
-            self.render_exploring_lines(width)
-        } else if self.snapshot.kind == crate::presentation::ToolKind::Execute {
-            self.render_execute_transcript_lines(width)
-        } else if matches!(
-            self.snapshot.kind,
-            crate::presentation::ToolKind::Create
-                | crate::presentation::ToolKind::Edit
-                | crate::presentation::ToolKind::Delete
-                | crate::presentation::ToolKind::Move
-        ) {
-            self.render_edit_lines(width)
-        } else {
-            self.render_generic_lines()
-        }
+        self.render(width, true)
     }
 }
 
-/// Extract a display name for a Read path: use the file name (basename) when
-/// available, falling back to the full path display. This matches the Codex
-/// ExecCell exploring style where Read items show just the filename.
+/// Display name for a Read path: the file name when there is one.
 fn read_display_name(path: &std::path::Path) -> String {
     path.file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -915,7 +756,7 @@ mod tests {
             Some(serde_json::json!({"exit_code": 0, "stdout": "2026-03-30 05:45:34 UTC"})),
         );
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
-        let lines = render_lines(&cell.display_lines(80));
+        let lines = render_lines(&cell.transcript_lines(80));
 
         // First line: green bullet + "Ran" + command
         assert!(lines[0].contains("Ran"));
@@ -925,22 +766,6 @@ mod tests {
 
         // Output line under └ prefix
         assert!(lines.iter().any(|l| l.contains("2026-03-30 05:45:34 UTC")));
-    }
-
-    #[test]
-    fn execute_completed_no_output_shows_no_output() {
-        let snapshot = make_execute_snapshot(
-            ToolPhase::Completed,
-            "rm /tmp/foo.txt",
-            vec![],
-            Some(serde_json::json!({"exit_code": 0, "stdout": ""})),
-        );
-        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
-        let lines = render_lines(&cell.display_lines(80));
-
-        assert!(lines[0].contains("Ran"));
-        assert!(lines[0].contains("rm /tmp/foo.txt"));
-        assert!(lines.iter().any(|l| l.contains("(no output)")));
     }
 
     #[test]
@@ -972,43 +797,11 @@ mod tests {
     fn execute_in_progress_shows_running() {
         let snapshot = make_execute_snapshot(ToolPhase::InProgress, "cargo build", vec![], None);
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
-        let lines = render_lines(&cell.display_lines(80));
+        let lines = render_lines(&cell.transcript_lines(80));
 
         assert!(lines[0].contains("Running"));
         assert!(lines[0].contains("cargo build"));
         assert!(!lines[0].contains("Tool ["));
-    }
-
-    #[test]
-    fn execute_output_truncation_with_many_lines() {
-        let long_output = (1..=20)
-            .map(|i| format!("line {i}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let snapshot = make_execute_snapshot(
-            ToolPhase::Completed,
-            "cat big_file.txt",
-            vec![Artifact::Text {
-                text: long_output.clone(),
-            }],
-            Some(serde_json::json!({"exit_code": 0, "stdout": long_output})),
-        );
-        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
-        let lines = render_lines(&cell.display_lines(80));
-
-        // Should have truncation indicator
-        assert!(
-            lines.iter().any(|l| l.contains("…") && l.contains("lines")),
-            "Expected truncation ellipsis in output, got: {lines:?}"
-        );
-
-        // Should NOT show all 20 lines
-        let output_lines: Vec<_> = lines.iter().filter(|l| l.contains("line ")).collect();
-        assert!(
-            output_lines.len() < 20,
-            "Expected truncation but got {count} output lines",
-            count = output_lines.len()
-        );
     }
 
     #[test]
@@ -1098,7 +891,7 @@ mod tests {
             owner_request_id: None,
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
-        let lines = render_lines(&cell.display_lines(80));
+        let lines = render_lines(&cell.transcript_lines(80));
 
         assert!(lines[0].contains("Ran"));
         assert!(lines[0].contains("ls -la"));
@@ -1377,7 +1170,7 @@ mod tests {
         let cwd = PathBuf::from("/home/user/project");
         let snapshot = make_execute_snapshot(
             ToolPhase::Completed,
-            "cat /home/user/project/README.md",
+            "cp /home/user/project/README.md /tmp/README.md",
             vec![Artifact::Text {
                 text: "# Readme".into(),
             }],
@@ -1385,12 +1178,12 @@ mod tests {
         );
         // Override the default cwd for this test
         let cell = ClientToolCell::new(snapshot, cwd, false);
-        let lines = render_lines(&cell.display_lines(80));
+        let lines = render_lines(&cell.transcript_lines(80));
 
         // Execute commands should keep their original command text
         // (path normalization in the command itself is NOT desired for execute tools)
         assert!(
-            lines[0].contains("Ran"),
+            lines[0].contains("Ran cp /home/user/project/README.md"),
             "Execute should still show 'Ran', got: {}",
             lines[0]
         );
@@ -1524,14 +1317,13 @@ mod tests {
         let mut cell = ClientToolCell::new(snap1, PathBuf::from("/tmp/cwd"), false);
         cell.mark_exploring();
         cell.merge_exploring(snap2);
-        let lines = render_lines(&cell.display_lines(80));
+        let lines = render_lines(&cell.transcript_lines(80));
 
-        // Should group reads on a single line: "Read file1.rs, file2.rs"
         assert!(
-            lines
-                .iter()
-                .any(|l| l.contains("file1.rs") && l.contains("file2.rs")),
-            "Exploring cell should group reads, got: {lines:?}"
+            lines[0].contains("Explored 2 reads")
+                && lines.iter().any(|l| l.contains("Read file1.rs"))
+                && lines.iter().any(|l| l.contains("Read file2.rs")),
+            "Exploring cell should list both reads, got: {lines:?}"
         );
     }
 
@@ -2129,7 +1921,7 @@ mod tests {
         let cell = ClientToolCell::new(snapshot, dir.path().to_path_buf(), false);
         std::fs::remove_file(&file_path).expect("remove file before render");
 
-        let lines = render_lines(&cell.display_lines(80));
+        let lines = render_lines(&cell.transcript_lines(80));
 
         assert!(
             lines.iter().any(|line| line.contains("50 -fn line_50")),
@@ -2270,7 +2062,7 @@ mod tests {
             owner_request_id: None,
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/"), false);
-        let lines = render_lines(&cell.display_lines(80));
+        let lines = render_lines(&cell.transcript_lines(80));
 
         // The diff content lines (containing "+hello", "+world") should start
         // with exactly 4 spaces, not 8. This matches PatchHistoryCell's output.
@@ -2315,7 +2107,7 @@ mod tests {
             owner_request_id: None,
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/"), false);
-        let lines = render_lines(&cell.display_lines(80));
+        let lines = render_lines(&cell.transcript_lines(80));
 
         // Header should say "Moved", not "Edited"
         assert!(
@@ -2398,41 +2190,6 @@ mod tests {
             lines[0].contains("Explored"),
             "Standalone completed Search should auto-render as 'Explored', got: {}",
             lines[0]
-        );
-    }
-
-    // --- Bug fix: Execute transcript should use $ command format ---
-
-    #[test]
-    fn execute_transcript_uses_shell_format() {
-        // In transcript view, Execute tools should render as "$ command"
-        // (shell-style), not "• Ran command" (bullet-style).
-        let snapshot = make_execute_snapshot(
-            ToolPhase::Completed,
-            "date --utc",
-            vec![Artifact::Text {
-                text: "2026-03-30".into(),
-            }],
-            Some(serde_json::json!({"exit_code": 0, "stdout": "2026-03-30"})),
-        );
-        let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
-        let lines = render_lines(&cell.transcript_lines(80));
-
-        // Should have "$ " prefix (shell-style)
-        assert!(
-            lines[0].contains("$ "),
-            "Execute transcript should use '$ ' shell format, got: {}",
-            lines[0]
-        );
-        assert!(
-            lines[0].contains("date --utc"),
-            "Execute transcript should show command, got: {}",
-            lines[0]
-        );
-        // Should NOT have bullet-style "Ran"
-        assert!(
-            !lines.iter().any(|l| l.contains("Ran")),
-            "Execute transcript should NOT use bullet-style 'Ran', got: {lines:?}"
         );
     }
 

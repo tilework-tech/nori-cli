@@ -64,6 +64,7 @@ pub use types::ProjectConfig;
 pub use types::ResolvedDistribution;
 pub use types::ScriptTimeout;
 pub use types::TerminalNotifications;
+pub use types::ToolOutput;
 pub use types::TuiConfig;
 pub use types::VimEnterBehavior;
 pub use types::resolve_hook_paths;

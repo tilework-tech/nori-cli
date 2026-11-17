@@ -1,0 +1,20 @@
+---
+source: tui/src/exec_cell/tests.rs
+expression: full(&group)
+---
+--- 120 ---
+• Explored 1 read · 3 searches · 1 failed
+  • Read main.rs
+  • Search TODO in src
+  • Ran grep -rn missing_symbol src/
+  • Ran rg -n 'fn render' src/ | sort -t: -k1,1 | uniq -c | sort -rn | head -20
+    └      12 src/history_cell/mod.rs
+            4 src/exec_cell/render.rs
+--- 80 ---
+• Explored 1 read · 3 searches · 1 failed
+  • Read main.rs
+  • Search TODO in src
+  • Ran grep -rn missing_symbol src/
+  • Ran rg -n 'fn render' src/ | sort -t: -k1,1 | uniq -c | sort -rn | head -20
+    └      12 src/history_cell/mod.rs
+            4 src/exec_cell/render.rs

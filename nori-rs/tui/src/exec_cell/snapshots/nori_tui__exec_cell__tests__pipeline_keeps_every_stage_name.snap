@@ -1,0 +1,10 @@
+---
+source: tui/src/exec_cell/tests.rs
+expression: compact(&cell)
+---
+--- 120 ---
+• Ran git … | sort | uniq … | sort … | head …
+  └ 3 Lin
+--- 80 ---
+• Ran git … | sort | uniq … | sort … | head …
+  └ 3 Lin
