@@ -30,6 +30,10 @@ impl ChatWidget {
         };
     }
 
+    pub(crate) fn has_pinned_plan(&self) -> bool {
+        self.pinned_plan.is_some()
+    }
+
     /// Return the current plan drawer mode.
     pub(crate) fn plan_drawer_mode(&self) -> PlanDrawerMode {
         self.plan_drawer_mode

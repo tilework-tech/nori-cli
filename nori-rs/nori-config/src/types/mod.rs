@@ -2049,6 +2049,9 @@ pub struct TuiConfigToml {
     /// Terminal file manager for the `/browse` command.
     pub file_manager: Option<FileManager>,
 
+    /// How tool calls render inline (the transcript view is always full).
+    pub tool_output: Option<ToolOutput>,
+
     /// Pin plan updates to a drawer in the viewport instead of history cells.
     pub pinned_plan_drawer: Option<bool>,
 
@@ -2090,6 +2093,17 @@ impl Default for TuiConfig {
             vertical_footer: false,
         }
     }
+}
+
+/// How tool calls render inline.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ToolOutput {
+    /// One line per tool call: status dot, command summary, last output line.
+    #[default]
+    Compact,
+    /// Every command in full with its output.
+    Full,
 }
 
 /// Supported terminal file managers for the `/browse` command.
@@ -2278,6 +2292,9 @@ pub struct NoriConfig {
     /// `None` means not configured.
     pub file_manager: Option<FileManager>,
 
+    /// How tool calls render inline (the transcript view is always full).
+    pub tool_output: ToolOutput,
+
     /// Pin plan updates to a drawer in the viewport instead of history cells.
     pub pinned_plan_drawer: bool,
 
@@ -2401,6 +2418,7 @@ impl Default for NoriConfig {
             skillset_per_session: false,
             file_manager: None,
             pinned_plan_drawer: false,
+            tool_output: ToolOutput::default(),
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             footer_segment_config: FooterSegmentConfig::default(),

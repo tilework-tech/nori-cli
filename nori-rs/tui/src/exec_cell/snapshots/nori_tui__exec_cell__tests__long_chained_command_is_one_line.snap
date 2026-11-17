@@ -1,0 +1,10 @@
+---
+source: tui/src/exec_cell/tests.rs
+expression: compact(&cell)
+---
+--- 120 ---
+• Ran cargo … && cargo … ; notify.sh … && git … && docker …
+  └ Finished release
+--- 80 ---
+• Ran cargo … && cargo … ; notify.sh … && git … && docker …
+  └ Finished release

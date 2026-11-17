@@ -1,0 +1,10 @@
+---
+source: tui/src/exec_cell/tests.rs
+expression: compact(&cell)
+---
+--- 120 ---
+• Running npm …
+  └ ➜  Local:   http://localhost:3000/
+--- 80 ---
+• Running npm …
+  └ ➜  Local:   http://localhost:3000/

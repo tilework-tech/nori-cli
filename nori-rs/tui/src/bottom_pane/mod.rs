@@ -36,6 +36,7 @@ pub(crate) use component_picker_view::ComponentPickerParams;
 #[cfg(test)]
 pub(crate) use list_selection_view::ListSelectionView;
 pub(crate) use list_selection_view::SelectionViewParams;
+pub(crate) use selection_popup_common::truncate_line;
 mod paste_burst;
 pub(crate) mod picker_keys;
 pub mod popup_consts;

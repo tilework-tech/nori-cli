@@ -1,0 +1,10 @@
+---
+source: tui/src/exec_cell/tests.rs
+expression: compact(&cell)
+---
+--- 120 ---
+• Ran python3 <<heredoc (4 lines)
+  └ 1284 rows
+--- 80 ---
+• Ran python3 <<heredoc (4 lines)
+  └ 1284 rows

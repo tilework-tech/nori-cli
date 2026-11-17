@@ -5,7 +5,7 @@ Nori reads one TOML file at `$NORI_HOME/config.toml` (default
 at startup. The resolution architecture and the full set of runtime-policy types
 live in [`nori-config/docs.md`](nori-config/docs.md); this file documents the
 agent and model configuration surface, which is the most commonly hand-edited
-part of the file, plus the opt-in multi-session feature.
+part of the file, plus tool call display and the opt-in multi-session feature.
 
 ## Choosing an agent
 
@@ -84,6 +84,26 @@ key of `CODEX_CONFIG`) and ignore this field. For env-based channels, Nori's
 injected value takes precedence over the agent's own configured model (for
 example `~/.claude/settings.json`) for Nori-spawned sessions — Nori's
 `[default_models]` is authoritative there by design.
+
+## Tool call display: `[tui] tool_output`
+
+```toml
+[tui]
+tool_output = "compact"   # or "full"
+```
+
+`compact` (the default) shows each tool call as one scannable line: a status
+dot (green ok, red failed, animated while running), the command summarized to
+its command names with arguments shown as `…`, and the last line of output
+underneath. Read-only commands and file reads/searches collapse into one
+`Explored N reads · M searches` line, and edits show only the file and line
+counts. `full` shows every command in full with syntax highlighting, all of its
+output, every exploring step, and edit diffs.
+
+The transcript view (Ctrl+T, or Ctrl+O when no plan is pinned) always shows the
+full form. The first-run directory-trust screen asks this question after the
+trust choice, preselecting Compact if you allowed Nori to work without approval
+and Full if you required approval; Esc skips it without writing the key.
 
 ## Several sessions in one TUI: `[features] multi_session`
 

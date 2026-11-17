@@ -1190,9 +1190,13 @@ impl ChatWidget {
         // Check if this snapshot is for a buffered incomplete execute cell.
         // This allows completions to reach cells that were displaced from
         // active_cell by subsequent tool snapshots (parallel ACP calls).
-        if let Some(mut buffered_cell) = self
+        let buffered_key = self
             .pending_client_tool_cells
-            .remove(&tool_snapshot.call_id)
+            .iter()
+            .find(|(_, cell)| cell.holds_call(&tool_snapshot.call_id))
+            .map(|(key, _)| key.clone());
+        if let Some(mut buffered_cell) =
+            buffered_key.and_then(|key| self.pending_client_tool_cells.remove(&key))
         {
             buffered_cell.apply_snapshot(tool_snapshot);
             if !buffered_cell.is_active() {
@@ -1204,6 +1208,8 @@ impl ChatWidget {
                 // its later completion event.
                 self.completed_client_tool_calls
                     .insert(buffered_cell.call_id().to_owned());
+                self.completed_client_tool_calls
+                    .extend(buffered_cell.exploring_call_ids());
                 self.needs_final_message_separator = true;
                 self.app_event_tx
                     .send(AppEvent::InsertHistoryCell(Box::new(buffered_cell)));
@@ -1267,7 +1273,8 @@ impl ChatWidget {
             tool_snapshot,
             self.config.cwd.clone(),
             self.config.animations,
-        );
+        )
+        .with_tool_output(self.config.tool_output);
         if is_new_exploring {
             cell.mark_exploring();
         }

@@ -231,6 +231,7 @@ impl NoriConfig {
                 .map_or(crate::types::DEFAULT_MAX_SESSIONS, |limit| limit.max(1)),
             skillset_per_session,
             file_manager: toml.tui.file_manager,
+            tool_output: toml.tui.tool_output.unwrap_or_default(),
             pinned_plan_drawer: toml.tui.pinned_plan_drawer.unwrap_or(false),
             custom_working_messages: toml.tui.custom_working_messages.unwrap_or(true),
             custom_working_message_list: toml
@@ -711,6 +712,20 @@ auto_worktree = false
     // ========================================================================
     // File Manager Config Tests
     // ========================================================================
+
+    #[test]
+    fn test_tool_output_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.tool_output, crate::ToolOutput::Compact);
+
+        std::fs::write(&config_path, "[tui]\ntool_output = \"full\"\n").unwrap();
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.tool_output, crate::ToolOutput::Full);
+    }
 
     #[test]
     fn test_file_manager_loaded_from_config() {
