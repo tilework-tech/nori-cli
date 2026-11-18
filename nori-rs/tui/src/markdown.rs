@@ -203,6 +203,24 @@ mod tests {
     }
 
     #[test]
+    fn pipe_table_inside_a_code_fence_renders_as_code() {
+        let src = format!("Example:\n\n```\n{INVENTORY_TABLE}```\n\nEnd of example.\n");
+        assert_eq!(
+            render_trimmed(&src),
+            vec![
+                "Example:",
+                "",
+                "| Fruit | Color | Count |",
+                "| --- | --- | --- |",
+                "| Apple | Red | 3 |",
+                "| Banana | Yellow | 5 |",
+                "",
+                "End of example.",
+            ]
+        );
+    }
+
+    #[test]
     fn append_markdown_uses_shared_adaptive_table_renderer() {
         let src = "| Session | Project | Turn status |\n| :-- | :-- | :-- |\n| Improve Markdown tables | external-codex | Waiting for input |\n";
         let mut wide = Vec::new();
