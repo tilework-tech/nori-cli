@@ -441,3 +441,36 @@ See the [machine invocation and recovery control operations](../cli/src/host/doc
   projection belongs privately in a consumer such as the TUI.
 
 Created and maintained by Nori.
+
+### Rebuilt side sessions on a managed binding
+
+A machine provisioned with `[host] side_sessions = true` advertises
+`rebuiltSideSessions: 1` alongside `standardAcp: 1` in its managed-host
+capabilities. The default is off. Sessions checks the capability and its own
+rollout policy before opening a side thread. On the parent's existing
+`/managed` connection, send the following frame after the regular ACP session
+has opened. All identifiers in this example are synthetic.
+
+```json
+{"bindingId":"sample","generation":1,"message":{"jsonrpc":"2.0","id":12,"method":"session/new","params":{"cwd":"/srv/fixture/bindings/sample/work","mcpServers":[],"_meta":{"nori.dev/sideSession":{"bindingId":"sample","generation":1,"sessionId":"parent-0"}}}}}
+```
+
+The presence of `nori.dev/sideSession` requests a side session. Its
+`sessionId` names the open parent ACP session. Both scope fields must match
+the envelope. A malformed or stale reference fails the request. An unmarked
+`session/new` retains the regular adapter contract.
+
+A successful response contains a new opaque `result.sessionId` and echoes the
+parent object in `result._meta["nori.dev/sideSession"]`. Use that new ID on
+`session/prompt`, `session/cancel` and `session/close`. Updates and permission
+requests identify the side in `params.sessionId` and the parent in
+`params._meta["nori.dev/sideSession"]`. Reply to a permission request using
+the JSON-RPC ID the host sent. Several side sessions may have outstanding
+requests at once, including while a parent prompt awaits permission.
+
+Each rebuilt session uses one process slot. A full machine returns
+`-32017` with the message `machine full`. A launch that cannot enforce a
+read-only workspace returns an error before the caller receives a side ID.
+The host owns process cleanup. Sessions owns history selection, restrictive
+mode selection, permission decisions, and idle close. It sends bounded
+conversation history in the first prompt and keeps the side exchange in memory.
