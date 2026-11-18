@@ -153,11 +153,14 @@ Run `NORI_HOME=/srv/fixture/nori nori host --port 0` to start the detached
 loopback listener. Use the same `NORI_HOME` with `nori host stop` to stop
 all its children. The defaults are `managed = false`, a managed capacity of
 eight live adapter processes, and `$NORI_HOME/hosted-sessions` for the
-bindings root. A configured capacity must be positive. Local mode retains
-its own session cap and attach protocol.
+bindings root. Both shared and dedicated machines use the positive
+`max_sessions` limit. Each binding's adapter and each rebuilt side
+process occupy a slot. Admission checks the machine-wide count and spawns
+under the same lock. A rebuilt side frees its slot once its whole sandbox
+has exited. Local mode retains its own session cap and attach protocol.
 
 A dedicated machine can retain its existing home and workspace. Configure
-one named binding with `max_sessions = 1` and omit `bindings_root`. Before
+one named binding and omit `bindings_root`. Before
 publishing its endpoint, the host validates the configured binding ID, checks
 that the absolute paths resolve to distinct existing directories, and checks
 the home configuration directories described below. An invalid layout fails
@@ -167,7 +170,6 @@ canonical pair. The workspace may be inside the home.
 ```toml
 [host]
 managed = true
-max_sessions = 1
 
 [host.dedicated_roots]
 binding_id = "sample"
@@ -189,7 +191,7 @@ Each text frame carries one JSON-RPC 2.0 object. Send
 `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"observe":true}}`
 first. Require `result.agentCapabilities._meta["nori.dev/managedHost"]`
 to contain `{"version":1,"maxSessions":2,"standardAcp":1}` for the shared configuration above
-(or `maxSessions: 1` for the dedicated configuration).
+(or `maxSessions: 8` for the dedicated configuration).
 The ordinary local host omits that key. The `standardAcp` field advertises version 1 of the scoped ACP transport at
 `/managed`. The control socket accepts `_nori/session/ensure`,
 `_nori/session/status` and `_nori/host/stop` from any authenticated,
@@ -227,7 +229,8 @@ own handshake.
   positive integer generation, and a binding ID containing ASCII letters,
   digits, `.`, `-`, or `_`. Empty, `.`, and `..` binding IDs are invalid.
   The conversation ID names the hosted conversation. ACP session IDs belong
-  to the downstream adapter and a binding can carry several of them.
+  to the downstream adapter for regular sessions. A binding can carry several
+  regular and side ACP IDs.
 - The provisioner installs the versioned executable, protects it from
   replacement, resolves credential references and prepares binding-owned
   paths. The host executes the absolute `adapter.path` directly with
@@ -251,12 +254,54 @@ own handshake.
   The executable receives only its arguments, working directory and child
   environment. Unknown request or spec fields are rejected.
 - The host clears inherited environment, applies `spec.env`, and sets
-  `HOME=home`, `CODEX_HOME=home/.codex` and `NORI_HOME=home/.nori/cli`.
+  `HOME=home` and `NORI_HOME=home/.nori/cli`. The default `CODEX_HOME`
+  is `home/.codex`.
   Those names and `USERPROFILE` are reserved case-insensitively. Adapter
   arguments and environment entries must be free of NUL characters.
   Supply variables such as `PATH` explicitly when the adapter needs them.
   Subprocesses inherit the binding environment. Host `.env` values stay
   in the host. Managed launches bypass host-configured hooks and MCP servers.
+- `spec.workspaceReadOnly` selects OS-enforced read-only launch. It defaults
+  to false. Every rebuilt side forces this option when it reuses the parent's
+  pinned executable, arguments, environment, cwd and home. The host uses
+  the spec's model when the side adapter reports a different current model.
+  A read-only launch requires Linux with `/usr/bin/bwrap` and permission to
+  create the required namespaces and mounts. The launcher mounts the root
+  read-only, supplies private device and process mounts, and sets
+  `TMPDIR=/dev/shm` on a private writable tmpfs. Both the pinned workspace
+  and persistent `HOME` are read-only. A rebuilt side also requires
+  `pidfd_open`, `pidfd_send_signal`, and a host `/proc` view of Bubblewrap's
+  reported child PID. Before the adapter can run, the host verifies that PID
+  belongs to the supervisor's child and registers its pidfd. The side must
+  then complete the sandboxed ACP handshake before the host returns its ID.
+  [Read-only launch](../../../harness/src/managed_launch/side_sandbox.rs)
+- A marked rebuilt side pinned to codex-acp 2.7.0 gets a fresh
+  `CODEX_HOME` and `CODEX_SQLITE_HOME` in its private tmpfs. Codex CLI
+  0.166.0 opens its installation ID for writing during initialization.
+  Each side creates its own installation ID and databases, which disappear
+  at exit. Ordinary launches, including explicit `workspaceReadOnly`
+  launches and launches with side sessions disabled, use `home/.codex`.
+- For a managed subscription, the host recognizes a single entry in the
+  parent's admitted `spec.credentialRefs`, `sessions:codex-subscription-file:v1`.
+  It opens the binding's `.codex` directory without following symlinks,
+  checks that `auth.json` is a regular file, and mounts the open directory
+  read-only. A symlink at the side's `$CODEX_HOME/auth.json` points to that
+  filename in the mount. Opening the file after a broker rename reaches the
+  replacement. The host never reads or copies token bytes. Codex CLI caches
+  its credentials and reloads from the file on same-account 401 recovery or
+  near expiry. A still-valid token can continue serving requests after
+  replacement. [Codex input policy](../../../harness/src/managed_launch/codex_home.rs)
+- The host mounts the exact validated binding config bytes and supported
+  instructions read-only. Unsupported provider inputs, enterprise settings
+  whose effect it cannot establish, and ambiguous credential sources cause
+  refusal. It does not force a credential store or rewrite workspace or
+  login restrictions. A binding with no credential references and no
+  credential files can run the logged-out probe. [Sessions source contract](../../../acp-host/docs.md#codex-subscription-source)
+- `[host] side_sessions` defaults to false. When enabled, the managed
+  host advertises `rebuiltSideSessions: 1` and accepts marked `session/new`
+  requests beside an open parent. The caller uses that parent's existing
+  logical connection.
+  [Sessions wire contract](../../../acp-host/docs.md#rebuilt-side-sessions-on-a-managed-binding)
 - All four `additions` booleans are required. With `standardAcp: 1`,
   each independently controls its host service. See the [machine wire and
   switch inventory](../../../acp-host/docs.md#managed-machine-connection).
@@ -326,8 +371,8 @@ observes exit and terminates managed processes during shutdown. See the
 [pipe handoff test](../../../harness/tests/managed_launch.rs).
 
 On Linux, provision a PID namespace init or ancestor subreaper that waits for
-orphaned processes. The host signals the adapter's process group and waits
-for its direct child. Orphaned descendants can remain as zombies until their
+orphaned processes. For ordinary managed launches the host signals the
+adapter's process group and waits for its direct child. Orphaned descendants can remain as zombies until their
 adopting ancestor reaps them. See [process supervision](../../../acp-host/src/connection/child_lifecycle.rs).
 
 #### Managed recovery control
@@ -361,8 +406,12 @@ Every request below names `bindingId` and the current `generation`.
 | `_nori/host/import` | `checkpoint`, `launchSpec` | Accepts the exported checkpoint and the destination machine's launch spec (same shape as ensure's `spec`). Requires a newer generation. Returns `{conversationId,sessionId,continuation}`. |
 | `_nori/host/release` | `commandId` | Returns the final `{checkpoint,watermarks}` and stops this binding's process group. Other bindings, including independently bound descendants, continue running. |
 
-Checkpoint freezes new requests at a boundary with no unfinished ACP request.
-When `spec.additions.recording` is enabled, it flushes and syncs each
+Checkpoint returns an error while an ordinary ACP request is unfinished. A side
+prompt waiting for permission can remain open during its parent’s checkpoint. Release
+stops the binding's processes and waits for its rebuilt sides and parent relay
+to finish before exporting the final checkpoint.
+
+When `spec.additions.recording` is enabled, checkpoint flushes and syncs each
 binding-owned recorder through its open file handle, then verifies that the
 output watermarks still match. On checkpoint or release error, read
 `error.data.savedThrough` when present. Its source cursors identify the last

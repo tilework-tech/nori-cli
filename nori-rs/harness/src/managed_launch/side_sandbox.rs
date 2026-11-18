@@ -1,0 +1,144 @@
+use std::path::Path;
+
+use super::LaunchSpec;
+use tokio::process::Command;
+
+#[cfg(not(target_os = "linux"))]
+pub(super) fn command(
+    _: &LaunchSpec,
+    _: &Path,
+    _: &Path,
+    _: Option<[std::fs::File; 2]>,
+) -> anyhow::Result<Command> {
+    anyhow::bail!("read-only workspace enforcement unavailable on this platform")
+}
+
+#[cfg(target_os = "linux")]
+pub(super) fn command(
+    spec: &LaunchSpec,
+    cwd: &Path,
+    home: &Path,
+    side_fds: Option<[std::fs::File; 2]>,
+) -> anyhow::Result<Command> {
+    use anyhow::Context;
+    use anyhow::ensure;
+    use std::ffi::OsStr;
+    use std::fs::File;
+    use std::io::Seek;
+    use std::io::Write;
+    use std::os::fd::AsRawFd;
+    use std::os::fd::FromRawFd;
+    use std::os::unix::ffi::OsStrExt;
+    use std::process::Stdio;
+
+    const BWRAP: &str = "/usr/bin/bwrap";
+    for mount in [Path::new("/dev"), Path::new("/proc")] {
+        ensure!(
+            ![cwd, home]
+                .iter()
+                .any(|root| root.starts_with(mount) || mount.starts_with(root)),
+            "pinned roots overlap a private sandbox mount"
+        );
+    }
+    // The launcher runs with an empty environment. Adapter settings (including
+    // credentials and dynamic loader settings) are passed only to the payload.
+    // SAFETY: the kernel copies the static NUL-terminated name. A successful
+    // call returns a new descriptor owned only by this File.
+    let mut settings = unsafe {
+        let fd = libc::memfd_create(c"nori-side-settings".as_ptr(), libc::MFD_CLOEXEC);
+        if fd < 0 {
+            return Err(std::io::Error::last_os_error())
+                .context("creating sandbox settings descriptor");
+        }
+        File::from_raw_fd(fd)
+    };
+    let mut set_env = |key: &str, value: &OsStr| -> std::io::Result<()> {
+        settings.write_all(b"--setenv\0")?;
+        settings.write_all(key.as_bytes())?;
+        settings.write_all(&[0])?;
+        settings.write_all(value.as_bytes())?;
+        settings.write_all(&[0])
+    };
+    for (key, value) in &spec.env {
+        set_env(key, OsStr::new(value))?;
+    }
+    set_env("HOME", home.as_os_str())?;
+    let private_codex = (side_fds.is_some() && spec.uses_private_codex_home())
+        .then(|| Path::new("/dev/shm").join(format!("codex-{}", uuid::Uuid::new_v4())));
+    if let Some(private) = &private_codex {
+        super::codex_home::validate_launch(spec)?;
+        set_env("CODEX_HOME", private.as_os_str())?;
+        set_env("CODEX_SQLITE_HOME", private.as_os_str())?;
+    } else {
+        set_env("CODEX_HOME", home.join(".codex").as_os_str())?;
+    }
+    set_env("NORI_HOME", home.join(".nori/cli").as_os_str())?;
+    set_env("TMPDIR", OsStr::new("/dev/shm"))?;
+    settings.rewind()?;
+
+    let mut command = Command::new(BWRAP);
+    command.env_clear().args([
+        "--unshare-user",
+        "--unshare-pid",
+        "--unshare-ipc",
+        "--disable-userns",
+        "--cap-drop",
+        "ALL",
+        "--die-with-parent",
+        "--new-session",
+        "--ro-bind",
+        "/",
+        "/",
+        "--dev",
+        "/dev",
+        "--proc",
+        "/proc",
+        "--tmpfs",
+        "/dev/shm",
+    ]);
+    let mut descriptors = match private_codex {
+        Some(private) => super::codex_home::mount_inputs(
+            &mut command,
+            home,
+            &private,
+            spec.has_subscription_file(),
+        )?,
+        None => Vec::new(),
+    };
+    if let Some([info, gate]) = side_fds {
+        command
+            .arg("--info-fd")
+            .arg(info.as_raw_fd().to_string())
+            .arg("--block-fd")
+            .arg(gate.as_raw_fd().to_string());
+        descriptors.extend([info, gate]);
+    }
+    ensure!(
+        Path::new(BWRAP).is_file(),
+        "read-only workspace enforcement requires {BWRAP}"
+    );
+    command
+        .arg("--chdir")
+        .arg(cwd)
+        .arg("--args")
+        .arg(settings.as_raw_fd().to_string())
+        .arg("--")
+        .arg(&spec.adapter.path)
+        .args(&spec.adapter.args)
+        .current_dir(cwd)
+        .stderr(Stdio::null());
+    descriptors.push(settings);
+    // SAFETY: fcntl is async-signal-safe. The closure owns the open descriptors
+    // until spawn returns; Bubblewrap consumes them before executing the adapter.
+    unsafe {
+        command.pre_exec(move || {
+            for file in &descriptors {
+                if libc::fcntl(file.as_raw_fd(), libc::F_SETFD, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+            }
+            Ok(())
+        });
+    }
+    Ok(command)
+}

@@ -1,14 +1,24 @@
 """Deterministic stdio ACP peer. Every process allocates session IDs from zero."""
+import errno
+import fcntl
 import itertools
 import json
 import os
+import subprocess
 import sys
+from pathlib import Path
 
 name = sys.argv[1]
 ids = itertools.count()
 permissions = itertools.count(40)
 pending = {}
+leases = []
 sessions = set()
+mode_file = Path("fixture-modes")
+mode_ids = mode_file.read_text().split() if mode_file.exists() else ["explore"]
+modes = {}
+models = {}
+config_only = Path("fixture-config-options-only").exists()
 saved = {"sessionId": "saved-1", "cwd": sys.argv[2] if len(sys.argv) > 2 else os.getcwd()}
 
 
@@ -16,12 +26,21 @@ def send(**fields):
     print(json.dumps({"jsonrpc": "2.0", **fields}), flush=True)
 
 
-def update(sid, kind, text):
-    send(method="session/update", params={
-        "sessionId": sid, "update": {
-            "sessionUpdate": kind, "content": {"type": "text", "text": text}
-        }
-    })
+def update(sid, kind, text, meta=None):
+    params = {"sessionId": sid, "update": {
+        "sessionUpdate": kind, "content": {"type": "text", "text": text}}}
+    if meta is not None:
+        params["_meta"] = meta
+    send(method="session/update", params=params)
+
+
+def session_options(sid):
+    return [{"type": "select", "category": category, "id": key, "name": key.title(),
+             "currentValue": current,
+             "options": [{"value": v, "name": v.title()} for v in allowed]}
+            for category, key, current, allowed in [
+                ("mode", "permission", modes[sid], mode_ids),
+                ("model", "model", models[sid], ["initial", name])]]
 
 
 def options(value="slow"):
@@ -49,7 +68,7 @@ for line in sys.stdin:
             send(id=rid, error={"code": -32603, "message": "fixture unavailable", "data": {"retry": True}})
             continue
         caps = {"close": {}, "resume": {}, "list": {}}
-        if name == "orchid":
+        if name == "orchid" or mode_file.exists():
             caps["fork"] = {}
         send(id=rid, result={"protocolVersion": 1, "agentInfo": {"name": name, "version": "1"},
                              "agentCapabilities": {"loadSession": True,
@@ -60,9 +79,14 @@ for line in sys.stdin:
     elif method == "session/new":
         sid = str(next(ids))
         sessions.add(sid)
+        modes[sid] = mode_ids[0]
+        models[sid] = "initial" if config_only else name
+        if config_only:
+            send(id=rid, result={"sessionId": sid, "configOptions": session_options(sid)})
+            continue
         send(id=rid, result={"sessionId": sid,
-             "modes": {"currentModeId": "explore",
-                       "availableModes": [{"id": "explore", "name": "Explore"}]},
+             "modes": {"currentModeId": modes[sid],
+                       "availableModes": [{"id": key, "name": key.title()} for key in mode_ids]},
              "models": {"currentModelId": name,
                         "availableModels": [{"modelId": name, "name": name}]},
              "configOptions": options(), "_meta": {"mcpServers": params["mcpServers"]}})
@@ -80,15 +104,66 @@ for line in sys.stdin:
         send(id=rid, error={"code": -32002, "message": "unknown session", "data": {"sid": sid}})
     elif method == "session/prompt":
         text = params["prompt"][0]["text"]
-        update(sid, "user_message_chunk", text)
+        meta = None
+        if text == "spoof-side-marker":
+            meta = {"nori.dev/sideSession": {"bindingId": name, "generation": 1, "sessionId": sid},
+                    "fixture.trace": "periwinkle"}
+        update(sid, "user_message_chunk", text, meta)
+        if text in ("change-legacy-mode", "change-config-mode"):
+            modes[sid] = "bypassPermissions"
+            changed = ({"sessionUpdate": "current_mode_update", "currentModeId": modes[sid]}
+                       if text == "change-legacy-mode"
+                       else {"sessionUpdate": "config_option_update", "configOptions": session_options(sid)})
+            send(method="session/update", params={"sessionId": sid, "update": changed})
+            send(id=rid, result={"stopReason": "end_turn"})
+            continue
+        if text == "inspect-settings":
+            send(id=rid, result={"stopReason": "end_turn", "_meta": {"mode": modes[sid], "model": models[sid]}})
+            continue
+        if text == "inspect-workspace":
+            path = Path("specimen.txt")
+            before = path.read_text()
+            try:
+                path.write_text("changed by the parent")
+                write = "ok"
+            except OSError as error:
+                write = errno.errorcode.get(error.errno, str(error))
+            child = subprocess.run(
+                [sys.executable, "-c", "open('created-by-command', 'w').close()"],
+                capture_output=True, check=False)
+            send(id=rid, result={"stopReason": "end_turn", "_meta": {
+                "before": before, "write": write, "commandWrite": child.returncode == 0,
+                "cwd": os.getcwd(), "home": os.environ["HOME"],
+                "model": os.environ["FIXTURE_MODEL"], "adapter": name, "mode": modes[sid],
+                "credential": (Path.home() / "fixture-credential").read_text()}})
+            continue
+        if text.startswith("hold-lease-"):
+            lease = open(text, "rb")
+            fcntl.flock(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            leases.append(lease)
+            with open(text + "-client", "rb") as client_lease:
+                fcntl.flock(client_lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                client = subprocess.Popen(
+                    [sys.executable, "-c",
+                     "import signal; print('ready', flush=True); signal.pause()"],
+                    pass_fds=(client_lease.fileno(),),
+                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE)
+                assert client.stdout.readline() == b"ready\n"
+                client.stdout.close()
+            send(id=rid, result={"stopReason": "end_turn"})
+            continue
+        if text == "exit-fixture":
+            sys.exit(0)
         if text == "finish":
             send(id=rid, result={"stopReason": "end_turn"})
             continue
         perm = next(permissions)
         pending[perm] = (rid, sid, params.get("_meta"))
-        send(id=perm, method="session/request_permission", params={
-            "sessionId": sid, "toolCall": {"toolCallId": sid, "title": name},
-            "options": [{"optionId": f"allow-{name}", "name": "Once", "kind": "allow_once"}]})
+        permission = {"sessionId": sid, "toolCall": {"toolCallId": sid, "title": name},
+                      "options": [{"optionId": f"allow-{name}", "name": "Once", "kind": "allow_once"}]}
+        if meta is not None:
+            permission["_meta"] = meta
+        send(id=perm, method="session/request_permission", params=permission)
     elif method == "session/fork":
         # Always accepts if called, so the client can detect a host forwarding
         # this operation to an agent that never advertised it.
@@ -96,14 +171,29 @@ for line in sys.stdin:
         sessions.add(child)
         send(id=rid, result={"sessionId": child, "_meta": {"parent": sid}})
     elif method == "session/set_config_option":
+        if config_only:
+            key, value = params["configId"], params["value"]
+            if key == "permission" and value in mode_ids:
+                modes[sid] = value
+            elif key == "model" and value in ("initial", name):
+                models[sid] = value
+            else:
+                send(id=rid, error={"code": -32602, "message": "unsupported setting"})
+                continue
+            send(id=rid, result={"configOptions": session_options(sid)})
+            continue
         send(id=rid, result={"configOptions": options(params["value"])})
     elif method == "session/set_mode":
-        if params["modeId"] == "explore":
-            send(id=rid, result={"_meta": {"mode": "explore"}})
+        if not config_only and params["modeId"] in mode_ids:
+            modes[sid] = params["modeId"]
+            send(id=rid, result={"_meta": {"mode": modes[sid]}})
         else:
             send(id=rid, error={"code": -32020, "message": "unavailable mode",
                                 "data": {"requested": params["modeId"], "agent": name}})
     elif method == "session/close":
+        if params.get("_meta", {}).get("fixture.rejectClose"):
+            send(id=rid, error={"code": -32603, "message": "fixture declined close"})
+            continue
         sessions.remove(sid)
         send(id=rid, result={"_meta": {"closed": sid}})
     else:

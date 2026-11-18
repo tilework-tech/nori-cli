@@ -233,7 +233,7 @@ journal records. With `[host] managed = false`,
    `agentCapabilities.sessionCapabilities.fork` when supported.
    [Machine framing](src/remote/standard_wire.rs)
 
-The agent owns the session IDs within its binding. `session/new` and
+For regular sessions, the adapter assigns the ACP IDs. Unmarked `session/new` and
 `session/fork` return agent-issued IDs. An agent that advertises fork can
 receive a `session/fork` for an inactive session from its `session/list`,
 even before the client loads or resumes it. Use the admitted cwd for new,
@@ -251,8 +251,8 @@ agent and returns its result or full error, including any `data`.
 along with agent-provided modes, config options, models and metadata.
 [Session routing](../harness/src/managed_acp.rs)
 
-The immutable launch controls the following additions independently. Switching
-all four off preserves the agent's original updates, caller-supplied prompt
+The immutable launch controls the following additions independently for
+regular sessions. Switching all four off preserves the agent's original updates, caller-supplied prompt
 metadata and MCP servers. [Optional session services](../harness/src/backend/managed_additions.rs)
 
 | Addition | Effect when enabled |
@@ -303,8 +303,10 @@ message.
   loss has the original source, including after host restart. An ACK is cumulative within one producing
   generation and incarnation. After import its outer scope must name the
   destination generation, even when its `source` names an older producer.
-- The first main-session setup supplies the ACP session ID used for recovery.
-  Messages from side sessions stay ephemeral. History emitted during
+- The first successful ordinary `session/new`, `session/load`, or
+  `session/resume` selected for recovery supplies the main ACP session ID.
+  A marked side open leaves that selection available. Side prompts and
+  permission requests stay out of the journal and the exported checkpoint. History emitted during
   `session/load` stays out of the live journal, so loading an adapter cannot
   append that history to the broker transcript again.
 - The checksummed append log is limited to 16 MiB per binding. Compaction
@@ -351,6 +353,127 @@ its logical ACP connection to continue.
 [Cursor validation](src/recovery/journal.rs) · [Relay handoff](src/remote/standard_wire.rs)
 
 See the [machine invocation and recovery control operations](../cli/src/host/docs.md#managed-recovery-control).
+
+### Rebuilt side sessions on a managed binding
+
+A machine provisioned with `[host] side_sessions = true` advertises
+`rebuiltSideSessions: 1` alongside `standardAcp: 1` in its managed-host
+capabilities. The default is off. Sessions checks this field and its rollout
+policy before opening a side thread. The host checks OS and adapter support on each launch. On the parent's existing
+`/managed` connection, send the following frame after the regular ACP session
+has opened. All identifiers in this example are synthetic.
+
+```json
+{"bindingId":"sample","generation":1,"message":{"jsonrpc":"2.0","id":12,"method":"session/new","params":{"cwd":"/srv/fixture/bindings/sample/work","mcpServers":[],"_meta":{"nori.dev/sideSession":{"bindingId":"sample","generation":1,"sessionId":"parent-0"}}}}}
+```
+
+The presence of `nori.dev/sideSession` requests a side session. Its
+`sessionId` names the open parent ACP session. Both scope fields must match
+the envelope. Use the parent binding’s canonical `cwd`. Omit `mcpServers` and
+`additionalDirectories` or supply empty lists. A malformed or stale
+parent reference receives `-32602`. The host refuses a marked open when
+side sessions are disabled.
+
+A successful response contains a new opaque `result.sessionId` and echoes the
+parent object in `result._meta["nori.dev/sideSession"]`. Use that new ID on
+`session/prompt`, `session/cancel` and `session/close`. Updates and permission
+requests identify the side in `params.sessionId` and the parent in
+`params._meta["nori.dev/sideSession"]`. Reply to a permission request using
+the JSON-RPC ID the host sent on that logical connection. The host maps
+that ID back to the issuing process, whose own request IDs can repeat
+across siblings. Several side sessions may have outstanding
+requests at once, including while a parent prompt awaits permission.
+
+For a marked side pinned to codex-acp 2.7.0 and Codex CLI 0.166.0,
+the parent launch determines the expected `_auth/status_update` after
+`initialize`. A managed subscription requires `authStatus.kind = account`
+before `session/new`. The adapter's account label, email and plan do not
+identify a workspace or select credentials. A credential-free probe requires
+`kind = none` and ends at the adapter's authentication refusal. A conflicting
+status or unexpectedly successful credential-free open issues no side ID.
+[Codex launch policy](../cli/src/host/docs.md#managed-launch-control-v1)
+
+The host initializes the side adapter with empty client capabilities and opens
+one session in the pinned workspace. It selects the advertised mode ID
+`read-only`, or `plan` if available instead. For ACP `configOptions`, the
+adapter must acknowledge `session/set_config_option` with the requested
+option ID and current value. If it also advertises legacy `modes`, its
+catalog must contain the same ID. The host then returns that ID in both
+selectors. For Claude Agent ACP 0.102.0 both
+`configOptions[category=mode].currentValue` and `modes.currentModeId`
+report `plan`. Workspace protection comes from the read-only launch.
+Legacy-only adapters use `modes` and `session/set_mode`. A conflicting
+mode update during selection or a failed setup ends the process and returns
+an error before the client receives a side ID. If the adapter later reports
+a different mode or drops its confirmed selector, the host closes the side,
+fails pending requests with `-32002`, and releases its process slot.
+[Side adapter setup](../harness/src/managed_acp/side_worker.rs)
+
+The host uses the ACP `configOptions` model selector when advertised and
+supports legacy `models`. A caller may reassert the selected permission mode
+through the same selector. Changing the mode or setting other options
+returns `-32602`.
+Only the host supplies the side marker on frames delivered to Sessions.
+The host forwards side updates, permission requests and correlated replies.
+The host disables recording, prompt echo, status additions and client MCP for
+this process. Side IDs have no delegation or restore path and are omitted from
+session lists. [Side routing](../harness/src/managed_acp/side_sessions.rs)
+
+Each rebuilt side holds a process slot until its Bubblewrap supervisor and
+PID namespace have exited. At capacity, `session/new` returns `-32017`
+with the message `machine full`. The parent and its outstanding turn continue.
+
+A successful side close means its adapter and descendants have released
+their process-held resources. A successful parent close gives this guarantee
+for every side belonging to that ACP session. Sides of other parents keep
+running. If the parent adapter declines the close, its sides stay active
+and the caller can retry. If the host cannot confirm a side's exit, its slot
+stays reserved and the affected close returns an error. Loss of the parent
+process, the logical ACP connection or the host also triggers side teardown.
+[Admission and confinement](../cli/src/host/docs.md#managed-launch-control-v1)
+
+Sessions supplies conversation context in the first prompt, correlates side
+events separately from the parent transcript, answers permission requests
+and closes idle side threads. The host keeps side identity in memory.
+
+#### Codex subscription source
+
+Sessions can opt an admitted parent into file-backed subscription reuse by
+setting its entire `spec.credentialRefs` array to
+`["sessions:codex-subscription-file:v1"]`. This unsigned marker derives
+its authority from the privileged, immutable parent launch spec. Side ACP
+requests cannot declare a credential source. A path, file contents or
+generic credential access reference alone cannot establish the selection.
+
+Before emitting the marker, the Sessions adapter must establish all of the
+following for the binding generation and the lifetime of every active side.
+
+- The parent actually uses the official file store at
+  `home/.codex/auth.json`. Its effective provider, store, endpoints and
+  login restrictions apply equally to the side's private provider home.
+  Keep these settings fixed. A change of connection, account, workspace or
+  policy requires closing the sides and admitting a new binding generation.
+  Sessions must also prevent a parent ACP login or gateway switch from
+  changing that selection in place. A subscription side rejects the
+  adapter's local `/logout` command and closes if it reports loss of account auth.
+- The publisher controls the stable binding directory and the auth pathname.
+  Only the selected subscription principal and workspace can supply a
+  replacement. Publish each complete, mode-0600 regular file by atomic rename
+  in that directory. Keep the broker refresh token and service credentials
+  outside the file. The worker document carries the broker-redacted refresh
+  field. The side runs no vault or token-distribution client.
+- For a native subscription, the bridge pulls the worker-bound Codex account
+  from the vault and atomically renames a sibling into its configured
+  destination. Its default destination is the worker home. For a scoped
+  connection, the token-provider runtime resolves the machine and connection
+  to its pinned account and selects a separate pairing home. Its file
+  distribution uses `vm.writeFile`, whose atomicity depends on the backend.
+  Sessions must publish the selected source into the binding file and keep it
+  current before declaring this contract. Omit the marker when selection,
+  refresh delivery, or effective file-store policy is ambiguous.
+  [Native bridge](https://github.com/tilework-tech/nori-sessions/blob/477d4da9c52e3bb2d057945098be3eb35b3c6ffa/broker/server/bootstrap/scripts/sprite-acp-bridge/server.ts) ·
+  [Vault selection](https://github.com/tilework-tech/nori-sessions/blob/477d4da9c52e3bb2d057945098be3eb35b3c6ffa/broker/server/src/inbound-events/http/endpoints/vault.ts) ·
+  [Scoped runtime](https://github.com/tilework-tech/nori-sessions/blob/477d4da9c52e3bb2d057945098be3eb35b3c6ffa/broker/server/src/core-services/credential-management/token-provider-runtime.ts)
 
 ### Things to Know
 

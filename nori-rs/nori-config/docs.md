@@ -53,6 +53,12 @@ from `HotkeyAction::default_binding`. The session-move actions
 `open_session_list`, `parent_session`) always resolve, but `HotkeyAction::is_multi_session`
 marks them so frontends ignore and hide them unless `multi_session` is on.
 
+`[host]` configures the managed machine listener. `managed` and `side_sessions`
+default to false. For both shared and dedicated layouts, `max_sessions` defaults
+to eight process slots and must be positive. A dedicated binding can use
+spare slots for several rebuilt side sessions beside its parent.
+[Host configuration and admission](../cli/src/host/docs.md#managed-launch-control-v1)
+
 `[default_models]` maps an agent slug to a model id. This crate only stores the
 value; the id is not validated here (an agent may accept models its ACP picker
 never advertised). `nori-acp-host` reads `model_override` to build a
