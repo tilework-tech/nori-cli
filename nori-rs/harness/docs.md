@@ -400,6 +400,13 @@ authority for prompt, permission, transcript, and session state. The
 `ManagedClient` re-export lets an attached frontend consume this transport
 without importing the ACP host crate directly.
 
+With managed recovery and private recording enabled, the binding keeps each
+recorder open through the checkpoint barrier. The writer hashes bytes appended
+since its last successful sync. A writeback error may surface only once, so on
+retry the writer checks the file length, rewrites the unsynced suffix at its
+original offsets, verifies its digest and syncs the file again. A length or
+digest mismatch fails the barrier. [Recorder sync retry](src/transcript/sync_retry.rs)
+
 #### Goal ownership and MCP routing
 
 Thread goals are Nori-owned live state. The harness is the authority for their

@@ -130,12 +130,14 @@ impl ManagedSessionAdditions {
                 }
                 None => None,
             };
-            let recorder = TranscriptRecorder::new(
+            let recorder = TranscriptRecorder::create(
                 &self.nori_home,
                 &self.cwd,
                 Some(self.agent.clone()),
                 env!("CARGO_PKG_VERSION"),
                 Some(sid.to_owned()),
+                None,
+                self.barrier.is_some(),
             )
             .await?;
             if let Some(writers) = registered.as_mut() {

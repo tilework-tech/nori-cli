@@ -368,12 +368,18 @@ output watermarks still match. On checkpoint or release error, read
 `error.data.savedThrough` when present. Its source cursors identify the last
 durable output the host could verify. A known storage failure closes admission
 with `-32020` before a fresh command enters the ledger. A failure during the
-initial ledger commit can return `-32021`; preserve the command ID and query
+initial ledger commit can return `-32021`. Preserve the command ID and query
 the recovered source journal as described in [managed ACP delivery and
-recovery](../../../acp-host/docs.md#managed-acp-delivery-and-recovery). A later
-successful recorder barrier clears its recorder gate. If a writer cannot
-recover, or output has already failed to reach the journal, restore from the
-last committed checkpoint under a newer generation. An ACK can free journal
+recovery](../../../acp-host/docs.md#managed-acp-delivery-and-recovery).
+
+After a private recorder sync error, retry `_nori/host/checkpoint` on the
+same host, binding and generation once storage recovers. Fresh prompts still
+receive `-32020` until every required recorder completes its durable flush.
+After checkpoint success, resubmit the refused command with its original ID
+and payload. The host admits it once and returns the recorded outcome on
+later retries. If a recorder write had an uncertain outcome, its unsynced
+bytes cannot be verified, or output failed to reach the journal, restore
+from the last committed checkpoint under a newer generation. An ACK can free journal
 space but cannot recover lost output. The broker captures the binding's
 workspace and permitted provider state separately.
 
