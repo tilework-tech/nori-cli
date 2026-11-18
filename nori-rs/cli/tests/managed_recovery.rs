@@ -615,9 +615,14 @@ async fn an_imported_command_receipt_cannot_select_another_bindings_private_chec
 
 #[tokio::test]
 async fn an_adapter_protocol_fault_after_a_completed_turn_fails_the_checkpoint_barrier() {
+    check_adapter_fault(false).await;
+    check_adapter_fault(true).await;
+}
+
+async fn check_adapter_fault(side_sessions: bool) {
     let home = TempDir::new().unwrap();
     let binding = Binding::new(home.path());
-    let host = Host::start(home.path(), true).await;
+    let host = Host::with_env(home.path(), true, side_sessions, &[]).await;
     let mut wire = host.connect().await;
     let session = wire.start(&binding, 1).await;
     wire.send_prompt(&binding, 1, &session, "bad-tail", "malformed-adapter-tail")

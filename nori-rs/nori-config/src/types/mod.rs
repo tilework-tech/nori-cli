@@ -270,6 +270,7 @@ pub struct DedicatedRoots {
 #[serde(default, deny_unknown_fields)]
 pub struct HostConfig {
     pub managed: bool,
+    pub side_sessions: bool,
     pub max_sessions: i32,
     pub bindings_root: Option<PathBuf>,
     pub dedicated_roots: Option<DedicatedRoots>,
@@ -279,6 +280,7 @@ impl Default for HostConfig {
     fn default() -> Self {
         Self {
             managed: false,
+            side_sessions: false,
             max_sessions: DEFAULT_MAX_SESSIONS,
             bindings_root: None,
             dedicated_roots: None,

@@ -407,6 +407,30 @@ retry the writer checks the file length, rewrites the unsynced suffix at its
 original offsets, verifies its digest and syncs the file again. A length or
 digest mismatch fails the barrier. [Recorder sync retry](src/transcript/sync_retry.rs)
 
+For a host provisioned with `[host] managed = true`, the CLI uses
+[managed launches](src/managed_launch.rs) for process admission and
+[the standard ACP relay](src/managed_acp.rs) for the binding's agent traffic.
+When side sessions are enabled, [a router](src/managed_acp/side_sessions.rs)
+keeps each side's parent identity, public ACP ID and pending request mappings
+on that logical connection. Rebuilt sides occupy a process slot. An eligible
+adapter hosts native forks in the parent's process. Both forms route events
+outside the parent recorder and session manager.
+
+The rebuilt worker and launch registry share an exit result. After the outer
+Bubblewrap supervisor exits, the host signals the side's namespace init
+through its pidfd and waits for exit readiness. At that point the adapter
+and its clients have exited, and the slot can be reused. An unconfirmed exit
+retains the slot and reports an error to its owning parent.
+[Namespace exit monitor](src/managed_launch/namespace_exit.rs)
+
+The router keeps the adapter's confirmed parent close result while it waits
+for rebuilt processes to exit and native forks to close. The native relay owns
+each fork until the adapter confirms closure, even if its client endpoint
+has gone away. After a refusal the router can retry unfinished cleanup on the
+same connection. [Parent close](src/managed_acp/parent_close.rs) ·
+[Native fork cleanup](src/managed_acp/native_cleanup.rs) ·
+[Managed machine protocol](../acp-host/docs.md#forking-a-read-only-side-session)
+
 #### Goal ownership and MCP routing
 
 Thread goals are Nori-owned live state. The harness is the authority for their

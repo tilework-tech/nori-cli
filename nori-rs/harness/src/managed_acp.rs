@@ -1,5 +1,9 @@
 //! Duplex relay for one admitted binding and generation.
 
+mod native;
+
+pub use native::NativeForks;
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
@@ -22,6 +26,23 @@ use crate::backend::managed_additions::ManagedMcp;
 use crate::backend::managed_additions::ManagedSessionAdditions;
 
 pub use nori_acp_host::remote::StandardAcpConnection;
+mod side_sessions;
+pub use side_sessions::route_side_sessions;
+
+fn normalize_close(frame: &mut Value) {
+    match (frame.get("result"), frame.get("error")) {
+        (Some(result), None) if result.is_object() => {}
+        (None, Some(error)) if error["code"] == -32002 => {
+            *frame = json!({"jsonrpc":"2.0","id":frame["id"],"result":{}});
+        }
+        (None, Some(error)) if error["code"].is_i64() && error["message"].is_string() => {}
+        _ => {
+            *frame = json!({"jsonrpc":"2.0","id":frame["id"],"error":{
+                "code":-32603,"message":"adapter did not confirm session close"
+            }});
+        }
+    }
+}
 
 struct Request {
     method: String,
@@ -31,6 +52,7 @@ struct Request {
 
 struct Relay {
     cwd: PathBuf,
+    native: native::Native,
     initialize: Option<Value>,
     requests: HashMap<Value, Request>,
     agent_requests: HashSet<Value>,
@@ -60,8 +82,24 @@ impl Relay {
                 "session requests require an id; session/cancel is a notification",
             ));
         }
-        if id.is_some_and(|id| self.requests.contains_key(id)) {
+        if params["sessionId"]
+            .as_str()
+            .is_some_and(|sid| self.native.inaccessible(sid))
+        {
+            return Some((-32602, "unknown session"));
+        }
+        if id.is_some_and(|id| self.requests.contains_key(id) || self.native.reserved(id)) {
             return Some((-32600, "duplicate request ID on logical connection"));
+        }
+        if params["_meta"].get(side_sessions::SIDE_META).is_some() {
+            return Some((-32601, "side sessions are unavailable on this connection"));
+        }
+        if matches!(method, "session/load" | "session/resume" | "session/fork")
+            && params["sessionId"]
+                .as_str()
+                .is_some_and(side_sessions::reserved)
+        {
+            return Some((-32002, "side session cannot be restored or forked"));
         }
         if method == "initialize" {
             return (id.is_none() || self.initialize.is_some() || !self.requests.is_empty())
@@ -136,9 +174,11 @@ impl Relay {
         }
         let Some(method) = message["method"].as_str().map(str::to_owned) else {
             if message.get("result").is_some() != message.get("error").is_some()
-                && id.as_ref().is_some_and(|id| self.agent_requests.remove(id))
+                && id
+                    .as_ref()
+                    .is_some_and(|id| self.agent_requests.remove(id) && !self.native.ambiguous(id))
             {
-                writer.try_send(message)?;
+                self.native.write(writer, message)?;
             }
             return Ok(());
         };
@@ -186,12 +226,18 @@ impl Relay {
         if let Some(id) = id {
             self.requests.insert(id, Request { method, sid, mcp });
         }
-        writer.try_send(message)?;
+        self.native.write(writer, message)?;
         Ok(())
     }
 
-    async fn agent(&mut self, message: Value) -> Result<()> {
+    async fn agent(&mut self, mut message: Value, writer: &mpsc::Sender<Value>) -> Result<()> {
         ensure!(message["jsonrpc"] == "2.0", "invalid adapter JSON-RPC");
+        if self
+            .native
+            .agent(&mut message, &self.requests, &self.agent_requests, writer)?
+        {
+            return Ok(());
+        }
         if message["method"].is_string() {
             if let Some(id) = message.get("id") {
                 ensure!(
@@ -215,6 +261,11 @@ impl Relay {
                 .remove(&message["id"])
                 .context("unsolicited adapter response")?;
             let sid = request.sid.as_deref();
+            if request.method == "session/close"
+                && sid.is_some_and(|sid| self.native.knows_parent(sid))
+            {
+                normalize_close(&mut message);
+            }
             if let Some(result) = message.get("result") {
                 match request.method.as_str() {
                     "initialize" => self.initialize = Some(result.clone()),
@@ -226,11 +277,30 @@ impl Relay {
                                 sid
                             }
                             .context("missing agent session ID")?;
+                        if self.native.private(resolved) {
+                            self.output.send(json!({"jsonrpc":"2.0","id":message["id"],"error":{"code":-32603,"message":"adapter returned an existing session ID"}})).await?;
+                            return Ok(());
+                        }
+                        self.native.observed(resolved);
                         self.additions.opened(resolved, request.mcp).await?;
                     }
                     "session/close" => {
                         if let Some(sid) = sid {
+                            self.native.parent_closed(sid, writer)?;
                             self.additions.closed(sid).await?;
+                        }
+                    }
+                    "session/list" => {
+                        if let Some(sessions) = message
+                            .get_mut("result")
+                            .and_then(|r| r.get_mut("sessions"))
+                            .and_then(Value::as_array_mut)
+                        {
+                            sessions.retain(|session| {
+                                session["sessionId"]
+                                    .as_str()
+                                    .is_none_or(|sid| self.native.list_visible(sid))
+                            });
                         }
                     }
                     _ => {}
@@ -263,11 +333,54 @@ impl Relay {
 
 pub fn connect(
     reader: impl AsyncRead + Unpin + Send + 'static,
-    mut writer: impl AsyncWrite + Unpin + Send + 'static,
+    writer: impl AsyncWrite + Unpin + Send + 'static,
     cwd: PathBuf,
     additions: ManagedSessionAdditions,
     echo: bool,
     status: bool,
+) -> StandardAcpConnection {
+    let (_, commands) = NativeForks::channel();
+    start(
+        reader,
+        writer,
+        cwd,
+        additions,
+        (echo, status),
+        native::Native::default(),
+        commands,
+    )
+}
+
+pub fn connect_with_forks(
+    reader: impl AsyncRead + Unpin + Send + 'static,
+    writer: impl AsyncWrite + Unpin + Send + 'static,
+    cwd: PathBuf,
+    additions: ManagedSessionAdditions,
+    echo: bool,
+    status: bool,
+    agent: String,
+) -> (StandardAcpConnection, NativeForks) {
+    let (forks, commands) = NativeForks::channel();
+    let connection = start(
+        reader,
+        writer,
+        cwd,
+        additions,
+        (echo, status),
+        native::Native::enabled(agent),
+        commands,
+    );
+    (connection, forks)
+}
+
+fn start(
+    reader: impl AsyncRead + Unpin + Send + 'static,
+    mut writer: impl AsyncWrite + Unpin + Send + 'static,
+    cwd: PathBuf,
+    additions: ManagedSessionAdditions,
+    (echo, status): (bool, bool),
+    native: native::Native,
+    mut commands: mpsc::Receiver<native::Command>,
 ) -> StandardAcpConnection {
     let (input, mut client) = mpsc::channel(64);
     let (output, incoming) = mpsc::channel(64);
@@ -285,6 +398,7 @@ pub fn connect(
         let relay = async {
             let mut state = Relay {
                 cwd,
+                native,
                 additions,
                 echo,
                 status,
@@ -297,12 +411,18 @@ pub fn connect(
                 FramedRead::new(reader, LinesCodec::new_with_max_length(16 * 1024 * 1024));
             loop {
                 tokio::select! {
-                    message = client.recv() => match message {
+                    permit = to_agent.reserve(), if state.native.deferred() => {
+                        state.native.flush(permit?);
+                    },
+                    message = client.recv(), if !state.native.deferred() => match message {
                         Some(message) => state.client(message, &to_agent).await?,
                         None => break,
                     },
+                    Some(cmd) = commands.recv(), if !state.native.deferred() => {
+                        state.native.command(cmd, state.initialize.as_ref().unwrap_or(&Value::Null), &state.cwd, &state.requests, &to_agent)?;
+                    },
                     line = lines.next() => match line {
-                        Some(line) => state.agent(serde_json::from_str(&line?)?).await?,
+                        Some(line) => state.agent(serde_json::from_str(&line?)?, &to_agent).await?,
                         None => break,
                     }
                 }
@@ -317,3 +437,6 @@ pub fn connect(
         finished,
     }
 }
+
+#[cfg(test)]
+mod native_tests;

@@ -178,11 +178,8 @@ impl ManagedAgent for HostService {
         generation: i64,
     ) -> anyhow::Result<nori_harness::managed_acp::StandardAcpConnection> {
         use nori_harness::backend::managed_additions::ManagedSessionAdditions;
-        let launch = self
-            .launches
-            .as_ref()
-            .context("managed host is disabled")?
-            .take_connection(binding_id, generation)?;
+        let launches = self.launches.as_ref().context("managed host is disabled")?;
+        let launch = launches.take_connection(binding_id, generation)?;
         let options = &launch.spec.additions;
         let additions = ManagedSessionAdditions::new(
             launch.home.join(".nori/cli"),
@@ -198,13 +195,32 @@ impl ManagedAgent for HostService {
         } else {
             additions
         };
-        Ok(nori_harness::managed_acp::connect(
+        if !launches.side_sessions_enabled() {
+            return Ok(nori_harness::managed_acp::connect(
+                launch.stdout,
+                launch.stdin,
+                launch.cwd,
+                additions,
+                options.prompt_echo,
+                options.status_events,
+            ));
+        }
+        let (parent, forks) = nori_harness::managed_acp::connect_with_forks(
             launch.stdout,
             launch.stdin,
-            launch.cwd,
+            launch.cwd.clone(),
             additions,
             options.prompt_echo,
             options.status_events,
+            launch.spec.agent.clone(),
+        );
+        Ok(nori_harness::managed_acp::route_side_sessions(
+            parent,
+            forks,
+            launches.clone(),
+            binding_id.to_owned(),
+            generation,
+            launch.cwd,
         ))
     }
 

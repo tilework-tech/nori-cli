@@ -1,3 +1,6 @@
+mod fork_side;
+mod side_sessions;
+
 use std::collections::HashMap;
 use std::fs;
 use std::io;
@@ -266,13 +269,12 @@ async fn multiplexer(
 }
 
 fn start(managed: bool) -> (Host, String, String) {
-    let host = Host::new();
-    fs::create_dir(host.0.path().join("hosted-sessions")).unwrap();
-    fs::write(
-        host.0.path().join("config.toml"),
-        format!("[host]\nmanaged = {managed}\n"),
-    )
-    .unwrap();
+    start_config(Host::new(), format!("[host]\nmanaged = {managed}\n"))
+}
+
+fn start_config(host: Host, config: String) -> (Host, String, String) {
+    fs::create_dir_all(host.0.path().join("hosted-sessions")).unwrap();
+    fs::write(host.0.path().join("config.toml"), config).unwrap();
     success(host.run(&["host", "--port", "0"]));
     let state: Value =
         serde_json::from_slice(&fs::read(host.0.path().join("host/state.json")).unwrap()).unwrap();
@@ -293,21 +295,40 @@ async fn admit(
     name: &str,
     additions: [bool; 4],
 ) -> PathBuf {
+    admit_fixture(client, host, name, additions, FIXTURE, false).await
+}
+
+async fn admit_fixture(
+    client: &mut ManagedClient,
+    host: &Host,
+    name: &str,
+    additions: [bool; 4],
+    fixture: &str,
+    recovery: bool,
+) -> PathBuf {
     let [echo, status, recording, mcp] = additions;
     let root = host.0.path().join("hosted-sessions").join(name);
     let cwd = root.join("workspace");
     let home = root.join("home");
     fs::create_dir_all(&cwd).unwrap();
     fs::create_dir_all(&home).unwrap();
-    client.request("_nori/session/ensure", json!({
+    let mut request = json!({
         "bindingId":name, "generation":1, "commandId":format!("launch-{name}"),
         "conversationId":uuid::Uuid::new_v4(), "spec":{
             "projectId":"fixture-project", "runId":format!("run-{name}"),
             "agent":name, "model":name, "cwd":cwd, "home":home,
-            "adapter":{"path":which::which("python3").unwrap(),"version":"fixture-1","args":[FIXTURE,name]},
+            "env":{"FIXTURE_MODEL":name},
+            "adapter":{"path":which::which("python3").unwrap(),"version":"fixture-1","args":[fixture,name]},
             "additions":{"promptEcho":echo,"statusEvents":status,"recording":recording,"clientMcp":mcp}
         }
-    })).await.unwrap();
+    });
+    if recovery {
+        request["recoveryVersion"] = json!(1);
+    }
+    client
+        .request("_nori/session/ensure", request)
+        .await
+        .unwrap();
     cwd
 }
 
