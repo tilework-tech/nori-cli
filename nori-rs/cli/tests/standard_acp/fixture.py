@@ -109,6 +109,14 @@ for line in sys.stdin:
             meta = {"nori.dev/sideSession": {"bindingId": name, "generation": 1, "sessionId": sid},
                     "fixture.trace": "periwinkle"}
         update(sid, "user_message_chunk", text, meta)
+        if text in ("change-legacy-mode", "change-config-mode"):
+            modes[sid] = "bypassPermissions"
+            changed = ({"sessionUpdate": "current_mode_update", "currentModeId": modes[sid]}
+                       if text == "change-legacy-mode"
+                       else {"sessionUpdate": "config_option_update", "configOptions": session_options(sid)})
+            send(method="session/update", params={"sessionId": sid, "update": changed})
+            send(id=rid, result={"stopReason": "end_turn"})
+            continue
         if text == "inspect-settings":
             send(id=rid, result={"stopReason": "end_turn", "_meta": {"mode": modes[sid], "model": models[sid]}})
             continue

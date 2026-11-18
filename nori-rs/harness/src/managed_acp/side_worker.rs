@@ -23,7 +23,12 @@ fn failure(id: Value, code: i32, reason: &str) -> Value {
     json!({"jsonrpc":"2.0","id":id,"error":{"code":code,"message":reason}})
 }
 
-async fn exchange(acp: &mut StandardAcpConnection, method: &str, params: Value) -> Result<Value> {
+async fn exchange(
+    acp: &mut StandardAcpConnection,
+    method: &str,
+    params: Value,
+    expected_mode: Option<&str>,
+) -> Result<Value> {
     // Setup requests run sequentially before any client requests are admitted.
     acp.input
         .send(json!({"jsonrpc":"2.0","id":0,"method":method,"params":params}))
@@ -34,6 +39,19 @@ async fn exchange(acp: &mut StandardAcpConnection, method: &str, params: Value) 
             .recv()
             .await
             .context("side adapter disconnected during setup")?;
+        if message["method"] == "session/update"
+            && message["params"]["sessionId"] == params["sessionId"]
+            && let Some(expected) = expected_mode
+        {
+            ensure!(
+                matches_fixed_mode(
+                    &message["params"]["update"],
+                    expected,
+                    params["configId"].as_str()
+                ),
+                "side adapter reported a different permission mode"
+            );
+        }
         if message.get("method").is_some() {
             if let Some(id) = message.get("id") {
                 acp.input
@@ -65,6 +83,37 @@ fn option<'a>(result: &'a Value, category: &str) -> Option<&'a Value> {
         .find(|item| item["category"] == category)
 }
 
+fn matches_fixed_mode(state: &Value, expected: &str, config_id: Option<&str>) -> bool {
+    if state["sessionUpdate"] == "current_mode_update" {
+        return state["currentModeId"] == expected;
+    }
+    let Some(options) = state.get("configOptions") else {
+        return state["sessionUpdate"] != "config_option_update";
+    };
+    matches_config_option(options, "mode", config_id, expected)
+}
+
+fn matches_config_option(
+    options: &Value,
+    category: &str,
+    id: Option<&str>,
+    expected: &str,
+) -> bool {
+    let Some(options) = options.as_array() else {
+        return false;
+    };
+    let mut matches = options
+        .iter()
+        .filter(|item| item["category"] == category || id.is_some_and(|id| item["id"] == id));
+    let Some(option) = matches.next() else {
+        return id.is_none();
+    };
+    option["category"] == category
+        && id.is_none_or(|id| option["id"] == id)
+        && option["currentValue"] == expected
+        && matches.next().is_none()
+}
+
 async fn select_option(
     acp: &mut StandardAcpConnection,
     result: &mut Value,
@@ -73,7 +122,7 @@ async fn select_option(
     value: &str,
 ) -> Result<()> {
     let item = option(result, category).context("missing advertised side option")?;
-    if item["currentValue"] == value {
+    if category != "mode" && item["currentValue"] == value {
         return Ok(());
     }
     let id = item["id"]
@@ -83,13 +132,14 @@ async fn select_option(
         acp,
         "session/set_config_option",
         json!({"sessionId":sid,"configId":id,"value":value}),
+        (category == "mode").then_some(value),
     )
     .await?;
-    result["configOptions"] = response["configOptions"].take();
     ensure!(
-        option(result, category).is_some_and(|o| o["currentValue"] == value),
+        matches_config_option(&response["configOptions"], category, Some(id), value),
         "side adapter did not apply the requested {category}"
     );
+    result["configOptions"] = response["configOptions"].take();
     Ok(())
 }
 
@@ -107,8 +157,8 @@ async fn open(
     // A side process can ask for permissions. Filesystem and terminal services
     // supplied by an ACP client would run outside its read-only mount.
     init["clientCapabilities"] = json!({});
-    exchange(acp, "initialize", init).await?;
-    let mut result = exchange(acp, "session/new", json!({"cwd":cwd,"mcpServers":[]})).await?;
+    exchange(acp, "initialize", init, None).await?;
+    let mut result = exchange(acp, "session/new", json!({"cwd":cwd,"mcpServers":[]}), None).await?;
     let sid = result["sessionId"]
         .as_str()
         .filter(|id| !id.is_empty())
@@ -125,6 +175,7 @@ async fn open(
                 acp,
                 "session/set_model",
                 json!({"sessionId":sid,"modelId":model}),
+                None,
             )
             .await?;
             result["models"]["currentModelId"] = json!(model);
@@ -139,7 +190,7 @@ async fn open(
         )
         .as_array()
         .context("side adapter has no selectable permission mode")?;
-    let value = ["read-only", "plan", "explore", "ask", "default"]
+    let value = ["read-only", "plan"]
         .into_iter()
         .find(|name| {
             choices.iter().any(|entry| {
@@ -165,12 +216,24 @@ async fn open(
         None
     };
     if config_id.is_some() {
+        if !result["modes"].is_null() {
+            ensure!(
+                result["modes"]["availableModes"]
+                    .as_array()
+                    .is_some_and(|modes| modes.iter().any(|mode| mode["id"] == value)),
+                "side adapter has no equivalent legacy permission mode"
+            );
+        }
         select_option(acp, &mut result, &sid, "mode", value).await?;
+        if !result["modes"].is_null() {
+            result["modes"]["currentModeId"] = json!(value);
+        }
     } else if result["modes"]["currentModeId"] != value {
         exchange(
             acp,
             "session/set_mode",
             json!({"sessionId":sid,"modeId":value}),
+            Some(value),
         )
         .await?;
         result["modes"]["currentModeId"] = json!(value);
@@ -302,10 +365,138 @@ async fn serve(
                         }
                         continue;
                     }
+                    if method == "session/update"
+                        && !matches_fixed_mode(&message["params"]["update"], mode.value, mode.config_id.as_deref()) {
+                        return None;
+                    }
                     message["params"]["sessionId"] = json!(public_sid);
+                } else if !matches_fixed_mode(&message["result"], mode.value, mode.config_id.as_deref()) {
+                    return None;
                 }
                 events.send((public_sid.into(), Some(message))).await.ok()?;
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    async fn open_with_modes(
+        initial: Value,
+        setting_reply: Value,
+        setting_update: Option<Value>,
+    ) -> Result<Value> {
+        let (input, _requests) = mpsc::channel(4);
+        let (responses, output) = mpsc::channel(4);
+        for result in [json!({"protocolVersion":1}), initial] {
+            responses.try_send(json!({"id":0,"result":result})).unwrap();
+        }
+        if let Some(update) = setting_update {
+            responses.try_send(json!({"method":"session/update","params":{"sessionId":"side","update":update}})).unwrap();
+        }
+        responses
+            .try_send(json!({"id":0,"result":setting_reply}))
+            .unwrap();
+        drop(responses);
+        open(
+            &mut StandardAcpConnection { input, output },
+            json!({}),
+            Path::new("/work"),
+            None,
+        )
+        .await
+        .map(|(result, _, _)| result)
+    }
+
+    fn mode_options(current: &str) -> Value {
+        json!([{"type":"select","category":"mode","id":"mode","currentValue":current,
+                 "options":[{"value":"auto","name":"Auto"},{"value":"plan","name":"Plan"}]}])
+    }
+
+    fn dual_modes() -> Value {
+        json!({"sessionId":"side", "configOptions":mode_options("auto"),
+               "modes":{"currentModeId":"auto", "availableModes":[{"id":"auto","name":"Auto"},{"id":"plan","name":"Plan"}]}})
+    }
+
+    #[tokio::test]
+    async fn confirmed_side_mode_is_reported_in_both_acp_selectors() {
+        let mut expected = dual_modes();
+        expected["configOptions"] = mode_options("plan");
+        expected["modes"]["currentModeId"] = json!("plan");
+        let result = open_with_modes(
+            dual_modes(),
+            json!({"configOptions":mode_options("plan")}),
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[tokio::test]
+    async fn side_mode_requires_confirmation_from_the_selected_config_option() {
+        let mut wrong_option = mode_options("plan");
+        wrong_option[0]["id"] = json!("other");
+        let mut initial = dual_modes();
+        initial["configOptions"] = mode_options("plan");
+        let conflicting = json!([mode_options("plan")[0], mode_options("auto")[0]]);
+        for returned in [mode_options("auto"), json!([]), wrong_option, conflicting] {
+            assert!(
+                open_with_modes(initial.clone(), json!({"configOptions":returned}), None)
+                    .await
+                    .is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn removing_the_pinned_mode_from_a_config_update_refuses_the_side() {
+        let update = json!({"sessionUpdate":"config_option_update", "configOptions":[]});
+        assert!(
+            open_with_modes(
+                dual_modes(),
+                json!({"configOptions":mode_options("plan")}),
+                Some(update)
+            )
+            .await
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn side_mode_requires_an_equivalent_legacy_id_when_both_selectors_are_present() {
+        let mut session = dual_modes();
+        session["modes"]["availableModes"][1]["id"] = json!("draft");
+        assert!(
+            open_with_modes(session, json!({"configOptions":mode_options("plan")}), None)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_permission_prompt_mode_is_insufficient_for_a_rebuilt_side() {
+        let session = json!({"sessionId":"side", "modes":{"currentModeId":"default",
+            "availableModes":[{"id":"default","name":"Read only"}]}});
+        assert!(open_with_modes(session, json!({}), None).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn explicit_mode_fallback_refuses_the_side_even_with_a_successful_setter_reply() {
+        let legacy = json!({"sessionId":"side", "modes":dual_modes()["modes"]});
+        let fallback = json!({"sessionUpdate":"current_mode_update","currentModeId":"auto"});
+        for (session, reply) in [
+            (legacy, json!({})),
+            (dual_modes(), json!({"configOptions":mode_options("plan")})),
+        ] {
+            assert!(
+                open_with_modes(session, reply, Some(fallback.clone()))
+                    .await
+                    .is_err()
+            );
         }
     }
 }

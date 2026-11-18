@@ -383,12 +383,25 @@ across siblings. Several side sessions may have outstanding
 requests at once, including while a parent prompt awaits permission.
 
 The host initializes the side adapter with empty client capabilities and opens
-one session in the pinned workspace. It selects a restrictive advertised mode
-before returning the side ID. If setup fails, the host reaps the process and
-returns an error. The host uses the mode and model selectors in ACP
-`configOptions` when advertised and supports the older `modes` and `models`
-fields. A caller may reassert the selected permission mode through the same
-selector. Changing the mode or setting other options returns `-32602`.
+one session in the pinned workspace. It selects the advertised mode ID
+`read-only`, or `plan` if available instead. For ACP `configOptions`, the
+adapter must acknowledge `session/set_config_option` with the requested
+option ID and current value. If it also advertises legacy `modes`, its
+catalog must contain the same ID. The host then returns that ID in both
+selectors. For Claude Agent ACP 0.102.0 both
+`configOptions[category=mode].currentValue` and `modes.currentModeId`
+report `plan`. Workspace protection comes from the read-only launch.
+Legacy-only adapters use `modes` and `session/set_mode`. A conflicting
+mode update during selection or a failed setup ends the process and returns
+an error before the client receives a side ID. If the adapter later reports
+a different mode or drops its confirmed selector, the host closes the side,
+fails pending requests with `-32002`, and releases its process slot.
+[Side adapter setup](../harness/src/managed_acp/side_worker.rs)
+
+The host uses the ACP `configOptions` model selector when advertised and
+supports legacy `models`. A caller may reassert the selected permission mode
+through the same selector. Changing the mode or setting other options
+returns `-32602`.
 Only the host supplies the side marker on frames delivered to Sessions.
 The host forwards side updates, permission requests and correlated replies.
 The host disables recording, prompt echo, status additions and client MCP for

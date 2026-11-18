@@ -533,3 +533,24 @@ async fn config_options_only_adapter_uses_the_restrictive_mode_and_pinned_model(
         json!({"mode":"plan","model":"aster"})
     );
 }
+
+#[tokio::test]
+async fn a_provider_mode_change_closes_the_side_and_frees_its_slot() {
+    if !read_only_launch_available() {
+        return;
+    }
+    let mut host = SideHost::start(true, Some(2)).await;
+    for (id, prompt) in [(4, "change-legacy-mode"), (8, "change-config-mode")] {
+        if prompt == "change-config-mode" {
+            fs::write(host.cwd.join("fixture-config-options-only"), []).unwrap();
+        }
+        let side = side_id(&host.start_side(id, "0").await);
+        host.prompt(id + 1, &side, prompt).await;
+        assert_eq!(host.reply(id + 1).await["error"]["code"], -32002);
+        host.prompt(id + 2, &side, "finish").await;
+        assert_eq!(host.reply(id + 2).await["error"]["code"], -32002);
+    }
+    let replacement = side_id(&host.start_side(12, "0").await);
+    host.prompt(13, &replacement, "finish").await;
+    assert_eq!(host.reply(13).await["result"]["stopReason"], "end_turn");
+}
