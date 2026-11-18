@@ -1109,6 +1109,25 @@ impl MockAgent {
             }
         }
 
+        if std::env::var("MOCK_AGENT_SEND_PLAN").is_ok() {
+            self.send_update(
+                session_id.clone(),
+                acp::SessionUpdate::Plan(acp::Plan::new(vec![
+                    acp::PlanEntry::new(
+                        "Draft the outline",
+                        acp::PlanEntryPriority::Medium,
+                        acp::PlanEntryStatus::Completed,
+                    ),
+                    acp::PlanEntry::new(
+                        "Write the summary",
+                        acp::PlanEntryPriority::Medium,
+                        acp::PlanEntryStatus::InProgress,
+                    ),
+                ])),
+            )
+            .await?;
+        }
+
         // Support custom response text for TUI testing. A model-specific
         // variable lets multi-agent tests distinguish which subprocess
         // produced a response while retaining the generic fallback.

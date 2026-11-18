@@ -963,7 +963,7 @@ impl HotkeyAction {
             Self::KillToBeginningOfLine => "ctrl+u",
             Self::Yank => "ctrl+y",
             Self::HistorySearch => "ctrl+r",
-            Self::TogglePlanDrawer => "ctrl+o",
+            Self::TogglePlanDrawer => "alt+p",
             Self::PreviousSession => "alt+,",
             Self::NextSession => "alt+.",
             Self::NextWaitingSession => "alt+down",

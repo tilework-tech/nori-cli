@@ -100,7 +100,7 @@ underneath. Read-only commands and file reads/searches collapse into one
 counts. `full` shows every command in full with syntax highlighting, all of its
 output, every exploring step, and edit diffs.
 
-The transcript view (Ctrl+T, or Ctrl+O when no plan is pinned) always shows the
+The transcript view (Ctrl+T or Ctrl+O) always shows the
 full form. The first-run directory-trust screen asks this question after the
 trust choice, preselecting Compact if you allowed Nori to work without approval
 and Full if you required approval; Esc skips it without writing the key.

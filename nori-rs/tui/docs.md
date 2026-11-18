@@ -557,9 +557,10 @@ pending/completed bookkeeping, and exploring-group lifetime are described in
 The transcript overlay ([`pager_overlay`](src/pager_overlay.rs)) caps each
 cell's rows and marks the cut with a faint italic `┄ N more lines` row so it
 cannot be mistaken for output. The configured `open_transcript` key (Ctrl+T)
-opens it. The `toggle_plan_drawer` key (Ctrl+O) also opens it when no plan is
-pinned (`ChatWidget::has_pinned_plan`) and otherwise keeps toggling the plan
-drawer. Inside the overlay, `q`, Ctrl+C, Ctrl+T, and Ctrl+O close it.
+and a fixed Ctrl+O alias open it. Ctrl+O is reserved for the transcript, so
+binding another `[tui.hotkeys]` action to it is unsupported. The plan drawer
+toggles on the `toggle_plan_drawer` key (Alt+P). Inside the overlay, `q`,
+Ctrl+C, Ctrl+T, and Ctrl+O close it.
 
 The directory-trust onboarding step
 ([`trust_directory`](src/nori/onboarding/trust_directory.rs)) asks a second,

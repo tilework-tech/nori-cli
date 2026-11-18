@@ -2044,12 +2044,9 @@ impl App {
         }
         if key_event.kind == KeyEventKind::Press && !self.chat_widget.has_active_popup() {
             let transcript_binding = self.hotkey_config.binding_for(HotkeyAction::OpenTranscript);
-            let plan_binding = self
-                .hotkey_config
-                .binding_for(HotkeyAction::TogglePlanDrawer);
-            let plan_key_without_plan =
-                matches_binding(plan_binding, &key_event) && !self.chat_widget.has_pinned_plan();
-            if matches_binding(transcript_binding, &key_event) || plan_key_without_plan {
+            if matches_binding(transcript_binding, &key_event)
+                || crate::key_hint::ctrl(KeyCode::Char('o')).is_press(key_event)
+            {
                 let _ = tui.enter_alt_screen();
                 self.overlay = Some(Overlay::new_transcript(self.transcript_cells.clone()));
                 tui.frame_requester().schedule_frame();
@@ -2062,6 +2059,9 @@ impl App {
                 return;
             }
 
+            let plan_binding = self
+                .hotkey_config
+                .binding_for(HotkeyAction::TogglePlanDrawer);
             if matches_binding(plan_binding, &key_event) {
                 self.chat_widget.toggle_plan_drawer();
                 self.plan_drawer_mode = self.chat_widget.plan_drawer_mode();
