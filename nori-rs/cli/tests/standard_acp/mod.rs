@@ -1,3 +1,4 @@
+mod fork_side;
 mod side_sessions;
 
 use std::collections::HashMap;
@@ -294,14 +295,15 @@ async fn admit(
     name: &str,
     additions: [bool; 4],
 ) -> PathBuf {
-    admit_binding(client, host, name, additions, false).await
+    admit_fixture(client, host, name, additions, FIXTURE, false).await
 }
 
-async fn admit_binding(
+async fn admit_fixture(
     client: &mut ManagedClient,
     host: &Host,
     name: &str,
     additions: [bool; 4],
+    fixture: &str,
     recovery: bool,
 ) -> PathBuf {
     let [echo, status, recording, mcp] = additions;
@@ -316,7 +318,7 @@ async fn admit_binding(
             "projectId":"fixture-project", "runId":format!("run-{name}"),
             "agent":name, "model":name, "cwd":cwd, "home":home,
             "env":{"FIXTURE_MODEL":name},
-            "adapter":{"path":which::which("python3").unwrap(),"version":"fixture-1","args":[FIXTURE,name]},
+            "adapter":{"path":which::which("python3").unwrap(),"version":"fixture-1","args":[fixture,name]},
             "additions":{"promptEcho":echo,"statusEvents":status,"recording":recording,"clientMcp":mcp}
         }
     });
