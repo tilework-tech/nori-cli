@@ -352,6 +352,19 @@ impl MockAgent {
                 }
             }
         }
+        // Record each delivered prompt's user text, one JSON string per line,
+        // so tests can assert exactly which prompts reached the agent.
+        if let Some(path) = std::env::var_os("MOCK_AGENT_PROMPT_LOG") {
+            use std::io::Write as _;
+            let text = last_prompt_text_block(&arguments.prompt).unwrap_or_default();
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .map_err(|error| acp::Error::new(-32001, error.to_string()))?;
+            writeln!(file, "{}", serde_json::Value::String(text.to_string()))
+                .map_err(|error| acp::Error::new(-32001, error.to_string()))?;
+        }
         if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK") {
             let actual = last_prompt_text_block(&arguments.prompt);
             if actual != Some(expected.as_str()) {

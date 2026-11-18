@@ -44,6 +44,11 @@ pub(crate) enum PromptAdmission {
 #[error("session already has an active turn")]
 pub struct PromptBusy;
 
+/// A queued prompt was taken back before it was sent.
+#[derive(Debug, thiserror::Error)]
+#[error("queued prompt was withdrawn before it was sent")]
+pub struct PromptWithdrawn;
+
 // =============================================================================
 // Error Categorization
 // =============================================================================
@@ -394,6 +399,7 @@ pub mod managed_additions;
 mod nori_client_context;
 mod nori_client_mcp;
 pub mod prepared;
+mod queue_reclaim;
 mod session;
 mod session_defaults;
 pub(crate) mod session_reducer;

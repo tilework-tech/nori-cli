@@ -27,6 +27,10 @@ pub(crate) enum SessionRuntimeInput {
     Barrier {
         response_tx: tokio::sync::oneshot::Sender<()>,
     },
+    ReclaimQueuedPrompt {
+        event_id: String,
+        response_tx: tokio::sync::oneshot::Sender<Option<String>>,
+    },
     PermissionRequest {
         pending_request: Box<PendingApprovalRequest>,
         current_policy: AskForApproval,
@@ -186,6 +190,12 @@ impl SessionDriver {
     }
 }
 
+impl SessionDriver {
+    pub(crate) fn reclaim_queued(&mut self, event_id: &str) -> Option<session_reducer::Reclaimed> {
+        session_reducer::reclaim_queued(&mut self.runtime, event_id)
+    }
+}
+
 impl Default for SessionDriver {
     fn default() -> Self {
         Self::new()
@@ -326,7 +336,7 @@ impl AcpBackend {
             });
     }
 
-    async fn dispatch_reducer_actions(&self, actions: ReducerActions) {
+    pub(super) async fn dispatch_reducer_actions(&self, actions: ReducerActions) {
         let completed_prompt = actions.completed_turn.is_some();
         match actions.completed_turn.as_ref().map(|turn| turn.prompt.kind) {
             // Summarize-and-swap compaction defers `PromptCompleted` until after
@@ -440,6 +450,7 @@ impl AcpBackend {
             ClientEvent::QueueChanged(queue) => Some(nori_protocol::NoriEvent::QueueChanged(
                 nori_protocol::QueueSnapshot {
                     prompts: queue.prompts.clone(),
+                    entries: queue.entries.clone(),
                 },
             )),
             ClientEvent::ContextCompacted(compacted) => Some(

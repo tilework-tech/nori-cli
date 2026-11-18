@@ -7,7 +7,6 @@
 use crate::normalized::ClientEvent;
 use crate::normalized::ClientEventNormalizer;
 use crate::normalized::PromptCompleted;
-use crate::normalized::QueueChanged;
 use crate::normalized::WarningInfo;
 use crate::normalized::session_runtime::ActiveRequestState;
 use crate::normalized::session_runtime::OpenMessage;
@@ -176,9 +175,7 @@ fn reduce_prompt_submit(
             queue_len = runtime.queue.len(),
             "Queued prompt while another session request is active"
         );
-        out.events.push(ClientEvent::QueueChanged(QueueChanged {
-            prompts: queued_prompt_texts(runtime),
-        }));
+        out.events.push(reclaim::queue_changed(runtime));
         return;
     }
 
@@ -367,9 +364,7 @@ fn reduce_prompt_response(
         }));
 
     if should_drain_queue && let Some(next_prompt) = runtime.queue.pop_front() {
-        out.events.push(ClientEvent::QueueChanged(QueueChanged {
-            prompts: queued_prompt_texts(runtime),
-        }));
+        out.events.push(reclaim::queue_changed(runtime));
         start_prompt(runtime, next_prompt, out);
     }
 }
@@ -810,28 +805,13 @@ fn is_terminal_phase(phase: &crate::normalized::ToolPhase) -> bool {
     )
 }
 
-fn queued_prompt_texts(runtime: &SessionRuntime) -> Vec<String> {
-    runtime
-        .queue
-        .iter()
-        .filter(|prompt| {
-            matches!(
-                prompt.kind,
-                crate::normalized::session_runtime::QueuedPromptKind::User
-            )
-        })
-        .filter_map(|prompt| {
-            prompt
-                .display_text
-                .clone()
-                .or_else(|| Some(prompt.text.clone()))
-        })
-        .collect()
-}
-
 fn new_request_id() -> acp::RequestId {
     acp::RequestId::Str(uuid::Uuid::new_v4().to_string())
 }
+
+mod reclaim;
+pub(crate) use reclaim::Reclaimed;
+pub(crate) use reclaim::reclaim_queued;
 
 #[cfg(test)]
 mod tests;
