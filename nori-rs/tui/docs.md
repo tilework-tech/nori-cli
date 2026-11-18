@@ -584,6 +584,19 @@ Streaming output remains transient and is consolidated into one source-backed
 assistant cell when the message finishes; user, tool, event, and assistant
 cells otherwise keep their semantic order.
 
+Assistant Markdown (live streaming, finalized-cell reflow, attach, and
+reasoning summaries) renders through
+[`markdown_render`](src/markdown_render.rs), which splits the source into prose
+and GFM table segments ([`table_segments`](src/markdown_render/table_segments.rs)).
+Tables go through the shared `nori_tui_components::Markdown` renderer and prose
+through the local writer. Neither pads its output with blank lines, so the segment
+join owns table spacing: it skips empty segments and puts exactly one blank line
+between non-empty ones, whatever blank lines the source had. The message's own
+first and last lines stay unpadded because the transcript already separates
+history cells. Streaming stays prefix-stable because the separator appears only
+once the next segment renders content, and the stream collector withholds an
+unfinished trailing table.
+
 Reflow is width-only and trailing-debounced by 75 ms. It waits while a popup,
 transcript overlay, alternate screen, or assistant stream owns presentation,
 then runs once that boundary closes. The replay retains at most the newest

@@ -3,6 +3,7 @@ source: tui/src/markdown_stream.rs
 expression: transcript
 ---
 Here is a table:
+
 Situation                            Commit strategy
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Streaming/tail append                Existing incremental insertion

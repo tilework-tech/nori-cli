@@ -105,25 +105,30 @@ pub(crate) fn render_markdown_text_with_width_and_cwd(
     width: Option<usize>,
     cwd: Option<&Path>,
 ) -> Text<'static> {
-    let segments = table_segments::markdown_segments(input);
-    if segments.iter().any(|segment| segment.is_table) {
-        let mut lines = Vec::new();
-        for segment in segments {
-            let source = &input[segment.range];
-            let rendered = if segment.is_table {
-                let mut markdown = nori_tui_components::Markdown::new(source);
-                if let Some(width) = width.and_then(|width| u16::try_from(width).ok()) {
-                    markdown = markdown.width(width);
-                }
-                markdown.render_text()
-            } else {
-                render_markdown_without_tables(source, width, cwd)
-            };
-            lines.extend(rendered.lines);
+    let mut lines = Vec::new();
+    for segment in table_segments::markdown_segments(input) {
+        let source = &input[segment.range];
+        let rendered = if segment.is_table {
+            let mut markdown = nori_tui_components::Markdown::new(source);
+            if let Some(width) = width.and_then(|width| u16::try_from(width).ok()) {
+                markdown = markdown.width(width);
+            }
+            markdown.render_text()
+        } else {
+            render_markdown_without_tables(source, width, cwd)
+        };
+        if rendered.lines.is_empty() {
+            continue;
         }
-        return Text::from(lines);
+        // Neither renderer pads its output with blank lines, so the blank line separating a table
+        // from its neighbours is added here, once. The edges of the whole message stay unpadded
+        // because history cells are already separated by the transcript.
+        if !lines.is_empty() {
+            lines.push(Line::default());
+        }
+        lines.extend(rendered.lines);
     }
-    render_markdown_without_tables(input, width, cwd)
+    Text::from(lines)
 }
 
 fn render_markdown_without_tables(
