@@ -385,8 +385,11 @@ requests at once, including while a parent prompt awaits permission.
 The host initializes the side adapter with empty client capabilities and opens
 one session in the pinned workspace. It selects a restrictive advertised mode
 before returning the side ID. If setup fails, the host reaps the process and
-returns an error. A caller can reassert the selected mode with `session/set_mode`. Changing
-it returns `-32602`.
+returns an error. The host uses the mode and model selectors in ACP
+`configOptions` when advertised and supports the older `modes` and `models`
+fields. A caller may reassert the selected permission mode through the same
+selector. Changing the mode or setting other options returns `-32602`.
+Only the host supplies the side marker on frames delivered to Sessions.
 The host forwards side updates, permission requests and correlated replies.
 The host disables recording, prompt echo, status additions and client MCP for
 this process. Side IDs have no delegation or restore path and are omitted from

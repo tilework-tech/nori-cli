@@ -554,13 +554,13 @@ impl ManagedLaunches {
             .get_mut(binding)
             .filter(|l| l.generation == generation)
             .context("unknown binding or generation")?;
-        let parent = launch
+        let parent_exit = launch
             .process
             .as_ref()
             .ok()
             .filter(|p| !p.has_exited())
             .context("parent adapter is not running")?
-            .clone();
+            .wait_for_exit();
         ensure!(
             !launch.sides.contains_key(side_id),
             "side ID already in use"
@@ -575,11 +575,17 @@ impl ManagedLaunches {
         let command = launch.spec.command(&launch.cwd, &launch.home, true)?;
         let child = AgentProcess::spawn(command).context("read-only adapter launch failed")?;
         let handle = Arc::new(child.handle);
-        launch.sides.insert(side_id.to_owned(), handle.clone());
+        let side_exit = handle.wait_for_exit();
+        let side = Arc::downgrade(&handle);
+        launch.sides.insert(side_id.to_owned(), handle);
         tokio::spawn(async move {
             tokio::select! {
-                () = parent.wait_for_exit() => handle.request_kill(),
-                () = handle.wait_for_exit() => (),
+                () = parent_exit => {
+                    if let Some(side) = side.upgrade() {
+                        side.request_kill();
+                    }
+                }
+                () = side_exit => (),
             }
         });
         Ok(launch.connection(child.stdin, child.stdout))

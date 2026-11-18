@@ -68,6 +68,13 @@ impl Relay {
         if params["_meta"].get(side_sessions::SIDE_META).is_some() {
             return Some((-32601, "side sessions are unavailable on this connection"));
         }
+        if matches!(method, "session/load" | "session/resume" | "session/fork")
+            && params["sessionId"]
+                .as_str()
+                .is_some_and(side_sessions::reserved)
+        {
+            return Some((-32002, "side session cannot be restored or forked"));
+        }
         if method == "initialize" {
             return (id.is_none() || self.initialize.is_some() || !self.requests.is_empty())
                 .then_some((-32600, "expected a single initialize request"));

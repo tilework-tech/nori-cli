@@ -124,10 +124,12 @@ impl ChildHandle {
         self.wait_for_exit().await;
     }
 
-    /// Wait until the watcher has swept descendants and reaped the child.
-    pub async fn wait_for_exit(&self) {
+    /// Observe reaping without extending the lifetime of the owning process handle.
+    pub fn wait_for_exit(&self) -> impl Future<Output = ()> + use<> {
         let mut exit = self.exit_rx.clone();
-        let _ = exit.wait_for(|status| status.is_some()).await;
+        async move {
+            let _ = exit.wait_for(std::option::Option::is_some).await;
+        }
     }
 
     /// Kill the child (and, on Unix, its whole process group) without

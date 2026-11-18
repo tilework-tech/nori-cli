@@ -152,6 +152,20 @@ async fn read_only_launch_pins_environment_and_isolates_scratch() {
         assert_eq!(fs::read_to_string(cwd.join("input")).unwrap(), "original");
         assert!(!cwd.join("creation").exists());
         assert!(!home.join("state").exists());
+        // Outstanding transport pipes can outlive the host owner on cancellation.
+        let _parent = launches.take_connection("sample", 2).unwrap();
+        let outstanding = launches.spawn_side("sample", 2, "outstanding").unwrap();
+        drop(launches);
+        let mut result = String::new();
+        let read = tokio::time::timeout(
+            Duration::from_secs(2),
+            BufReader::new(outstanding.stdout).read_line(&mut result),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(read, 0);
+    } else {
+        launches.shutdown().await.unwrap();
     }
-    launches.shutdown().await.unwrap();
 }

@@ -20,8 +20,23 @@ fn open_side(id: i64, cwd: &Path, mark: Value) -> Value {
 }
 
 #[tokio::test]
-async fn disabled_host_refuses_marked_opens_and_preserves_regular_session_new() {
-    let (host, endpoint, token) = start(true);
+async fn disabled_host_refuses_marked_opens_and_side_restoration_but_preserves_regular_sessions() {
+    let (host, old_side) = if read_only_launch_available() {
+        let mut previous = SideHost::start(false, None).await;
+        let id = side_id(&previous.start_side(4, "0").await);
+        previous.close(5, &id).await;
+        let SideHost {
+            _host: host,
+            machine,
+            ..
+        } = previous;
+        drop(machine);
+        success(host.run(&["host", "stop"]));
+        (host, id)
+    } else {
+        (Host::new(), format!("nori-side-{}", uuid::Uuid::new_v4()))
+    };
+    let (host, endpoint, token) = start_config(host, "[host]\nmanaged=true\n".into());
     let mut control = ManagedClient::connect(&endpoint.replace("/managed", "/sessions"), &token)
         .await
         .unwrap();
@@ -41,6 +56,19 @@ async fn disabled_host_refuses_marked_opens_and_preserves_regular_session_new() 
     assert!(refused["error"].is_object(), "{refused}");
     let next = exchange(&mut machine, regular(4)).await;
     assert_eq!(next["result"]["sessionId"], "1");
+    let load = |method: &str, id, sid: &str| {
+        request(
+            id,
+            method,
+            json!({"sessionId":sid,"cwd":cwd,"mcpServers":[]}),
+        )
+    };
+    for (method, id) in [("session/load", 5), ("session/resume", 6)] {
+        let denied = exchange(&mut machine, load(method, id, &old_side)).await;
+        assert!(denied["error"].is_object(), "{method}: {denied}");
+    }
+    let resumed = exchange(&mut machine, load("session/resume", 7, "saved-1")).await;
+    assert!(resumed["result"].is_object(), "{resumed}");
 }
 
 struct SideHost {

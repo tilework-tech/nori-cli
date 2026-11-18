@@ -54,7 +54,7 @@ impl SideOwner {
 
 struct Side {
     parent: Parent,
-    input: Option<mpsc::Sender<Value>>,
+    input: Option<side_worker::SideInput>,
 }
 
 struct Pending {
@@ -84,7 +84,7 @@ struct Router {
     output: mpsc::Sender<Value>,
 }
 
-fn reserved(sid: &str) -> bool {
+pub(super) fn reserved(sid: &str) -> bool {
     sid.strip_prefix(SIDE_PREFIX)
         .is_some_and(|suffix| Uuid::parse_str(suffix).is_ok())
 }
@@ -169,15 +169,9 @@ impl Router {
             generation: self.generation,
             side_id: side_id.clone(),
         };
-        let mut params = params.clone();
-        params["_meta"]
-            .as_object_mut()
-            .expect("validated side metadata")
-            .remove(SIDE_META);
         let input = side_worker::start_side(
             SideLaunch { connection, owner },
             initialize,
-            params,
             id.clone(),
             side_id.clone(),
             self.events.clone(),
@@ -199,11 +193,15 @@ impl Router {
         id: Option<&Value>,
         frame: Value,
     ) -> std::result::Result<(), Value> {
-        let reason = if !self.sides.get(sid).is_some_and(|s| s.input.is_some()) {
+        let reason = if self.sides.get(sid).is_none_or(|s| s.input.is_none()) {
             Some((-32002, "side session is closed or unknown"))
         } else if !matches!(
             method,
-            "session/prompt" | "session/close" | "session/cancel" | "session/set_mode"
+            "session/prompt"
+                | "session/close"
+                | "session/cancel"
+                | "session/set_mode"
+                | "session/set_config_option"
         ) {
             Some((-32601, "operation unavailable on a side session"))
         } else if (method == "session/cancel") == id.is_some() {
@@ -317,7 +315,7 @@ impl Router {
     fn send_to_side(&mut self, sid: &str, message: Value) {
         if let Some(side) = self.sides.get_mut(sid)
             && let Some(input) = &side.input
-            && input.try_send(message).is_err()
+            && input.sender.try_send(message).is_err()
         {
             side.input = None;
         }
@@ -370,6 +368,20 @@ impl Router {
     }
 
     async fn agent(&mut self, side: Option<&str>, mut frame: Value) -> Result<()> {
+        if side.is_none() {
+            let fields = if frame.get("method").is_some() {
+                "params"
+            } else {
+                "result"
+            };
+            if let Some(meta) = frame
+                .get_mut(fields)
+                .and_then(|fields| fields.get_mut("_meta"))
+                .and_then(Value::as_object_mut)
+            {
+                meta.remove(SIDE_META);
+            }
+        }
         if frame["method"].is_string() {
             if let Some(side) = side {
                 let Some(record) = self.sides.get_mut(side).filter(|s| s.input.is_some()) else {
@@ -385,11 +397,8 @@ impl Router {
             .requests
             .get(&frame["id"])
             .is_some_and(|r| r.side.as_deref() == side)
+            && let Some(request) = self.requests.remove(&frame["id"])
         {
-            let request = self
-                .requests
-                .remove(&frame["id"])
-                .expect("matching request");
             if frame.get("result").is_some() {
                 match side {
                     Some(sid) if request.method == "session/new" => {
