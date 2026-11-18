@@ -125,7 +125,8 @@ impl Producer {
                     .get_mut(&scope)
                     .context("binding retired before producer drained")?;
                 let fault = fault.or_else(|| {
-                    (!active.pending.is_empty())
+                    active
+                        .has_unfinished_requests()
                         .then(|| "ACP producer ended with unfinished requests".to_owned())
                 });
                 active.faulted |= fault.is_some();

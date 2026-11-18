@@ -16,6 +16,8 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_json::json;
 
+use crate::remote::SIDE_SESSION_META;
+use crate::remote::is_side_session_id;
 use journal::Admission;
 use journal::Journal;
 use journal::Snapshot;
@@ -82,6 +84,7 @@ impl StorageFailure {
 #[derive(Default)]
 struct Active {
     main: Option<String>,
+    has_side_namespace: bool,
     load_session: bool,
     pending: HashMap<String, Request>,
     faulted: bool,
@@ -90,11 +93,18 @@ struct Active {
     producer: Option<tokio::sync::watch::Receiver<shared::DrainResult>>,
 }
 
+impl Active {
+    fn has_unfinished_requests(&self) -> bool {
+        self.pending.values().any(|r| !matches!(r, Request::Side))
+    }
+}
+
 enum Request {
     Initialize,
     Main { load: Option<String> },
     Load(String),
     Prompt { command: String, session: String },
+    Side,
     Other,
 }
 
@@ -182,7 +192,7 @@ impl Recovery {
             "binding lost durable output; use its last committed checkpoint"
         );
         ensure!(
-            active.pending.is_empty(),
+            !active.has_unfinished_requests(),
             "binding has an unfinished ACP request"
         );
         Ok(Checkpoint {
@@ -266,6 +276,20 @@ impl Recovery {
                 .any(|r| matches!(r, Request::Main { .. }));
         let entry = match method {
             Some("initialize") => Request::Initialize,
+            Some("session/new" | "session/fork")
+                if message["params"]["_meta"].get(SIDE_SESSION_META).is_some() =>
+            {
+                Request::Side
+            }
+            Some(method)
+                if state.has_side_namespace
+                    && method.starts_with("session/")
+                    && method != "session/new"
+                    && session != state.main.as_deref()
+                    && session.is_some_and(is_side_session_id) =>
+            {
+                Request::Side
+            }
             Some("session/new" | "session/load" | "session/resume") if selecting_main => {
                 Request::Main {
                     load: session.map(str::to_owned),
@@ -308,6 +332,16 @@ impl Recovery {
                 .get("id")
                 .and_then(|id| state.pending.remove(&id.to_string()));
             match request {
+                Some(Request::Side) => {
+                    if message["result"]["_meta"].get(SIDE_SESSION_META).is_some()
+                        && message["result"]["sessionId"]
+                            .as_str()
+                            .is_some_and(is_side_session_id)
+                    {
+                        state.has_side_namespace = true;
+                    }
+                    return Ok(None);
+                }
                 Some(Request::Initialize) => {
                     state.load_session = message.pointer("/result/agentCapabilities/loadSession")
                         == Some(&Value::Bool(true));

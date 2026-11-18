@@ -111,6 +111,17 @@ impl AgentProcess {
 }
 
 impl ChildHandle {
+    /// A PID for validating launcher observations made before this check.
+    /// The watcher retires the process group before reaping its leader.
+    #[cfg(target_os = "linux")]
+    pub fn unreaped_id(&self) -> Option<u32> {
+        let retired = self
+            .group_cleanup_complete
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (!*retired).then_some(self.pid)
+    }
+
     pub fn has_exited(&self) -> bool {
         self.exit_rx.borrow().is_some() || self.exit_rx.has_changed().is_err()
     }
@@ -119,16 +130,22 @@ impl ChildHandle {
         self.exit_rx.borrow().and_then(|status| status.code())
     }
 
-    pub async fn stop(mut self) {
+    pub async fn stop(self) {
         self.request_kill();
-        if !self.has_exited() {
-            let _ = self.exit_rx.changed().await;
+        self.wait_for_exit().await;
+    }
+
+    /// Observe reaping without extending the lifetime of the owning process handle.
+    pub fn wait_for_exit(&self) -> impl Future<Output = ()> + use<> {
+        let mut exit = self.exit_rx.clone();
+        async move {
+            let _ = exit.wait_for(std::option::Option::is_some).await;
         }
     }
 
     /// Kill the child (and, on Unix, its whole process group) without
     /// waiting. Safe to call repeatedly or after the child already exited.
-    pub(super) fn request_kill(&self) {
+    pub fn request_kill(&self) {
         // Only signal the group while the child is unreaped; after reaping
         // the pid may be reused by an unrelated process.
         if self.exit_rx.borrow().is_none() {
