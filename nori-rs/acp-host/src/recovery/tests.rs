@@ -103,6 +103,39 @@ fn marked_sides_never_claim_the_recovery_session_or_hold_its_checkpoint_open() -
     Ok(())
 }
 
+#[test]
+fn ordinary_acp_requests_keep_their_checkpoint_barrier_with_side_shaped_ids() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let mut host = Recovery::open(root.path())?;
+    let scope = Scope {
+        binding_id: "fixture".into(),
+        generation: 1,
+    };
+    host.journal.register("fixture", 1)?;
+    host.attach(&scope);
+    let secondary = "nori-side-00000000-0000-4000-8000-000000000002";
+    for (id, session) in [(1, "main"), (2, secondary)] {
+        host.incoming(
+            &scope,
+            &json!({"jsonrpc":"2.0","id":id,"method":"session/new","params":{}}),
+            None,
+        )?;
+        host.outgoing(&scope, &json!({"id":id,"result":{"sessionId":session}}))?;
+    }
+    host.incoming(
+        &scope,
+        &json!({"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":secondary}}),
+        None,
+    )?;
+    assert!(host.checkpoint(&scope).is_err());
+    host.outgoing(&scope, &json!({"id":3,"result":{"stopReason":"end_turn"}}))?;
+    assert_eq!(
+        host.checkpoint(&scope)?.main_session_id.as_deref(),
+        Some("main")
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn release_waits_for_a_registered_producer_and_receives_its_failure() -> Result<()> {
     let dir = tempfile::tempdir()?;

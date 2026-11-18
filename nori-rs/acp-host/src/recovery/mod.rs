@@ -84,6 +84,7 @@ impl StorageFailure {
 #[derive(Default)]
 struct Active {
     main: Option<String>,
+    has_side_namespace: bool,
     load_session: bool,
     pending: HashMap<String, Request>,
     faulted: bool,
@@ -281,7 +282,8 @@ impl Recovery {
                 Request::Side
             }
             Some(method)
-                if method.starts_with("session/")
+                if state.has_side_namespace
+                    && method.starts_with("session/")
                     && method != "session/new"
                     && session != state.main.as_deref()
                     && session.is_some_and(is_side_session_id) =>
@@ -330,6 +332,16 @@ impl Recovery {
                 .get("id")
                 .and_then(|id| state.pending.remove(&id.to_string()));
             match request {
+                Some(Request::Side) => {
+                    if message["result"]["_meta"].get(SIDE_SESSION_META).is_some()
+                        && message["result"]["sessionId"]
+                            .as_str()
+                            .is_some_and(is_side_session_id)
+                    {
+                        state.has_side_namespace = true;
+                    }
+                    return Ok(None);
+                }
                 Some(Request::Initialize) => {
                     state.load_session = message.pointer("/result/agentCapabilities/loadSession")
                         == Some(&Value::Bool(true));
