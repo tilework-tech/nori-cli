@@ -7,6 +7,7 @@ expression: normalize_for_input_snapshot(screen)
 › show me a table
 
 • Here is a table:
+
   Situation                            Commit strategy
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Streaming/tail append                Existing incremental insertion
@@ -14,6 +15,7 @@ expression: normalize_for_input_snapshot(screen)
   Width changes                        Debounced full replay
   ───────────────────────────────────  ──────────────────────────────
   Rollback/session replacement/resume  Full replay
+
   Done.
 
 › [DEFAULT_PROMPT]
