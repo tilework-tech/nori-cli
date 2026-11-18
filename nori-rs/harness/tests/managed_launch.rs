@@ -482,6 +482,60 @@ async fn a_codex_side_without_the_boundary_runs_on_the_binding_home_and_stops_wi
 
 #[cfg(target_os = "linux")]
 #[tokio::test]
+async fn codex_sides_start_from_a_machine_environment_without_its_other_variables() {
+    if !sandbox_available() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let binding = root.path().join("sample");
+    let home = binding.join("home");
+    let cwd = home.join("work");
+    fs::create_dir_all(&cwd).unwrap();
+    fs::create_dir(home.join(".codex")).unwrap();
+    let launches = ManagedLaunches::from_config(
+        &nori_config::HostConfig {
+            managed: true,
+            side_sessions: true,
+            bindings_root: Some(root.path().into()),
+            ..Default::default()
+        },
+        root.path(),
+    )
+    .unwrap();
+    // The parent keeps every variable. Its side keeps only the recognised ones.
+    let script = r#"
+        read -r role || exit 0
+        echo "$role ${TZ:-} ${SERVICE_TOKEN:-absent} ${OPENAI_API_KEY:-absent}"
+        read -r done
+    "#;
+    launches.ensure(serde_json::from_value(json!({
+        "commandId":"start", "conversationId":uuid::Uuid::new_v4(), "bindingId":"sample", "generation":1,
+        "spec":{"agent":"codex","projectId":"project","runId":"run","cwd":cwd,"home":home,
+            "env":{"PATH":"/usr/bin:/bin","TZ":"UTC","SERVICE_TOKEN":"synthetic","OPENAI_API_KEY":"synthetic"},
+            "adapter":{"path":"/bin/sh","version":"2.7.0","args":["-c",script]},
+            "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
+    })).unwrap()).unwrap();
+    let mut observed = Vec::new();
+    for (role, mut pipe) in [
+        ("side", launches.spawn_side("sample", 1, "lilac").unwrap()),
+        ("parent", launches.take_connection("sample", 1).unwrap()),
+    ] {
+        pipe.stdin
+            .write_all(format!("{role}\n").as_bytes())
+            .await
+            .unwrap();
+        let mut output = BufReader::new(pipe.stdout).lines();
+        observed.push(output.next_line().await.unwrap().unwrap());
+    }
+    assert_eq!(
+        observed,
+        ["side UTC absent absent", "parent UTC synthetic synthetic"]
+    );
+    launches.shutdown().await.unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
 async fn codex_refuses_unverified_credential_scopes_before_spawning() {
     let root = tempfile::tempdir().unwrap();
     let binding = root.path().join("sample");
@@ -528,13 +582,6 @@ async fn codex_refuses_unverified_credential_scopes_before_spawning() {
             json!([]),
             json!({}),
             "cli_auth_credentials_store",
-        ),
-        (
-            "config.toml",
-            "",
-            json!([]),
-            json!({"DEFAULT_AUTH_REQUEST":"fixture"}),
-            "DEFAULT_AUTH_REQUEST",
         ),
     ] {
         fs::write(provider.join(file), content).unwrap();

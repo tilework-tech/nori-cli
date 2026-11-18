@@ -14,27 +14,25 @@ use tokio::process::Command;
 
 use super::LaunchSpec;
 
+/// The parent's environment variables a side session keeps. Every other
+/// variable could name a credential or redirect the provider, so the side
+/// starts without it.
+pub(super) const SIDE_ENV: [&str; 8] = [
+    "PATH",
+    "CODEX_PATH",
+    "TMPDIR",
+    "CODEX_SQLITE_HOME",
+    "LANG",
+    "LC_ALL",
+    "TERM",
+    "TZ",
+];
+
 pub(super) fn validate_launch(spec: &LaunchSpec) -> anyhow::Result<()> {
     ensure!(
         spec.credential_refs.is_empty() || spec.has_subscription_file(),
         "unsupported Codex side-session credential references: expected one binding subscription file"
     );
-    for key in spec.env.keys() {
-        ensure!(
-            matches!(
-                key.as_str(),
-                "PATH"
-                    | "CODEX_PATH"
-                    | "TMPDIR"
-                    | "CODEX_SQLITE_HOME"
-                    | "LANG"
-                    | "LC_ALL"
-                    | "TERM"
-                    | "TZ"
-            ),
-            "unsupported Codex side-session environment input: {key}; credential scope cannot be confirmed"
-        );
-    }
     for name in ["config.toml", "managed_config.toml", "requirements.toml"] {
         let path = Path::new("/etc/codex").join(name);
         ensure!(
