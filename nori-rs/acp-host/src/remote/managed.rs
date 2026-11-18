@@ -18,9 +18,27 @@ pub struct ManagedReply {
     pub subscription: Option<ManagedSubscription>,
 }
 
+/// Bidirectional ACP frames for one admitted binding and generation.
+pub struct StandardAcpConnection {
+    pub input: mpsc::Sender<Value>,
+    pub output: mpsc::Receiver<Value>,
+}
+
 /// Transport-independent command handling for a managed session host.
 pub trait ManagedAgent: Send + Sync + 'static {
     fn request(&self, request: Value) -> impl Future<Output = ManagedReply> + Send;
+
+    fn standard_acp_enabled(&self) -> bool {
+        false
+    }
+
+    fn open_standard_acp(
+        &self,
+        _binding_id: &str,
+        _generation: i64,
+    ) -> impl Future<Output = anyhow::Result<StandardAcpConnection>> + Send {
+        async { anyhow::bail!("standard ACP is disabled") }
+    }
 }
 
 /// Encode the complete manager envelope without changing its event vocabulary.

@@ -1,6 +1,8 @@
 #![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
+mod standard_acp;
+
 use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
@@ -488,3 +490,45 @@ async fn a_delegated_child_works_in_its_parents_folder() {
 
 #[path = "host_lifecycle/managed.rs"]
 mod managed;
+
+#[test]
+fn machine_transport_authenticates_before_upgrade() {
+    use std::io::Write;
+    use std::net::TcpStream;
+
+    let host = Host::new();
+    std::fs::create_dir(host.0.path().join("hosted-sessions")).unwrap();
+    std::fs::write(
+        host.0.path().join("config.toml"),
+        "[host]\nmanaged = true\n",
+    )
+    .unwrap();
+    success(host.run(&["host", "--port", "0"]));
+    let state: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(host.0.path().join("host/state.json")).unwrap())
+            .unwrap();
+    let address = state["endpoint"]
+        .as_str()
+        .unwrap()
+        .strip_prefix("ws://")
+        .unwrap()
+        .split('/')
+        .next()
+        .unwrap();
+    let token = std::fs::read_to_string(host.0.path().join("host/token")).unwrap();
+    for (credential, expected) in [("wrong", 401), (token.trim(), 426)] {
+        let mut socket = TcpStream::connect(address).unwrap();
+        socket
+            .set_read_timeout(Some(Duration::from_secs(3)))
+            .unwrap();
+        write!(socket,
+            "GET /managed HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {credential}\r\nConnection: close\r\n\r\n"
+        ).unwrap();
+        let mut response = String::new();
+        socket.read_to_string(&mut response).unwrap();
+        assert!(
+            response.starts_with(&format!("HTTP/1.1 {expected} ")),
+            "{response}"
+        );
+    }
+}

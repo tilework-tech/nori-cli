@@ -544,8 +544,8 @@ commands read that token automatically; startup prints its path, never its
 value. Background hosting is refused on platforms without the implemented Unix
 permission checks.
 
-`RemoteAcpServer::bind_host` exposes only `/sessions`, with no legacy `/acp`
-route. A valid `Authorization: Bearer <token>` header is required before the
+`RemoteAcpServer::bind_host` serves `/sessions`. A host configured with
+`[host] managed = true` also serves the [scoped ACP transport](../nori-rs/acp-host/docs.md#managed-machine-connection) on `/managed`. A valid `Authorization: Bearer <token>` header is required before the
 WebSocket upgrade, including on loopback; a missing or wrong token returns
 HTTP 401. This policy applies to `nori host`, not the separate `--remote` or
 `/remote-control` listeners.

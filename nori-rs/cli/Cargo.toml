@@ -59,6 +59,8 @@ which = { workspace = true }
 codex_windows_sandbox = { package = "codex-windows-sandbox", path = "../windows-sandbox-rs" }
 
 [dev-dependencies]
+agent-client-protocol = { workspace = true, features = ["unstable"] }
+futures = { workspace = true }
 ratatui = { workspace = true }
 insta = { workspace = true }
 assert_cmd = { workspace = true }
