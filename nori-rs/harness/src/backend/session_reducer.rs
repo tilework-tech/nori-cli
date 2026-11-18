@@ -60,6 +60,8 @@ pub enum InboundEvent {
     LoadSubmit {
         request_id: acp::RequestId,
     },
+    /// The user asked a paused queue to start sending again.
+    ResumeQueue,
 }
 
 pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
@@ -74,6 +76,7 @@ pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
         InboundEvent::PromptSubmit(_) | InboundEvent::PromptSubmitIfIdle(_) => "prompt_submit",
         InboundEvent::CancelSubmit | InboundEvent::CancelSubmitFor { .. } => "cancel_submit",
         InboundEvent::LoadSubmit { .. } => "load_submit",
+        InboundEvent::ResumeQueue => "resume_queue",
     }
 }
 
@@ -136,7 +139,7 @@ pub fn reduce(
         }
         InboundEvent::PromptSubmitIfIdle(prompt) => {
             if runtime.phase == SessionPhase::Idle
-                && runtime.queue.is_empty()
+                && (runtime.queue.is_empty() || runtime.queue_pause.is_some())
                 && runtime.steer_fence == SteerFence::Open
             {
                 start_prompt(runtime, prompt, &mut out);
@@ -175,6 +178,9 @@ pub fn reduce(
             call_id,
         } => {
             reduce_permission_request(runtime, request_id, call_id, &mut out);
+        }
+        InboundEvent::ResumeQueue => {
+            queue_pause::resume(runtime, &mut out);
         }
     }
 
@@ -389,16 +395,25 @@ fn reduce_prompt_response(
             failure: None,
         }));
 
-    if should_drain_queue {
-        if runtime.steer_fence == SteerFence::Open {
-            drain_queue(runtime, out);
+    if !should_drain_queue {
+        let reason = if stop_reason == acp::StopReason::Cancelled {
+            nori_protocol::QueuePause::Interrupted
         } else {
-            runtime.steer_fence = SteerFence::DrainAfterReply;
-        }
+            nori_protocol::QueuePause::TurnFailed
+        };
+        queue_pause::pause(runtime, reason, out);
+    } else if runtime.steer_fence == SteerFence::Open {
+        drain_queue(runtime, out);
+    } else {
+        runtime.steer_fence = SteerFence::DrainAfterReply;
     }
 }
 
+/// Start the next queued prompt unless the queue is paused.
 fn drain_queue(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
+    if runtime.queue_pause.is_some() {
+        return;
+    }
     if let Some(next_prompt) = runtime.queue.pop_front() {
         out.events.push(reclaim::queue_changed(runtime));
         start_prompt(runtime, next_prompt, out);
@@ -429,6 +444,17 @@ fn reduce_prompt_failed(
         return;
     }
 
+    let reason = if matches!(
+        runtime.phase,
+        SessionPhase::Prompt {
+            cancelling: true,
+            ..
+        }
+    ) {
+        nori_protocol::QueuePause::Interrupted
+    } else {
+        nori_protocol::QueuePause::TurnFailed
+    };
     let last_agent_message = finalize_active(runtime);
     runtime.phase = SessionPhase::Idle;
     out.events
@@ -439,6 +465,7 @@ fn reduce_prompt_failed(
             last_agent_message,
             failure,
         }));
+    queue_pause::pause(runtime, reason, out);
 }
 
 // ---------------------------------------------------------------------------
@@ -845,6 +872,7 @@ fn new_request_id() -> acp::RequestId {
     acp::RequestId::Str(uuid::Uuid::new_v4().to_string())
 }
 
+mod queue_pause;
 mod reclaim;
 pub(crate) use reclaim::Reclaimed;
 pub(crate) use reclaim::reclaim_queued;

@@ -78,6 +78,7 @@ end of the text block:
 | --- | --- | --- |
 | `mock:stream-until-cancel` | Streams text chunks until the turn is cancelled | `MOCK_AGENT_STREAM_UNTIL_CANCEL` |
 | `mock:exit-during-prompt` | Exits with status 17 mid-prompt | `MOCK_AGENT_EXIT_DURING_PROMPT` |
+| `mock:prompt-fail-after-delay` | Waits `MOCK_AGENT_DELAY_MS`, then fails the prompt with a JSON-RPC error, so prompts can queue behind a failing turn | `MOCK_AGENT_PROMPT_FAIL` (fails at once) |
 | `mock:request-permission` | Sends a permission request for the default `echo` command | `MOCK_AGENT_REQUEST_PERMISSION` |
 | `mock:request-permission:<command>` | Sends a permission request naming `<command>` | none |
 
