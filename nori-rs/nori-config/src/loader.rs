@@ -83,15 +83,17 @@ impl NoriConfig {
                     || path.starts_with("sandbox_workspace_write.")
             });
         // `-c tui.tool_output` is merged into `toml.tui`, so it must also beat the project.
-        let tool_output_from_command_line =
-            overrides
-                .raw_overrides
-                .iter()
-                .any(|(path, value)| match path.as_str() {
-                    "tui.tool_output" => true,
-                    "tui" => value.get("tool_output").is_some(),
-                    _ => false,
-                });
+        // A later `-c tui={...}` replaces the whole table, so the last such override decides.
+        let tool_output_from_command_line = overrides
+            .raw_overrides
+            .iter()
+            .rev()
+            .find_map(|(path, value)| match path.as_str() {
+                "tui.tool_output" => Some(true),
+                "tui" => Some(value.get("tool_output").is_some()),
+                _ => None,
+            })
+            .unwrap_or(false);
         let NoriConfigOverrides {
             agent: agent_override,
             sandbox_mode: sandbox_mode_override,
@@ -832,6 +834,31 @@ auto_worktree = false
 
         assert_eq!(
             tool_output_for(&config, &project, vec![("tui".to_string(), tui)]),
+            crate::ToolOutput::Compact
+        );
+    }
+
+    #[test]
+    fn later_tui_table_without_tool_output_keeps_project_setting() {
+        let (_dir, project) = project_dir();
+        let config = format!(
+            "[projects.{:?}]\ntool_output = \"compact\"\n",
+            project.display().to_string(),
+        );
+        let tui: toml::Value = toml::from_str("pinned_plan_drawer = false").unwrap();
+
+        assert_eq!(
+            tool_output_for(
+                &config,
+                &project,
+                vec![
+                    (
+                        "tui.tool_output".to_string(),
+                        toml::Value::String("full".to_string())
+                    ),
+                    ("tui".to_string(), tui),
+                ]
+            ),
             crate::ToolOutput::Compact
         );
     }

@@ -1,4 +1,4 @@
-//! Inline tool output is full unless a project opts into compact output.
+//! Inline tool output is full unless compact is chosen for a project or set globally.
 #![cfg(target_os = "linux")]
 
 use std::path::Path;
