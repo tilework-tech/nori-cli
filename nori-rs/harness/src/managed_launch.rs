@@ -22,6 +22,8 @@ use tokio::process::Command;
 
 use crate::ConversationId;
 
+mod side_sandbox;
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnsureLaunch {
@@ -62,6 +64,8 @@ pub struct LaunchSpec {
     #[serde(default)]
     pub resume_artifacts: Vec<String>,
     pub additions: HostAdditions,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub workspace_read_only: bool,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Eq)]
@@ -138,6 +142,7 @@ fn validate_roots(cwd: &Path, home: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Clone)]
 enum Layout {
     Shared(PathBuf),
     Dedicated(nori_config::DedicatedRoots),
@@ -169,7 +174,7 @@ impl Layout {
 }
 
 impl LaunchSpec {
-    fn command(&self, cwd: &Path, home: &Path) -> anyhow::Result<Command> {
+    fn command(&self, cwd: &Path, home: &Path, read_only: bool) -> anyhow::Result<Command> {
         ensure!(
             [
                 &self.agent,
@@ -202,6 +207,9 @@ impl LaunchSpec {
                         .any(|reserved| key.eq_ignore_ascii_case(reserved)),
                 "invalid or reserved environment key"
             );
+        }
+        if read_only || self.workspace_read_only {
+            return side_sandbox::command(self, cwd, home);
         }
         let mut command = Command::new(&self.adapter.path);
         command
@@ -244,11 +252,35 @@ struct Launch {
     conversation_id: ConversationId,
     generation: i64,
     digest: String,
-    process: Result<ChildHandle, String>,
-    connection: Option<LaunchConnection>,
+    process: Result<Arc<ChildHandle>, String>,
+    spec: Arc<LaunchSpec>,
+    cwd: PathBuf,
+    home: PathBuf,
+    pipes: Option<(ChildStdin, ChildStdout)>,
+    sides: HashMap<String, Arc<ChildHandle>>,
 }
 
 impl Launch {
+    fn connection(&self, stdin: ChildStdin, stdout: ChildStdout) -> LaunchConnection {
+        LaunchConnection {
+            cwd: self.cwd.clone(),
+            home: self.home.clone(),
+            conversation_id: self.conversation_id,
+            spec: self.spec.clone(),
+            stdin,
+            stdout,
+        }
+    }
+
+    fn live_slots(&mut self) -> usize {
+        let parent_live = self.process.as_ref().is_ok_and(|p| !p.has_exited());
+        if !parent_live {
+            self.pipes = None;
+        }
+        self.sides.retain(|_, child| !child.has_exited());
+        usize::from(parent_live) + self.sides.len()
+    }
+
     fn receipt(&self, binding: &str, status: bool) -> LaunchReceipt {
         let (state, exit_code) = match &self.process {
             Err(_) => ("spawnFailed", None),
@@ -279,12 +311,16 @@ pub struct ManagedHostCapabilities {
     version: i32,
     max_sessions: usize,
     standard_acp: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rebuilt_side_sessions: Option<i32>,
 }
 
+#[derive(Clone)]
 pub struct ManagedLaunches {
     layout: Layout,
     limit: usize,
-    launches: Mutex<Option<HashMap<String, Launch>>>,
+    side_sessions: bool,
+    launches: Arc<Mutex<Option<HashMap<String, Launch>>>>,
 }
 
 enum PreparedLaunch {
@@ -303,35 +339,43 @@ impl ManagedLaunches {
         Ok(Self {
             layout: Layout::Shared(session_folder(root)?),
             limit: max_sessions.try_into()?,
-            launches: Mutex::new(Some(HashMap::new())),
+            side_sessions: false,
+            launches: Arc::new(Mutex::new(Some(HashMap::new()))),
         })
     }
 
     pub fn from_config(config: &nori_config::HostConfig, nori_home: &Path) -> anyhow::Result<Self> {
         if let Some(roots) = &config.dedicated_roots {
             ensure!(
-                config.bindings_root.is_none() && config.max_sessions == 1,
-                "dedicated roots require max_sessions = 1 and no bindings_root"
+                config.bindings_root.is_none(),
+                "dedicated roots cannot be combined with bindings_root"
             );
             validate_binding_id(&roots.binding_id)?;
             let cwd = session_folder(&roots.cwd)?;
             let home = session_folder(&roots.home)?;
             validate_roots(&cwd, &home)?;
+            ensure!(
+                config.max_sessions > 0,
+                "host.max_sessions must be positive"
+            );
             return Ok(Self {
                 layout: Layout::Dedicated(nori_config::DedicatedRoots {
                     binding_id: roots.binding_id.clone(),
                     cwd,
                     home,
                 }),
-                limit: 1,
-                launches: Mutex::new(Some(HashMap::new())),
+                limit: config.max_sessions.try_into()?,
+                side_sessions: config.side_sessions,
+                launches: Arc::new(Mutex::new(Some(HashMap::new()))),
             });
         }
         let root = config
             .bindings_root
             .clone()
             .unwrap_or_else(|| nori_home.join("hosted-sessions"));
-        Self::new(&root, config.max_sessions)
+        let mut launches = Self::new(&root, config.max_sessions)?;
+        launches.side_sessions = config.side_sessions;
+        Ok(launches)
     }
 
     pub fn capabilities(&self) -> ManagedHostCapabilities {
@@ -339,6 +383,7 @@ impl ManagedLaunches {
             version: 1,
             max_sessions: self.limit,
             standard_acp: 1,
+            rebuilt_side_sessions: self.side_sessions.then_some(1),
         }
     }
 
@@ -393,16 +438,9 @@ impl ManagedLaunches {
             .map_err(LaunchRefusal::InvalidParams)?;
         let command = request
             .spec
-            .command(&cwd, &home)
+            .command(&cwd, &home, false)
             .map_err(LaunchRefusal::InvalidParams)?;
-        let mut live = 0;
-        for record in launches.values_mut() {
-            if record.process.as_ref().is_ok_and(|p| !p.has_exited()) {
-                live += 1;
-            } else {
-                record.connection = None;
-            }
-        }
+        let live: usize = launches.values_mut().map(Launch::live_slots).sum();
         ensure!(live < self.limit, LaunchRefusal::AtCapacity);
         Ok(PreparedLaunch::Spawn {
             command: Box::new(command),
@@ -434,17 +472,10 @@ impl ManagedLaunches {
             spec,
             ..
         } = request;
-        let (process, connection) = match AgentProcess::spawn(command) {
+        let (process, pipes) = match AgentProcess::spawn(command) {
             Ok(child) => (
-                Ok(child.handle),
-                Some(LaunchConnection {
-                    cwd,
-                    home,
-                    conversation_id,
-                    spec: Arc::new(spec),
-                    stdin: child.stdin,
-                    stdout: child.stdout,
-                }),
+                Ok(Arc::new(child.handle)),
+                Some((child.stdin, child.stdout)),
             ),
             Err(error) => (Err(error.to_string()), None),
         };
@@ -455,7 +486,11 @@ impl ManagedLaunches {
                 generation,
                 digest,
                 process,
-                connection,
+                cwd,
+                home,
+                spec: Arc::new(spec),
+                pipes,
+                sides: HashMap::new(),
             })
             .acknowledge(&binding_id)
     }
@@ -491,10 +526,79 @@ impl ManagedLaunches {
             launch.process.as_ref().is_ok_and(|p| !p.has_exited()),
             "adapter is not running"
         );
-        launch
-            .connection
+        let (stdin, stdout) = launch
+            .pipes
             .take()
-            .context("no available adapter connection")
+            .context("no available adapter connection")?;
+        Ok(launch.connection(stdin, stdout))
+    }
+
+    pub fn side_sessions_enabled(&self) -> bool {
+        self.side_sessions
+    }
+
+    pub fn spawn_side(
+        &self,
+        binding: &str,
+        generation: i64,
+        side_id: &str,
+    ) -> anyhow::Result<LaunchConnection> {
+        ensure!(self.side_sessions, "side sessions disabled");
+        let mut guard = self
+            .launches
+            .lock()
+            .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?;
+        let launches = guard.as_mut().context("host is stopping")?;
+        let live: usize = launches.values_mut().map(Launch::live_slots).sum();
+        let launch = launches
+            .get_mut(binding)
+            .filter(|l| l.generation == generation)
+            .context("unknown binding or generation")?;
+        let parent = launch
+            .process
+            .as_ref()
+            .ok()
+            .filter(|p| !p.has_exited())
+            .context("parent adapter is not running")?
+            .clone();
+        ensure!(
+            !launch.sides.contains_key(side_id),
+            "side ID already in use"
+        );
+        ensure!(live < self.limit, LaunchRefusal::AtCapacity);
+        self.layout.validate(binding, &launch.cwd, &launch.home)?;
+        ensure!(
+            session_folder(&launch.cwd)? == launch.cwd
+                && session_folder(&launch.home)? == launch.home,
+            "pinned launch roots changed"
+        );
+        let command = launch.spec.command(&launch.cwd, &launch.home, true)?;
+        let child = AgentProcess::spawn(command).context("read-only adapter launch failed")?;
+        let handle = Arc::new(child.handle);
+        launch.sides.insert(side_id.to_owned(), handle.clone());
+        tokio::spawn(async move {
+            tokio::select! {
+                () = parent.wait_for_exit() => handle.request_kill(),
+                () = handle.wait_for_exit() => (),
+            }
+        });
+        Ok(launch.connection(child.stdin, child.stdout))
+    }
+
+    pub async fn stop_side(&self, binding: &str, generation: i64, side_id: &str) {
+        let handle = self
+            .launches
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .and_then(|launches| launches.get(binding))
+            .filter(|launch| launch.generation == generation)
+            .and_then(|launch| launch.sides.get(side_id))
+            .cloned();
+        if let Some(handle) = handle {
+            handle.request_kill();
+            handle.wait_for_exit().await;
+        }
     }
 
     pub async fn release_one(&self, binding: &str, generation: i64) -> anyhow::Result<()> {
@@ -528,8 +632,11 @@ impl ManagedLaunches {
             .unwrap_or_default();
         let stopping = launches
             .into_values()
-            .filter_map(|launch| launch.process.ok())
-            .map(ChildHandle::stop);
+            .flat_map(|launch| launch.process.into_iter().chain(launch.sides.into_values()))
+            .map(|handle| async move {
+                handle.request_kill();
+                handle.wait_for_exit().await;
+            });
         tokio::time::timeout(
             std::time::Duration::from_secs(10),
             futures::future::join_all(stopping),

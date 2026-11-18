@@ -22,6 +22,8 @@ use crate::backend::managed_additions::ManagedMcp;
 use crate::backend::managed_additions::ManagedSessionAdditions;
 
 pub use nori_acp_host::remote::StandardAcpConnection;
+mod side_sessions;
+pub use side_sessions::route_side_sessions;
 
 struct Request {
     method: String,
@@ -62,6 +64,9 @@ impl Relay {
         }
         if id.is_some_and(|id| self.requests.contains_key(id)) {
             return Some((-32600, "duplicate request ID on logical connection"));
+        }
+        if params["_meta"].get(side_sessions::SIDE_META).is_some() {
+            return Some((-32601, "side sessions are unavailable on this connection"));
         }
         if method == "initialize" {
             return (id.is_none() || self.initialize.is_some() || !self.requests.is_empty())

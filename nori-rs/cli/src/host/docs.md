@@ -153,11 +153,14 @@ Run `NORI_HOME=/srv/fixture/nori nori host --port 0` to start the detached
 loopback listener. Use the same `NORI_HOME` with `nori host stop` to stop
 all its children. The defaults are `managed = false`, a managed capacity of
 eight live adapter processes, and `$NORI_HOME/hosted-sessions` for the
-bindings root. A configured capacity must be positive. Local mode retains
+bindings root. Both shared and dedicated machines use the positive
+`max_sessions` limit. Each binding's adapter and each rebuilt side
+process occupy a slot. Admission checks the machine-wide count and spawns
+under the same lock. Process exit frees a slot. Local mode retains
 its own session cap and attach protocol.
 
 A dedicated machine can retain its existing home and workspace. Configure
-one named binding with `max_sessions = 1` and omit `bindings_root`. Before
+one named binding and omit `bindings_root`. Before
 publishing its endpoint, the host validates the configured binding ID, checks
 that the absolute paths resolve to distinct existing directories, and checks
 the home configuration directories described below. An invalid layout fails
@@ -167,7 +170,6 @@ canonical pair. The workspace may be inside the home.
 ```toml
 [host]
 managed = true
-max_sessions = 1
 
 [host.dedicated_roots]
 binding_id = "sample"
@@ -189,7 +191,7 @@ Each text frame carries one JSON-RPC 2.0 object. Send
 `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"observe":true}}`
 first. Require `result.agentCapabilities._meta["nori.dev/managedHost"]`
 to contain `{"version":1,"maxSessions":2,"standardAcp":1}` for the shared configuration above
-(or `maxSessions: 1` for the dedicated configuration).
+(or `maxSessions: 8` for the dedicated configuration).
 The ordinary local host omits that key. The `standardAcp` field advertises version 1 of the scoped ACP transport at
 `/managed`. The control socket accepts `_nori/session/ensure`,
 `_nori/session/status` and `_nori/host/stop` from any authenticated,
@@ -227,7 +229,8 @@ own handshake.
   positive integer generation, and a binding ID containing ASCII letters,
   digits, `.`, `-`, or `_`. Empty, `.`, and `..` binding IDs are invalid.
   The conversation ID names the hosted conversation. ACP session IDs belong
-  to the downstream adapter and a binding can carry several of them.
+  to the downstream adapter for regular sessions. A binding can carry several
+  regular and side ACP IDs.
 - The provisioner installs the versioned executable, protects it from
   replacement, resolves credential references and prepares binding-owned
   paths. The host executes the absolute `adapter.path` directly with
@@ -257,6 +260,23 @@ own handshake.
   Supply variables such as `PATH` explicitly when the adapter needs them.
   Subprocesses inherit the binding environment. Host `.env` values stay
   in the host. Managed launches bypass host-configured hooks and MCP servers.
+- `spec.workspaceReadOnly` selects OS-enforced read-only launch. It defaults
+  to false. Every rebuilt side forces this option when it reuses the parent's
+  pinned executable, arguments, environment, cwd and home. The host uses
+  the spec's model when the side adapter reports a different current model.
+  A read-only launch requires Linux with `/usr/bin/bwrap` and permission to
+  create the required namespaces and mounts. The launcher mounts the root
+  read-only, supplies private device and process mounts, and sets
+  `TMPDIR=/dev/shm` on a private writable tmpfs. The pinned home remains
+  readable for credentials. Adapters that require writes to the real home
+  cannot use this layout. A side open must complete the sandboxed ACP
+  handshake before the host returns its ID.
+  [Read-only launch](../../../harness/src/managed_launch/side_sandbox.rs)
+- `[host] side_sessions` defaults to false. When enabled, the managed
+  host advertises `rebuiltSideSessions: 1` and accepts marked `session/new`
+  requests beside an open parent. The caller uses that parent's existing
+  logical connection.
+  [Sessions wire contract](../../../acp-host/docs.md#rebuilt-side-sessions-on-a-managed-binding)
 - All four `additions` booleans are required. With `standardAcp: 1`,
   each independently controls its host service. See the [machine wire and
   switch inventory](../../../acp-host/docs.md#managed-machine-connection).

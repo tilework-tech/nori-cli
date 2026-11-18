@@ -119,16 +119,20 @@ impl ChildHandle {
         self.exit_rx.borrow().and_then(|status| status.code())
     }
 
-    pub async fn stop(mut self) {
+    pub async fn stop(self) {
         self.request_kill();
-        if !self.has_exited() {
-            let _ = self.exit_rx.changed().await;
-        }
+        self.wait_for_exit().await;
+    }
+
+    /// Wait until the watcher has swept descendants and reaped the child.
+    pub async fn wait_for_exit(&self) {
+        let mut exit = self.exit_rx.clone();
+        let _ = exit.wait_for(|status| status.is_some()).await;
     }
 
     /// Kill the child (and, on Unix, its whole process group) without
     /// waiting. Safe to call repeatedly or after the child already exited.
-    pub(super) fn request_kill(&self) {
+    pub fn request_kill(&self) {
         // Only signal the group while the child is unreaped; after reaping
         // the pid may be reused by an unrelated process.
         if self.exit_rx.borrow().is_none() {

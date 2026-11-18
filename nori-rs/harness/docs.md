@@ -407,6 +407,17 @@ retry the writer checks the file length, rewrites the unsynced suffix at its
 original offsets, verifies its digest and syncs the file again. A length or
 digest mismatch fails the barrier. [Recorder sync retry](src/transcript/sync_retry.rs)
 
+For a host provisioned with `[host] managed = true`, the CLI uses
+[managed launches](src/managed_launch.rs) for process admission and
+[the standard ACP relay](src/managed_acp.rs) for the binding's agent traffic.
+When side sessions are enabled, [a router](src/managed_acp/side_sessions.rs)
+keeps each side's parent identity, public ACP ID and pending request mappings
+on that logical connection. Each side uses its own adapter process, drawn
+from the same machine-wide process limit as regular bindings. Its events
+bypass the parent recorder and session manager. Both side close and parent close wait for their
+respective side processes to exit.
+[Managed machine protocol](../acp-host/docs.md#managed-machine-connection)
+
 #### Goal ownership and MCP routing
 
 Thread goals are Nori-owned live state. The harness is the authority for their

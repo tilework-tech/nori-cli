@@ -233,7 +233,7 @@ journal records. With `[host] managed = false`,
    `agentCapabilities.sessionCapabilities.fork` when supported.
    [Machine framing](src/remote/standard_wire.rs)
 
-The agent owns the session IDs within its binding. `session/new` and
+For regular sessions, the adapter assigns the ACP IDs. Unmarked `session/new` and
 `session/fork` return agent-issued IDs. An agent that advertises fork can
 receive a `session/fork` for an inactive session from its `session/list`,
 even before the client loads or resumes it. Use the admitted cwd for new,
@@ -251,8 +251,8 @@ agent and returns its result or full error, including any `data`.
 along with agent-provided modes, config options, models and metadata.
 [Session routing](../harness/src/managed_acp.rs)
 
-The immutable launch controls the following additions independently. Switching
-all four off preserves the agent's original updates, caller-supplied prompt
+The immutable launch controls the following additions independently for
+regular sessions. Switching all four off preserves the agent's original updates, caller-supplied prompt
 metadata and MCP servers. [Optional session services](../harness/src/backend/managed_additions.rs)
 
 | Addition | Effect when enabled |
@@ -352,6 +352,57 @@ its logical ACP connection to continue.
 
 See the [machine invocation and recovery control operations](../cli/src/host/docs.md#managed-recovery-control).
 
+### Rebuilt side sessions on a managed binding
+
+A machine provisioned with `[host] side_sessions = true` advertises
+`rebuiltSideSessions: 1` alongside `standardAcp: 1` in its managed-host
+capabilities. The default is off. Sessions checks this field and its rollout
+policy before opening a side thread. The host checks OS and adapter support on each launch. On the parent's existing
+`/managed` connection, send the following frame after the regular ACP session
+has opened. All identifiers in this example are synthetic.
+
+```json
+{"bindingId":"sample","generation":1,"message":{"jsonrpc":"2.0","id":12,"method":"session/new","params":{"cwd":"/srv/fixture/bindings/sample/work","mcpServers":[],"_meta":{"nori.dev/sideSession":{"bindingId":"sample","generation":1,"sessionId":"parent-0"}}}}}
+```
+
+The presence of `nori.dev/sideSession` requests a side session. Its
+`sessionId` names the open parent ACP session. Both scope fields must match
+the envelope. Use the parent binding’s canonical `cwd`. Omit `mcpServers` and
+`additionalDirectories` or supply empty lists. A malformed or stale
+parent reference receives `-32602`. The host refuses a marked open when
+side sessions are disabled.
+
+A successful response contains a new opaque `result.sessionId` and echoes the
+parent object in `result._meta["nori.dev/sideSession"]`. Use that new ID on
+`session/prompt`, `session/cancel` and `session/close`. Updates and permission
+requests identify the side in `params.sessionId` and the parent in
+`params._meta["nori.dev/sideSession"]`. Reply to a permission request using
+the JSON-RPC ID the host sent on that logical connection. The host maps
+that ID back to the issuing process, whose own request IDs can repeat
+across siblings. Several side sessions may have outstanding
+requests at once, including while a parent prompt awaits permission.
+
+The host initializes the side adapter with empty client capabilities and opens
+one session in the pinned workspace. It selects a restrictive advertised mode
+before returning the side ID. If setup fails, the host reaps the process and
+returns an error. A caller can reassert the selected mode with `session/set_mode`. Changing
+it returns `-32602`.
+The host forwards side updates, permission requests and correlated replies.
+The host disables recording, prompt echo, status additions and client MCP for
+this process. Side IDs have no delegation or restore path and are omitted from
+session lists. [Side routing](../harness/src/managed_acp/side_sessions.rs)
+
+Each rebuilt side occupies one process slot until its process exits. At
+capacity, `session/new` returns `-32017` with the message `machine full`.
+The parent and its outstanding turn continue. Closing a side ends just that
+thread. Closing its parent waits for the side processes to exit. Loss of
+the parent process, the logical ACP connection or the host also ends them.
+[Admission and confinement](../cli/src/host/docs.md#managed-launch-control-v1)
+
+Sessions supplies conversation context in the first prompt, correlates side
+events separately from the parent transcript, answers permission requests
+and closes idle side threads. The host keeps side identity in memory.
+
 ### Things to Know
 
 - The dependency direction is `nori-harness -> nori-acp-host`, never the
@@ -441,36 +492,3 @@ See the [machine invocation and recovery control operations](../cli/src/host/doc
   projection belongs privately in a consumer such as the TUI.
 
 Created and maintained by Nori.
-
-### Rebuilt side sessions on a managed binding
-
-A machine provisioned with `[host] side_sessions = true` advertises
-`rebuiltSideSessions: 1` alongside `standardAcp: 1` in its managed-host
-capabilities. The default is off. Sessions checks the capability and its own
-rollout policy before opening a side thread. On the parent's existing
-`/managed` connection, send the following frame after the regular ACP session
-has opened. All identifiers in this example are synthetic.
-
-```json
-{"bindingId":"sample","generation":1,"message":{"jsonrpc":"2.0","id":12,"method":"session/new","params":{"cwd":"/srv/fixture/bindings/sample/work","mcpServers":[],"_meta":{"nori.dev/sideSession":{"bindingId":"sample","generation":1,"sessionId":"parent-0"}}}}}
-```
-
-The presence of `nori.dev/sideSession` requests a side session. Its
-`sessionId` names the open parent ACP session. Both scope fields must match
-the envelope. A malformed or stale reference fails the request. An unmarked
-`session/new` retains the regular adapter contract.
-
-A successful response contains a new opaque `result.sessionId` and echoes the
-parent object in `result._meta["nori.dev/sideSession"]`. Use that new ID on
-`session/prompt`, `session/cancel` and `session/close`. Updates and permission
-requests identify the side in `params.sessionId` and the parent in
-`params._meta["nori.dev/sideSession"]`. Reply to a permission request using
-the JSON-RPC ID the host sent. Several side sessions may have outstanding
-requests at once, including while a parent prompt awaits permission.
-
-Each rebuilt session uses one process slot. A full machine returns
-`-32017` with the message `machine full`. A launch that cannot enforce a
-read-only workspace returns an error before the caller receives a side ID.
-The host owns process cleanup. Sessions owns history selection, restrictive
-mode selection, permission decisions, and idle close. It sends bounded
-conversation history in the first prompt and keeps the side exchange in memory.
