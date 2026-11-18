@@ -589,7 +589,7 @@ reasoning summaries) renders through
 [`markdown_render`](src/markdown_render.rs), which splits the source into prose
 and GFM table segments ([`table_segments`](src/markdown_render/table_segments.rs)).
 Tables go through the shared `nori_tui_components::Markdown` renderer and prose
-through the local writer. Neither emits blank lines at its edges, so the segment
+through the local writer. Neither pads its output with blank lines, so the segment
 join owns table spacing: it skips empty segments and puts exactly one blank line
 between non-empty ones, whatever blank lines the source had. The message's own
 first and last lines stay unpadded because the transcript already separates

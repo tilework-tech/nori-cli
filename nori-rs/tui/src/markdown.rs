@@ -154,24 +154,12 @@ mod tests {
     }
 
     #[test]
-    fn table_between_tight_prose_gets_one_blank_line_on_each_side() {
-        let src = format!("Here is the inventory:\n{INVENTORY_TABLE}That is all for today.\n");
-        assert_eq!(
-            render_trimmed(&src),
-            inventory_with(
-                &["Here is the inventory:", ""],
-                &["", "That is all for today."]
-            )
-        );
-    }
-
-    #[test]
-    fn table_between_loose_prose_keeps_exactly_one_blank_line_on_each_side() {
+    fn table_between_prose_gets_exactly_one_blank_line_on_each_side() {
         let expected = inventory_with(
             &["Here is the inventory:", ""],
             &["", "That is all for today."],
         );
-        for gap in ["\n", "\n\n\n"] {
+        for gap in ["", "\n", "\n\n\n"] {
             let src = format!(
                 "Here is the inventory:\n{gap}{INVENTORY_TABLE}{gap}That is all for today.\n"
             );

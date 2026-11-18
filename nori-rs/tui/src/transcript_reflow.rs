@@ -343,7 +343,7 @@ mod tests {
         let gap_before_next_cell = |lines: &[String], last_message_line: &str| {
             let end = lines
                 .iter()
-                .position(|line| line.ends_with(last_message_line))
+                .position(|line| line.contains(last_message_line))
                 .expect("message line present");
             lines[end + 1..].to_vec()
         };
@@ -354,7 +354,7 @@ mod tests {
         let prose = transcript("Here is the inventory:\n\nThat is all for today.\n");
 
         assert_eq!(
-            gap_before_next_cell(&table, "Banana  Yellow  5"),
+            gap_before_next_cell(&table, "Banana"),
             gap_before_next_cell(&prose, "That is all for today."),
         );
         insta::assert_snapshot!(table.join("\n"));

@@ -120,7 +120,7 @@ pub(crate) fn render_markdown_text_with_width_and_cwd(
         if rendered.lines.is_empty() {
             continue;
         }
-        // Neither renderer emits blank lines at its edges, so the blank line separating a table
+        // Neither renderer pads its output with blank lines, so the blank line separating a table
         // from its neighbours is added here, once. The edges of the whole message stay unpadded
         // because history cells are already separated by the transcript.
         if !lines.is_empty() {
