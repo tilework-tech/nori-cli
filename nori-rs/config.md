@@ -85,25 +85,46 @@ injected value takes precedence over the agent's own configured model (for
 example `~/.claude/settings.json`) for Nori-spawned sessions — Nori's
 `[default_models]` is authoritative there by design.
 
-## Tool call display: `[tui] tool_output`
+## Tool call display: `tool_output`
 
 ```toml
 [tui]
-tool_output = "compact"   # or "full"
+tool_output = "compact"   # or "full" (the default)
+
+[projects."/home/me/work/app"]
+trust_level = "trusted"
+tool_output = "compact"   # this project only
 ```
 
-`compact` (the default) shows each tool call as one scannable line: a status
-dot (green ok, red failed, animated while running), the command summarized to
-its command names with arguments shown as `…`, and the last line of output
-underneath. Read-only commands and file reads/searches collapse into one
-`Explored N reads · M searches` line, and edits show only the file and line
-counts. `full` shows every command in full with syntax highlighting, all of its
-output, every exploring step, and edit diffs.
+`full` (the default) shows every command in full with syntax highlighting, all
+of its output, every exploring step, and edit diffs. `compact` shows each tool
+call as one scannable line: a status dot (green ok, red failed, animated while
+running), the command summarized to its command names with arguments shown as
+`…`, and the last line of output underneath. Read-only commands and file
+reads/searches collapse into one `Explored N reads · M searches` line, and
+edits show only the file and line counts.
 
-The transcript view (Ctrl+T or Ctrl+O) always shows the
-full form. The first-run directory-trust screen asks this question after the
-trust choice, preselecting Compact if you allowed Nori to work without approval
-and Full if you required approval; Esc skips it without writing the key.
+The setting is read in this order, first match wins:
+
+1. `-c tui.tool_output=...` on the command line.
+2. `tool_output` in the active project's `[projects."<path>"]` entry. The
+   active project is the entry for the exact working directory, otherwise the
+   entry for its git repository root; linked worktrees use the main
+   repository's entry.
+3. `[tui] tool_output`.
+4. `full`.
+
+The transcript view (Ctrl+T or Ctrl+O) always shows the full form. `nori
+attach` does not read project settings and always shows full output.
+
+After the first-run directory-trust question, Nori asks "Use compact tool
+output in this project?" with Full preselected. Choosing Compact writes
+`tool_output = "compact"` to the same project entry the trust answer was saved
+under (the git repository root, or the working directory outside a
+repository). Choosing Full or pressing Esc writes nothing. The question is
+skipped when compact output already applies (from `[tui] tool_output` or the
+command line). Directories that are already trusted never see the trust
+screen, so they keep full output unless you set the key yourself.
 
 ## Several sessions in one TUI: `[features] multi_session`
 

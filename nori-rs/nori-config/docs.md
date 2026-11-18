@@ -36,10 +36,23 @@ scrollback after width changes. It defaults to `true`; the `/settings` toggle
 persists to this same key, so startup configuration and runtime changes share
 one source of truth.
 
-`[tui] tool_output` resolves to `NoriConfig::tool_output` (`ToolOutput::Compact`
-by default, or `Full`). The TUI's tool call cells read it to choose the inline
-history view; the transcript overlay always shows the full view. The TUI's
-directory-trust onboarding step can write this key with `NoriConfigEdits`.
+`NoriConfig::tool_output` (`ToolOutput::Full` by default, or `Compact`) picks
+the inline view for the TUI's tool call cells; the transcript overlay always
+shows the full view. It resolves from, in order: a `-c tui.tool_output=...`
+command-line override, the active project's `tool_output`, `[tui]
+tool_output`, then `Full`. Because `-c` overrides are merged into the parsed
+`[tui]` table before resolution, the loader checks the raw overrides for
+`tui.tool_output` to know whether the `[tui]` value came from the command line
+and must beat the project value.
+
+`[projects."<path>"]` entries deserialize to `ProjectConfig`, which holds
+`trust_level` and `tool_output`. The active project is the entry for the exact
+cwd, otherwise the entry for the primary git root (found through the git common
+dir, so linked worktrees share the main repository's entry). `NoriConfigEdits`
+writes both fields under the same canonicalized project key through
+`set_project_trust_level` and `set_project_tool_output`; the shared helper also
+re-formats a project written as an inline table so an added field stays tidy.
+The TUI's directory-trust onboarding step uses both edits.
 
 `[features]` holds opt-in behavior flags, resolved to plain booleans on
 `NoriConfig`. `multi_session` (default `false`) lets the TUI hold several
