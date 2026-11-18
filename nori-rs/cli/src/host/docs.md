@@ -187,10 +187,10 @@ when the host restarts.
 Each text frame carries one JSON-RPC 2.0 object. Send
 `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"observe":true}}`
 first. Require `result.agentCapabilities._meta["nori.dev/managedHost"]`
-to contain `{"version":1,"maxSessions":2}` for the shared configuration above
+to contain `{"version":1,"maxSessions":2,"standardAcp":1}` for the shared configuration above
 (or `maxSessions: 1` for the dedicated configuration).
-The ordinary local host omits that key. This capability covers process launch
-and status. The control socket accepts `_nori/session/ensure`,
+The ordinary local host omits that key. The `standardAcp` field advertises version 1 of the scoped ACP transport at
+`/managed`. The control socket accepts `_nori/session/ensure`,
 `_nori/session/status` and `_nori/host/stop` from any authenticated,
 initialized connection. The transport also implements its existing
 `_nori/control/status` and `_nori/control/take` role operations.
@@ -256,9 +256,9 @@ own handshake.
   Supply variables such as `PATH` explicitly when the adapter needs them.
   Subprocesses inherit the binding environment. Host `.env` values stay
   in the host. Managed launches bypass host-configured hooks and MCP servers.
-- All four `additions` booleans are required. Version 1 accepts `false`
-  for prompt echo, status events, transcript recording and client MCP
-  injection. Requesting an unsupported addition fails before spawning.
+- All four `additions` booleans are required. With `standardAcp: 1`,
+  each independently controls its host service. See the [machine wire and
+  switch inventory](../../../acp-host/docs.md#managed-machine-connection).
 
 **Interpret replies.** A successful OS spawn returns a receipt immediately,
 even if the child exits before the caller receives it. For the example above
@@ -334,8 +334,8 @@ adopting ancestor reaps them. See [process supervision](../../../acp-host/src/co
   file validation after a reconnect authentication failure. Explicit endpoints
   require `--host` together with `--token-file` and receive no local credential
   rediscovery callback. Token contents never appear in startup output.
-- The authenticated listener exposes only `/sessions`; it does not change the
-  legacy interactive remote-control listener. See the
+- The authenticated listener serves `/sessions` and adds `/managed` when
+  managed launches are enabled. For the local attach protocol, see the
   [wire contract](../../../../docs/remote-control.md#11-background-host-and-attached-terminals).
 - Delegation requests pass through `ManagedRemoteHost` to the same manager
   used by local sessions. Child sessions consume the ordinary session cap

@@ -164,6 +164,39 @@ impl HostService {
 }
 
 impl ManagedAgent for HostService {
+    fn standard_acp_enabled(&self) -> bool {
+        self.launches.is_some()
+    }
+
+    async fn open_standard_acp(
+        &self,
+        binding_id: &str,
+        generation: i64,
+    ) -> anyhow::Result<nori_harness::managed_acp::StandardAcpConnection> {
+        use nori_harness::backend::managed_additions::ManagedSessionAdditions;
+        let launch = self
+            .launches
+            .as_ref()
+            .context("managed host is disabled")?
+            .take_connection(binding_id, generation)?;
+        let options = &launch.spec.additions;
+        let additions = ManagedSessionAdditions::new(
+            launch.home.join(".nori/cli"),
+            launch.cwd.clone(),
+            launch.spec.agent.clone(),
+            options.recording,
+            options.client_mcp,
+        );
+        Ok(nori_harness::managed_acp::connect(
+            launch.stdout,
+            launch.stdin,
+            launch.cwd,
+            additions,
+            options.prompt_echo,
+            options.status_events,
+        ))
+    }
+
     async fn request(&self, request: Value) -> ManagedReply {
         let method = request["method"].as_str().unwrap_or_default();
         if self.launches.is_none()

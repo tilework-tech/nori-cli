@@ -158,10 +158,6 @@ impl Layout {
 impl LaunchSpec {
     fn command(&self, cwd: &Path, home: &Path) -> anyhow::Result<Command> {
         ensure!(
-            self.additions == HostAdditions::default(),
-            "requested host addition is unsupported"
-        );
-        ensure!(
             [
                 &self.agent,
                 &self.project_id,
@@ -269,6 +265,7 @@ impl Launch {
 pub struct ManagedHostCapabilities {
     version: i32,
     max_sessions: usize,
+    standard_acp: i32,
 }
 
 pub struct ManagedLaunches {
@@ -318,6 +315,7 @@ impl ManagedLaunches {
         ManagedHostCapabilities {
             version: 1,
             max_sessions: self.limit,
+            standard_acp: 1,
         }
     }
 

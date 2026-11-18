@@ -56,19 +56,21 @@ pub(super) fn router<M: ManagedAgent>(
     control: Arc<Mutex<HostControl>>,
     shutdown: CancellationToken,
 ) -> axum::Router {
-    axum::Router::new()
-        .route("/sessions", axum::routing::any(route::<M>))
-        .with_state(HostState {
-            host,
-            token: token.into(),
-            instance: uuid::Uuid::new_v4(),
-            control,
-            generation: Arc::new(AtomicI64::new(0)),
-            shutdown,
-        })
+    let mut router = axum::Router::new().route("/sessions", axum::routing::any(route::<M, false>));
+    if host.standard_acp_enabled() {
+        router = router.route("/managed", axum::routing::any(route::<M, true>));
+    }
+    router.with_state(HostState {
+        host,
+        token: token.into(),
+        instance: uuid::Uuid::new_v4(),
+        control,
+        generation: Arc::new(AtomicI64::new(0)),
+        shutdown,
+    })
 }
 
-async fn route<M: ManagedAgent>(
+async fn route<M: ManagedAgent, const STANDARD: bool>(
     State(state): State<HostState<M>>,
     headers: HeaderMap,
     upgrade: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
@@ -102,8 +104,19 @@ async fn route<M: ManagedAgent>(
     let instance = state.instance.to_string();
     let response = upgrade
         .on_upgrade(move |socket| async move {
-            let client = state.generation.fetch_add(1, Ordering::Relaxed);
             let cancel = state.shutdown.child_token();
+            if STANDARD {
+                tokio::select! {
+                    _ = cancel.cancelled() => {},
+                    result = super::standard_wire::serve(socket, state.host) => {
+                        if let Err(error) = result {
+                            tracing::debug!(%error, "standard ACP machine connection ended");
+                        }
+                    }
+                }
+                return;
+            }
+            let client = state.generation.fetch_add(1, Ordering::Relaxed);
             tokio::select! {
                 _ = cancel.cancelled() => {},
                 result = serve(socket, &state, client, cancel.clone()) => {
