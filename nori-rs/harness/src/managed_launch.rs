@@ -22,6 +22,8 @@ use tokio::process::Command;
 
 use crate::ConversationId;
 
+#[cfg(target_os = "linux")]
+mod codex_home;
 mod side_sandbox;
 
 #[derive(Deserialize)]
@@ -174,7 +176,13 @@ impl Layout {
 }
 
 impl LaunchSpec {
-    fn command(&self, cwd: &Path, home: &Path, read_only: bool) -> anyhow::Result<Command> {
+    pub(crate) fn uses_private_codex_home(&self) -> bool {
+        use nori_acp_host::registry::AgentKind;
+        AgentKind::from_slug(&self.agent) == Some(AgentKind::Codex)
+            && self.adapter.version == "2.7.0"
+    }
+
+    fn command(&self, cwd: &Path, home: &Path, rebuilt_side: bool) -> anyhow::Result<Command> {
         ensure!(
             [
                 &self.agent,
@@ -208,8 +216,13 @@ impl LaunchSpec {
                 "invalid or reserved environment key"
             );
         }
-        if read_only || self.workspace_read_only {
-            return side_sandbox::command(self, cwd, home);
+        if rebuilt_side || self.workspace_read_only {
+            return side_sandbox::command(
+                self,
+                cwd,
+                home,
+                rebuilt_side && self.uses_private_codex_home(),
+            );
         }
         let mut command = Command::new(&self.adapter.path);
         command

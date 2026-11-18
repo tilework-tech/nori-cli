@@ -4,12 +4,17 @@ use super::LaunchSpec;
 use tokio::process::Command;
 
 #[cfg(not(target_os = "linux"))]
-pub(super) fn command(_: &LaunchSpec, _: &Path, _: &Path) -> anyhow::Result<Command> {
+pub(super) fn command(_: &LaunchSpec, _: &Path, _: &Path, _: bool) -> anyhow::Result<Command> {
     anyhow::bail!("read-only workspace enforcement unavailable on this platform")
 }
 
 #[cfg(target_os = "linux")]
-pub(super) fn command(spec: &LaunchSpec, cwd: &Path, home: &Path) -> anyhow::Result<Command> {
+pub(super) fn command(
+    spec: &LaunchSpec,
+    cwd: &Path,
+    home: &Path,
+    private_codex_home: bool,
+) -> anyhow::Result<Command> {
     use anyhow::Context;
     use anyhow::ensure;
     use std::ffi::OsStr;
@@ -22,10 +27,6 @@ pub(super) fn command(spec: &LaunchSpec, cwd: &Path, home: &Path) -> anyhow::Res
     use std::process::Stdio;
 
     const BWRAP: &str = "/usr/bin/bwrap";
-    ensure!(
-        Path::new(BWRAP).is_file(),
-        "read-only workspace enforcement requires {BWRAP}"
-    );
     for mount in [Path::new("/dev"), Path::new("/proc")] {
         ensure!(
             ![cwd, home]
@@ -57,33 +58,48 @@ pub(super) fn command(spec: &LaunchSpec, cwd: &Path, home: &Path) -> anyhow::Res
         set_env(key, OsStr::new(value))?;
     }
     set_env("HOME", home.as_os_str())?;
-    set_env("CODEX_HOME", home.join(".codex").as_os_str())?;
+    let private_codex = private_codex_home
+        .then(|| Path::new("/dev/shm").join(format!("codex-{}", uuid::Uuid::new_v4())));
+    if let Some(private) = &private_codex {
+        super::codex_home::validate_launch(spec)?;
+        set_env("CODEX_HOME", private.as_os_str())?;
+        set_env("CODEX_SQLITE_HOME", private.as_os_str())?;
+    } else {
+        set_env("CODEX_HOME", home.join(".codex").as_os_str())?;
+    }
     set_env("NORI_HOME", home.join(".nori/cli").as_os_str())?;
     set_env("TMPDIR", OsStr::new("/dev/shm"))?;
     settings.rewind()?;
 
     let mut command = Command::new(BWRAP);
+    command.env_clear().args([
+        "--unshare-user",
+        "--unshare-pid",
+        "--unshare-ipc",
+        "--disable-userns",
+        "--cap-drop",
+        "ALL",
+        "--die-with-parent",
+        "--new-session",
+        "--ro-bind",
+        "/",
+        "/",
+        "--dev",
+        "/dev",
+        "--proc",
+        "/proc",
+        "--tmpfs",
+        "/dev/shm",
+    ]);
+    let mut descriptors = match private_codex {
+        Some(private) => super::codex_home::mount_inputs(&mut command, home, &private)?,
+        None => Vec::new(),
+    };
+    ensure!(
+        Path::new(BWRAP).is_file(),
+        "read-only workspace enforcement requires {BWRAP}"
+    );
     command
-        .env_clear()
-        .args([
-            "--unshare-user",
-            "--unshare-pid",
-            "--unshare-ipc",
-            "--disable-userns",
-            "--cap-drop",
-            "ALL",
-            "--die-with-parent",
-            "--new-session",
-            "--ro-bind",
-            "/",
-            "/",
-            "--dev",
-            "/dev",
-            "--proc",
-            "/proc",
-            "--tmpfs",
-            "/dev/shm",
-        ])
         .arg("--chdir")
         .arg(cwd)
         .arg("--args")
@@ -93,12 +109,15 @@ pub(super) fn command(spec: &LaunchSpec, cwd: &Path, home: &Path) -> anyhow::Res
         .args(&spec.adapter.args)
         .current_dir(cwd)
         .stderr(Stdio::null());
-    // SAFETY: fcntl is async-signal-safe. The closure owns the open descriptor
-    // until spawn returns; Bubblewrap consumes it before executing the adapter.
+    descriptors.push(settings);
+    // SAFETY: fcntl is async-signal-safe. The closure owns the open descriptors
+    // until spawn returns; Bubblewrap consumes them before executing the adapter.
     unsafe {
         command.pre_exec(move || {
-            if libc::fcntl(settings.as_raw_fd(), libc::F_SETFD, 0) < 0 {
-                return Err(std::io::Error::last_os_error());
+            for file in &descriptors {
+                if libc::fcntl(file.as_raw_fd(), libc::F_SETFD, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
             }
             Ok(())
         });

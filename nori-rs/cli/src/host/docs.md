@@ -254,7 +254,8 @@ own handshake.
   The executable receives only its arguments, working directory and child
   environment. Unknown request or spec fields are rejected.
 - The host clears inherited environment, applies `spec.env`, and sets
-  `HOME=home`, `CODEX_HOME=home/.codex` and `NORI_HOME=home/.nori/cli`.
+  `HOME=home` and `NORI_HOME=home/.nori/cli`. The default `CODEX_HOME`
+  is `home/.codex`.
   Those names and `USERPROFILE` are reserved case-insensitively. Adapter
   arguments and environment entries must be free of NUL characters.
   Supply variables such as `PATH` explicitly when the adapter needs them.
@@ -267,11 +268,25 @@ own handshake.
   A read-only launch requires Linux with `/usr/bin/bwrap` and permission to
   create the required namespaces and mounts. The launcher mounts the root
   read-only, supplies private device and process mounts, and sets
-  `TMPDIR=/dev/shm` on a private writable tmpfs. The pinned home remains
-  readable for credentials. Adapters that require writes to the real home
-  cannot use this layout. A side open must complete the sandboxed ACP
-  handshake before the host returns its ID.
+  `TMPDIR=/dev/shm` on a private writable tmpfs. Both the pinned workspace
+  and persistent `HOME` are read-only. A side open must complete the
+  sandboxed ACP handshake before the host returns its ID.
   [Read-only launch](../../../harness/src/managed_launch/side_sandbox.rs)
+- A marked rebuilt side pinned to codex-acp 2.7.0 gets a fresh
+  `CODEX_HOME` and `CODEX_SQLITE_HOME` in its private tmpfs. Codex CLI
+  0.166.0 opens its installation ID for writing during initialization.
+  Each side creates its own installation ID and databases, which disappear
+  at exit. Ordinary launches, including explicit `workspaceReadOnly`
+  launches and launches with side sessions disabled, use `home/.codex`.
+- This pin supports a credential-free check only. The host rejects
+  credential references, binding credential files and settings whose
+  credential scope it cannot verify. It checks the binding's `config.toml`
+  and mounts the validated bytes read-only alongside supported instruction
+  files and directories. It skips recognized runtime state and refuses
+  unsupported environment inputs, provider configuration or home entries.
+  Authenticated side sessions require a verified credential source and
+  refresh path. The smoke uses synthetic homes and no parent credentials.
+  [Codex input policy](../../../harness/src/managed_launch/codex_home.rs)
 - `[host] side_sessions` defaults to false. When enabled, the managed
   host advertises `rebuiltSideSessions: 1` and accepts marked `session/new`
   requests beside an open parent. The caller uses that parent's existing

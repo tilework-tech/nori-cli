@@ -114,27 +114,7 @@ async fn read_only_launch_pins_environment_and_isolates_scratch() {
     // Check this host's sandbox separately; a launch returning an empty stream
     // on a supported host is a failure. In a restricted CI container the
     // real-host protocol test exercises the refusal path.
-    let supported = std::process::Command::new("/usr/bin/bwrap")
-        .args([
-            "--unshare-user",
-            "--unshare-pid",
-            "--unshare-ipc",
-            "--disable-userns",
-            "--ro-bind",
-            "/",
-            "/",
-            "--proc",
-            "/proc",
-            "--dev",
-            "/dev",
-            "--tmpfs",
-            "/dev/shm",
-            "--",
-            "/bin/true",
-        ])
-        .output()
-        .is_ok_and(|result| result.status.success());
-    if supported {
+    if sandbox_available() {
         for id in ["first", "second"] {
             let mut child = launches.spawn_side("sample", 2, id).unwrap();
             child.stdin.write_all(b"probe\n").await.unwrap();
@@ -166,6 +146,225 @@ async fn read_only_launch_pins_environment_and_isolates_scratch() {
         .unwrap();
         assert_eq!(read, 0);
     } else {
+        launches.shutdown().await.unwrap();
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn sandbox_available() -> bool {
+    std::process::Command::new("/usr/bin/bwrap")
+        .args([
+            "--unshare-user",
+            "--unshare-pid",
+            "--unshare-ipc",
+            "--disable-userns",
+            "--ro-bind",
+            "/",
+            "/",
+            "--proc",
+            "/proc",
+            "--dev",
+            "/dev",
+            "--tmpfs",
+            "/dev/shm",
+            "--",
+            "/bin/true",
+        ])
+        .output()
+        .is_ok_and(|result| result.status.success())
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn codex_sides_keep_binding_inputs_and_use_independent_runtime_homes() {
+    if !sandbox_available() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let binding = root.path().join("sample");
+    let home = binding.join("home");
+    let cwd = home.join("work");
+    let provider = home.join(".codex");
+    fs::create_dir_all(&cwd).unwrap();
+    fs::create_dir(&provider).unwrap();
+    fs::write(provider.join("config.toml"), "model = 'fixture'").unwrap();
+    fs::write(provider.join("installation_id"), "parent").unwrap();
+    let launches = ManagedLaunches::from_config(
+        &nori_config::HostConfig {
+            managed: true,
+            side_sessions: true,
+            bindings_root: Some(root.path().into()),
+            max_sessions: 3,
+            ..Default::default()
+        },
+        root.path(),
+    )
+    .unwrap();
+    let script = r#"
+        read -r marker || exit 0
+        set -eu
+        test ! -e "$CODEX_HOME/auth.json"
+        test "$(cat "$CODEX_HOME/config.toml")" = "model = 'fixture'"
+        test "$(cat "$HOME/.codex/installation_id")" = parent
+        test ! -e "$CODEX_HOME/installation_id"
+        test ! -e "$CODEX_SQLITE_HOME/state.sqlite"
+        if touch "$PWD/new" || touch "$HOME/new" || echo changed >> "$CODEX_HOME/config.toml"; then exit 2; fi
+        echo "$marker" > "$CODEX_HOME/installation_id"
+        echo "$marker" > "$CODEX_SQLITE_HOME/state.sqlite"
+        echo ready
+        read -r done
+        cat "$CODEX_HOME/installation_id" "$CODEX_SQLITE_HOME/state.sqlite"
+    "#;
+    launches.ensure(serde_json::from_value(json!({
+        "commandId":"start", "conversationId":uuid::Uuid::new_v4(), "bindingId":"sample", "generation":1,
+        "spec":{"agent":"codex","projectId":"project","runId":"run","cwd":cwd,"home":home,
+            "env":{"CODEX_SQLITE_HOME":cwd},
+            "adapter":{"path":"/bin/sh","version":"2.7.0","args":["-c",script]},
+            "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
+    })).unwrap()).unwrap();
+    let mut siblings = Vec::new();
+    for id in ["lilac", "moss"] {
+        let child = launches.spawn_side("sample", 1, id).unwrap();
+        let mut reader = BufReader::new(child.stdout).lines();
+        let mut stdin = child.stdin;
+        stdin.write_all(format!("{id}\n").as_bytes()).await.unwrap();
+        assert_eq!(reader.next_line().await.unwrap().as_deref(), Some("ready"));
+        siblings.push((id, stdin, reader));
+    }
+    for (id, mut stdin, mut reader) in siblings {
+        stdin.write_all(b"done\n").await.unwrap();
+        assert_eq!(reader.next_line().await.unwrap().as_deref(), Some(id));
+        assert_eq!(reader.next_line().await.unwrap().as_deref(), Some(id));
+    }
+    assert_eq!(
+        fs::read_to_string(provider.join("installation_id")).unwrap(),
+        "parent"
+    );
+    assert_eq!(
+        fs::read_to_string(provider.join("config.toml")).unwrap(),
+        "model = 'fixture'"
+    );
+    assert!(!provider.join("state.sqlite").exists());
+    assert!(fs::read_dir(&cwd).unwrap().next().is_none());
+    launches.shutdown().await.unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn codex_refuses_unverified_credential_scopes_before_spawning() {
+    let root = tempfile::tempdir().unwrap();
+    let binding = root.path().join("sample");
+    let home = binding.join("home");
+    let cwd = binding.join("workspace");
+    let provider = home.join(".codex");
+    fs::create_dir_all(&cwd).unwrap();
+    fs::create_dir_all(&provider).unwrap();
+    for (file, content, refs, env, reason) in [
+        ("auth.json", "synthetic", json!([]), json!({}), "auth.json"),
+        (
+            ".credentials.json",
+            "synthetic",
+            json!([]),
+            json!({}),
+            ".credentials.json",
+        ),
+        (
+            "config.toml",
+            "",
+            json!(["synthetic-ref"]),
+            json!({}),
+            "credential references",
+        ),
+        (
+            "config.toml",
+            "cli_auth_credentials_store = 'keyring'",
+            json!([]),
+            json!({}),
+            "cli_auth_credentials_store",
+        ),
+        (
+            "config.toml",
+            "cli_auth_credentials_store = 'auto'",
+            json!([]),
+            json!({}),
+            "cli_auth_credentials_store",
+        ),
+        (
+            "config.toml",
+            "",
+            json!([]),
+            json!({"DEFAULT_AUTH_REQUEST":"fixture"}),
+            "DEFAULT_AUTH_REQUEST",
+        ),
+    ] {
+        fs::write(provider.join(file), content).unwrap();
+        let launches = ManagedLaunches::from_config(
+            &nori_config::HostConfig {
+                managed: true,
+                side_sessions: true,
+                bindings_root: Some(root.path().into()),
+                ..Default::default()
+            },
+            root.path(),
+        )
+        .unwrap();
+        launches.ensure(serde_json::from_value(json!({
+            "commandId":"start", "conversationId":uuid::Uuid::new_v4(), "bindingId":"sample", "generation":1,
+            "spec":{"agent":"codex","projectId":"project","runId":"run","cwd":cwd,"home":home,"credentialRefs":refs,"env":env,
+                "adapter":{"path":"/bin/cat","version":"2.7.0","args":[]},
+                "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
+        })).unwrap()).unwrap();
+        let refusal = launches
+            .spawn_side("sample", 1, "side")
+            .err()
+            .expect("unsupported launch must be refused before spawn");
+        assert!(
+            refusal.to_string().contains(reason),
+            "expected {reason:?} in {refusal}"
+        );
+        launches.shutdown().await.unwrap();
+        fs::remove_file(provider.join(file)).unwrap();
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn ordinary_read_only_codex_keeps_its_credential_home_with_either_flag_value() {
+    if !sandbox_available() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let binding = root.path().join("sample");
+    let home = binding.join("home");
+    let cwd = binding.join("work");
+    fs::create_dir_all(home.join(".codex")).unwrap();
+    fs::create_dir(&cwd).unwrap();
+    fs::write(home.join(".codex/auth.json"), "scope-fixture").unwrap();
+    for enabled in [false, true] {
+        let launches = ManagedLaunches::from_config(
+            &nori_config::HostConfig {
+                managed: true,
+                side_sessions: enabled,
+                bindings_root: Some(root.path().into()),
+                ..Default::default()
+            },
+            root.path(),
+        )
+        .unwrap();
+        launches.ensure(serde_json::from_value(json!({
+            "bindingId":"sample","generation":1,"conversationId":uuid::Uuid::new_v4(),"commandId":"regular",
+            "spec":{"agent":"codex","projectId":"p","runId":"r","cwd":cwd,"home":home,"workspaceReadOnly":true,
+                "credentialRefs":["synthetic-file"],"adapter":{"path":"/bin/sh","version":"2.7.0",
+                "args":["-c",r#"test "$CODEX_HOME" = "$HOME/.codex" && ! touch "$PWD/probe" && cat "$CODEX_HOME/auth.json""#]},
+                "additions":{"clientMcp":false,"recording":false,"statusEvents":false,"promptEcho":false}}
+        })).unwrap()).unwrap();
+        let child = launches.take_connection("sample", 1).unwrap();
+        let mut result = String::new();
+        BufReader::new(child.stdout)
+            .read_line(&mut result)
+            .await
+            .unwrap();
+        assert_eq!(result, "scope-fixture");
         launches.shutdown().await.unwrap();
     }
 }

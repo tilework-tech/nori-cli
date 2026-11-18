@@ -382,6 +382,15 @@ that ID back to the issuing process, whose own request IDs can repeat
 across siblings. Several side sessions may have outstanding
 requests at once, including while a parent prompt awaits permission.
 
+For a marked side pinned to codex-acp 2.7.0, the host verifies the
+credential-free authentication boundary. After `initialize` it requires an
+`_auth/status_update` reporting `authStatus.kind = none` before sending
+`session/new`. The expected result is an error reporting
+`Authentication required`. A missing or active account status, or an
+unexpectedly successful `session/new`, returns an unsupported error.
+This path ends the process without issuing a side ID. Authenticated Codex
+turns remain blocked. [Codex launch policy](../cli/src/host/docs.md#managed-launch-control-v1)
+
 The host initializes the side adapter with empty client capabilities and opens
 one session in the pinned workspace. It selects the advertised mode ID
 `read-only`, or `plan` if available instead. For ACP `configOptions`, the

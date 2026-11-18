@@ -153,12 +153,41 @@ async fn open(
     mut init: Value,
     cwd: &Path,
     model: Option<&str>,
+    codex_probe: bool,
 ) -> Result<(Value, String, FixedMode)> {
     // A side process can ask for permissions. Filesystem and terminal services
     // supplied by an ACP client would run outside its read-only mount.
     init["clientCapabilities"] = json!({});
-    exchange(acp, "initialize", init, None).await?;
+    let initialized = exchange(acp, "initialize", init, None).await?;
+    if codex_probe {
+        // This pin reports its account after the initialize response.
+        // Account labels and API key status cannot identify the parent's credential.
+        const UNSUPPORTED: &str =
+            "unsupported Codex side session: credential scope cannot be confirmed";
+        ensure!(
+            initialized["agentCapabilities"]["_meta"]["authStatus"].is_object(),
+            UNSUPPORTED
+        );
+        loop {
+            let message = acp.output.recv().await.context(UNSUPPORTED)?;
+            ensure!(
+                message.get("id").is_none() && message["method"].is_string(),
+                UNSUPPORTED
+            );
+            if message["method"] == "_auth/status_update" {
+                ensure!(
+                    message["params"]["authStatus"]["kind"] == "none",
+                    UNSUPPORTED
+                );
+                break;
+            }
+        }
+    }
     let mut result = exchange(acp, "session/new", json!({"cwd":cwd,"mcpServers":[]}), None).await?;
+    ensure!(
+        !codex_probe,
+        "unsupported Codex side session: session/new succeeded without a verified credential scope"
+    );
     let sid = result["sessionId"]
         .as_str()
         .filter(|id| !id.is_empty())
@@ -279,6 +308,7 @@ pub(super) fn start_side(
         );
         let send = |message| events.send((public_sid.clone(), Some(message)));
         let run = async {
+            let codex_probe = spec.uses_private_codex_home();
             let setup = tokio::time::timeout(
                 Duration::from_secs(30),
                 open(
@@ -286,10 +316,15 @@ pub(super) fn start_side(
                     init_params,
                     &connection.cwd,
                     spec.model.as_deref(),
+                    codex_probe,
                 ),
             )
             .await
-            .context("side adapter setup timed out")
+            .context(if codex_probe {
+                "unsupported Codex side session: credential-free setup timed out"
+            } else {
+                "side adapter setup timed out"
+            })
             .and_then(|inner| inner);
             match setup {
                 Ok((mut result, internal_sid, mode)) => {
@@ -406,9 +441,54 @@ mod tests {
             json!({}),
             Path::new("/work"),
             None,
+            false,
         )
         .await
         .map(|(result, _, _)| result)
+    }
+
+    #[tokio::test]
+    async fn pinned_codex_only_probes_the_unauthenticated_boundary() {
+        for (kind, reply, attempted_new, reason) in [
+            ("account", json!({}), false, "unsupported"),
+            (
+                "none",
+                json!({"error":{"code":-32000,"message":"Authentication required"}}),
+                true,
+                "Authentication required",
+            ),
+            (
+                "none",
+                json!({"result":{"sessionId":"fixture","modes":{"currentModeId":"read-only","availableModes":[{"id":"read-only"}]}}}),
+                true,
+                "unsupported",
+            ),
+        ] {
+            let (input, mut requests) = mpsc::channel(4);
+            let (responses, output) = mpsc::channel(4);
+            responses
+                .try_send(
+                    json!({"id":0,"result":{"agentCapabilities":{"_meta":{"authStatus":{}}}}}),
+                )
+                .unwrap();
+            responses
+                .try_send(
+                    json!({"method":"_auth/status_update","params":{"authStatus":{"kind":kind}}}),
+                )
+                .unwrap();
+            let mut reply = reply;
+            reply["id"] = json!(0);
+            responses.try_send(reply).unwrap();
+            drop(responses);
+            let mut connection = StandardAcpConnection { input, output };
+            let error = open(&mut connection, json!({}), Path::new("/work"), None, true)
+                .await
+                .err()
+                .expect("credential scope is unverified");
+            assert!(error.to_string().contains(reason), "{error}");
+            assert_eq!(requests.try_recv().unwrap()["method"], "initialize");
+            assert_eq!(requests.try_recv().is_ok(), attempted_new);
+        }
     }
 
     fn mode_options(current: &str) -> Value {
