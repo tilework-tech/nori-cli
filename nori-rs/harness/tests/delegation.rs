@@ -1157,3 +1157,71 @@ async fn result_queued_before_parent_crash_is_redelivered_after_resume() {
     .expect("queued result survives parent crash");
     m.shutdown(Duration::ZERO).await;
 }
+
+#[tokio::test]
+#[serial]
+async fn cold_import_keeps_delegation_identity_and_terminal_state_without_launching_a_process() {
+    let _echo = Env::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let old_home = tempfile::tempdir().unwrap();
+    let m = manager(2);
+    let mut parent = start(&m, old_home.path(), true);
+    status(&m, &parent.conversation_id, SessionStatus::Ready).await;
+    let delegation = m
+        .delegate(
+            &parent.conversation_id,
+            "mock-model".into(),
+            "inspect synthetic sample".into(),
+        )
+        .await
+        .unwrap();
+    status(&m, &id(&delegation), SessionStatus::Done).await;
+    let done = terminal(&m, &parent.conversation_id, &delegation.request_id).await;
+    wait_parent_reply(&mut parent, "inspect synthetic sample").await;
+    status(&m, &parent.conversation_id, SessionStatus::Ready).await;
+    let child_checkpoint = m.checkpoint_session(&id(&delegation), false).await.unwrap();
+    assert!(child_checkpoint.private_transcript.is_none());
+    let parent_checkpoint = m
+        .checkpoint_session(&parent.conversation_id, true)
+        .await
+        .unwrap();
+    assert!(
+        parent_checkpoint
+            .private_transcript
+            .as_deref()
+            .unwrap()
+            .contains("inspect synthetic sample")
+    );
+    m.shutdown(Duration::ZERO).await;
+    drop(old_home);
+    let new_home = tempfile::tempdir().unwrap();
+    let fresh = manager(2);
+    let policy = nori_config::AskForApproval::Never;
+    fresh
+        .import_checkpoint(&child_checkpoint, new_home.path(), policy)
+        .unwrap();
+    fresh
+        .import_checkpoint(&parent_checkpoint, new_home.path(), policy)
+        .unwrap();
+    let child = fresh.get(&id(&delegation)).unwrap();
+    assert_eq!(
+        (child.parent, child.source, child.status),
+        (
+            Some(parent.conversation_id),
+            SessionSource::Session,
+            SessionStatus::Done
+        )
+    );
+    assert_eq!(fresh.delegations(&parent.conversation_id), vec![done]);
+    assert_eq!(fresh.free_slots(), 2);
+    assert_eq!(
+        fresh.get(&parent.conversation_id).unwrap().status,
+        SessionStatus::Failed
+    );
+    assert!(fresh.handle(&parent.conversation_id).is_none());
+    assert!(
+        fresh
+            .import_checkpoint(&parent_checkpoint, new_home.path(), policy)
+            .is_err()
+    );
+    fresh.shutdown(Duration::ZERO).await;
+}

@@ -9,6 +9,8 @@ use std::path::PathBuf;
 
 use serde_json;
 use tokio::fs::File;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncSeekExt;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
@@ -33,8 +35,16 @@ use super::types::now_iso8601;
 /// Commands sent to the background writer task.
 enum TranscriptCmd {
     Write(Box<TranscriptEntry>),
-    Flush { ack: oneshot::Sender<()> },
-    Shutdown { ack: oneshot::Sender<()> },
+    Flush {
+        durable: bool,
+        ack: oneshot::Sender<io::Result<()>>,
+    },
+    Checkpoint {
+        ack: oneshot::Sender<io::Result<String>>,
+    },
+    Shutdown {
+        ack: oneshot::Sender<io::Result<()>>,
+    },
 }
 
 /// Records transcript entries for a session.
@@ -160,6 +170,7 @@ impl TranscriptRecorder {
         let transcript_path = sessions_dir.join(format!("{session_id}.jsonl"));
         let file = tokio::fs::OpenOptions::new()
             .create(true)
+            .read(true)
             .write(true)
             .truncate(true)
             .open(&transcript_path)
@@ -235,6 +246,7 @@ impl TranscriptRecorder {
         let transcript_path = sessions_dir.join(format!("{session_id}.jsonl"));
         let mut file = tokio::fs::OpenOptions::new()
             .create(true)
+            .read(true)
             .write(true)
             .truncate(true)
             .open(&transcript_path)
@@ -304,13 +316,34 @@ impl TranscriptRecorder {
 
     /// Flush all pending writes.
     pub async fn flush(&self) -> io::Result<()> {
+        self.flush_writer(false).await
+    }
+
+    pub(crate) async fn durable_flush(&self) -> io::Result<()> {
+        self.flush_writer(true).await
+    }
+
+    async fn flush_writer(&self, durable: bool) -> io::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(TranscriptCmd::Flush { ack: tx })
+            .send(TranscriptCmd::Flush { durable, ack: tx })
             .await
             .map_err(|e| IoError::other(format!("failed to queue transcript flush: {e}")))?;
         rx.await
-            .map_err(|e| IoError::other(format!("failed waiting for transcript flush: {e}")))
+            .map_err(|e| IoError::other(format!("failed waiting for transcript flush: {e}")))?
+    }
+
+    pub(crate) async fn checkpoint(&self) -> io::Result<String> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(TranscriptCmd::Checkpoint { ack: tx })
+            .await
+            .map_err(|error| {
+                IoError::other(format!("could not queue transcript checkpoint: {error}"))
+            })?;
+        rx.await.map_err(|error| {
+            IoError::other(format!("transcript checkpoint interrupted: {error}"))
+        })?
     }
 
     /// Graceful shutdown.
@@ -321,7 +354,7 @@ impl TranscriptRecorder {
             .await
             .map_err(|e| IoError::other(format!("failed to queue transcript shutdown: {e}")))?;
         rx.await
-            .map_err(|e| IoError::other(format!("failed waiting for transcript shutdown: {e}")))
+            .map_err(|e| IoError::other(format!("failed waiting for transcript shutdown: {e}")))?
     }
 
     /// Get the path to this session's transcript file.
@@ -370,16 +403,40 @@ async fn run_writer_loop(mut file: File, mut rx: mpsc::Receiver<TranscriptCmd>) 
                 let line = TranscriptLine::new(*entry);
                 write_line(&mut file, &line).await?;
             }
-            TranscriptCmd::Flush { ack } => {
-                if let Err(e) = file.flush().await {
-                    let _ = ack.send(());
-                    return Err(e);
+            TranscriptCmd::Flush { durable, ack } => {
+                let result = async {
+                    file.flush().await?;
+                    if durable {
+                        file.sync_data().await?;
+                    }
+                    Ok(())
                 }
-                let _ = ack.send(());
+                .await;
+                let failed = result.is_err();
+                let _ = ack.send(result);
+                if failed {
+                    break;
+                }
+            }
+            TranscriptCmd::Checkpoint { ack } => {
+                let result = async {
+                    file.flush().await?;
+                    file.sync_data().await?;
+                    file.rewind().await?;
+                    let mut data = String::new();
+                    file.read_to_string(&mut data).await?;
+                    Ok(data)
+                }
+                .await;
+                // A failed read can leave the next write positioned inside the transcript.
+                if result.is_err() && file.seek(std::io::SeekFrom::End(0)).await.is_err() {
+                    let _ = ack.send(result);
+                    break;
+                }
+                let _ = ack.send(result);
             }
             TranscriptCmd::Shutdown { ack } => {
-                let _ = file.flush().await;
-                let _ = ack.send(());
+                let _ = ack.send(file.flush().await);
                 return Ok(());
             }
         }
@@ -603,4 +660,29 @@ mod tests {
             _ => panic!("Expected User entry"),
         }
     }
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn checkpoint_refuses_an_unsyncable_transcript() -> anyhow::Result<()> {
+    let file = File::options().write(true).open("/dev/null").await?;
+    let (tx, rx) = mpsc::channel(2);
+    let recorder = TranscriptRecorder {
+        tx,
+        session_id: "fixture".into(),
+        project_id: "fixture".into(),
+        transcript_path: "/dev/null".into(),
+    };
+    let writer = tokio::spawn(run_writer_loop(file, rx));
+    assert!(
+        recorder.checkpoint().await.is_err(),
+        "fsync failed but checkpoint succeeded"
+    );
+    assert!(
+        recorder.durable_flush().await.is_err(),
+        "fsync failed but binding recorder barrier succeeded"
+    );
+    drop(recorder);
+    writer.await??;
+    Ok(())
 }

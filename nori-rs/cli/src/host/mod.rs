@@ -1,5 +1,7 @@
 //! Background session host commands and local discovery.
 
+mod recovery_control;
+mod recovery_history;
 mod service;
 mod session_lookup;
 mod state;
@@ -367,7 +369,13 @@ async fn serve(
         max_sessions: config.max_sessions,
         ..Default::default()
     });
+    let recovery = if launches.is_some() {
+        Some(recovery_control::RecoveryControl::open(&files.directory)?)
+    } else {
+        None
+    };
     let host = Arc::new(HostService {
+        recovery,
         launches,
         managed: ManagedRemoteHost::new(manager.clone()),
         manager,

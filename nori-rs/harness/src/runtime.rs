@@ -179,6 +179,9 @@ enum HarnessCommand {
     SubscribeEvents {
         response_tx: oneshot::Sender<mpsc::Receiver<SessionEvent>>,
     },
+    SnapshotTranscript {
+        response_tx: oneshot::Sender<anyhow::Result<String>>,
+    },
     /// Flush the session transcript to disk (write barrier).
     FlushTranscript {
         response_tx: oneshot::Sender<anyhow::Result<()>>,
@@ -632,6 +635,11 @@ impl HarnessHandle {
         response_rx
             .await
             .map_err(|_| anyhow::Error::new(HarnessTransportClosed("ACP agent did not respond")))
+    }
+
+    pub(crate) async fn snapshot_transcript(&self) -> anyhow::Result<String> {
+        self.request(|response_tx| HarnessCommand::SnapshotTranscript { response_tx })
+            .await
     }
 
     /// Flush the session transcript to disk and wait for the write barrier.
@@ -1180,6 +1188,21 @@ pub(crate) fn launch_session_from(
                     }
                     HarnessCommand::SubscribeEvents { response_tx } => {
                         let _ = response_tx.send(event_fanout.subscribe());
+                    }
+                    HarnessCommand::SnapshotTranscript { response_tx } => {
+                        let result = async {
+                            let recorder = backend_for_agent
+                                .transcript_recorder_cell()
+                                .read()
+                                .await
+                                .clone()
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!("private recovery transcript is unavailable")
+                                })?;
+                            Ok(recorder.checkpoint().await?)
+                        }
+                        .await;
+                        let _ = response_tx.send(result);
                     }
                     HarnessCommand::FlushTranscript { response_tx } => {
                         let _ = response_tx.send(backend_for_agent.flush_transcript().await);

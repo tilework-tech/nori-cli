@@ -21,6 +21,7 @@ use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 
 pub use crate::managed_remote::ManagedRemoteHost;
+pub use nori_acp_host::recovery;
 pub use nori_acp_host::remote::HostedAgent;
 pub use nori_acp_host::remote::HostedSubscription;
 pub use nori_acp_host::remote::LoadedSession;

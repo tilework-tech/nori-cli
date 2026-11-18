@@ -34,6 +34,7 @@ pub(super) struct Delivery {
 
 #[derive(Default)]
 pub(super) struct DelegationState {
+    pub(super) history: Vec<Delegation>,
     pub(super) entries: Vec<Entry>,
     pub(super) closed: HashSet<ConversationId>,
     pub(super) deliveries: VecDeque<Delivery>,

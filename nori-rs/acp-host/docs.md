@@ -46,9 +46,10 @@ the harness through this crate) without inverting the crate dependency:
 `nori-protocol` types, and `nori-harness` implements it over `HarnessHandle`.
 [`remote/managed.rs`](src/remote/managed.rs) defines a parallel `ManagedAgent`
 boundary for session-addressed JSON-RPC requests and atomic replay/live
-subscriptions. The harness implements both interfaces; this crate owns neither
-the session registry nor replay retention. The dependency direction stays
-`nori-harness -> nori-acp-host`.
+subscriptions. The harness owns the session registry and the in-memory replay
+used by attached terminals. The managed machine transport uses a separate
+[durable journal](src/recovery/journal.rs) for acknowledged delivery to the
+broker. The dependency direction stays `nori-harness -> nori-acp-host`.
 
 ### Core Implementation
 
@@ -267,14 +268,58 @@ Once admitted, the logical connection owns the launch's single set of adapter
 pipes. If the agent rejects `initialize`, deliver its error immediately. If
 the agent keeps its pipes open, the client can retry on the same connection.
 Agent EOF or a saturated scope queue emits the close frame. Fail outstanding
-requests for that scope and continue serving its peers. Disconnecting the
-physical socket ends all its logical connections. A new connection cannot
-reclaim consumed pipes. The transport provides no replay or automatic prompt retry.
+requests for that scope and continue serving its peers. For plain ACP bindings,
+disconnecting the physical socket ends the logical connection and consumes the
+pipes. Recovery-enabled bindings retain their relay across machine socket loss.
 
 Missing or malformed scope produces a bare JSON-RPC error with `id: null`
 (`-32600`, or `-32700` for malformed JSON). Within a valid scope, an inner
 message with a valid `id` but no `method`, `result` or `error` receives a
 scoped `-32600` carrying that ID.
+
+#### Managed ACP delivery and recovery
+
+Negotiate `nori.dev/durableRecovery` version 1 on the control connection
+and select `recoveryVersion: 1` during ensure. Each main-session prompt then
+carries a stable outer `commandId`. JSON-RPC `id` still correlates one call
+and its response. The broker can change that ID when retrying the same
+command. Scope, command identity and source cursors stay outside the ACP
+message.
+
+```json
+{"bindingId":"fixture-binding","generation":1,"commandId":"turn-7","message":{"jsonrpc":"2.0","id":12,"method":"session/prompt","params":{"sessionId":"agent-session","prompt":[{"type":"text","text":"Show the fixture."}]}}}
+```
+
+- The host durably admits the command before dispatch. A retry with identical
+  method and parameters can return its recorded response under the caller's
+  current JSON-RPC ID. A conflicting command ID fails. If dispatch began and
+  the host restarted before completion was recorded, reconciliation reports
+  `interrupted`. A tool effect may already have happened.
+- A recordable live message carries an outer `source` with `bindingId`,
+  `generation`, `hostIncarnation` and `sequence`. The host commits the
+  original message and source together before delivery. The broker appends
+  both to its canonical transcript WAL, deduplicates by source, then ACKs
+  through that sequence. Replay after ACK loss has the original source,
+  including after host restart. An ACK is cumulative within one producing
+  generation and incarnation. After import its outer scope must name the
+  destination generation, even when its `source` names an older producer.
+- The first main-session setup supplies the ACP session ID used for recovery.
+  Messages from side sessions stay ephemeral. History emitted during
+  `session/load` stays out of the live journal, so loading an adapter cannot
+  append that history to the broker transcript again.
+- After machine socket loss, a durable relay keeps consuming and journaling
+  output. Reconnect the privileged control socket, retrieve unacknowledged
+  records, then send the next scoped ACP operation on the new machine socket.
+  A surviving logical connection accepts that operation on the original
+  agent pipes. A fresh process after host loss requires import and ACP
+  initialization. The control lookup can reconcile an old command while
+  its agent is offline.
+- The checksummed append log is limited to 16 MiB per binding. Compaction
+  can temporarily require space for a second bounded copy. When the host
+  cannot guarantee persistence, it rejects new work and retains the
+  committed unacknowledged records. The broker owns the canonical transcript.
+
+See the [machine invocation and recovery control operations](../cli/src/host/docs.md#managed-recovery-control).
 
 ### Things to Know
 

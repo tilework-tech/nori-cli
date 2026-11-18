@@ -28,6 +28,7 @@ use serde_json::json;
 use tokio::sync::Notify;
 
 pub(super) struct HostService {
+    pub recovery: Option<super::recovery_control::RecoveryControl>,
     pub launches: Option<ManagedLaunches>,
     pub manager: SessionManager,
     pub managed: ManagedRemoteHost,
@@ -72,16 +73,15 @@ impl HostService {
             self.stop.notify_one();
             return Ok(json!({"stopping":true}));
         }
-        if let Some(launches) = &self.launches {
+        if let (Some(launches), Some(recovery)) = (&self.launches, &self.recovery) {
             return match method {
                 "initialize" => Ok(json!({
-                    "agentCapabilities":{"_meta":{"nori.dev/managedHost":launches.capabilities()}},
+                    "agentCapabilities":{"_meta":{"nori.dev/managedHost":launches.capabilities(),"nori.dev/durableRecovery":{"version":1}}},
                     "server_info":{"name":"nori","version":env!("CARGO_PKG_VERSION")}
                 })),
-                "_nori/session/ensure" => {
-                    let request = serde_json::from_value(params.clone())
-                        .map_err(|error| LaunchRefusal::InvalidParams(error.into()))?;
-                    Ok(serde_json::to_value(launches.ensure(request)?)?)
+                "_nori/session/ensure" => recovery.ensure(launches, params.clone()).await,
+                method if method.starts_with("_nori/host/") => {
+                    recovery.control(launches, method, params).await
                 }
                 "_nori/session/status" => {
                     let scope: LaunchScope = serde_json::from_value(params.clone())?;
@@ -164,6 +164,10 @@ impl HostService {
 }
 
 impl ManagedAgent for HostService {
+    fn recovery(&self) -> Option<nori_harness::remote_agent::recovery::SharedRecovery> {
+        self.recovery.as_ref().map(|r| r.shared.clone())
+    }
+
     fn standard_acp_enabled(&self) -> bool {
         self.launches.is_some()
     }
@@ -187,6 +191,14 @@ impl ManagedAgent for HostService {
             options.recording,
             options.client_mcp,
         );
+        let additions = match self
+            .recovery
+            .as_ref()
+            .and_then(|recovery| recovery.writers(binding_id, generation))
+        {
+            Some(writers) => additions.with_barrier(writers),
+            None => additions,
+        };
         Ok(nori_harness::managed_acp::connect(
             launch.stdout,
             launch.stdin,
@@ -237,7 +249,14 @@ impl ManagedAgent for HostService {
                     Some(LaunchRefusal::InvalidParams(_)) => -32602,
                     None => -32000,
                 };
-                json!({"jsonrpc":"2.0","id":request["id"],"error":{"code":code,"message":error.to_string()}})
+                let mut body = json!({"code":code,"message":error.to_string()});
+                if matches!(method, "_nori/host/release" | "_nori/host/checkpoint")
+                    && let Some(recovery) = &self.recovery
+                    && let Some(watermarks) = recovery.saved_through(&params).await
+                {
+                    body["data"] = json!({"savedThrough":watermarks});
+                }
+                json!({"jsonrpc":"2.0","id":request["id"],"error":body})
             }
         };
         ManagedReply {

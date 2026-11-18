@@ -279,9 +279,10 @@ typed spec, including defaults. Treat it as opaque and store it with the
 receipt. Matching concurrent and later ensures return the original receipt,
 including at capacity and after exit. Reusing a binding with a different
 generation, conversation ID or spec, or assigning
-the conversation ID to another binding, returns a conflict. Launch identity
+the conversation ID to another binding, returns a conflict. Without durable recovery, launch identity
 is determined by the binding, generation, conversation UUID and spec digest,
-independently of the command ID. Preserve the supplied paths on retry. The
+independently of the command ID. A recovery-enabled generation admits one launch
+command ID. Reuse that ID. Preserve the supplied paths on retry. The
 digest covers their original spelling before filesystem canonicalization.
 
 Send `_nori/session/status` with `{"bindingId":"sample","generation":1}`
@@ -299,8 +300,9 @@ If the first acknowledgement is lost, reconnect, initialize and verify that
 stored parameters. The host checks the immutable identity and returns the
 original outcome, or performs the launch if the first request never arrived.
 Use status for the current process state, even when the recovered receipt
-says `spawned`. Reconciliation after a host restart requires external durable
-state because receipts live in memory.
+says `spawned`. For a plain launch, receipts live in memory, so reconciliation after
+a host restart requires external state. For a binding with durable recovery,
+use `_nori/host/command` to reconcile admission after restart.
 
 Use the JSON-RPC `error.code` to handle an ensure refusal.
 
@@ -326,6 +328,65 @@ On Linux, provision a PID namespace init or ancestor subreaper that waits for
 orphaned processes. The host signals the adapter's process group and waits
 for its direct child. Orphaned descendants can remain as zombies until their
 adopting ancestor reaps them. See [process supervision](../../../acp-host/src/connection/child_lifecycle.rs).
+
+#### Managed recovery control
+
+A machine supervisor can run the [managed host](#managed-launch-control-v1)
+in the foreground with `NORI_HOME=/srv/fixture/nori nori host --foreground --port 0`.
+After a restart, reread `host/state.json` and `host/token` from that home.
+Initialize the privileged `/sessions` connection with `params: {}` to claim
+control, or acquire control via `_nori/control/take`. Require both
+`result.agentCapabilities._meta["nori.dev/managedHost"].standardAcp == 1`
+and `result.agentCapabilities._meta["nori.dev/durableRecovery"].version == 1`.
+The latter advertises the acknowledged journal, durable command admission,
+checkpoint, import and release operations.
+
+Add `recoveryVersion: 1` to the top-level **params** in the ensure example
+above. Optionally include `transcriptId` there to associate the broker's
+canonical transcript with the stable public conversation UUID. Later ensures
+of that binding must continue to specify the recovery version. Recovery
+persists unacknowledged transport data even with every host addition off,
+including `spec.additions.recording`.
+[Frame layout and ACK ordering](../../../acp-host/docs.md#managed-acp-delivery-and-recovery)
+
+Every request below names `bindingId` and the current `generation`.
+
+| Method on `/sessions` | Additional parameters | Result |
+| --- | --- | --- |
+| `_nori/host/command` | `commandId` | `status` is `inFlight`, `completed` (with the recorded `response`), or `interrupted`. The lookup works after restart. An unknown command returns an error. |
+| `_nori/host/replay` | — | `records` contains unacknowledged `{source,sessionId,message}` records. |
+| `_nori/host/ack` | `source` | Returns `{}` after durably advancing the cumulative cursor for that source stream. A future sequence or stale outer generation fails. |
+| `_nori/host/checkpoint` | — | Returns `{checkpoint,watermarks}` at an idle boundary. Treat the checkpoint as opaque. Each watermark is a complete source identity. |
+| `_nori/host/import` | `checkpoint`, `launchSpec` | Accepts the exported checkpoint and the destination machine's launch spec (same shape as ensure's `spec`). Requires a newer generation. Returns `{conversationId,sessionId,continuation}`. |
+| `_nori/host/release` | `commandId` | Returns the final `{checkpoint,watermarks}` and stops this binding's process group. Other bindings, including independently bound descendants, continue running. |
+
+Checkpoint freezes new requests at a boundary with no unfinished ACP request.
+When `spec.additions.recording` is enabled, it flushes and syncs each
+binding-owned recorder through its open file handle, then verifies that the
+output watermarks still match. On checkpoint or release error, read
+`error.data.savedThrough` when present. Its source cursors identify the last
+durable output the host could verify. Only a successful checkpoint can
+advance the broker's checkpoint pointer. The broker captures the binding's
+workspace and permitted provider state separately.
+
+Reuse the same release command ID when its reply is lost. A completed release
+returns its saved export, including after restart. A busy release closes
+admission for new work. Let its existing turn finish, or explicitly cancel
+it, then retry. The host can finish a release after restart when its drained
+export reached disk before the completion receipt. An interrupted release
+without that final export requires the previous committed checkpoint.
+
+An import with `continuation: "load"` means the source recorded a main ACP
+session ID and its adapter advertised load support. The caller initializes
+the destination adapter, checks its capabilities, then requests
+`session/load` using the returned `sessionId`. The provider can reject the
+load, for example if its backing state is unavailable. With
+`continuation: "fresh"`, initialize and call `session/new`. This preserves
+the public conversation identity with fresh provider context. In either
+case, retrieve canonical conversation history through the broker. A
+per-conversation host JSONL, when required for continuation, is a private
+recovery artifact. The managed raw ACP export does not upload that JSONL.
+Recovering model context never entails submitting an interrupted prompt.
 
 ### Things to Know
 
