@@ -1,10 +1,4 @@
-//! Host session listing. On a terminal it uses the shared two-row session
-//! layout (`nori_tui_components::session_table`), the same as the session
-//! lists in the TUI and `nori attach`. Piped output keeps one row per session
-//! with complete values and no colour.
-//!
-//! Children follow their parent. Tree glyphs sit inside the title column so
-//! the other columns never move.
+//! Session-list formatting for host terminals and piped output.
 
 use nori_tui_components::session_table;
 use serde_json::Value;
