@@ -1,0 +1,1334 @@
+{
+  "testedCommit": "904de07e2c95104a4991b295c8022c9badbfd0d2",
+  "binarySha256": "23dec9e9c8925ea2af90e4e62c2c18acd3d0f497dcc9a6ff7987f007e7594a97",
+  "pty": {
+    "direct-steer": [
+      {
+        "time": 1795043950.1337194,
+        "event": "keyboard",
+        "text": "Sketch the orchard plan",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043950.2339637,
+        "event": "original-prompt-at-agent",
+        "agent_prompts": [
+          "Sketch the orchard plan"
+        ]
+      },
+      {
+        "time": 1795043951.1295624,
+        "event": "keyboard",
+        "text": "Count the cedar trees",
+        "key": "Tab"
+      },
+      {
+        "time": 1795043951.4844308,
+        "event": "tab-while-held",
+        "agent_prompts": [
+          "Sketch the orchard plan"
+        ]
+      },
+      {
+        "time": 1795043956.1864593,
+        "event": "tab-still-held",
+        "agent_prompts": [
+          "Sketch the orchard plan"
+        ]
+      },
+      {
+        "time": 1795043956.335298,
+        "event": "keyboard",
+        "text": "Focus on the western grove",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043960.0503385,
+        "event": "queue-drained",
+        "agent_prompts": [
+          "Sketch the orchard plan",
+          "Count the cedar trees"
+        ]
+      },
+      {
+        "time": 1795043960.2556052,
+        "event": "keyboard",
+        "text": "Close the orchard record",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043960.6088707,
+        "event": "subsequent-turn",
+        "agent_prompts": [
+          "Sketch the orchard plan",
+          "Count the cedar trees",
+          "Close the orchard record"
+        ]
+      },
+      {
+        "time": 1795043960.608917,
+        "event": "passed"
+      }
+    ],
+    "attach-steer": [
+      {
+        "time": 1795043969.784601,
+        "event": "keyboard",
+        "text": "/new",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043970.9869092,
+        "event": "keyboard",
+        "text": "Sketch the orchard plan",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043971.18757,
+        "event": "original-prompt-at-agent",
+        "agent_prompts": [
+          "Sketch the orchard plan"
+        ]
+      },
+      {
+        "time": 1795043971.7378056,
+        "event": "keyboard",
+        "text": "Count the cedar trees",
+        "key": "Tab"
+      },
+      {
+        "time": 1795043972.106136,
+        "event": "tab-while-held",
+        "agent_prompts": [
+          "Sketch the orchard plan"
+        ]
+      },
+      {
+        "time": 1795043977.1276212,
+        "event": "tab-still-held",
+        "agent_prompts": [
+          "Sketch the orchard plan"
+        ]
+      },
+      {
+        "time": 1795043977.4571795,
+        "event": "keyboard",
+        "text": "Focus on the western grove",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043980.7997894,
+        "event": "queue-drained",
+        "agent_prompts": [
+          "Sketch the orchard plan",
+          "Count the cedar trees"
+        ]
+      },
+      {
+        "time": 1795043981.0663927,
+        "event": "keyboard",
+        "text": "Close the orchard record",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043981.3987033,
+        "event": "subsequent-turn",
+        "agent_prompts": [
+          "Sketch the orchard plan",
+          "Count the cedar trees",
+          "Close the orchard record"
+        ]
+      },
+      {
+        "time": 1795043981.3987644,
+        "event": "passed"
+      }
+    ],
+    "direct-fallback": [
+      {
+        "time": 1795043969.4979417,
+        "event": "keyboard",
+        "text": "Sketch the orchard plan",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043969.5981963,
+        "event": "original-prompt-at-agent",
+        "agent_prompts": [
+          "Sketch the orchard plan"
+        ]
+      },
+      {
+        "time": 1795043969.826846,
+        "event": "keyboard",
+        "text": "Focus on the western grove",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043975.5391088,
+        "event": "keyboard",
+        "text": "Count the cedar trees",
+        "key": "Tab"
+      },
+      {
+        "time": 1795043975.9086707,
+        "event": "fallback-and-tab-still-held",
+        "agent_prompts": [
+          "Sketch the orchard plan"
+        ]
+      },
+      {
+        "time": 1795043975.9087663,
+        "event": "release-original"
+      },
+      {
+        "time": 1795043976.0101879,
+        "event": "queue-drained",
+        "agent_prompts": [
+          "Sketch the orchard plan",
+          "Focus on the western grove",
+          "Count the cedar trees"
+        ]
+      },
+      {
+        "time": 1795043976.871836,
+        "event": "keyboard",
+        "text": "Close the orchard record",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043976.972116,
+        "event": "subsequent-turn",
+        "agent_prompts": [
+          "Sketch the orchard plan",
+          "Focus on the western grove",
+          "Count the cedar trees",
+          "Close the orchard record"
+        ]
+      },
+      {
+        "time": 1795043976.9721656,
+        "event": "passed"
+      }
+    ],
+    "attach-fallback": [
+      {
+        "time": 1795043969.6956642,
+        "event": "keyboard",
+        "text": "/new",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043970.9029596,
+        "event": "keyboard",
+        "text": "Sketch the orchard plan",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043971.1044362,
+        "event": "original-prompt-at-agent",
+        "agent_prompts": [
+          "Sketch the orchard plan"
+        ]
+      },
+      {
+        "time": 1795043971.706305,
+        "event": "keyboard",
+        "text": "Focus on the western grove",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043977.6216245,
+        "event": "keyboard",
+        "text": "Count the cedar trees",
+        "key": "Tab"
+      },
+      {
+        "time": 1795043977.9956014,
+        "event": "fallback-and-tab-still-held",
+        "agent_prompts": [
+          "Sketch the orchard plan"
+        ]
+      },
+      {
+        "time": 1795043977.9956992,
+        "event": "release-original"
+      },
+      {
+        "time": 1795043978.0972686,
+        "event": "queue-drained",
+        "agent_prompts": [
+          "Sketch the orchard plan",
+          "Focus on the western grove",
+          "Count the cedar trees"
+        ]
+      },
+      {
+        "time": 1795043978.7441242,
+        "event": "keyboard",
+        "text": "Close the orchard record",
+        "key": "Enter"
+      },
+      {
+        "time": 1795043978.844427,
+        "event": "subsequent-turn",
+        "agent_prompts": [
+          "Sketch the orchard plan",
+          "Focus on the western grove",
+          "Count the cedar trees",
+          "Close the orchard record"
+        ]
+      },
+      {
+        "time": 1795043978.844476,
+        "event": "passed"
+      }
+    ]
+  },
+  "authenticatedHost": [
+    {
+      "provider": "claude",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 7249.4,
+      "event": "provider HTTP input",
+      "sequence": 1,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 7297.9,
+      "event": "steer receipt",
+      "status": "injected",
+      "actor": "host-controller",
+      "permissionPending": false
+    },
+    {
+      "provider": "claude",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 7341.2,
+      "event": "same-ID retry matched"
+    },
+    {
+      "provider": "claude",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 7507.5,
+      "event": "reconnected; matched original steer and queue receipts"
+    },
+    {
+      "provider": "claude",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 7544.2,
+      "event": "provider HTTP input",
+      "sequence": 2,
+      "original": 1,
+      "correction": 1,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 7748.2,
+      "event": "corrected HTTP request held",
+      "originalDoneOnWire": false,
+      "queuedSeen": false
+    },
+    {
+      "provider": "claude",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 7875.4,
+      "event": "original terminal reply",
+      "stop": "end_turn"
+    },
+    {
+      "provider": "claude",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 8083,
+      "event": "provider HTTP input",
+      "sequence": 3,
+      "original": 1,
+      "correction": 1,
+      "queued": 1,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 8428.4,
+      "event": "provider HTTP input",
+      "sequence": 4,
+      "original": 1,
+      "correction": 1,
+      "queued": 2,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 8497.5,
+      "event": "both queued inputs completed in order",
+      "terminalReplies": 3
+    },
+    {
+      "provider": "codex",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 3130.8,
+      "event": "provider HTTP input",
+      "sequence": 1,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 3238,
+      "event": "steer receipt",
+      "status": "injected",
+      "actor": "host-controller",
+      "permissionPending": false
+    },
+    {
+      "provider": "codex",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 3284,
+      "event": "same-ID retry matched"
+    },
+    {
+      "provider": "codex",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 3396.6,
+      "event": "reconnected; matched original steer and queue receipts"
+    },
+    {
+      "provider": "codex",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 3479.5,
+      "event": "provider HTTP input",
+      "sequence": 2,
+      "original": 1,
+      "correction": 1,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 3680.2,
+      "event": "corrected HTTP request held",
+      "originalDoneOnWire": false,
+      "queuedSeen": false
+    },
+    {
+      "provider": "codex",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 3817.9,
+      "event": "original terminal reply",
+      "stop": "end_turn"
+    },
+    {
+      "provider": "codex",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 4095.6,
+      "event": "provider HTTP input",
+      "sequence": 3,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 4111.4,
+      "event": "provider HTTP input",
+      "sequence": 4,
+      "original": 1,
+      "correction": 1,
+      "queued": 1,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 4312.9,
+      "event": "provider HTTP input",
+      "sequence": 5,
+      "original": 1,
+      "correction": 1,
+      "queued": 2,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "sessions",
+      "scenario": "delivery",
+      "ms": 4400.6,
+      "event": "both queued inputs completed in order",
+      "terminalReplies": 3
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 1985.5,
+      "event": "provider HTTP input",
+      "sequence": 1,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 1993.7,
+      "event": "steer receipt",
+      "status": "injected",
+      "actor": "machine-client",
+      "permissionPending": false
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 1997.3,
+      "event": "same-ID retry matched"
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 2021.6,
+      "event": "reconnected; matched original steer and queue receipts",
+      "generation": 1
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 2055.7,
+      "event": "provider HTTP input",
+      "sequence": 2,
+      "original": 1,
+      "correction": 1,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 2256.6,
+      "event": "corrected HTTP request held",
+      "originalDoneOnWire": false,
+      "queuedSeen": false
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 2368.9,
+      "event": "original terminal reply",
+      "stop": "end_turn"
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 2501.8,
+      "event": "provider HTTP input",
+      "sequence": 3,
+      "original": 1,
+      "correction": 1,
+      "queued": 1,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 2636.2,
+      "event": "provider HTTP input",
+      "sequence": 4,
+      "original": 1,
+      "correction": 1,
+      "queued": 2,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 2730,
+      "event": "both queued inputs completed in order",
+      "terminalReplies": 3
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 2257.8,
+      "event": "provider HTTP input",
+      "sequence": 1,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 2364,
+      "event": "steer receipt",
+      "status": "injected",
+      "actor": "machine-client",
+      "permissionPending": true
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 2370,
+      "event": "same-ID retry matched"
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 2370.1,
+      "event": "explicit reject_once",
+      "originalDoneOnWire": false
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 2424,
+      "event": "provider HTTP input",
+      "sequence": 2,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 2484.4,
+      "event": "provider HTTP input",
+      "sequence": 3,
+      "original": 1,
+      "correction": 1,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 2501.3,
+      "event": "original terminal reply",
+      "stop": "end_turn"
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 1548.8,
+      "event": "provider HTTP input",
+      "sequence": 1,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 1572.2,
+      "event": "steer receipt",
+      "status": "injected",
+      "actor": "machine-client",
+      "permissionPending": false
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 1572.7,
+      "event": "same-ID retry matched"
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 1639.3,
+      "event": "reconnected; matched original steer and queue receipts",
+      "generation": 1
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 1705.3,
+      "event": "provider HTTP input",
+      "sequence": 2,
+      "original": 1,
+      "correction": 1,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 1906,
+      "event": "corrected HTTP request held",
+      "originalDoneOnWire": false,
+      "queuedSeen": false
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 1991.4,
+      "event": "original terminal reply",
+      "stop": "end_turn"
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 2161.5,
+      "event": "provider HTTP input",
+      "sequence": 3,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 2183.6,
+      "event": "provider HTTP input",
+      "sequence": 4,
+      "original": 1,
+      "correction": 1,
+      "queued": 1,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 2396.6,
+      "event": "provider HTTP input",
+      "sequence": 5,
+      "original": 1,
+      "correction": 1,
+      "queued": 2,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "delivery",
+      "ms": 2504.5,
+      "event": "both queued inputs completed in order",
+      "terminalReplies": 3
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 1300.3,
+      "event": "provider HTTP input",
+      "sequence": 1,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 1363.5,
+      "event": "steer receipt",
+      "status": "injected",
+      "actor": "machine-client",
+      "permissionPending": true
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 1363.9,
+      "event": "same-ID retry matched"
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 1364,
+      "event": "explicit reject_once",
+      "originalDoneOnWire": false
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "permission",
+      "ms": 1413.4,
+      "event": "original terminal reply",
+      "stop": "cancelled"
+    }
+  ],
+  "delayedAcknowledgment": [
+    {
+      "provider": "claude",
+      "version": "0.102.0",
+      "transport": "sessions",
+      "staleTurn": "rejected",
+      "adapterReply": "injected",
+      "clientAfterTimeout": "unknown",
+      "afterReconnect": "unknown",
+      "afterLateReply": "unknown",
+      "adapterSteerWrites": 1,
+      "queuedBeforeAck": 0,
+      "queuedAfterAck": 1
+    },
+    {
+      "provider": "codex",
+      "version": "2.7.0",
+      "transport": "sessions",
+      "staleTurn": "rejected",
+      "adapterReply": "injected",
+      "clientAfterTimeout": "unknown",
+      "afterReconnect": "unknown",
+      "afterLateReply": "unknown",
+      "adapterSteerWrites": 1,
+      "queuedBeforeAck": 0,
+      "queuedAfterAck": 1
+    },
+    {
+      "provider": "claude",
+      "version": "0.102.0",
+      "transport": "managed",
+      "staleTurn": "rejected",
+      "adapterReply": "injected",
+      "clientAfterTimeout": "unknown",
+      "afterReconnect": "unknown",
+      "afterLateReply": "unknown",
+      "adapterSteerWrites": 1,
+      "queuedBeforeAck": 0,
+      "queuedAfterAck": 1
+    },
+    {
+      "provider": "codex",
+      "version": "2.7.0",
+      "transport": "managed",
+      "staleTurn": "rejected",
+      "adapterReply": "injected",
+      "clientAfterTimeout": "unknown",
+      "afterReconnect": "unknown",
+      "afterLateReply": "unknown",
+      "adapterSteerWrites": 1,
+      "queuedBeforeAck": 0,
+      "queuedAfterAck": 1
+    }
+  ],
+  "completionRace": [
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 2662.6,
+      "event": "provider HTTP input",
+      "model": "claude-opus-5-5",
+      "messages": [
+        [
+          "user",
+          null,
+          2,
+          [
+            "text",
+            "text"
+          ],
+          "O",
+          ""
+        ],
+        [
+          "system",
+          null,
+          1,
+          [
+            "text"
+          ],
+          "",
+          ""
+        ]
+      ],
+      "sequence": 1,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 2715.3,
+      "event": "steer request paused before real adapter"
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 2809.9,
+      "event": "original terminal reply",
+      "stop": "end_turn"
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 2822.3,
+      "event": "race receipt after original finished",
+      "status": "idle_queued"
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 2976.4,
+      "event": "provider HTTP input",
+      "model": "claude-opus-5-5",
+      "messages": [
+        [
+          "user",
+          null,
+          2,
+          [
+            "text",
+            "text"
+          ],
+          "O",
+          ""
+        ],
+        [
+          "system",
+          null,
+          9659,
+          "string",
+          "",
+          ""
+        ],
+        [
+          "assistant",
+          null,
+          1,
+          [
+            "text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "user",
+          null,
+          1,
+          [
+            "text"
+          ],
+          "",
+          "C"
+        ]
+      ],
+      "sequence": 2,
+      "original": 1,
+      "correction": 1,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 3006.2,
+      "event": "provider HTTP input",
+      "model": "claude-opus-5-5",
+      "messages": [
+        [
+          "user",
+          null,
+          2,
+          [
+            "text",
+            "text"
+          ],
+          "O",
+          ""
+        ],
+        [
+          "system",
+          null,
+          9659,
+          "string",
+          "",
+          ""
+        ],
+        [
+          "assistant",
+          null,
+          1,
+          [
+            "text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "user",
+          null,
+          1,
+          [
+            "text"
+          ],
+          "",
+          "C"
+        ],
+        [
+          "assistant",
+          null,
+          1,
+          [
+            "text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "user",
+          null,
+          1363,
+          "string",
+          "",
+          ""
+        ]
+      ],
+      "sequence": 3,
+      "original": 1,
+      "correction": 1,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 3028.2,
+      "event": "adapter input sequence",
+      "methods": [
+        [
+          "session/prompt",
+          "SYNTHETIC_ORIGINAL_7041"
+        ],
+        [
+          "_session/steering",
+          "SYNTHETIC_CORRECTION_9352"
+        ],
+        [
+          "session/prompt",
+          "SYNTHETIC_CORRECTION_9352"
+        ]
+      ]
+    },
+    {
+      "provider": "claude",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 3028.4,
+      "event": "single queued fallback finished"
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 1205.1,
+      "event": "provider HTTP input",
+      "model": "gpt-5.4",
+      "messages": [
+        [
+          "developer",
+          "message",
+          1,
+          [
+            "input_text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "developer",
+          "message",
+          2,
+          [
+            "input_text",
+            "input_text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "user",
+          "message",
+          1,
+          [
+            "input_text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "user",
+          "message",
+          1,
+          [
+            "input_text"
+          ],
+          "O",
+          ""
+        ]
+      ],
+      "sequence": 1,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 1256.7,
+      "event": "steer request paused before real adapter"
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 1321.2,
+      "event": "original terminal reply",
+      "stop": "end_turn"
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 1332.7,
+      "event": "race receipt after original finished",
+      "status": "idle_queued"
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 1397.3,
+      "event": "provider HTTP input",
+      "model": "gpt-5.6-luna",
+      "messages": [
+        [
+          "developer",
+          "additional_tools",
+          null,
+          null,
+          "",
+          ""
+        ],
+        [
+          "developer",
+          "message",
+          1,
+          [
+            "input_text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "developer",
+          "message",
+          2,
+          [
+            "input_text",
+            "input_text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "user",
+          "message",
+          1,
+          [
+            "input_text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "user",
+          "message",
+          1,
+          [
+            "input_text"
+          ],
+          "O",
+          ""
+        ]
+      ],
+      "sequence": 2,
+      "original": 1,
+      "correction": 0,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 1414.9,
+      "event": "provider HTTP input",
+      "model": "gpt-5.4",
+      "messages": [
+        [
+          "developer",
+          "message",
+          1,
+          [
+            "input_text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "developer",
+          "message",
+          2,
+          [
+            "input_text",
+            "input_text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "user",
+          "message",
+          1,
+          [
+            "input_text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "user",
+          "message",
+          1,
+          [
+            "input_text"
+          ],
+          "O",
+          ""
+        ],
+        [
+          "assistant",
+          "message",
+          1,
+          [
+            "output_text"
+          ],
+          "",
+          ""
+        ],
+        [
+          "user",
+          "message",
+          1,
+          [
+            "input_text"
+          ],
+          "",
+          "C"
+        ]
+      ],
+      "sequence": 3,
+      "original": 1,
+      "correction": 1,
+      "queued": 0,
+      "refused": 0
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 1465.9,
+      "event": "adapter input sequence",
+      "methods": [
+        [
+          "session/prompt",
+          "SYNTHETIC_ORIGINAL_7041"
+        ],
+        [
+          "_session/steering",
+          "SYNTHETIC_CORRECTION_9352"
+        ],
+        [
+          "session/prompt",
+          "SYNTHETIC_CORRECTION_9352"
+        ]
+      ]
+    },
+    {
+      "provider": "codex",
+      "transport": "managed",
+      "scenario": "race",
+      "ms": 1465.9,
+      "event": "single queued fallback finished"
+    }
+  ]
+}
