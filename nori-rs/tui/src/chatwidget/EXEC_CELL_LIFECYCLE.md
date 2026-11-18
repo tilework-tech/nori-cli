@@ -99,11 +99,12 @@ into one line.
 
 ## Rendering: compact and full
 
-`ClientToolCell::display_lines` is the compact view unless
-`[tui] tool_output = "full"` (`NoriConfig::tool_output`), in which case it is
-the full view. `transcript_lines` (the Ctrl+T overlay) is always full. The
-`nori attach` frontend builds cells without `with_tool_output`, so it always
-renders compact.
+`ClientToolCell::display_lines` is the full view unless
+`NoriConfig::tool_output` resolves to compact (command-line override, the
+project's `tool_output`, or `[tui] tool_output`; see
+[config.md](../../../config.md)). `transcript_lines` (the Ctrl+T/Ctrl+O
+overlay) is always full. The `nori attach` frontend builds cells without
+`with_tool_output`, so they keep `ToolOutput::default()` and render full.
 
 | Cell | Compact | Full |
 | --- | --- | --- |

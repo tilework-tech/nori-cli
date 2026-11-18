@@ -693,7 +693,7 @@ mod tests {
             ..NoriConfig::default()
         };
         config.has_explicit_approval_or_sandbox_policy = false;
-        config.active_project = ProjectConfig { trust_level: None };
+        config.active_project = ProjectConfig::default();
         config.windows_sandbox_enabled = false;
 
         let should_show = should_show_trust_screen(&config);
@@ -719,7 +719,7 @@ mod tests {
             ..NoriConfig::default()
         };
         config.has_explicit_approval_or_sandbox_policy = false;
-        config.active_project = ProjectConfig { trust_level: None };
+        config.active_project = ProjectConfig::default();
         config.windows_sandbox_enabled = true;
 
         let should_show = should_show_trust_screen(&config);
@@ -747,6 +747,7 @@ mod tests {
         config.has_explicit_approval_or_sandbox_policy = false;
         config.active_project = ProjectConfig {
             trust_level: Some(TrustLevel::Untrusted),
+            ..ProjectConfig::default()
         };
 
         let should_show = should_show_trust_screen(&config);

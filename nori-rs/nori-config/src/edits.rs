@@ -2,6 +2,7 @@
 
 use crate::CONFIG_FILE;
 use crate::McpServerConfig;
+use crate::ToolOutput;
 use crate::TrustLevel;
 use anyhow::Context;
 use anyhow::Result;
@@ -24,10 +25,25 @@ static TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
 
 enum ConfigEdit {
     Agent(String),
-    DefaultModel { agent: String, model: String },
-    ProjectTrustLevel { path: PathBuf, level: TrustLevel },
-    SetPath { path: Vec<String>, value: Value },
-    ClearPath { path: Vec<String> },
+    DefaultModel {
+        agent: String,
+        model: String,
+    },
+    ProjectTrustLevel {
+        path: PathBuf,
+        level: TrustLevel,
+    },
+    ProjectToolOutput {
+        path: PathBuf,
+        tool_output: ToolOutput,
+    },
+    SetPath {
+        path: Vec<String>,
+        value: Value,
+    },
+    ClearPath {
+        path: Vec<String>,
+    },
     ReplaceMcpServers(BTreeMap<String, McpServerConfig>),
 }
 
@@ -62,6 +78,14 @@ impl NoriConfigEdits {
         self.edits.push(ConfigEdit::ProjectTrustLevel {
             path: path.to_path_buf(),
             level,
+        });
+        self
+    }
+
+    pub fn set_project_tool_output(mut self, path: &Path, tool_output: ToolOutput) -> Self {
+        self.edits.push(ConfigEdit::ProjectToolOutput {
+            path: path.to_path_buf(),
+            tool_output,
         });
         self
     }
@@ -124,13 +148,18 @@ impl NoriConfigEdits {
                     document["default_models"][&agent] = value(model);
                 }
                 ConfigEdit::ProjectTrustLevel { path, level } => {
-                    let path = std::fs::canonicalize(&path).unwrap_or(path);
                     let trust_level = match level {
                         TrustLevel::Trusted => "trusted",
                         TrustLevel::Untrusted => "untrusted",
                     };
-                    document["projects"][path.to_string_lossy().as_ref()]["trust_level"] =
-                        value(trust_level);
+                    set_project_field(&mut document, path, "trust_level", trust_level);
+                }
+                ConfigEdit::ProjectToolOutput { path, tool_output } => {
+                    let tool_output = match tool_output {
+                        ToolOutput::Compact => "compact",
+                        ToolOutput::Full => "full",
+                    };
+                    set_project_field(&mut document, path, "tool_output", tool_output);
                 }
                 ConfigEdit::SetPath { path, value } => {
                     set_path(&mut document, &path, value);
@@ -185,6 +214,16 @@ fn replace_mcp_servers(
     }
     document.as_table_mut().insert("mcp_servers", replacement);
     Ok(())
+}
+
+/// Set one field of the `[projects]` entry keyed by the canonical project path.
+fn set_project_field(document: &mut DocumentMut, path: PathBuf, field: &str, field_value: &str) {
+    let key = std::fs::canonicalize(&path).unwrap_or(path);
+    let project = &mut document["projects"][key.to_string_lossy().as_ref()];
+    project[field] = value(field_value);
+    if let Some(inline) = project.as_inline_table_mut() {
+        inline.fmt();
+    }
 }
 
 fn set_path(document: &mut DocumentMut, path: &[String], mut value: Value) {

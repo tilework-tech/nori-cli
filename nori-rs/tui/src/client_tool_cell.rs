@@ -62,7 +62,7 @@ impl ClientToolCell {
             edit_changes,
             animations_enabled,
             start_time,
-            tool_output: ToolOutput::Compact,
+            tool_output: ToolOutput::default(),
         }
     }
 
