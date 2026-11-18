@@ -16,6 +16,7 @@ mod hosted_agent;
 mod managed;
 mod managed_wire;
 mod server;
+mod standard_wire;
 mod wire;
 
 pub use client::ManagedClient;
@@ -29,4 +30,5 @@ pub use server::parse_bind_addr;
 pub use managed::ManagedAgent;
 pub use managed::ManagedReply;
 pub use managed::ManagedSubscription;
+pub use managed::StandardAcpConnection;
 pub use managed::managed_event;

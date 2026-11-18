@@ -3802,6 +3802,7 @@ dependencies = [
 name = "nori-cli"
 version = "0.0.0"
 dependencies = [
+ "agent-client-protocol",
  "anyhow",
  "assert_cmd",
  "assert_matches",
@@ -3817,6 +3818,7 @@ dependencies = [
  "crossterm",
  "ctor 0.5.0",
  "dirs",
+ "futures",
  "insta",
  "libc",
  "nori-config",

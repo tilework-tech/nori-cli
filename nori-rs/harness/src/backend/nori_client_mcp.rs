@@ -117,15 +117,20 @@ impl From<GoalCompletion> for GoalStatus {
 /// The Arcs the `nori-client` tools operate on, shared across every request the
 /// streamable-HTTP transport spawns. Cloned (cheaply) into each per-session
 /// [`NoriClientService`] by the service factory.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct NoriClientShared {
     thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
+    harness: Option<HarnessEvents>,
+    delegation_context: Option<crate::session_manager::DelegationContext>,
+}
+
+#[derive(Clone)]
+struct HarnessEvents {
     backend_event_tx: mpsc::Sender<BackendEvent>,
     connected: Arc<AtomicBool>,
     agent_capabilities: crate::normalized::AgentCapabilitiesView,
     nori_client_advertised: bool,
     goal_ext_advertised: bool,
-    delegation_context: Option<crate::session_manager::DelegationContext>,
 }
 
 impl NoriClientShared {
@@ -139,11 +144,13 @@ impl NoriClientShared {
     ) -> Self {
         Self {
             thread_goal_state,
-            backend_event_tx,
-            connected,
-            agent_capabilities,
-            nori_client_advertised,
-            goal_ext_advertised,
+            harness: Some(HarnessEvents {
+                backend_event_tx,
+                connected,
+                agent_capabilities,
+                nori_client_advertised,
+                goal_ext_advertised,
+            }),
             delegation_context: None,
         }
     }
@@ -240,15 +247,15 @@ impl NoriClientService {
     ) -> CallToolResult {
         match result {
             Ok(goal) => {
-                let _ = self
-                    .shared
-                    .backend_event_tx
-                    .send(BackendEvent::Public(nori_protocol::SessionEvent::Nori(
-                        nori_protocol::NoriEvent::GoalChanged(Some(
-                            goal.clone().into_client_goal(),
-                        )),
-                    )))
-                    .await;
+                if let Some(harness) = &self.shared.harness {
+                    let event = nori_protocol::NoriEvent::GoalChanged(Some(
+                        goal.clone().into_client_goal(),
+                    ));
+                    let _ = harness
+                        .backend_event_tx
+                        .send(BackendEvent::Public(SessionEvent::Nori(event)))
+                        .await;
+                }
                 tool_success(serde_json::json!({ "goal": goal_json(goal) }))
             }
             Err(err) => tool_error(err),
@@ -326,16 +333,16 @@ impl ServerHandler for NoriClientService {
         request: InitializeRequestParams,
         context: RequestContext<RoleServer>,
     ) -> Result<InitializeResult, McpError> {
-        let already_connected = self.shared.connected.swap(true, Ordering::Relaxed);
-        if !already_connected {
+        if let Some(harness) = &self.shared.harness
+            && !harness.connected.swap(true, Ordering::Relaxed)
+        {
             let update = capabilities_update(
-                self.shared.agent_capabilities.clone(),
-                self.shared.nori_client_advertised,
+                harness.agent_capabilities.clone(),
+                harness.nori_client_advertised,
                 true,
-                self.shared.goal_ext_advertised,
+                harness.goal_ext_advertised,
             );
-            let _ = self
-                .shared
+            let _ = harness
                 .backend_event_tx
                 .send(BackendEvent::Public(SessionEvent::Nori(
                     nori_protocol::NoriEvent::CapabilitiesChanged(public_nori_capabilities(update)),

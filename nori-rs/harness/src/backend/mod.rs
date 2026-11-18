@@ -390,6 +390,7 @@ pub mod browser_profile;
 #[cfg(unix)]
 pub mod browser_session;
 mod goal_ext;
+pub mod managed_additions;
 mod nori_client_context;
 mod nori_client_mcp;
 pub mod prepared;
