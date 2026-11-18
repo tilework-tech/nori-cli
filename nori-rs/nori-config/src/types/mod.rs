@@ -258,10 +258,40 @@ pub enum ResolvedDistribution {
     // Future: Binary { url: String, platforms: HashMap<String, BinaryPlatformConfig> }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DedicatedRoots {
+    pub binding_id: String,
+    pub cwd: PathBuf,
+    pub home: PathBuf,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct HostConfig {
+    pub managed: bool,
+    pub max_sessions: i32,
+    pub bindings_root: Option<PathBuf>,
+    pub dedicated_roots: Option<DedicatedRoots>,
+}
+
+impl Default for HostConfig {
+    fn default() -> Self {
+        Self {
+            managed: false,
+            max_sessions: DEFAULT_MAX_SESSIONS,
+            bindings_root: None,
+            dedicated_roots: None,
+        }
+    }
+}
+
 /// TOML-deserializable config structure (all fields optional)
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct NoriConfigToml {
+    #[serde(default)]
+    pub host: HostConfig,
     /// The ACP agent to use (e.g., "claude-code", "codex", "gemini")
     /// This is persisted to track the user's agent preference.
     pub agent: Option<String>,
@@ -2194,6 +2224,7 @@ pub const DEFAULT_MAX_SESSIONS: i32 = 8;
 /// Resolved configuration with defaults applied
 #[derive(Debug, Clone)]
 pub struct NoriConfig {
+    pub host: HostConfig,
     /// The ACP agent to use (e.g., "claude-code", "codex", "gemini")
     /// Persisted to track user's agent preference across sessions
     pub agent: String,
@@ -2414,6 +2445,7 @@ impl Default for NoriConfig {
             script_timeout: ScriptTimeout::default(),
             loop_count: None,
             max_sessions: DEFAULT_MAX_SESSIONS,
+            host: HostConfig::default(),
             auto_worktree: AutoWorktree::Off,
             skillset_per_session: false,
             file_manager: None,

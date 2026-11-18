@@ -354,12 +354,21 @@ async fn serve(
     // A crash can leave discovery state, but cannot retain the OS lock.
     let _ = std::fs::remove_file(files.directory.join("state.json"));
     let token = files.new_token()?;
-    nori_harness::initialize_registry(config.agents.clone())?;
+    let launches = if config.host.managed {
+        Some(nori_harness::managed_launch::ManagedLaunches::from_config(
+            &config.host,
+            &config.nori_home,
+        )?)
+    } else {
+        nori_harness::initialize_registry(config.agents.clone())?;
+        None
+    };
     let manager = SessionManager::new(SessionManagerConfig {
         max_sessions: config.max_sessions,
         ..Default::default()
     });
     let host = Arc::new(HostService {
+        launches,
         managed: ManagedRemoteHost::new(manager.clone()),
         manager,
         config: Arc::new(config),
@@ -384,6 +393,9 @@ async fn serve(
     #[cfg(not(unix))]
     host.stop.notified().await;
     server.shutdown().await;
+    if let Some(launches) = &host.launches {
+        launches.shutdown().await?;
+    }
     let report = host.manager.shutdown(Duration::ZERO).await;
     std::fs::remove_file(files.directory.join("state.json"))?;
     anyhow::ensure!(

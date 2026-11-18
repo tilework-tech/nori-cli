@@ -27,13 +27,13 @@ use tracing::debug;
 use tracing::warn;
 
 use super::AcpSessionConfigState;
+use super::AgentProcess;
 use super::ConnectionEvent;
 use super::DelegatedRequest;
 use super::child_lifecycle::ChildHandle;
 use super::child_lifecycle::SHUTDOWN_GRACE;
 use super::child_lifecycle::STDERR_TAIL_LINES;
 use super::child_lifecycle::collect_stderr_tail;
-use super::child_lifecycle::wait_for_child_exit;
 use super::wire_log::WireDirection;
 use super::wire_log::WireLogger;
 use crate::registry::AcpAgentConfig;
@@ -449,45 +449,17 @@ impl AcpConnection {
             .envs(&config.env)
             .env_remove("CODEX_HOME")
             .current_dir(cwd)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
+            .stderr(Stdio::piped());
 
-        // Process group isolation and parent death signal.
-        #[cfg(unix)]
-        unsafe {
-            #[cfg(target_os = "linux")]
-            let parent_pid = libc::getpid();
-
-            cmd.pre_exec(move || {
-                if libc::setpgid(0, 0) == -1 {
-                    return Err(std::io::Error::last_os_error());
-                }
-
-                #[cfg(target_os = "linux")]
-                {
-                    if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) == -1 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                    if libc::getppid() != parent_pid {
-                        libc::raise(libc::SIGTERM);
-                    }
-                }
-
-                Ok(())
-            });
-        }
-
-        let mut child = cmd
-            .spawn()
+        let AgentProcess {
+            stdin,
+            stdout,
+            stderr,
+            handle: child_handle,
+        } = AgentProcess::spawn(cmd)
             .with_context(|| format!("Failed to spawn ACP agent: {}", config.command))?;
-
-        let stdout = child.stdout.take().context("Failed to take stdout")?;
-        let stdin = child.stdin.take().context("Failed to take stdin")?;
-        let stderr = child.stderr.take().context("Failed to take stderr")?;
-        let pid = child.id().context("Failed to get ACP agent pid")?;
-
+        let stderr = stderr.context("Failed to take stderr")?;
+        let pid = child_handle.pid;
         debug!("ACP agent spawned (pid: Some({pid}))");
 
         let wire_logger = if proxy_config.enabled {
@@ -530,21 +502,14 @@ impl AcpConnection {
         // child is a silent EOF that the ACP layer treats as non-terminal —
         // pending requests hang forever.
         let (event_tx, event_rx) = mpsc::channel::<ConnectionEvent>(1024);
-        let (exit_tx, exit_rx) = tokio::sync::watch::channel(None);
-        let kill_notify = std::sync::Arc::new(tokio::sync::Notify::new());
-        let group_cleanup_complete = std::sync::Arc::new(std::sync::Mutex::new(false));
         tokio::spawn({
             let event_tx = event_tx.clone();
             let stderr_tail = std::sync::Arc::clone(&stderr_tail);
-            let kill_notify = std::sync::Arc::clone(&kill_notify);
-            let group_cleanup_complete = std::sync::Arc::clone(&group_cleanup_complete);
+            let mut exit = child_handle.exit_rx.clone();
             async move {
-                let status =
-                    wait_for_child_exit(child, pid, kill_notify, group_cleanup_complete).await;
+                let _ = exit.changed().await;
+                let status = *exit.borrow();
                 debug!("ACP agent exited: {status:?}");
-                let _ = exit_tx.send(status);
-                // Give the stderr reader a moment to drain the pipe before
-                // snapshotting the tail.
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                 let _ = event_tx
                     .send(ConnectionEvent::ChildExited {
@@ -554,16 +519,6 @@ impl AcpConnection {
                     .await;
             }
         });
-        // Install ownership immediately after the child moves into the exit
-        // watcher. Until this handle is transferred into `AcpConnection`, its
-        // Drop implementation makes cancellation of the initialization future
-        // kill and reap the already-spawned process.
-        let child_handle = ChildHandle {
-            pid,
-            exit_rx,
-            kill: kill_notify,
-            group_cleanup_complete,
-        };
 
         let outgoing_logger = wire_logger.clone();
         let outgoing_sink = futures::sink::unfold(

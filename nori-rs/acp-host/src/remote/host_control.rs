@@ -86,6 +86,8 @@ impl HostControl {
             // Starting a session leaves every existing one alone, so any
             // authenticated client may do it, as with stopping the host.
             "_nori/session/list"
+            | "_nori/session/ensure"
+            | "_nori/session/status"
             | "_nori/session/subscribe"
             | "_nori/session/new"
             | "_nori/host/stop" => HostRequest::Forward(request),

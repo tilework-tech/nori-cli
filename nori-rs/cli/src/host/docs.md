@@ -6,8 +6,9 @@ Path: @/nori-rs/cli/src/host
 
 - Implements `nori host`, its administrative commands (`ls`, `stop`, `new`),
   and `nori attach` discovery so agent sessions can outlive every terminal.
-- Each host session works in its own folder: the host's start folder by
-  default, or any existing folder a client names when starting it.
+- Local sessions use the host's start folder or a folder supplied by the client.
+  A machine can enable [managed launch admission](#managed-launch-control-v1)
+  to run each binding's pinned adapter in its provisioned workspace and home.
 - Owns Unix process lifetime and private host files; protocol framing remains
   in [acp-host](../../../acp-host/docs.md), and session policy remains in the
   [harness](../../../harness/docs.md).
@@ -23,7 +24,7 @@ Path: @/nori-rs/cli/src/host
   `multi_session` and invokes the dedicated
   [terminal frontend](../../../tui/src/attach/docs.md), bypassing the
   local process-owning TUI application.
-- [HostService](service.rs) implements `ManagedAgent`, delegates envelope
+- In local mode, [HostService](service.rs) implements `ManagedAgent`, delegates envelope
   operations to `ManagedRemoteHost`, and adds lifecycle commands over the same
   `SessionManager`. Agent initialization and transcript recording follow the
   ordinary harness path.
@@ -40,6 +41,8 @@ host ls / stop / new --------------+                   SessionManager
 ```
 
 ### Core Implementation
+
+#### Local host and attach
 
 - [Startup](mod.rs) launches the same executable with a private foreground
   argument, starts a Unix process session, disconnects stdin, and redirects
@@ -131,6 +134,198 @@ host ls / stop / new --------------+                   SessionManager
   sending, and the host checks the folder exists on its machine. Without
   `--cwd` the local host starts the session in the caller's directory; a host
   named with `--host` may be another machine, so it uses its own folder.
+
+#### Managed launch control v1
+
+**Start the machine host.** Set the following in the host's
+`$NORI_HOME/config.toml`. The provisioner creates the absolute bindings
+directory before startup. For the example below it also creates
+`sample/work` and `sample/home` under that directory before ensure.
+
+```toml
+[host]
+managed = true
+max_sessions = 2
+bindings_root = "/srv/fixture/bindings"
+```
+
+Run `NORI_HOME=/srv/fixture/nori nori host --port 0` to start the detached
+loopback listener. Use the same `NORI_HOME` with `nori host stop` to stop
+all its children. The defaults are `managed = false`, a managed capacity of
+eight live adapter processes, and `$NORI_HOME/hosted-sessions` for the
+bindings root. A configured capacity must be positive. Local mode retains
+its own session cap and attach protocol.
+
+A dedicated machine can retain its existing home and workspace. Configure
+one named binding with `max_sessions = 1` and omit `bindings_root`. Before
+publishing its endpoint, the host validates the configured binding ID, checks
+that the absolute paths resolve to distinct existing directories, and checks
+the home configuration directories described below. An invalid layout fails
+startup. Ensure must supply the configured binding ID and resolve to the same
+canonical pair. The workspace may be inside the home.
+
+```toml
+[host]
+managed = true
+max_sessions = 1
+
+[host.dedicated_roots]
+binding_id = "sample"
+home = "/srv/fixture/home"
+cwd = "/srv/fixture/home/org/workspace"
+```
+
+**Discover and authenticate.** Read `endpoint` from
+`$NORI_HOME/host/state.json` and the bearer token from `$NORI_HOME/host/token`.
+Connect to that WebSocket URL (`ws://127.0.0.1:<port>/sessions`) with
+`Authorization: Bearer <token>` on the upgrade. Only the privileged machine
+adapter should receive this credential. It authorizes operations on every
+binding and host-wide stop. The upgrade response's `x-nori-host-instance`
+identifies this host incarnation. Both that identity and the token change
+when the host restarts.
+
+Each text frame carries one JSON-RPC 2.0 object. Send
+`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"observe":true}}`
+first. Require `result.agentCapabilities._meta["nori.dev/managedHost"]`
+to contain `{"version":1,"maxSessions":2}` for the shared configuration above
+(or `maxSessions: 1` for the dedicated configuration).
+The ordinary local host omits that key. This capability covers process launch
+and status. The control socket accepts `_nori/session/ensure`,
+`_nori/session/status` and `_nori/host/stop` from any authenticated,
+initialized connection. The transport also implements its existing
+`_nori/control/status` and `_nori/control/take` role operations.
+
+**Ensure a process.** ACP session setup requires a running adapter, so the
+machine sends this administrative request before the ACP client starts its
+own handshake.
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "_nori/session/ensure",
+  "params": {
+    "commandId": "launch-sample",
+    "conversationId": "00000000-0000-4000-8000-000000000001",
+    "bindingId": "sample",
+    "generation": 1,
+    "spec": {
+      "projectId": "fixture-project",
+      "runId": "fixture-run",
+      "agent": "fixture",
+      "adapter": {"path": "/opt/fixture/1.2.3/bin/fixture-acp", "version": "1.2.3"},
+      "cwd": "/srv/fixture/bindings/sample/work",
+      "home": "/srv/fixture/bindings/sample/home",
+      "additions": {"promptEcho": false, "statusEvents": false, "recording": false, "clientMcp": false}
+    }
+  }
+}
+```
+
+- The caller supplies a stable conversation UUID, a nonblank command ID, a
+  positive integer generation, and a binding ID containing ASCII letters,
+  digits, `.`, `-`, or `_`. Empty, `.`, and `..` binding IDs are invalid.
+  The conversation ID names the hosted conversation. ACP session IDs belong
+  to the downstream adapter and a binding can carry several of them.
+- The provisioner installs the versioned executable, protects it from
+  replacement, resolves credential references and prepares binding-owned
+  paths. The host executes the absolute `adapter.path` directly with
+  `adapter.args` (optional string array, default empty). The version string
+  identifies that installation in the spec. The host performs no download
+  or binary-version probe. Keep binary selection and launch requests in
+  trusted machine code.
+- The existing session-folder validator canonicalizes the absolute `cwd`
+  and `home`. Both must exist and be distinct directories. In the shared
+  layout both must be strictly beneath `bindings_root/bindingId`, and the
+  binding directory must resolve to its designated location. In either
+  layout existing `.codex`, `.nori`, and `.nori/cli` entries under the home
+  must be directories. The host rejects symlinks at those entries, including
+  dangling links. The provisioner must control directory
+  replacement during launch. Same-UID filesystem access remains subject
+  to OS permissions.
+- Optional fields inside `spec` are `model` (string or null), `env`
+  (string-to-string map), `credentialRefs` and `resumeArtifacts` (string
+  arrays). Missing maps and arrays default to empty. Project, run, agent,
+  model, credential and resume metadata stay with the immutable spec.
+  The executable receives only its arguments, working directory and child
+  environment. Unknown request or spec fields are rejected.
+- The host clears inherited environment, applies `spec.env`, and sets
+  `HOME=home`, `CODEX_HOME=home/.codex` and `NORI_HOME=home/.nori/cli`.
+  Those names and `USERPROFILE` are reserved case-insensitively. Adapter
+  arguments and environment entries must be free of NUL characters.
+  Supply variables such as `PATH` explicitly when the adapter needs them.
+  Subprocesses inherit the binding environment. Host `.env` values stay
+  in the host. Managed launches bypass host-configured hooks and MCP servers.
+- All four `additions` booleans are required. Version 1 accepts `false`
+  for prompt echo, status events, transcript recording and client MCP
+  injection. Requesting an unsupported addition fails before spawning.
+
+**Interpret replies.** A successful OS spawn returns a receipt immediately,
+even if the child exits before the caller receives it. For the example above
+the JSON-RPC `result` has the following fields.
+
+```json
+{
+  "bindingId":"sample",
+  "generation":1,
+  "conversationId":"00000000-0000-4000-8000-000000000001",
+  "specDigest":"be38062d7d4f3978fff3a223d10370562d2ff9ea813eaf46891b7b434a6b1662",
+  "state":"spawned"
+}
+```
+
+The host computes `specDigest` as lowercase hex SHA-256 of its serialized
+typed spec, including defaults. Treat it as opaque and store it with the
+receipt. Matching concurrent and later ensures return the original receipt,
+including at capacity and after exit. Reusing a binding with a different
+generation, conversation ID or spec, or assigning
+the conversation ID to another binding, returns a conflict. Launch identity
+is determined by the binding, generation, conversation UUID and spec digest,
+independently of the command ID. Preserve the supplied paths on retry. The
+digest covers their original spelling before filesystem canonicalization.
+
+Send `_nori/session/status` with `{"bindingId":"sample","generation":1}`
+to obtain the same identity and the observed state.
+
+| Status result | Caller interpretation |
+| --- | --- |
+| `spawned` | OS spawn succeeded. The host has yet to observe exit. ACP initialization can still fail. |
+| `exited` | OS spawn succeeded and the child subsequently exited. `exitCode` is present when the OS provided a numeric exit code. |
+| `spawnFailed` | The admitted OS spawn failed. Ensure and identical retries return an error and preserve that outcome. |
+| `-32000` for an unknown binding or generation | The host has no record for the requested pair. |
+
+If the first acknowledgement is lost, reconnect, initialize and verify that
+`x-nori-host-instance` still matches. Repeat the original ensure with its
+stored parameters. The host checks the immutable identity and returns the
+original outcome, or performs the launch if the first request never arrived.
+Use status for the current process state, even when the recovered receipt
+says `spawned`. Reconciliation after a host restart requires external durable
+state because receipts live in memory.
+
+Use the JSON-RPC `error.code` to handle an ensure refusal.
+
+| Code | Meaning | Caller action |
+| --- | --- | --- |
+| `-32017` | The request is valid but all live process slots are occupied. This refusal creates no record. | Try another machine. |
+| `-32602` | The ensure parameters failed decoding or admission validation. This refusal creates no record. | Correct the request or its provisioned paths. |
+| `-32000` | Other launch failure, including an immutable identity conflict or a failed OS spawn. | Inspect the diagnostic and query status for the binding and generation. A failed spawn retains its record. |
+
+**Handoff to the ACP relay.**
+`nori_harness::managed_launch::ManagedLaunches::take_connection(binding, generation)`
+hands the relay a `LaunchConnection` with the stable conversation ID,
+original immutable spec, validated canonical `cwd` and `home`, and the
+child's original stdin/stdout. It succeeds once for an admitted pair with a
+live process. The logical ACP client sends the first downstream
+`initialize` and owns session setup. The host keeps the process handle,
+observes exit and terminates managed processes during shutdown. See the
+[admission implementation](../../../harness/src/managed_launch.rs),
+[loopback cases](../../tests/host_lifecycle/managed.rs), and
+[pipe handoff test](../../../harness/tests/managed_launch.rs).
+
+On Linux, provision a PID namespace init or ancestor subreaper that waits for
+orphaned processes. The host signals the adapter's process group and waits
+for its direct child. Orphaned descendants can remain as zombies until their
+adopting ancestor reaps them. See [process supervision](../../../acp-host/src/connection/child_lifecycle.rs).
 
 ### Things to Know
 

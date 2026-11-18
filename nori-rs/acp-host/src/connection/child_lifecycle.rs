@@ -33,7 +33,7 @@ pub(super) fn collect_stderr_tail(
 /// Unix process-group leader until descendants are swept and then reaps it;
 /// teardown observes the exit via `exit_rx` and requests a kill via `kill`,
 /// instead of sharing the `Child`.
-pub(super) struct ChildHandle {
+pub struct ChildHandle {
     /// OS pid of the direct child, used to signal its process group on Unix.
     pub(super) pid: u32,
     /// Becomes `Some(status)` once the child has exited and been reaped.
@@ -45,7 +45,87 @@ pub(super) struct ChildHandle {
     pub(super) group_cleanup_complete: std::sync::Arc<std::sync::Mutex<bool>>,
 }
 
+pub struct AgentProcess {
+    pub stdin: tokio::process::ChildStdin,
+    pub stdout: tokio::process::ChildStdout,
+    pub stderr: Option<tokio::process::ChildStderr>,
+    pub handle: ChildHandle,
+}
+
+impl AgentProcess {
+    pub fn spawn(mut cmd: tokio::process::Command) -> anyhow::Result<Self> {
+        use anyhow::Context;
+        use std::process::Stdio;
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .kill_on_drop(true);
+        // Process group isolation and parent death signal.
+        #[cfg(unix)]
+        unsafe {
+            #[cfg(target_os = "linux")]
+            let parent_pid = libc::getpid();
+
+            cmd.pre_exec(move || {
+                if libc::setpgid(0, 0) == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+
+                #[cfg(target_os = "linux")]
+                {
+                    if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) == -1 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    if libc::getppid() != parent_pid {
+                        libc::raise(libc::SIGTERM);
+                    }
+                }
+
+                Ok(())
+            });
+        }
+
+        let mut child = cmd.spawn()?;
+        let pid = child.id().context("missing child pid")?;
+        let stdin = child.stdin.take().context("missing child stdin")?;
+        let stdout = child.stdout.take().context("missing child stdout")?;
+        let stderr = child.stderr.take();
+        let (exit_tx, exit_rx) = tokio::sync::watch::channel(None);
+        let handle = ChildHandle {
+            pid,
+            exit_rx,
+            kill: Default::default(),
+            group_cleanup_complete: Default::default(),
+        };
+        let kill = handle.kill.clone();
+        let group = handle.group_cleanup_complete.clone();
+        tokio::spawn(async move {
+            exit_tx.send_replace(wait_for_child_exit(child, pid, kill, group).await);
+        });
+        Ok(Self {
+            stdin,
+            stdout,
+            stderr,
+            handle,
+        })
+    }
+}
+
 impl ChildHandle {
+    pub fn has_exited(&self) -> bool {
+        self.exit_rx.borrow().is_some() || self.exit_rx.has_changed().is_err()
+    }
+
+    pub fn exit_code(&self) -> Option<i32> {
+        self.exit_rx.borrow().and_then(|status| status.code())
+    }
+
+    pub async fn stop(mut self) {
+        self.request_kill();
+        if !self.has_exited() {
+            let _ = self.exit_rx.changed().await;
+        }
+    }
+
     /// Kill the child (and, on Unix, its whole process group) without
     /// waiting. Safe to call repeatedly or after the child already exited.
     pub(super) fn request_kill(&self) {

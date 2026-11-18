@@ -225,6 +225,7 @@ impl NoriConfig {
             hotkeys: super::types::HotkeyConfig::from_toml(&toml.tui.hotkeys),
             script_timeout: toml.tui.script_timeout.unwrap_or_default(),
             loop_count: toml.tui.loop_count,
+            host: toml.host,
             max_sessions: toml
                 .tui
                 .max_sessions
