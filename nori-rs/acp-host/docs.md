@@ -382,14 +382,14 @@ that ID back to the issuing process, whose own request IDs can repeat
 across siblings. Several side sessions may have outstanding
 requests at once, including while a parent prompt awaits permission.
 
-For a marked side pinned to codex-acp 2.7.0, the host verifies the
-credential-free authentication boundary. After `initialize` it requires an
-`_auth/status_update` reporting `authStatus.kind = none` before sending
-`session/new`. The expected result is an error reporting
-`Authentication required`. A missing or active account status, or an
-unexpectedly successful `session/new`, returns an unsupported error.
-This path ends the process without issuing a side ID. Authenticated Codex
-turns remain blocked. [Codex launch policy](../cli/src/host/docs.md#managed-launch-control-v1)
+For a marked side pinned to codex-acp 2.7.0 and Codex CLI 0.166.0,
+the parent launch determines the expected `_auth/status_update` after
+`initialize`. A managed subscription requires `authStatus.kind = account`
+before `session/new`. The adapter's account label, email and plan do not
+identify a workspace or select credentials. A credential-free probe requires
+`kind = none` and ends at the adapter's authentication refusal. A conflicting
+status or unexpectedly successful credential-free open issues no side ID.
+[Codex launch policy](../cli/src/host/docs.md#managed-launch-control-v1)
 
 The host initializes the side adapter with empty client capabilities and opens
 one session in the pinned workspace. It selects the advertised mode ID
@@ -427,6 +427,45 @@ the parent process, the logical ACP connection or the host also ends them.
 Sessions supplies conversation context in the first prompt, correlates side
 events separately from the parent transcript, answers permission requests
 and closes idle side threads. The host keeps side identity in memory.
+
+#### Codex subscription source
+
+Sessions can opt an admitted parent into file-backed subscription reuse by
+setting its entire `spec.credentialRefs` array to
+`["sessions:codex-subscription-file:v1"]`. This unsigned marker derives
+its authority from the privileged, immutable parent launch spec. Side ACP
+requests cannot declare a credential source. A path, file contents or
+generic credential access reference alone cannot establish the selection.
+
+Before emitting the marker, the Sessions adapter must establish all of the
+following for the binding generation and the lifetime of every active side.
+
+- The parent actually uses the official file store at
+  `home/.codex/auth.json`. Its effective provider, store, endpoints and
+  login restrictions apply equally to the side's private provider home.
+  Keep these settings fixed. A change of connection, account, workspace or
+  policy requires closing the sides and admitting a new binding generation.
+  Sessions must also prevent a parent ACP login or gateway switch from
+  changing that selection in place. A subscription side rejects the
+  adapter's local `/logout` command and closes if it reports loss of account auth.
+- The publisher controls the stable binding directory and the auth pathname.
+  Only the selected subscription principal and workspace can supply a
+  replacement. Publish each complete, mode-0600 regular file by atomic rename
+  in that directory. Keep the broker refresh token and service credentials
+  outside the file. The worker document carries the broker-redacted refresh
+  field. The side runs no vault or token-distribution client.
+- For a native subscription, the bridge pulls the worker-bound Codex account
+  from the vault and atomically renames a sibling into its configured
+  destination. Its default destination is the worker home. For a scoped
+  connection, the token-provider runtime resolves the machine and connection
+  to its pinned account and selects a separate pairing home. Its file
+  distribution uses `vm.writeFile`, whose atomicity depends on the backend.
+  Sessions must publish the selected source into the binding file and keep it
+  current before declaring this contract. Omit the marker when selection,
+  refresh delivery, or effective file-store policy is ambiguous.
+  [Native bridge](https://github.com/tilework-tech/nori-sessions/blob/477d4da9c52e3bb2d057945098be3eb35b3c6ffa/broker/server/bootstrap/scripts/sprite-acp-bridge/server.ts) ·
+  [Vault selection](https://github.com/tilework-tech/nori-sessions/blob/477d4da9c52e3bb2d057945098be3eb35b3c6ffa/broker/server/src/inbound-events/http/endpoints/vault.ts) ·
+  [Scoped runtime](https://github.com/tilework-tech/nori-sessions/blob/477d4da9c52e3bb2d057945098be3eb35b3c6ffa/broker/server/src/core-services/credential-management/token-provider-runtime.ts)
 
 ### Things to Know
 

@@ -92,7 +92,12 @@ pub(super) fn command(
         "/dev/shm",
     ]);
     let mut descriptors = match private_codex {
-        Some(private) => super::codex_home::mount_inputs(&mut command, home, &private)?,
+        Some(private) => super::codex_home::mount_inputs(
+            &mut command,
+            home,
+            &private,
+            spec.has_subscription_file(),
+        )?,
         None => Vec::new(),
     };
     ensure!(

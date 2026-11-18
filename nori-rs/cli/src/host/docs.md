@@ -278,15 +278,22 @@ own handshake.
   Each side creates its own installation ID and databases, which disappear
   at exit. Ordinary launches, including explicit `workspaceReadOnly`
   launches and launches with side sessions disabled, use `home/.codex`.
-- This pin supports a credential-free check only. The host rejects
-  credential references, binding credential files and settings whose
-  credential scope it cannot verify. It checks the binding's `config.toml`
-  and mounts the validated bytes read-only alongside supported instruction
-  files and directories. It skips recognized runtime state and refuses
-  unsupported environment inputs, provider configuration or home entries.
-  Authenticated side sessions require a verified credential source and
-  refresh path. The smoke uses synthetic homes and no parent credentials.
-  [Codex input policy](../../../harness/src/managed_launch/codex_home.rs)
+- For a managed subscription, the host recognizes a single entry in the
+  parent's admitted `spec.credentialRefs`, `sessions:codex-subscription-file:v1`.
+  It opens the binding's `.codex` directory without following symlinks,
+  checks that `auth.json` is a regular file, and mounts the open directory
+  read-only. A symlink at the side's `$CODEX_HOME/auth.json` points to that
+  filename in the mount. Opening the file after a broker rename reaches the
+  replacement. The host never reads or copies token bytes. Codex CLI caches
+  its credentials and reloads from the file on same-account 401 recovery or
+  near expiry. A still-valid token can continue serving requests after
+  replacement. [Codex input policy](../../../harness/src/managed_launch/codex_home.rs)
+- The host mounts the exact validated binding config bytes and supported
+  instructions read-only. Unsupported provider inputs, enterprise settings
+  whose effect it cannot establish, and ambiguous credential sources cause
+  refusal. It does not force a credential store or rewrite workspace or
+  login restrictions. A binding with no credential references and no
+  credential files can run the logged-out probe. [Sessions source contract](../../../acp-host/docs.md#codex-subscription-source)
 - `[host] side_sessions` defaults to false. When enabled, the managed
   host advertises `rebuiltSideSessions: 1` and accepts marked `session/new`
   requests beside an open parent. The caller uses that parent's existing

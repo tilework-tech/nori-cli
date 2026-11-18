@@ -259,7 +259,16 @@ async fn codex_refuses_unverified_credential_scopes_before_spawning() {
     let provider = home.join(".codex");
     fs::create_dir_all(&cwd).unwrap();
     fs::create_dir_all(&provider).unwrap();
+    let subscription = json!(["sessions:codex-subscription-file:v1"]);
     for (file, content, refs, env, reason) in [
+        ("config.toml", "", subscription, json!({}), "auth.json"),
+        (
+            "auth.json",
+            "synthetic",
+            json!(["sessions:codex-subscription-file:v1", "second-source"]),
+            json!({}),
+            "credential references",
+        ),
         ("auth.json", "synthetic", json!([]), json!({}), "auth.json"),
         (
             ".credentials.json",
@@ -367,4 +376,108 @@ async fn ordinary_read_only_codex_keeps_its_credential_home_with_either_flag_val
         assert_eq!(result, "scope-fixture");
         launches.shutdown().await.unwrap();
     }
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn subscription_sides_follow_the_admitted_files_atomic_replacement() {
+    if !sandbox_available() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let binding = root.path().join("sample");
+    let home = binding.join("home");
+    let cwd = binding.join("work");
+    let provider = home.join(".codex");
+    fs::create_dir_all(&provider).unwrap();
+    fs::create_dir(&cwd).unwrap();
+    let auth = provider.join("auth.json");
+    fs::write(&auth, "subscription-generation-one\n").unwrap();
+    let config = r#"
+        model_provider = "openai"
+        cli_auth_credentials_store = "file"
+        forced_chatgpt_workspace_id = ["fixture-workspace"]
+        [projects."/synthetic/work"]
+        trust_level = "trusted"
+        [notice.model_migrations]
+        fixture = "replacement"
+    "#;
+    fs::write(provider.join("config.toml"), config).unwrap();
+    fs::write(provider.join("auth.json.456.tmp"), "unfinished").unwrap();
+    let launches = ManagedLaunches::from_config(
+        &nori_config::HostConfig {
+            managed: true,
+            side_sessions: true,
+            bindings_root: Some(root.path().into()),
+            max_sessions: 3,
+            ..Default::default()
+        },
+        root.path(),
+    )
+    .unwrap();
+    let script = r#"
+        set -eu
+        read -r marker
+        if echo changed >> "$CODEX_HOME/auth.json" || touch "$HOME/created" || touch "$PWD/created"; then exit 2; fi
+        test ! -e "$CODEX_HOME/installation_id"
+        echo "$marker" > "$CODEX_HOME/installation_id"
+        cat "$CODEX_HOME/auth.json"
+        read -r again
+        cat "$CODEX_HOME/auth.json" "$CODEX_HOME/installation_id"
+    "#;
+    launches.ensure(serde_json::from_value(json!({
+        "commandId":"start", "conversationId":uuid::Uuid::new_v4(), "bindingId":"sample", "generation":1,
+        "spec":{"agent":"codex","projectId":"project","runId":"run","cwd":cwd,"home":home,
+            "credentialRefs":["sessions:codex-subscription-file:v1"],
+            "adapter":{"path":"/bin/sh","version":"2.7.0","args":["-c",script]},
+            "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
+    })).unwrap()).unwrap();
+    let original = provider.join("auth.json.789.tmp");
+    fs::rename(&auth, &original).unwrap();
+    std::os::unix::fs::symlink(&original, &auth).unwrap();
+    let refused = launches
+        .spawn_side("sample", 1, "redirected")
+        .err()
+        .unwrap();
+    assert!(refused.to_string().contains("auth.json input type"));
+    fs::rename(&original, &auth).unwrap();
+    let mut sides = Vec::new();
+    for id in ["lilac", "moss"] {
+        let mut child = launches.spawn_side("sample", 1, id).unwrap();
+        let mut output = BufReader::new(child.stdout).lines();
+        child
+            .stdin
+            .write_all(format!("{id}\n").as_bytes())
+            .await
+            .unwrap();
+        assert_eq!(
+            output.next_line().await.unwrap().as_deref(),
+            Some("subscription-generation-one")
+        );
+        sides.push((id, child.stdin, output));
+    }
+    let replacement = provider.join("auth.json.123.tmp");
+    fs::write(&replacement, "subscription-generation-two\n").unwrap();
+    fs::rename(replacement, &auth).unwrap();
+    for (id, mut input, mut output) in sides {
+        input.write_all(b"again\n").await.unwrap();
+        assert_eq!(
+            output.next_line().await.unwrap().as_deref(),
+            Some("subscription-generation-two")
+        );
+        assert_eq!(output.next_line().await.unwrap().as_deref(), Some(id));
+        launches.stop_side("sample", 1, id).await;
+    }
+    launches.shutdown().await.unwrap();
+    assert!(!provider.join("installation_id").exists());
+    assert!(!home.join("created").exists());
+    assert!(!cwd.join("created").exists());
+    assert_eq!(
+        fs::read_to_string(provider.join("config.toml")).unwrap(),
+        config
+    );
+    assert_eq!(
+        fs::read_to_string(auth).unwrap(),
+        "subscription-generation-two\n"
+    );
 }

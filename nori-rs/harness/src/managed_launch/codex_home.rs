@@ -16,8 +16,8 @@ use super::LaunchSpec;
 
 pub(super) fn validate_launch(spec: &LaunchSpec) -> anyhow::Result<()> {
     ensure!(
-        spec.credential_refs.is_empty(),
-        "unsupported Codex side-session credential references: this pin supports credential-free launches"
+        spec.credential_refs.is_empty() || spec.has_subscription_file(),
+        "unsupported Codex side-session credential references: expected one binding subscription file"
     );
     for key in spec.env.keys() {
         ensure!(
@@ -52,6 +52,7 @@ pub(super) fn mount_inputs(
     command: &mut Command,
     binding_home: &Path,
     private_home: &Path,
+    subscription_file: bool,
 ) -> anyhow::Result<Vec<File>> {
     command.args(["--perms", "0700", "--dir"]).arg(private_home);
     let dir = match OpenOptions::new()
@@ -60,18 +61,45 @@ pub(super) fn mount_inputs(
         .open(binding_home.join(".codex"))
     {
         Ok(dir) => dir,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) if error.kind() == ErrorKind::NotFound && !subscription_file => {
+            return Ok(Vec::new());
+        }
         Err(error) => return Err(error).context("opening pinned Codex home"),
     };
     let root = format!("/proc/self/fd/{}", dir.as_raw_fd());
     let mut inputs = Vec::new();
+    if subscription_file {
+        // Keep the directory pinned. Each auth lookup sees the publisher's current inode.
+        let auth = Path::new(&root).join("auth.json");
+        ensure!(
+            std::fs::symlink_metadata(auth)
+                .context("opening binding auth.json")?
+                .is_file(),
+            "unsupported Codex side-session auth.json input type"
+        );
+        let source = private_home.with_extension("source");
+        command
+            .arg("--ro-bind-fd")
+            .arg(dir.as_raw_fd().to_string())
+            .arg(&source)
+            .arg("--symlink")
+            .arg(source.join("auth.json"))
+            .arg(private_home.join("auth.json"));
+    }
     for entry in std::fs::read_dir(root)? {
         let entry = entry?;
         let name = entry.file_name();
         let name = name.to_str().context("unsupported Codex home entry")?;
         match name {
+            "auth.json" if subscription_file => continue,
+            name if subscription_file
+                && name.starts_with("auth.json.")
+                && name.ends_with(".tmp") =>
+            {
+                continue;
+            }
             "auth.json" | ".credentials.json" => anyhow::bail!(
-                "unsupported Codex side-session credential file: {name}; this pin supports credential-free launches"
+                "unsupported Codex side-session credential file: {name}; no verified source for this file"
             ),
             "config.toml" => (),
             "skills" | "agents" | "rules" | "prompts" | "AGENTS.md" | "AGENTS.override.md" => {
@@ -99,6 +127,10 @@ pub(super) fn mount_inputs(
             // empty state even when the parent has previously run a turn.
             "tmp"
             | ".tmp"
+            | ".sqlite-maintenance.lock"
+            | ".sandbox_migration"
+            | "mcp-oauth-locks"
+            | "thread-writer-locks"
             | "installation_id"
             | "sessions"
             | "archived_sessions"
@@ -134,6 +166,16 @@ pub(super) fn mount_inputs(
                 "model" | "model_reasoning_effort" | "sandbox_mode" | "approval_policy" => {
                     value.is_str()
                 }
+                "projects" | "notice" if subscription_file => value.is_table(),
+                "model_provider" if subscription_file => value.as_str() == Some("openai"),
+                "openai_base_url" | "chatgpt_base_url" if subscription_file => value.is_str(),
+                "forced_login_method" if subscription_file => value.as_str() == Some("chatgpt"),
+                "forced_chatgpt_workspace_id" if subscription_file => {
+                    value.is_str()
+                        || value
+                            .as_array()
+                            .is_some_and(|ids| ids.iter().all(toml::Value::is_str))
+                }
                 "cli_auth_credentials_store" | "mcp_oauth_credentials_store" => {
                     value.as_str() == Some("file")
                 }
@@ -155,6 +197,9 @@ pub(super) fn mount_inputs(
             .arg(private_home.join(name));
         inputs.push(snapshot);
     }
+    if subscription_file {
+        inputs.push(dir);
+    }
     Ok(inputs)
 }
 
@@ -169,7 +214,9 @@ fn is_runtime_database(name: &str) -> bool {
     else {
         return false;
     };
-    matches!(kind, "state" | "goals" | "logs" | "memories" | "queue")
-        && !version.is_empty()
+    matches!(
+        kind,
+        "state" | "goals" | "logs" | "memories" | "queue" | "thread_history"
+    ) && !version.is_empty()
         && version.bytes().all(|b| b.is_ascii_digit())
 }

@@ -143,7 +143,14 @@ async fn select_option(
     Ok(())
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CodexAuth {
+    Unverified,
+    SubscriptionFile,
+}
+
 struct FixedMode {
+    subscription_file: bool,
     value: &'static str,
     config_id: Option<String>,
 }
@@ -153,13 +160,13 @@ async fn open(
     mut init: Value,
     cwd: &Path,
     model: Option<&str>,
-    codex_probe: bool,
+    codex_auth: Option<CodexAuth>,
 ) -> Result<(Value, String, FixedMode)> {
     // A side process can ask for permissions. Filesystem and terminal services
     // supplied by an ACP client would run outside its read-only mount.
     init["clientCapabilities"] = json!({});
     let initialized = exchange(acp, "initialize", init, None).await?;
-    if codex_probe {
+    if let Some(auth) = codex_auth {
         // This pin reports its account after the initialize response.
         // Account labels and API key status cannot identify the parent's credential.
         const UNSUPPORTED: &str =
@@ -176,7 +183,11 @@ async fn open(
             );
             if message["method"] == "_auth/status_update" {
                 ensure!(
-                    message["params"]["authStatus"]["kind"] == "none",
+                    message["params"]["authStatus"]["kind"]
+                        == match auth {
+                            CodexAuth::Unverified => "none",
+                            CodexAuth::SubscriptionFile => "account",
+                        },
                     UNSUPPORTED
                 );
                 break;
@@ -185,7 +196,7 @@ async fn open(
     }
     let mut result = exchange(acp, "session/new", json!({"cwd":cwd,"mcpServers":[]}), None).await?;
     ensure!(
-        !codex_probe,
+        codex_auth != Some(CodexAuth::Unverified),
         "unsupported Codex side session: session/new succeeded without a verified credential scope"
     );
     let sid = result["sessionId"]
@@ -267,7 +278,15 @@ async fn open(
         .await?;
         result["modes"]["currentModeId"] = json!(value);
     }
-    Ok((result, sid, FixedMode { value, config_id }))
+    Ok((
+        result,
+        sid,
+        FixedMode {
+            value,
+            config_id,
+            subscription_file: codex_auth == Some(CodexAuth::SubscriptionFile),
+        },
+    ))
 }
 
 pub(super) struct SideInput {
@@ -308,7 +327,13 @@ pub(super) fn start_side(
         );
         let send = |message| events.send((public_sid.clone(), Some(message)));
         let run = async {
-            let codex_probe = spec.uses_private_codex_home();
+            let codex_auth = spec.uses_private_codex_home().then(|| {
+                if spec.has_subscription_file() {
+                    CodexAuth::SubscriptionFile
+                } else {
+                    CodexAuth::Unverified
+                }
+            });
             let setup = tokio::time::timeout(
                 Duration::from_secs(30),
                 open(
@@ -316,12 +341,12 @@ pub(super) fn start_side(
                     init_params,
                     &connection.cwd,
                     spec.model.as_deref(),
-                    codex_probe,
+                    codex_auth,
                 ),
             )
             .await
-            .context(if codex_probe {
-                "unsupported Codex side session: credential-free setup timed out"
+            .context(if codex_auth.is_some() {
+                "unsupported Codex side session: authentication setup timed out"
             } else {
                 "side adapter setup timed out"
             })
@@ -364,6 +389,20 @@ pub(super) fn start_side(
     input
 }
 
+// Codex ACP handles this command locally before starting a model turn.
+fn is_codex_logout(request: &Value) -> bool {
+    let block = &request["params"]["prompt"][0];
+    if block["type"] != "text" {
+        return false;
+    }
+    let space = |ch: char| ch.is_whitespace() || ch == '\u{feff}';
+    block["text"]
+        .as_str()
+        .and_then(|text| text.trim_start_matches(space).strip_prefix('/'))
+        .and_then(|command| command.trim_start_matches(space).split(space).next())
+        .is_some_and(|name| name.eq_ignore_ascii_case("logout"))
+}
+
 async fn serve(
     acp: &mut StandardAcpConnection,
     requests: &mut mpsc::Receiver<Value>,
@@ -377,6 +416,10 @@ async fn serve(
             request = requests.recv() => {
                 let mut request = request?;
                 if let Some(method) = request["method"].as_str() {
+                    if mode.subscription_file && method == "session/prompt" && is_codex_logout(&request) {
+                        events.send((public_sid.into(), Some(failure(request["id"].clone(), -32602, "the binding owns this Codex subscription")))).await.ok()?;
+                        continue;
+                    }
                     if method == "session/close" {
                         return Some(json!({"jsonrpc":"2.0","id":request["id"],"result":{}}));
                     }
@@ -394,6 +437,9 @@ async fn serve(
             message = acp.output.recv() => {
                 let mut message = message?;
                 if let Some(method) = message["method"].as_str() {
+                    if mode.subscription_file && method == "_auth/status_update" && message["params"]["authStatus"]["kind"] != "account" {
+                        return None;
+                    }
                     if !matches!(method, "session/update" | "session/request_permission") || message["params"]["sessionId"] != internal_sid {
                         if let Some(id) = message.get("id") {
                             acp.input.try_send(failure(id.clone(), -32601, "client service unavailable on a side session")).ok()?;
@@ -441,10 +487,34 @@ mod tests {
             json!({}),
             Path::new("/work"),
             None,
-            false,
+            None,
         )
         .await
         .map(|(result, _, _)| result)
+    }
+
+    #[tokio::test]
+    async fn subscribed_codex_requires_account_status_before_open() {
+        for kind in ["none", "api_key", "gateway", "account"] {
+            let (input, _requests) = mpsc::channel(8);
+            let (responses, output) = mpsc::channel(8);
+            for message in [
+                json!({"id":0,"result":{"agentCapabilities":{"_meta":{"authStatus":{}}}}}),
+                json!({"method":"_auth/status_update","params":{"authStatus":{"kind":kind}}}),
+                json!({"id":0,"result":{"sessionId":"fixture","modes":{"currentModeId":"read-only","availableModes":[{"id":"read-only"}]}}}),
+            ] {
+                responses.try_send(message).unwrap();
+            }
+            let result = open(
+                &mut StandardAcpConnection { input, output },
+                json!({}),
+                Path::new("/work"),
+                None,
+                Some(CodexAuth::SubscriptionFile),
+            )
+            .await;
+            assert_eq!(result.is_ok(), kind == "account");
+        }
     }
 
     #[tokio::test]
@@ -481,10 +551,16 @@ mod tests {
             responses.try_send(reply).unwrap();
             drop(responses);
             let mut connection = StandardAcpConnection { input, output };
-            let error = open(&mut connection, json!({}), Path::new("/work"), None, true)
-                .await
-                .err()
-                .expect("credential scope is unverified");
+            let error = open(
+                &mut connection,
+                json!({}),
+                Path::new("/work"),
+                None,
+                Some(CodexAuth::Unverified),
+            )
+            .await
+            .err()
+            .expect("credential scope is unverified");
             assert!(error.to_string().contains(reason), "{error}");
             assert_eq!(requests.try_recv().unwrap()["method"], "initialize");
             assert_eq!(requests.try_recv().is_ok(), attempted_new);

@@ -182,6 +182,10 @@ impl LaunchSpec {
             && self.adapter.version == "2.7.0"
     }
 
+    pub(crate) fn has_subscription_file(&self) -> bool {
+        self.credential_refs == ["sessions:codex-subscription-file:v1"]
+    }
+
     fn command(&self, cwd: &Path, home: &Path, rebuilt_side: bool) -> anyhow::Result<Command> {
         ensure!(
             [
