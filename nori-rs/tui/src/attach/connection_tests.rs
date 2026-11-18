@@ -19,6 +19,7 @@ struct EmptyHost;
 impl ManagedAgent for EmptyHost {
     async fn request(&self, request: Value) -> ManagedReply {
         ManagedReply {
+            delivery_guard: None,
             response: json!({"jsonrpc":"2.0", "id":request["id"], "result":{}}),
             subscription: None,
         }
