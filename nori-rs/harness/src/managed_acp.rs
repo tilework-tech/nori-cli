@@ -32,7 +32,6 @@ struct Request {
 struct Relay {
     cwd: PathBuf,
     initialize: Option<Value>,
-    sessions: HashSet<String>,
     requests: HashMap<Value, Request>,
     agent_requests: HashSet<Value>,
     additions: ManagedSessionAdditions,
@@ -110,10 +109,6 @@ impl Relay {
             let Some(sid) = params["sessionId"].as_str().filter(|s| !s.is_empty()) else {
                 return Some((-32602, "sessionId is required"));
             };
-            if !matches!(method, "session/load" | "session/resume") && !self.sessions.contains(sid)
-            {
-                return Some((-32002, "unknown session in this binding"));
-            }
             if method == "session/prompt"
                 && self
                     .requests
@@ -232,11 +227,9 @@ impl Relay {
                             }
                             .context("missing agent session ID")?;
                         self.additions.opened(resolved, request.mcp).await?;
-                        self.sessions.insert(resolved.to_owned());
                     }
                     "session/close" => {
                         if let Some(sid) = sid {
-                            self.sessions.remove(sid);
                             self.additions.closed(sid).await?;
                         }
                     }
@@ -297,7 +290,6 @@ pub fn connect(
                 status,
                 output,
                 initialize: None,
-                sessions: HashSet::new(),
                 requests: HashMap::new(),
                 agent_requests: HashSet::new(),
             };

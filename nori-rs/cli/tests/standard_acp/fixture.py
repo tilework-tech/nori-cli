@@ -1,6 +1,7 @@
 """Deterministic stdio ACP peer. Every process allocates session IDs from zero."""
 import itertools
 import json
+import os
 import sys
 
 name = sys.argv[1]
@@ -8,6 +9,7 @@ ids = itertools.count()
 permissions = itertools.count(40)
 pending = {}
 sessions = set()
+saved = {"sessionId": "saved-1", "cwd": sys.argv[2] if len(sys.argv) > 2 else os.getcwd()}
 
 
 def send(**fields):
@@ -43,13 +45,18 @@ for line in sys.stdin:
             update(sid, "agent_message_chunk", f"{name}/{sid}/{decision['outcome']}")
             send(id=prompt, result={"stopReason": "end_turn", "_meta": {"decision": decision, "receivedPromptMeta": metadata}})
     elif method == "initialize":
-        caps = {"close": {}, "resume": {}}
+        if params.get("_meta", {}).get("fixture.rejectInitialize"):
+            send(id=rid, error={"code": -32603, "message": "fixture unavailable", "data": {"retry": True}})
+            continue
+        caps = {"close": {}, "resume": {}, "list": {}}
         if name == "orchid":
             caps["fork"] = {}
         send(id=rid, result={"protocolVersion": 1, "agentInfo": {"name": name, "version": "1"},
                              "agentCapabilities": {"loadSession": True,
                                                    "mcpCapabilities": {"http": True},
                                                    "sessionCapabilities": caps}, "_meta": {"receivedClient": params}})
+    elif method == "session/list":
+        send(id=rid, result={"sessions": [saved] if params.get("cwd") in (None, saved["cwd"]) else []})
     elif method == "session/new":
         sid = str(next(ids))
         sessions.add(sid)
@@ -69,7 +76,7 @@ for line in sys.stdin:
         if method == "session/load":
             update(sid, "user_message_chunk", "saved input")
         send(id=rid, result={"configOptions": options(), "_meta": {"fixture": name}})
-    elif sid not in sessions:
+    elif sid not in sessions and not (method == "session/fork" and sid == saved["sessionId"]):
         send(id=rid, error={"code": -32002, "message": "unknown session", "data": {"sid": sid}})
     elif method == "session/prompt":
         text = params["prompt"][0]["text"]

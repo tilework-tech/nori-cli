@@ -55,8 +55,18 @@ fn decode(text: &str) -> Result<(Scope, Value), Message> {
         serde_json::from_str(text).map_err(|_| unscoped_error(-32700, "invalid JSON"))?;
     let scope = Scope::deserialize(&envelope)
         .map_err(|_| unscoped_error(-32600, "expected bindingId and generation"))?;
-    if !envelope["message"].is_object() {
-        let response = failure(Value::Null, -32600, "expected a JSON-RPC message object").response;
+    let message = &envelope["message"];
+    if message.get("method").is_none()
+        && message.get("result").is_none()
+        && message.get("error").is_none()
+    {
+        let id = &message["id"];
+        let id = if id.is_string() || id.is_i64() {
+            id.clone()
+        } else {
+            Value::Null
+        };
+        let response = failure(id, -32600, "expected a JSON-RPC request or response").response;
         return Err(Outgoing {
             scope,
             message: Some(response),

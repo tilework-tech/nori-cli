@@ -180,6 +180,21 @@ async fn exercise(
             cx.send_request(CloseSessionRequest::new(first))
                 .block_task()
                 .await?;
+            if name == "orchid" {
+                let listed = cx
+                    .send_request(ListSessionsRequest::new())
+                    .block_task()
+                    .await?;
+                let [saved] = listed.sessions.as_slice() else {
+                    panic!("expected one saved session");
+                };
+                assert_eq!(saved.cwd, cwd);
+                let child = cx
+                    .send_request(ForkSessionRequest::new(saved.session_id.clone(), cwd))
+                    .block_task()
+                    .await?;
+                assert_eq!(child.meta.unwrap()["parent"], saved.session_id.to_string());
+            }
             Ok(())
         });
     tokio::time::timeout(Duration::from_secs(12), scenario)
@@ -191,9 +206,9 @@ async fn exercise(
 async fn direct(name: &'static str, cwd: &Path, barrier: Arc<Barrier>) -> Vec<Value> {
     let frames = Frames::default();
     let capture = frames.clone();
-    let agent = acp::AcpAgent::new(McpServer::Stdio(
-        McpServerStdio::new(name, "python3").args(vec![FIXTURE.into(), name.into()]),
-    ))
+    let agent = acp::AcpAgent::new(McpServer::Stdio(McpServerStdio::new(name, "python3").args(
+        vec![FIXTURE.into(), name.into(), cwd.to_str().unwrap().into()],
+    )))
     .with_debug(move |line, direction| {
         if direction == acp::LineDirection::Stdout {
             capture.record(serde_json::from_str(line).unwrap());
@@ -452,6 +467,66 @@ async fn managed_switches_control_host_additions() {
     }
 }
 
+async fn exchange(machine: &mut ManagedClient, message: Value) -> Value {
+    machine
+        .send(json!({"bindingId":"aster","generation":1,"message":message}))
+        .await
+        .unwrap();
+    let frame = tokio::time::timeout(Duration::from_secs(5), machine.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(frame["bindingId"], "aster");
+    assert_eq!(frame["generation"], 1);
+    frame["message"].clone()
+}
+
+#[tokio::test]
+async fn agent_can_accept_initialize_after_rejection_and_decides_close_retries() {
+    let (host, endpoint, token) = start(true);
+    let mut control = ManagedClient::connect(&endpoint.replace("/managed", "/sessions"), &token)
+        .await
+        .unwrap();
+    control.request("initialize", json!({})).await.unwrap();
+    let cwd = admit(&mut control, &host, "aster", [false; 4]).await;
+    let mut machine = ManagedClient::connect(&endpoint, &token).await.unwrap();
+    let request = |id, method: &str, params: Value| json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
+
+    assert_eq!(
+        exchange(
+            &mut machine,
+            request(
+                1,
+                "initialize",
+                json!({"protocolVersion":1,"_meta":{"fixture.rejectInitialize":true}})
+            )
+        )
+        .await,
+        json!({"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"fixture unavailable","data":{"retry":true}}})
+    );
+    let initialized = exchange(
+        &mut machine,
+        request(2, "initialize", json!({"protocolVersion":1})),
+    )
+    .await;
+    assert_eq!(initialized["result"]["agentInfo"]["name"], "aster");
+    let opened = exchange(
+        &mut machine,
+        request(3, "session/new", json!({"cwd":cwd,"mcpServers":[]})),
+    )
+    .await;
+    let sid = opened["result"]["sessionId"].as_str().unwrap();
+    let close = |id| request(id, "session/close", json!({"sessionId":sid}));
+    assert_eq!(
+        exchange(&mut machine, close(4)).await["result"]["_meta"]["closed"],
+        sid
+    );
+    assert_eq!(
+        exchange(&mut machine, close(5)).await,
+        json!({"jsonrpc":"2.0","id":5,"error":{"code":-32002,"message":"unknown session","data":{"sid":sid}}})
+    );
+}
+
 #[tokio::test]
 async fn malformed_machine_envelopes_leave_an_open_agent_usable() {
     let (host, endpoint, token) = start(true);
@@ -474,6 +549,20 @@ async fn malformed_machine_envelopes_leave_an_open_agent_usable() {
             machine.recv().await.unwrap()["message"]["result"]["agentInfo"]["name"],
             "aster"
         );
+
+        let incomplete = json!({"jsonrpc":"2.0","id":"incomplete","params":{}});
+        let error = exchange(&mut machine, incomplete).await;
+        assert_eq!(error["id"], "incomplete");
+        assert_eq!(error["error"]["code"], -32600);
+
+        machine.send(json!({"bindingId":"unused","generation":1,"message":{
+            "jsonrpc":"2.0","id":17,"params":{}
+        }})).await.unwrap();
+        let unopened = machine.recv().await.unwrap();
+        assert_eq!(unopened["bindingId"], "unused");
+        assert_eq!(unopened["generation"], 1);
+        assert_eq!(unopened["message"]["id"], 17);
+        assert_eq!(unopened["message"]["error"]["code"], -32600);
 
         machine.send(json!({"message":{}})).await.unwrap();
         let error = machine.recv().await.unwrap();

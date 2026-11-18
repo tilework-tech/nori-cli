@@ -215,7 +215,7 @@ response header identifies the host incarnation. With `[host] managed = false`,
    `spec.additions` booleans below. A `spawned` receipt allows the logical
    client to initialize the admitted process. ACP describes sessions after
    process creation, so launch and generation fencing use host control.
-   [Launch request and receipt](../harness/src/managed_launch.rs)
+   [Launch request and receipt](../cli/src/host/docs.md#managed-launch-control-v1)
 2. Open one `/managed` WebSocket for the machine. For each admitted scope,
    send the logical ACP client's `initialize` as its first message. For
    example, a UTF-8 text frame for an admitted binding named `orchid` is
@@ -232,18 +232,21 @@ response header identifies the host incarnation. With `[host] managed = false`,
    `agentCapabilities.sessionCapabilities.fork` when supported.
    [Machine framing](src/remote/standard_wire.rs)
 
-Within a scope, `session/new` and advertised `session/fork` return agent-issued
-session IDs. `session/load` and `session/resume` take a saved ID in the
-admitted workspace. Use the admitted cwd on all four calls. Additional
-directories must resolve inside it. An unadvertised fork returns `-32601`.
+The agent owns the session IDs within its binding. `session/new` and
+`session/fork` return agent-issued IDs. An agent that advertises fork can
+receive a `session/fork` for an inactive session from its `session/list`,
+even before the client loads or resumes it. Use the admitted cwd for new,
+fork, load and resume. Additional directories must resolve inside it.
+An unadvertised fork returns `-32601`.
 One prompt per session can be outstanding. A client can prompt one session
 while another awaits permission. Agent `session/update` notifications, including
 history before a load reply, arrive in agent order. Answer each agent
 `session/request_permission` with the matching JSON-RPC ID on the same
 logical connection. The host delegates that decision to the client.
 `session/prompt` completes with the agent's turn result or error.
-`session/cancel` is a notification. `session/close` closes the addressed
-session. `session/set_mode` and `session/set_config_option` pass through
+`session/cancel` is a notification. A repeated `session/close` reaches the
+agent and returns its result or full error, including any `data`.
+`session/set_mode` and `session/set_config_option` pass through
 along with agent-provided modes, config options, models and metadata.
 [Session routing](../harness/src/managed_acp.rs)
 
@@ -258,17 +261,20 @@ metadata and MCP servers. [Optional session services](../harness/src/backend/man
 | `recording` | Write per-session prompt and update records under `<spec.home>/.nori/cli/transcripts`, the binding’s private `NORI_HOME`. A successful session close flushes its recorder. |
 | `clientMcp` | On session open, add an authenticated loopback `nori-client` descriptor when the agent supports HTTP MCP and the caller has not supplied that name. Its server lives with the session. |
 
-Machine framing also signals the end of a logical connection. A rejected
-initialize receives a scoped JSON-RPC error (`-32001`) before
-`{"bindingId":"orchid","generation":1,"closed":true}`. End of agent output
-or a saturated scope queue also emits the close frame. The adapter can fail
-pending requests for that scope while continuing to service its peers.
+When the host refuses to open a scope, it answers the initialize request with
+`-32001` followed by `{"bindingId":"orchid","generation":1,"closed":true}`.
+Once admitted, the logical connection owns the launch's single set of adapter
+pipes. If the agent rejects `initialize`, deliver its error immediately. If
+the agent keeps its pipes open, the client can retry on the same connection.
+Agent EOF or a saturated scope queue emits the close frame. Fail outstanding
+requests for that scope and continue serving its peers. Disconnecting the
+physical socket ends all its logical connections. A new connection cannot
+reclaim consumed pipes. The transport provides no replay or automatic prompt retry.
+
 Missing or malformed scope produces a bare JSON-RPC error with `id: null`
-(`-32600`, or `-32700` for malformed JSON). A valid scope with a malformed
-inner message receives a scoped error. Disconnecting the physical socket
-ends its logical connections. Initializing a scope takes its single set of
-adapter pipes. A subsequent initialize for the same launch fails. The
-transport provides no replay or automatic prompt retry.
+(`-32600`, or `-32700` for malformed JSON). Within a valid scope, an inner
+message with a valid `id` but no `method`, `result` or `error` receives a
+scoped `-32600` carrying that ID.
 
 ### Things to Know
 
