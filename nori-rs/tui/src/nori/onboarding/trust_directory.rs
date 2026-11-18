@@ -39,6 +39,10 @@ pub(crate) struct NoriTrustDirectoryWidget {
     /// User's selection, if any.
     pub selection: Option<TrustDirectorySelection>,
     menu: MenuState<TrustDirectorySelection>,
+    /// Inline tool output that applies here before any project opt-in.
+    current_tool_output: ToolOutput,
+    /// Project saved by the trust answer; the compact opt-in uses the same key.
+    trust_target: Option<PathBuf>,
     /// Second, skippable question shown after the trust choice.
     tool_output_menu: Option<MenuState<ToolOutput>>,
     /// Error message to display, if any.
@@ -56,8 +60,10 @@ impl WidgetRef for &NoriTrustDirectoryWidget {
         let navigation = KeyHint::new("↑↓/j/k", "move");
         if let Some(menu) = &self.tool_output_menu {
             styled_menu(
-                "How should tool calls appear?".to_string(),
-                subtitle("Change it later with [tui] tool_output in config.toml."),
+                "Use compact tool output in this project?".to_string(),
+                subtitle(
+                    "Compact shows one line per tool call. Ctrl+O opens the full transcript either way.",
+                ),
                 [
                     navigation,
                     KeyHint::new("enter", "select"),
@@ -106,21 +112,19 @@ impl KeyboardHandler for NoriTrustDirectoryWidget {
         };
         if let Some(menu) = &mut self.tool_output_menu {
             match menu.handle(action) {
-                MenuOutcome::Activated(tool_output) => {
-                    let value = if tool_output == ToolOutput::Full {
-                        "full"
-                    } else {
-                        "compact"
-                    };
-                    if let Err(e) = NoriConfigEdits::new(&self.nori_home)
-                        .set_path(&["tui", "tool_output"], value)
-                        .apply_blocking()
+                MenuOutcome::Activated(ToolOutput::Compact) => {
+                    if let Some(target) = &self.trust_target
+                        && let Err(e) = NoriConfigEdits::new(&self.nori_home)
+                            .set_project_tool_output(target, ToolOutput::Compact)
+                            .apply_blocking()
                     {
                         tracing::error!("Failed to save tool_output: {e:?}");
                     }
                     self.tool_output_menu = None;
                 }
-                MenuOutcome::Cancelled => self.tool_output_menu = None,
+                MenuOutcome::Activated(ToolOutput::Full) | MenuOutcome::Cancelled => {
+                    self.tool_output_menu = None;
+                }
                 MenuOutcome::Unchanged | MenuOutcome::SelectionChanged(_) => {}
             }
             return;
@@ -142,7 +146,12 @@ impl StepStateProvider for NoriTrustDirectoryWidget {
 }
 
 impl NoriTrustDirectoryWidget {
-    pub(crate) fn new(nori_home: PathBuf, cwd: PathBuf, is_git_repo: bool) -> Self {
+    pub(crate) fn new(
+        nori_home: PathBuf,
+        cwd: PathBuf,
+        is_git_repo: bool,
+        current_tool_output: ToolOutput,
+    ) -> Self {
         let items = [
             MenuItem::new(
                 TrustDirectorySelection::Trust,
@@ -169,6 +178,8 @@ impl NoriTrustDirectoryWidget {
             is_git_repo,
             selection: None,
             menu,
+            current_tool_output,
+            trust_target: None,
             tool_output_menu: None,
             error: None,
         }
@@ -177,9 +188,9 @@ impl NoriTrustDirectoryWidget {
     fn save_trust(&mut self, selection: TrustDirectorySelection) {
         let target =
             resolve_root_git_project_for_trust(&self.cwd).unwrap_or_else(|| self.cwd.clone());
-        let (level, preselected) = match selection {
-            TrustDirectorySelection::Trust => (TrustLevel::Trusted, ToolOutput::Compact),
-            TrustDirectorySelection::DontTrust => (TrustLevel::Untrusted, ToolOutput::Full),
+        let level = match selection {
+            TrustDirectorySelection::Trust => TrustLevel::Trusted,
+            TrustDirectorySelection::DontTrust => TrustLevel::Untrusted,
         };
         if let Err(e) = NoriConfigEdits::new(&self.nori_home)
             .set_project_trust_level(&target, level)
@@ -192,18 +203,20 @@ impl NoriTrustDirectoryWidget {
             ));
         }
         self.selection = Some(selection);
+        self.trust_target = Some(target);
+        if self.current_tool_output == ToolOutput::Compact {
+            return;
+        }
 
         let items = [
-            MenuItem::new(ToolOutput::Compact, "Compact")
+            MenuItem::new(ToolOutput::Full, "Full tool output")
+                .description("Keep every command with all of its output")
+                .mnemonic('f'),
+            MenuItem::new(ToolOutput::Compact, "Compact tool output")
                 .description("One line per tool call with its last output line")
                 .mnemonic('c'),
-            MenuItem::new(ToolOutput::Full, "Full")
-                .description("Every command in full with its output")
-                .mnemonic('f'),
         ];
-        let mut menu = crate::overlay_menu::state_from_items(items, "tool output");
-        menu.select_key(&preselected);
-        self.tool_output_menu = Some(menu);
+        self.tool_output_menu = Some(crate::overlay_menu::state_from_items(items, "tool output"));
     }
 }
 
@@ -220,6 +233,7 @@ mod tests {
             nori_home.path().to_path_buf(),
             PathBuf::from("/workspace/project"),
             is_git_repo,
+            ToolOutput::Full,
         );
         (widget, nori_home)
     }
@@ -302,80 +316,115 @@ mod tests {
         widget.handle_key_event(KeyEvent::new(code, KeyModifiers::NONE));
     }
 
-    fn written_tool_output(nori_home: &TempDir) -> Option<nori_config::ToolOutput> {
+    fn written_config(nori_home: &TempDir) -> nori_config::NoriConfigToml {
         let path = nori_home.path().join("config.toml");
-        let toml: nori_config::NoriConfigToml =
-            toml::from_str(&std::fs::read_to_string(path).expect("config written"))
-                .expect("valid config");
-        toml.tui.tool_output
+        toml::from_str(&std::fs::read_to_string(path).expect("config written"))
+            .expect("valid config")
+    }
+
+    fn project_settings(nori_home: &TempDir) -> nori_config::ProjectConfig {
+        written_config(nori_home)
+            .projects
+            .get("/workspace/project")
+            .cloned()
+            .expect("trust saved for the project")
+    }
+
+    fn answer_trust(widget: &mut NoriTrustDirectoryWidget, selection: TrustDirectorySelection) {
+        let key = match selection {
+            TrustDirectorySelection::Trust => 'y',
+            TrustDirectorySelection::DontTrust => 'n',
+        };
+        press(widget, KeyCode::Char(key));
     }
 
     #[test]
-    fn trust_then_tool_output_question_preselects_compact() {
+    fn trust_then_offers_compact_with_full_preselected() {
         let (mut widget, tmp) = create_widget(true);
-        widget.menu.select_key(&TrustDirectorySelection::Trust);
-        press(&mut widget, KeyCode::Enter);
+        answer_trust(&mut widget, TrustDirectorySelection::Trust);
 
         assert_eq!(widget.get_step_state(), StepState::InProgress);
-        assert_eq!(widget.selection, Some(TrustDirectorySelection::Trust));
         insta::assert_snapshot!(
-            "nori_trust_tool_output_after_trust",
-            render_widget(&widget, 70, 12)
+            "nori_trust_compact_opt_in_after_trust",
+            render_widget(&widget, 70, 16)
         );
 
         press(&mut widget, KeyCode::Enter);
         assert_eq!(widget.get_step_state(), StepState::Complete);
         assert_eq!(
-            written_tool_output(&tmp),
-            Some(nori_config::ToolOutput::Compact)
+            project_settings(&tmp),
+            nori_config::ProjectConfig {
+                trust_level: Some(TrustLevel::Trusted),
+                tool_output: None,
+            }
         );
+        assert_eq!(written_config(&tmp).tui.tool_output, None);
     }
 
     #[test]
-    fn dont_trust_preselects_full_tool_output() {
+    fn choosing_compact_saves_it_for_this_project_only() {
         let (mut widget, tmp) = create_widget(true);
-        widget.menu.select_key(&TrustDirectorySelection::DontTrust);
-        press(&mut widget, KeyCode::Enter);
-        assert_eq!(widget.get_step_state(), StepState::InProgress);
-        insta::assert_snapshot!(
-            "nori_trust_tool_output_after_dont_trust",
-            render_widget(&widget, 70, 12)
-        );
+        answer_trust(&mut widget, TrustDirectorySelection::Trust);
+        press(&mut widget, KeyCode::Char('c'));
 
-        press(&mut widget, KeyCode::Enter);
         assert_eq!(widget.get_step_state(), StepState::Complete);
-        assert_eq!(widget.selection, Some(TrustDirectorySelection::DontTrust));
         assert_eq!(
-            written_tool_output(&tmp),
-            Some(nori_config::ToolOutput::Full)
+            project_settings(&tmp),
+            nori_config::ProjectConfig {
+                trust_level: Some(TrustLevel::Trusted),
+                tool_output: Some(ToolOutput::Compact),
+            }
         );
+        assert_eq!(written_config(&tmp).tui.tool_output, None);
     }
 
     #[test]
-    fn trusted_directory_can_still_choose_full_tool_output() {
+    fn compact_opt_in_can_be_skipped() {
         let (mut widget, tmp) = create_widget(true);
-        widget.menu.select_key(&TrustDirectorySelection::Trust);
-        press(&mut widget, KeyCode::Enter);
-        press(&mut widget, KeyCode::Down);
-        press(&mut widget, KeyCode::Enter);
-
-        assert_eq!(
-            written_tool_output(&tmp),
-            Some(nori_config::ToolOutput::Full)
-        );
-    }
-
-    #[test]
-    fn tool_output_question_can_be_skipped() {
-        let (mut widget, tmp) = create_widget(true);
-        widget.menu.select_key(&TrustDirectorySelection::Trust);
-        press(&mut widget, KeyCode::Enter);
+        answer_trust(&mut widget, TrustDirectorySelection::Trust);
         press(&mut widget, KeyCode::Esc);
 
         assert_eq!(widget.get_step_state(), StepState::Complete);
-        assert_eq!(written_tool_output(&tmp), None);
-        let config = std::fs::read_to_string(tmp.path().join("config.toml")).expect("config");
-        assert!(config.contains("trust_level = \"trusted\""), "{config}");
+        assert_eq!(
+            project_settings(&tmp),
+            nori_config::ProjectConfig {
+                trust_level: Some(TrustLevel::Trusted),
+                tool_output: None,
+            }
+        );
+        assert_eq!(written_config(&tmp).tui.tool_output, None);
+    }
+
+    #[test]
+    fn requiring_approval_also_offers_compact() {
+        let (mut widget, tmp) = create_widget(true);
+        answer_trust(&mut widget, TrustDirectorySelection::DontTrust);
+        assert_eq!(widget.get_step_state(), StepState::InProgress);
+        press(&mut widget, KeyCode::Char('c'));
+
+        assert_eq!(widget.get_step_state(), StepState::Complete);
+        assert_eq!(
+            project_settings(&tmp),
+            nori_config::ProjectConfig {
+                trust_level: Some(TrustLevel::Untrusted),
+                tool_output: Some(ToolOutput::Compact),
+            }
+        );
+    }
+
+    #[test]
+    fn no_compact_question_when_compact_is_already_configured() {
+        let nori_home = TempDir::new().expect("create temp dir");
+        let mut widget = NoriTrustDirectoryWidget::new(
+            nori_home.path().to_path_buf(),
+            PathBuf::from("/workspace/project"),
+            true,
+            ToolOutput::Compact,
+        );
+        answer_trust(&mut widget, TrustDirectorySelection::Trust);
+
+        assert_eq!(widget.get_step_state(), StepState::Complete);
+        assert_eq!(project_settings(&nori_home).tool_output, None);
     }
 
     #[test]

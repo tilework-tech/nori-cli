@@ -82,6 +82,11 @@ impl NoriConfig {
                 matches!(path.as_str(), "approval_policy" | "sandbox_mode")
                     || path.starts_with("sandbox_workspace_write.")
             });
+        // `-c tui.tool_output` is merged into `toml.tui`, so it must also beat the project.
+        let tool_output_from_command_line = overrides
+            .raw_overrides
+            .iter()
+            .any(|(path, _)| path == "tui.tool_output");
         let NoriConfigOverrides {
             agent: agent_override,
             sandbox_mode: sandbox_mode_override,
@@ -105,6 +110,12 @@ impl NoriConfig {
                 })
             })
             .unwrap_or_default();
+        let tool_output = if tool_output_from_command_line {
+            toml.tui.tool_output
+        } else {
+            active_project.tool_output.or(toml.tui.tool_output)
+        }
+        .unwrap_or_default();
         let sandbox_mode = sandbox_mode_override
             .or(toml.sandbox_mode)
             .unwrap_or(SandboxMode::WorkspaceWrite);
@@ -232,7 +243,7 @@ impl NoriConfig {
                 .map_or(crate::types::DEFAULT_MAX_SESSIONS, |limit| limit.max(1)),
             skillset_per_session,
             file_manager: toml.tui.file_manager,
-            tool_output: toml.tui.tool_output.unwrap_or_default(),
+            tool_output,
             pinned_plan_drawer: toml.tui.pinned_plan_drawer.unwrap_or(false),
             custom_working_messages: toml.tui.custom_working_messages.unwrap_or(true),
             custom_working_message_list: toml
@@ -721,11 +732,137 @@ auto_worktree = false
 
         std::fs::write(&config_path, "").unwrap();
         let config = NoriConfig::load_from_path(&config_path).unwrap();
-        assert_eq!(config.tool_output, crate::ToolOutput::Compact);
-
-        std::fs::write(&config_path, "[tui]\ntool_output = \"full\"\n").unwrap();
-        let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert_eq!(config.tool_output, crate::ToolOutput::Full);
+
+        std::fs::write(&config_path, "[tui]\ntool_output = \"compact\"\n").unwrap();
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(config.tool_output, crate::ToolOutput::Compact);
+    }
+
+    fn tool_output_for(
+        config_toml: &str,
+        cwd: &Path,
+        raw_overrides: Vec<(String, toml::Value)>,
+    ) -> crate::ToolOutput {
+        let home = TempDir::new().unwrap();
+        let config_path = home.path().join(CONFIG_FILE);
+        std::fs::write(&config_path, config_toml).unwrap();
+        NoriConfig::load_from_path_with_overrides(
+            &config_path,
+            NoriConfigOverrides {
+                cwd: Some(cwd.to_path_buf()),
+                raw_overrides,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .tool_output
+    }
+
+    fn project_dir() -> (TempDir, PathBuf) {
+        let dir = TempDir::new().unwrap();
+        let path = std::fs::canonicalize(dir.path()).unwrap();
+        (dir, path)
+    }
+
+    #[test]
+    fn project_compact_opt_in_applies_only_to_that_project() {
+        let (_a, opted_in) = project_dir();
+        let (_b, other) = project_dir();
+        let config = format!(
+            "[projects.{:?}]\ntrust_level = \"trusted\"\ntool_output = \"compact\"\n\n[projects.{:?}]\ntrust_level = \"trusted\"\n",
+            opted_in.display().to_string(),
+            other.display().to_string(),
+        );
+
+        assert_eq!(
+            tool_output_for(&config, &opted_in, Vec::new()),
+            crate::ToolOutput::Compact
+        );
+        assert_eq!(
+            tool_output_for(&config, &other, Vec::new()),
+            crate::ToolOutput::Full
+        );
+    }
+
+    #[test]
+    fn project_tool_output_overrides_global_setting() {
+        let (_dir, project) = project_dir();
+        let config = format!(
+            "[tui]\ntool_output = \"compact\"\n\n[projects.{:?}]\ntool_output = \"full\"\n",
+            project.display().to_string(),
+        );
+
+        assert_eq!(
+            tool_output_for(&config, &project, Vec::new()),
+            crate::ToolOutput::Full
+        );
+    }
+
+    #[test]
+    fn command_line_tool_output_overrides_project_setting() {
+        let (_dir, project) = project_dir();
+        let config = format!(
+            "[projects.{:?}]\ntool_output = \"compact\"\n",
+            project.display().to_string(),
+        );
+
+        assert_eq!(
+            tool_output_for(
+                &config,
+                &project,
+                vec![(
+                    "tui.tool_output".to_string(),
+                    toml::Value::String("full".to_string())
+                )]
+            ),
+            crate::ToolOutput::Full
+        );
+    }
+
+    #[test]
+    fn command_line_compact_overrides_project_full() {
+        let (_dir, project) = project_dir();
+        let config = format!(
+            "[projects.{:?}]\ntool_output = \"full\"\n",
+            project.display().to_string(),
+        );
+
+        assert_eq!(
+            tool_output_for(
+                &config,
+                &project,
+                vec![(
+                    "tui.tool_output".to_string(),
+                    toml::Value::String("compact".to_string())
+                )]
+            ),
+            crate::ToolOutput::Compact
+        );
+    }
+
+    #[test]
+    fn project_tool_output_applies_in_repository_subdirectories() {
+        let (_dir, repo) = project_dir();
+        assert!(
+            std::process::Command::new("git")
+                .args(["init", "-q"])
+                .current_dir(&repo)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let subdir = repo.join("crates/app");
+        std::fs::create_dir_all(&subdir).unwrap();
+        let config = format!(
+            "[projects.{:?}]\ntool_output = \"compact\"\n",
+            repo.display().to_string(),
+        );
+
+        assert_eq!(
+            tool_output_for(&config, &subdir, Vec::new()),
+            crate::ToolOutput::Compact
+        );
     }
 
     #[test]

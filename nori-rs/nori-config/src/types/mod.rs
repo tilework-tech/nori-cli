@@ -2130,9 +2130,9 @@ impl Default for TuiConfig {
 #[serde(rename_all = "kebab-case")]
 pub enum ToolOutput {
     /// One line per tool call: status dot, command summary, last output line.
-    #[default]
     Compact,
     /// Every command in full with its output.
+    #[default]
     Full,
 }
 
@@ -2212,10 +2212,12 @@ pub struct NoriConfigOverrides {
     pub raw_overrides: Vec<(String, toml::Value)>,
 }
 
-/// Trust settings resolved for the active project.
+/// Settings saved for one project in `[projects."<path>"]`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 pub struct ProjectConfig {
     pub trust_level: Option<TrustLevel>,
+    /// Inline tool output for this project; beats `[tui] tool_output`.
+    pub tool_output: Option<ToolOutput>,
 }
 
 /// Sessions allowed at once when `[tui] max_sessions` is not set.

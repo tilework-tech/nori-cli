@@ -300,10 +300,10 @@ fn test_trust_directory_saves_to_config() {
         .send_key(Key::Char('y'))
         .expect("Failed to send 'y' key");
 
-    // Step 4b: Accept the preselected tool output style (Compact after Trust)
+    // Step 4b: Accept the preselected answer to keep full tool output
     session
-        .wait_for_text("How should tool calls appear", TIMEOUT)
-        .expect("Tool output question did not appear after trust selection");
+        .wait_for_text("Use compact tool output", TIMEOUT)
+        .expect("Compact tool output question did not appear after trust selection");
     session.send_key(Key::Enter).expect("Failed to send Enter");
 
     // Step 5: Wait for the main prompt to appear (onboarding complete). The
@@ -341,8 +341,8 @@ fn test_trust_directory_saves_to_config() {
         config_content
     );
     assert!(
-        config_content.contains("tool_output = \"compact\""),
-        "config.toml should record the tool output choice, got:\n{config_content}"
+        !config_content.contains("tool_output"),
+        "keeping full output should record no tool output preference, got:\n{config_content}"
     );
 }
 

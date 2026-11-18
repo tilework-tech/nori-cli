@@ -274,7 +274,10 @@ impl TuiSession {
         // Set CODEX_HOME and NORI_HOME to temp directory if we have one, so logs
         // and config go to the temp directory instead of trying to write to
         // ~/.codex or ~/.nori/cli
-        if let Some(temp) = &temp_dir {
+        if let Some(home) = &config.nori_home {
+            cmd.env("CODEX_HOME", home);
+            cmd.env("NORI_HOME", home);
+        } else if let Some(temp) = &temp_dir {
             let codex_home = temp.path();
             cmd.env("CODEX_HOME", codex_home.to_str().unwrap());
             // Also set NORI_HOME for nori-config feature support
@@ -776,6 +779,9 @@ pub struct SessionConfig {
     /// Enabled by default for E2E tests to avoid interactive prompts.
     pub skip_trust_directory: bool,
     pub cwd: Option<std::path::PathBuf>,
+    /// Caller-owned NORI_HOME reused across launches. The harness neither
+    /// writes nor deletes its config.toml.
+    pub nori_home: Option<std::path::PathBuf>,
     /// Custom config.toml content. If None, a default config will be generated.
     /// Set to Some("") to write an empty config file.
     pub config_toml: Option<String>,
@@ -816,6 +822,7 @@ impl SessionConfig {
             mock_instruction_files: true,
             skip_trust_directory: true, // Skip trust prompt by default for E2E tests
             cwd: None,
+            nori_home: None,
             config_toml: None,
             extra_config_toml: None,
             git_init: true,
@@ -901,6 +908,16 @@ impl SessionConfig {
 
     pub fn with_agent_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.mock_agent_env.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn with_cwd(mut self, cwd: impl Into<std::path::PathBuf>) -> Self {
+        self.cwd = Some(cwd.into());
+        self
+    }
+
+    pub fn with_nori_home(mut self, nori_home: impl Into<std::path::PathBuf>) -> Self {
+        self.nori_home = Some(nori_home.into());
         self
     }
 

@@ -1128,6 +1128,37 @@ impl MockAgent {
             .await?;
         }
 
+        if std::env::var("MOCK_AGENT_SEND_COMMAND_OUTPUT").is_ok() {
+            let tool_call_id = acp::ToolCallId::new("command-output-001");
+            self.send_tool_call(
+                session_id.clone(),
+                acp::ToolCall::new(tool_call_id.clone(), "Run the test suite")
+                    .kind(acp::ToolKind::Execute)
+                    .status(acp::ToolCallStatus::InProgress)
+                    .raw_input(json!({"command": "cargo test --package demo-widgets --quiet"})),
+            )
+            .await?;
+            self.send_tool_call_update(
+                session_id.clone(),
+                acp::ToolCallUpdate::new(
+                    tool_call_id,
+                    acp::ToolCallUpdateFields::new()
+                        .status(acp::ToolCallStatus::Completed)
+                        .content(vec![acp::ToolCallContent::Content(acp::Content::new(
+                            acp::ContentBlock::Text(acp::TextContent::new(
+                                "running 3 tests\n\
+                                 test widgets::renders_label ... ok\n\
+                                 test widgets::wraps_long_text ... ok\n\
+                                 test widgets::clamps_width ... ok\n\
+                                 test result: ok. 3 passed; 0 failed",
+                            )),
+                        ))])
+                        .raw_output(json!({"exit_code": 0})),
+                ),
+            )
+            .await?;
+        }
+
         // Support custom response text for TUI testing. A model-specific
         // variable lets multi-agent tests distinguish which subprocess
         // produced a response while retaining the generic fallback.

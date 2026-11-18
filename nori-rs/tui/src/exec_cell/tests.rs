@@ -64,7 +64,7 @@ fn acp(call_id: &str, kind: ToolKind, title: &str, invocation: Invocation) -> To
 }
 
 fn cell(snapshot: ToolSnapshot) -> ClientToolCell {
-    ClientToolCell::new(snapshot, cwd(), false)
+    ClientToolCell::new(snapshot, cwd(), false).with_tool_output(ToolOutput::Compact)
 }
 
 fn explore_group() -> ClientToolCell {
@@ -377,6 +377,16 @@ fn full_setting_renders_full_view_inline() {
     assert_eq!(
         text(&full_cell.display_lines(120), 120),
         text(&cell(snapshot).transcript_lines(120), 120)
+    );
+}
+
+#[test]
+fn cells_without_a_setting_render_the_full_view_inline() {
+    let snapshot = execute("d", ToolPhase::Completed, CHAINED, Some(("ok", 0)));
+    let unconfigured = ClientToolCell::new(snapshot, cwd(), false);
+    assert_eq!(
+        text(&unconfigured.display_lines(120), 120),
+        text(&unconfigured.transcript_lines(120), 120)
     );
 }
 

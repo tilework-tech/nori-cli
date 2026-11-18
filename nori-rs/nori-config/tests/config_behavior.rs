@@ -4,6 +4,7 @@ use nori_config::NoriConfigEdits;
 use nori_config::NoriConfigOverrides;
 use nori_config::SandboxMode;
 use nori_config::SandboxPolicy;
+use nori_config::ToolOutput;
 use nori_config::TrustLevel;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
@@ -542,4 +543,50 @@ enable_experimental_windows_sandbox = true
         available.sandbox_policy,
         SandboxPolicy::WorkspaceWrite { .. }
     ));
+}
+
+#[test]
+fn project_compact_opt_in_is_saved_beside_trust_and_survives_reload() {
+    let home = TempDir::new().expect("create config home");
+    let config_path = home.path().join("config.toml");
+    std::fs::write(&config_path, "# my settings\n[tui]\nanimations = false\n")
+        .expect("write config");
+    let repo = create_git_repository(&home).expect("create git repository");
+    std::fs::create_dir_all(repo.join("nested")).expect("create nested directory");
+    let other = home.path().join("other");
+    std::fs::create_dir_all(&other).expect("create other project");
+
+    NoriConfigEdits::new(home.path())
+        .set_project_trust_level(&repo, TrustLevel::Trusted)
+        .set_project_trust_level(&other, TrustLevel::Trusted)
+        .apply_blocking()
+        .expect("persist trust");
+    NoriConfigEdits::new(home.path())
+        .set_project_tool_output(&repo, ToolOutput::Compact)
+        .apply_blocking()
+        .expect("persist tool output");
+
+    let contents = std::fs::read_to_string(&config_path).expect("read edited config");
+    assert!(contents.contains("# my settings"), "{contents}");
+    let load = |cwd: std::path::PathBuf| {
+        NoriConfig::load_from_path_with_overrides(
+            &config_path,
+            NoriConfigOverrides {
+                cwd: Some(cwd),
+                ..NoriConfigOverrides::default()
+            },
+        )
+        .expect("load config")
+    };
+
+    let opted_in = load(repo.join("nested"));
+    assert_eq!(
+        (opted_in.active_project.trust_level, opted_in.tool_output),
+        (Some(TrustLevel::Trusted), ToolOutput::Compact)
+    );
+    let untouched = load(other);
+    assert_eq!(
+        (untouched.active_project.trust_level, untouched.tool_output),
+        (Some(TrustLevel::Trusted), ToolOutput::Full)
+    );
 }
