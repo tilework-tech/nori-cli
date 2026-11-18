@@ -244,6 +244,7 @@ async fn respond_to_agent(
     Result<acp::v1::ClientResponse, acp::v1::Error>,
 ) -> Result<()>;
 async fn cancel() -> Result<()>;
+async fn reclaim_queued_prompt(String) -> Result<Option<String>>;
 async fn shutdown() -> Result<()>;
 
 // Harness-owned commands and queries.
@@ -291,6 +292,29 @@ on disk when it returns (backed by `AcpBackend::flush_transcript` in
 [`submit_and_ops.rs`](src/backend/submit_and_ops.rs); a missing recorder
 flushes trivially). The remote host uses it before serving `session/load` from
 the transcript.
+
+Queued prompts are published as `NoriEvent::QueueChanged` snapshots built in
+[`session_reducer/reclaim.rs`](src/backend/session_reducer/reclaim.rs). Each
+snapshot lists user prompts only (compact, native-compact, and goal-continuation
+prompts stay hidden), oldest first, as plain `prompts` texts plus `entries`
+carrying the submission event ID and an `editable` flag. A prompt is editable
+only when its original content is all text, so taking it back never drops an
+image.
+
+`reclaim_queued_prompt(event_id)` takes one queued prompt back before it is
+sent. The request is routed through
+[`queue_reclaim.rs`](src/backend/queue_reclaim.rs) onto the serialized session
+runtime task as `SessionRuntimeInput::ReclaimQueuedPrompt`, so it is ordered
+against the reducer events that drain the queue:
+
+| Prompt state when the request runs | Result |
+| --- | --- |
+| Still queued and editable | Removed exactly once; other entries keep their order and IDs; a new `QueueChanged` snapshot is published; returns the text the user typed |
+| Already started, already reclaimed, unknown, or not editable | Returns `None`; queue unchanged |
+
+The returned text is the caller's original content, never the hook, goal, or
+compact context added to the wire prompt. The withdrawn prompt's pending
+`prompt()` call resolves with `backend::PromptWithdrawn`.
 
 #### Remote ACP hosting
 
@@ -763,5 +787,10 @@ Execute call is read-only.
   receives a correlated prompt outcome. Prompt registration belongs to
   `HarnessRemoteHost`, so controller replacement cannot strand admission state,
   while hosted-session replacement invalidates the old registration token.
+- A queued prompt has already run its `pre_user_prompt` hooks, taken any
+  pending hook context or compact summary, and pushed its `/undo` snapshot at
+  submission, not at dispatch. Reclaiming does not undo any of that; the
+  resubmitted edit is a new prompt and runs hooks again. Remote `nori attach`
+  has no queue preview, so only the local TUI reclaims.
 
 Created and maintained by Nori.

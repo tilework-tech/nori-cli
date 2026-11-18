@@ -642,8 +642,29 @@ impl BottomPane {
     }
 
     /// Update the queued messages preview shown above the composer.
-    pub(crate) fn set_queued_user_messages(&mut self, queued: Vec<String>) {
-        self.queued_user_messages.messages = queued;
+    pub(crate) fn set_queued_user_messages(
+        &mut self,
+        prompts: Vec<String>,
+        entries: Vec<nori_protocol::QueueEntry>,
+    ) {
+        self.queued_user_messages.set(prompts, entries);
+        self.request_redraw();
+    }
+
+    /// Hide the newest editable queued message and return its ID so the
+    /// caller can ask the harness to take it back.
+    pub(crate) fn start_queued_message_reclaim(&mut self) -> Option<String> {
+        let id = self.queued_user_messages.start_reclaim_newest();
+        self.request_redraw();
+        id
+    }
+
+    pub(crate) fn has_reclaimable_queued_message(&self) -> bool {
+        self.queued_user_messages.has_editable()
+    }
+
+    pub(crate) fn finish_queued_message_reclaim(&mut self, id: &str) {
+        self.queued_user_messages.finish_reclaim(id);
         self.request_redraw();
     }
 
@@ -922,7 +943,7 @@ impl BottomPane {
                 flex.push(0, RenderableItem::Borrowed(status));
             }
             flex.push(1, RenderableItem::Borrowed(&self.queued_user_messages));
-            if self.status.is_some() || !self.queued_user_messages.messages.is_empty() {
+            if self.status.is_some() || !self.queued_user_messages.is_empty() {
                 flex.push(0, RenderableItem::Owned("".into()));
             }
             let mut flex2 = FlexRenderable::new();
@@ -1759,7 +1780,14 @@ mod tests {
         });
 
         pane.set_task_running(true);
-        pane.set_queued_user_messages(vec!["Queued follow-up question".to_string()]);
+        pane.set_queued_user_messages(
+            vec!["Queued follow-up question".to_string()],
+            vec![nori_protocol::QueueEntry {
+                id: "evt-1".to_string(),
+                text: "Queued follow-up question".to_string(),
+                editable: true,
+            }],
+        );
         pane.hide_status_indicator();
 
         let width = 48;
@@ -1795,7 +1823,14 @@ mod tests {
 
         pane.set_task_running(true);
         pane.update_status_header("Thinking really hard".to_string());
-        pane.set_queued_user_messages(vec!["Queued follow-up question".to_string()]);
+        pane.set_queued_user_messages(
+            vec!["Queued follow-up question".to_string()],
+            vec![nori_protocol::QueueEntry {
+                id: "evt-1".to_string(),
+                text: "Queued follow-up question".to_string(),
+                editable: true,
+            }],
+        );
 
         let width = 48;
         let height = pane.desired_height(width);

@@ -259,7 +259,8 @@ impl ChatWidget {
                 }
             }
             nori_protocol::NoriEvent::QueueChanged(queue) => {
-                self.bottom_pane.set_queued_user_messages(queue.prompts);
+                self.bottom_pane
+                    .set_queued_user_messages(queue.prompts, queue.entries);
                 self.request_redraw();
             }
             nori_protocol::NoriEvent::ContextCompacted(compacted) => {
@@ -834,7 +835,7 @@ impl ChatWidget {
             }
             crate::presentation::ClientEvent::QueueChanged(queue_changed) => {
                 self.bottom_pane
-                    .set_queued_user_messages(queue_changed.prompts);
+                    .set_queued_user_messages(queue_changed.prompts, queue_changed.entries);
                 self.request_redraw();
             }
             crate::presentation::ClientEvent::ContextCompacted(context_compacted) => {

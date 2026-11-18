@@ -46,6 +46,19 @@ impl ChatWidget {
             {
                 return;
             }
+            KeyEvent {
+                code: KeyCode::Up,
+                modifiers,
+                kind: KeyEventKind::Press,
+                ..
+            } if !self.exiting
+                && !self.bottom_pane.has_active_overlay_or_popup()
+                && (modifiers == KeyModifiers::ALT
+                    || (modifiers.is_empty() && self.bottom_pane.composer_is_empty()))
+                && self.start_queued_prompt_reclaim() =>
+            {
+                return;
+            }
             other if other.kind == KeyEventKind::Press => {
                 self.bottom_pane.clear_ctrl_c_quit_hint();
             }
