@@ -163,8 +163,10 @@ jump to a long history takes; run it with `--ignored --nocapture`.
 [Tool output preference scenarios](tests/tool_output_preference.rs) use a
 shared home and the mock agent's `MOCK_AGENT_SEND_COMMAND_OUTPUT` command to
 check that inline tool output is full by default, that the post-trust compact
-question saves compact only for that project (and applies in its
-subdirectories), and that Full or Esc saves nothing.
+question saves the chosen value only for that project (and applies in its
+subdirectories), that Esc saves nothing and keeps inheriting the global
+setting, that a one-off `-c` override still shows the question without being
+saved, and that an unrelated `-c tui={...}` table keeps the project's choice.
 
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same
