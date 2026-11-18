@@ -179,6 +179,16 @@ async fn managed_roots_and_pins_fail_closed() {
         *invalid.pointer_mut(pointer).unwrap() = value;
         assert!(client.request(ENSURE, invalid).await.is_err(), "{pointer}");
     }
+    for component in [".codex", ".nori", ".nori/cli"] {
+        let path = root.join("home").join(component);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(outside.path().join("dangling"), &path).unwrap();
+        assert!(
+            client.request(ENSURE, launch.clone()).await.is_err(),
+            "{component}"
+        );
+        fs::remove_file(path).unwrap();
+    }
     assert!(!root.join("workspace/starts").exists());
     client.request(ENSURE, launch).await.unwrap();
 }
@@ -260,4 +270,27 @@ async fn explicit_off_keeps_local_session_creation_and_omits_managed_discovery()
             .unwrap()["session_id"]
             .is_string()
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dedicated_machine_matches_only_its_existing_roots_and_binding() {
+    let host = start(1, true);
+    success(host.run(&["host", "stop"]));
+    let home = host.0.path().join("existing-home");
+    let cwd = home.join("org/workspace");
+    fs::create_dir_all(&cwd).unwrap();
+    fs::write(host.0.path().join("config.toml"), format!(
+        "[host]\nmanaged=true\nmax_sessions=1\n[host.dedicated_roots]\nbinding_id='single'\nhome='{}'\ncwd='{}'\n",
+        home.display(),cwd.display())).unwrap();
+    success(host.run(&["host", "--port", "0"]));
+    let mut client = client(&host);
+    let mut launch = request(&host, "single");
+    assert!(client.request(ENSURE, launch.clone()).await.is_err());
+    launch["spec"]["home"] = json!(home);
+    launch["spec"]["cwd"] = json!(cwd);
+    let mut foreign = launch.clone();
+    foreign["bindingId"] = json!("other");
+    assert!(client.request(ENSURE, foreign).await.is_err());
+    client.request(ENSURE, launch).await.unwrap();
+    wait_for_file(&cwd.join("observed"));
 }

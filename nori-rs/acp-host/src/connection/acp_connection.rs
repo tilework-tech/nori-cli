@@ -460,6 +460,7 @@ impl AcpConnection {
             .with_context(|| format!("Failed to spawn ACP agent: {}", config.command))?;
         let stderr = stderr.context("Failed to take stderr")?;
         let pid = child_handle.pid;
+        debug!("ACP agent spawned (pid: Some({pid}))");
 
         let wire_logger = if proxy_config.enabled {
             Some(WireLogger::new(&proxy_config, config, pid)?)

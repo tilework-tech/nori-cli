@@ -18,10 +18,12 @@ async fn handoff_uses_the_admitted_process_and_leaves_initialize_to_the_client()
     let home = binding.join("home");
     fs::create_dir_all(&cwd).unwrap();
     fs::create_dir_all(&home).unwrap();
+    let alias = binding.join("work-link");
+    std::os::unix::fs::symlink(&cwd, &alias).unwrap();
     let launches = ManagedLaunches::new(root.path(), 1).unwrap();
     let request = serde_json::from_value(json!({
         "commandId":"one","conversationId":uuid::Uuid::new_v4(),"bindingId":"sample","generation":2,
-        "spec":{"agent":"fixture","projectId":"project","runId":"run","cwd":cwd,"home":home,
+        "spec":{"agent":"fixture","projectId":"project","runId":"run","cwd":alias,"home":home,
         "adapter":{"path":"/bin/sh","version":"fixture-v1","args":["-c",
             "echo start >> starts; read -r first; echo \"$first\"; read -r next"]},
         "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
@@ -30,6 +32,8 @@ async fn handoff_uses_the_admitted_process_and_leaves_initialize_to_the_client()
     launches.ensure(request).unwrap();
     assert!(launches.take_connection("sample", 1).is_err());
     let mut pipe = launches.take_connection("sample", 2).unwrap();
+    assert_eq!(pipe.cwd, cwd.canonicalize().unwrap());
+    assert_eq!(pipe.home, home.canonicalize().unwrap());
     assert!(launches.take_connection("sample", 2).is_err());
     let initialize =
         r#"{"jsonrpc":"2.0","id":91,"method":"initialize","params":{"protocolVersion":1}}"#;

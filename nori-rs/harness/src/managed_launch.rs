@@ -88,8 +88,50 @@ pub fn session_folder(path: &Path) -> anyhow::Result<PathBuf> {
     Ok(folder)
 }
 
+enum Layout {
+    Shared(PathBuf),
+    Dedicated(nori_config::DedicatedRoots),
+}
+
+impl Layout {
+    fn validate(&self, binding: &str, cwd: &Path, home: &Path) -> anyhow::Result<()> {
+        ensure!(cwd != home, "cwd and home must be distinct");
+        match self {
+            Self::Dedicated(roots) => ensure!(
+                binding == roots.binding_id && cwd == roots.cwd && home == roots.home,
+                "binding does not match dedicated roots"
+            ),
+            Self::Shared(root) => {
+                let scope = root.join(binding);
+                ensure!(
+                    session_folder(&scope)? == scope,
+                    "binding root must not be redirected"
+                );
+                ensure!(
+                    [cwd, home]
+                        .iter()
+                        .all(|p| p.starts_with(&scope) && *p != scope),
+                    "cwd and home must be inside the binding root"
+                );
+            }
+        }
+        for name in [".codex", ".nori", ".nori/cli"] {
+            let path = home.join(name);
+            match std::fs::symlink_metadata(&path) {
+                Ok(meta) => ensure!(
+                    meta.is_dir() && session_folder(&path)?.starts_with(home),
+                    "configuration directories must stay inside the binding home"
+                ),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => return Err(err.into()),
+            }
+        }
+        Ok(())
+    }
+}
+
 impl LaunchSpec {
-    fn command(&self, root: &Path, binding: &str) -> anyhow::Result<Command> {
+    fn command(&self, cwd: &Path, home: &Path) -> anyhow::Result<Command> {
         ensure!(
             self.additions == HostAdditions::default(),
             "requested host addition is unsupported"
@@ -109,20 +151,6 @@ impl LaunchSpec {
             self.adapter.path.is_absolute() && self.adapter.path.is_file(),
             "adapter path must name an installed absolute executable"
         );
-        let binding_root = root.join(binding);
-        ensure!(
-            session_folder(&binding_root)? == binding_root,
-            "binding root must not be redirected"
-        );
-        let cwd = session_folder(&self.cwd)?;
-        let home = session_folder(&self.home)?;
-        ensure!(
-            cwd != home
-                && [&cwd, &home]
-                    .iter()
-                    .all(|p| p.starts_with(&binding_root) && **p != binding_root),
-            "cwd and home must be distinct directories inside the binding root"
-        );
         for key in self.env.keys() {
             ensure!(
                 !key.is_empty()
@@ -138,13 +166,13 @@ impl LaunchSpec {
             .args(&self.adapter.args)
             .env_clear()
             .envs(&self.env)
-            .env("HOME", &home)
+            .env("HOME", home)
             .env("CODEX_HOME", home.join(".codex"))
             .env("NORI_HOME", home.join(".nori/cli"))
             .current_dir(cwd)
             .stderr(Stdio::null());
         #[cfg(windows)]
-        command.env("USERPROFILE", &home);
+        command.env("USERPROFILE", home);
         Ok(command)
     }
 }
@@ -162,6 +190,8 @@ pub struct LaunchReceipt {
 }
 
 pub struct LaunchConnection {
+    pub cwd: PathBuf,
+    pub home: PathBuf,
     pub conversation_id: ConversationId,
     pub spec: Arc<LaunchSpec>,
     pub stdin: ChildStdin,
@@ -171,10 +201,9 @@ pub struct LaunchConnection {
 struct Launch {
     conversation_id: ConversationId,
     generation: i64,
-    spec: Arc<LaunchSpec>,
     digest: String,
     process: Result<ChildHandle, String>,
-    pipes: Option<(ChildStdin, ChildStdout)>,
+    connection: Option<LaunchConnection>,
 }
 
 impl Launch {
@@ -210,7 +239,7 @@ pub struct ManagedHostCapabilities {
 }
 
 pub struct ManagedLaunches {
-    root: PathBuf,
+    layout: Layout,
     limit: usize,
     launches: Mutex<Option<HashMap<String, Launch>>>,
 }
@@ -219,10 +248,33 @@ impl ManagedLaunches {
     pub fn new(root: &Path, max_sessions: i32) -> anyhow::Result<Self> {
         ensure!(max_sessions > 0, "host.max_sessions must be positive");
         Ok(Self {
-            root: session_folder(root)?,
+            layout: Layout::Shared(session_folder(root)?),
             limit: max_sessions.try_into()?,
             launches: Mutex::new(Some(HashMap::new())),
         })
+    }
+
+    pub fn from_config(config: &nori_config::HostConfig, nori_home: &Path) -> anyhow::Result<Self> {
+        if let Some(roots) = &config.dedicated_roots {
+            ensure!(
+                config.bindings_root.is_none() && config.max_sessions == 1,
+                "dedicated roots require max_sessions = 1 and no bindings_root"
+            );
+            return Ok(Self {
+                layout: Layout::Dedicated(nori_config::DedicatedRoots {
+                    binding_id: roots.binding_id.clone(),
+                    cwd: session_folder(&roots.cwd)?,
+                    home: session_folder(&roots.home)?,
+                }),
+                limit: 1,
+                launches: Mutex::new(Some(HashMap::new())),
+            });
+        }
+        let root = config
+            .bindings_root
+            .clone()
+            .unwrap_or_else(|| nori_home.join("hosted-sessions"));
+        Self::new(&root, config.max_sessions)
     }
 
     pub fn capabilities(&self) -> ManagedHostCapabilities {
@@ -253,13 +305,17 @@ impl ManagedLaunches {
                     .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-' | b'.')),
             "invalid bindingId"
         );
-        let mut guard = self.launches.lock().expect("launch registry poisoned");
+        let digest = hex::encode(Sha256::digest(serde_json::to_vec(&spec)?));
+        let mut guard = self
+            .launches
+            .lock()
+            .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?;
         let launches = guard.as_mut().context("host is stopping")?;
         if let Some(existing) = launches.get(&binding_id) {
             ensure!(
                 existing.conversation_id == conversation_id
                     && existing.generation == generation
-                    && *existing.spec == spec,
+                    && existing.digest == digest,
                 "managed launch conflict"
             );
             return existing.acknowledge(&binding_id);
@@ -270,18 +326,31 @@ impl ManagedLaunches {
                 .any(|l| l.conversation_id == conversation_id),
             "managed conversation ID conflict"
         );
-        let command = spec.command(&self.root, &binding_id)?;
-        ensure!(
-            launches
-                .values()
-                .filter(|l| l.process.as_ref().is_ok_and(|p| !p.has_exited()))
-                .count()
-                < self.limit,
-            "managed host at capacity"
-        );
-        let digest = hex::encode(Sha256::digest(serde_json::to_vec(&spec)?));
-        let (process, pipes) = match AgentProcess::spawn(command) {
-            Ok(child) => (Ok(child.handle), Some((child.stdin, child.stdout))),
+        let cwd = session_folder(&spec.cwd)?;
+        let home = session_folder(&spec.home)?;
+        self.layout.validate(&binding_id, &cwd, &home)?;
+        let command = spec.command(&cwd, &home)?;
+        let mut live = 0;
+        for record in launches.values_mut() {
+            if record.process.as_ref().is_ok_and(|p| !p.has_exited()) {
+                live += 1;
+            } else {
+                record.connection = None;
+            }
+        }
+        ensure!(live < self.limit, "managed host at capacity");
+        let (process, connection) = match AgentProcess::spawn(command) {
+            Ok(child) => (
+                Ok(child.handle),
+                Some(LaunchConnection {
+                    cwd,
+                    home,
+                    conversation_id,
+                    spec: Arc::new(spec),
+                    stdin: child.stdin,
+                    stdout: child.stdout,
+                }),
+            ),
             Err(error) => (Err(error.to_string()), None),
         };
         launches
@@ -289,16 +358,18 @@ impl ManagedLaunches {
             .or_insert(Launch {
                 conversation_id,
                 generation,
-                spec: Arc::new(spec),
                 digest,
                 process,
-                pipes,
+                connection,
             })
             .acknowledge(&binding_id)
     }
 
     pub fn status(&self, binding: &str, generation: i64) -> anyhow::Result<LaunchReceipt> {
-        let guard = self.launches.lock().expect("launch registry poisoned");
+        let guard = self
+            .launches
+            .lock()
+            .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?;
         let launch = guard
             .as_ref()
             .and_then(|l| l.get(binding))
@@ -312,29 +383,30 @@ impl ManagedLaunches {
         binding: &str,
         generation: i64,
     ) -> anyhow::Result<LaunchConnection> {
-        let mut guard = self.launches.lock().expect("launch registry poisoned");
+        let mut guard = self
+            .launches
+            .lock()
+            .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?;
         let launch = guard
             .as_mut()
             .and_then(|l| l.get_mut(binding))
             .filter(|l| l.generation == generation)
             .context("unknown binding or generation")?;
-        let (stdin, stdout) = launch
-            .pipes
+        ensure!(
+            launch.process.as_ref().is_ok_and(|p| !p.has_exited()),
+            "adapter is not running"
+        );
+        launch
+            .connection
             .take()
-            .context("no available adapter connection")?;
-        Ok(LaunchConnection {
-            conversation_id: launch.conversation_id,
-            spec: launch.spec.clone(),
-            stdin,
-            stdout,
-        })
+            .context("no available adapter connection")
     }
 
     pub async fn shutdown(&self) -> anyhow::Result<()> {
         let launches = self
             .launches
             .lock()
-            .expect("launch registry poisoned")
+            .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?
             .take()
             .unwrap_or_default();
         let stopping = launches

@@ -514,6 +514,9 @@ sessions.
 
 ## 11. Background host and attached terminals
 
+This section covers the default local host. Machine adapters that opt into
+`[host] managed = true` use the [managed launch control contract](../nori-rs/cli/src/host/docs.md#managed-launch-control-v1).
+
 `nori host` starts a detached Unix process with an initially empty
 `SessionManager`. The host owns the agent processes and remains alive when
 every terminal detaches or the last session ends. It binds only loopback,

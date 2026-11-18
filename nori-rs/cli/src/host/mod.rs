@@ -355,14 +355,9 @@ async fn serve(
     let _ = std::fs::remove_file(files.directory.join("state.json"));
     let token = files.new_token()?;
     let launches = if config.host.managed {
-        let root = config
-            .host
-            .bindings_root
-            .clone()
-            .unwrap_or_else(|| config.nori_home.join("hosted-sessions"));
-        Some(nori_harness::managed_launch::ManagedLaunches::new(
-            &root,
-            config.host.max_sessions,
+        Some(nori_harness::managed_launch::ManagedLaunches::from_config(
+            &config.host,
+            &config.nori_home,
         )?)
     } else {
         nori_harness::initialize_registry(config.agents.clone())?;

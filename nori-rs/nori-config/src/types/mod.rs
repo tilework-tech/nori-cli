@@ -259,11 +259,20 @@ pub enum ResolvedDistribution {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DedicatedRoots {
+    pub binding_id: String,
+    pub cwd: PathBuf,
+    pub home: PathBuf,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HostConfig {
     pub managed: bool,
     pub max_sessions: i32,
     pub bindings_root: Option<PathBuf>,
+    pub dedicated_roots: Option<DedicatedRoots>,
 }
 
 impl Default for HostConfig {
@@ -272,6 +281,7 @@ impl Default for HostConfig {
             managed: false,
             max_sessions: DEFAULT_MAX_SESSIONS,
             bindings_root: None,
+            dedicated_roots: None,
         }
     }
 }

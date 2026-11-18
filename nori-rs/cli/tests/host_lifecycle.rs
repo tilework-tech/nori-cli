@@ -389,7 +389,7 @@ async fn send_prompt(client: &mut nori_harness::remote_agent::ManagedClient, id:
     let deadline = Instant::now() + Duration::from_secs(30);
     while let Err(error) = client.request("_nori/session/prompt", prompt.clone()).await {
         assert!(
-            error.to_string().contains("busy") && Instant::now() < deadline,
+            error.to_string().starts_with("host error -32015:") && Instant::now() < deadline,
             "{text}: {error}"
         );
         tokio::time::sleep(Duration::from_millis(100)).await;
