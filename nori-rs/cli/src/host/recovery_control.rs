@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::Weak;
+use tokio::sync::Mutex;
 
 use anyhow::Context;
 use anyhow::Result;
@@ -46,7 +46,7 @@ pub(super) struct RecoveryControl {
     pub shared: SharedRecovery,
     directory: PathBuf,
     bindings: Mutex<HashMap<Scope, Arc<Binding>>>,
-    gates: Mutex<HashMap<String, Weak<tokio::sync::Mutex<()>>>>,
+    gates: Mutex<HashMap<String, Weak<Mutex<()>>>>,
 }
 
 impl RecoveryControl {
@@ -60,30 +60,30 @@ impl RecoveryControl {
         })
     }
 
-    fn binding(&self, scope: &Scope) -> Arc<Binding> {
+    async fn binding(&self, scope: &Scope) -> Arc<Binding> {
         self.bindings
             .lock()
-            .expect("binding map poisoned")
+            .await
             .entry(scope.clone())
             .or_default()
             .clone()
     }
 
-    fn gate(&self, binding: &str) -> Arc<tokio::sync::Mutex<()>> {
-        let mut gates = self.gates.lock().expect("binding gates poisoned");
+    async fn gate(&self, binding: &str) -> Arc<Mutex<()>> {
+        let mut gates = self.gates.lock().await;
         if let Some(gate) = gates.get(binding).and_then(Weak::upgrade) {
             return gate;
         }
         gates.retain(|_, gate| gate.strong_count() > 0);
-        let gate = Arc::new(tokio::sync::Mutex::new(()));
+        let gate = Arc::new(Mutex::new(()));
         gates.insert(binding.to_owned(), Arc::downgrade(&gate));
         gate
     }
 
-    pub fn writers(&self, id: &str, generation: i64) -> Option<ManagedRecorderBarrier> {
+    pub async fn writers(&self, id: &str, generation: i64) -> Option<ManagedRecorderBarrier> {
         self.bindings
             .lock()
-            .expect("binding map poisoned")
+            .await
             .get(&Scope {
                 binding_id: id.to_owned(),
                 generation,
@@ -102,7 +102,7 @@ impl RecoveryControl {
 
     pub async fn ensure(&self, launches: &ManagedLaunches, mut params: Value) -> Result<Value> {
         let scope = Scope::deserialize(&params).map_err(|e| LaunchRefusal::InvalidParams(e.into()))?;
-        let gate = self.gate(&scope.binding_id);
+        let gate = self.gate(&scope.binding_id).await;
         let _guard = gate.lock().await;
         let fields = params.as_object_mut().context("expected ensure params")?;
         let version = fields.remove("recoveryVersion");
@@ -128,7 +128,7 @@ impl RecoveryControl {
             );
             launches.validate_destination(&request)?;
         }
-        self.binding(&scope);
+        self.binding(&scope).await;
         self.scoped(&scope, move |r, s| {
             r.journal
                 .register_identity(&s.binding_id, s.generation, &stable, transcript.as_deref())
@@ -213,23 +213,20 @@ impl RecoveryControl {
                 .await
             }
             "_nori/host/import" | "_nori/host/release" | "_nori/host/checkpoint" => {
-                let gate = self.gate(&scope.binding_id);
+                let gate = self.gate(&scope.binding_id).await;
                 let _guard = gate.lock().await;
                 if method != "_nori/host/import" {
                     self.scoped(&scope, |r, s| r.journal.check(&s.binding_id, s.generation))
                         .await?;
                 }
-                let binding = self.binding(&scope);
+                let binding = self.binding(&scope).await;
                 match method {
                     "_nori/host/import" => self.import(launches, &scope, &binding, params).await,
                     "_nori/host/release" => {
                         let output = self
                             .release(launches, &scope, &binding, string(params, "commandId")?)
                             .await?;
-                        self.bindings
-                            .lock()
-                            .expect("binding map poisoned")
-                            .remove(&scope);
+                        self.bindings.lock().await.remove(&scope);
                         Ok(output)
                     }
                     _ => {
@@ -257,17 +254,13 @@ impl RecoveryControl {
     }
 
     async fn export(&self, scope: &Scope, binding: &Binding) -> Result<Value> {
-        let first = self.scoped(scope, |r, s| r.freeze(s)).await?;
+        let first = self.scoped(scope, Recovery::freeze).await?;
         binding.writers.checkpoint().await?;
         let stable = first
             .journal
             .conversation_id()
             .context("missing stable identity")?;
-        let history = binding
-            .history
-            .lock()
-            .expect("binding history poisoned")
-            .clone();
+        let history = binding.history.lock().await.clone();
         let history = history.export(stable).await?;
         let checkpoint = self.scoped(scope, |r, s| r.checkpoint(s)).await?;
         let watermarks = checkpoint.journal.watermarks();
@@ -311,7 +304,7 @@ impl RecoveryControl {
                 .import_checkpoint(&s.binding_id, s.generation, &snapshot, &restored)
         })
         .await?;
-        *binding.history.lock().expect("binding history poisoned") = history;
+        *binding.history.lock().await = history;
         self.spawn(launches, scope, request, identity).await?;
         Ok(
             json!({"conversationId":stable, "continuation":mode, "sessionId":export.checkpoint.main_session_id}),

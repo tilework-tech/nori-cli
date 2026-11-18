@@ -191,13 +191,12 @@ impl ManagedAgent for HostService {
             options.recording,
             options.client_mcp,
         );
-        let additions = match self
-            .recovery
-            .as_ref()
-            .and_then(|recovery| recovery.writers(binding_id, generation))
+        let additions = if let Some(recovery) = &self.recovery
+            && let Some(writers) = recovery.writers(binding_id, generation).await
         {
-            Some(writers) => additions.with_barrier(writers),
-            None => additions,
+            additions.with_barrier(writers)
+        } else {
+            additions
         };
         Ok(nori_harness::managed_acp::connect(
             launch.stdout,

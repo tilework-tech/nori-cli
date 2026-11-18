@@ -1,5 +1,5 @@
 #![cfg(unix)]
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 mod recovery;
 
