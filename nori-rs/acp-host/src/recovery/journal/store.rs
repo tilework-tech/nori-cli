@@ -13,6 +13,7 @@ use anyhow::ensure;
 use sha2::Digest;
 use sha2::Sha256;
 
+use super::super::StorageFailure;
 use super::state::Edit;
 use super::state::Snapshot;
 
@@ -81,7 +82,7 @@ impl Store {
     }
 
     pub(super) fn state(&self) -> Result<Option<&Snapshot>> {
-        ensure!(!self.failed, "journal persistence failure");
+        ensure!(!self.failed, StorageFailure::JournalUnavailable);
         Ok(self.state.as_ref())
     }
 
@@ -95,17 +96,20 @@ impl Store {
     }
 
     pub(super) fn current(&self, generation: i64) -> Result<&Snapshot> {
-        ensure!(!self.failed, "journal persistence failure");
+        ensure!(!self.failed, StorageFailure::JournalUnavailable);
         self.durable(generation)
     }
 
     pub(super) fn replace(&mut self, state: Snapshot) -> Result<()> {
         let payload = serde_json::to_vec(&state)?;
-        self.replace_bytes(state, &payload)
+        self.replace_bytes(state, &payload, false)
     }
 
-    fn replace_bytes(&mut self, state: Snapshot, bytes: &[u8]) -> Result<()> {
-        ensure!(bytes.len() + HEADER <= self.limit, "binding journal full");
+    fn replace_bytes(&mut self, state: Snapshot, bytes: &[u8], admitting: bool) -> Result<()> {
+        ensure!(
+            bytes.len() + HEADER <= self.limit,
+            StorageFailure::JournalFull
+        );
         self.failed = true;
         let root = self.path.parent().context("missing journal directory")?;
         let temporary = root.join("writing");
@@ -116,7 +120,7 @@ impl Store {
         write_frame(&mut file, bytes)?;
         drop(file);
         fs::rename(temporary, &self.path)?;
-        sync_directory(root)?;
+        admission_write(sync_directory(root), admitting)?;
         self.file_bytes = bytes.len() + HEADER;
         self.image_bound = self.file_bytes;
         self.state = Some(state);
@@ -126,6 +130,7 @@ impl Store {
 
     pub(super) fn edit(&mut self, change: Edit) -> Result<()> {
         let state = self.state()?.context("unknown binding")?;
+        let admitting = matches!(&change, Edit::Start { .. });
         let bytes = serde_json::to_vec(&change)?;
         let frame = HEADER + bytes.len();
         // A final response also becomes a ledger result; a new stream has a header.
@@ -136,7 +141,7 @@ impl Store {
         if bound <= self.limit && self.file_bytes.saturating_add(frame) <= self.limit {
             self.failed = true;
             let mut file = private_file().append(true).open(&self.path)?;
-            write_frame(&mut file, &bytes)?;
+            admission_write(write_frame(&mut file, &bytes), admitting)?;
             change.apply(self.state.as_mut().context("unknown binding")?)?;
             self.file_bytes += frame;
             self.image_bound = bound;
@@ -159,9 +164,18 @@ impl Store {
                 blocked.blocked = true;
                 self.replace(blocked)?;
             }
-            bail!("binding journal full");
+            bail!(StorageFailure::JournalFull);
         }
-        self.replace_bytes(compact, &bytes)
+        self.replace_bytes(compact, &bytes, admitting)
+    }
+}
+
+// A failed write to the live WAL or a directory sync after rename can leave the ID on disk.
+fn admission_write(result: Result<()>, admitting: bool) -> Result<()> {
+    if admitting {
+        result.context(StorageFailure::AdmissionUncertain)
+    } else {
+        result
     }
 }
 

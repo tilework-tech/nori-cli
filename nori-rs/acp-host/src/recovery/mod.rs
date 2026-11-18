@@ -46,12 +46,46 @@ impl Checkpoint {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StorageFailure {
+    Recorder,
+    JournalFull,
+    JournalUnavailable,
+    AdmissionUncertain,
+}
+
+impl std::fmt::Display for StorageFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Recorder => "private recorder persistence failure",
+            Self::JournalFull => "binding journal full",
+            Self::JournalUnavailable => "binding journal persistence failure",
+            Self::AdmissionUncertain => {
+                "command admission persistence uncertain; reconcile the original command ID"
+            }
+        })
+    }
+}
+
+impl std::error::Error for StorageFailure {}
+
+impl StorageFailure {
+    pub fn rpc_code(error: &anyhow::Error, fallback: i32) -> i32 {
+        match error.downcast_ref::<Self>() {
+            Some(Self::AdmissionUncertain) => -32021,
+            Some(_) => -32020,
+            None => fallback,
+        }
+    }
+}
+
 #[derive(Default)]
 struct Active {
     main: Option<String>,
     load_session: bool,
     pending: HashMap<String, Request>,
     faulted: bool,
+    storage_failure: Option<StorageFailure>,
     frozen: bool,
     producer: Option<tokio::sync::watch::Receiver<shared::DrainResult>>,
 }
@@ -100,11 +134,45 @@ impl Recovery {
         }
     }
 
+    pub fn recorder_barrier(&mut self, scope: &Scope, result: Result<()>) -> Result<()> {
+        let state = self.active.get_mut(scope).context("binding is offline")?;
+        if let Err(error) = result {
+            state
+                .storage_failure
+                .get_or_insert(StorageFailure::Recorder);
+            let detail = format!("{}: {error}", StorageFailure::Recorder);
+            return Err(error.context(StorageFailure::Recorder).context(detail));
+        }
+        if state.storage_failure == Some(StorageFailure::Recorder) {
+            state.storage_failure = None;
+        }
+        Ok(())
+    }
+
+    pub fn check_admission_storage(&self, scope: &Scope) -> Result<()> {
+        self.journal
+            .check_capacity(&scope.binding_id, scope.generation)?;
+        if let Some(failure) = self
+            .active
+            .get(scope)
+            .and_then(|state| state.storage_failure)
+        {
+            return Err(failure.into());
+        }
+        Ok(())
+    }
+
     pub fn checkpoint(&self, scope: &Scope) -> Result<Checkpoint> {
         let active = self
             .active
             .get(scope)
             .context("binding is offline; use its last committed checkpoint")?;
+        if active.faulted
+            && let Some(error) = active.storage_failure
+        {
+            return Err(anyhow::Error::new(error)
+                .context("binding lost durable output; use its last committed checkpoint"));
+        }
         ensure!(
             !active.faulted
                 && active.producer.as_ref().is_none_or(|producer| {
@@ -178,6 +246,7 @@ impl Recovery {
             self.journal.check(binding, generation)?;
         } else {
             self.journal.check_open(binding, generation)?;
+            self.check_admission_storage(scope)?;
         }
         let state = self
             .active
@@ -271,8 +340,11 @@ impl Recovery {
             }
             self.journal.append(binding, generation, session, message)
         };
-        if stored.is_err() {
+        if let Err(error) = &stored {
             state.faulted = true;
+            if let Some(failure) = error.downcast_ref::<StorageFailure>() {
+                state.storage_failure = Some(*failure);
+            }
         }
         Ok(Some(stored?.source))
     }

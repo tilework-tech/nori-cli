@@ -232,21 +232,48 @@ impl ManagedAgent for HostService {
             return reply;
         }
         let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
-        let result =
-            if request["jsonrpc"] == "2.0" && request.get("id").is_some() && params.is_object() {
-                self.lifecycle(method, &params).await
+        let mut delivery_guard = None;
+        let mut checkpoint_fence = None;
+        let result = if request["jsonrpc"] != "2.0"
+            || request.get("id").is_none()
+            || !params.is_object()
+        {
+            Err(anyhow::anyhow!(
+                "expected a JSON-RPC request with an id and object params"
+            ))
+        } else if method == "_nori/host/checkpoint"
+            && let Some(recovery) = &self.recovery
+        {
+            let attempt = params
+                .get("attemptId")
+                .cloned()
+                .unwrap_or_else(|| json!(uuid::Uuid::new_v4()));
+            if attempt.as_str().is_some_and(|id| !id.is_empty()) {
+                let fence = json!({"bindingId":params["bindingId"],"generation":params["generation"],"attemptId":attempt});
+                checkpoint_fence = Some(fence.clone());
+                recovery
+                    .checkpoint(&params)
+                    .await
+                    .map(|(mut result, guard)| {
+                        delivery_guard = Some(guard);
+                        result["fence"] = fence;
+                        result
+                    })
             } else {
-                Err(anyhow::anyhow!(
-                    "expected a JSON-RPC request with an id and object params"
-                ))
-            };
+                Err(anyhow::anyhow!("attemptId must be a nonempty string"))
+            }
+        } else {
+            self.lifecycle(method, &params).await
+        };
         let response = match result {
             Ok(result) => json!({"jsonrpc":"2.0","id":request["id"],"result":result}),
             Err(error) => {
                 let code = match error.downcast_ref::<LaunchRefusal>() {
                     Some(LaunchRefusal::AtCapacity) => -32017,
                     Some(LaunchRefusal::InvalidParams(_)) => -32602,
-                    None => -32000,
+                    None => nori_harness::remote_agent::recovery::StorageFailure::rpc_code(
+                        &error, -32000,
+                    ),
                 };
                 let mut body = json!({"code":code,"message":error.to_string()});
                 if matches!(method, "_nori/host/release" | "_nori/host/checkpoint")
@@ -255,10 +282,14 @@ impl ManagedAgent for HostService {
                 {
                     body["data"] = json!({"savedThrough":watermarks});
                 }
+                if let Some(fence) = checkpoint_fence {
+                    body["data"]["fence"] = fence;
+                }
                 json!({"jsonrpc":"2.0","id":request["id"],"error":body})
             }
         };
         ManagedReply {
+            delivery_guard,
             response,
             subscription: None,
         }

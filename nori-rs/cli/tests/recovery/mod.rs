@@ -12,6 +12,8 @@ use serde_json::json;
 use tokio::time::sleep;
 use tokio::time::timeout;
 
+mod storage;
+
 const DEADLINE: Duration = Duration::from_secs(30);
 
 pub struct Host {
@@ -22,10 +24,15 @@ pub struct Host {
 
 impl Host {
     pub async fn start(home: &Path, managed: bool) -> Self {
+        Self::with_env(home, managed, &[]).await
+    }
+
+    async fn with_env(home: &Path, managed: bool, env: &[(&str, &Path)]) -> Self {
         let config = format!("[features]\nmulti_session = true\n[host]\nmanaged = {managed}\n");
         fs::write(home.join("config.toml"), config).unwrap();
         let process = Command::new(env!("CARGO_BIN_EXE_nori"))
             .env_clear()
+            .envs(env.iter().copied())
             .env("HOME", home)
             .env("NORI_HOME", home)
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -168,7 +175,7 @@ impl Binding {
 
 pub struct Wire {
     pub client: ManagedClient,
-    acp: Option<ManagedClient>,
+    pub acp: Option<ManagedClient>,
     next_id: i64,
 }
 

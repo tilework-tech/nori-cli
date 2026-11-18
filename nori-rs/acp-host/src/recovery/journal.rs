@@ -32,6 +32,7 @@ pub use self::state::Source;
 use self::store::Store;
 use self::store::private_file;
 use self::store::sync_directory;
+use super::StorageFailure;
 
 pub struct Journal {
     root: PathBuf,
@@ -88,7 +89,13 @@ impl Journal {
                 entry.insert(Store::load(path, binding, self.max_binding_bytes)?)
             }
         };
-        let result = op(store);
+        let result = op(store).map_err(|error| {
+            if error.is::<std::io::Error>() && !error.is::<StorageFailure>() {
+                error.context(StorageFailure::JournalUnavailable)
+            } else {
+                error
+            }
+        });
         if let Ok(state) = store.state()
             && state.is_none_or(|state| state.residency == Residency::Released)
         {
@@ -163,6 +170,16 @@ impl Journal {
 
     pub fn contains(&self, binding: &str) -> Result<bool> {
         self.access(binding, |store| Ok(store.state()?.is_some()))
+    }
+
+    pub(super) fn check_capacity(&self, binding: &str, generation: i64) -> Result<()> {
+        self.access(binding, |store| {
+            ensure!(
+                !store.current(generation)?.blocked,
+                StorageFailure::JournalFull
+            );
+            Ok(())
+        })
     }
 
     pub fn check_open(&self, binding: &str, generation: i64) -> Result<()> {
@@ -349,7 +366,7 @@ impl Journal {
             );
             ensure!(
                 !state.blocked || kind == Kind::Release,
-                "binding journal backpressure"
+                StorageFailure::JournalFull
             );
             match kind {
                 Kind::Release => ensure!(
@@ -511,13 +528,47 @@ impl Journal {
     }
 
     pub fn replay(&self, binding: &str, generation: i64) -> Result<Vec<Record>> {
+        self.replay_from(binding, generation, &[])
+    }
+
+    pub(crate) fn replay_from(
+        &self,
+        binding: &str,
+        generation: i64,
+        cursors: &[Source],
+    ) -> Result<Vec<Record>> {
         self.access(binding, |store| {
-            Ok(store
-                .current(generation)?
-                .streams
-                .iter()
-                .flat_map(|s| s.pending.iter().cloned())
-                .collect())
+            let state = store.current(generation)?;
+            let mut after = HashMap::new();
+            for source in cursors {
+                ensure!(source.binding_id == binding, "foreign attach cursor");
+                ensure!(
+                    after
+                        .insert(
+                            (source.generation, source.host_incarnation.as_str()),
+                            source.sequence
+                        )
+                        .is_none(),
+                    "duplicate attach cursor"
+                );
+            }
+            let mut records = Vec::new();
+            for stream in &state.streams {
+                let sequence = after
+                    .remove(&(
+                        stream.high.generation,
+                        stream.high.host_incarnation.as_str(),
+                    ))
+                    .unwrap_or(stream.acknowledged);
+                ensure!(
+                    (stream.acknowledged..=stream.high.sequence).contains(&sequence),
+                    "attach cursor outside retained range"
+                );
+                let skip = usize::try_from(sequence - stream.acknowledged)?;
+                records.extend(stream.pending.iter().skip(skip).cloned());
+            }
+            ensure!(after.is_empty(), "unknown attach cursor stream");
+            Ok(records)
         })
     }
 

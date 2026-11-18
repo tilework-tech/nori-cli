@@ -10,6 +10,63 @@ use serde_json::json;
 use tempfile::TempDir;
 
 #[tokio::test]
+async fn buffered_checkpoint_completion_identifies_its_binding_generation_and_attempt() {
+    let home = TempDir::new().unwrap();
+    let binding = Binding::new(home.path());
+    let host = Host::start(home.path(), true).await;
+    let mut source = host.connect().await;
+    source.start(&binding, 1).await;
+    let attempt = json!({"bindingId":binding.id,"generation":1,"attemptId":"first-export"});
+    let buffered = source
+        .client
+        .request("_nori/host/checkpoint", attempt.clone())
+        .await
+        .unwrap();
+    let newer = json!({"attemptId":"next-export", "bindingId":binding.id, "generation":1});
+    let second = source
+        .client
+        .request("_nori/host/checkpoint", newer.clone())
+        .await
+        .unwrap();
+    let released = source.release(&binding, 1, "release").await;
+    source
+        .import(&binding, 2, released["checkpoint"].clone())
+        .await;
+    let current = json!({"attemptId":"first-export","bindingId":binding.id,"generation":2});
+    assert_eq!(buffered["watermarks"], json!([]));
+    assert_eq!(buffered["fence"], attempt);
+    assert_eq!(second["fence"], newer);
+    assert_ne!(buffered["fence"], current);
+    source
+        .client
+        .send(json!({"id":1000,"jsonrpc":"2.0","method":"_nori/host/checkpoint","params":attempt}))
+        .await
+        .unwrap();
+    let stale = source.client.recv().await.unwrap();
+    assert_eq!(stale["error"]["data"]["fence"], attempt);
+    assert!(stale["result"].is_null());
+}
+
+#[tokio::test]
+async fn upgrade_and_new_source_share_one_host_incarnation_across_restart() {
+    let home = TempDir::new().unwrap();
+    let binding = Binding::new(home.path());
+    let mut host = Host::start(home.path(), true).await;
+    let mut wire = host.connect().await;
+    let before = wire.client.host_instance().unwrap().to_string();
+    let session = wire.start(&binding, 1).await;
+    wire.send_prompt(&binding, 1, &session, "first", "hello")
+        .await;
+    let record = wire.text_event("hello").await;
+    assert_eq!(record["source"]["hostIncarnation"], before);
+    host.crash();
+    let host = Host::start(home.path(), true).await;
+    let mut wire = host.connect().await;
+    assert_ne!(wire.client.host_instance().unwrap().to_string(), before);
+    assert!(wire.replay(&binding, 1).await.contains(&record));
+}
+
+#[tokio::test]
 async fn restart_replays_the_original_event_until_its_source_cursor_is_acknowledged() {
     let home = TempDir::new().unwrap();
     let binding = Binding::new(home.path());
@@ -333,6 +390,88 @@ async fn disconnected_machine_output_is_saved_and_its_live_lane_can_reattach() {
         "end_turn"
     );
     assert_eq!(binding.side_effects(), ["hold", "continue"]);
+}
+
+#[tokio::test]
+async fn attach_from_a_committed_cursor_delivers_detached_output_before_live_frames() {
+    let home = TempDir::new().unwrap();
+    let binding = Binding::new(home.path());
+    let host = Host::start(home.path(), true).await;
+    let mut first = host.connect().await;
+    let session = first.start(&binding, 1).await;
+    first
+        .send_prompt(&binding, 1, &session, "one", "hold")
+        .await;
+    let first_record = first.text_event("hold").await;
+    drop(first);
+
+    let mut next = host.connect().await;
+    next.client
+        .request("_nori/control/take", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(
+        next.replay(&binding, 1).await.as_slice(),
+        std::slice::from_ref(&first_record)
+    );
+    binding.unblock();
+    // The turn ends between the previous replay and the machine attachment.
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let command = next
+                .client
+                .request(
+                    "_nori/host/command",
+                    json!({
+                        "bindingId":binding.id,"generation":1,"commandId":"one"
+                    }),
+                )
+                .await
+                .unwrap();
+            if command["status"] == "completed" {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        let machine = next.acp.as_mut().unwrap();
+        let mut future = first_record["source"].clone();
+        future["sequence"] = json!(3);
+        let rejected = loop {
+            machine.send(json!({"bindingId":binding.id,"generation":1,"attachFrom":[future]}))
+                .await.unwrap();
+            let frame = machine.recv().await.unwrap();
+            if frame["message"]["error"]["message"] != "logical connection already attached" {
+                break frame;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        };
+        assert_eq!(rejected["message"]["error"]["code"], -32001);
+        assert!(rejected["message"]["error"]["message"].as_str().unwrap().contains("outside retained range"));
+
+        machine.send(json!({"bindingId":binding.id,"generation":1,"attachFrom":[first_record["source"]]}))
+            .await.unwrap();
+        let frame = machine.recv().await.unwrap();
+        let mut expected_source = first_record["source"].clone();
+        expected_source["sequence"] = json!(2);
+        assert_eq!(frame["source"], expected_source, "{frame}");
+        assert_eq!(frame["message"]["result"]["stopReason"], "end_turn");
+        assert_eq!(machine.recv().await.unwrap(),
+            json!({"bindingId":binding.id,"generation":1,"attached":true}));
+    }).await.expect("reconnecting machine received replay and attachment confirmation");
+
+    next.send_prompt(&binding, 1, &session, "two", "live").await;
+    let live = next.text_event("live").await;
+    assert_eq!(live["source"]["sequence"], 3);
+    assert_eq!(
+        next.prompt_reply().await["result"]["stopReason"],
+        "end_turn"
+    );
+    assert_eq!(binding.side_effects(), ["hold", "live"]);
 }
 
 #[tokio::test]

@@ -101,7 +101,8 @@ impl RecoveryControl {
     }
 
     pub async fn ensure(&self, launches: &ManagedLaunches, mut params: Value) -> Result<Value> {
-        let scope = Scope::deserialize(&params).map_err(|e| LaunchRefusal::InvalidParams(e.into()))?;
+        let scope =
+            Scope::deserialize(&params).map_err(|e| LaunchRefusal::InvalidParams(e.into()))?;
         let gate = self.gate(&scope.binding_id).await;
         let _guard = gate.lock().await;
         let fields = params.as_object_mut().context("expected ensure params")?;
@@ -110,7 +111,8 @@ impl RecoveryControl {
             .remove("transcriptId")
             .map(serde_json::from_value::<String>)
             .transpose()?;
-        let request: EnsureLaunch = serde_json::from_value(params.clone()).map_err(|e| LaunchRefusal::InvalidParams(e.into()))?;
+        let request: EnsureLaunch = serde_json::from_value(params.clone())
+            .map_err(|e| LaunchRefusal::InvalidParams(e.into()))?;
         request.validate()?;
         let known = self
             .scoped(&scope, |r, s| r.journal.contains(&s.binding_id))
@@ -159,7 +161,14 @@ impl RecoveryControl {
             Admission::Dispatch => {
                 let value = match launches.ensure(request) {
                     Ok(receipt) => json!({"result":receipt}),
-                    Err(error) => json!({"error":error.to_string()}),
+                    Err(error) => {
+                        let reason = match error.downcast_ref::<LaunchRefusal>() {
+                            Some(LaunchRefusal::AtCapacity) => Some("atCapacity"),
+                            Some(LaunchRefusal::InvalidParams(_)) => Some("invalidParams"),
+                            None => None,
+                        };
+                        json!({"error":error.to_string(), "refusal":reason})
+                    }
                 };
                 self.scoped(scope, move |r, s| {
                     r.journal
@@ -173,7 +182,13 @@ impl RecoveryControl {
             }
         };
         if let Some(error) = outcome["error"].as_str() {
-            bail!("{error}");
+            return Err(match outcome["refusal"].as_str() {
+                Some("atCapacity") => LaunchRefusal::AtCapacity.into(),
+                Some("invalidParams") => {
+                    LaunchRefusal::InvalidParams(anyhow::anyhow!("{error}")).into()
+                }
+                _ => anyhow::anyhow!("{error}"),
+            });
         }
         Ok(outcome["result"].clone())
     }
@@ -212,36 +227,44 @@ impl RecoveryControl {
                 })
                 .await
             }
-            "_nori/host/import" | "_nori/host/release" | "_nori/host/checkpoint" => {
+            "_nori/host/import" | "_nori/host/release" => {
                 let gate = self.gate(&scope.binding_id).await;
                 let _guard = gate.lock().await;
-                if method != "_nori/host/import" {
-                    self.scoped(&scope, |r, s| r.journal.check(&s.binding_id, s.generation))
-                        .await?;
+                if method == "_nori/host/import" {
+                    let binding = self.binding(&scope).await;
+                    return self.import(launches, &scope, &binding, params).await;
                 }
+                self.scoped(&scope, |r, s| r.journal.check(&s.binding_id, s.generation))
+                    .await?;
                 let binding = self.binding(&scope).await;
-                match method {
-                    "_nori/host/import" => self.import(launches, &scope, &binding, params).await,
-                    "_nori/host/release" => {
-                        let output = self
-                            .release(launches, &scope, &binding, string(params, "commandId")?)
-                            .await?;
-                        self.bindings.lock().await.remove(&scope);
-                        Ok(output)
-                    }
-                    _ => {
-                        let result = self.export(&scope, &binding).await;
-                        self.scoped(&scope, |r, s| {
-                            r.thaw(s);
-                            Ok(())
-                        })
-                        .await?;
-                        result
-                    }
-                }
+                let output = self
+                    .release(launches, &scope, &binding, string(params, "commandId")?)
+                    .await?;
+                self.bindings.lock().await.remove(&scope);
+                Ok(output)
             }
             _ => bail!("unsupported recovery operation"),
         }
+    }
+
+    pub async fn checkpoint(
+        &self,
+        params: &Value,
+    ) -> Result<(Value, tokio::sync::OwnedMutexGuard<()>)> {
+        let scope = Scope::deserialize(params)?;
+        let guard = self.gate(&scope.binding_id).await.lock_owned().await;
+        self.scoped(&scope, |r, s| {
+            r.journal.check_open(&s.binding_id, s.generation)
+        })
+        .await?;
+        let binding = self.binding(&scope).await;
+        let result = self.export(&scope, &binding).await;
+        self.scoped(&scope, |r, s| {
+            r.thaw(s);
+            Ok(())
+        })
+        .await?;
+        Ok((result?, guard))
     }
 
     pub async fn saved_through(&self, params: &Value) -> Option<Vec<Source>> {
@@ -255,7 +278,9 @@ impl RecoveryControl {
 
     async fn export(&self, scope: &Scope, binding: &Binding) -> Result<Value> {
         let first = self.scoped(scope, Recovery::freeze).await?;
-        binding.writers.checkpoint().await?;
+        let writers = binding.writers.checkpoint().await;
+        self.scoped(scope, move |r, s| r.recorder_barrier(s, writers))
+            .await?;
         let stable = first
             .journal
             .conversation_id()
@@ -323,6 +348,9 @@ impl RecoveryControl {
         let id = command.to_owned();
         let admission = self
             .scoped(scope, move |r, s| {
+                if r.journal.command(&s.binding_id, s.generation, &id).is_err() {
+                    r.check_admission_storage(s)?;
+                }
                 r.journal.admit_release(
                     &s.binding_id,
                     s.generation,
@@ -476,4 +504,110 @@ async fn save_release(path: PathBuf, artifact: ReleaseArtifact) -> Result<()> {
         Ok(())
     })
     .await?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn launch_refusal_after_preflight_keeps_its_classification_on_restart() -> Result<()> {
+        for fill_slot in [false, true] {
+            let home = tempfile::TempDir::new()?;
+            let launches = ManagedLaunches::new(home.path(), 1)?;
+            let request = |binding: &str| -> Result<Value> {
+                let root = home.path().join(binding);
+                std::fs::create_dir_all(root.join("workspace"))?;
+                std::fs::create_dir_all(root.join("home"))?;
+                Ok(json!({
+                    "bindingId": binding, "generation": 1, "commandId": "launch",
+                    "conversationId": uuid::Uuid::new_v4(),
+                    "spec": {"projectId":"fixture", "runId":"fixture", "agent":"fixture",
+                        "adapter":{"path":Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/recovery/adapter.py"),"version":"1"},
+                        "cwd":root.join("workspace"), "home":root.join("home"),
+                        "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
+                }))
+            };
+            let mut params = request("candidate")?;
+            launches.validate_destination(&serde_json::from_value(params.clone())?)?;
+            let workspace = home.path().join("candidate/workspace");
+            if fill_slot {
+                launches.ensure(serde_json::from_value(request("resident")?)?)?;
+            } else {
+                std::fs::remove_dir(&workspace)?;
+            }
+            let control = RecoveryControl::open(home.path())?;
+            let scope = Scope::deserialize(&params)?;
+            let stable = params["conversationId"]
+                .as_str()
+                .context("missing fixture ID")?
+                .to_owned();
+            control
+                .scoped(&scope, move |r, s| {
+                    r.journal
+                        .register_identity(&s.binding_id, s.generation, &stable, None)
+                })
+                .await?;
+            let first = control
+                .spawn(
+                    &launches,
+                    &scope,
+                    serde_json::from_value(params.clone())?,
+                    params.clone(),
+                )
+                .await
+                .expect_err("launch must fail after preflight");
+            drop(control);
+            if fill_slot {
+                launches.release_one("resident", 1).await?;
+            } else {
+                std::fs::create_dir(&workspace)?;
+            }
+            let restored = RecoveryControl::open(home.path())?;
+            params["recoveryVersion"] = json!(1);
+            let replay = restored
+                .ensure(&launches, params)
+                .await
+                .expect_err("saved refusal must replay");
+            for error in [first, replay] {
+                assert!(
+                    matches!(
+                        (fill_slot, error.downcast_ref::<LaunchRefusal>()),
+                        (true, Some(LaunchRefusal::AtCapacity))
+                            | (false, Some(LaunchRefusal::InvalidParams(_)))
+                    ),
+                    "incorrect classification: {error}"
+                );
+            }
+            launches.shutdown().await?;
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn checkpoint_owns_the_binding_gate_until_its_reply_is_handed_off() -> Result<()> {
+        let home = tempfile::TempDir::new()?;
+        let control = RecoveryControl::open(home.path())?;
+        let params = json!({"bindingId":"fixture-binding","generation":1});
+        let scope = Scope::deserialize(&params)?;
+        control
+            .scoped(&scope, |r, s| {
+                r.journal.register_identity(
+                    &s.binding_id,
+                    s.generation,
+                    &uuid::Uuid::new_v4().to_string(),
+                    None,
+                )?;
+                r.attach(s);
+                Ok(())
+            })
+            .await?;
+        let (_, delivery) = control.checkpoint(&params).await?;
+        let lifecycle = control.gate(&scope.binding_id).await;
+        assert!(lifecycle.try_lock().is_err());
+        drop(delivery);
+        assert!(lifecycle.try_lock().is_ok());
+        Ok(())
+    }
 }

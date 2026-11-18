@@ -111,9 +111,8 @@ broker. The dependency direction stays `nori-harness -> nori-acp-host`.
   authenticated host stop remain
   available.
   Successful authenticated upgrades include `x-nori-host-instance`, a UUID
-  generated once per router lifetime independently of the bearer token. Clients
-  can compare it before replaying against a replacement listener at the same
-  address.
+  that identifies the running host independently of the bearer token. On a
+  managed host it matches the journal’s producing incarnation.
 - [`ManagedClient`](src/remote/client.rs) authenticates the upgrade and exposes
   the optional host-instance UUID and HTTP 401/403 authentication classification,
   alongside streaming send/receive for frontends that retain notifications.
@@ -202,7 +201,8 @@ from the `endpoint` field of `$NORI_HOME/host/state.json`. Use that URL
 (`/sessions`) for managed control and use `/managed` on the same host and
 port for ACP traffic. Both upgrades require `Authorization: Bearer <token>`
 using the private `$NORI_HOME/host/token` file. The `x-nori-host-instance`
-response header identifies the host incarnation. With `[host] managed = false`,
+response header on both routes identifies the host incarnation that stamps new
+journal records. With `[host] managed = false`,
 `nori attach` uses its local `_nori/session/*` protocol on `/sessions`, and
 `/managed` is absent. [Host lifecycle and discovery](../cli/src/host/docs.md)
 
@@ -298,26 +298,57 @@ message.
 - A recordable live message carries an outer `source` with `bindingId`,
   `generation`, `hostIncarnation` and `sequence`. The host commits the
   original message and source together before delivery. The broker appends
-  both to its canonical transcript WAL, deduplicates by source, then ACKs
-  through that sequence. Replay after ACK loss has the original source,
-  including after host restart. An ACK is cumulative within one producing
+  both to its canonical transcript WAL, deduplicates by full source and ACKs
+  only through its contiguous durable prefix for that stream. Replay after ACK
+  loss has the original source, including after host restart. An ACK is cumulative within one producing
   generation and incarnation. After import its outer scope must name the
   destination generation, even when its `source` names an older producer.
 - The first main-session setup supplies the ACP session ID used for recovery.
   Messages from side sessions stay ephemeral. History emitted during
   `session/load` stays out of the live journal, so loading an adapter cannot
   append that history to the broker transcript again.
-- After machine socket loss, a durable relay keeps consuming and journaling
-  output. Reconnect the privileged control socket, retrieve unacknowledged
-  records, then send the next scoped ACP operation on the new machine socket.
-  A surviving logical connection accepts that operation on the original
-  agent pipes. A fresh process after host loss requires import and ACP
-  initialization. The control lookup can reconcile an old command while
-  its agent is offline.
 - The checksummed append log is limited to 16 MiB per binding. Compaction
-  can temporarily require space for a second bounded copy. When the host
-  cannot guarantee persistence, it rejects new work and retains the
-  committed unacknowledged records. The broker owns the canonical transcript.
+  can temporarily require space for a second bounded copy. A fresh prompt
+  refused for a full journal or failed recorder barrier receives a scoped
+  JSON-RPC error with its original request ID and code `-32020`. The refusal
+  leaves the command ID available. Previously admitted IDs remain eligible
+  for reconciliation while the ledger is readable.
+- Code `-32021` means the host could not confirm persistence of the command's
+  initial ledger entry. Keep the original ID and payload. Recover the source
+  journal and query `_nori/host/command` for that binding, generation and ID.
+  A later refusal on the failed store does not resolve the earlier attempt.
+  Use the recorded outcome for a known ID. An interrupted command requires
+  reconciliation before any new action. Only an explicit unknown-command
+  result from the reopened source journal establishes that the ID was absent.
+  An older checkpoint can predate this attempt.
+
+**Reconnect a surviving relay.** After a machine socket disconnects, the
+host continues to journal output from the original agent. On the replacement
+`/managed` socket, send a standalone frame for each surviving scope. For
+example, `{"bindingId":"fixture-binding","generation":1,"attachFrom":[]}`
+starts each stream after its last durable ACK. To skip records already
+committed by the broker, supply the full `source` of the last contiguous
+commit for each such stream in `attachFrom`. Omitted streams start at their
+ACK. Each supplied sequence must be between that stream's ACK and high
+watermark, inclusive. Attaching does not advance an ACK.
+
+The host takes the replay snapshot and switches live delivery under the
+same lock. On success the socket receives retained
+`{bindingId,generation,source,message}` frames in sequence order within each stream, then
+`{bindingId,generation,attached:true}`, then live frames. Wait for the
+scoped `attached` marker before submitting new work. A disconnect during
+catch-up uses the same attach operation from the latest durable prefix.
+A first ordinary ACP frame on a surviving relay also catches up from the
+host's ACKs before dispatch, without the marker.
+
+A malformed attach frame gets a scoped `-32600` when the scope is valid.
+A duplicate, foreign, unknown or out-of-range cursor, an already attached
+scope, or a scope without a live relay returns a scoped `-32001` with
+`id: null`. Cursor rejection leaves the relay available to its owner.
+After host restart, retrieve retained records and reconcile admitted commands
+on `/sessions`. Restore a checkpoint into a newer generation and initialize
+its logical ACP connection to continue.
+[Cursor validation](src/recovery/journal.rs) · [Relay handoff](src/remote/standard_wire.rs)
 
 See the [machine invocation and recovery control operations](../cli/src/host/docs.md#managed-recovery-control).
 

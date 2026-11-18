@@ -78,7 +78,16 @@ impl RemoteAcpServer {
         let control = Arc::new(tokio::sync::Mutex::new(
             super::host_control::HostControl::default(),
         ));
-        let router = super::host_wire::router(managed, token, control.clone(), shutdown.clone());
+        let instance = match managed.recovery() {
+            Some(recovery) => {
+                recovery
+                    .run(|r| Ok(r.journal.incarnation().to_owned()))
+                    .await?
+            }
+            None => uuid::Uuid::new_v4().to_string(),
+        };
+        let router =
+            super::host_wire::router(managed, token, instance, control.clone(), shutdown.clone());
         let task = tokio::spawn(async move {
             if let Err(error) = axum::serve(listener, router).await {
                 tracing::warn!(%error, "managed host listener exited");

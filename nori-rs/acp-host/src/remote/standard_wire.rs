@@ -24,6 +24,8 @@ use super::managed::ManagedAgent;
 use super::managed_wire::send_frame;
 use crate::recovery::Scope;
 use crate::recovery::SharedRecovery;
+use crate::recovery::StorageFailure;
+use crate::recovery::journal::Record;
 use crate::recovery::journal::Source;
 
 const MAX_LANES: usize = 128;
@@ -33,6 +35,25 @@ const QUEUE_DEPTH: usize = 32;
 struct Input {
     message: Value,
     command: Option<String>,
+}
+
+enum Operation {
+    Acp(Input),
+    Attach(Vec<Source>),
+}
+
+impl Operation {
+    fn error_id(&self) -> Option<Value> {
+        match self {
+            Self::Attach(_) => Some(Value::Null),
+            Self::Acp(input)
+                if input.message["method"].is_string() && !input.message["id"].is_null() =>
+            {
+                Some(reply_id(&input.message))
+            }
+            _ => None,
+        }
+    }
 }
 
 struct Outgoing {
@@ -81,11 +102,26 @@ fn unscoped_error(code: i32, description: &str) -> Message {
     )
 }
 
-fn decode(text: &str) -> Result<(Scope, Input), Message> {
+fn decode(text: &str) -> Result<(Scope, Operation), Message> {
     let mut envelope: Value =
         serde_json::from_str(text).map_err(|_| unscoped_error(-32700, "invalid JSON"))?;
     let scope = Scope::deserialize(&envelope)
         .map_err(|_| unscoped_error(-32600, "expected bindingId and generation"))?;
+    if let Some(from) = envelope.get("attachFrom") {
+        if envelope.get("message").is_none()
+            && envelope.get("commandId").is_none()
+            && let Ok(cursors) = Vec::<Source>::deserialize(from)
+        {
+            return Ok((scope, Operation::Attach(cursors)));
+        }
+        let reply = failure(
+            Value::Null,
+            -32600,
+            "expected standalone attachFrom cursor array",
+        )
+        .response;
+        return Err(Outgoing::new(&scope, Some(reply), None).into_frame());
+    }
     let command = envelope
         .get("commandId")
         .map(|v| v.as_str().map(str::to_owned));
@@ -113,10 +149,10 @@ fn decode(text: &str) -> Result<(Scope, Input), Message> {
     }
     Ok((
         scope,
-        Input {
+        Operation::Acp(Input {
             message: envelope["message"].take(),
             command: command.flatten(),
-        },
+        }),
     ))
 }
 
@@ -124,6 +160,14 @@ fn decode(text: &str) -> Result<(Scope, Input), Message> {
 struct Client {
     frames: mpsc::Sender<Outgoing>,
     close: CancellationToken,
+}
+
+impl Client {
+    fn send_durable(&self, frame: Outgoing) {
+        if !self.close.is_cancelled() && self.frames.try_send(frame).is_err() {
+            self.close.cancel();
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -141,9 +185,7 @@ impl Lane {
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
         if durable {
-            if client.frames.try_send(frame).is_err() {
-                client.close.cancel();
-            }
+            client.send_durable(frame);
             true
         } else {
             client.frames.send(frame).await.is_ok()
@@ -160,7 +202,7 @@ struct Attachment {
 }
 
 enum Open {
-    Attached(Attachment),
+    Attached(Attachment, Vec<Record>),
     Replied(Value),
 }
 
@@ -169,25 +211,52 @@ impl Lanes {
         &self,
         host: &Arc<M>,
         scope: &Scope,
-        input: &Input,
+        operation: &Operation,
         client: &Client,
         shutdown: &CancellationToken,
     ) -> Result<Open> {
-        {
-            let lanes = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-            if let Some(lane) = lanes.get(scope) {
-                let mut previous = lane.client.lock().unwrap_or_else(PoisonError::into_inner);
-                ensure!(
-                    previous.frames.is_closed(),
-                    "logical connection already attached"
-                );
-                *previous = client.clone();
-                return Ok(Open::Attached(Attachment {
-                    lane: lane.clone(),
+        let existing = self
+            .0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(scope)
+            .cloned();
+        if let Some(lane) = existing {
+            let cursors = match operation {
+                Operation::Attach(from) => from.clone(),
+                Operation::Acp(_) => vec![],
+            };
+            let scope = scope.clone();
+            let live = lane.clone();
+            let client = client.clone();
+            let replay = host
+                .recovery()
+                .context("binding has not negotiated durable recovery")?
+                .run(move |r| {
+                    let mut previous = live.client.lock().unwrap_or_else(PoisonError::into_inner);
+                    ensure!(!live.inbox.is_closed(), "binding has no live ACP relay");
+                    ensure!(
+                        previous.frames.is_closed(),
+                        "logical connection already attached"
+                    );
+                    let records =
+                        r.journal
+                            .replay_from(&scope.binding_id, scope.generation, &cursors)?;
+                    *previous = client;
+                    Ok(records)
+                })
+                .await?;
+            return Ok(Open::Attached(
+                Attachment {
+                    lane,
                     close_on_disconnect: None,
-                }));
-            }
+                },
+                replay,
+            ));
         }
+        let Operation::Acp(input) = operation else {
+            bail!("binding has no live ACP relay");
+        };
         let recovery = if let Some(recovery) = host.recovery() {
             let binding = scope.binding_id.clone();
             recovery
@@ -209,8 +278,13 @@ impl Lanes {
                 let message = message.clone();
                 let reply = recovery
                     .run(move |r| {
-                        r.journal
-                            .command(&scope.binding_id, scope.generation, &command)?;
+                        if let Err(error) =
+                            r.journal
+                                .command(&scope.binding_id, scope.generation, &command)
+                        {
+                            r.check_admission_storage(&scope)?;
+                            return Err(error);
+                        }
                         r.incoming(&scope, &message, Some(&command))?
                             .context("command cannot be reconciled")
                     })
@@ -253,7 +327,12 @@ impl Lanes {
                         relay(connection, &scope, &worker, pending, recovery.as_ref()).await
                     }
                     Err(error) => {
-                        let reply = failure(id, -32001, &error.to_string()).response;
+                        let reply = failure(
+                            id,
+                            StorageFailure::rpc_code(&error, -32001),
+                            &error.to_string(),
+                        )
+                        .response;
                         worker
                             .deliver(Outgoing::new(&scope, Some(reply), None), durable)
                             .await;
@@ -285,10 +364,13 @@ impl Lanes {
                 .deliver(Outgoing::new(&scope, None, None), durable)
                 .await;
         });
-        Ok(Open::Attached(Attachment {
-            close_on_disconnect: (!durable).then(|| lane.cancel.clone().drop_guard()),
-            lane,
-        }))
+        Ok(Open::Attached(
+            Attachment {
+                close_on_disconnect: (!durable).then(|| lane.cancel.clone().drop_guard()),
+                lane,
+            },
+            vec![],
+        ))
     }
 }
 
@@ -325,7 +407,7 @@ pub(super) async fn serve<M: ManagedAgent>(
                         continue;
                     }
                 };
-                let (scope, input) = match decode(&text) {
+                let (scope, operation) = match decode(&text) {
                     Ok(decoded) => decoded,
                     Err(error) => { send_frame(&mut sink, error).await?; continue; }
                 };
@@ -333,24 +415,41 @@ pub(super) async fn serve<M: ManagedAgent>(
                     let opened = if lanes.len() >= MAX_LANES {
                         Err(anyhow::anyhow!("machine connection has reached the logical connection limit"))
                     } else {
-                        routes.open(&host, &scope, &input, &client, &shutdown).await
+                        routes.open(&host, &scope, &operation, &client, &shutdown).await
                     };
                     match opened {
-                        Ok(Open::Attached(attached)) => { lanes.insert(scope.clone(), attached); }
+                        Ok(Open::Attached(attached, replay)) => {
+                            lanes.insert(scope.clone(), attached);
+                            for record in replay {
+                                send_frame(&mut sink, Outgoing::new(&scope, Some(record.message), Some(record.source)).into_frame()).await?;
+                            }
+                            if matches!(operation, Operation::Attach(_)) {
+                                let ready = json!({"bindingId":scope.binding_id,"generation":scope.generation,"attached":true});
+                                send_frame(&mut sink, Message::Text(ready.to_string().into())).await?;
+                                continue;
+                            }
+                        }
                         Ok(Open::Replied(reply)) => {
                             send_frame(&mut sink, Outgoing::new(&scope, Some(reply), None).into_frame()).await?;
                             continue;
                         }
                         Err(error) => {
-                            if input.message["method"].is_string() && !input.message["id"].is_null() {
-                                let reply = failure(reply_id(&input.message), -32001, &error.to_string()).response;
+                            if let Some(id) = operation.error_id() {
+                                let reply = failure(id, StorageFailure::rpc_code(&error, -32001), &error.to_string()).response;
                                 send_frame(&mut sink, Outgoing::new(&scope, Some(reply), None).into_frame()).await?;
                             }
-                            send_frame(&mut sink, Outgoing::new(&scope, None, None).into_frame()).await?;
+                            if !matches!(operation, Operation::Attach(_)) {
+                                send_frame(&mut sink, Outgoing::new(&scope, None, None).into_frame()).await?;
+                            }
                             continue;
                         }
                     }
                 }
+                let Operation::Acp(input) = operation else {
+                    let reply = failure(Value::Null, -32001, "logical connection already attached").response;
+                    send_frame(&mut sink, Outgoing::new(&scope, Some(reply), None).into_frame()).await?;
+                    continue;
+                };
                 if let Some(attached) = lanes.get(&scope)
                     && attached.lane.inbox.try_send(input).is_err() {
                     if attached.close_on_disconnect.is_some() { attached.lane.cancel.cancel(); }
@@ -371,16 +470,21 @@ async fn relay(
 ) -> Result<()> {
     let from_agent = async {
         while let Some(message) = connection.output.recv().await {
-            let source = if let Some(r) = recovery {
-                r.outgoing(scope.clone(), message.clone()).await?
-            } else {
-                None
-            };
-            if !lane
-                .deliver(
-                    Outgoing::new(scope, Some(message), source),
-                    recovery.is_some(),
-                )
+            if let Some(recovery) = recovery {
+                let scope = scope.clone();
+                let client = lane.client.clone();
+                recovery
+                    .run(move |r| {
+                        let source = r.outgoing(&scope, &message)?;
+                        client
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .send_durable(Outgoing::new(&scope, Some(message), source));
+                        Ok(())
+                    })
+                    .await?;
+            } else if !lane
+                .deliver(Outgoing::new(scope, Some(message), None), false)
                 .await
             {
                 break;
@@ -408,7 +512,14 @@ async fn relay(
                     continue;
                 }
                 Ok(Some(reply)) => reply,
-                Err(error) => failure(reply_id(&message), -32001, &error.to_string()).response,
+                Err(error) => {
+                    failure(
+                        reply_id(&message),
+                        StorageFailure::rpc_code(&error, -32001),
+                        &error.to_string(),
+                    )
+                    .response
+                }
             };
             if !lane
                 .deliver(Outgoing::new(scope, Some(reply), None), recovery.is_some())

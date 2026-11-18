@@ -181,8 +181,9 @@ Connect to that WebSocket URL (`ws://127.0.0.1:<port>/sessions`) with
 `Authorization: Bearer <token>` on the upgrade. Only the privileged machine
 adapter should receive this credential. It authorizes operations on every
 binding and host-wide stop. The upgrade response's `x-nori-host-instance`
-identifies this host incarnation. Both that identity and the token change
-when the host restarts.
+matches `source.hostIncarnation` on new durable records produced by this
+host. The header and token change on host restart. Replayed records keep
+the original producing incarnation for deduplication and ACK.
 
 Each text frame carries one JSON-RPC 2.0 object. Send
 `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"observe":true}}`
@@ -356,7 +357,7 @@ Every request below names `bindingId` and the current `generation`.
 | `_nori/host/command` | `commandId` | `status` is `inFlight`, `completed` (with the recorded `response`), or `interrupted`. The lookup works after restart. An unknown command returns an error. |
 | `_nori/host/replay` | — | `records` contains unacknowledged `{source,sessionId,message}` records. |
 | `_nori/host/ack` | `source` | Returns `{}` after durably advancing the cumulative cursor for that source stream. A future sequence or stale outer generation fails. |
-| `_nori/host/checkpoint` | — | Returns `{checkpoint,watermarks}` at an idle boundary. Treat the checkpoint as opaque. Each watermark is a complete source identity. |
+| `_nori/host/checkpoint` | Optional nonempty string `attemptId` | Returns `{checkpoint,watermarks,fence}` at an idle boundary. Treat the checkpoint as opaque. Each watermark is a complete source identity. |
 | `_nori/host/import` | `checkpoint`, `launchSpec` | Accepts the exported checkpoint and the destination machine's launch spec (same shape as ensure's `spec`). Requires a newer generation. Returns `{conversationId,sessionId,continuation}`. |
 | `_nori/host/release` | `commandId` | Returns the final `{checkpoint,watermarks}` and stops this binding's process group. Other bindings, including independently bound descendants, continue running. |
 
@@ -365,9 +366,28 @@ When `spec.additions.recording` is enabled, it flushes and syncs each
 binding-owned recorder through its open file handle, then verifies that the
 output watermarks still match. On checkpoint or release error, read
 `error.data.savedThrough` when present. Its source cursors identify the last
-durable output the host could verify. Only a successful checkpoint can
-advance the broker's checkpoint pointer. The broker captures the binding's
+durable output the host could verify. A known storage failure closes admission
+with `-32020` before a fresh command enters the ledger. A failure during the
+initial ledger commit can return `-32021`; preserve the command ID and query
+the recovered source journal as described in [managed ACP delivery and
+recovery](../../../acp-host/docs.md#managed-acp-delivery-and-recovery). A later
+successful recorder barrier clears its recorder gate. If a writer cannot
+recover, or output has already failed to reach the journal, restore from the
+last committed checkpoint under a newer generation. An ACK can free journal
+space but cannot recover lost output. The broker captures the binding's
 workspace and permitted provider state separately.
+
+Give each checkpoint attempt a unique `attemptId`. If omitted, the host
+assigns a UUID. For a valid attempt, success carries `result.fence` and
+failure carries `error.data.fence`, both shaped
+`{bindingId,generation,attemptId}` even with empty watermarks. The host
+holds the binding's lifecycle lock through the bounded socket write of a
+successful response. A release, import or later checkpoint on that host
+therefore cannot overtake the handoff. A callback already buffered by the
+adapter can arrive after a new generation or attempt became current.
+Publish the checkpoint pointer in one conditional write that checks the
+active binding, generation and pending attempt against the returned fence.
+Discard a superseded completion. [Checkpoint control](recovery_control.rs)
 
 Reuse the same release command ID when its reply is lost. A completed release
 returns its saved export, including after restart. A busy release closes

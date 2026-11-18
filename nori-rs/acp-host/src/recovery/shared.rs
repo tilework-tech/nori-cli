@@ -11,7 +11,6 @@ use tokio::task;
 
 use super::Recovery;
 use super::Scope;
-use super::Source;
 
 #[derive(Clone)]
 pub struct SharedRecovery(Arc<Mutex<Recovery>>);
@@ -51,17 +50,6 @@ impl SharedRecovery {
                 return Ok(None);
             }
             recovery.incoming(&scope, &message, command.as_deref())
-        })
-        .await
-    }
-
-    pub async fn outgoing(&self, scope: Scope, message: Value) -> Result<Option<Source>> {
-        self.run(move |recovery| {
-            if recovery.journal.contains(&scope.binding_id)? {
-                recovery.outgoing(&scope, &message)
-            } else {
-                Ok(None)
-            }
         })
         .await
     }

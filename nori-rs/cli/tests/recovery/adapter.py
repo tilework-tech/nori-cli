@@ -42,6 +42,13 @@ def handle(request):
                 "content": {"type": "text", "text": text},
             },
         })
+        if text == "fill-journal":
+            for _ in range(17):
+                send(method="session/update", params={
+                    "sessionId": params["sessionId"],
+                    "update": {"sessionUpdate": "agent_message_chunk",
+                               "content": {"type": "text", "text": "x" * 1024 ** 2}},
+                })
         if text == "hold":
             deadline = time.monotonic() + 35
             while not pathlib.Path("unblock").exists():

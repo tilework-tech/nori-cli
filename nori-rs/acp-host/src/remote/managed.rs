@@ -15,6 +15,8 @@ pub struct ManagedSubscription {
 /// One JSON-RPC response and an optional replacement event subscription.
 pub struct ManagedReply {
     pub response: Value,
+    /// Keep a checkpoint current until the transport flushes its response.
+    pub delivery_guard: Option<tokio::sync::OwnedMutexGuard<()>>,
     pub subscription: Option<ManagedSubscription>,
 }
 

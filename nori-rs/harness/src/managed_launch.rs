@@ -36,7 +36,9 @@ impl EnsureLaunch {
     pub fn validate(&self) -> anyhow::Result<()> {
         ensure!(
             !self.command_id.trim().is_empty() && self.generation > 0,
-            LaunchRefusal::InvalidParams(anyhow::anyhow!("commandId and a positive generation are required"))
+            LaunchRefusal::InvalidParams(anyhow::anyhow!(
+                "commandId and a positive generation are required"
+            ))
         );
         validate_binding_id(&self.binding_id).map_err(LaunchRefusal::InvalidParams)?;
         Ok(())
@@ -389,7 +391,8 @@ impl ManagedLaunches {
         self.layout
             .validate(&request.binding_id, &cwd, &home)
             .map_err(LaunchRefusal::InvalidParams)?;
-        let command = request.spec
+        let command = request
+            .spec
             .command(&cwd, &home)
             .map_err(LaunchRefusal::InvalidParams)?;
         let mut live = 0;
