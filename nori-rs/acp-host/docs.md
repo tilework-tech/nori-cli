@@ -564,3 +564,64 @@ following for the binding generation and the lifetime of every active side.
   projection belongs privately in a consumer such as the TUI.
 
 Created and maintained by Nori.
+
+### Forking a read-only side session
+
+Check `result.agentCapabilities._meta["nori.dev/managedHost"].forkSideSessions`
+on the host control connection. A value of `1` means that the host accepts
+marked fork requests. The admitted adapter must also support them. With
+`[host] side_sessions` off, the host refuses marked forks. An ordinary
+unmarked `session/fork` retains the adapter's standard ACP behavior.
+
+On the parent's existing `/managed` connection, send `session/fork` with the
+parent ACP ID in both `params.sessionId` and the existing side-session marker.
+The example uses the admitted workspace as `cwd`.
+
+```json
+{"bindingId":"sample","generation":1,"message":{"jsonrpc":"2.0","id":13,"method":"session/fork","params":{"sessionId":"parent-0","cwd":"/srv/fixture/bindings/sample/work","mcpServers":[],"_meta":{"nori.dev/sideSession":{"bindingId":"sample","generation":1,"sessionId":"parent-0"}}}}}
+```
+
+**Adapter handshake.** In the adapter's `initialize` result, advertise
+`agentCapabilities.sessionCapabilities.fork` and `.close` as objects and set
+`agentCapabilities._meta["nori.dev/readOnlyFork"]` to
+`{"version":1,"modeId":"inspect"}`, substituting the adapter's actual mode ID.
+The host forwards the validated `nori.dev/sideSession` marker on the adapter's
+standard `session/fork` request. An adapter advertising this guarantee keeps
+marked forks ephemeral, omits them from durable history and restoration, and
+waits for mode setup before performing any work in the fork. It can fork a running turn,
+service prompts on each fork independently, and enforce the named mode on
+one fork without changing the parent or its siblings. The mode must prevent
+workspace writes and command execution, including actions the adapter performs
+without asking permission. An adapter can omit this capability when it cannot
+make those guarantees.
+
+The adapter returns a fresh session ID and includes the advertised mode ID in
+the fork's available modes. The host confirms the fork's read-only mode
+before returning its public ID to the caller. A mode change uses
+`session/set_mode` on the fork's adapter ID. An ID that aliases the parent or
+a live sibling fails admission. When the adapter cannot supply a safe fork,
+the host returns `error.data.fallback = "rebuilt"`. Sessions can then issue
+the marked `session/new` described above. Codex launches use this rebuilt path.
+
+Each successful fork shares the parent's adapter process and consumes zero
+additional process slots. Use the returned public ID for prompts, cancellation
+and close. Side turns stay out of the parent's transcript and session lists.
+Updates and permission requests carry the same parent metadata as a rebuilt
+side. The broker answers each permission using its side-session policy and the
+JSON-RPC ID the host sent.
+
+Keep receiving streamed updates and answering permissions while a fork's
+`session/close` is pending. If the adapter declines, the same public ID and
+outstanding permission requests remain usable. After the adapter confirms
+closure, the host drops late callbacks for that fork. Its parent and siblings
+can continue their turns.
+
+If the adapter declines to close the parent, its forks remain open. Once it
+confirms the parent is closed, the host refuses new sides for that parent and
+returns success only after its native forks close and its rebuilt processes exit.
+If a fork declines close or confirmation times out, the parent close returns
+`error.data` containing `{"parentClosed":true,"retry":true}`. Keep answering
+outstanding child permissions, then repeat `session/close` with the parent ID.
+The host retries remaining cleanup and reuses confirmed close results. Other
+regular sessions on the same adapter can continue.
+[Loopback tests](../cli/tests/standard_acp/fork_side.rs) · [Synthetic adapter](../cli/tests/standard_acp/fork_fixture.py)

@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -14,11 +16,15 @@ use serde_json::json;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
+use super::NativeForks;
 use super::StandardAcpConnection;
 use crate::managed_launch::LaunchConnection;
 use crate::managed_launch::LaunchRefusal;
 use crate::managed_launch::ManagedLaunches;
 use crate::managed_launch::SideProcess;
+
+#[path = "parent_close.rs"]
+mod parent_close;
 
 #[path = "side_worker.rs"]
 mod side_worker;
@@ -46,6 +52,7 @@ pub(super) enum SideEvent {
 }
 
 struct Side {
+    native: bool,
     parent: Parent,
     exit_error: Option<String>,
     input: Option<side_worker::SideInput>,
@@ -64,6 +71,7 @@ struct AgentRequest {
 }
 
 struct Router {
+    forks: NativeForks,
     registry: ManagedLaunches,
     binding: String,
     generation: i64,
@@ -73,7 +81,8 @@ struct Router {
     sides: HashMap<String, Side>,
     requests: HashMap<Value, Pending>,
     agent_requests: HashMap<Value, AgentRequest>,
-    closing: Vec<(HashSet<String>, Value)>,
+    closing: HashMap<String, parent_close::ClosingParent>,
+    cleanup: FuturesUnordered<parent_close::Cleanup>,
     events: mpsc::Sender<(String, SideEvent)>,
     output: mpsc::Sender<Value>,
 }
@@ -100,6 +109,7 @@ impl Router {
         id: &Value,
         params: &Value,
         parent: &Value,
+        method: &str,
     ) -> std::result::Result<String, Value> {
         let parent: Parent = serde_json::from_value(parent.clone()).map_err(|_| {
             invalid(
@@ -111,6 +121,8 @@ impl Router {
         if parent.binding_id != self.binding
             || parent.generation != self.generation
             || !self.parents.contains(&parent.session_id)
+            || self.closing.contains_key(&parent.session_id)
+            || self.parent_close_pending(&parent.session_id)
         {
             return Err(invalid(
                 id,
@@ -139,9 +151,46 @@ impl Router {
         }
 
         let side_id = format!("{SIDE_PREFIX}{}", Uuid::new_v4());
+        let input = if method == "session/fork" {
+            if params["sessionId"] != parent.session_id {
+                return Err(invalid(
+                    id,
+                    -32602,
+                    "fork sessionId must match the marked parent",
+                ));
+            }
+            side_worker::start_fork(
+                self.forks.clone(),
+                parent.session_id.clone(),
+                params.clone(),
+                id.clone(),
+                side_id.clone(),
+                self.events.clone(),
+            )
+        } else {
+            self.start_rebuilt(id, initialize, &side_id)?
+        };
+        self.sides.insert(
+            side_id.clone(),
+            Side {
+                native: method == "session/fork",
+                parent,
+                exit_error: None,
+                input: Some(input),
+            },
+        );
+        Ok(side_id)
+    }
+
+    fn start_rebuilt(
+        &self,
+        id: &Value,
+        initialize: Value,
+        side_id: &str,
+    ) -> std::result::Result<side_worker::SideInput, Value> {
         let (connection, owner) = self
             .registry
-            .spawn_owned_side(&self.binding, self.generation, &side_id)
+            .spawn_owned_side(&self.binding, self.generation, side_id)
             .map_err(|err| {
                 if matches!(
                     err.downcast_ref::<LaunchRefusal>(),
@@ -152,22 +201,13 @@ impl Router {
                     invalid(id, -32000, &err.to_string())
                 }
             })?;
-        let input = side_worker::start_side(
+        Ok(side_worker::start_side(
             SideLaunch { connection, owner },
             initialize,
             id.clone(),
-            side_id.clone(),
+            side_id.to_owned(),
             self.events.clone(),
-        );
-        self.sides.insert(
-            side_id.clone(),
-            Side {
-                parent,
-                exit_error: None,
-                input: Some(input),
-            },
-        );
-        Ok(side_id)
+        ))
     }
 
     fn side_request(
@@ -238,7 +278,10 @@ impl Router {
         }
         if let Some(id) = &id
             && (self.requests.contains_key(id)
-                || self.closing.iter().any(|(_, frame)| frame["id"] == *id))
+                || self
+                    .closing
+                    .values()
+                    .any(|close| close.request_id.as_ref() == Some(id)))
         {
             self.output
                 .send(invalid(
@@ -252,18 +295,29 @@ impl Router {
 
         let params = &frame["params"];
         let sid = params["sessionId"].as_str().map(str::to_owned);
+        if let Some(sid) = sid.as_deref()
+            && self.route_closing_parent(sid, &method, id.as_ref()).await?
+        {
+            return Ok(());
+        }
         let target_side = sid
             .as_ref()
             .filter(|sid| self.sides.contains_key(*sid) || reserved(sid));
         let route = match (params["_meta"].get(SIDE_META), target_side) {
-            (Some(mark), None) if method == "session/new" => match &id {
-                Some(id) => self.open_side(id, params, mark).map(Some),
-                None => Err(invalid(&Value::Null, -32600, "session/new requires an id")),
-            },
+            (Some(mark), None) if matches!(method.as_str(), "session/new" | "session/fork") => {
+                match &id {
+                    Some(id) => self.open_side(id, params, mark, &method).map(Some),
+                    None => Err(invalid(
+                        &Value::Null,
+                        -32600,
+                        "opening a side session requires an id",
+                    )),
+                }
+            }
             (Some(_), _) => Err(invalid(
                 id.as_ref().unwrap_or(&Value::Null),
                 -32602,
-                "side parent metadata is valid only on session/new",
+                "side parent metadata requires session/new or session/fork on a regular parent",
             )),
             (None, Some(side)) => self
                 .side_request(side, &method, id.as_ref(), frame.clone())
@@ -323,7 +377,7 @@ impl Router {
         }
     }
 
-    fn parent_result(&mut self, request: Pending, result: &Value) -> HashSet<String> {
+    fn parent_result(&mut self, request: Pending, result: &Value) {
         match request.method.as_str() {
             "initialize" => self.initialize = request.initialize,
             "session/new" | "session/fork" => {
@@ -332,23 +386,8 @@ impl Router {
                 }
             }
             "session/resume" | "session/load" => self.parents.extend(request.sid),
-            "session/close" => {
-                if let Some(parent) = request.sid {
-                    self.parents.remove(&parent);
-                    return self
-                        .sides
-                        .iter_mut()
-                        .filter(|(_, s)| s.parent.session_id == parent)
-                        .map(|(sid, child)| {
-                            child.input = None;
-                            sid.clone()
-                        })
-                        .collect();
-                }
-            }
             _ => {}
         }
-        HashSet::new()
     }
 
     async fn agent(&mut self, side: Option<&str>, mut frame: Value) -> Result<()> {
@@ -385,7 +424,9 @@ impl Router {
         {
             if frame.get("result").is_some() {
                 match side {
-                    Some(sid) if request.method == "session/new" => {
+                    Some(sid)
+                        if matches!(request.method.as_str(), "session/new" | "session/fork") =>
+                    {
                         if let Some(record) = self.sides.get_mut(sid) {
                             if record.input.is_none() {
                                 frame = invalid(
@@ -420,16 +461,13 @@ impl Router {
                         {
                             list.retain(|item| !item["sessionId"].as_str().is_some_and(reserved));
                         }
-                        let closing = self.parent_result(request, &frame["result"]);
-                        if let Some(reason) = closing
-                            .iter()
-                            .find_map(|sid| self.sides[sid].exit_error.as_ref())
+                        if request.method == "session/close"
+                            && let Some(parent) = request.sid.as_deref()
                         {
-                            frame = invalid(&frame["id"], -32000, reason);
-                        } else if !closing.is_empty() {
-                            self.closing.push((closing, frame));
+                            self.begin_parent_cleanup(parent, frame);
                             return Ok(());
                         }
+                        self.parent_result(request, &frame["result"]);
                     }
                     _ => {}
                 }
@@ -442,15 +480,14 @@ impl Router {
     }
 
     async fn ended(&mut self, sid: &str, status: Result<(), String>) -> Result<()> {
-        let error = status.err();
-        if let Some(reason) = &error {
-            if let Some(side) = self.sides.get_mut(sid) {
+        let parent = match status {
+            Ok(()) => self.sides.remove(sid).map(|side| side.parent.session_id),
+            Err(reason) => self.sides.get_mut(sid).map(|side| {
                 side.input = None;
-                side.exit_error = Some(reason.clone());
-            }
-        } else {
-            self.sides.remove(sid);
-        }
+                side.exit_error = Some(reason);
+                side.parent.session_id.clone()
+            }),
+        };
         self.agent_requests
             .retain(|_, r| r.side.as_deref() != Some(sid));
         let lost: Vec<_> = self
@@ -463,21 +500,8 @@ impl Router {
                 .send(invalid(&id, -32002, "side session ended"))
                 .await?;
         }
-        let ready = self
-            .closing
-            .extract_if(.., |(siblings, reply)| {
-                if !siblings.remove(sid) {
-                    return false;
-                }
-                if let Some(reason) = &error {
-                    *reply = invalid(&reply["id"], -32000, reason);
-                    return true;
-                }
-                siblings.is_empty()
-            })
-            .collect::<Vec<_>>();
-        for (_, reply) in ready {
-            self.output.send(reply).await?;
+        if let Some(parent) = parent {
+            self.finish_parent_cleanup(&parent).await?;
         }
         Ok(())
     }
@@ -485,6 +509,7 @@ impl Router {
 
 pub fn route_side_sessions(
     mut parent: StandardAcpConnection,
+    forks: NativeForks,
     registry: ManagedLaunches,
     binding: String,
     generation: i64,
@@ -495,6 +520,7 @@ pub fn route_side_sessions(
     let (events, mut child_events) = mpsc::channel(64);
     let finished = tokio::spawn(async move {
         let mut router = Router {
+            forks,
             registry,
             binding,
             generation,
@@ -504,7 +530,8 @@ pub fn route_side_sessions(
             sides: HashMap::new(),
             requests: HashMap::new(),
             agent_requests: HashMap::new(),
-            closing: Vec::new(),
+            closing: HashMap::new(),
+            cleanup: FuturesUnordered::new(),
             events,
             output,
         };
@@ -518,6 +545,12 @@ pub fn route_side_sessions(
                     Some(frame) => router.agent(None, frame).await,
                     None => break Ok(()),
                 },
+                Some((parent, outcome)) = router.cleanup.next(), if !router.cleanup.is_empty() => {
+                    if let Some(close) = router.closing.get_mut(&parent) {
+                        close.outcome = Some(outcome);
+                    }
+                    router.finish_parent_cleanup(&parent).await
+                }
                 Some((sid, frame)) = child_events.recv() => match frame {
                     SideEvent::Frame(frame) => router.agent(Some(&sid), frame).await,
                     SideEvent::Ended(status) => router.ended(&sid, status).await,
