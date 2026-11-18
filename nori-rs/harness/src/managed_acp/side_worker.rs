@@ -503,7 +503,7 @@ async fn serve(
                     }
                     if closing.is_some() {
                         if let Some(id) = request.get("id") {
-                            events.send((public_sid.into(), SideEvent::Frame(failure(id.clone(), -32002, "side session is closing")))).await.ok()?;
+                            events.send((public_sid.into(), SideEvent::Frame(failure(id.clone(), -32015, "side session is closing")))).await.ok()?;
                         }
                         continue;
                     }

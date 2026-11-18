@@ -499,6 +499,14 @@ async fn declined_fork_close_preserves_the_pending_permission_and_allows_retry()
     let close = json!({"sessionId":side});
     peer.send(json!({"jsonrpc":"2.0", "id":5, "method":"session/close", "params":close}))
         .await;
+    let blocked = peer
+        .call(
+            8,
+            "session/set_mode",
+            json!({"sessionId":side,"modeId":"inspect"}),
+        )
+        .await;
+    assert_eq!(blocked["error"]["code"], -32015);
     let decision = json!({"outcome":{"outcome":"selected","optionId":"hold-retry"}});
     peer.send(json!({"jsonrpc":"2.0","id":permission["id"],"result":decision}))
         .await;
