@@ -745,6 +745,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn streamed_table_spacing_matches_full_render() {
+        const TABLE: &str = "| Fruit | Color | Count |\n| --- | --- | --- |\n| Apple | Red | 3 |\n| Banana | Yellow | 5 |\n";
+        let sources = [
+            format!("Here is the inventory:\n{TABLE}That is all for today.\n"),
+            format!("Here is the inventory:\n\n{TABLE}\nThat is all for today.\n"),
+            format!("Here is the inventory:\n\n{TABLE}"),
+            format!("Here is the inventory:\n\n{TABLE}\n\n"),
+            format!("{TABLE}That is all for today.\n"),
+            format!("{TABLE}\n{TABLE}"),
+        ];
+        for source in &sources {
+            for width in [Some(40), Some(80), None] {
+                assert_streamed_table_equals_full(source, width);
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn streamed_table_never_commits_raw_pipe_syntax() {
         let streamed = lines_to_plain_strings(&stream_char_by_char(STREAMED_TABLE, Some(80)));
         assert!(

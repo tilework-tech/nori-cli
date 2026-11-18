@@ -6,6 +6,7 @@ expression: "narrow.iter().map(Line::to_string).collect::<Vec<_>>().join(\"\\n\"
   with a long clickable link
   (https://example.com/a/very/long/path)
   before a table.
+  
   Name    Description               
   ━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━
   resize  a deliberately long       

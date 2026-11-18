@@ -127,6 +127,93 @@ mod tests {
         );
     }
 
+    const INVENTORY_TABLE: &str = "| Fruit | Color | Count |\n| --- | --- | --- |\n| Apple | Red | 3 |\n| Banana | Yellow | 5 |\n";
+
+    fn render_trimmed(src: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        append_markdown(src, Some(80), &mut out);
+        lines_to_strings(&out)
+            .into_iter()
+            .map(|line| line.trim_end().to_string())
+            .collect()
+    }
+
+    fn inventory_with(before: &[&str], after: &[&str]) -> Vec<String> {
+        before
+            .iter()
+            .chain(&[
+                "Fruit   Color   Count",
+                "━━━━━━  ━━━━━━  ━━━━━",
+                "Apple   Red     3",
+                "──────  ──────  ─────",
+                "Banana  Yellow  5",
+            ])
+            .chain(after)
+            .map(|line| (*line).to_string())
+            .collect()
+    }
+
+    #[test]
+    fn table_between_tight_prose_gets_one_blank_line_on_each_side() {
+        let src = format!("Here is the inventory:\n{INVENTORY_TABLE}That is all for today.\n");
+        assert_eq!(
+            render_trimmed(&src),
+            inventory_with(
+                &["Here is the inventory:", ""],
+                &["", "That is all for today."]
+            )
+        );
+    }
+
+    #[test]
+    fn table_between_loose_prose_keeps_exactly_one_blank_line_on_each_side() {
+        let expected = inventory_with(
+            &["Here is the inventory:", ""],
+            &["", "That is all for today."],
+        );
+        for gap in ["\n", "\n\n\n"] {
+            let src = format!(
+                "Here is the inventory:\n{gap}{INVENTORY_TABLE}{gap}That is all for today.\n"
+            );
+            assert_eq!(render_trimmed(&src), expected, "gap {gap:?}");
+        }
+    }
+
+    #[test]
+    fn table_between_a_list_and_a_code_block_gets_one_blank_line_on_each_side() {
+        let src = format!("- first\n- second\n{INVENTORY_TABLE}\n```\nlet x = 1;\n```\n");
+        assert_eq!(
+            render_trimmed(&src),
+            inventory_with(&["- first", "- second", ""], &["", "let x = 1;"])
+        );
+    }
+
+    #[test]
+    fn table_opening_a_message_has_no_leading_blank_line() {
+        let src = format!("{INVENTORY_TABLE}That is all for today.\n");
+        assert_eq!(
+            render_trimmed(&src),
+            inventory_with(&[], &["", "That is all for today."])
+        );
+    }
+
+    #[test]
+    fn table_closing_a_message_has_no_trailing_blank_line() {
+        let src = format!("Here is the inventory:\n\n{INVENTORY_TABLE}");
+        assert_eq!(
+            render_trimmed(&src),
+            inventory_with(&["Here is the inventory:", ""], &[])
+        );
+    }
+
+    #[test]
+    fn consecutive_tables_are_separated_by_one_blank_line() {
+        let src = format!("{INVENTORY_TABLE}\n{INVENTORY_TABLE}");
+        let mut expected = inventory_with(&[], &[""]);
+        expected.extend(inventory_with(&[], &[]));
+        assert_eq!(render_trimmed(&src), expected);
+    }
+
     #[test]
     fn append_markdown_uses_shared_adaptive_table_renderer() {
         let src = "| Session | Project | Turn status |\n| :-- | :-- | :-- |\n| Improve Markdown tables | external-codex | Waiting for input |\n";

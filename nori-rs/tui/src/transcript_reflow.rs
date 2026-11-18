@@ -324,6 +324,43 @@ mod tests {
     }
 
     #[test]
+    fn message_ending_in_a_table_is_separated_from_the_next_cell_like_prose() {
+        let transcript = |message: &str| {
+            let cells: Vec<Arc<dyn HistoryCell>> = vec![
+                Arc::new(crate::history_cell::AgentMarkdownCell::new(
+                    message.to_string(),
+                    Path::new("/tmp"),
+                )),
+                Arc::new(crate::history_cell::new_user_prompt(
+                    "and again".to_string(),
+                )),
+            ];
+            line_text(&render_transcript_tail(&cells, 60))
+                .into_iter()
+                .map(|line| line.trim_end().to_string())
+                .collect::<Vec<_>>()
+        };
+        let gap_before_next_cell = |lines: &[String], last_message_line: &str| {
+            let end = lines
+                .iter()
+                .position(|line| line.ends_with(last_message_line))
+                .expect("message line present");
+            lines[end + 1..].to_vec()
+        };
+
+        let table = transcript(
+            "Here is the inventory:\n\n| Fruit | Color | Count |\n| --- | --- | --- |\n| Apple | Red | 3 |\n| Banana | Yellow | 5 |\n",
+        );
+        let prose = transcript("Here is the inventory:\n\nThat is all for today.\n");
+
+        assert_eq!(
+            gap_before_next_cell(&table, "Banana  Yellow  5"),
+            gap_before_next_cell(&prose, "That is all for today."),
+        );
+        insta::assert_snapshot!(table.join("\n"));
+    }
+
+    #[test]
     fn consolidation_preserves_neighbor_order_and_reflows_the_message_once() {
         let mut cells: Vec<Arc<dyn HistoryCell>> = vec![
             plain(&["tool"]),

@@ -1,0 +1,14 @@
+---
+source: tui/src/transcript_reflow.rs
+expression: "table.join(\"\\n\")"
+---
+• Here is the inventory:
+
+  Fruit   Color   Count
+  ━━━━━━  ━━━━━━  ━━━━━
+  Apple   Red     3
+  ──────  ──────  ─────
+  Banana  Yellow  5
+
+
+› and again
