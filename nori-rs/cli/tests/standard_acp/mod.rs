@@ -1,5 +1,6 @@
 mod fork_side;
 mod side_sessions;
+mod stdio;
 
 use std::collections::HashMap;
 use std::fs;

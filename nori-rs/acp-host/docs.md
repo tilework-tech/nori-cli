@@ -236,6 +236,11 @@ journal records. With `[host] managed = false`,
    `agentCapabilities.sessionCapabilities.fork` when supported.
    [Machine framing](src/remote/standard_wire.rs)
 
+A bridge that pipes an adapter's stdin and stdout can use the same ACP stream
+without the envelope. `nori host --stdio --launch <FILE>` admits one launch
+on a dedicated binding and relays line-delimited ACP through these two
+sockets. [Managed launch on stdio](../cli/src/host/docs.md#managed-launch-on-stdio)
+
 For regular sessions, the adapter assigns the ACP IDs. Unmarked `session/new` and
 `session/fork` return agent-issued IDs. An agent that advertises fork can
 receive a `session/fork` for an inactive session from its `session/list`,

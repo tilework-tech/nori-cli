@@ -9,6 +9,8 @@ Path: @/nori-rs/cli/src/host
 - Local sessions use the host's start folder or a folder supplied by the client.
   A machine can enable [managed launch admission](#managed-launch-control-v1)
   to run each binding's pinned adapter in its provisioned workspace and home.
+  A dedicated managed machine can also serve one launch as plain ACP on the
+  host's own [stdin and stdout](#managed-launch-on-stdio).
 - Owns Unix process lifetime and private host files; protocol framing remains
   in [acp-host](../../../acp-host/docs.md), and session policy remains in the
   [harness](../../../harness/docs.md).
@@ -425,6 +427,60 @@ On Linux, provision a PID namespace init or ancestor subreaper that waits for
 orphaned processes. For ordinary managed launches the host signals the
 adapter's process group and waits for its direct child. Orphaned descendants can remain as zombies until their
 adopting ancestor reaps them. See [process supervision](../../../acp-host/src/connection/child_lifecycle.rs).
+
+#### Managed launch on stdio
+
+A machine bridge that already pipes an ACP adapter's stdin and stdout can run
+the managed host in the adapter's place. The bridge speaks standard ACP and
+never opens the host's WebSockets. This mode requires `[host] managed = true`
+and `[host.dedicated_roots]`. Startup fails without them.
+
+```toml
+[host]
+managed = true
+side_sessions = true
+
+[host.dedicated_roots]
+binding_id = "sample"
+home = "/srv/fixture/home"
+cwd = "/srv/fixture/home/org/workspace"
+```
+
+```sh
+NORI_HOME=/srv/fixture/nori nori -c features.multi_session=true \
+  host --stdio --launch /srv/fixture/launch.json
+```
+
+- The host runs in the foreground on an ephemeral loopback port. The
+  [relay](stdio.rs) connects to that host's own `/sessions` and `/managed`
+  sockets, so admission, side sessions, slot limits and process cleanup follow
+  the [managed launch contract](#managed-launch-control-v1).
+- The launch file holds one JSON object, the `spec` of `_nori/session/ensure`
+  with the same required and optional fields. The host admits it once on the
+  configured dedicated binding at generation 1 with a fresh conversation
+  UUID, as a plain launch without durable recovery.
+- stdin and stdout carry one JSON-RPC message per line. The relay adds and
+  removes the `{bindingId, generation, message}` envelope of the
+  [managed machine connection](../../../acp-host/docs.md#managed-machine-connection).
+  The client sends `initialize` first and owns session setup. A marked side
+  `session/new` or `session/fork` names the dedicated binding ID, generation 1
+  and the parent ACP session ID, and travels on the same stream.
+- Blank input lines are ignored. A line that is not JSON receives a JSON-RPC
+  `-32700` error with a null `id` on stdout.
+- `--inherit-env` adds the host process's environment to the launch's `env`.
+  Variables in the specification win. `HOME`, `USERPROFILE`, `CODEX_HOME` and
+  `NORI_HOME` are never inherited, because the host assigns them. Entries
+  that are not UTF-8 are skipped. Without the flag the adapter receives only
+  `spec.env` and the host-assigned variables.
+- stdout carries only ACP messages. Logs never go to stdout.
+
+| Event | Outcome |
+| --- | --- |
+| stdin reaches EOF | The host stops, ends the adapter and its side sessions, removes its discovery state and exits 0. |
+| The launch file is unreadable or the host refuses the launch | The host stops and exits non-zero with the reason on stderr. stdout stays empty. |
+| The adapter's logical connection closes | The host stops and exits non-zero with the reason on stderr. |
+
+See the [stdio cases](../../tests/standard_acp/stdio.rs).
 
 #### Managed recovery control
 
