@@ -69,6 +69,14 @@ impl ChatWidget {
     }
 
     pub(super) fn submit_user_message(&mut self, user_message: UserMessage) {
+        self.submit_composed_message(user_message, crate::follow_up::Delivery::Default);
+    }
+
+    pub(super) fn submit_composed_message(
+        &mut self,
+        user_message: UserMessage,
+        delivery: crate::follow_up::Delivery,
+    ) {
         // The app is exiting: teardown has started, so a prompt submitted by
         // a fast typist must not start another turn.
         if self.exiting {
@@ -225,7 +233,40 @@ impl ChatWidget {
             }
         }
 
-        self.submit_prompt(content);
+        match (delivery, self.harness_handle.as_ref()) {
+            (crate::follow_up::Delivery::FollowUp { turn, intent }, Some(handle)) => {
+                let id = uuid::Uuid::new_v4().to_string();
+                let receipt = handle.local_follow_up(id.clone(), turn, intent, content);
+                let tx = self.app_event_tx.clone();
+                let submitted = text.clone();
+                tokio::spawn(async move {
+                    match receipt.await {
+                        Ok(receipt) => tx.send(AppEvent::InsertHistoryCell(Box::new(
+                            history_cell::new_info_event(
+                                crate::follow_up::delivery_notice(receipt.status, &id, &submitted),
+                                None,
+                            ),
+                        ))),
+                        Err(error) => tx.send(AppEvent::HarnessActionFailed(format!(
+                            "{error} [{id}] {submitted}"
+                        ))),
+                    }
+                });
+            }
+            (crate::follow_up::Delivery::IfIdle, Some(handle)) => {
+                let admitted = handle.submit_prompt_if_idle(content, None);
+                let tx = self.app_event_tx.clone();
+                let submitted = text.clone();
+                tokio::spawn(async move {
+                    if let Err(error) = admitted.await {
+                        tx.send(AppEvent::HarnessActionFailed(format!(
+                            "Could not submit “{submitted}”: {error}"
+                        )));
+                    }
+                });
+            }
+            _ => self.submit_prompt(content),
+        }
 
         // Persist the text to cross-session message history.
         self.persist_prompt_history(&text);

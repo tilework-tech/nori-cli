@@ -80,6 +80,13 @@ pub struct AcpConnection {
     /// ACP extensions (e.g. the `_session/goal` goal extension).
     initialize_meta: Option<acp::Meta>,
 
+    /// Live initialize response used to negotiate versioned extensions.
+    initialize_result: serde_json::Value,
+
+    /// Read guards live from a delegated permission request through the wire
+    /// response. A new turn may start after all those decisions are sent.
+    permissions: std::sync::Arc<tokio::sync::RwLock<()>>,
+
     /// Ordered inbox of raw ACP events from the transport layer.
     event_rx: mpsc::Receiver<ConnectionEvent>,
 
@@ -121,12 +128,15 @@ async fn establish_connection(
     let session_config_state_for_notifications = session_config_state.clone();
     let write_cwd = cwd.to_path_buf();
     let read_cwd = cwd.to_path_buf();
+    let permissions = std::sync::Arc::new(tokio::sync::RwLock::new(()));
+    let permission_requests = std::sync::Arc::clone(&permissions);
 
     let (init_tx, init_rx) = oneshot::channel::<
         Result<(
             ConnectionTo<Agent>,
             acp::AgentCapabilities,
             Option<acp::Meta>,
+            serde_json::Value,
         )>,
     >();
 
@@ -182,6 +192,9 @@ async fn establish_connection(
                         acp::RequestPermissionResponse,
                     >,
                                 connection: ConnectionTo<Agent>| {
+                        let permission = std::sync::Arc::clone(&permission_requests)
+                            .read_owned()
+                            .await;
                         let (response_tx, response_rx) = oneshot::channel();
                         let delegated = DelegatedRequest {
                             request_id: schema_request_id(responder.id()),
@@ -213,6 +226,7 @@ async fn establish_connection(
                                 )),
                             };
                             responder.respond_with_result(response)?;
+                            drop(permission);
                             Ok(())
                         })?;
 
@@ -367,10 +381,12 @@ async fn establish_connection(
                             );
                         }
                         debug!("ACP connection established, agent: {:?}", resp.agent_info);
+                        let initialize_result = serde_json::json!(resp);
                         let _ = init_tx.send(Ok((
                             connection.clone(),
                             resp.agent_capabilities,
                             resp.meta,
+                            initialize_result,
                         )));
 
                         futures::future::pending::<Result<(), acp::Error>>().await
@@ -389,7 +405,7 @@ async fn establish_connection(
         }
     }));
 
-    let (cx, capabilities, initialize_meta) = init_rx
+    let (cx, capabilities, initialize_meta, initialize_result) = init_rx
         .await
         .context("ACP connection task died during initialization")??;
 
@@ -397,6 +413,8 @@ async fn establish_connection(
         cx,
         agent_capabilities: capabilities,
         initialize_meta,
+        initialize_result,
+        permissions,
         event_rx,
         event_tx: connection_event_tx,
         session_config_state,
@@ -886,6 +904,14 @@ impl AcpConnection {
     /// advertise ACP extensions.
     pub fn initialize_meta(&self) -> Option<&acp::Meta> {
         self.initialize_meta.as_ref()
+    }
+
+    pub async fn wait_for_permission_responses(&self) {
+        drop(self.permissions.write().await);
+    }
+
+    pub fn initialize_result(&self) -> &serde_json::Value {
+        &self.initialize_result
     }
 
     /// Send an extension (`_`-prefixed) method request to the agent and

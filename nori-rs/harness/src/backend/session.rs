@@ -714,6 +714,7 @@ impl AcpBackend {
             async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
             session_driver: Arc::clone(&session_driver),
+            follow_ups: Default::default(),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
             is_shutting_down: Arc::new(AtomicBool::new(false)),
@@ -726,29 +727,7 @@ impl AcpBackend {
         let runtime_backend = backend.clone();
         let runtime_task = tokio::spawn(async move {
             while let Some(input) = session_event_rx.recv().await {
-                match input {
-                    session_runtime_driver::SessionRuntimeInput::Reducer(event) => {
-                        runtime_backend.apply_session_event(event).await;
-                    }
-                    session_runtime_driver::SessionRuntimeInput::Barrier { response_tx } => {
-                        let _ = response_tx.send(());
-                    }
-                    session_runtime_driver::SessionRuntimeInput::ReclaimQueuedPrompt {
-                        event_id,
-                        response_tx,
-                    } => {
-                        let _ =
-                            response_tx.send(runtime_backend.apply_queue_reclaim(&event_id).await);
-                    }
-                    session_runtime_driver::SessionRuntimeInput::PermissionRequest {
-                        pending_request,
-                        current_policy,
-                    } => {
-                        runtime_backend
-                            .handle_permission_request(pending_request, current_policy)
-                            .await;
-                    }
-                }
+                runtime_backend.apply_runtime_input(input).await;
             }
         });
         *backend.runtime_task_abort.lock().await = Some(runtime_task.abort_handle());

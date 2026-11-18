@@ -26,6 +26,8 @@ Path: @/nori-rs/tui/src/attach
   ordinary command handling. A terminal's selected session does not change
   another terminal's selection.
 
+The controller uses the [host follow-up operation](../../../cli/src/host/docs.md#mid-turn-follow-ups) for a composed message during a working turn. Enter steers and Tab queues. Session events supply the expected turn ID. A pending permission dialog continues to handle its own keys and idle Enter submits an ordinary prompt.
+
 ### Core Implementation
 
 - [Connection driving](connection.rs) separates socket ownership and reconnect

@@ -28,6 +28,7 @@ fn text_content(text: &str) -> Vec<acp::ContentBlock> {
 
 fn simple_prompt() -> QueuedPrompt {
     QueuedPrompt {
+        target_session: None,
         event_id: "evt-1".to_string(),
         kind: QueuedPromptKind::User,
         text: "hello".to_string(),
@@ -165,6 +166,7 @@ fn queued_goal_continuation_is_hidden_from_user_queue_and_transcript() {
     );
 
     let hidden_prompt = QueuedPrompt {
+        target_session: None,
         event_id: "goal-continuation-1".to_string(),
         kind: QueuedPromptKind::GoalContinuation,
         text: "Continue working toward the active thread goal.".to_string(),
@@ -550,6 +552,7 @@ fn prompt_submit_while_active_queues() {
     let out = reduce(
         &mut rt,
         InboundEvent::PromptSubmit(QueuedPrompt {
+            target_session: None,
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
@@ -586,6 +589,7 @@ fn end_turn_drains_queue() {
     reduce(
         &mut rt,
         InboundEvent::PromptSubmit(QueuedPrompt {
+            target_session: None,
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
@@ -638,6 +642,7 @@ fn cancelled_does_not_drain_queue() {
     reduce(
         &mut rt,
         InboundEvent::PromptSubmit(QueuedPrompt {
+            target_session: None,
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),

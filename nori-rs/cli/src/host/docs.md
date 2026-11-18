@@ -135,6 +135,36 @@ host ls / stop / new --------------+                   SessionManager
   `--cwd` the local host starts the session in the caller's directory; a host
   named with `--host` may be another machine, so it uses its own folder.
 
+#### Mid-turn follow-ups
+
+Direct `nori` and the controller in `nori attach` send ordinary Enter immediately when idle. With a composed follow-up and an observed working turn, Enter requests steering and Tab requests the next turn. Completion, modal permission choices and focus navigation retain their own keys.
+
+An external client calls `_nori/session/follow_up` with a fresh JSON-RPC request ID. An example inner request is
+
+```json
+{"jsonrpc":"2.0","id":31,"method":"_nori/session/follow_up","params":{"session_id":"SESSION","expected_turn":"TURN","message_id":"correction-1","intent":"steer","prompt":[{"type":"text","text":"Use the blue sample."}]}}
+```
+
+| Transport | Session and turn identifiers | Authenticated sender in receipt |
+| --- | --- | --- |
+| Local host `/sessions` | Initialize with the host bearer and acquire the controller role. Check `result.capabilities.nori_sessions.follow_up == 1`. Use the conversation's `session_id` and the harness `request_id` from prompt admission or its prompting event. | `host-controller`. Observers receive the read-only error. |
+| Machine host `/managed` | Discover `nori.dev/followUp.version == 1` in the control initialize result’s `agentCapabilities._meta`. After ensure and ACP initialization, wrap the request in the same `{bindingId,generation,message}` envelope as the original prompt. Use the regular ACP session ID and that prompt's JSON-RPC ID, retaining its string or integer type. Allocate unique prompt IDs throughout the logical session. | `machine-client`, authenticated by the machine bearer and scoped to the admitted generation. |
+
+Send exactly the fields shown. Choose `steer` or `queue` for `intent`, supply nonempty ACP content and assign a stable, nonblank `message_id` of at most 256 bytes per submission. The host supplies the sender from the authorized path. It identifies the calling principal at this transport boundary. The response is a delivery receipt such as `{"message_id":"correction-1","sender":"host-controller","status":"injected"}`.
+
+| Receipt status | What the caller can report |
+| --- | --- |
+| `injected` | The adapter accepted input for the observed turn. The original prompt still owns output, terminal result, usage and cancellation. |
+| `queued` | The host admitted explicit next-turn input to its FIFO. |
+| `unsupported_queued` | The host admitted input for the next turn because guarded steering was unavailable. |
+| `idle_queued` | The observed turn finished during admission or the guard returned `promptRequired/noRunningTurn`. The host owns the next prompt. |
+| `rejected` | The host or adapter refused this delivery, for example because a different turn already owns the session. |
+| `unknown` | Delivery could not be confirmed. Keep the message ID for reconciliation. |
+
+Only the active connection's ACP v1 initialize result can enable injection. It must advertise `_meta.steering.supported == true` and report a guard-compatible adapter identity and version. The verified pins are `@agentclientprotocol/claude-agent-acp` 0.102.0 and `@agentclientprotocol/codex-acp` 2.7.0. Standalone Claude 0.108.1 also supports guarded delivery. The host sends `_session/steering` with `_meta.steering.idleBehavior = "promptRequired"`. A pending permission still needs its own response. Normal turn completion and settlement of pending permission requests allow the FIFO to drain. With prompt echo enabled, `/managed` emits `_nori/session/follow_up/submitted` before writing a steer. Use its message ID to place the pending input ahead of provider output and update it from the delivery receipt. For host-started queued prompts on `/managed`, correlate `_nori/session/follow_up/started` and `_nori/session/follow_up/finished` using `message_id` and `turn_id`. The finished notification carries the result or error. Local-host clients follow the ordinary managed session envelopes.
+
+When reconnecting, first reestablish the same live runtime. A machine client can reattach to a surviving logical ACP stream when the binding negotiated durable recovery. Repeat the identical request with its original message ID, turn, intent and content to reconcile delivery. The live host returns its retained receipt for an admitted ID. Reuse with different parameters fails. Identical text with distinct IDs represents distinct input. If the host incarnation, session runtime or binding generation changed, retain an uncertain outcome for outstanding input. Reissuing it under a new ID can duplicate delivery. Receipt deduplication is live state. Durable checkpointing waits for admitted queued work to settle. The [independent transport verifier](../../../../scripts/verify-host-follow-up/README.md) exercises both routes against the pinned adapters with loopback provider endpoints.
+
 #### Managed launch control v1
 
 **Start the machine host.** Set the following in the host's

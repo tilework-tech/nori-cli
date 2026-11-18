@@ -13,6 +13,7 @@ use crate::normalized::session_runtime::OpenMessage;
 use crate::normalized::session_runtime::QueuedPrompt;
 use crate::normalized::session_runtime::SessionPhase;
 use crate::normalized::session_runtime::SessionRuntime;
+use crate::normalized::session_runtime::SteerFence;
 use crate::normalized::session_runtime::TranscriptMessage;
 use crate::normalized::session_runtime::TranscriptRole;
 use nori_protocol::acp::v1 as acp;
@@ -24,7 +25,9 @@ pub enum InboundEvent {
     /// A `session/update` notification from the agent.
     Notification(Box<acp::SessionUpdate>),
     /// The response to an active `session/prompt` request.
-    PromptResponse { stop_reason: acp::StopReason },
+    PromptResponse {
+        stop_reason: acp::StopReason,
+    },
     /// A transport/protocol failure for the active `session/prompt` request.
     /// `failure` describes the disposition carried onto the completion (`None`
     /// for a clean forced-cancel/timeout).
@@ -34,19 +37,29 @@ pub enum InboundEvent {
     /// The response to an active `session/load` request.
     LoadResponse,
     /// The transport has assigned the active prompt its ACP wire request ID.
-    PromptStarted { request_id: acp::RequestId },
+    PromptStarted {
+        request_id: acp::RequestId,
+    },
     /// A `session/request_permission` from the agent.
-    PermissionRequest { request_id: String, call_id: String },
+    PermissionRequest {
+        request_id: String,
+        call_id: String,
+    },
     /// The user submitted a prompt (may be queued if a request is in flight).
     PromptSubmit(QueuedPrompt),
     /// A remote controller submitted a prompt that must not queue.
     PromptSubmitIfIdle(QueuedPrompt),
     /// The user requested cancellation of the active prompt.
     CancelSubmit,
+    SteerSettled,
     /// A controller requested cancellation only if it owns this prompt.
-    CancelSubmitFor { request_id: acp::RequestId },
+    CancelSubmitFor {
+        request_id: acp::RequestId,
+    },
     /// A `session/load` was initiated.
-    LoadSubmit { request_id: acp::RequestId },
+    LoadSubmit {
+        request_id: acp::RequestId,
+    },
 }
 
 pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
@@ -55,6 +68,7 @@ pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
         InboundEvent::PromptResponse { .. } => "prompt_response",
         InboundEvent::PromptFailed { .. } => "prompt_failed",
         InboundEvent::LoadResponse => "load_response",
+        InboundEvent::SteerSettled => "steer_settled",
         InboundEvent::PromptStarted { .. } => "prompt_started",
         InboundEvent::PermissionRequest { .. } => "permission_request",
         InboundEvent::PromptSubmit(_) | InboundEvent::PromptSubmitIfIdle(_) => "prompt_submit",
@@ -111,11 +125,20 @@ pub fn reduce(
     };
 
     match event {
+        InboundEvent::SteerSettled => {
+            let previous = std::mem::replace(&mut runtime.steer_fence, SteerFence::Open);
+            if previous == SteerFence::DrainAfterReply && runtime.phase == SessionPhase::Idle {
+                drain_queue(runtime, &mut out);
+            }
+        }
         InboundEvent::PromptSubmit(prompt) => {
             reduce_prompt_submit(runtime, prompt, &mut out);
         }
         InboundEvent::PromptSubmitIfIdle(prompt) => {
-            if runtime.phase == SessionPhase::Idle && runtime.queue.is_empty() {
+            if runtime.phase == SessionPhase::Idle
+                && runtime.queue.is_empty()
+                && runtime.steer_fence == SteerFence::Open
+            {
                 start_prompt(runtime, prompt, &mut out);
             } else {
                 out.side_effects.push(SideEffect::RejectPromptBusy {
@@ -167,7 +190,10 @@ fn reduce_prompt_submit(
     prompt: QueuedPrompt,
     out: &mut ReduceOutput,
 ) {
-    if runtime.phase != SessionPhase::Idle {
+    if runtime.phase != SessionPhase::Idle || runtime.steer_fence != SteerFence::Open {
+        if runtime.phase == SessionPhase::Idle {
+            runtime.steer_fence = SteerFence::DrainAfterReply;
+        }
         runtime.queue.push_back(prompt);
         debug!(
             target: "acp_event_flow",
@@ -363,7 +389,17 @@ fn reduce_prompt_response(
             failure: None,
         }));
 
-    if should_drain_queue && let Some(next_prompt) = runtime.queue.pop_front() {
+    if should_drain_queue {
+        if runtime.steer_fence == SteerFence::Open {
+            drain_queue(runtime, out);
+        } else {
+            runtime.steer_fence = SteerFence::DrainAfterReply;
+        }
+    }
+}
+
+fn drain_queue(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
+    if let Some(next_prompt) = runtime.queue.pop_front() {
         out.events.push(reclaim::queue_changed(runtime));
         start_prompt(runtime, next_prompt, out);
     }

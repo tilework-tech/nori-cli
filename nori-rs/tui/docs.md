@@ -934,8 +934,8 @@ Quitting an attached cloud session detaches through connection teardown;
 
 #### Queued follow-ups
 
-Prompts submitted while a turn runs wait in the harness queue, the only queue
-that is delivered. The bottom pane's queued-message preview
+While the direct composer observes a working turn, Enter steers that turn and
+Tab queues a composed follow-up. The harness owns the queue. The bottom pane's queued-message preview
 ([`queued_user_messages.rs`](src/bottom_pane/queued_user_messages.rs)) mirrors
 each `QueueChanged` snapshot, keeping its `entries` IDs. Taking a message back
 lives in [`queue_recall.rs`](src/chatwidget/queue_recall.rs):
@@ -965,9 +965,10 @@ Up (empty composer) / Alt+Up, no popup or overlay
 - The `alt + ↑ edit` hint renders only while an editable row is visible. Rows
   from a host that sends only `prompts` (no `entries`) render without the hint
   and cannot be taken back; prompts with images are never editable.
-- The edited text is submitted through the normal prompt path and joins the end
-  of the queue as a new prompt. The withdrawn prompt's original submission
-  fails with `PromptWithdrawn`, which the widget ignores.
+- The edited text goes through the composer as new input. Enter sends it when
+  idle or steers the observed working turn. Tab during that turn places it at
+  the end of the queue. The widget ignores `PromptWithdrawn` when reclaiming
+  an item whose original submission is awaiting a prompt result.
 - When Up does not reclaim, it falls through to composer history recall.
 
 #### Multi-session view

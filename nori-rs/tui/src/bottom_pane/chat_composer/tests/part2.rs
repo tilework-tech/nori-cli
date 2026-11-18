@@ -289,7 +289,7 @@ fn slash_init_dispatches_command_and_does_not_submit_literal_text() {
         InputResult::Command(cmd) => {
             assert_eq!(cmd.command(), "init");
         }
-        InputResult::Submitted(text) => {
+        InputResult::Submitted(text) | InputResult::Queued(text) => {
             panic!("expected command dispatch, but composer submitted literal text: {text}")
         }
         InputResult::None => panic!("expected Command result for '/init'"),
@@ -361,7 +361,7 @@ fn slash_tab_then_enter_dispatches_builtin_command() {
         composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     match result {
         InputResult::Command(cmd) => assert_eq!(cmd.command(), "diff"),
-        InputResult::Submitted(text) => {
+        InputResult::Submitted(text) | InputResult::Queued(text) => {
             panic!("expected command dispatch after Tab completion, got literal submit: {text}")
         }
         InputResult::None => panic!("expected Command result for '/diff'"),
@@ -394,7 +394,7 @@ fn slash_mention_dispatches_command_and_inserts_at() {
         InputResult::Command(cmd) => {
             assert_eq!(cmd.command(), "mention");
         }
-        InputResult::Submitted(text) => {
+        InputResult::Submitted(text) | InputResult::Queued(text) => {
             panic!("expected command dispatch, but composer submitted literal text: {text}")
         }
         InputResult::None => panic!("expected Command result for '/mention'"),

@@ -83,6 +83,10 @@ enum HarnessCommand {
         admission: PromptAdmission,
         response_tx: oneshot::Sender<anyhow::Result<acp::v1::RequestId>>,
     },
+    FollowUp {
+        submission: crate::follow_up::Submission,
+        response_tx: oneshot::Sender<anyhow::Result<crate::FollowUpReceipt>>,
+    },
     /// Shut down the active harness session.
     Shutdown {
         child_grace: std::time::Duration,
@@ -301,6 +305,68 @@ impl HarnessHandle {
         self.prompt_with_meta(content, None).await
     }
 
+    /// Submit against the observed wire turn. Commands enter the session FIFO
+    /// immediately, even if the caller awaits their receipts concurrently.
+    pub fn follow_up(
+        &self,
+        message_id: String,
+        expected_turn: acp::v1::RequestId,
+        intent: crate::FollowUpIntent,
+        prompt: Vec<acp::v1::ContentBlock>,
+        sender: String,
+    ) -> impl std::future::Future<Output = anyhow::Result<crate::FollowUpReceipt>> + Send + 'static
+    {
+        self.submit_follow_up(crate::follow_up::Submission {
+            message_id,
+            sender,
+            expected_turn,
+            intent,
+            prompt,
+            origin: crate::follow_up::PromptOrigin::External,
+        })
+    }
+
+    /// Submit a follow-up from the local composer. Only its own plain-text
+    /// queued messages can be taken back for editing.
+    pub fn local_follow_up(
+        &self,
+        message_id: String,
+        expected_turn: acp::v1::RequestId,
+        intent: crate::FollowUpIntent,
+        prompt: Vec<acp::v1::ContentBlock>,
+    ) -> impl std::future::Future<Output = anyhow::Result<crate::FollowUpReceipt>> + Send + 'static
+    {
+        self.submit_follow_up(crate::follow_up::Submission {
+            message_id,
+            sender: "local".into(),
+            expected_turn,
+            intent,
+            prompt,
+            origin: crate::follow_up::PromptOrigin::LocalComposer,
+        })
+    }
+
+    fn submit_follow_up(
+        &self,
+        submission: crate::follow_up::Submission,
+    ) -> impl std::future::Future<Output = anyhow::Result<crate::FollowUpReceipt>> + Send + 'static
+    {
+        let (response_tx, response_rx) = oneshot::channel();
+        let submitted = self
+            .command_tx
+            .send(HarnessCommand::FollowUp {
+                submission,
+                response_tx,
+            })
+            .is_ok();
+        async move {
+            anyhow::ensure!(submitted, "session is closed");
+            response_rx
+                .await
+                .map_err(|_| anyhow::anyhow!("follow-up receipt lost; delivery unknown"))?
+        }
+    }
+
     pub(crate) async fn prompt_with_meta(
         &self,
         content: Vec<acp::v1::ContentBlock>,
@@ -316,40 +382,57 @@ impl HarnessHandle {
         content: Vec<acp::v1::ContentBlock>,
         meta: Option<acp::v1::Meta>,
     ) -> anyhow::Result<acp::v1::RequestId> {
-        self.prompt_with_meta_and_admission(content, meta, PromptAdmission::RejectIfBusy)
-            .await
+        self.submit_prompt_if_idle(content, meta).await
     }
 
-    async fn prompt_with_meta_and_admission(
+    /// Enqueue the idle-only command now and resolve on transport admission.
+    pub fn submit_prompt_if_idle(
+        &self,
+        content: Vec<acp::v1::ContentBlock>,
+        meta: Option<acp::v1::Meta>,
+    ) -> impl std::future::Future<Output = anyhow::Result<acp::v1::RequestId>> + Send + 'static
+    {
+        self.prompt_with_meta_and_admission(content, meta, PromptAdmission::RejectIfBusy)
+    }
+
+    fn prompt_with_meta_and_admission(
         &self,
         content: Vec<acp::v1::ContentBlock>,
         meta: Option<acp::v1::Meta>,
         admission: PromptAdmission,
-    ) -> anyhow::Result<acp::v1::RequestId> {
+    ) -> impl std::future::Future<Output = anyhow::Result<acp::v1::RequestId>> + Send + 'static
+    {
         let (response_tx, response_rx) = oneshot::channel();
-        self.command_tx
+        let sent = self
+            .command_tx
             .send(HarnessCommand::Prompt {
                 content,
                 meta,
                 admission,
                 response_tx,
             })
-            .map_err(|_| {
-                anyhow::Error::new(HarnessTransportClosed("ACP agent command channel closed"))
-            })?;
-        let request_id = response_rx.await.map_err(|_| {
-            anyhow::Error::new(HarnessTransportClosed(
-                "ACP agent did not accept the prompt",
-            ))
-        })??;
-        if let Some(first_prompt_started) = &self.first_prompt_started
-            && !first_prompt_started
-                .fired
-                .swap(true, std::sync::atomic::Ordering::AcqRel)
-        {
-            (first_prompt_started.callback)();
+            .is_ok();
+        let first_prompt_started = self.first_prompt_started.clone();
+        async move {
+            if !sent {
+                return Err(anyhow::Error::new(HarnessTransportClosed(
+                    "ACP agent command channel closed",
+                )));
+            }
+            let request_id = response_rx.await.map_err(|_| {
+                anyhow::Error::new(HarnessTransportClosed(
+                    "ACP agent did not accept the prompt",
+                ))
+            })??;
+            if let Some(first_prompt_started) = &first_prompt_started
+                && !first_prompt_started
+                    .fired
+                    .swap(true, std::sync::atomic::Ordering::AcqRel)
+            {
+                (first_prompt_started.callback)();
+            }
+            Ok(request_id)
         }
-        Ok(request_id)
     }
 
     /// Shut down the active harness session.
@@ -1070,6 +1153,14 @@ pub(crate) fn launch_session_from(
                     } => {
                         backend_for_agent
                             .submit_prompt(content, meta, admission, response_tx)
+                            .await;
+                    }
+                    HarnessCommand::FollowUp {
+                        submission,
+                        response_tx,
+                    } => {
+                        backend_for_agent
+                            .submit_follow_up(submission, response_tx)
                             .await;
                     }
                     HarnessCommand::Shutdown {

@@ -52,6 +52,7 @@ mod effective_cwd_tracker;
 mod exec_cell;
 mod exec_command;
 mod file_search;
+mod follow_up;
 mod frames;
 mod get_git_diff;
 mod git_marker;

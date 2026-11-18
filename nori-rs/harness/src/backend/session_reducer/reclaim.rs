@@ -90,6 +90,7 @@ mod tests {
     fn prompt(event_id: &str, text: &str) -> QueuedPrompt {
         let content = vec![acp::ContentBlock::Text(acp::TextContent::new(text))];
         QueuedPrompt {
+            target_session: None,
             event_id: event_id.to_string(),
             kind: QueuedPromptKind::User,
             text: text.to_string(),

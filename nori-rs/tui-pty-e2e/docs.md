@@ -168,11 +168,12 @@ subdirectories), that Esc saves nothing and keeps inheriting the global
 setting, that a one-off `-c` override still shows the question without being
 saved, and that an unrelated `-c tui={...}` table keeps the project's choice.
 
-[Queue recall scenarios](tests/queue_recall.rs) queue follow-ups behind a
-running turn and check that Up or Alt+Up returns the newest queued message to
-the composer, removes it from the preview, and that the agent receives the
-edited text once and the original never, including Alt+Up outside a
-delegated child with `[features] multi_session` on.
+[Queue recall scenarios](tests/queue_recall.rs) press Tab to queue a follow-up
+during a running turn, then Up or Alt+Up to move it back into the composer.
+After an edit, Tab appends the revised text to the queue and Enter steers the
+active turn. The mock agent's prompt log checks that the withdrawn text never
+runs as a separate prompt. Coverage includes identical messages and Alt+Up
+outside a delegated child with `[features] multi_session` on.
 
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same

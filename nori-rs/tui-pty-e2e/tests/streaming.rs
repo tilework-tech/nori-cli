@@ -191,3 +191,33 @@ fn test_prompt_still_streams_after_interrupt() {
         )
         .expect("Second prompt should also be interruptible");
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn direct_busy_enter_reports_fallback_and_tab_explicitly_queues() {
+    let mut session = TuiSession::spawn_with_config(32, 110, SessionConfig::new()).unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.submit_input("mock:stream-until-cancel").unwrap();
+    session.wait_for_text("esc to interrupt", TIMEOUT).unwrap();
+    session.submit_input("Chart the orchard first").unwrap();
+    session
+        .wait_for_text("Steering unavailable", TIMEOUT)
+        .unwrap();
+    session.type_input("Count the cedar trees").unwrap();
+    session.send_key(Key::Tab).unwrap();
+    session
+        .wait_for_text("Queued for the next turn", TIMEOUT)
+        .unwrap();
+}
+
+#[path = "support/steering.rs"]
+mod steering;
+
+#[test]
+#[cfg(target_os = "linux")]
+fn direct_enter_delivers_to_the_original_turn_then_tab_drains_once() {
+    let config = SessionConfig::new().with_agent_env("MOCK_AGENT_STEERING", "1");
+    let mut session = TuiSession::spawn_with_config(34, 110, config).unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
+    steering::exercise(&mut session);
+}

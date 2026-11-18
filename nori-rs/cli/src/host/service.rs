@@ -76,7 +76,7 @@ impl HostService {
         if let (Some(launches), Some(recovery)) = (&self.launches, &self.recovery) {
             return match method {
                 "initialize" => Ok(json!({
-                    "agentCapabilities":{"_meta":{"nori.dev/managedHost":launches.capabilities(),"nori.dev/durableRecovery":{"version":1}}},
+                    "agentCapabilities":{"_meta":{"nori.dev/managedHost":launches.capabilities(),"nori.dev/durableRecovery":{"version":1},"nori.dev/followUp":{"version":1}}},
                     "server_info":{"name":"nori","version":env!("CARGO_PKG_VERSION")}
                 })),
                 "_nori/session/ensure" => recovery.ensure(launches, params.clone()).await,
@@ -244,6 +244,7 @@ impl ManagedAgent for HostService {
                     .pointer_mut("/result/capabilities/nori_sessions")
             {
                 sessions["session_cwd"] = json!(true);
+                sessions["follow_up"] = json!(1);
             }
             return reply;
         }
