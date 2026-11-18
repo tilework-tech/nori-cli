@@ -30,8 +30,9 @@ use super::managed_wire::send_frame;
 
 struct HostState<M> {
     host: Arc<M>,
+    lanes: super::standard_wire::Lanes,
     token: Arc<str>,
-    instance: uuid::Uuid,
+    instance: Arc<str>,
     control: Arc<Mutex<HostControl>>,
     generation: Arc<AtomicI64>,
     shutdown: CancellationToken,
@@ -41,8 +42,9 @@ impl<M> Clone for HostState<M> {
     fn clone(&self) -> Self {
         Self {
             host: self.host.clone(),
+            lanes: self.lanes.clone(),
             token: self.token.clone(),
-            instance: self.instance,
+            instance: self.instance.clone(),
             control: self.control.clone(),
             generation: self.generation.clone(),
             shutdown: self.shutdown.clone(),
@@ -53,6 +55,7 @@ impl<M> Clone for HostState<M> {
 pub(super) fn router<M: ManagedAgent>(
     host: Arc<M>,
     token: String,
+    instance: String,
     control: Arc<Mutex<HostControl>>,
     shutdown: CancellationToken,
 ) -> axum::Router {
@@ -62,8 +65,9 @@ pub(super) fn router<M: ManagedAgent>(
     }
     router.with_state(HostState {
         host,
+        lanes: Default::default(),
         token: token.into(),
-        instance: uuid::Uuid::new_v4(),
+        instance: instance.into(),
         control,
         generation: Arc::new(AtomicI64::new(0)),
         shutdown,
@@ -108,7 +112,7 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
             if STANDARD {
                 tokio::select! {
                     _ = cancel.cancelled() => {},
-                    result = super::standard_wire::serve(socket, state.host) => {
+                    result = super::standard_wire::serve(socket, state.host, state.lanes, state.shutdown) => {
                         if let Err(error) = result {
                             tracing::debug!(%error, "standard ACP machine connection ended");
                         }
@@ -191,6 +195,7 @@ async fn serve<M: ManagedAgent>(
                         };
                         initialized |= reply.response.get("error").is_none();
                         send_frame(&mut sink, Message::Text(reply.response.to_string().into())).await?;
+                        drop(reply.delivery_guard);
                         if let Some(mut next) = reply.subscription {
                             for envelope in next.replay.drain(..) {
                                 send_frame(&mut sink, Message::Text(managed_event(&envelope).to_string().into())).await?;

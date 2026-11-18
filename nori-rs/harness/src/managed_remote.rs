@@ -294,10 +294,12 @@ impl ManagedAgent for ManagedRemoteHost {
         };
         match result {
             Ok((result, subscription)) => ManagedReply {
+                delivery_guard: None,
                 response: json!({"jsonrpc":"2.0","id":id,"result":result}),
                 subscription,
             },
             Err(error) => ManagedReply {
+                delivery_guard: None,
                 response: json!({"jsonrpc":"2.0","id":id,"error":{"code":error.code,"message":error.message}}),
                 subscription: None,
             },

@@ -15,6 +15,8 @@ pub struct ManagedSubscription {
 /// One JSON-RPC response and an optional replacement event subscription.
 pub struct ManagedReply {
     pub response: Value,
+    /// Keep a checkpoint current until the transport flushes its response.
+    pub delivery_guard: Option<tokio::sync::OwnedMutexGuard<()>>,
     pub subscription: Option<ManagedSubscription>,
 }
 
@@ -22,11 +24,16 @@ pub struct ManagedReply {
 pub struct StandardAcpConnection {
     pub input: mpsc::Sender<Value>,
     pub output: mpsc::Receiver<Value>,
+    pub finished: tokio::task::JoinHandle<anyhow::Result<()>>,
 }
 
 /// Transport-independent command handling for a managed session host.
 pub trait ManagedAgent: Send + Sync + 'static {
     fn request(&self, request: Value) -> impl Future<Output = ManagedReply> + Send;
+
+    fn recovery(&self) -> Option<crate::recovery::SharedRecovery> {
+        None
+    }
 
     fn standard_acp_enabled(&self) -> bool {
         false

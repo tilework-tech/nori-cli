@@ -283,6 +283,40 @@ impl Registry {
         Ok(process)
     }
 
+    pub(super) fn import_history(
+        &mut self,
+        settings: SessionSettings,
+        status: SessionStatus,
+        acp_session_id: Option<String>,
+    ) -> anyhow::Result<()> {
+        let id = settings.conversation_id;
+        anyhow::ensure!(
+            !self.sessions.contains_key(&id),
+            "session {id} is already registered"
+        );
+        let mut ancestor = settings.parent;
+        while let Some(parent) = ancestor {
+            anyhow::ensure!(
+                parent != id,
+                "checkpoint has a cycle in its session ancestry"
+            );
+            ancestor = self
+                .sessions
+                .get(&parent)
+                .and_then(|entry| entry.settings.parent);
+        }
+        let mut entry = Entry::new(settings, self.next_order, None);
+        self.next_order += 1;
+        entry.end(if status.is_closed() {
+            status
+        } else {
+            SessionStatus::Failed
+        });
+        entry.acp_session_id = acp_session_id;
+        self.sessions.insert(id, entry);
+        Ok(())
+    }
+
     /// Number manager-owned events even when the session has no live process.
     pub(crate) fn emit(
         &mut self,

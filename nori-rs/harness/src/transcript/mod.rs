@@ -19,6 +19,7 @@ mod loader;
 mod project;
 mod recorder;
 mod session_event;
+mod sync_retry;
 mod types;
 
 /// Subdirectory for transcripts within NORI_HOME

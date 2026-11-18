@@ -400,6 +400,13 @@ authority for prompt, permission, transcript, and session state. The
 `ManagedClient` re-export lets an attached frontend consume this transport
 without importing the ACP host crate directly.
 
+With managed recovery and private recording enabled, the binding keeps each
+recorder open through the checkpoint barrier. The writer hashes bytes appended
+since its last successful sync. A writeback error may surface only once, so on
+retry the writer checks the file length, rewrites the unsynced suffix at its
+original offsets, verifies its digest and syncs the file again. A length or
+digest mismatch fails the barrier. [Recorder sync retry](src/transcript/sync_retry.rs)
+
 #### Goal ownership and MCP routing
 
 Thread goals are Nori-owned live state. The harness is the authority for their
@@ -697,8 +704,8 @@ processes.
   child's registry entry task-done (`Registry::mark_task_done`) when its
   delegation reaches `Completed`, before closing the child; the entry then
   records that close as `Done`. Every other end keeps its ordinary status.
-  `Done`, like the parent link and the rest of the registry, lives only in
-  the in-memory manager; the host keeps no snapshot of it. After a host
+  With `[host] managed = false`, the parent link and terminal status live
+  only in the in-memory manager. After a local host
   restart a finished child is not listed at all (`nori host ls` and the
   `nori attach` list omit it), and reopening its transcript with `/resume`
   starts it as a live top-level `ready` session with no parent link.
@@ -747,6 +754,18 @@ processes.
   nor managed remote list responses expose it.
   Resume validates failed status, agent identity, and a readable transcript,
   then reserves capacity before launching the replacement.
+- **Managed checkpoint metadata.** `checkpoint_session(id, include_private_transcript)`
+  captures the named conversation's identity, parent, source, status and its
+  delegation records. The caller holds the binding admission barrier.
+  A checkpoint that requests continuation evidence requires a live, idle
+  recorder. The writer drains prior writes, syncs its file and reads from
+  that same open file. The returned JSONL is private recovery data.
+  `import_checkpoint` restores historical records to the destination registry
+  with the supplied workspace and policy. A finished child retains its
+  `Done` status and parent ID even when its parent is on a different host.
+  A previously live session appears interrupted (`Failed`). Import consumes
+  no process slot and submits no prompts. Provider continuation and durable
+  cross-machine delegation result delivery require their own owning paths.
 - **Close and shutdown.** `close(id, child_grace)` cancels delegated descendants and shuts the
   target session down, bounded by `shutdown_timeout`. An ended target has no
   process to stop, but its running descendants and pending approvals still
@@ -867,8 +886,8 @@ remote /session/delegate ----------+         |
 - Explicit parent close cancels descendants and invalidates pending delegation
   approvals, including when the parent has already failed. A parent process
   crash leaves children running; results wait for the parent's stable-ID
-  resume. These held results and delegation state belong to the live manager,
-  not a persistent host restart snapshot. A child crash produces a failure
+  resume. The held result queue belongs to the live manager. Managed checkpoints
+  can carry historical delegation metadata as described above. A child crash produces a failure
   result without failing its parent.
 - Admission and explicit close share a mutex so a start cannot escape a parent
   close. Result work is claimed under manager state, then prompts and process

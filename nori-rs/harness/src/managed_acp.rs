@@ -271,7 +271,7 @@ pub fn connect(
 ) -> StandardAcpConnection {
     let (input, mut client) = mpsc::channel(64);
     let (output, incoming) = mpsc::channel(64);
-    tokio::spawn(async move {
+    let finished = tokio::spawn(async move {
         let (to_agent, mut writes) = mpsc::channel::<Value>(64);
         let write = async move {
             while let Some(message) = writes.recv().await {
@@ -309,14 +309,11 @@ pub fn connect(
             }
             Ok(())
         };
-        let result: Result<()> =
-            tokio::select! { result = write => result, result = relay => result };
-        if let Err(error) = result {
-            tracing::debug!(%error, "logical ACP connection ended");
-        }
+        tokio::select! { result = write => result, result = relay => result }
     });
     StandardAcpConnection {
         input,
         output: incoming,
+        finished,
     }
 }

@@ -28,6 +28,7 @@ use serde_json::json;
 use tokio::sync::Notify;
 
 pub(super) struct HostService {
+    pub recovery: Option<super::recovery_control::RecoveryControl>,
     pub launches: Option<ManagedLaunches>,
     pub manager: SessionManager,
     pub managed: ManagedRemoteHost,
@@ -72,16 +73,15 @@ impl HostService {
             self.stop.notify_one();
             return Ok(json!({"stopping":true}));
         }
-        if let Some(launches) = &self.launches {
+        if let (Some(launches), Some(recovery)) = (&self.launches, &self.recovery) {
             return match method {
                 "initialize" => Ok(json!({
-                    "agentCapabilities":{"_meta":{"nori.dev/managedHost":launches.capabilities()}},
+                    "agentCapabilities":{"_meta":{"nori.dev/managedHost":launches.capabilities(),"nori.dev/durableRecovery":{"version":1}}},
                     "server_info":{"name":"nori","version":env!("CARGO_PKG_VERSION")}
                 })),
-                "_nori/session/ensure" => {
-                    let request = serde_json::from_value(params.clone())
-                        .map_err(|error| LaunchRefusal::InvalidParams(error.into()))?;
-                    Ok(serde_json::to_value(launches.ensure(request)?)?)
+                "_nori/session/ensure" => recovery.ensure(launches, params.clone()).await,
+                method if method.starts_with("_nori/host/") => {
+                    recovery.control(launches, method, params).await
                 }
                 "_nori/session/status" => {
                     let scope: LaunchScope = serde_json::from_value(params.clone())?;
@@ -164,6 +164,10 @@ impl HostService {
 }
 
 impl ManagedAgent for HostService {
+    fn recovery(&self) -> Option<nori_harness::remote_agent::recovery::SharedRecovery> {
+        self.recovery.as_ref().map(|r| r.shared.clone())
+    }
+
     fn standard_acp_enabled(&self) -> bool {
         self.launches.is_some()
     }
@@ -187,6 +191,13 @@ impl ManagedAgent for HostService {
             options.recording,
             options.client_mcp,
         );
+        let additions = if let Some(recovery) = &self.recovery
+            && let Some(writers) = recovery.writers(binding_id, generation).await
+        {
+            additions.with_barrier(writers)
+        } else {
+            additions
+        };
         Ok(nori_harness::managed_acp::connect(
             launch.stdout,
             launch.stdin,
@@ -221,26 +232,64 @@ impl ManagedAgent for HostService {
             return reply;
         }
         let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
-        let result =
-            if request["jsonrpc"] == "2.0" && request.get("id").is_some() && params.is_object() {
-                self.lifecycle(method, &params).await
+        let mut delivery_guard = None;
+        let mut checkpoint_fence = None;
+        let result = if request["jsonrpc"] != "2.0"
+            || request.get("id").is_none()
+            || !params.is_object()
+        {
+            Err(anyhow::anyhow!(
+                "expected a JSON-RPC request with an id and object params"
+            ))
+        } else if method == "_nori/host/checkpoint"
+            && let Some(recovery) = &self.recovery
+        {
+            let attempt = params
+                .get("attemptId")
+                .cloned()
+                .unwrap_or_else(|| json!(uuid::Uuid::new_v4()));
+            if attempt.as_str().is_some_and(|id| !id.is_empty()) {
+                let fence = json!({"bindingId":params["bindingId"],"generation":params["generation"],"attemptId":attempt});
+                checkpoint_fence = Some(fence.clone());
+                recovery
+                    .checkpoint(&params)
+                    .await
+                    .map(|(mut result, guard)| {
+                        delivery_guard = Some(guard);
+                        result["fence"] = fence;
+                        result
+                    })
             } else {
-                Err(anyhow::anyhow!(
-                    "expected a JSON-RPC request with an id and object params"
-                ))
-            };
+                Err(anyhow::anyhow!("attemptId must be a nonempty string"))
+            }
+        } else {
+            self.lifecycle(method, &params).await
+        };
         let response = match result {
             Ok(result) => json!({"jsonrpc":"2.0","id":request["id"],"result":result}),
             Err(error) => {
                 let code = match error.downcast_ref::<LaunchRefusal>() {
                     Some(LaunchRefusal::AtCapacity) => -32017,
                     Some(LaunchRefusal::InvalidParams(_)) => -32602,
-                    None => -32000,
+                    None => nori_harness::remote_agent::recovery::StorageFailure::rpc_code(
+                        &error, -32000,
+                    ),
                 };
-                json!({"jsonrpc":"2.0","id":request["id"],"error":{"code":code,"message":error.to_string()}})
+                let mut body = json!({"code":code,"message":error.to_string()});
+                if matches!(method, "_nori/host/release" | "_nori/host/checkpoint")
+                    && let Some(recovery) = &self.recovery
+                    && let Some(watermarks) = recovery.saved_through(&params).await
+                {
+                    body["data"] = json!({"savedThrough":watermarks});
+                }
+                if let Some(fence) = checkpoint_fence {
+                    body["data"]["fence"] = fence;
+                }
+                json!({"jsonrpc":"2.0","id":request["id"],"error":body})
             }
         };
         ManagedReply {
+            delivery_guard,
             response,
             subscription: None,
         }
