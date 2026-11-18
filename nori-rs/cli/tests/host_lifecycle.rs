@@ -485,3 +485,6 @@ async fn a_delegated_child_works_in_its_parents_folder() {
     assert_eq!(child["cwd"], canonical(folder.path()));
     tokio::task::block_in_place(|| wait_for_file(&marker));
 }
+
+#[path = "host_lifecycle/managed.rs"]
+mod managed;

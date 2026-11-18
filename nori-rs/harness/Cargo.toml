@@ -37,6 +37,9 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 toml = { workspace = true }
 toml_edit = { workspace = true }
 dirs = { workspace = true }
+dunce = { workspace = true }
+hex = { workspace = true }
+sha2 = { workspace = true }
 diffy = { workspace = true }
 nori-acp-host = { workspace = true }
 nori-config = { workspace = true }

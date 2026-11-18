@@ -9,6 +9,8 @@ use anyhow::Context;
 use nori_config::NoriConfig;
 use nori_config::NoriConfigOverrides;
 use nori_harness::ConversationId;
+use nori_harness::managed_launch::ManagedLaunches;
+use nori_harness::managed_launch::session_folder;
 use nori_harness::remote_agent::ManagedAgent;
 use nori_harness::remote_agent::ManagedRemoteHost;
 use nori_harness::remote_agent::ManagedReply;
@@ -25,6 +27,7 @@ use serde_json::json;
 use tokio::sync::Notify;
 
 pub(super) struct HostService {
+    pub launches: Option<ManagedLaunches>,
     pub manager: SessionManager,
     pub managed: ManagedRemoteHost,
     pub config: Arc<NoriConfig>,
@@ -33,25 +36,11 @@ pub(super) struct HostService {
     pub stop: Notify,
 }
 
-/// The canonical form of a requested session folder, which must already
-/// exist as a directory on this machine.
-fn session_folder(requested: &str) -> anyhow::Result<PathBuf> {
-    let path = Path::new(requested);
-    anyhow::ensure!(
-        path.is_absolute(),
-        "session folder must be an absolute path: {requested}"
-    );
-    let folder = dunce::canonicalize(path).map_err(|error| match error.kind() {
-        std::io::ErrorKind::NotFound => {
-            anyhow::anyhow!("session folder does not exist on the host: {requested}")
-        }
-        _ => anyhow::anyhow!("cannot open session folder {requested}: {error}"),
-    })?;
-    anyhow::ensure!(
-        folder.is_dir(),
-        "session folder is not a directory: {requested}"
-    );
-    Ok(folder)
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LaunchScope {
+    binding_id: String,
+    generation: i64,
 }
 
 impl HostService {
@@ -82,6 +71,24 @@ impl HostService {
             self.stop.notify_one();
             return Ok(json!({"stopping":true}));
         }
+        if let Some(launches) = &self.launches {
+            return match method {
+                "initialize" => Ok(json!({
+                    "agentCapabilities":{"_meta":{"nori.dev/managedHost":launches.capabilities()}},
+                    "server_info":{"name":"nori","version":env!("CARGO_PKG_VERSION")}
+                })),
+                "_nori/session/ensure" => Ok(serde_json::to_value(
+                    launches.ensure(serde_json::from_value(params.clone())?)?,
+                )?),
+                "_nori/session/status" => {
+                    let scope: LaunchScope = serde_json::from_value(params.clone())?;
+                    Ok(serde_json::to_value(
+                        launches.status(&scope.binding_id, scope.generation)?,
+                    )?)
+                }
+                _ => anyhow::bail!("unsupported managed host operation"),
+            };
+        }
         if method == "_nori/session/new" {
             let string = |key: &str| {
                 params
@@ -95,7 +102,7 @@ impl HostService {
             };
             let (cwd, agent, prompt) = (string("cwd")?, string("agent")?, string("prompt")?);
             let mut config = match cwd {
-                Some(cwd) => self.config_in(session_folder(cwd)?).await?,
+                Some(cwd) => self.config_in(session_folder(Path::new(cwd))?).await?,
                 None => (*self.config).clone(),
             };
             if let Some(agent) = agent {
@@ -156,14 +163,16 @@ impl HostService {
 impl ManagedAgent for HostService {
     async fn request(&self, request: Value) -> ManagedReply {
         let method = request["method"].as_str().unwrap_or_default();
-        if !matches!(
-            method,
-            "_nori/host/stop"
-                | "_nori/session/new"
-                | "_nori/session/close"
-                | "_nori/session/cancel"
-                | "_nori/session/resume"
-        ) {
+        if self.launches.is_none()
+            && !matches!(
+                method,
+                "_nori/host/stop"
+                    | "_nori/session/new"
+                    | "_nori/session/close"
+                    | "_nori/session/cancel"
+                    | "_nori/session/resume"
+            )
+        {
             let initialize = method == "initialize";
             let mut reply = self.managed.request(request).await;
             if initialize

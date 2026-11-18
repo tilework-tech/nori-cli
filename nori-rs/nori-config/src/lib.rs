@@ -47,6 +47,7 @@ pub use types::FooterSegmentConfig;
 pub use types::FooterSegmentConfigToml;
 pub use types::HistoryPersistence;
 pub use types::HooksConfigToml;
+pub use types::HostConfig;
 pub use types::HotkeyAction;
 pub use types::HotkeyBinding;
 pub use types::HotkeyConfig;
