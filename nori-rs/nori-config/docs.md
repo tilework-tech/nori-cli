@@ -70,6 +70,9 @@ marks them so frontends ignore and hide them unless `multi_session` is on.
 default to false. For both shared and dedicated layouts, `max_sessions` defaults
 to eight process slots and must be positive. A dedicated binding can use
 spare slots for several rebuilt side sessions beside its parent.
+`side_confinement` is `"preferred"` or `"required"` and defaults to
+`"preferred"`. It decides whether a rebuilt side may start when the machine
+cannot create the OS read-only launch.
 [Host configuration and admission](../cli/src/host/docs.md#managed-launch-control-v1)
 
 `[default_models]` maps an agent slug to a model id. This crate only stores the

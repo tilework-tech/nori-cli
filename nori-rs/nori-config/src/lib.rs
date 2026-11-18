@@ -65,6 +65,7 @@ pub use types::PackageDistribution;
 pub use types::ProjectConfig;
 pub use types::ResolvedDistribution;
 pub use types::ScriptTimeout;
+pub use types::SideConfinement;
 pub use types::TerminalNotifications;
 pub use types::ToolOutput;
 pub use types::TuiConfig;

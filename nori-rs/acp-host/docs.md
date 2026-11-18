@@ -359,7 +359,7 @@ See the [machine invocation and recovery control operations](../cli/src/host/doc
 A machine provisioned with `[host] side_sessions = true` advertises
 `rebuiltSideSessions: 1` alongside `standardAcp: 1` in its managed-host
 capabilities. The default is off. Sessions checks this field and its rollout
-policy before opening a side thread. The host checks OS and adapter support on each launch. On the parent's existing
+policy before opening a side thread. The host checks adapter support on each launch and probes OS confinement support once, when the host starts. On the parent's existing
 `/managed` connection, send the following frame after the regular ACP session
 has opened. All identifiers in this example are synthetic.
 
@@ -375,7 +375,10 @@ parent reference receives `-32602`. The host refuses a marked open when
 side sessions are disabled.
 
 A successful response contains a new opaque `result.sessionId` and echoes the
-parent object in `result._meta["nori.dev/sideSession"]`. Use that new ID on
+parent object in `result._meta["nori.dev/sideSession"]`. It also carries
+`result._meta["nori.dev/sideConfinement"]`, either `"bubblewrap"` or `"none"`.
+Sessions reads this field to learn whether the OS read-only launch holds
+the side. A fork-form side does not carry it. Use that new ID on
 `session/prompt`, `session/cancel` and `session/close`. Updates and permission
 requests identify the side in `params.sessionId` and the parent in
 `params._meta["nori.dev/sideSession"]`. Reply to a permission request using
@@ -401,7 +404,12 @@ option ID and current value. If it also advertises legacy `modes`, its
 catalog must contain the same ID. The host then returns that ID in both
 selectors. For Claude Agent ACP 0.102.0 both
 `configOptions[category=mode].currentValue` and `modes.currentModeId`
-report `plan`. Workspace protection comes from the read-only launch.
+report `plan`. When the result reports `"bubblewrap"`, workspace protection
+comes from the read-only launch. When it reports `"none"`, the workspace and
+home are writable at the OS level. The remaining guards are the confirmed
+restrictive mode, the caller's permission policy and the caller's
+instruction. With `[host] side_confinement = "required"`, the host refuses
+a side the machine cannot confine.
 Legacy-only adapters use `modes` and `session/set_mode`. A conflicting
 mode update during selection or a failed setup ends the process and returns
 an error before the client receives a side ID. If the adapter later reports
@@ -419,12 +427,14 @@ The host disables recording, prompt echo, status additions and client MCP for
 this process. Side IDs have no delegation or restore path and are omitted from
 session lists. [Side routing](../harness/src/managed_acp/side_sessions.rs)
 
-Each rebuilt side holds a process slot until its Bubblewrap supervisor and
-PID namespace have exited. At capacity, `session/new` returns `-32017`
+A confined rebuilt side holds a process slot until its Bubblewrap supervisor
+and PID namespace have exited. An unconfined side holds its slot until the
+adapter process exits. At capacity, `session/new` returns `-32017`
 with the message `machine full`. The parent and its outstanding turn continue.
 
-A successful side close means its adapter and descendants have released
-their process-held resources. A successful parent close gives this guarantee
+A successful close of a confined side means its adapter and descendants have
+released their process-held resources. For an unconfined side it confirms
+the exit of the adapter process only. A successful parent close gives this guarantee
 for every side belonging to that ACP session. Sides of other parents keep
 running. If the parent adapter declines the close, its sides stay active
 and the caller can retry. If the host cannot confirm a side's exit, its slot
@@ -451,6 +461,8 @@ following for the binding generation and the lifetime of every active side.
 - The parent actually uses the official file store at
   `home/.codex/auth.json`. Its effective provider, store, endpoints and
   login restrictions apply equally to the side's private provider home.
+  The side starts without the binding's `mcp_servers`. An unconfined side
+  has no private provider home and uses `home/.codex` directly.
   Keep these settings fixed. A change of connection, account, workspace or
   policy requires closing the sides and admitting a new binding generation.
   Sessions must also prevent a parent ACP login or gateway switch from

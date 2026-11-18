@@ -1,7 +1,78 @@
 use std::path::Path;
+use std::path::PathBuf;
 
 use super::LaunchSpec;
 use tokio::process::Command;
+
+const NAMESPACE_ARGS: [&str; 17] = [
+    "--unshare-user",
+    "--unshare-pid",
+    "--unshare-ipc",
+    "--disable-userns",
+    "--cap-drop",
+    "ALL",
+    "--die-with-parent",
+    "--new-session",
+    "--ro-bind",
+    "/",
+    "/",
+    "--dev",
+    "/dev",
+    "--proc",
+    "/proc",
+    "--tmpfs",
+    "/dev/shm",
+];
+
+/// The machine's Bubblewrap launcher and whether it can create the read-only
+/// launch on this machine.
+pub(super) struct Sandbox {
+    pub(super) launcher: PathBuf,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub(super) usable: bool,
+}
+
+impl Sandbox {
+    /// Prefer the system install and fall back to the host's `PATH`. Probe
+    /// with the namespaces and mounts every read-only launch requests. A
+    /// launcher that has not finished within five seconds is unusable.
+    pub(super) fn locate() -> Self {
+        let system = PathBuf::from("/usr/bin/bwrap");
+        let launcher = if system.is_file() {
+            system
+        } else {
+            which::which("bwrap").unwrap_or(system)
+        };
+        let probe = std::process::Command::new(&launcher)
+            .env_clear()
+            .args(NAMESPACE_ARGS)
+            .arg("--")
+            .arg(&launcher)
+            .arg("--version")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+        let usable = cfg!(target_os = "linux")
+            && probe.is_ok_and(|mut probe| {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                loop {
+                    match probe.try_wait() {
+                        Ok(Some(status)) => return status.success(),
+                        Ok(None) if std::time::Instant::now() < deadline => {
+                            std::thread::sleep(std::time::Duration::from_millis(5));
+                        }
+                        Ok(None) | Err(_) => {
+                            let _ = probe.kill();
+                            let _ = probe.wait();
+                            return false;
+                        }
+                    }
+                }
+            });
+        Self { launcher, usable }
+    }
+}
 
 #[cfg(not(target_os = "linux"))]
 pub(super) fn command(
@@ -9,6 +80,7 @@ pub(super) fn command(
     _: &Path,
     _: &Path,
     _: Option<[std::fs::File; 2]>,
+    _: &Path,
 ) -> anyhow::Result<Command> {
     anyhow::bail!("read-only workspace enforcement unavailable on this platform")
 }
@@ -19,6 +91,7 @@ pub(super) fn command(
     cwd: &Path,
     home: &Path,
     side_fds: Option<[std::fs::File; 2]>,
+    launcher: &Path,
 ) -> anyhow::Result<Command> {
     use anyhow::Context;
     use anyhow::ensure;
@@ -31,7 +104,6 @@ pub(super) fn command(
     use std::os::unix::ffi::OsStrExt;
     use std::process::Stdio;
 
-    const BWRAP: &str = "/usr/bin/bwrap";
     for mount in [Path::new("/dev"), Path::new("/proc")] {
         ensure!(
             ![cwd, home]
@@ -76,26 +148,8 @@ pub(super) fn command(
     set_env("TMPDIR", OsStr::new("/dev/shm"))?;
     settings.rewind()?;
 
-    let mut command = Command::new(BWRAP);
-    command.env_clear().args([
-        "--unshare-user",
-        "--unshare-pid",
-        "--unshare-ipc",
-        "--disable-userns",
-        "--cap-drop",
-        "ALL",
-        "--die-with-parent",
-        "--new-session",
-        "--ro-bind",
-        "/",
-        "/",
-        "--dev",
-        "/dev",
-        "--proc",
-        "/proc",
-        "--tmpfs",
-        "/dev/shm",
-    ]);
+    let mut command = Command::new(launcher);
+    command.env_clear().args(NAMESPACE_ARGS);
     let mut descriptors = match private_codex {
         Some(private) => super::codex_home::mount_inputs(
             &mut command,
@@ -114,8 +168,9 @@ pub(super) fn command(
         descriptors.extend([info, gate]);
     }
     ensure!(
-        Path::new(BWRAP).is_file(),
-        "read-only workspace enforcement requires {BWRAP}"
+        launcher.is_file(),
+        "read-only workspace enforcement requires {}",
+        launcher.display()
     );
     command
         .arg("--chdir")

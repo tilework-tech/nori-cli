@@ -266,11 +266,24 @@ pub struct DedicatedRoots {
     pub home: PathBuf,
 }
 
+/// Whether a rebuilt side session needs the OS read-only launch.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SideConfinement {
+    /// Use the OS read-only launch when the machine supports it. Otherwise
+    /// start the side without it and report that to the caller.
+    #[default]
+    Preferred,
+    /// Refuse a side session the machine cannot confine.
+    Required,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HostConfig {
     pub managed: bool,
     pub side_sessions: bool,
+    pub side_confinement: SideConfinement,
     pub max_sessions: i32,
     pub bindings_root: Option<PathBuf>,
     pub dedicated_roots: Option<DedicatedRoots>,
@@ -281,6 +294,7 @@ impl Default for HostConfig {
         Self {
             managed: false,
             side_sessions: false,
+            side_confinement: SideConfinement::default(),
             max_sessions: DEFAULT_MAX_SESSIONS,
             bindings_root: None,
             dedicated_roots: None,

@@ -84,6 +84,15 @@ impl SideHost {
     }
 
     async fn with_modes(dedicated: bool, limit: Option<usize>, modes: &str) -> Self {
+        Self::with_settings(dedicated, limit, modes, "side_confinement='required'\n").await
+    }
+
+    async fn with_settings(
+        dedicated: bool,
+        limit: Option<usize>,
+        modes: &str,
+        settings: &str,
+    ) -> Self {
         let host = Host::new();
         let root = host.0.path().join("hosted-sessions/aster");
         let cwd = root.join("workspace");
@@ -91,7 +100,7 @@ impl SideHost {
         fs::create_dir_all(&cwd).unwrap();
         fs::create_dir_all(&home).unwrap();
         fs::write(cwd.join("fixture-modes"), modes).unwrap();
-        let mut config = String::from("[host]\nmanaged=true\nside_sessions=true\n");
+        let mut config = format!("[host]\nmanaged=true\nside_sessions=true\n{settings}");
         if let Some(limit) = limit {
             config.push_str(&format!("max_sessions={limit}\n"));
         }
@@ -200,6 +209,8 @@ impl SideHost {
     }
 }
 
+const CONFINEMENT: &str = "nori.dev/sideConfinement";
+
 fn side_id(response: &Value) -> String {
     assert_eq!(
         response["result"]["_meta"][MARK],
@@ -214,7 +225,7 @@ fn side_id(response: &Value) -> String {
 // A machine without user namespaces still exercises the fail-closed launch.
 // Check the OS independently so an error from the host cannot skip a working runner.
 fn read_only_launch_available() -> bool {
-    std::process::Command::new("/usr/bin/bwrap")
+    std::process::Command::new("bwrap")
         .args([
             "--unshare-user",
             "--unshare-pid",
@@ -383,6 +394,7 @@ async fn rebuilt_opens_require_a_live_matching_parent_and_an_enforced_read_only_
     let opened = host.start_side(20, "0").await;
     if read_only_launch_available() {
         let side = side_id(&opened);
+        assert_eq!(opened["result"]["_meta"][CONFINEMENT], "bubblewrap");
         host.prompt(21, &side, "inspect-workspace").await;
         let report = host.reply(21).await;
         let observed = &report["result"]["_meta"];
@@ -673,7 +685,7 @@ async fn unavailable_os_boundary_refuses_the_side_and_keeps_parent_usable() {
         // The nested test has a writable temporary folder but cannot create another user namespace.
         assert!(std::env::var_os("FIXTURE_NO_USER_NAMESPACES").is_none());
         let folder = std::env::temp_dir();
-        let mut command = std::process::Command::new("/usr/bin/bwrap");
+        let mut command = std::process::Command::new("bwrap");
         command.args(["--unshare-user", "--disable-userns", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--bind"])
             .arg(&folder).arg(&folder).arg("--").arg(std::env::current_exe().unwrap())
             .args(["--exact", "standard_acp::side_sessions::unavailable_os_boundary_refuses_the_side_and_keeps_parent_usable"])
@@ -690,6 +702,54 @@ async fn unavailable_os_boundary_refuses_the_side_and_keeps_parent_usable() {
     }
     host.prompt(6, "0", "finish").await;
     assert_eq!(host.reply(6).await["result"]["stopReason"], "end_turn");
+}
+
+#[tokio::test]
+async fn a_side_opens_without_os_confinement_when_the_boundary_is_unavailable() {
+    const NAME: &str = "standard_acp::side_sessions::a_side_opens_without_os_confinement_when_the_boundary_is_unavailable";
+    if read_only_launch_available() {
+        // Rerun where another user namespace cannot be created, as on a machine without the boundary.
+        assert!(std::env::var_os("FIXTURE_NO_USER_NAMESPACES").is_none());
+        let folder = std::env::temp_dir();
+        let mut command = std::process::Command::new("bwrap");
+        command
+            .args([
+                "--unshare-user",
+                "--disable-userns",
+                "--ro-bind",
+                "/",
+                "/",
+                "--dev",
+                "/dev",
+                "--proc",
+                "/proc",
+                "--bind",
+            ])
+            .arg(&folder)
+            .arg(&folder)
+            .arg("--")
+            .arg(std::env::current_exe().unwrap())
+            .args(["--exact", NAME])
+            .env("FIXTURE_NO_USER_NAMESPACES", "1");
+        let output = success(super::super::bounded_output(&mut command));
+        assert!(output.contains("1 passed"), "{output}");
+        return;
+    }
+    let mut host = SideHost::with_settings(false, Some(2), "bypassPermissions plan", "").await;
+    let opened = host.start_side(4, "0").await;
+    let side = side_id(&opened);
+    assert_eq!(opened["result"]["_meta"][CONFINEMENT], "none");
+    host.prompt(5, &side, "inspect-settings").await;
+    assert_eq!(
+        host.reply(5).await["result"]["_meta"],
+        json!({"mode":"plan","model":"aster"})
+    );
+    let full = host.start_side(6, "0").await;
+    assert_eq!(full["error"]["code"], -32017, "{full}");
+    host.close(7, &side).await;
+    side_id(&host.start_side(8, "0").await);
+    host.prompt(9, "0", "finish").await;
+    assert_eq!(host.reply(9).await["result"]["stopReason"], "end_turn");
 }
 
 #[tokio::test]

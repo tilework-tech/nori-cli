@@ -416,8 +416,10 @@ on that logical connection. Rebuilt sides occupy a process slot. An eligible
 adapter hosts native forks in the parent's process. Both forms route events
 outside the parent recorder and session manager.
 
-The rebuilt worker and launch registry share an exit result. After the outer
-Bubblewrap supervisor exits, the host signals the side's namespace init
+The rebuilt worker and launch registry share an exit result. A side that
+[runs without confinement](../cli/src/host/docs.md#managed-launch-control-v1)
+has no namespace, and its slot can be reused when the adapter process exits.
+For a confined side, after the outer Bubblewrap supervisor exits, the host signals the side's namespace init
 through its pidfd and waits for exit readiness. At that point the adapter
 and its clients have exited, and the slot can be reused. An unconfirmed exit
 retains the slot and reports an error to its owning parent.
