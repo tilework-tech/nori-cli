@@ -70,8 +70,8 @@ for line in sys.stdin:
         ("session/new", new(&cwd), Value::Null),
         (
             "session/prompt",
-            json!({"sessionId":"unknown","prompt":[]}),
-            json!(-32002),
+            json!({"sessionId":"agent-owned","prompt":[]}),
+            Value::Null,
         ),
         (
             "session/prompt",
@@ -91,6 +91,12 @@ for line in sys.stdin:
         assert_eq!(&reply["error"]["code"], &expected, "{reply}");
         if method == "session/new" && expected.is_null() {
             assert_eq!(reply["result"]["sessionId"], "1");
+        }
+        if method == "session/prompt" && expected.is_null() {
+            assert_eq!(
+                reply["result"],
+                json!({"_meta":{"received":"session/prompt"}})
+            );
         }
     }
     Ok(())
