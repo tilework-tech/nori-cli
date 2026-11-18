@@ -239,7 +239,7 @@ async fn release_one_drains_both_side_process_trees_before_reusing_their_slots()
 
 #[cfg(target_os = "linux")]
 fn sandbox_available() -> bool {
-    std::process::Command::new("/usr/bin/bwrap")
+    std::process::Command::new("bwrap")
         .args([
             "--unshare-user",
             "--unshare-pid",
@@ -338,6 +338,150 @@ async fn codex_sides_keep_binding_inputs_and_use_independent_runtime_homes() {
 
 #[cfg(target_os = "linux")]
 #[tokio::test]
+async fn codex_sides_start_beside_provider_runtime_entries_and_without_mcp_servers() {
+    if !sandbox_available() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let binding = root.path().join("sample");
+    let home = binding.join("home");
+    let cwd = home.join("work");
+    let provider = home.join(".codex");
+    fs::create_dir_all(&cwd).unwrap();
+    fs::create_dir(&provider).unwrap();
+    let config = "model = 'fixture'\n[mcp_servers.fixture]\nurl = 'https://mcp.invalid'\n";
+    fs::write(provider.join("config.toml"), config).unwrap();
+    for file in ["session_index.jsonl.lock", ".nori-managed"] {
+        fs::write(provider.join(file), "parent").unwrap();
+    }
+    for folder in ["cache", "plugins"] {
+        fs::create_dir(provider.join(folder)).unwrap();
+    }
+    let launches = ManagedLaunches::from_config(
+        &nori_config::HostConfig {
+            managed: true,
+            side_sessions: true,
+            bindings_root: Some(root.path().into()),
+            ..Default::default()
+        },
+        root.path(),
+    )
+    .unwrap();
+    let script = r#"
+        read -r marker || exit 0
+        set -eu
+        grep -q fixture "$CODEX_HOME/config.toml"
+        if grep -q mcp "$CODEX_HOME/config.toml"; then exit 2; fi
+        for entry in session_index.jsonl.lock .nori-managed cache plugins; do
+            test ! -e "$CODEX_HOME/$entry"
+        done
+        echo ready
+        read -r done
+    "#;
+    launches.ensure(serde_json::from_value(json!({
+        "commandId":"start", "conversationId":uuid::Uuid::new_v4(), "bindingId":"sample", "generation":1,
+        "spec":{"agent":"codex","projectId":"project","runId":"run","cwd":cwd,"home":home,
+            "adapter":{"path":"/bin/sh","version":"2.7.0","args":["-c",script]},
+            "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
+    })).unwrap()).unwrap();
+    let mut side = launches.spawn_side("sample", 1, "lilac").unwrap();
+    side.stdin.write_all(b"lilac\n").await.unwrap();
+    let mut output = BufReader::new(side.stdout).lines();
+    assert_eq!(output.next_line().await.unwrap().as_deref(), Some("ready"));
+    assert_eq!(
+        fs::read_to_string(provider.join("config.toml")).unwrap(),
+        config
+    );
+    launches.shutdown().await.unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn a_codex_side_without_the_boundary_runs_on_the_binding_home_and_stops_with_it() {
+    const NAME: &str =
+        "a_codex_side_without_the_boundary_runs_on_the_binding_home_and_stops_with_it";
+    if sandbox_available() {
+        // Rerun where another user namespace cannot be created, as on a machine without the boundary.
+        assert!(std::env::var_os("FIXTURE_NO_USER_NAMESPACES").is_none());
+        let folder = std::env::temp_dir();
+        let output = std::process::Command::new("bwrap")
+            .args([
+                "--unshare-user",
+                "--disable-userns",
+                "--ro-bind",
+                "/",
+                "/",
+                "--dev",
+                "/dev",
+                "--proc",
+                "/proc",
+                "--bind",
+            ])
+            .arg(&folder)
+            .arg(&folder)
+            .arg("--")
+            .arg(std::env::current_exe().unwrap())
+            .args(["--exact", NAME])
+            .env("FIXTURE_NO_USER_NAMESPACES", "1")
+            .output()
+            .unwrap();
+        let output = String::from_utf8_lossy(&output.stdout).into_owned();
+        assert!(output.contains("1 passed"), "{output}");
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let binding = root.path().join("sample");
+    let home = binding.join("home");
+    let cwd = home.join("work");
+    let provider = home.join(".codex");
+    fs::create_dir_all(&cwd).unwrap();
+    fs::create_dir(&provider).unwrap();
+    fs::write(provider.join("session_index.jsonl.lock"), "parent").unwrap();
+    let launches = ManagedLaunches::from_config(
+        &nori_config::HostConfig {
+            managed: true,
+            side_sessions: true,
+            bindings_root: Some(root.path().into()),
+            max_sessions: 2,
+            ..Default::default()
+        },
+        root.path(),
+    )
+    .unwrap();
+    let script = r#"
+        read -r marker || exit 0
+        echo "$CODEX_HOME"
+        read -r done
+    "#;
+    launches.ensure(serde_json::from_value(json!({
+        "commandId":"start", "conversationId":uuid::Uuid::new_v4(), "bindingId":"sample", "generation":1,
+        "spec":{"agent":"codex","projectId":"project","runId":"run","cwd":cwd,"home":home,
+            "adapter":{"path":"/bin/sh","version":"2.7.0","args":["-c",script]},
+            "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
+    })).unwrap()).unwrap();
+    let mut side = launches.spawn_side("sample", 1, "lilac").unwrap();
+    side.stdin.write_all(b"lilac\n").await.unwrap();
+    let mut output = BufReader::new(side.stdout).lines();
+    assert_eq!(
+        output.next_line().await.unwrap(),
+        Some(provider.canonicalize().unwrap().display().to_string())
+    );
+    assert!(matches!(
+        launches
+            .spawn_side("sample", 1, "full")
+            .err()
+            .unwrap()
+            .downcast_ref(),
+        Some(nori_harness::managed_launch::LaunchRefusal::AtCapacity)
+    ));
+    launches.stop_side("sample", 1, "lilac").await.unwrap();
+    assert_eq!(output.next_line().await.unwrap(), None);
+    let _replacement = launches.spawn_side("sample", 1, "moss").unwrap();
+    launches.shutdown().await.unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
 async fn codex_refuses_unverified_credential_scopes_before_spawning() {
     let root = tempfile::tempdir().unwrap();
     let binding = root.path().join("sample");
@@ -398,6 +542,7 @@ async fn codex_refuses_unverified_credential_scopes_before_spawning() {
             &nori_config::HostConfig {
                 managed: true,
                 side_sessions: true,
+                side_confinement: nori_config::SideConfinement::Required,
                 bindings_root: Some(root.path().into()),
                 ..Default::default()
             },

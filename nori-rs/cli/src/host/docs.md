@@ -262,25 +262,42 @@ own handshake.
   Subprocesses inherit the binding environment. Host `.env` values stay
   in the host. Managed launches bypass host-configured hooks and MCP servers.
 - `spec.workspaceReadOnly` selects OS-enforced read-only launch. It defaults
-  to false. Every rebuilt side forces this option when it reuses the parent's
-  pinned executable, arguments, environment, cwd and home. The host uses
-  the spec's model when the side adapter reports a different current model.
-  A read-only launch requires Linux with `/usr/bin/bwrap` and permission to
-  create the required namespaces and mounts. The launcher mounts the root
+  to false. A confined rebuilt side forces this option when it reuses the
+  parent's pinned executable, arguments, environment, cwd and home. The host
+  uses the spec's model when the side adapter reports a different current
+  model. A read-only launch requires Linux with Bubblewrap and permission to
+  create the required namespaces and mounts. The host uses `/usr/bin/bwrap`,
+  or else `bwrap` on its own `PATH`. The launcher mounts the root
   read-only, supplies private device and process mounts, and sets
   `TMPDIR=/dev/shm` on a private writable tmpfs. Both the pinned workspace
-  and persistent `HOME` are read-only. A rebuilt side also requires
+  and persistent `HOME` are read-only. A confined rebuilt side also requires
   `pidfd_open`, `pidfd_send_signal`, and a host `/proc` view of Bubblewrap's
   reported child PID. Before the adapter can run, the host verifies that PID
   belongs to the supervisor's child and registers its pidfd. The side must
   then complete the sandboxed ACP handshake before the host returns its ID.
   [Read-only launch](../../../harness/src/managed_launch/side_sandbox.rs)
-- A marked rebuilt side pinned to codex-acp 2.7.0 gets a fresh
+- `[host] side_confinement` is `"preferred"` by default. When it starts,
+  the host probes Bubblewrap once with the namespace and mount arguments of a
+  read-only launch. A probe that fails or has not finished within five
+  seconds marks the machine as unable to confine. When the probe succeeds, a rebuilt side
+  is confined. When Bubblewrap is missing or cannot create its namespaces,
+  the side starts as an ordinary adapter process with the parent's pinned
+  executable, arguments, environment, cwd and home. Its workspace and home
+  are writable at the OS level. The host still selects and confirms the
+  restrictive adapter mode. The side takes one process slot, stops with its
+  parent, and frees its slot when the process exits. With `"required"`, the
+  host refuses a side the machine cannot confine. An explicit
+  `workspaceReadOnly` launch always requires Bubblewrap. The side's
+  `session/new` result [reports the outcome](../../../acp-host/docs.md#rebuilt-side-sessions-on-a-managed-binding).
+- A confined rebuilt side pinned to codex-acp 2.7.0 gets a fresh
   `CODEX_HOME` and `CODEX_SQLITE_HOME` in its private tmpfs. Codex CLI
   0.166.0 opens its installation ID for writing during initialization.
   Each side creates its own installation ID and databases, which disappear
   at exit. Ordinary launches, including explicit `workspaceReadOnly`
-  launches and launches with side sessions disabled, use `home/.codex`.
+  launches, unconfined sides and launches with side sessions disabled, use
+  `home/.codex`. The Codex input checks below apply to the private home only.
+  An unconfined Codex side shares the parent's provider home and credentials,
+  including its MCP servers, and skips the side authentication checks.
 - For a managed subscription, the host recognizes a single entry in the
   parent's admitted `spec.credentialRefs`, `sessions:codex-subscription-file:v1`.
   It opens the binding's `.codex` directory without following symlinks,
@@ -292,9 +309,13 @@ own handshake.
   near expiry. A still-valid token can continue serving requests after
   replacement. [Codex input policy](../../../harness/src/managed_launch/codex_home.rs)
 - The host mounts the exact validated binding config bytes and supported
-  instructions read-only. Unsupported provider inputs, enterprise settings
-  whose effect it cannot establish, and ambiguous credential sources cause
-  refusal. It does not force a credential store or rewrite workspace or
+  instructions read-only. When the config contains `mcp_servers`, the host
+  mounts the validated configuration without that table and leaves the
+  binding's file unchanged. Any other unsupported config key, enterprise
+  settings whose effect it cannot establish, and ambiguous credential sources
+  cause refusal. Unrecognised entries in the binding's `.codex` directory are
+  the parent provider's own state, such as caches, plugins and lock files.
+  The host does not mount them. It does not force a credential store or rewrite workspace or
   login restrictions. A binding with no credential references and no
   credential files can run the logged-out probe. [Sessions source contract](../../../acp-host/docs.md#codex-subscription-source)
 - `[host] side_sessions` defaults to false. When enabled, the managed

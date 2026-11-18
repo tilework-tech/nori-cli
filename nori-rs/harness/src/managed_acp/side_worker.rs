@@ -306,8 +306,11 @@ pub(super) fn start_side(
     events: Events,
 ) -> SideInput {
     let SideLaunch { connection, owner } = launch;
+    let confined = owner.confined;
     let spec = connection.spec;
-    let codex_auth = spec.uses_private_codex_home().then(|| {
+    // Without the read-only launch a Codex side has no private home. It runs
+    // on the binding's own provider home, so there is no separate scope to verify.
+    let codex_auth = (confined && spec.uses_private_codex_home()).then(|| {
         if spec.has_subscription_file() {
             CodexAuth::SubscriptionFile
         } else {
@@ -330,7 +333,7 @@ pub(super) fn start_side(
             false,
             false,
         );
-        let (result, sid, mode) = open(
+        let (mut result, sid, mode) = open(
             &mut acp,
             init_params,
             &connection.cwd,
@@ -338,6 +341,11 @@ pub(super) fn start_side(
             codex_auth,
         )
         .await?;
+        if !result["_meta"].is_object() {
+            result["_meta"] = json!({});
+        }
+        result["_meta"]["nori.dev/sideConfinement"] =
+            json!(if confined { "bubblewrap" } else { "none" });
         Ok((acp, result, sid, mode))
     };
     let timeout_reason = if codex_auth.is_some() {

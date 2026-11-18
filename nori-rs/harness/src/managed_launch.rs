@@ -193,6 +193,7 @@ impl LaunchSpec {
         cwd: &Path,
         home: &Path,
         side_fds: Option<[std::fs::File; 2]>,
+        sandbox: &side_sandbox::Sandbox,
     ) -> anyhow::Result<Command> {
         ensure!(
             [
@@ -228,7 +229,7 @@ impl LaunchSpec {
             );
         }
         if side_fds.is_some() || self.workspace_read_only {
-            return side_sandbox::command(self, cwd, home, side_fds);
+            return side_sandbox::command(self, cwd, home, side_fds, &sandbox.launcher);
         }
         let mut command = Command::new(&self.adapter.path);
         command
@@ -282,6 +283,8 @@ struct Launch {
 
 pub(crate) struct SideProcess {
     supervisor: Arc<ChildHandle>,
+    /// Whether the OS read-only launch holds this process.
+    pub(crate) confined: bool,
     drained: tokio::sync::watch::Receiver<Option<Result<(), String>>>,
 }
 
@@ -386,6 +389,9 @@ pub struct ManagedLaunches {
     layout: Layout,
     limit: usize,
     side_sessions: bool,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    side_confinement: nori_config::SideConfinement,
+    sandbox: Arc<side_sandbox::Sandbox>,
     launches: Arc<Mutex<Option<HashMap<String, Launch>>>>,
 }
 
@@ -406,6 +412,8 @@ impl ManagedLaunches {
             layout: Layout::Shared(session_folder(root)?),
             limit: max_sessions.try_into()?,
             side_sessions: false,
+            side_confinement: nori_config::SideConfinement::default(),
+            sandbox: Arc::new(side_sandbox::Sandbox::locate()),
             launches: Arc::new(Mutex::new(Some(HashMap::new()))),
         })
     }
@@ -432,6 +440,8 @@ impl ManagedLaunches {
                 }),
                 limit: config.max_sessions.try_into()?,
                 side_sessions: config.side_sessions,
+                side_confinement: config.side_confinement,
+                sandbox: Arc::new(side_sandbox::Sandbox::locate()),
                 launches: Arc::new(Mutex::new(Some(HashMap::new()))),
             });
         }
@@ -441,6 +451,7 @@ impl ManagedLaunches {
             .unwrap_or_else(|| nori_home.join("hosted-sessions"));
         let mut launches = Self::new(&root, config.max_sessions)?;
         launches.side_sessions = config.side_sessions;
+        launches.side_confinement = config.side_confinement;
         Ok(launches)
     }
 
@@ -506,7 +517,7 @@ impl ManagedLaunches {
             .map_err(LaunchRefusal::InvalidParams)?;
         let command = request
             .spec
-            .command(&cwd, &home, None)
+            .command(&cwd, &home, None, &self.sandbox)
             .map_err(LaunchRefusal::InvalidParams)?;
         let live: usize = launches.values_mut().map(Launch::live_slots).sum();
         ensure!(live < self.limit, LaunchRefusal::AtCapacity);
@@ -663,20 +674,44 @@ impl ManagedLaunches {
                 && session_folder(&launch.home)? == launch.home,
             "pinned launch roots changed"
         );
-        let (namespace, fds) = namespace_exit::NamespaceExit::prepare()?;
-        let command = launch.spec.command(&launch.cwd, &launch.home, Some(fds))?;
-        let child = AgentProcess::spawn(command).context("read-only adapter launch failed")?;
+        let confined =
+            self.side_confinement == nori_config::SideConfinement::Required || self.sandbox.usable;
+        let (namespace, command) = if confined {
+            let (namespace, fds) = namespace_exit::NamespaceExit::prepare()?;
+            let command =
+                launch
+                    .spec
+                    .command(&launch.cwd, &launch.home, Some(fds), &self.sandbox)?;
+            (Some(namespace), command)
+        } else {
+            // This machine cannot create the read-only launch. The side runs as
+            // an ordinary adapter process and the caller learns that it did.
+            let command = launch
+                .spec
+                .command(&launch.cwd, &launch.home, None, &self.sandbox)?;
+            (None, command)
+        };
+        let child = AgentProcess::spawn(command).context("side adapter launch failed")?;
         let supervisor = Arc::new(child.handle);
         let outer_exit = supervisor.wait_for_exit();
         let side = Arc::downgrade(&supervisor);
         let (done, drained) = tokio::sync::watch::channel(None);
         let process = Arc::new(SideProcess {
             supervisor,
+            confined,
             drained,
         });
         launch.sides.insert(side_id.to_owned(), process.clone());
         tokio::spawn(async move {
-            let drain = namespace.monitor(side.clone(), outer_exit);
+            let drain = async {
+                match namespace {
+                    Some(namespace) => namespace.monitor(side.clone(), outer_exit).await,
+                    None => {
+                        outer_exit.await;
+                        Ok(())
+                    }
+                }
+            };
             tokio::pin!(drain);
             let result = tokio::select! {
                 () = parent_exit => {

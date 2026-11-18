@@ -123,26 +123,10 @@ pub(super) fn mount_inputs(
                 inputs.push(input);
                 continue;
             }
-            // These belong to the parent provider process. The side starts with
-            // empty state even when the parent has previously run a turn.
-            "tmp"
-            | ".tmp"
-            | ".sqlite-maintenance.lock"
-            | ".sandbox_migration"
-            | "mcp-oauth-locks"
-            | "thread-writer-locks"
-            | "installation_id"
-            | "sessions"
-            | "archived_sessions"
-            | "history.jsonl"
-            | "session_index.jsonl"
-            | "shell_snapshots"
-            | "log"
-            | "models_cache.json"
-            | "version.json"
-            | "memories" => continue,
-            database if is_runtime_database(database) => continue,
-            _ => anyhow::bail!("unsupported Codex side-session home entry: {name}"),
+            // Everything else is the parent provider's own state, such as its
+            // sessions, databases, caches, plugins and lock files. The side
+            // starts with an empty home and receives none of it.
+            _ => continue,
         };
         let source = OpenOptions::new()
             .read(true)
@@ -159,8 +143,12 @@ pub(super) fn mount_inputs(
             text.len() <= 1_048_576,
             "unsupported Codex side-session config.toml size"
         );
-        let config: toml::Table = toml::from_str(&text)
+        let mut config: toml::Table = toml::from_str(&text)
             .map_err(|_| anyhow::anyhow!("unsupported Codex side-session config.toml syntax"))?;
+        // The side starts without the binding's MCP servers and their credentials.
+        if config.remove("mcp_servers").is_some() {
+            text = toml::to_string(&config)?;
+        }
         for (key, value) in &config {
             let supported = match key.as_str() {
                 "model" | "model_reasoning_effort" | "sandbox_mode" | "approval_policy" => {
@@ -201,22 +189,4 @@ pub(super) fn mount_inputs(
         inputs.push(dir);
     }
     Ok(inputs)
-}
-
-fn is_runtime_database(name: &str) -> bool {
-    let name = name
-        .strip_suffix("-wal")
-        .or_else(|| name.strip_suffix("-shm"))
-        .unwrap_or(name);
-    let Some((kind, version)) = name
-        .strip_suffix(".sqlite")
-        .and_then(|stem| stem.rsplit_once('_'))
-    else {
-        return false;
-    };
-    matches!(
-        kind,
-        "state" | "goals" | "logs" | "memories" | "queue" | "thread_history"
-    ) && !version.is_empty()
-        && version.bytes().all(|b| b.is_ascii_digit())
 }
