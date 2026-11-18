@@ -152,16 +152,14 @@ impl NoriConfigEdits {
                         TrustLevel::Trusted => "trusted",
                         TrustLevel::Untrusted => "untrusted",
                     };
-                    document["projects"][project_key(path).as_str()]["trust_level"] =
-                        value(trust_level);
+                    set_project_field(&mut document, path, "trust_level", trust_level);
                 }
                 ConfigEdit::ProjectToolOutput { path, tool_output } => {
                     let tool_output = match tool_output {
                         ToolOutput::Compact => "compact",
                         ToolOutput::Full => "full",
                     };
-                    document["projects"][project_key(path).as_str()]["tool_output"] =
-                        value(tool_output);
+                    set_project_field(&mut document, path, "tool_output", tool_output);
                 }
                 ConfigEdit::SetPath { path, value } => {
                     set_path(&mut document, &path, value);
@@ -218,12 +216,14 @@ fn replace_mcp_servers(
     Ok(())
 }
 
-/// `[projects]` tables are keyed by the canonical project path.
-fn project_key(path: PathBuf) -> String {
-    std::fs::canonicalize(&path)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .into_owned()
+/// Set one field of the `[projects]` entry keyed by the canonical project path.
+fn set_project_field(document: &mut DocumentMut, path: PathBuf, field: &str, field_value: &str) {
+    let key = std::fs::canonicalize(&path).unwrap_or(path);
+    let project = &mut document["projects"][key.to_string_lossy().as_ref()];
+    project[field] = value(field_value);
+    if let Some(inline) = project.as_inline_table_mut() {
+        inline.fmt();
+    }
 }
 
 fn set_path(document: &mut DocumentMut, path: &[String], mut value: Value) {

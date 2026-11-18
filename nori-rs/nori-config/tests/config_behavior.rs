@@ -590,3 +590,29 @@ fn project_compact_opt_in_is_saved_beside_trust_and_survives_reload() {
         (Some(TrustLevel::Trusted), ToolOutput::Full)
     );
 }
+
+#[test]
+fn project_opt_in_keeps_an_inline_project_entry_tidy() {
+    let home = TempDir::new().expect("create config home");
+    let project = std::fs::canonicalize(home.path()).expect("canonical path");
+    let config_path = home.path().join("config.toml");
+    let key = format!("{:?}", project.display().to_string());
+    std::fs::write(
+        &config_path,
+        format!("[projects]\n{key} = {{ trust_level = \"trusted\" }}\n"),
+    )
+    .expect("write config");
+
+    NoriConfigEdits::new(home.path())
+        .set_project_tool_output(&project, ToolOutput::Compact)
+        .apply_blocking()
+        .expect("persist tool output");
+
+    let contents = std::fs::read_to_string(&config_path).expect("read config");
+    assert!(
+        contents.contains(&format!(
+            "{key} = {{ trust_level = \"trusted\", tool_output = \"compact\" }}"
+        )),
+        "{contents}"
+    );
+}
