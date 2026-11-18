@@ -9,6 +9,8 @@ use tokio::sync::oneshot;
 
 pub mod acp_connection;
 mod child_lifecycle;
+pub use child_lifecycle::AgentProcess;
+pub use child_lifecycle::ChildHandle;
 pub mod mcp;
 mod wire_log;
 

@@ -28,6 +28,7 @@ pub mod hooks;
 pub mod message_history;
 pub(crate) mod normalized;
 pub use nori_acp_host::registry;
+pub mod managed_launch;
 mod managed_remote;
 pub mod remote_agent;
 pub mod runtime;
