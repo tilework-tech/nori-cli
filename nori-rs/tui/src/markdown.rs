@@ -203,6 +203,42 @@ mod tests {
     }
 
     #[test]
+    fn pipe_table_inside_a_code_fence_renders_as_code() {
+        let src = format!("Example:\n\n```\n{INVENTORY_TABLE}```\n\nEnd of example.\n");
+        assert_eq!(
+            render_trimmed(&src),
+            vec![
+                "Example:",
+                "",
+                "| Fruit | Color | Count |",
+                "| --- | --- | --- |",
+                "| Apple | Red | 3 |",
+                "| Banana | Yellow | 5 |",
+                "",
+                "End of example.",
+            ]
+        );
+    }
+
+    #[test]
+    fn table_after_a_closed_code_fence_still_renders_as_a_table() {
+        let src = format!("```\nlet x = 1;\n```\n{INVENTORY_TABLE}");
+        assert_eq!(
+            render_trimmed(&src),
+            inventory_with(&["let x = 1;", ""], &[])
+        );
+    }
+
+    #[test]
+    fn pipe_table_in_a_list_item_code_fence_renders_as_code() {
+        let src = "1. Run it:\n\n    ```\n    | A | B |\n    | - | - |\n    ```\n";
+        assert_eq!(
+            render_trimmed(src),
+            vec!["1. Run it:", "", "   | A | B |", "   | - | - |"]
+        );
+    }
+
+    #[test]
     fn append_markdown_uses_shared_adaptive_table_renderer() {
         let src = "| Session | Project | Turn status |\n| :-- | :-- | :-- |\n| Improve Markdown tables | external-codex | Waiting for input |\n";
         let mut wide = Vec::new();

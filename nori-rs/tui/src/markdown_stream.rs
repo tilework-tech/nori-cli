@@ -763,6 +763,12 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn streamed_fenced_pipe_table_matches_full_render() {
+        let source = "Example:\n\n```\n| A | B |\n| - | - |\n| 1 | 2 |\n```\n\nDone.\n";
+        assert_streamed_table_equals_full(source, Some(80));
+    }
+
+    #[tokio::test]
     async fn streamed_table_never_commits_raw_pipe_syntax() {
         let streamed = lines_to_plain_strings(&stream_char_by_char(STREAMED_TABLE, Some(80)));
         assert!(

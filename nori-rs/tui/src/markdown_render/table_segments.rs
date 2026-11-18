@@ -1,4 +1,5 @@
-//! Splits markdown source into prose and GFM table blocks.
+//! Splits markdown source into prose and GFM table blocks. Pipe rows inside ``` or ~~~ code fences
+//! stay prose, so fenced examples keep rendering as code.
 //!
 //! The TUI renders tables with the shared adaptive renderer in
 //! `nori-tui-components` and everything else with the local writer, so the source has to be cut
@@ -25,8 +26,39 @@ pub(super) fn markdown_segments(input: &str) -> Vec<MarkdownSegment> {
     let mut segments = Vec::new();
     let mut prose_start = 0;
     let mut index = 0;
+    let mut open_fence = None;
     while index + 1 < lines.len() {
         let header = input[lines[index].clone()].trim();
+        // Pipe rows inside a code fence are code. Skip until the fence closes, or to the end of the
+        // source while it stays open.
+        let run = header
+            .chars()
+            .next()
+            .filter(|marker| matches!(marker, '`' | '~'))
+            .map(|marker| {
+                let length = header
+                    .chars()
+                    .take_while(|character| *character == marker)
+                    .count();
+                (marker, length, &header[length..])
+            });
+        if let Some((open_marker, open_length)) = open_fence {
+            if run.is_some_and(|(marker, length, rest)| {
+                marker == open_marker && length >= open_length && rest.trim().is_empty()
+            }) {
+                open_fence = None;
+            }
+            index += 1;
+            continue;
+        }
+        if let Some((marker, length, info)) = run
+            && length >= 3
+            && !(marker == '`' && info.contains('`'))
+        {
+            open_fence = Some((marker, length));
+            index += 1;
+            continue;
+        }
         let delimiter = input[lines[index + 1].clone()].trim();
         if !header.contains('|') || !is_table_delimiter(delimiter) {
             index += 1;
@@ -160,6 +192,64 @@ mod tests {
         let input = "just prose\nand more\n";
         assert_eq!(
             markdown_segments(input),
+            vec![MarkdownSegment {
+                range: 0..input.len(),
+                is_table: false
+            }]
+        );
+    }
+
+    #[test]
+    fn pipe_table_inside_a_fence_stays_prose() {
+        for (open, close) in [
+            ("```", "```"),
+            ("~~~", "~~~"),
+            ("````text", "`````"),
+            ("~~~ `quoted` info", "~~~"),
+            ("   ```", "  ```"),
+            ("    ```", "    ```"),
+        ] {
+            let input = format!("intro\n\n{open}\n{TABLE}{close}\n\noutro\n");
+            assert_eq!(
+                markdown_segments(&input),
+                vec![MarkdownSegment {
+                    range: 0..input.len(),
+                    is_table: false
+                }],
+                "fence {open:?} .. {close:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn shorter_or_different_fence_markers_do_not_close_a_fence() {
+        let input = format!("````\n```\n~~~~\n```` trailing\n{TABLE}````\n");
+        assert_eq!(
+            markdown_segments(&input),
+            vec![MarkdownSegment {
+                range: 0..input.len(),
+                is_table: false
+            }]
+        );
+    }
+
+    #[test]
+    fn backticks_in_a_backtick_info_string_do_not_open_a_fence() {
+        let input = format!("``` not `a` fence\n{TABLE}");
+        assert_eq!(
+            markdown_segments(&input)
+                .iter()
+                .map(|segment| segment.is_table)
+                .collect::<Vec<_>>(),
+            vec![false, true]
+        );
+    }
+
+    #[test]
+    fn pipe_table_in_a_still_open_fence_stays_prose() {
+        let input = format!("intro\n\n```\n{TABLE}more code\n");
+        assert_eq!(
+            markdown_segments(&input),
             vec![MarkdownSegment {
                 range: 0..input.len(),
                 is_table: false
