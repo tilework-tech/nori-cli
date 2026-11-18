@@ -181,8 +181,9 @@ Connect to that WebSocket URL (`ws://127.0.0.1:<port>/sessions`) with
 `Authorization: Bearer <token>` on the upgrade. Only the privileged machine
 adapter should receive this credential. It authorizes operations on every
 binding and host-wide stop. The upgrade response's `x-nori-host-instance`
-identifies this host incarnation. Both that identity and the token change
-when the host restarts.
+matches `source.hostIncarnation` on new durable records produced by this
+host. The header and token change on host restart. Replayed records keep
+the original producing incarnation for deduplication and ACK.
 
 Each text frame carries one JSON-RPC 2.0 object. Send
 `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"observe":true}}`
@@ -279,9 +280,10 @@ typed spec, including defaults. Treat it as opaque and store it with the
 receipt. Matching concurrent and later ensures return the original receipt,
 including at capacity and after exit. Reusing a binding with a different
 generation, conversation ID or spec, or assigning
-the conversation ID to another binding, returns a conflict. Launch identity
+the conversation ID to another binding, returns a conflict. Without durable recovery, launch identity
 is determined by the binding, generation, conversation UUID and spec digest,
-independently of the command ID. Preserve the supplied paths on retry. The
+independently of the command ID. A recovery-enabled generation admits one launch
+command ID. Reuse that ID. Preserve the supplied paths on retry. The
 digest covers their original spelling before filesystem canonicalization.
 
 Send `_nori/session/status` with `{"bindingId":"sample","generation":1}`
@@ -299,8 +301,9 @@ If the first acknowledgement is lost, reconnect, initialize and verify that
 stored parameters. The host checks the immutable identity and returns the
 original outcome, or performs the launch if the first request never arrived.
 Use status for the current process state, even when the recovered receipt
-says `spawned`. Reconciliation after a host restart requires external durable
-state because receipts live in memory.
+says `spawned`. For a plain launch, receipts live in memory, so reconciliation after
+a host restart requires external state. For a binding with durable recovery,
+use `_nori/host/command` to reconcile admission after restart.
 
 Use the JSON-RPC `error.code` to handle an ensure refusal.
 
@@ -326,6 +329,90 @@ On Linux, provision a PID namespace init or ancestor subreaper that waits for
 orphaned processes. The host signals the adapter's process group and waits
 for its direct child. Orphaned descendants can remain as zombies until their
 adopting ancestor reaps them. See [process supervision](../../../acp-host/src/connection/child_lifecycle.rs).
+
+#### Managed recovery control
+
+A machine supervisor can run the [managed host](#managed-launch-control-v1)
+in the foreground with `NORI_HOME=/srv/fixture/nori nori host --foreground --port 0`.
+After a restart, reread `host/state.json` and `host/token` from that home.
+Initialize the privileged `/sessions` connection with `params: {}` to claim
+control, or acquire control via `_nori/control/take`. Require both
+`result.agentCapabilities._meta["nori.dev/managedHost"].standardAcp == 1`
+and `result.agentCapabilities._meta["nori.dev/durableRecovery"].version == 1`.
+The latter advertises the acknowledged journal, durable command admission,
+checkpoint, import and release operations.
+
+Add `recoveryVersion: 1` to the top-level **params** in the ensure example
+above. Optionally include `transcriptId` there to associate the broker's
+canonical transcript with the stable public conversation UUID. Later ensures
+of that binding must continue to specify the recovery version. Recovery
+persists unacknowledged transport data even with every host addition off,
+including `spec.additions.recording`.
+[Frame layout and ACK ordering](../../../acp-host/docs.md#managed-acp-delivery-and-recovery)
+
+Every request below names `bindingId` and the current `generation`.
+
+| Method on `/sessions` | Additional parameters | Result |
+| --- | --- | --- |
+| `_nori/host/command` | `commandId` | `status` is `inFlight`, `completed` (with the recorded `response`), or `interrupted`. The lookup works after restart. An unknown command returns an error. |
+| `_nori/host/replay` | — | `records` contains unacknowledged `{source,sessionId,message}` records. |
+| `_nori/host/ack` | `source` | Returns `{}` after durably advancing the cumulative cursor for that source stream. A future sequence or stale outer generation fails. |
+| `_nori/host/checkpoint` | Optional nonempty string `attemptId` | Returns `{checkpoint,watermarks,fence}` at an idle boundary. Treat the checkpoint as opaque. Each watermark is a complete source identity. |
+| `_nori/host/import` | `checkpoint`, `launchSpec` | Accepts the exported checkpoint and the destination machine's launch spec (same shape as ensure's `spec`). Requires a newer generation. Returns `{conversationId,sessionId,continuation}`. |
+| `_nori/host/release` | `commandId` | Returns the final `{checkpoint,watermarks}` and stops this binding's process group. Other bindings, including independently bound descendants, continue running. |
+
+Checkpoint freezes new requests at a boundary with no unfinished ACP request.
+When `spec.additions.recording` is enabled, it flushes and syncs each
+binding-owned recorder through its open file handle, then verifies that the
+output watermarks still match. On checkpoint or release error, read
+`error.data.savedThrough` when present. Its source cursors identify the last
+durable output the host could verify. A known storage failure closes admission
+with `-32020` before a fresh command enters the ledger. A failure during the
+initial ledger commit can return `-32021`. Preserve the command ID and query
+the recovered source journal as described in [managed ACP delivery and
+recovery](../../../acp-host/docs.md#managed-acp-delivery-and-recovery).
+
+After a private recorder sync error, retry `_nori/host/checkpoint` on the
+same host, binding and generation once storage recovers. Fresh prompts still
+receive `-32020` until every required recorder completes its durable flush.
+After checkpoint success, resubmit the refused command with its original ID
+and payload. The host admits it once and returns the recorded outcome on
+later retries. If a recorder write had an uncertain outcome, its unsynced
+bytes cannot be verified, or output failed to reach the journal, restore
+from the last committed checkpoint under a newer generation. An ACK can free journal
+space but cannot recover lost output. The broker captures the binding's
+workspace and permitted provider state separately.
+
+Give each checkpoint attempt a unique `attemptId`. If omitted, the host
+assigns a UUID. For a valid attempt, success carries `result.fence` and
+failure carries `error.data.fence`, both shaped
+`{bindingId,generation,attemptId}` even with empty watermarks. The host
+holds the binding's lifecycle lock through the bounded socket write of a
+successful response. A release, import or later checkpoint on that host
+therefore cannot overtake the handoff. A callback already buffered by the
+adapter can arrive after a new generation or attempt became current.
+Publish the checkpoint pointer in one conditional write that checks the
+active binding, generation and pending attempt against the returned fence.
+Discard a superseded completion. [Checkpoint control](recovery_control.rs)
+
+Reuse the same release command ID when its reply is lost. A completed release
+returns its saved export, including after restart. A busy release closes
+admission for new work. Let its existing turn finish, or explicitly cancel
+it, then retry. The host can finish a release after restart when its drained
+export reached disk before the completion receipt. An interrupted release
+without that final export requires the previous committed checkpoint.
+
+An import with `continuation: "load"` means the source recorded a main ACP
+session ID and its adapter advertised load support. The caller initializes
+the destination adapter, checks its capabilities, then requests
+`session/load` using the returned `sessionId`. The provider can reject the
+load, for example if its backing state is unavailable. With
+`continuation: "fresh"`, initialize and call `session/new`. This preserves
+the public conversation identity with fresh provider context. In either
+case, retrieve canonical conversation history through the broker. A
+per-conversation host JSONL, when required for continuation, is a private
+recovery artifact. The managed raw ACP export does not upload that JSONL.
+Recovering model context never entails submitting an interrupted prompt.
 
 ### Things to Know
 

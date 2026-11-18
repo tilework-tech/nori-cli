@@ -227,13 +227,15 @@ impl SessionManager {
 
     /// Requests made by this parent, including completed and declined requests.
     pub fn delegations(&self, parent: &ConversationId) -> Vec<Delegation> {
-        self.shared
-            .state()
+        let state = self.shared.state();
+        state
             .delegation
             .entries
             .iter()
-            .filter(|entry| entry.value.parent_id == parent.to_string())
-            .map(|entry| entry.value.clone())
+            .map(|entry| &entry.value)
+            .chain(&state.delegation.history)
+            .filter(|value| value.parent_id == parent.to_string())
+            .cloned()
             .collect()
     }
 

@@ -32,6 +32,19 @@ pub struct EnsureLaunch {
     spec: LaunchSpec,
 }
 
+impl EnsureLaunch {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        ensure!(
+            !self.command_id.trim().is_empty() && self.generation > 0,
+            LaunchRefusal::InvalidParams(anyhow::anyhow!(
+                "commandId and a positive generation are required"
+            ))
+        );
+        validate_binding_id(&self.binding_id).map_err(LaunchRefusal::InvalidParams)?;
+        Ok(())
+    }
+}
+
 #[derive(Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LaunchSpec {
@@ -274,6 +287,16 @@ pub struct ManagedLaunches {
     launches: Mutex<Option<HashMap<String, Launch>>>,
 }
 
+enum PreparedLaunch {
+    Existing(LaunchReceipt),
+    Spawn {
+        command: Box<Command>,
+        digest: String,
+        cwd: PathBuf,
+        home: PathBuf,
+    },
+}
+
 impl ManagedLaunches {
     pub fn new(root: &Path, max_sessions: i32) -> anyhow::Result<Self> {
         ensure!(max_sessions > 0, "host.max_sessions must be positive");
@@ -319,48 +342,57 @@ impl ManagedLaunches {
         }
     }
 
-    pub fn ensure(&self, request: EnsureLaunch) -> anyhow::Result<LaunchReceipt> {
-        let EnsureLaunch {
-            binding_id,
-            generation,
-            conversation_id,
-            command_id,
-            spec,
-        } = request;
-        ensure!(
-            !command_id.trim().is_empty() && generation > 0,
-            LaunchRefusal::InvalidParams(anyhow::anyhow!(
-                "commandId and a positive generation are required"
-            ))
-        );
-        validate_binding_id(&binding_id).map_err(LaunchRefusal::InvalidParams)?;
-        let digest = hex::encode(Sha256::digest(serde_json::to_vec(&spec)?));
+    pub fn is_resident(&self, binding: &str) -> anyhow::Result<bool> {
+        let guard = self
+            .launches
+            .lock()
+            .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?;
+        Ok(guard
+            .as_ref()
+            .context("host is stopping")?
+            .contains_key(binding))
+    }
+
+    pub fn validate_destination(&self, request: &EnsureLaunch) -> anyhow::Result<()> {
         let mut guard = self
             .launches
             .lock()
             .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?;
         let launches = guard.as_mut().context("host is stopping")?;
-        if let Some(existing) = launches.get(&binding_id) {
+        self.prepare(launches, request).map(|_| ())
+    }
+
+    fn prepare(
+        &self,
+        launches: &mut HashMap<String, Launch>,
+        request: &EnsureLaunch,
+    ) -> anyhow::Result<PreparedLaunch> {
+        request.validate()?;
+        let digest = hex::encode(Sha256::digest(serde_json::to_vec(&request.spec)?));
+        if let Some(existing) = launches.get(&request.binding_id) {
             ensure!(
-                existing.conversation_id == conversation_id
-                    && existing.generation == generation
+                existing.conversation_id == request.conversation_id
+                    && existing.generation == request.generation
                     && existing.digest == digest,
                 "managed launch conflict"
             );
-            return existing.acknowledge(&binding_id);
+            return Ok(PreparedLaunch::Existing(
+                existing.acknowledge(&request.binding_id)?,
+            ));
         }
         ensure!(
             !launches
                 .values()
-                .any(|l| l.conversation_id == conversation_id),
+                .any(|l| l.conversation_id == request.conversation_id),
             "managed conversation ID conflict"
         );
-        let cwd = session_folder(&spec.cwd).map_err(LaunchRefusal::InvalidParams)?;
-        let home = session_folder(&spec.home).map_err(LaunchRefusal::InvalidParams)?;
+        let cwd = session_folder(&request.spec.cwd).map_err(LaunchRefusal::InvalidParams)?;
+        let home = session_folder(&request.spec.home).map_err(LaunchRefusal::InvalidParams)?;
         self.layout
-            .validate(&binding_id, &cwd, &home)
+            .validate(&request.binding_id, &cwd, &home)
             .map_err(LaunchRefusal::InvalidParams)?;
-        let command = spec
+        let command = request
+            .spec
             .command(&cwd, &home)
             .map_err(LaunchRefusal::InvalidParams)?;
         let mut live = 0;
@@ -372,6 +404,36 @@ impl ManagedLaunches {
             }
         }
         ensure!(live < self.limit, LaunchRefusal::AtCapacity);
+        Ok(PreparedLaunch::Spawn {
+            command: Box::new(command),
+            digest,
+            cwd,
+            home,
+        })
+    }
+
+    pub fn ensure(&self, request: EnsureLaunch) -> anyhow::Result<LaunchReceipt> {
+        let mut guard = self
+            .launches
+            .lock()
+            .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?;
+        let launches = guard.as_mut().context("host is stopping")?;
+        let (command, digest, cwd, home) = match self.prepare(launches, &request)? {
+            PreparedLaunch::Existing(receipt) => return Ok(receipt),
+            PreparedLaunch::Spawn {
+                command,
+                digest,
+                cwd,
+                home,
+            } => (*command, digest, cwd, home),
+        };
+        let EnsureLaunch {
+            binding_id,
+            generation,
+            conversation_id,
+            spec,
+            ..
+        } = request;
         let (process, connection) = match AgentProcess::spawn(command) {
             Ok(child) => (
                 Ok(child.handle),
@@ -433,6 +495,28 @@ impl ManagedLaunches {
             .connection
             .take()
             .context("no available adapter connection")
+    }
+
+    pub async fn release_one(&self, binding: &str, generation: i64) -> anyhow::Result<()> {
+        let launch = {
+            let mut guard = self
+                .launches
+                .lock()
+                .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?;
+            let launches = guard.as_mut().context("host is stopping")?;
+            let Some(existing) = launches.get(binding) else {
+                return Ok(());
+            };
+            ensure!(
+                existing.generation == generation,
+                "binding generation mismatch"
+            );
+            launches.remove(binding).context("unknown binding")?
+        };
+        if let Ok(process) = launch.process {
+            process.stop().await;
+        }
+        Ok(())
     }
 
     pub async fn shutdown(&self) -> anyhow::Result<()> {

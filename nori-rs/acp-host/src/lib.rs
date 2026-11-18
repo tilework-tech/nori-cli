@@ -6,6 +6,7 @@
 pub mod connection;
 mod error_category;
 pub mod patch;
+pub mod recovery;
 pub mod registry;
 pub mod remote;
 

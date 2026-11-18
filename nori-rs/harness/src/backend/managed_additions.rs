@@ -2,7 +2,9 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use anyhow::Context;
 use anyhow::Result;
 use nori_protocol::AcpEvent;
 use nori_protocol::SessionEvent;
@@ -24,12 +26,33 @@ struct SessionServices {
     mcp: Option<ManagedMcp>,
 }
 
+/// Recorder handles outlive the relay until a durable close or binding release.
+#[derive(Default, Clone)]
+pub struct ManagedRecorderBarrier {
+    writers: Arc<tokio::sync::Mutex<HashMap<String, Option<TranscriptRecorder>>>>,
+}
+
+impl ManagedRecorderBarrier {
+    pub async fn checkpoint(&self) -> Result<()> {
+        let writers = self.writers.lock().await;
+        for (sid, writer) in writers.iter() {
+            writer
+                .as_ref()
+                .with_context(|| format!("private recorder unavailable for {sid}"))?
+                .durable_flush()
+                .await?;
+        }
+        Ok(())
+    }
+}
+
 pub struct ManagedSessionAdditions {
     nori_home: PathBuf,
     cwd: PathBuf,
     agent: String,
     record: bool,
     inject_mcp: bool,
+    barrier: Option<ManagedRecorderBarrier>,
     sessions: HashMap<String, SessionServices>,
 }
 
@@ -48,7 +71,13 @@ impl ManagedSessionAdditions {
             record,
             inject_mcp,
             sessions: HashMap::new(),
+            barrier: None,
         }
+    }
+
+    pub fn with_barrier(mut self, barrier: ManagedRecorderBarrier) -> Self {
+        self.barrier = Some(barrier);
+        self
     }
 
     pub async fn prepare_mcp(
@@ -89,16 +118,32 @@ impl ManagedSessionAdditions {
             session.mcp = mcp;
         }
         if self.record && session.recorder.is_none() {
-            session.recorder = Some(
-                TranscriptRecorder::new(
-                    &self.nori_home,
-                    &self.cwd,
-                    Some(self.agent.clone()),
-                    env!("CARGO_PKG_VERSION"),
-                    Some(sid.to_owned()),
-                )
-                .await?,
-            );
+            let mut registered = match &self.barrier {
+                Some(barrier) => {
+                    let mut writers = barrier.writers.lock().await;
+                    if let Some(Some(recorder)) = writers.get(sid) {
+                        session.recorder = Some(recorder.clone());
+                        return Ok(());
+                    }
+                    writers.insert(sid.to_owned(), None);
+                    Some(writers)
+                }
+                None => None,
+            };
+            let recorder = TranscriptRecorder::create(
+                &self.nori_home,
+                &self.cwd,
+                Some(self.agent.clone()),
+                env!("CARGO_PKG_VERSION"),
+                Some(sid.to_owned()),
+                None,
+                self.barrier.is_some(),
+            )
+            .await?;
+            if let Some(writers) = registered.as_mut() {
+                writers.insert(sid.to_owned(), Some(recorder.clone()));
+            }
+            session.recorder = Some(recorder);
         }
         Ok(())
     }
@@ -173,8 +218,74 @@ impl ManagedSessionAdditions {
         if let Some(session) = self.sessions.remove(sid)
             && let Some(recorder) = session.recorder
         {
-            recorder.shutdown().await?;
+            if let Some(barrier) = &self.barrier {
+                let mut writers = barrier.writers.lock().await;
+                recorder.durable_flush().await?;
+                recorder.shutdown().await?;
+                writers.remove(sid);
+            } else {
+                recorder.shutdown().await?;
+            }
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn a_binding_barrier_drains_the_open_recorder_even_after_relay_disconnect() -> Result<()>
+    {
+        let temp = TempDir::new()?;
+        let root = temp.path().to_owned();
+        let barrier = ManagedRecorderBarrier::default();
+        let mut services =
+            ManagedSessionAdditions::new(root.clone(), root, "fixture".into(), true, false)
+                .with_barrier(barrier.clone());
+        services.opened("fixture-main", None).await?;
+        let path = services.sessions["fixture-main"]
+            .recorder
+            .as_ref()
+            .unwrap()
+            .transcript_path()
+            .to_owned();
+        services
+            .prompt(
+                "fixture-main",
+                &json!({"prompt":[{"type":"text","text":"recorded before detach"}]}),
+            )
+            .await?;
+        drop(services);
+        barrier.checkpoint().await?;
+        let jsonl = tokio::fs::read_to_string(path).await?;
+        assert!(
+            jsonl
+                .lines()
+                .map(serde_json::from_str::<Value>)
+                .collect::<serde_json::Result<Vec<_>>>()?
+                .iter()
+                .any(|entry| entry["content"] == "recorded before detach")
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_missing_private_writer_cannot_be_reported_as_flushed_after_disconnect() -> Result<()>
+    {
+        let temp = TempDir::new()?;
+        let root = temp.path().join("not-a-directory");
+        tokio::fs::write(&root, "fixture").await?;
+        let barrier = ManagedRecorderBarrier::default();
+        let mut services =
+            ManagedSessionAdditions::new(root, temp.path().into(), "fixture".into(), true, false)
+                .with_barrier(barrier.clone());
+        assert!(services.opened("fixture-main", None).await.is_err());
+        drop(services);
+        assert!(barrier.checkpoint().await.is_err());
         Ok(())
     }
 }

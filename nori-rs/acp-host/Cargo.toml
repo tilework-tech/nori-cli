@@ -33,6 +33,7 @@ oauth2 = "5"
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 tokio = { workspace = true, features = [
     "io-util",
     "macros",

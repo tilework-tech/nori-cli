@@ -1,5 +1,7 @@
 //! Session manager: one registry of live sessions per Nori process.
 
+mod recovery;
+pub use recovery::SessionCheckpoint;
 mod delegation;
 mod delegation_driver;
 mod delegation_state;
@@ -45,7 +47,8 @@ use crate::transcript::load_transcript_from_path;
 
 /// How a session came to exist. A user-started session, a fork and a session
 /// started by another session are otherwise the same thing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum SessionSource {
     /// Started by a user through a client.
     User,

@@ -103,6 +103,7 @@ impl HostControl {
 
 fn success(id: Value, result: Value) -> ManagedReply {
     ManagedReply {
+        delivery_guard: None,
         response: json!({"jsonrpc":"2.0","id":id,"result":result}),
         subscription: None,
     }
@@ -110,6 +111,7 @@ fn success(id: Value, result: Value) -> ManagedReply {
 
 pub(super) fn failure(id: Value, code: i32, message: &str) -> ManagedReply {
     ManagedReply {
+        delivery_guard: None,
         response: json!({"jsonrpc":"2.0","id":id,"error":{"code":code,"message":message}}),
         subscription: None,
     }

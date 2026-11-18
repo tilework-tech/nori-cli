@@ -35,6 +35,7 @@ impl ManagedAgent for Host {
             _ => json!({"mutations":self.mutations.fetch_add(1, Ordering::SeqCst) + 1}),
         };
         ManagedReply {
+            delivery_guard: None,
             response: json!({"jsonrpc":"2.0","id":request["id"],"result":result}),
             subscription: None,
         }
@@ -237,6 +238,7 @@ impl ManagedAgent for BlockingHost {
             self.release.notified().await;
         }
         ManagedReply {
+            delivery_guard: None,
             response: json!({"jsonrpc":"2.0","id":request["id"],"result":{"method":request["method"]}}),
             subscription: None,
         }
