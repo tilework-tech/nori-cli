@@ -425,8 +425,7 @@ async fn simultaneous_rebuilt_threads_preserve_turns_permissions_capacity_and_hi
     );
 }
 
-async fn assert_lease_released(path: &Path) {
-    let file = fs::File::open(path).unwrap();
+async fn assert_lease_released(file: &fs::File) {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match file.try_lock() {
@@ -442,37 +441,109 @@ async fn assert_lease_released(path: &Path) {
     .unwrap();
 }
 
+async fn lease_side_processes(
+    host: &mut SideHost,
+    parent: &str,
+    id: i64,
+) -> (String, [fs::File; 2]) {
+    let name = format!("hold-lease-{id}");
+    let leases = [name.clone(), format!("{name}-client")].map(|filename| {
+        let path = host.cwd.join(filename);
+        fs::write(&path, []).unwrap();
+        fs::File::open(path).unwrap()
+    });
+    let opened = host.start_side(id, parent).await;
+    assert_eq!(
+        opened["result"]["_meta"][MARK],
+        parent_mark(parent),
+        "{opened}"
+    );
+    let side = opened["result"]["sessionId"].as_str().unwrap().to_owned();
+    host.prompt(id + 100, &side, &name).await;
+    assert_eq!(
+        host.reply(id + 100).await["result"]["stopReason"],
+        "end_turn"
+    );
+    assert_processes_hold(&leases);
+    (side, leases)
+}
+
+fn assert_processes_hold(leases: &[fs::File; 2]) {
+    for file in leases {
+        assert!(matches!(file.try_lock(), Err(fs::TryLockError::WouldBlock)));
+    }
+}
+
 #[tokio::test]
-async fn side_processes_end_with_a_closed_or_crashed_parent() {
-    for crash in [false, true] {
-        let mut host = SideHost::start(false, None).await;
-        let mut files = Vec::new();
-        for id in 4..6 {
-            let name = format!("hold-lease-{id}");
-            let path = host.cwd.join(&name);
-            fs::write(&path, []).unwrap();
-            let response = host.start_side(id, "0").await;
-            if !read_only_launch_available() {
-                assert!(response["error"].is_object(), "{response}");
-                return;
-            }
-            let side = side_id(&response);
-            host.prompt(id + 10, &side, &name).await;
-            host.permission(&side).await;
-            assert!(matches!(
-                fs::File::open(&path).unwrap().try_lock(),
-                Err(fs::TryLockError::WouldBlock)
-            ));
-            files.push(path);
-        }
-        if crash {
-            host.prompt(30, "0", "exit-fixture").await;
-        } else {
-            host.close(30, "0").await;
-        }
-        for path in files {
-            assert_lease_released(&path).await;
-        }
+async fn parent_close_acknowledges_both_side_process_trees_have_exited() {
+    if !read_only_launch_available() {
+        return;
+    }
+    let mut host = SideHost::start(false, Some(4)).await;
+    host.send(request(
+        4,
+        "session/new",
+        json!({"cwd":host.cwd,"mcpServers":[]}),
+    ))
+    .await;
+    let other = host.reply(4).await["result"]["sessionId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (_, first) = lease_side_processes(&mut host, "0", 5).await;
+    let (_, second) = lease_side_processes(&mut host, "0", 6).await;
+    let (survivor, unrelated) = lease_side_processes(&mut host, &other, 7).await;
+    assert_eq!(host.start_side(8, &other).await["error"]["code"], -32017);
+
+    host.send(request(
+        9,
+        "session/close",
+        json!({"sessionId":"0","_meta":{"fixture.rejectClose":true}}),
+    ))
+    .await;
+    assert_eq!(
+        host.reply(9).await["error"]["message"],
+        "fixture declined close"
+    );
+    assert_processes_hold(&first);
+    assert_processes_hold(&second);
+
+    host.close(10, "0").await;
+    let released = [first, second].map(|leases| {
+        leases.map(|file| match file.try_lock() {
+            Ok(()) => true,
+            Err(fs::TryLockError::WouldBlock) => false,
+            Err(error) => panic!("could not check fixture lease: {error}"),
+        })
+    });
+    assert_eq!(
+        released, [[true; 2]; 2],
+        "adapter and client lease release at parent close acknowledgment"
+    );
+    assert_processes_hold(&unrelated);
+    host.prompt(11, &survivor, "finish").await;
+    assert_eq!(host.reply(11).await["result"]["stopReason"], "end_turn");
+    for id in [12, 13] {
+        let opened = host.start_side(id, &other).await;
+        assert_eq!(
+            opened["result"]["_meta"][MARK],
+            parent_mark(&other),
+            "{opened}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn side_process_trees_end_after_a_parent_crash() {
+    if !read_only_launch_available() {
+        return;
+    }
+    let mut host = SideHost::start(false, None).await;
+    let (_, first) = lease_side_processes(&mut host, "0", 4).await;
+    let (_, second) = lease_side_processes(&mut host, "0", 5).await;
+    host.prompt(6, "0", "exit-fixture").await;
+    for file in first.into_iter().chain(second) {
+        assert_lease_released(&file).await;
     }
 }
 

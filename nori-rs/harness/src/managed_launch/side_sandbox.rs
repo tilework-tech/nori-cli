@@ -4,7 +4,12 @@ use super::LaunchSpec;
 use tokio::process::Command;
 
 #[cfg(not(target_os = "linux"))]
-pub(super) fn command(_: &LaunchSpec, _: &Path, _: &Path, _: bool) -> anyhow::Result<Command> {
+pub(super) fn command(
+    _: &LaunchSpec,
+    _: &Path,
+    _: &Path,
+    _: Option<[std::fs::File; 2]>,
+) -> anyhow::Result<Command> {
     anyhow::bail!("read-only workspace enforcement unavailable on this platform")
 }
 
@@ -13,7 +18,7 @@ pub(super) fn command(
     spec: &LaunchSpec,
     cwd: &Path,
     home: &Path,
-    private_codex_home: bool,
+    side_fds: Option<[std::fs::File; 2]>,
 ) -> anyhow::Result<Command> {
     use anyhow::Context;
     use anyhow::ensure;
@@ -58,7 +63,7 @@ pub(super) fn command(
         set_env(key, OsStr::new(value))?;
     }
     set_env("HOME", home.as_os_str())?;
-    let private_codex = private_codex_home
+    let private_codex = (side_fds.is_some() && spec.uses_private_codex_home())
         .then(|| Path::new("/dev/shm").join(format!("codex-{}", uuid::Uuid::new_v4())));
     if let Some(private) = &private_codex {
         super::codex_home::validate_launch(spec)?;
@@ -100,6 +105,14 @@ pub(super) fn command(
         )?,
         None => Vec::new(),
     };
+    if let Some([info, gate]) = side_fds {
+        command
+            .arg("--info-fd")
+            .arg(info.as_raw_fd().to_string())
+            .arg("--block-fd")
+            .arg(gate.as_raw_fd().to_string());
+        descriptors.extend([info, gate]);
+    }
     ensure!(
         Path::new(BWRAP).is_file(),
         "read-only workspace enforcement requires {BWRAP}"

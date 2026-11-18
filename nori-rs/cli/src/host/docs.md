@@ -156,8 +156,8 @@ eight live adapter processes, and `$NORI_HOME/hosted-sessions` for the
 bindings root. Both shared and dedicated machines use the positive
 `max_sessions` limit. Each binding's adapter and each rebuilt side
 process occupy a slot. Admission checks the machine-wide count and spawns
-under the same lock. Process exit frees a slot. Local mode retains
-its own session cap and attach protocol.
+under the same lock. A rebuilt side frees its slot once its whole sandbox
+has exited. Local mode retains its own session cap and attach protocol.
 
 A dedicated machine can retain its existing home and workspace. Configure
 one named binding and omit `bindings_root`. Before
@@ -269,8 +269,11 @@ own handshake.
   create the required namespaces and mounts. The launcher mounts the root
   read-only, supplies private device and process mounts, and sets
   `TMPDIR=/dev/shm` on a private writable tmpfs. Both the pinned workspace
-  and persistent `HOME` are read-only. A side open must complete the
-  sandboxed ACP handshake before the host returns its ID.
+  and persistent `HOME` are read-only. A rebuilt side also requires
+  `pidfd_open`, `pidfd_send_signal`, and a host `/proc` view of Bubblewrap's
+  reported child PID. Before the adapter can run, the host verifies that PID
+  belongs to the supervisor's child and registers its pidfd. The side must
+  then complete the sandboxed ACP handshake before the host returns its ID.
   [Read-only launch](../../../harness/src/managed_launch/side_sandbox.rs)
 - A marked rebuilt side pinned to codex-acp 2.7.0 gets a fresh
   `CODEX_HOME` and `CODEX_SQLITE_HOME` in its private tmpfs. Codex CLI
@@ -368,8 +371,8 @@ observes exit and terminates managed processes during shutdown. See the
 [pipe handoff test](../../../harness/tests/managed_launch.rs).
 
 On Linux, provision a PID namespace init or ancestor subreaper that waits for
-orphaned processes. The host signals the adapter's process group and waits
-for its direct child. Orphaned descendants can remain as zombies until their
+orphaned processes. For ordinary managed launches the host signals the
+adapter's process group and waits for its direct child. Orphaned descendants can remain as zombies until their
 adopting ancestor reaps them. See [process supervision](../../../acp-host/src/connection/child_lifecycle.rs).
 
 #### Managed recovery control

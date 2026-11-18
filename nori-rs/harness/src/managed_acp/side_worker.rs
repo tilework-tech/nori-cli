@@ -12,12 +12,13 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tokio_util::sync::DropGuard;
 
+use super::SideEvent;
 use super::SideLaunch;
 use crate::backend::managed_additions::ManagedSessionAdditions;
 use crate::managed_acp::StandardAcpConnection;
 use crate::managed_acp::connect;
 
-type Events = mpsc::Sender<(String, Option<Value>)>;
+type Events = mpsc::Sender<(String, SideEvent)>;
 
 fn failure(id: Value, code: i32, reason: &str) -> Value {
     json!({"jsonrpc":"2.0","id":id,"error":{"code":code,"message":reason}})
@@ -325,7 +326,7 @@ pub(super) fn start_side(
             false,
             false,
         );
-        let send = |message| events.send((public_sid.clone(), Some(message)));
+        let send = |message| events.send((public_sid.clone(), SideEvent::Frame(message)));
         let run = async {
             let codex_auth = spec.uses_private_codex_home().then(|| {
                 if spec.has_subscription_file() {
@@ -380,11 +381,15 @@ pub(super) fn start_side(
             reply = run => reply,
         };
         drop(acp);
-        owner.stop().await;
+        let status = owner.stop().await.map_err(|error| error.to_string());
         if let Some(message) = final_reply {
-            let _ = send(message).await;
+            let reply = match &status {
+                Ok(()) => message,
+                Err(reason) => failure(message["id"].clone(), -32000, reason),
+            };
+            let _ = send(reply).await;
         }
-        let _ = events.send((public_sid, None)).await;
+        let _ = events.send((public_sid, SideEvent::Ended(status))).await;
     });
     input
 }
@@ -417,7 +422,7 @@ async fn serve(
                 let mut request = request?;
                 if let Some(method) = request["method"].as_str() {
                     if mode.subscription_file && method == "session/prompt" && is_codex_logout(&request) {
-                        events.send((public_sid.into(), Some(failure(request["id"].clone(), -32602, "the binding owns this Codex subscription")))).await.ok()?;
+                        events.send((public_sid.into(), SideEvent::Frame(failure(request["id"].clone(), -32602, "the binding owns this Codex subscription")))).await.ok()?;
                         continue;
                     }
                     if method == "session/close" {
@@ -427,7 +432,7 @@ async fn serve(
                         || (method == "session/set_config_option"
                             && !(mode.config_id.as_deref().is_some_and(|id| request["params"]["configId"] == id)
                                 && request["params"]["value"] == mode.value)) {
-                        events.send((public_sid.into(), Some(failure(request["id"].clone(), -32602, "side session permission mode is fixed")))).await.ok()?;
+                        events.send((public_sid.into(), SideEvent::Frame(failure(request["id"].clone(), -32602, "side session permission mode is fixed")))).await.ok()?;
                         continue;
                     }
                     request["params"]["sessionId"] = json!(internal_sid);
@@ -454,7 +459,7 @@ async fn serve(
                 } else if !matches_fixed_mode(&message["result"], mode.value, mode.config_id.as_deref()) {
                     return None;
                 }
-                events.send((public_sid.into(), Some(message))).await.ok()?;
+                events.send((public_sid.into(), SideEvent::Frame(message))).await.ok()?;
             }
         }
     }

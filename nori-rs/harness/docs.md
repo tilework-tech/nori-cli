@@ -414,8 +414,13 @@ When side sessions are enabled, [a router](src/managed_acp/side_sessions.rs)
 keeps each side's parent identity, public ACP ID and pending request mappings
 on that logical connection. Each side uses its own adapter process, drawn
 from the same machine-wide process limit as regular bindings. Its events
-bypass the parent recorder and session manager. Both side close and parent close wait for their
-respective side processes to exit.
+bypass the parent recorder and session manager. The worker and launch registry
+share the same exit result for close acknowledgments and slot reuse. After
+the outer Bubblewrap supervisor exits, the host signals the side's namespace
+init through its pidfd and waits for exit readiness. Linux supplies that
+signal after the namespace's remaining processes have exited, including
+clients spawned by the adapter.
+[Namespace exit monitor](src/managed_launch/namespace_exit.rs)
 [Managed machine protocol](../acp-host/docs.md#managed-machine-connection)
 
 #### Goal ownership and MCP routing

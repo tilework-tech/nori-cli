@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Result;
 use serde::Deserialize;
@@ -17,6 +18,7 @@ use super::StandardAcpConnection;
 use crate::managed_launch::LaunchConnection;
 use crate::managed_launch::LaunchRefusal;
 use crate::managed_launch::ManagedLaunches;
+use crate::managed_launch::SideProcess;
 
 #[path = "side_worker.rs"]
 mod side_worker;
@@ -34,26 +36,17 @@ struct Parent {
 
 pub(super) struct SideLaunch {
     pub connection: LaunchConnection,
-    pub owner: SideOwner,
+    pub owner: Arc<SideProcess>,
 }
 
-pub(super) struct SideOwner {
-    registry: ManagedLaunches,
-    binding_id: String,
-    generation: i64,
-    side_id: String,
-}
-
-impl SideOwner {
-    pub async fn stop(&self) {
-        self.registry
-            .stop_side(&self.binding_id, self.generation, &self.side_id)
-            .await;
-    }
+pub(super) enum SideEvent {
+    Frame(Value),
+    Ended(Result<(), String>),
 }
 
 struct Side {
     parent: Parent,
+    exit_error: Option<String>,
     input: Option<side_worker::SideInput>,
 }
 
@@ -80,7 +73,7 @@ struct Router {
     requests: HashMap<Value, Pending>,
     agent_requests: HashMap<Value, AgentRequest>,
     closing: Vec<(HashSet<String>, Value)>,
-    events: mpsc::Sender<(String, Option<Value>)>,
+    events: mpsc::Sender<(String, SideEvent)>,
     output: mpsc::Sender<Value>,
 }
 
@@ -150,9 +143,9 @@ impl Router {
         }
 
         let side_id = format!("{SIDE_PREFIX}{}", Uuid::new_v4());
-        let connection = self
+        let (connection, owner) = self
             .registry
-            .spawn_side(&self.binding, self.generation, &side_id)
+            .spawn_owned_side(&self.binding, self.generation, &side_id)
             .map_err(|err| {
                 if matches!(
                     err.downcast_ref::<LaunchRefusal>(),
@@ -163,12 +156,6 @@ impl Router {
                     invalid(id, -32000, &err.to_string())
                 }
             })?;
-        let owner = SideOwner {
-            registry: self.registry.clone(),
-            binding_id: self.binding.clone(),
-            generation: self.generation,
-            side_id: side_id.clone(),
-        };
         let input = side_worker::start_side(
             SideLaunch { connection, owner },
             initialize,
@@ -180,6 +167,7 @@ impl Router {
             side_id.clone(),
             Side {
                 parent,
+                exit_error: None,
                 input: Some(input),
             },
         );
@@ -437,7 +425,12 @@ impl Router {
                             list.retain(|item| !item["sessionId"].as_str().is_some_and(reserved));
                         }
                         let closing = self.parent_result(request, &frame["result"]);
-                        if !closing.is_empty() {
+                        if let Some(reason) = closing
+                            .iter()
+                            .find_map(|sid| self.sides[sid].exit_error.as_ref())
+                        {
+                            frame = invalid(&frame["id"], -32000, reason);
+                        } else if !closing.is_empty() {
                             self.closing.push((closing, frame));
                             return Ok(());
                         }
@@ -452,8 +445,16 @@ impl Router {
         Ok(())
     }
 
-    async fn ended(&mut self, sid: &str) -> Result<()> {
-        self.sides.remove(sid);
+    async fn ended(&mut self, sid: &str, status: Result<(), String>) -> Result<()> {
+        let error = status.err();
+        if let Some(reason) = &error {
+            if let Some(side) = self.sides.get_mut(sid) {
+                side.input = None;
+                side.exit_error = Some(reason.clone());
+            }
+        } else {
+            self.sides.remove(sid);
+        }
         self.agent_requests
             .retain(|_, r| r.side.as_deref() != Some(sid));
         let lost: Vec<_> = self
@@ -468,8 +469,14 @@ impl Router {
         }
         let ready = self
             .closing
-            .extract_if(.., |(siblings, _)| {
-                siblings.remove(sid);
+            .extract_if(.., |(siblings, reply)| {
+                if !siblings.remove(sid) {
+                    return false;
+                }
+                if let Some(reason) = &error {
+                    *reply = invalid(&reply["id"], -32000, reason);
+                    return true;
+                }
                 siblings.is_empty()
             })
             .collect::<Vec<_>>();
@@ -516,8 +523,8 @@ pub fn route_side_sessions(
                     None => break,
                 },
                 Some((sid, frame)) = child_events.recv() => match frame {
-                    Some(frame) => router.agent(Some(&sid), frame).await,
-                    None => router.ended(&sid).await,
+                    SideEvent::Frame(frame) => router.agent(Some(&sid), frame).await,
+                    SideEvent::Ended(status) => router.ended(&sid, status).await,
                 }
             };
             if result.is_err() {

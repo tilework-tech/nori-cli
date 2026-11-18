@@ -24,6 +24,8 @@ use crate::ConversationId;
 
 #[cfg(target_os = "linux")]
 mod codex_home;
+#[cfg(target_os = "linux")]
+mod namespace_exit;
 mod side_sandbox;
 
 #[derive(Deserialize)]
@@ -186,7 +188,12 @@ impl LaunchSpec {
         self.credential_refs == ["sessions:codex-subscription-file:v1"]
     }
 
-    fn command(&self, cwd: &Path, home: &Path, rebuilt_side: bool) -> anyhow::Result<Command> {
+    fn command(
+        &self,
+        cwd: &Path,
+        home: &Path,
+        side_fds: Option<[std::fs::File; 2]>,
+    ) -> anyhow::Result<Command> {
         ensure!(
             [
                 &self.agent,
@@ -220,13 +227,8 @@ impl LaunchSpec {
                 "invalid or reserved environment key"
             );
         }
-        if rebuilt_side || self.workspace_read_only {
-            return side_sandbox::command(
-                self,
-                cwd,
-                home,
-                rebuilt_side && self.uses_private_codex_home(),
-            );
+        if side_fds.is_some() || self.workspace_read_only {
+            return side_sandbox::command(self, cwd, home, side_fds);
         }
         let mut command = Command::new(&self.adapter.path);
         command
@@ -274,7 +276,31 @@ struct Launch {
     cwd: PathBuf,
     home: PathBuf,
     pipes: Option<(ChildStdin, ChildStdout)>,
-    sides: HashMap<String, Arc<ChildHandle>>,
+    sides: HashMap<String, Arc<SideProcess>>,
+}
+
+pub(crate) struct SideProcess {
+    supervisor: Arc<ChildHandle>,
+    drained: tokio::sync::watch::Receiver<Option<Result<(), String>>>,
+}
+
+impl SideProcess {
+    fn has_exited(&self) -> bool {
+        matches!(*self.drained.borrow(), Some(Ok(())))
+    }
+
+    pub(crate) async fn stop(&self) -> anyhow::Result<()> {
+        self.supervisor.request_kill();
+        let mut drained = self.drained.clone();
+        let done = drained
+            .wait_for(Option::is_some)
+            .await
+            .context("side exit monitor disconnected")?;
+        if let Some(Err(error)) = &*done {
+            anyhow::bail!("side process exit unconfirmed: {error}");
+        }
+        Ok(())
+    }
 }
 
 impl Launch {
@@ -455,7 +481,7 @@ impl ManagedLaunches {
             .map_err(LaunchRefusal::InvalidParams)?;
         let command = request
             .spec
-            .command(&cwd, &home, false)
+            .command(&cwd, &home, None)
             .map_err(LaunchRefusal::InvalidParams)?;
         let live: usize = launches.values_mut().map(Launch::live_slots).sum();
         ensure!(live < self.limit, LaunchRefusal::AtCapacity);
@@ -560,6 +586,27 @@ impl ManagedLaunches {
         generation: i64,
         side_id: &str,
     ) -> anyhow::Result<LaunchConnection> {
+        self.spawn_owned_side(binding, generation, side_id)
+            .map(|(connection, _)| connection)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub(crate) fn spawn_owned_side(
+        &self,
+        _: &str,
+        _: i64,
+        _: &str,
+    ) -> anyhow::Result<(LaunchConnection, Arc<SideProcess>)> {
+        anyhow::bail!("read-only workspace enforcement unavailable on this platform")
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn spawn_owned_side(
+        &self,
+        binding: &str,
+        generation: i64,
+        side_id: &str,
+    ) -> anyhow::Result<(LaunchConnection, Arc<SideProcess>)> {
         ensure!(self.side_sessions, "side sessions disabled");
         let mut guard = self
             .launches
@@ -589,26 +636,41 @@ impl ManagedLaunches {
                 && session_folder(&launch.home)? == launch.home,
             "pinned launch roots changed"
         );
-        let command = launch.spec.command(&launch.cwd, &launch.home, true)?;
+        let (namespace, fds) = namespace_exit::NamespaceExit::prepare()?;
+        let command = launch.spec.command(&launch.cwd, &launch.home, Some(fds))?;
         let child = AgentProcess::spawn(command).context("read-only adapter launch failed")?;
-        let handle = Arc::new(child.handle);
-        let side_exit = handle.wait_for_exit();
-        let side = Arc::downgrade(&handle);
-        launch.sides.insert(side_id.to_owned(), handle);
+        let supervisor = Arc::new(child.handle);
+        let outer_exit = supervisor.wait_for_exit();
+        let side = Arc::downgrade(&supervisor);
+        let (done, drained) = tokio::sync::watch::channel(None);
+        let process = Arc::new(SideProcess {
+            supervisor,
+            drained,
+        });
+        launch.sides.insert(side_id.to_owned(), process.clone());
         tokio::spawn(async move {
-            tokio::select! {
+            let drain = namespace.monitor(side.clone(), outer_exit);
+            tokio::pin!(drain);
+            let result = tokio::select! {
                 () = parent_exit => {
                     if let Some(side) = side.upgrade() {
                         side.request_kill();
                     }
+                    drain.await
                 }
-                () = side_exit => (),
-            }
+                result = &mut drain => result,
+            };
+            done.send_replace(Some(result.map_err(|error| format!("{error:#}"))));
         });
-        Ok(launch.connection(child.stdin, child.stdout))
+        Ok((launch.connection(child.stdin, child.stdout), process))
     }
 
-    pub async fn stop_side(&self, binding: &str, generation: i64, side_id: &str) {
+    pub async fn stop_side(
+        &self,
+        binding: &str,
+        generation: i64,
+        side_id: &str,
+    ) -> anyhow::Result<()> {
         let handle = self
             .launches
             .lock()
@@ -619,9 +681,9 @@ impl ManagedLaunches {
             .and_then(|launch| launch.sides.get(side_id))
             .cloned();
         if let Some(handle) = handle {
-            handle.request_kill();
-            handle.wait_for_exit().await;
+            handle.stop().await?;
         }
+        Ok(())
     }
 
     pub async fn release_one(&self, binding: &str, generation: i64) -> anyhow::Result<()> {
@@ -653,19 +715,25 @@ impl ManagedLaunches {
             .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?
             .take()
             .unwrap_or_default();
-        let stopping = launches
-            .into_values()
-            .flat_map(|launch| launch.process.into_iter().chain(launch.sides.into_values()))
-            .map(|handle| async move {
-                handle.request_kill();
-                handle.wait_for_exit().await;
-            });
-        tokio::time::timeout(
+        let stopping = launches.into_values().map(|launch| async move {
+            let parent = async {
+                if let Ok(parent) = launch.process {
+                    parent.request_kill();
+                    parent.wait_for_exit().await;
+                }
+            };
+            let sides = futures::future::join_all(launch.sides.values().map(|side| side.stop()));
+            tokio::join!(parent, sides).1
+        });
+        let results = tokio::time::timeout(
             std::time::Duration::from_secs(10),
             futures::future::join_all(stopping),
         )
         .await
         .context("managed adapters did not stop")?;
+        for result in results.into_iter().flatten() {
+            result?;
+        }
         Ok(())
     }
 }

@@ -141,6 +141,17 @@ for line in sys.stdin:
             lease = open(text, "rb")
             fcntl.flock(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
             leases.append(lease)
+            with open(text + "-client", "rb") as client_lease:
+                fcntl.flock(client_lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                client = subprocess.Popen(
+                    [sys.executable, "-c",
+                     "import signal; print('ready', flush=True); signal.pause()"],
+                    pass_fds=(client_lease.fileno(),),
+                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE)
+                assert client.stdout.readline() == b"ready\n"
+                client.stdout.close()
+            send(id=rid, result={"stopReason": "end_turn"})
+            continue
         if text == "exit-fixture":
             sys.exit(0)
         if text == "finish":
@@ -180,6 +191,9 @@ for line in sys.stdin:
             send(id=rid, error={"code": -32020, "message": "unavailable mode",
                                 "data": {"requested": params["modeId"], "agent": name}})
     elif method == "session/close":
+        if params.get("_meta", {}).get("fixture.rejectClose"):
+            send(id=rid, error={"code": -32603, "message": "fixture declined close"})
+            continue
         sessions.remove(sid)
         send(id=rid, result={"_meta": {"closed": sid}})
     else:

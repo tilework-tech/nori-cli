@@ -127,7 +127,7 @@ async fn read_only_launch_pins_environment_and_isolates_scratch() {
             .unwrap()
             .unwrap();
             assert_eq!(result, "private\n");
-            launches.stop_side("sample", 2, id).await;
+            launches.stop_side("sample", 2, id).await.unwrap();
         }
         assert_eq!(fs::read_to_string(cwd.join("input")).unwrap(), "original");
         assert!(!cwd.join("creation").exists());
@@ -466,7 +466,7 @@ async fn subscription_sides_follow_the_admitted_files_atomic_replacement() {
             Some("subscription-generation-two")
         );
         assert_eq!(output.next_line().await.unwrap().as_deref(), Some(id));
-        launches.stop_side("sample", 1, id).await;
+        launches.stop_side("sample", 1, id).await.unwrap();
     }
     launches.shutdown().await.unwrap();
     assert!(!provider.join("installation_id").exists());

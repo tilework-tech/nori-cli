@@ -417,11 +417,17 @@ The host disables recording, prompt echo, status additions and client MCP for
 this process. Side IDs have no delegation or restore path and are omitted from
 session lists. [Side routing](../harness/src/managed_acp/side_sessions.rs)
 
-Each rebuilt side occupies one process slot until its process exits. At
-capacity, `session/new` returns `-32017` with the message `machine full`.
-The parent and its outstanding turn continue. Closing a side ends just that
-thread. Closing its parent waits for the side processes to exit. Loss of
-the parent process, the logical ACP connection or the host also ends them.
+Each rebuilt side holds a process slot until its Bubblewrap supervisor and
+PID namespace have exited. At capacity, `session/new` returns `-32017`
+with the message `machine full`. The parent and its outstanding turn continue.
+
+A successful side close means its adapter and descendants have released
+their process-held resources. A successful parent close gives this guarantee
+for every side belonging to that ACP session. Sides of other parents keep
+running. If the parent adapter declines the close, its sides stay active
+and the caller can retry. If the host cannot confirm a side's exit, its slot
+stays reserved and the affected close returns an error. Loss of the parent
+process, the logical ACP connection or the host also triggers side teardown.
 [Admission and confinement](../cli/src/host/docs.md#managed-launch-control-v1)
 
 Sessions supplies conversation context in the first prompt, correlates side

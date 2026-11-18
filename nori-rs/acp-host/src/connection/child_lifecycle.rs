@@ -111,6 +111,17 @@ impl AgentProcess {
 }
 
 impl ChildHandle {
+    /// A PID for validating launcher observations made before this check.
+    /// The watcher retires the process group before reaping its leader.
+    #[cfg(target_os = "linux")]
+    pub fn unreaped_id(&self) -> Option<u32> {
+        let retired = self
+            .group_cleanup_complete
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (!*retired).then_some(self.pid)
+    }
+
     pub fn has_exited(&self) -> bool {
         self.exit_rx.borrow().is_some() || self.exit_rx.has_changed().is_err()
     }
