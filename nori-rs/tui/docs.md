@@ -539,10 +539,12 @@ Every ACP tool call renders through
 [`ClientToolCell`](src/client_tool_cell.rs), with shell-command helpers in
 [`exec_cell`](src/exec_cell/render.rs) built on the harness's tolerant
 [`bash::summarize`](../harness/src/bash.rs) parser. The cell's
-`display_lines` is the compact inline view and `transcript_lines` the full
-view; `[tui] tool_output = "full"` (`NoriConfig::tool_output`, passed in by the
-chat widget through `with_tool_output`) makes the inline view full as well.
-`nori attach` builds cells without that setting, so it always renders compact.
+`display_lines` is the inline view and `transcript_lines` the full view. The
+inline view is full unless `NoriConfig::tool_output` resolves to compact (from
+`-c tui.tool_output`, the project's `tool_output`, or `[tui] tool_output`); the
+chat widget passes it in through `with_tool_output`. `nori attach` builds cells
+without that setting and does not resolve project settings, so it falls back
+to `ToolOutput::default()` and always renders full.
 
 Compact output is one scannable line per call: a status dot that is the only
 status indicator (green, red, or a spinner), `Ran`/`Running` plus a command
@@ -564,11 +566,14 @@ Ctrl+C, Ctrl+T, and Ctrl+O close it.
 
 The directory-trust onboarding step
 ([`trust_directory`](src/nori/onboarding/trust_directory.rs)) asks a second,
-skippable question after the trust choice: how tool calls should appear.
-Compact is preselected after choosing to work without approval and Full after
-requiring approval. Enter writes the global `[tui] tool_output`; Esc skips
-without writing. The step completes only after this question is answered or
-skipped.
+skippable question after either trust answer: "Use compact tool output in this
+project?" Full is preselected. Compact writes `tool_output = "compact"` for the
+same project path the trust answer used (git root or cwd) through
+`NoriConfigEdits::set_project_tool_output`; Full and Esc write nothing, so no
+preference is recorded. The onboarding screen passes the resolved
+`config.tool_output` to the widget, and the question is not shown when compact
+already applies. The step completes only after the question is answered or
+skipped. Directories that are already trusted never reach this step.
 
 #### Inline transcript reflow
 

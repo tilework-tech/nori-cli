@@ -39,6 +39,13 @@ split across PTY reads still applies. On top of it, `TuiSession` offers:
 | `settle(duration)` | Keeps reading output for a fixed time so the emulator catches up |
 | `wait_out_answer_grace()` | Settles for `ANSWER_GRACE`, longer than the TUI's request answer grace period, so the next option key answers a request that just appeared |
 
+By default each `TuiSession` gets a disposable home and generated
+`config.toml`. `SessionConfig::with_nori_home` instead points `NORI_HOME` and
+`CODEX_HOME` at a caller-owned directory that can be reused across launches;
+the harness neither writes nor deletes its `config.toml`, so a test can observe
+what one launch saved and how the next launch reads it. `with_cwd` starts Nori
+in a chosen directory.
+
 `Key` adds `Alt(char)` (ESC prefix), `AltDown`, `BackTab`, and the terminal
 focus reports `FocusIn` and `FocusOut`, used by session hotkeys and
 notification tests.
@@ -152,6 +159,12 @@ envelope sequence, and sends a prompt to that same ID after restart. A cloud-mod
 scenario checks that `/close` beside another open session lists the released one
 as closed. The ignored `jump_timing_on_a_long_history` test reports how long a
 jump to a long history takes; run it with `--ignored --nocapture`.
+
+[Tool output preference scenarios](tests/tool_output_preference.rs) use a
+shared home and the mock agent's `MOCK_AGENT_SEND_COMMAND_OUTPUT` command to
+check that inline tool output is full by default, that the post-trust compact
+question saves compact only for that project (and applies in its
+subdirectories), and that Full or Esc saves nothing.
 
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same

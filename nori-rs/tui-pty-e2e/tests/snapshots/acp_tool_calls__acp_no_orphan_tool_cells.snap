@@ -7,13 +7,13 @@ to change)
 
 › Analyze code
 
-• Running cargo …
+• Running cargo test
 
 ────────────────────────────────────────────────────────────────────────────────
 
 • Analyzing the code.
 
-• Ran cargo …
+• Ran cargo clippy
   └ No files found
 
 ────────────────────────────────────────────────────────────────────────────────
