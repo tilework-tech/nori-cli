@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -20,6 +22,9 @@ use crate::managed_launch::LaunchConnection;
 use crate::managed_launch::LaunchRefusal;
 use crate::managed_launch::ManagedLaunches;
 use crate::managed_launch::SideProcess;
+
+#[path = "parent_close.rs"]
+mod parent_close;
 
 #[path = "side_worker.rs"]
 mod side_worker;
@@ -47,6 +52,7 @@ pub(super) enum SideEvent {
 }
 
 struct Side {
+    native: bool,
     parent: Parent,
     exit_error: Option<String>,
     input: Option<side_worker::SideInput>,
@@ -75,7 +81,8 @@ struct Router {
     sides: HashMap<String, Side>,
     requests: HashMap<Value, Pending>,
     agent_requests: HashMap<Value, AgentRequest>,
-    closing: Vec<(HashSet<String>, Value)>,
+    closing: HashMap<String, parent_close::ClosingParent>,
+    cleanup: FuturesUnordered<parent_close::Cleanup>,
     events: mpsc::Sender<(String, SideEvent)>,
     output: mpsc::Sender<Value>,
 }
@@ -114,6 +121,8 @@ impl Router {
         if parent.binding_id != self.binding
             || parent.generation != self.generation
             || !self.parents.contains(&parent.session_id)
+            || self.closing.contains_key(&parent.session_id)
+            || self.parent_close_pending(&parent.session_id)
         {
             return Err(invalid(
                 id,
@@ -164,6 +173,7 @@ impl Router {
         self.sides.insert(
             side_id.clone(),
             Side {
+                native: method == "session/fork",
                 parent,
                 exit_error: None,
                 input: Some(input),
@@ -268,7 +278,10 @@ impl Router {
         }
         if let Some(id) = &id
             && (self.requests.contains_key(id)
-                || self.closing.iter().any(|(_, frame)| frame["id"] == *id))
+                || self
+                    .closing
+                    .values()
+                    .any(|close| close.request_id.as_ref() == Some(id)))
         {
             self.output
                 .send(invalid(
@@ -282,6 +295,11 @@ impl Router {
 
         let params = &frame["params"];
         let sid = params["sessionId"].as_str().map(str::to_owned);
+        if let Some(sid) = sid.as_deref()
+            && self.route_closing_parent(sid, &method, id.as_ref()).await?
+        {
+            return Ok(());
+        }
         let target_side = sid
             .as_ref()
             .filter(|sid| self.sides.contains_key(*sid) || reserved(sid));
@@ -359,7 +377,7 @@ impl Router {
         }
     }
 
-    fn parent_result(&mut self, request: Pending, result: &Value) -> HashSet<String> {
+    fn parent_result(&mut self, request: Pending, result: &Value) {
         match request.method.as_str() {
             "initialize" => self.initialize = request.initialize,
             "session/new" | "session/fork" => {
@@ -368,23 +386,8 @@ impl Router {
                 }
             }
             "session/resume" | "session/load" => self.parents.extend(request.sid),
-            "session/close" => {
-                if let Some(parent) = request.sid {
-                    self.parents.remove(&parent);
-                    return self
-                        .sides
-                        .iter_mut()
-                        .filter(|(_, s)| s.parent.session_id == parent)
-                        .map(|(sid, child)| {
-                            child.input = None;
-                            sid.clone()
-                        })
-                        .collect();
-                }
-            }
             _ => {}
         }
-        HashSet::new()
     }
 
     async fn agent(&mut self, side: Option<&str>, mut frame: Value) -> Result<()> {
@@ -458,16 +461,13 @@ impl Router {
                         {
                             list.retain(|item| !item["sessionId"].as_str().is_some_and(reserved));
                         }
-                        let closing = self.parent_result(request, &frame["result"]);
-                        if let Some(reason) = closing
-                            .iter()
-                            .find_map(|sid| self.sides[sid].exit_error.as_ref())
+                        if request.method == "session/close"
+                            && let Some(parent) = request.sid.as_deref()
                         {
-                            frame = invalid(&frame["id"], -32000, reason);
-                        } else if !closing.is_empty() {
-                            self.closing.push((closing, frame));
+                            self.begin_parent_cleanup(parent, frame);
                             return Ok(());
                         }
+                        self.parent_result(request, &frame["result"]);
                     }
                     _ => {}
                 }
@@ -480,15 +480,14 @@ impl Router {
     }
 
     async fn ended(&mut self, sid: &str, status: Result<(), String>) -> Result<()> {
-        let error = status.err();
-        if let Some(reason) = &error {
-            if let Some(side) = self.sides.get_mut(sid) {
+        let parent = match status {
+            Ok(()) => self.sides.remove(sid).map(|side| side.parent.session_id),
+            Err(reason) => self.sides.get_mut(sid).map(|side| {
                 side.input = None;
-                side.exit_error = Some(reason.clone());
-            }
-        } else {
-            self.sides.remove(sid);
-        }
+                side.exit_error = Some(reason);
+                side.parent.session_id.clone()
+            }),
+        };
         self.agent_requests
             .retain(|_, r| r.side.as_deref() != Some(sid));
         let lost: Vec<_> = self
@@ -501,21 +500,8 @@ impl Router {
                 .send(invalid(&id, -32002, "side session ended"))
                 .await?;
         }
-        let ready = self
-            .closing
-            .extract_if(.., |(siblings, reply)| {
-                if !siblings.remove(sid) {
-                    return false;
-                }
-                if let Some(reason) = &error {
-                    *reply = invalid(&reply["id"], -32000, reason);
-                    return true;
-                }
-                siblings.is_empty()
-            })
-            .collect::<Vec<_>>();
-        for (_, reply) in ready {
-            self.output.send(reply).await?;
+        if let Some(parent) = parent {
+            self.finish_parent_cleanup(&parent).await?;
         }
         Ok(())
     }
@@ -544,7 +530,8 @@ pub fn route_side_sessions(
             sides: HashMap::new(),
             requests: HashMap::new(),
             agent_requests: HashMap::new(),
-            closing: Vec::new(),
+            closing: HashMap::new(),
+            cleanup: FuturesUnordered::new(),
             events,
             output,
         };
@@ -558,6 +545,12 @@ pub fn route_side_sessions(
                     Some(frame) => router.agent(None, frame).await,
                     None => break Ok(()),
                 },
+                Some((parent, outcome)) = router.cleanup.next(), if !router.cleanup.is_empty() => {
+                    if let Some(close) = router.closing.get_mut(&parent) {
+                        close.outcome = Some(outcome);
+                    }
+                    router.finish_parent_cleanup(&parent).await
+                }
                 Some((sid, frame)) = child_events.recv() => match frame {
                     SideEvent::Frame(frame) => router.agent(Some(&sid), frame).await,
                     SideEvent::Ended(status) => router.ended(&sid, status).await,

@@ -29,6 +29,21 @@ pub use nori_acp_host::remote::StandardAcpConnection;
 mod side_sessions;
 pub use side_sessions::route_side_sessions;
 
+fn normalize_close(frame: &mut Value) {
+    match (frame.get("result"), frame.get("error")) {
+        (Some(result), None) if result.is_object() => {}
+        (None, Some(error)) if error["code"] == -32002 => {
+            *frame = json!({"jsonrpc":"2.0","id":frame["id"],"result":{}});
+        }
+        (None, Some(error)) if error["code"].is_i64() && error["message"].is_string() => {}
+        _ => {
+            *frame = json!({"jsonrpc":"2.0","id":frame["id"],"error":{
+                "code":-32603,"message":"adapter did not confirm session close"
+            }});
+        }
+    }
+}
+
 struct Request {
     method: String,
     sid: Option<String>,
@@ -246,6 +261,11 @@ impl Relay {
                 .remove(&message["id"])
                 .context("unsolicited adapter response")?;
             let sid = request.sid.as_deref();
+            if request.method == "session/close"
+                && sid.is_some_and(|sid| self.native.knows_parent(sid))
+            {
+                normalize_close(&mut message);
+            }
             if let Some(result) = message.get("result") {
                 match request.method.as_str() {
                     "initialize" => self.initialize = Some(result.clone()),

@@ -1,6 +1,8 @@
 //! Private ACP endpoints sharing the admitted adapter's stdio stream.
 #[path = "native_adapter.rs"]
 mod adapter;
+#[path = "native_cleanup.rs"]
+mod cleanup;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -30,10 +32,27 @@ fn error_response(id: &Value, code: i32, message: &str) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
 }
 
+fn cancelled_permission(id: &Value) -> Value {
+    json!({"jsonrpc":"2.0", "id":id, "result":{"outcome":{"outcome":"cancelled"}}})
+}
+
 impl NativeForks {
     pub(super) fn channel() -> (Self, mpsc::Receiver<Command>) {
         let (commands, receiver) = mpsc::channel(64);
         (Self { commands }, receiver)
+    }
+
+    pub(super) async fn close_children(&self, parent: &str) -> Result<()> {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            let (answer, outcome) = oneshot::channel();
+            self.commands
+                .send(Command::CloseChildren(parent.to_owned(), answer))
+                .await
+                .map_err(|_| anyhow!("parent adapter connection ended"))?;
+            outcome.await.context("parent adapter connection ended")?
+        })
+        .await
+        .context("adapter has not confirmed closure of every fork")?
     }
 
     /// Open a private endpoint after the adapter has acknowledged its read-only mode.
@@ -87,6 +106,7 @@ pub(super) enum Command {
         output: mpsc::Sender<Value>,
         answer: oneshot::Sender<Result<Value>>,
     },
+    CloseChildren(String, oneshot::Sender<Result<()>>),
     Frame(Uuid, Value),
     Dropped(Uuid),
 }
@@ -102,10 +122,20 @@ struct Opening {
 struct Child {
     parent: String,
     sid: String,
+    endpoint: Option<Endpoint>,
+    // A single adapter close can serve a parent cleanup and a concurrent child request.
+    closing: Option<Closing>,
+}
+
+struct Closing {
+    wire_id: Value,
+    client_ids: Vec<Value>,
+}
+
+struct Endpoint {
     mode: String,
     output: mpsc::Sender<Value>,
     permissions: HashSet<Value>,
-    closing: bool,
     ready: bool,
 }
 
@@ -122,14 +152,15 @@ enum Pending {
     Forward {
         key: Uuid,
         client_id: Value,
-        method: String,
     },
+    Close(Uuid),
     Discard,
 }
 
 #[derive(Default)]
 pub(super) struct Native {
     children: HashMap<Uuid, Child>,
+    drains: HashMap<String, Vec<oneshot::Sender<Result<()>>>>,
     private_ids: HashMap<String, Uuid>,
     parents: HashSet<String>,
     pending: HashMap<Value, Pending>,
@@ -202,6 +233,10 @@ impl Native {
         self.pending.contains_key(id)
     }
 
+    pub(super) fn knows_parent(&self, sid: &str) -> bool {
+        self.parents.contains(sid)
+    }
+
     pub(super) fn observed(&mut self, sid: &str) {
         if self.agent.is_some() {
             self.parents.insert(sid.to_owned());
@@ -226,7 +261,7 @@ impl Native {
         let keys: Vec<_> = self
             .children
             .iter()
-            .filter(|(_, c)| c.parent == parent)
+            .filter(|(_, c)| c.parent == parent && c.endpoint.as_ref().is_some_and(|e| !e.ready))
             .map(|(key, _)| *key)
             .collect();
         for key in keys {
@@ -262,14 +297,14 @@ impl Native {
         method: &str,
         params: Value,
         pending: Pending,
-    ) -> Result<()> {
+    ) -> Result<Value> {
         let id = json!(Uuid::new_v4().to_string());
         self.write(
             writer,
             json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
         )?;
-        self.pending.insert(id, pending);
-        Ok(())
+        self.pending.insert(id.clone(), pending);
+        Ok(id)
     }
 
     pub(super) fn command(
@@ -324,6 +359,7 @@ impl Native {
                 };
                 self.request(writer, "session/fork", fork_params, Pending::Fork(open))?;
             }
+            Command::CloseChildren(parent, answer) => self.drain(parent, answer, writer)?,
             Command::Frame(key, message) => self.client(key, message, writer)?,
             Command::Dropped(key) => {
                 for pending in self.pending.values_mut() {
@@ -345,17 +381,20 @@ impl Native {
         let Some(child) = self.children.get_mut(&key) else {
             return Ok(());
         };
+        let Some(endpoint) = &mut child.endpoint else {
+            return Ok(());
+        };
         let id = msg["id"].clone();
         let Some(method) = msg["method"].as_str().map(str::to_owned) else {
             if (msg.get("result").is_some() != msg.get("error").is_some())
-                && child.permissions.remove(&id)
+                && endpoint.permissions.remove(&id)
                 && !self.ambiguous(&id)
             {
                 self.write(writer, msg)?;
             }
             return Ok(());
         };
-        if child.closing || !child.ready {
+        if !endpoint.ready {
             return Ok(());
         }
         let allowed = matches!(
@@ -367,7 +406,7 @@ impl Native {
             || (method == "session/cancel") != id.is_null()
         {
             if !id.is_null() {
-                let _ = child.output.try_send(error_response(
+                let _ = endpoint.output.try_send(error_response(
                     &id,
                     -32602,
                     "operation unavailable on read-only fork",
@@ -375,61 +414,21 @@ impl Native {
             }
             return Ok(());
         }
-        if method == "session/cancel" {
+        if method == "session/close" {
+            self.close_child(key, Some(id), false, writer)?;
+        } else if method == "session/cancel" {
             self.write(writer, msg)?;
+        } else if child.closing.is_some() || !self.parents.contains(&child.parent) {
+            let _ =
+                endpoint
+                    .output
+                    .try_send(error_response(&id, -32015, "side session is closing"));
         } else {
-            if method == "session/close" {
-                child.closing = true;
-            }
             self.request(
                 writer,
                 &method,
                 msg["params"].take(),
-                Pending::Forward {
-                    key,
-                    client_id: id,
-                    method: method.clone(),
-                },
-            )?;
-        }
-        Ok(())
-    }
-
-    fn retire(&mut self, key: Uuid, writer: &mpsc::Sender<Value>) -> Result<()> {
-        let Some(child) = self.children.remove(&key) else {
-            return Ok(());
-        };
-        for pending in self.pending.values_mut() {
-            let owned = match pending {
-                Pending::Forward { key: owner, .. } | Pending::Mode { key: owner, .. } => {
-                    *owner == key
-                }
-                Pending::Fork(_) | Pending::LateFork { .. } | Pending::Discard => false,
-            };
-            if !owned {
-                continue;
-            }
-            match std::mem::replace(pending, Pending::Discard) {
-                Pending::Forward { client_id, .. } => {
-                    let _ = child.output.try_send(error_response(
-                        &client_id,
-                        -32001,
-                        "read-only fork closed",
-                    ));
-                }
-                Pending::Mode { answer, .. } => {
-                    let _ =
-                        answer.send(Err(anyhow!("read-only fork closed during mode selection")));
-                }
-                _ => unreachable!(),
-            }
-        }
-        if !child.closing {
-            self.request(
-                writer,
-                "session/close",
-                json!({"sessionId":child.sid}),
-                Pending::Discard,
+                Pending::Forward { key, client_id: id },
             )?;
         }
         Ok(())

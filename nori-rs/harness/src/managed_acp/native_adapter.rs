@@ -10,10 +10,12 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use super::Child;
+use super::Endpoint;
 use super::Native;
 use super::Opening;
 use super::Pending;
 use super::Request;
+use super::cancelled_permission;
 use super::error_response;
 
 impl Native {
@@ -30,17 +32,44 @@ impl Native {
                 return Ok(false);
             };
             let private = self.private_ids.get(sid).copied();
+            if private.is_some_and(|key| !self.children.contains_key(&key)) {
+                return Ok(true);
+            }
             let opening_regular = requests.values().any(|r| {
                 matches!(r.method.as_str(), "session/load" | "session/resume")
                     && r.sid.as_deref() == Some(sid)
             });
-            let unclaimed = !opening_regular && self.inaccessible(sid);
+            let unclaimed = !opening_regular
+                && (self.inaccessible(sid)
+                    || (!self.parents.contains(sid)
+                        && self
+                            .pending
+                            .values()
+                            .any(|pending| matches!(pending, Pending::LateFork { .. }))));
+
             if let Some(id) = msg.get("id") {
                 let previous = self
                     .children
                     .iter()
-                    .find(|(_, child)| child.permissions.contains(id))
+                    .find(|(_, child)| {
+                        child
+                            .endpoint
+                            .as_ref()
+                            .is_some_and(|e| e.permissions.contains(id))
+                    })
                     .map(|(key, _)| *key);
+                if private.is_some_and(|key| self.children[&key].endpoint.is_none()) {
+                    if !self.ambiguous(id) && previous.is_none() && !parent_permissions.contains(id)
+                    {
+                        let reply = if msg["method"] == "session/request_permission" {
+                            cancelled_permission(id)
+                        } else {
+                            error_response(id, -32002, "fork endpoint has ended")
+                        };
+                        self.write(writer, reply)?;
+                    }
+                    return Ok(true);
+                }
                 if self.ambiguous(id)
                     || previous.is_some()
                     || ((private.is_some() || unclaimed) && parent_permissions.contains(id))
@@ -68,24 +97,28 @@ impl Native {
                 }
                 return Ok(unclaimed);
             };
-            let Some(child) = self.children.get_mut(&key) else {
+            let Some(endpoint) = self
+                .children
+                .get_mut(&key)
+                .and_then(|c| c.endpoint.as_mut())
+            else {
                 return Ok(true);
             };
             let changed = &msg["params"]["update"];
             if changed["sessionUpdate"] == "current_mode_update"
-                && changed["currentModeId"] != child.mode
+                && changed["currentModeId"] != endpoint.mode
             {
                 self.retire(key, writer)?;
-            } else if !child.ready {
+            } else if !endpoint.ready {
                 if !msg["id"].is_null() && !self.deferred() {
                     self.write(
                         writer,
                         error_response(&msg["id"], -32001, "fork is not ready"),
                     )?;
                 }
-            } else if !child.closing {
+            } else {
                 if msg["method"] == "session/request_permission" && !msg["id"].is_null() {
-                    child.permissions.insert(msg["id"].clone());
+                    endpoint.permissions.insert(msg["id"].clone());
                 } else if msg["method"] != "session/update" || !msg["id"].is_null() {
                     if !msg["id"].is_null() && !self.deferred() {
                         self.write(
@@ -99,7 +132,7 @@ impl Native {
                     }
                     return Ok(true);
                 }
-                if child.output.try_send(msg.take()).is_err() {
+                if endpoint.output.try_send(msg.take()).is_err() {
                     self.retire(key, writer)?;
                 }
             }
@@ -117,14 +150,20 @@ impl Native {
                     .filter(|s| !s.is_empty())
                     && self.fresh_id(sid, &parent, requests)
                 {
-                    self.private_ids.insert(sid.to_owned(), Uuid::new_v4());
-                    self.request(
-                        writer,
-                        "session/close",
-                        json!({"sessionId":sid}),
-                        Pending::Discard,
-                    )?;
+                    let key = Uuid::new_v4();
+                    self.private_ids.insert(sid.to_owned(), key);
+                    self.children.insert(
+                        key,
+                        Child {
+                            sid: sid.to_owned(),
+                            parent: parent.clone(),
+                            endpoint: None,
+                            closing: None,
+                        },
+                    );
+                    self.close_child(key, None, false, writer)?;
                 }
+                self.finish_drain(&parent);
             }
             Pending::Mode {
                 key,
@@ -133,39 +172,33 @@ impl Native {
             } => {
                 if !msg["result"].is_object()
                     || msg.get("error").is_some()
-                    || !self.children.contains_key(&key)
+                    || self.children.get(&key).is_none_or(|c| c.endpoint.is_none())
                 {
                     self.retire(key, writer)?;
                     let _ = answer.send(Err(anyhow!(
                         "adapter could not confirm the independent read-only mode"
                     )));
-                } else if let Some(child) = self.children.get_mut(&key) {
-                    child.ready = true;
-                    result["modes"]["currentModeId"] = json!(child.mode);
+                } else if let Some(endpoint) = self
+                    .children
+                    .get_mut(&key)
+                    .and_then(|c| c.endpoint.as_mut())
+                {
+                    endpoint.ready = true;
+                    result["modes"]["currentModeId"] = json!(endpoint.mode);
                     if answer.send(Ok(result)).is_err() {
                         self.retire(key, writer)?;
                     }
                 }
             }
-            Pending::Forward {
-                key,
-                client_id,
-                method,
-            } => {
-                if let Some(child) = self.children.get_mut(&key) {
-                    let closed = method == "session/close"
-                        && msg.get("result").is_some()
-                        && msg.get("error").is_none();
-                    if method == "session/close" && !closed {
-                        child.closing = false;
-                    }
+            Pending::Forward { key, client_id } => {
+                if let Some(endpoint) = self.children.get(&key).and_then(|c| c.endpoint.as_ref()) {
                     msg["id"] = client_id;
-                    let failed = child.output.try_send(msg.take()).is_err();
-                    if closed || failed {
+                    if endpoint.output.try_send(msg.take()).is_err() {
                         self.retire(key, writer)?;
                     }
                 }
             }
+            Pending::Close(key) => self.closed(key, msg, writer)?,
             Pending::Discard => {}
         }
         Ok(true)
@@ -203,11 +236,13 @@ impl Native {
             Child {
                 parent: open.parent.clone(),
                 sid: sid.to_owned(),
-                mode: open.mode.clone(),
-                output: open.output,
-                permissions: HashSet::new(),
-                closing: false,
-                ready: false,
+                endpoint: Some(Endpoint {
+                    mode: open.mode.clone(),
+                    output: open.output,
+                    permissions: HashSet::new(),
+                    ready: false,
+                }),
+                closing: None,
             },
         );
         let available = result["modes"]["availableModes"]
@@ -229,6 +264,7 @@ impl Native {
                 result: result.clone(),
                 answer: open.answer,
             },
-        )
+        )?;
+        Ok(())
     }
 }

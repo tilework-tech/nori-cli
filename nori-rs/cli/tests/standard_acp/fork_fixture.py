@@ -13,6 +13,8 @@ sessions = {}
 pending = {}
 late_fork = None
 deferred_closes = {}
+streaming = {}
+close_attempts = {}
 
 if profile == "shutdown":
     process_lock = open("adapter.lock", "w")
@@ -30,6 +32,23 @@ def modes(mode):
     ]}
 
 
+def chunk(sid, text):
+    send(method="session/update", params={"sessionId": sid, "update": {
+        "sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": text}}})
+
+
+def permission(owner, prompt, word):
+    key = next(permissions)
+    pending[key] = (prompt, owner, word)
+    send_permission(key, owner, word)
+
+
+def send_permission(key, owner, word):
+    send(id=key, method="session/request_permission", params={
+        "sessionId": owner, "toolCall": {"toolCallId": word, "kind": "read"},
+        "options": [{"optionId": word, "kind": "allow_once", "name": "Once"}]})
+
+
 def cancel_pending(sid):
     for key, (prompt, owner, _) in list(pending.items()):
         if owner == sid:
@@ -42,15 +61,21 @@ for line in sys.stdin:
     rid, method = msg.get("id"), msg.get("method")
     p = msg.get("params", {})
     sid = p.get("sessionId")
+    if method == "session/close":
+        close_attempts[sid] = close_attempts.get(sid, 0) + 1
     if method is None:
         if rid in pending:
             prompt, owner, thread = pending.pop(rid)
-            send(id=prompt, result={"stopReason": "end_turn", "_meta": {
-                "thread": thread, "decision": msg.get("result")}})
+            if thread != "read-finish":
+                send(id=prompt, result={"stopReason": "end_turn", "_meta": {
+                    "thread": thread, "decision": msg.get("result")}})
             if owner in deferred_closes:
                 send(id=deferred_closes.pop(owner), error={
                     "code": -32031, "message": "permission pending", "data": {"retry": True}
                 })
+            if thread == "read-finish":
+                chunk(owner, msg["result"]["outcome"]["optionId"])
+                permission(owner, prompt, "read-after")
         continue
     if method == "initialize":
         caps = {"close": {}, "fork": {}}
@@ -70,7 +95,7 @@ for line in sys.stdin:
     elif method == "session/list":
         result = {"sessions": [{"sessionId": i, "cwd": os.getcwd()} for i in sessions]}
     elif method == "_fixture/active":
-        result = {"sessions": sorted(sessions)}
+        result = {"sessions": sorted(sessions), "closeAttempts": close_attempts}
     elif sid not in sessions:
         send(id=rid, error={"code": -32602, "message": "unknown fixture session"})
         continue
@@ -107,12 +132,12 @@ for line in sys.stdin:
             })
             send(id=rid, result={"stopReason": "end_turn"})
             continue
+        if word == "stream-close":
+            streaming[sid] = rid
+            chunk(sid, "first")
+            continue
         if word.startswith("hold"):
-            key = next(permissions)
-            pending[key] = (rid, sid, word)
-            send(id=key, method="session/request_permission", params={
-                "sessionId": sid, "toolCall": {"toolCallId": word, "kind": "read"},
-                "options": [{"optionId": word, "kind": "allow_once", "name": "Once"}]})
+            permission(sid, rid, word)
             continue
         if word == "write" and thread["mode"] != "inspect":
             with open("fixture-write", "w") as marker:
@@ -123,6 +148,16 @@ for line in sys.stdin:
                 "type": "text", "text": "|".join(thread["history"])}}})
         result = {"stopReason": "end_turn", "_meta": {"pid": os.getpid(), "mode": thread["mode"]}}
     elif method == "session/close":
+        if profile == "silent-close" and sessions[sid]["mode"] == "inspect":
+            if close_attempts[sid] == 1:
+                deferred_closes[sid] = rid
+                continue
+            send(id=deferred_closes.pop(sid), error={"code": -32031, "message": "original request declined"})
+        if sid in streaming:
+            chunk(sid, "lilac")
+            permission(sid, streaming.pop(sid), "read-finish")
+            deferred_closes[sid] = rid
+            continue
         if profile == "close-retry" and any(owner == sid for _, owner, _ in pending.values()):
             if any(owner == sid and word == "hold-retry" for _, owner, word in pending.values()):
                 deferred_closes[sid] = rid
@@ -132,9 +167,15 @@ for line in sys.stdin:
         cancel_pending(sid)
         del sessions[sid]
         send(id=rid, result={})
+        if profile == "stream-close":
+            for key, (_, _, word) in pending.items():
+                if word == "hold-witness":
+                    chunk(sid, "late")
+                    send_permission(key, sid, "late")
         if late_fork:
             request, response = late_fork
             late_fork = None
+            chunk(response["sessionId"], "unpublished side")
             send(id=request, result=response)
         continue
     elif method == "session/cancel":

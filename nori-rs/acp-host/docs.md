@@ -605,9 +605,23 @@ the marked `session/new` described above. Codex launches use this rebuilt path.
 
 Each successful fork shares the parent's adapter process and consumes zero
 additional process slots. Use the returned public ID for prompts, cancellation
-and close. Updates and permission requests carry the same parent metadata as
-a rebuilt side. The broker answers each permission using the JSON-RPC ID the host sent
-and its side-session policy. Closing one fork leaves the parent and siblings
-available. Closing the parent ends its forks. Side turns stay out of the parent's
-transcript and session lists. The [loopback tests](../cli/tests/standard_acp/fork_side.rs)
-exercise this exchange with a [synthetic adapter](../cli/tests/standard_acp/fork_fixture.py).
+and close. Side turns stay out of the parent's transcript and session lists.
+Updates and permission requests carry the same parent metadata as a rebuilt
+side. The broker answers each permission using its side-session policy and the
+JSON-RPC ID the host sent.
+
+Keep receiving streamed updates and answering permissions while a fork's
+`session/close` is pending. If the adapter declines, the same public ID and
+outstanding permission requests remain usable. After the adapter confirms
+closure, the host drops late callbacks for that fork. Its parent and siblings
+can continue their turns.
+
+If the adapter declines to close the parent, its forks remain open. Once it
+confirms the parent is closed, the host refuses new sides for that parent and
+returns success only after its native forks close and its rebuilt processes exit.
+If a fork declines close or confirmation times out, the parent close returns
+`error.data` containing `{"parentClosed":true,"retry":true}`. Keep answering
+outstanding child permissions, then repeat `session/close` with the parent ID.
+The host retries remaining cleanup and reuses confirmed close results. Other
+regular sessions on the same adapter can continue.
+[Loopback tests](../cli/tests/standard_acp/fork_side.rs) · [Synthetic adapter](../cli/tests/standard_acp/fork_fixture.py)

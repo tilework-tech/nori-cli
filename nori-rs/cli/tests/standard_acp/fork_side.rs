@@ -80,7 +80,11 @@ impl Peer {
     }
 
     async fn recv(&mut self) -> Value {
-        let frame = tokio::time::timeout(Duration::from_secs(5), self.machine.recv())
+        self.recv_within(Duration::from_secs(5)).await
+    }
+
+    async fn recv_within(&mut self, deadline: Duration) -> Value {
+        let frame = tokio::time::timeout(deadline, self.machine.recv())
             .await
             .unwrap()
             .unwrap();
@@ -98,6 +102,28 @@ impl Peer {
         let response = self.recv().await;
         assert_eq!(response["id"], id, "{response}");
         response
+    }
+
+    async fn recv_until(&mut self, id: i64, earlier: &mut Vec<Value>) -> Value {
+        loop {
+            let frame = self.recv().await;
+            if frame["id"] == id {
+                return frame;
+            }
+            earlier.push(frame);
+        }
+    }
+
+    async fn answer_child_permission(&mut self, child: &Value, option: &str) -> Value {
+        let permission = self.recv().await;
+        assert_eq!(permission["method"], "session/request_permission");
+        assert_eq!(permission["params"]["sessionId"], *child);
+        assert_eq!(permission["params"]["_meta"][MARK], self.marker);
+        assert_eq!(permission["params"]["toolCall"]["toolCallId"], option);
+        let decision = json!({"outcome":{"outcome":"selected","optionId":option}});
+        self.send(json!({"jsonrpc":"2.0","id":permission["id"],"result":decision}))
+            .await;
+        decision
     }
 
     fn fork(&self, id: i64) -> Value {
@@ -450,7 +476,11 @@ async fn a_fork_reply_after_parent_close_cannot_publish_or_leak_a_child() {
     .await;
 
     let mut replies = [peer.recv().await, peer.recv().await];
-    replies.sort_by_key(|frame| frame["id"].as_i64().unwrap());
+    assert!(
+        replies.iter().all(|frame| frame["id"].is_i64()),
+        "unexpected callback: {replies:?}"
+    );
+    replies.sort_by_key(|frame| frame["id"].as_i64());
     assert_eq!(replies[0]["id"], 3);
     assert!(replies[0]["error"].is_object(), "{:?}", replies[0]);
     assert_eq!(replies[1]["id"], 4);
@@ -514,4 +544,191 @@ async fn declined_parent_close_keeps_its_fork_usable_until_the_parent_closes() {
     assert_eq!(peer.recv().await["id"], 4);
     assert!(peer.call(7, "session/close", close).await["result"].is_object());
     peer.wait_for_adapter_sessions(&[]).await;
+}
+
+#[tokio::test]
+async fn close_lifecycle_retries_only_the_refused_child_after_parent_close() {
+    let mut peer = Peer::new("close-retry", true).await;
+    let parent = peer.parent.clone();
+    let other = peer
+        .call(3, "session/new", json!({"cwd":peer.cwd,"mcpServers":[]}))
+        .await["result"]["sessionId"]
+        .clone();
+    let child = peer.open_fork(4).await;
+    let raw_child = peer
+        .active_adapter_sessions()
+        .await
+        .into_iter()
+        .find(|sid| *sid != parent && *sid != other)
+        .unwrap();
+    let sibling = peer.open_fork(5).await;
+    peer.prompt(6, &child, "hold-inspect").await;
+    let permission = peer.recv().await;
+    assert_eq!(permission["params"]["sessionId"], child);
+
+    let close = json!({"sessionId":parent});
+    for id in [7, 8] {
+        peer.send(json!({"jsonrpc":"2.0","id":id,"method":"session/close","params":close}))
+            .await;
+        let mut early = Vec::new();
+        let refused = peer.recv_until(id, &mut early).await;
+        // Inspect the adapter immediately after the acknowledgment, even if the
+        // host has already terminated the pending prompt.
+        peer.send(json!({"jsonrpc":"2.0","id":700,"method":"_fixture/active","params":{}}))
+            .await;
+        let inventory = peer.recv_until(700, &mut early).await;
+        assert!(
+            early.is_empty(),
+            "premature child frames {early:?}; close {refused}; adapter {inventory}"
+        );
+        assert_eq!(
+            refused["error"]["data"]["parentClosed"], true,
+            "{refused}, {inventory}"
+        );
+        assert_eq!(refused["error"]["data"]["retry"], true);
+        assert_eq!(inventory["result"]["sessions"], json!([other, raw_child]));
+        assert_eq!(
+            inventory["result"]["closeAttempts"][parent.as_str().unwrap()],
+            1
+        );
+    }
+    peer.prompt(9, &sibling, "ended").await;
+    assert_eq!(peer.recv().await["error"]["code"], -32002);
+    peer.send(peer.fork(10)).await;
+    assert!(peer.recv().await["error"].is_object());
+    let rebuilt = peer
+        .call(
+            15,
+            "session/new",
+            json!({"cwd":peer.cwd,"mcpServers":[],"_meta":{(MARK):peer.marker}}),
+        )
+        .await;
+    assert_eq!(rebuilt["error"]["code"], -32602, "{rebuilt}");
+    assert_eq!(peer.listed_sessions(11).await, std::slice::from_ref(&other));
+
+    let decision = json!({"outcome":{"outcome":"selected","optionId":"hold-inspect"}});
+    peer.send(json!({"jsonrpc":"2.0","id":permission["id"],"result":decision}))
+        .await;
+    let done = peer.recv().await;
+    assert_eq!(done["id"], 6);
+    assert_eq!(done["result"]["_meta"]["decision"], decision);
+    assert_eq!(
+        peer.call(12, "session/close", close).await["result"],
+        json!({})
+    );
+    assert_eq!(
+        peer.active_adapter_sessions().await,
+        std::slice::from_ref(&other)
+    );
+    peer.prompt(13, &child, "ended").await;
+    assert_eq!(peer.recv().await["error"]["code"], -32002);
+    peer.prompt(14, &other, "still-here").await;
+    assert_eq!(
+        peer.recv().await["params"]["update"]["content"]["text"],
+        "still-here"
+    );
+    assert_eq!(peer.recv().await["result"]["_meta"]["mode"], "edit");
+}
+
+#[tokio::test]
+async fn close_lifecycle_delivers_child_callbacks_through_refusal_and_stops_at_confirmation() {
+    let mut peer = Peer::new("stream-close", true).await;
+    let parent = peer.parent.clone();
+    let child = peer.open_fork(3).await;
+    let sibling = peer.open_fork(4).await;
+    peer.prompt(5, &sibling, "hold-witness").await;
+    let witness = peer.recv().await;
+    assert_eq!(witness["params"]["sessionId"], sibling);
+
+    peer.prompt(6, &child, "stream-close").await;
+    assert_eq!(
+        peer.recv().await["params"]["update"]["content"]["text"],
+        "first"
+    );
+    let close = json!({"sessionId":child});
+    peer.send(json!({"jsonrpc":"2.0","id":7,"method":"session/close","params":close}))
+        .await;
+    let last = peer.recv().await;
+    assert_eq!(last["params"]["update"]["content"]["text"], "lilac");
+    assert_eq!(last["params"]["sessionId"], child);
+    assert_eq!(last["params"]["_meta"][MARK], peer.marker);
+    peer.answer_child_permission(&child, "read-finish").await;
+    let refused = peer.recv().await;
+    assert_eq!(refused["id"], 7);
+    assert_eq!(refused["error"]["code"], -32031);
+    let resumed = peer.recv().await;
+    assert_eq!(resumed["params"]["sessionId"], child);
+    assert_eq!(resumed["params"]["_meta"][MARK], peer.marker);
+    assert_eq!(
+        resumed["params"]["update"]["content"]["text"],
+        "read-finish"
+    );
+    let decision = peer.answer_child_permission(&child, "read-after").await;
+    let done = peer.recv().await;
+    assert_eq!(done["id"], 6);
+    assert_eq!(done["result"]["_meta"]["decision"], decision);
+
+    assert_eq!(
+        peer.call(9, "session/close", close).await["result"],
+        json!({})
+    );
+    assert_eq!(peer.active_adapter_sessions().await.len(), 2);
+    let decision = json!({"outcome":{"outcome":"cancelled"}});
+    peer.send(json!({"jsonrpc":"2.0","id":witness["id"],"result":decision}))
+        .await;
+    let done = peer.recv().await;
+    assert_eq!(done["id"], 5);
+    assert_eq!(done["result"]["_meta"]["decision"], decision);
+    peer.prompt(10, &sibling, "sibling-answer").await;
+    assert_eq!(
+        peer.recv().await["params"]["update"]["content"]["text"],
+        "sibling-answer"
+    );
+    assert_eq!(peer.recv().await["result"]["_meta"]["mode"], "inspect");
+    assert!(
+        peer.call(11, "session/close", json!({"sessionId":parent}))
+            .await["result"]
+            .is_object()
+    );
+    assert!(peer.active_adapter_sessions().await.is_empty());
+}
+
+#[tokio::test]
+async fn parent_close_can_retry_an_unanswered_adapter_close() {
+    let mut peer = Peer::new("silent-close", true).await;
+    let parent = peer.parent.clone();
+    peer.open_fork(3).await;
+    let other = peer
+        .call(4, "session/new", json!({"cwd":peer.cwd,"mcpServers":[]}))
+        .await["result"]["sessionId"]
+        .clone();
+    let request = |id| json!({"jsonrpc":"2.0","id":id,"method":"session/close","params":{"sessionId":parent}});
+    peer.send(request(5)).await;
+    let reopen = peer
+        .call(
+            8,
+            "session/load",
+            json!({"sessionId":parent,"cwd":peer.cwd,"mcpServers":[]}),
+        )
+        .await;
+    assert!(
+        matches!(reopen["error"]["code"].as_i64(), Some(-32015 | -32002)),
+        "{reopen}"
+    );
+    let expired = peer.recv_within(Duration::from_secs(20)).await;
+    assert_eq!(expired["id"], 5);
+    assert_eq!(
+        expired["error"]["data"],
+        json!({"parentClosed":true,"retry":true})
+    );
+    peer.send(request(6)).await;
+    let confirmed = peer.recv().await;
+    assert_eq!(confirmed["id"], 6);
+    assert_eq!(confirmed["result"], json!({}));
+    let inventory = peer.call(7, "_fixture/active", json!({})).await;
+    assert_eq!(inventory["result"]["sessions"], json!([other]));
+    assert_eq!(
+        inventory["result"]["closeAttempts"][parent.as_str().unwrap()],
+        1
+    );
 }
