@@ -32,3 +32,12 @@ pub use managed::ManagedReply;
 pub use managed::ManagedSubscription;
 pub use managed::StandardAcpConnection;
 pub use managed::managed_event;
+
+pub const SIDE_SESSION_META: &str = "nori.dev/sideSession";
+pub const SIDE_SESSION_PREFIX: &str = "nori-side-";
+
+pub fn is_side_session_id(session: &str) -> bool {
+    session
+        .strip_prefix(SIDE_SESSION_PREFIX)
+        .is_some_and(|id| uuid::Uuid::parse_str(id).is_ok())
+}

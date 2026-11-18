@@ -294,13 +294,23 @@ async fn admit(
     name: &str,
     additions: [bool; 4],
 ) -> PathBuf {
+    admit_binding(client, host, name, additions, false).await
+}
+
+async fn admit_binding(
+    client: &mut ManagedClient,
+    host: &Host,
+    name: &str,
+    additions: [bool; 4],
+    recovery: bool,
+) -> PathBuf {
     let [echo, status, recording, mcp] = additions;
     let root = host.0.path().join("hosted-sessions").join(name);
     let cwd = root.join("workspace");
     let home = root.join("home");
     fs::create_dir_all(&cwd).unwrap();
     fs::create_dir_all(&home).unwrap();
-    client.request("_nori/session/ensure", json!({
+    let mut request = json!({
         "bindingId":name, "generation":1, "commandId":format!("launch-{name}"),
         "conversationId":uuid::Uuid::new_v4(), "spec":{
             "projectId":"fixture-project", "runId":format!("run-{name}"),
@@ -309,7 +319,14 @@ async fn admit(
             "adapter":{"path":which::which("python3").unwrap(),"version":"fixture-1","args":[FIXTURE,name]},
             "additions":{"promptEcho":echo,"statusEvents":status,"recording":recording,"clientMcp":mcp}
         }
-    })).await.unwrap();
+    });
+    if recovery {
+        request["recoveryVersion"] = json!(1);
+    }
+    client
+        .request("_nori/session/ensure", request)
+        .await
+        .unwrap();
     cwd
 }
 

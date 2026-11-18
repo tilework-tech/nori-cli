@@ -23,8 +23,9 @@ use crate::managed_launch::SideProcess;
 #[path = "side_worker.rs"]
 mod side_worker;
 
-pub(super) const SIDE_META: &str = "nori.dev/sideSession";
-const SIDE_PREFIX: &str = "nori-side-";
+pub(super) use nori_acp_host::remote::SIDE_SESSION_META as SIDE_META;
+use nori_acp_host::remote::SIDE_SESSION_PREFIX as SIDE_PREFIX;
+pub(super) use nori_acp_host::remote::is_side_session_id as reserved;
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -75,11 +76,6 @@ struct Router {
     closing: Vec<(HashSet<String>, Value)>,
     events: mpsc::Sender<(String, SideEvent)>,
     output: mpsc::Sender<Value>,
-}
-
-pub(super) fn reserved(sid: &str) -> bool {
-    sid.strip_prefix(SIDE_PREFIX)
-        .is_some_and(|suffix| Uuid::parse_str(suffix).is_ok())
 }
 
 fn mark_parent(fields: &mut Value, parent: &Parent) -> bool {
@@ -497,7 +493,7 @@ pub fn route_side_sessions(
     let (input, mut commands) = mpsc::channel(64);
     let (output, incoming) = mpsc::channel(64);
     let (events, mut child_events) = mpsc::channel(64);
-    tokio::spawn(async move {
+    let finished = tokio::spawn(async move {
         let mut router = Router {
             registry,
             binding,
@@ -512,15 +508,15 @@ pub fn route_side_sessions(
             events,
             output,
         };
-        loop {
+        let routed = loop {
             let result = tokio::select! {
                 message = commands.recv() => match message {
                     Some(message) => router.client(message, &parent.input).await,
-                    None => break,
+                    None => break Ok(()),
                 },
                 frame = parent.output.recv() => match frame {
                     Some(frame) => router.agent(None, frame).await,
-                    None => break,
+                    None => break Ok(()),
                 },
                 Some((sid, frame)) = child_events.recv() => match frame {
                     SideEvent::Frame(frame) => router.agent(Some(&sid), frame).await,
@@ -528,12 +524,17 @@ pub fn route_side_sessions(
                 }
             };
             if result.is_err() {
-                break;
+                break result;
             }
-        }
+        };
+        drop(router);
+        drop(parent.input);
+        drop(parent.output);
+        routed.and(parent.finished.await?)
     });
     StandardAcpConnection {
         input,
         output: incoming,
+        finished,
     }
 }

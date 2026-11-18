@@ -277,6 +277,7 @@ struct Launch {
     home: PathBuf,
     pipes: Option<(ChildStdin, ChildStdout)>,
     sides: HashMap<String, Arc<SideProcess>>,
+    releasing: bool,
 }
 
 pub(crate) struct SideProcess {
@@ -312,6 +313,26 @@ impl Launch {
             spec: self.spec.clone(),
             stdin,
             stdout,
+        }
+    }
+
+    fn stop(&mut self) -> impl Future<Output = anyhow::Result<()>> + use<> {
+        self.releasing = true;
+        self.pipes = None;
+        let parent = self.process.as_ref().ok().cloned();
+        let sides: Vec<_> = self.sides.values().cloned().collect();
+        async move {
+            let parent = async {
+                if let Some(parent) = parent {
+                    parent.request_kill();
+                    parent.wait_for_exit().await;
+                }
+            };
+            let sides = futures::future::join_all(sides.iter().map(|side| side.stop()));
+            for result in tokio::join!(parent, sides).1 {
+                result?;
+            }
+            Ok(())
         }
     }
 
@@ -464,6 +485,7 @@ impl ManagedLaunches {
                     && existing.digest == digest,
                 "managed launch conflict"
             );
+            ensure!(!existing.releasing, "binding is releasing");
             return Ok(PreparedLaunch::Existing(
                 existing.acknowledge(&request.binding_id)?,
             ));
@@ -534,6 +556,7 @@ impl ManagedLaunches {
                 spec: Arc::new(spec),
                 pipes,
                 sides: HashMap::new(),
+                releasing: false,
             })
             .acknowledge(&binding_id)
     }
@@ -618,6 +641,7 @@ impl ManagedLaunches {
             .get_mut(binding)
             .filter(|l| l.generation == generation)
             .context("unknown binding or generation")?;
+        ensure!(!launch.releasing, "binding is releasing");
         let parent_exit = launch
             .process
             .as_ref()
@@ -687,23 +711,32 @@ impl ManagedLaunches {
     }
 
     pub async fn release_one(&self, binding: &str, generation: i64) -> anyhow::Result<()> {
-        let launch = {
+        let stopping = {
             let mut guard = self
                 .launches
                 .lock()
                 .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?;
             let launches = guard.as_mut().context("host is stopping")?;
-            let Some(existing) = launches.get(binding) else {
+            let Some(existing) = launches.get_mut(binding) else {
                 return Ok(());
             };
             ensure!(
                 existing.generation == generation,
                 "binding generation mismatch"
             );
-            launches.remove(binding).context("unknown binding")?
+            existing.stop()
         };
-        if let Ok(process) = launch.process {
-            process.stop().await;
+        stopping.await?;
+        let mut guard = self
+            .launches
+            .lock()
+            .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?;
+        if let Some(launches) = guard.as_mut()
+            && launches
+                .get(binding)
+                .is_some_and(|launch| launch.generation == generation && launch.releasing)
+        {
+            launches.remove(binding);
         }
         Ok(())
     }
@@ -715,23 +748,14 @@ impl ManagedLaunches {
             .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?
             .take()
             .unwrap_or_default();
-        let stopping = launches.into_values().map(|launch| async move {
-            let parent = async {
-                if let Ok(parent) = launch.process {
-                    parent.request_kill();
-                    parent.wait_for_exit().await;
-                }
-            };
-            let sides = futures::future::join_all(launch.sides.values().map(|side| side.stop()));
-            tokio::join!(parent, sides).1
-        });
+        let stopping = launches.into_values().map(|mut launch| launch.stop());
         let results = tokio::time::timeout(
             std::time::Duration::from_secs(10),
             futures::future::join_all(stopping),
         )
         .await
         .context("managed adapters did not stop")?;
-        for result in results.into_iter().flatten() {
+        for result in results {
             result?;
         }
         Ok(())

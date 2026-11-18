@@ -470,6 +470,17 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
+    fn fixture_connection(
+        input: mpsc::Sender<Value>,
+        output: mpsc::Receiver<Value>,
+    ) -> StandardAcpConnection {
+        StandardAcpConnection {
+            input,
+            output,
+            finished: tokio::spawn(async { Ok(()) }),
+        }
+    }
+
     async fn open_with_modes(
         initial: Value,
         setting_reply: Value,
@@ -488,7 +499,7 @@ mod tests {
             .unwrap();
         drop(responses);
         open(
-            &mut StandardAcpConnection { input, output },
+            &mut fixture_connection(input, output),
             json!({}),
             Path::new("/work"),
             None,
@@ -511,7 +522,7 @@ mod tests {
                 responses.try_send(message).unwrap();
             }
             let result = open(
-                &mut StandardAcpConnection { input, output },
+                &mut fixture_connection(input, output),
                 json!({}),
                 Path::new("/work"),
                 None,
@@ -555,7 +566,7 @@ mod tests {
             reply["id"] = json!(0);
             responses.try_send(reply).unwrap();
             drop(responses);
-            let mut connection = StandardAcpConnection { input, output };
+            let mut connection = fixture_connection(input, output);
             let error = open(
                 &mut connection,
                 json!({}),

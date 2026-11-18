@@ -24,11 +24,18 @@ pub struct Host {
 
 impl Host {
     pub async fn start(home: &Path, managed: bool) -> Self {
-        Self::with_env(home, managed, &[]).await
+        Self::with_env(home, managed, false, &[]).await
     }
 
-    async fn with_env(home: &Path, managed: bool, env: &[(&str, &Path)]) -> Self {
-        let config = format!("[features]\nmulti_session = true\n[host]\nmanaged = {managed}\n");
+    pub async fn with_env(
+        home: &Path,
+        managed: bool,
+        side_sessions: bool,
+        env: &[(&str, &Path)],
+    ) -> Self {
+        let config = format!(
+            "[features]\nmulti_session = true\n[host]\nmanaged = {managed}\nside_sessions = {side_sessions}\n"
+        );
         fs::write(home.join("config.toml"), config).unwrap();
         let process = Command::new(env!("CARGO_BIN_EXE_nori"))
             .env_clear()

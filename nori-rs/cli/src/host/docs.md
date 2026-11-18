@@ -406,8 +406,12 @@ Every request below names `bindingId` and the current `generation`.
 | `_nori/host/import` | `checkpoint`, `launchSpec` | Accepts the exported checkpoint and the destination machine's launch spec (same shape as ensure's `spec`). Requires a newer generation. Returns `{conversationId,sessionId,continuation}`. |
 | `_nori/host/release` | `commandId` | Returns the final `{checkpoint,watermarks}` and stops this binding's process group. Other bindings, including independently bound descendants, continue running. |
 
-Checkpoint freezes new requests at a boundary with no unfinished ACP request.
-When `spec.additions.recording` is enabled, it flushes and syncs each
+Checkpoint returns an error while an ordinary ACP request is unfinished. A side
+prompt waiting for permission can remain open during its parent’s checkpoint. Release
+stops the binding's processes and waits for its rebuilt sides and parent relay
+to finish before exporting the final checkpoint.
+
+When `spec.additions.recording` is enabled, checkpoint flushes and syncs each
 binding-owned recorder through its open file handle, then verifies that the
 output watermarks still match. On checkpoint or release error, read
 `error.data.savedThrough` when present. Its source cursors identify the last

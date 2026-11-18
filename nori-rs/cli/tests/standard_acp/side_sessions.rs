@@ -240,6 +240,112 @@ fn read_only_launch_available() -> bool {
         .is_ok_and(|r| r.status.success())
 }
 
+#[tokio::test]
+async fn recovery_checkpoints_and_releases_the_parent_with_a_side_permission_pending() {
+    if !read_only_launch_available() {
+        return;
+    }
+    let (host, endpoint, token) = start_config(
+        Host::new(),
+        "[host]\nmanaged=true\nside_sessions=true\n".into(),
+    );
+    let mut control = ManagedClient::connect(&endpoint.replace("/managed", "/sessions"), &token)
+        .await
+        .unwrap();
+    control.request("initialize", json!({})).await.unwrap();
+    let cwd = admit_binding(&mut control, &host, "aster", [false; 4], true).await;
+    fs::write(cwd.join("fixture-modes"), "plan").unwrap();
+    let mut machine = ManagedClient::connect(&endpoint, &token).await.unwrap();
+    let init = exchange(
+        &mut machine,
+        request(1, "initialize", json!({"protocolVersion":1})),
+    )
+    .await;
+    assert!(init["result"].is_object(), "{init}");
+    let opened = exchange(
+        &mut machine,
+        request(2, "session/new", json!({"cwd":cwd,"mcpServers":[]})),
+    )
+    .await;
+    assert_eq!(opened["result"]["sessionId"], "0");
+    let mut scenario = SideHost {
+        _host: host,
+        cwd,
+        machine,
+        pending: Vec::new(),
+    };
+    let side = side_id(&scenario.start_side(3, "0").await);
+    let scope = json!({"bindingId":"aster","generation":1});
+    let prompt = |id, sid, text, command| {
+        let message = request(
+            id,
+            "session/prompt",
+            json!({"sessionId":sid,"prompt":[{"type":"text","text":text}]}),
+        );
+        json!({"bindingId":"aster","generation":1,"commandId":command,"message":message})
+    };
+    scenario
+        .machine
+        .send(prompt(4, side.as_str(), "inspect", "ephemeral-side"))
+        .await
+        .unwrap();
+    let permission = scenario.permission(&side).await;
+    assert_eq!(permission["params"]["_meta"][MARK], parent_mark("0"));
+
+    scenario
+        .machine
+        .send(prompt(5, "0", "finish", "parent-turn"))
+        .await
+        .unwrap();
+    let completed = scenario.reply(5).await["result"].clone();
+    assert_eq!(completed["stopReason"], "end_turn");
+    let records = control
+        .request("_nori/host/replay", scope.clone())
+        .await
+        .unwrap();
+    let entries = records["records"].as_array().unwrap();
+    assert!(!entries.is_empty());
+    assert!(entries.iter().all(|r| r["sessionId"] == "0"));
+    scenario
+        .machine
+        .send(prompt(6, "0", "finish", "parent-turn"))
+        .await
+        .unwrap();
+    assert_eq!(scenario.reply(6).await["result"], completed);
+    assert_eq!(
+        control
+            .request("_nori/host/replay", scope.clone())
+            .await
+            .unwrap(),
+        records
+    );
+    let command = control
+        .request(
+            "_nori/host/command",
+            json!({"bindingId":"aster","generation":1,"commandId":"ephemeral-side"}),
+        )
+        .await
+        .unwrap_err();
+    assert!(command.to_string().contains("unknown command"), "{command}");
+    let checkpoint = control
+        .request("_nori/host/checkpoint", scope)
+        .await
+        .unwrap();
+    assert_eq!(checkpoint["checkpoint"]["mainSessionId"], "0");
+    let released = tokio::time::timeout(
+        Duration::from_secs(10),
+        control.request(
+            "_nori/host/release",
+            json!({"bindingId":"aster","generation":1,"commandId":"release-parent"}),
+        ),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(released["checkpoint"]["mainSessionId"], "0");
+    assert!(!released["checkpoint"].to_string().contains(&side));
+}
+
 fn transcripts(directory: &Path) -> String {
     let mut contents = String::new();
     for entry in fs::read_dir(directory).into_iter().flatten().flatten() {
@@ -521,16 +627,20 @@ async fn parent_close_acknowledges_both_side_process_trees_have_exited() {
         "adapter and client lease release at parent close acknowledgment"
     );
     assert_processes_hold(&unrelated);
-    host.prompt(11, &survivor, "finish").await;
-    assert_eq!(host.reply(11).await["result"]["stopReason"], "end_turn");
-    for id in [12, 13] {
-        let opened = host.start_side(id, &other).await;
+    for id in [11, 12] {
+        host.send(open_side(id, &host.cwd, parent_mark(&other)))
+            .await;
+    }
+    for id in [11, 12] {
+        let opened = host.reply(id).await;
         assert_eq!(
             opened["result"]["_meta"][MARK],
             parent_mark(&other),
             "{opened}"
         );
     }
+    host.prompt(13, &survivor, "finish").await;
+    assert_eq!(host.reply(13).await["result"]["stopReason"], "end_turn");
 }
 
 #[tokio::test]

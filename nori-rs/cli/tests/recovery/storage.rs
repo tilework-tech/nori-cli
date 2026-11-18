@@ -48,6 +48,7 @@ async fn fault_injecting_host(home: &TempDir, marker_name: &str) -> (Host, PathB
     let host = Host::with_env(
         home.path(),
         true,
+        false,
         &[("LD_PRELOAD", &library), (marker_name, &fault)],
     )
     .await;

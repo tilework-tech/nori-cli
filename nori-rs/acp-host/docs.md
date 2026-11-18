@@ -303,8 +303,10 @@ message.
   loss has the original source, including after host restart. An ACK is cumulative within one producing
   generation and incarnation. After import its outer scope must name the
   destination generation, even when its `source` names an older producer.
-- The first main-session setup supplies the ACP session ID used for recovery.
-  Messages from side sessions stay ephemeral. History emitted during
+- The first successful ordinary `session/new`, `session/load`, or
+  `session/resume` selected for recovery supplies the main ACP session ID.
+  A marked side open leaves that selection available. Side prompts and
+  permission requests stay out of the journal and the exported checkpoint. History emitted during
   `session/load` stays out of the live journal, so loading an adapter cannot
   append that history to the broker transcript again.
 - The checksummed append log is limited to 16 MiB per binding. Compaction

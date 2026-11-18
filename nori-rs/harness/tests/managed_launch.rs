@@ -151,6 +151,93 @@ async fn read_only_launch_pins_environment_and_isolates_scratch() {
 }
 
 #[cfg(target_os = "linux")]
+#[tokio::test]
+async fn release_one_drains_both_side_process_trees_before_reusing_their_slots() {
+    if !sandbox_available() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let launches = ManagedLaunches::from_config(
+        &nori_config::HostConfig {
+            managed: true,
+            side_sessions: true,
+            bindings_root: Some(root.path().into()),
+            max_sessions: 5,
+            ..Default::default()
+        },
+        root.path(),
+    )
+    .unwrap();
+    let script = r#"
+        set -eu
+        read -r side
+        exec 8<"$side.adapter"
+        flock -x 8
+        setsid sh -ec 'exec 9<"$1.client"; flock -x 9; echo ready; exec sleep 120' sh "$side" 8<&- &
+        wait
+    "#;
+    for binding in ["closing", "surviving"] {
+        let home = root.path().join(binding).join("home");
+        let cwd = root.path().join(binding).join("work");
+        fs::create_dir_all(&home).unwrap();
+        fs::create_dir_all(&cwd).unwrap();
+        launches.ensure(serde_json::from_value(json!({
+            "commandId":binding, "conversationId":uuid::Uuid::new_v4(), "bindingId":binding, "generation":1,
+            "spec":{"agent":"fixture","projectId":"project","runId":"run","cwd":cwd,"home":home,
+                "adapter":{"path":"/bin/sh","version":"fixture-v1","args":["-c",script]},
+                "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
+        })).unwrap()).unwrap();
+    }
+    let mut leases = Vec::new();
+    for (binding, side) in [("closing", "a"), ("closing", "b"), ("surviving", "witness")] {
+        let cwd = root.path().join(binding).join("work");
+        let files = ["adapter", "client"].map(|process| {
+            let path = cwd.join(format!("{side}.{process}"));
+            fs::write(&path, []).unwrap();
+            fs::File::open(path).unwrap()
+        });
+        let mut pipe = launches.spawn_side(binding, 1, side).unwrap();
+        pipe.stdin
+            .write_all(format!("{side}\n").as_bytes())
+            .await
+            .unwrap();
+        let mut output = BufReader::new(pipe.stdout).lines();
+        let ready = tokio::time::timeout(Duration::from_secs(5), output.next_line())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(ready.as_deref(), Some("ready"));
+        for file in &files {
+            assert!(matches!(file.try_lock(), Err(fs::TryLockError::WouldBlock)));
+        }
+        leases.push((binding, files));
+    }
+    assert!(matches!(
+        launches
+            .spawn_side("surviving", 1, "full")
+            .err()
+            .unwrap()
+            .downcast_ref(),
+        Some(nori_harness::managed_launch::LaunchRefusal::AtCapacity)
+    ));
+
+    launches.release_one("closing", 1).await.unwrap();
+    for (binding, files) in leases {
+        for file in files {
+            if binding == "closing" {
+                file.try_lock()
+                    .unwrap_or_else(|error| panic!("side process lease at release: {error}"));
+            } else {
+                assert!(matches!(file.try_lock(), Err(fs::TryLockError::WouldBlock)));
+            }
+        }
+    }
+    let _replacements =
+        ["next-a", "next-b"].map(|id| launches.spawn_side("surviving", 1, id).unwrap());
+    launches.shutdown().await.unwrap();
+}
+
+#[cfg(target_os = "linux")]
 fn sandbox_available() -> bool {
     std::process::Command::new("/usr/bin/bwrap")
         .args([
