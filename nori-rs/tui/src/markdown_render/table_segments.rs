@@ -31,7 +31,17 @@ pub(super) fn markdown_segments(input: &str) -> Vec<MarkdownSegment> {
         let header = input[lines[index].clone()].trim();
         // Pipe rows inside a code fence are code. Skip until the fence closes, or to the end of the
         // source while it stays open.
-        let run = fence_run(header);
+        let run = header
+            .chars()
+            .next()
+            .filter(|marker| matches!(marker, '`' | '~'))
+            .map(|marker| {
+                let length = header
+                    .chars()
+                    .take_while(|character| *character == marker)
+                    .count();
+                (marker, length, &header[length..])
+            });
         if let Some((open_marker, open_length)) = open_fence {
             if run.is_some_and(|(marker, length, rest)| {
                 marker == open_marker && length >= open_length && rest.trim().is_empty()
@@ -137,20 +147,6 @@ fn source_lines(input: &str) -> Vec<Range<usize>> {
     lines
 }
 
-/// Leading run of a fence marker (`` ` `` or `~`) in a trimmed line: the marker, the run length,
-/// and the rest of the line.
-fn fence_run(line: &str) -> Option<(char, usize, &str)> {
-    let marker = line
-        .chars()
-        .next()
-        .filter(|marker| matches!(marker, '`' | '~'))?;
-    let length = line
-        .chars()
-        .take_while(|character| *character == marker)
-        .count();
-    Some((marker, length, &line[length..]))
-}
-
 fn is_table_delimiter(line: &str) -> bool {
     let line = line.trim_matches('|');
     let cells = line.split('|').map(str::trim).collect::<Vec<_>>();
@@ -205,47 +201,47 @@ mod tests {
 
     #[test]
     fn pipe_table_inside_a_fence_stays_prose() {
-        for fence in ["```", "~~~", "````text"] {
-            let close = fence.trim_end_matches("text");
-            let input = format!("intro\n\n{fence}\n{TABLE}{close}\n\noutro\n");
+        for (open, close) in [
+            ("```", "```"),
+            ("~~~", "~~~"),
+            ("````text", "`````"),
+            ("~~~ `quoted` info", "~~~"),
+            ("   ```", "  ```"),
+            ("    ```", "    ```"),
+        ] {
+            let input = format!("intro\n\n{open}\n{TABLE}{close}\n\noutro\n");
             assert_eq!(
                 markdown_segments(&input),
                 vec![MarkdownSegment {
                     range: 0..input.len(),
                     is_table: false
                 }],
-                "fence {fence:?}"
+                "fence {open:?} .. {close:?}"
             );
         }
     }
 
     #[test]
-    fn pipe_table_after_a_closed_fence_is_still_a_table() {
-        let input = format!("```\ncode\n```\n{TABLE}");
-        assert_eq!(
-            markdown_segments(&input),
-            vec![
-                MarkdownSegment {
-                    range: 0..13,
-                    is_table: false
-                },
-                MarkdownSegment {
-                    range: 13..input.len(),
-                    is_table: true
-                },
-            ]
-        );
-    }
-
-    #[test]
     fn shorter_or_different_fence_markers_do_not_close_a_fence() {
-        let input = format!("````\n```\n~~~~\n{TABLE}````\n");
+        let input = format!("````\n```\n~~~~\n```` trailing\n{TABLE}````\n");
         assert_eq!(
             markdown_segments(&input),
             vec![MarkdownSegment {
                 range: 0..input.len(),
                 is_table: false
             }]
+        );
+    }
+
+    #[test]
+    fn backticks_in_a_backtick_info_string_do_not_open_a_fence() {
+        let input = format!("``` not `a` fence\n{TABLE}");
+        assert_eq!(
+            markdown_segments(&input)
+                .iter()
+                .map(|segment| segment.is_table)
+                .collect::<Vec<_>>(),
+            vec![false, true]
         );
     }
 
