@@ -595,7 +595,11 @@ between non-empty ones, whatever blank lines the source had. The message's own
 first and last lines stay unpadded because the transcript already separates
 history cells. Streaming stays prefix-stable because the separator appears only
 once the next segment renders content, and the stream collector withholds an
-unfinished trailing table.
+unfinished trailing table. The segment scanner treats pipe rows inside backtick
+(`` ``` ``) or tilde (`~~~`) code fences as prose, so a fenced table example
+still renders as code: a fence closes only on a line holding a run of the same
+marker at least as long as the opener and nothing else, and an unclosed fence
+runs to the end of the source.
 
 Reflow is width-only and trailing-debounced by 75 ms. It waits while a popup,
 transcript overlay, alternate screen, or assistant stream owns presentation,
