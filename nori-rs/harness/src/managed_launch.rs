@@ -377,6 +377,8 @@ pub struct ManagedHostCapabilities {
     standard_acp: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     rebuilt_side_sessions: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fork_side_sessions: Option<i32>,
 }
 
 #[derive(Clone)]
@@ -448,6 +450,7 @@ impl ManagedLaunches {
             max_sessions: self.limit,
             standard_acp: 1,
             rebuilt_side_sessions: self.side_sessions.then_some(1),
+            fork_side_sessions: self.side_sessions.then_some(1),
         }
     }
 

@@ -195,25 +195,33 @@ impl ManagedAgent for HostService {
         } else {
             additions
         };
-        let parent = nori_harness::managed_acp::connect(
+        if !launches.side_sessions_enabled() {
+            return Ok(nori_harness::managed_acp::connect(
+                launch.stdout,
+                launch.stdin,
+                launch.cwd,
+                additions,
+                options.prompt_echo,
+                options.status_events,
+            ));
+        }
+        let (parent, forks) = nori_harness::managed_acp::connect_with_forks(
             launch.stdout,
             launch.stdin,
             launch.cwd.clone(),
             additions,
             options.prompt_echo,
             options.status_events,
+            launch.spec.agent.clone(),
         );
-        if launches.side_sessions_enabled() {
-            Ok(nori_harness::managed_acp::route_side_sessions(
-                parent,
-                launches.clone(),
-                binding_id.to_owned(),
-                generation,
-                launch.cwd,
-            ))
-        } else {
-            Ok(parent)
-        }
+        Ok(nori_harness::managed_acp::route_side_sessions(
+            parent,
+            forks,
+            launches.clone(),
+            binding_id.to_owned(),
+            generation,
+            launch.cwd,
+        ))
     }
 
     async fn request(&self, request: Value) -> ManagedReply {

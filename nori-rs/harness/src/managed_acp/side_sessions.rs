@@ -14,6 +14,7 @@ use serde_json::json;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
+use super::NativeForks;
 use super::StandardAcpConnection;
 use crate::managed_launch::LaunchConnection;
 use crate::managed_launch::LaunchRefusal;
@@ -64,6 +65,7 @@ struct AgentRequest {
 }
 
 struct Router {
+    forks: NativeForks,
     registry: ManagedLaunches,
     binding: String,
     generation: i64,
@@ -100,6 +102,7 @@ impl Router {
         id: &Value,
         params: &Value,
         parent: &Value,
+        method: &str,
     ) -> std::result::Result<String, Value> {
         let parent: Parent = serde_json::from_value(parent.clone()).map_err(|_| {
             invalid(
@@ -139,9 +142,45 @@ impl Router {
         }
 
         let side_id = format!("{SIDE_PREFIX}{}", Uuid::new_v4());
+        let input = if method == "session/fork" {
+            if params["sessionId"] != parent.session_id {
+                return Err(invalid(
+                    id,
+                    -32602,
+                    "fork sessionId must match the marked parent",
+                ));
+            }
+            side_worker::start_fork(
+                self.forks.clone(),
+                parent.session_id.clone(),
+                params.clone(),
+                id.clone(),
+                side_id.clone(),
+                self.events.clone(),
+            )
+        } else {
+            self.start_rebuilt(id, initialize, &side_id)?
+        };
+        self.sides.insert(
+            side_id.clone(),
+            Side {
+                parent,
+                exit_error: None,
+                input: Some(input),
+            },
+        );
+        Ok(side_id)
+    }
+
+    fn start_rebuilt(
+        &self,
+        id: &Value,
+        initialize: Value,
+        side_id: &str,
+    ) -> std::result::Result<side_worker::SideInput, Value> {
         let (connection, owner) = self
             .registry
-            .spawn_owned_side(&self.binding, self.generation, &side_id)
+            .spawn_owned_side(&self.binding, self.generation, side_id)
             .map_err(|err| {
                 if matches!(
                     err.downcast_ref::<LaunchRefusal>(),
@@ -152,22 +191,13 @@ impl Router {
                     invalid(id, -32000, &err.to_string())
                 }
             })?;
-        let input = side_worker::start_side(
+        Ok(side_worker::start_side(
             SideLaunch { connection, owner },
             initialize,
             id.clone(),
-            side_id.clone(),
+            side_id.to_owned(),
             self.events.clone(),
-        );
-        self.sides.insert(
-            side_id.clone(),
-            Side {
-                parent,
-                exit_error: None,
-                input: Some(input),
-            },
-        );
-        Ok(side_id)
+        ))
     }
 
     fn side_request(
@@ -256,14 +286,20 @@ impl Router {
             .as_ref()
             .filter(|sid| self.sides.contains_key(*sid) || reserved(sid));
         let route = match (params["_meta"].get(SIDE_META), target_side) {
-            (Some(mark), None) if method == "session/new" => match &id {
-                Some(id) => self.open_side(id, params, mark).map(Some),
-                None => Err(invalid(&Value::Null, -32600, "session/new requires an id")),
-            },
+            (Some(mark), None) if matches!(method.as_str(), "session/new" | "session/fork") => {
+                match &id {
+                    Some(id) => self.open_side(id, params, mark, &method).map(Some),
+                    None => Err(invalid(
+                        &Value::Null,
+                        -32600,
+                        "opening a side session requires an id",
+                    )),
+                }
+            }
             (Some(_), _) => Err(invalid(
                 id.as_ref().unwrap_or(&Value::Null),
                 -32602,
-                "side parent metadata is valid only on session/new",
+                "side parent metadata requires session/new or session/fork on a regular parent",
             )),
             (None, Some(side)) => self
                 .side_request(side, &method, id.as_ref(), frame.clone())
@@ -385,7 +421,9 @@ impl Router {
         {
             if frame.get("result").is_some() {
                 match side {
-                    Some(sid) if request.method == "session/new" => {
+                    Some(sid)
+                        if matches!(request.method.as_str(), "session/new" | "session/fork") =>
+                    {
                         if let Some(record) = self.sides.get_mut(sid) {
                             if record.input.is_none() {
                                 frame = invalid(
@@ -485,6 +523,7 @@ impl Router {
 
 pub fn route_side_sessions(
     mut parent: StandardAcpConnection,
+    forks: NativeForks,
     registry: ManagedLaunches,
     binding: String,
     generation: i64,
@@ -495,6 +534,7 @@ pub fn route_side_sessions(
     let (events, mut child_events) = mpsc::channel(64);
     let finished = tokio::spawn(async move {
         let mut router = Router {
+            forks,
             registry,
             binding,
             generation,

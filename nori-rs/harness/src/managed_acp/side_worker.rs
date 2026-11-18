@@ -1,6 +1,7 @@
-//! ACP dialogue with one independently supervised, read-only adapter.
+//! Open a read-only side endpoint and route ACP frames by its public session ID.
 
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -15,8 +16,10 @@ use tokio_util::sync::DropGuard;
 use super::SideEvent;
 use super::SideLaunch;
 use crate::backend::managed_additions::ManagedSessionAdditions;
+use crate::managed_acp::NativeForks;
 use crate::managed_acp::StandardAcpConnection;
 use crate::managed_acp::connect;
+use crate::managed_launch::SideProcess;
 
 type Events = mpsc::Sender<(String, SideEvent)>;
 
@@ -152,7 +155,7 @@ enum CodexAuth {
 
 struct FixedMode {
     subscription_file: bool,
-    value: &'static str,
+    value: String,
     config_id: Option<String>,
 }
 
@@ -283,7 +286,7 @@ async fn open(
         result,
         sid,
         FixedMode {
-            value,
+            value: value.into(),
             config_id,
             subscription_file: codex_auth == Some(CodexAuth::SubscriptionFile),
         },
@@ -302,15 +305,16 @@ pub(super) fn start_side(
     public_sid: String,
     events: Events,
 ) -> SideInput {
-    let (sender, mut requests) = mpsc::channel(32);
-    let cancel = CancellationToken::new();
-    let input = SideInput {
-        sender,
-        _cancel: cancel.clone().drop_guard(),
-    };
-    tokio::spawn(async move {
-        let SideLaunch { connection, owner } = launch;
-        let spec = connection.spec;
+    let SideLaunch { connection, owner } = launch;
+    let spec = connection.spec;
+    let codex_auth = spec.uses_private_codex_home().then(|| {
+        if spec.has_subscription_file() {
+            CodexAuth::SubscriptionFile
+        } else {
+            CodexAuth::Unverified
+        }
+    });
+    let setup = async move {
         let additions = ManagedSessionAdditions::new(
             connection.home.join(".nori/cli"),
             connection.cwd.clone(),
@@ -326,34 +330,95 @@ pub(super) fn start_side(
             false,
             false,
         );
+        let (result, sid, mode) = open(
+            &mut acp,
+            init_params,
+            &connection.cwd,
+            spec.model.as_deref(),
+            codex_auth,
+        )
+        .await?;
+        Ok((acp, result, sid, mode))
+    };
+    let timeout_reason = if codex_auth.is_some() {
+        "unsupported Codex side session: authentication setup timed out"
+    } else {
+        "side adapter setup timed out"
+    };
+    start(
+        setup,
+        timeout_reason,
+        Some(owner),
+        request_id,
+        public_sid,
+        events,
+    )
+}
+
+pub(super) fn start_fork(
+    forks: NativeForks,
+    parent: String,
+    params: Value,
+    request_id: Value,
+    public_sid: String,
+    events: Events,
+) -> SideInput {
+    let setup = async move {
+        let (acp, result) = forks.open(&parent, params).await?;
+        let sid = result["sessionId"]
+            .as_str()
+            .context("missing fork session ID")?
+            .to_owned();
+        let mode = result["modes"]["currentModeId"]
+            .as_str()
+            .context("missing confirmed fork mode")?
+            .to_owned();
+        Ok((
+            acp,
+            result,
+            sid,
+            FixedMode {
+                subscription_file: false,
+                value: mode,
+                config_id: None,
+            },
+        ))
+    };
+    start(
+        setup,
+        "side adapter setup timed out",
+        None,
+        request_id,
+        public_sid,
+        events,
+    )
+}
+
+fn start(
+    setup: impl Future<Output = Result<(StandardAcpConnection, Value, String, FixedMode)>>
+    + Send
+    + 'static,
+    timeout_reason: &'static str,
+    process: Option<Arc<SideProcess>>,
+    request_id: Value,
+    public_sid: String,
+    events: Events,
+) -> SideInput {
+    let (sender, mut requests) = mpsc::channel(32);
+    let cancel = CancellationToken::new();
+    let input = SideInput {
+        sender,
+        _cancel: cancel.clone().drop_guard(),
+    };
+    tokio::spawn(async move {
         let send = |message| events.send((public_sid.clone(), SideEvent::Frame(message)));
         let run = async {
-            let codex_auth = spec.uses_private_codex_home().then(|| {
-                if spec.has_subscription_file() {
-                    CodexAuth::SubscriptionFile
-                } else {
-                    CodexAuth::Unverified
-                }
-            });
-            let setup = tokio::time::timeout(
-                Duration::from_secs(30),
-                open(
-                    &mut acp,
-                    init_params,
-                    &connection.cwd,
-                    spec.model.as_deref(),
-                    codex_auth,
-                ),
-            )
-            .await
-            .context(if codex_auth.is_some() {
-                "unsupported Codex side session: authentication setup timed out"
-            } else {
-                "side adapter setup timed out"
-            })
-            .and_then(|inner| inner);
+            let setup = tokio::time::timeout(Duration::from_secs(30), setup)
+                .await
+                .context(timeout_reason)
+                .and_then(|inner| inner);
             match setup {
-                Ok((mut result, internal_sid, mode)) => {
+                Ok((mut acp, mut result, internal_sid, mode)) => {
                     result["sessionId"] = json!(public_sid);
                     if send(json!({"jsonrpc":"2.0","id":request_id,"result":result}))
                         .await
@@ -366,13 +431,20 @@ pub(super) fn start_side(
                             &public_sid,
                             &internal_sid,
                             &mode,
+                            process.is_some(),
                         )
                         .await
                     } else {
                         None
                     }
                 }
-                Err(error) => Some(failure(request_id, -32000, &format!("{error:#}"))),
+                Err(error) => {
+                    let mut reply = failure(request_id, -32000, &format!("{error:#}"));
+                    if process.is_none() {
+                        reply["error"]["data"] = json!({"fallback":"rebuilt"});
+                    }
+                    Some(reply)
+                }
             }
         };
         let final_reply = tokio::select! {
@@ -380,8 +452,10 @@ pub(super) fn start_side(
             _ = cancel.cancelled() => None,
             reply = run => reply,
         };
-        drop(acp);
-        let status = owner.stop().await.map_err(|error| error.to_string());
+        let status = match process {
+            Some(process) => process.stop().await.map_err(|error| error.to_string()),
+            None => Ok(()),
+        };
         if let Some(message) = final_reply {
             let reply = match &status {
                 Ok(()) => message,
@@ -415,7 +489,9 @@ async fn serve(
     public_sid: &str,
     internal_sid: &str,
     mode: &FixedMode,
+    owns_process: bool,
 ) -> Option<Value> {
+    let mut closing = None;
     loop {
         tokio::select! {
             request = requests.recv() => {
@@ -425,14 +501,27 @@ async fn serve(
                         events.send((public_sid.into(), SideEvent::Frame(failure(request["id"].clone(), -32602, "the binding owns this Codex subscription")))).await.ok()?;
                         continue;
                     }
+                    if closing.is_some() {
+                        if let Some(id) = request.get("id") {
+                            events.send((public_sid.into(), SideEvent::Frame(failure(id.clone(), -32002, "side session is closing")))).await.ok()?;
+                        }
+                        continue;
+                    }
                     if method == "session/close" {
-                        return Some(json!({"jsonrpc":"2.0","id":request["id"],"result":{}}));
+                        if owns_process {
+                            return Some(json!({"jsonrpc":"2.0","id":request["id"],"result":{}}));
+                        }
+                        closing = request.get("id").cloned();
                     }
                     if (method == "session/set_mode" && request["params"]["modeId"] != mode.value)
                         || (method == "session/set_config_option"
                             && !(mode.config_id.as_deref().is_some_and(|id| request["params"]["configId"] == id)
                                 && request["params"]["value"] == mode.value)) {
                         events.send((public_sid.into(), SideEvent::Frame(failure(request["id"].clone(), -32602, "side session permission mode is fixed")))).await.ok()?;
+                        continue;
+                    }
+                    if method == "session/set_mode" && !owns_process {
+                        events.send((public_sid.into(), SideEvent::Frame(json!({"jsonrpc":"2.0","id":request["id"],"result":{}})))).await.ok()?;
                         continue;
                     }
                     request["params"]["sessionId"] = json!(internal_sid);
@@ -452,12 +541,17 @@ async fn serve(
                         continue;
                     }
                     if method == "session/update"
-                        && !matches_fixed_mode(&message["params"]["update"], mode.value, mode.config_id.as_deref()) {
+                        && !matches_fixed_mode(&message["params"]["update"], &mode.value, mode.config_id.as_deref()) {
                         return None;
                     }
                     message["params"]["sessionId"] = json!(public_sid);
-                } else if !matches_fixed_mode(&message["result"], mode.value, mode.config_id.as_deref()) {
+                } else if !matches_fixed_mode(&message["result"], &mode.value, mode.config_id.as_deref()) {
                     return None;
+                } else if closing.as_ref().is_some_and(|id| message["id"] == *id) {
+                    if message.get("result").is_some() {
+                        return Some(message);
+                    }
+                    closing = None;
                 }
                 events.send((public_sid.into(), SideEvent::Frame(message))).await.ok()?;
             }
