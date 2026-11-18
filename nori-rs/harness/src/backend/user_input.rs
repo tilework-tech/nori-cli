@@ -35,6 +35,14 @@ impl AcpBackend {
             prompt_text.clone()
         };
 
+        // Only text the local user typed may go back to their composer; a
+        // remote controller's or a delegated child's prompt may not. Its
+        // inherited hook context is captured before this prompt's own hooks
+        // add theirs, so a reclaim can return just what it consumed.
+        let local_user_prompt = prompt_meta.is_none()
+            && nori_protocol::delegation_result_summary(&display_text).is_none();
+        let inherited_hook_context = self.pending_hook_context.lock().await.clone();
+
         // Execute pre_user_prompt hooks before sending the prompt
         if !self.pre_user_prompt_hooks.is_empty() {
             let env_vars = HashMap::from([
@@ -147,7 +155,7 @@ impl AcpBackend {
 
         // Check if we have a pending compact summary to prepend
         let pending_summary = self.pending_compact_summary.lock().await.take();
-        let final_prompt_text = if let Some(summary) = pending_summary {
+        let final_prompt_text = if let Some(summary) = &pending_summary {
             use crate::compact::SUMMARY_PREFIX;
             format!("{SUMMARY_PREFIX}\n{summary}\n\n{prompt_with_goal_context}")
         } else {
@@ -209,6 +217,12 @@ impl AcpBackend {
             original_content,
             content: final_content,
             display_text: Some(prompt_text_for_hooks),
+            reclaim: local_user_prompt.then_some(Box::new(
+                crate::normalized::session_runtime::ReclaimRestore {
+                    hook_context: inherited_hook_context,
+                    compact_summary: pending_summary,
+                },
+            )),
         };
         let event = match admission {
             PromptAdmission::Queue => session_reducer::InboundEvent::PromptSubmit(prompt),

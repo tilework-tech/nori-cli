@@ -37,7 +37,10 @@ pub(super) fn queue_changed(runtime: &SessionRuntime) -> ClientEvent {
 /// The exact text the user submitted, when the prompt is plain text that can
 /// return to the composer without losing anything.
 fn editable_text(prompt: &QueuedPrompt) -> Option<String> {
-    if prompt.kind != QueuedPromptKind::User || prompt.original_content.is_empty() {
+    if prompt.kind != QueuedPromptKind::User
+        || prompt.reclaim.is_none()
+        || prompt.original_content.is_empty()
+    {
         return None;
     }
     let mut parts = Vec::with_capacity(prompt.original_content.len());
@@ -94,6 +97,7 @@ mod tests {
             original_content: content.clone(),
             content,
             display_text: Some(text.to_string()),
+            reclaim: Some(Box::default()),
         }
     }
 
@@ -214,6 +218,25 @@ mod tests {
                 entries: vec![QueueEntry {
                     editable: false,
                     ..entry("img", "look at this")
+                }],
+            })
+        );
+    }
+
+    #[test]
+    fn prompts_the_local_user_did_not_type_are_never_editable() {
+        let mut child_result = prompt("child", "result from a delegated session");
+        child_result.reclaim = None;
+        let (mut runtime, _) = busy_with(vec![child_result]);
+
+        assert!(reclaim_queued(&mut runtime, "child").is_none());
+        assert_eq!(
+            queue_changed(&runtime),
+            ClientEvent::QueueChanged(QueueChanged {
+                prompts: vec!["result from a delegated session".to_string()],
+                entries: vec![QueueEntry {
+                    editable: false,
+                    ..entry("child", "result from a delegated session")
                 }],
             })
         );

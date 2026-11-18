@@ -139,6 +139,11 @@ fn alt_up_reclaims_the_only_queued_message_so_it_is_never_delivered() {
     std::thread::sleep(Duration::from_secs(2));
     assert_eq!(delivered_prompts(&log), ["turn one"]);
     assert!(
+        !session.screen_contents().contains("withdrawn"),
+        "taking a message back is not reported as an error:\n{}",
+        session.screen_contents()
+    );
+    assert!(
         session.screen_contents().contains("› withdraw me"),
         "the draft stays in the composer:\n{}",
         session.screen_contents()

@@ -298,8 +298,8 @@ Queued prompts are published as `NoriEvent::QueueChanged` snapshots built in
 snapshot lists user prompts only (compact, native-compact, and goal-continuation
 prompts stay hidden), oldest first, as plain `prompts` texts plus `entries`
 carrying the submission event ID and an `editable` flag. A prompt is editable
-only when its original content is all text, so taking it back never drops an
-image.
+only when the local user typed it and its original content is all text, so
+taking it back never drops an image.
 
 `reclaim_queued_prompt(event_id)` takes one queued prompt back before it is
 sent. The request is routed through
@@ -787,10 +787,16 @@ Execute call is read-only.
   receives a correlated prompt outcome. Prompt registration belongs to
   `HarnessRemoteHost`, so controller replacement cannot strand admission state,
   while hosted-session replacement invalidates the old registration token.
-- A queued prompt has already run its `pre_user_prompt` hooks, taken any
-  pending hook context or compact summary, and pushed its `/undo` snapshot at
-  submission, not at dispatch. Reclaiming does not undo any of that; the
-  resubmitted edit is a new prompt and runs hooks again. Remote `nori attach`
-  has no queue preview, so only the local TUI reclaims.
+- Only a prompt the local user typed is reclaimable: one submitted without
+  caller metadata that is not a delegated child's result. Remote controllers'
+  prompts and child results are queued with `reclaim: None` and are never
+  editable, so a reclaim cannot strand their submitters.
+- A queued prompt runs its `pre_user_prompt` hooks, consumes pending hook
+  context and any compact summary, and pushes its `/undo` snapshot at
+  submission, not at dispatch. Reclaiming returns the hook context that was
+  pending before the prompt's own hooks ran and the compact summary, so the
+  next prompt still carries them. The hooks and the orphan `/undo` snapshot are
+  not undone; the resubmitted edit is a new prompt and runs its hooks again.
+  Remote `nori attach` has no queue preview, so only the local TUI reclaims.
 
 Created and maintained by Nori.

@@ -953,10 +953,15 @@ Up (empty composer) / Alt+Up, no popup or overlay
 ```
 
 - Hiding the row before the harness answers means a second press takes the
-  next older editable row, never the same one twice. The next snapshot
-  confirms the removal.
-- Reclaims run newest first, so prepending each one to the draft keeps the
-  original queue order and loses nothing already typed.
+  next older editable row, never the same one twice. After a successful
+  reclaim the row stays hidden until a snapshot without it arrives, because
+  the snapshot and the answer travel on different channels.
+- Reclaims run newest first, so inserting each one at the start of the draft
+  keeps the original queue order. The insertion keeps the draft's paste
+  placeholders, attached images, and cursor. When the composer cannot take the
+  text (input disabled, or a shell-mode draft), it is shown in an info line
+  instead of being dropped.
+- Follow-only attachments never reclaim; the queue belongs to the owner.
 - The `alt + ↑ edit` hint renders only while an editable row is visible. Rows
   from a host that sends only `prompts` (no `entries`) render without the hint
   and cannot be taken back; prompts with images are never editable.

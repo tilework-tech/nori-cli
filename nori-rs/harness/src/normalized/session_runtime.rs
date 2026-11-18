@@ -203,6 +203,19 @@ pub struct QueuedPrompt {
     /// Content sent to the downstream agent, including any Nori context.
     pub content: Vec<acp::ContentBlock>,
     pub display_text: Option<String>,
+    /// `Some` only for a prompt the local user typed, which may be taken back
+    /// into the composer before it is sent. Holds the one-shot context the
+    /// prompt consumed when it was queued, so a reclaim can return it.
+    pub reclaim: Option<Box<ReclaimRestore>>,
+}
+
+/// One-shot backend context a queued prompt consumed at submission.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReclaimRestore {
+    /// Hook context that was already pending before this prompt's own
+    /// `pre_user_prompt` hooks ran (their output is regenerated on resubmit).
+    pub hook_context: Option<String>,
+    pub compact_summary: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

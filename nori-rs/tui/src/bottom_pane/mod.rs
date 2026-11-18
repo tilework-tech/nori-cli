@@ -316,6 +316,14 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// Place a reclaimed queued message before the draft; `false` when the
+    /// composer cannot take it.
+    pub(crate) fn prepend_reclaimed_text(&mut self, text: &str) -> bool {
+        let placed = self.composer.prepend_reclaimed_text(text);
+        self.request_redraw();
+        placed
+    }
+
     /// Replace the composer text with `text`.
     pub(crate) fn set_composer_text(&mut self, text: String) {
         self.composer.set_text_content(text);

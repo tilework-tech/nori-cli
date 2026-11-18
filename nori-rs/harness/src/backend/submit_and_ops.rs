@@ -294,6 +294,7 @@ impl AcpBackend {
                                 "/compact",
                             ))],
                             display_text: None,
+                            reclaim: None,
                         },
                     ),
                 ))
@@ -315,6 +316,7 @@ impl AcpBackend {
                             SUMMARIZATION_PROMPT,
                         ))],
                         display_text: None,
+                        reclaim: None,
                     },
                 ),
             ))

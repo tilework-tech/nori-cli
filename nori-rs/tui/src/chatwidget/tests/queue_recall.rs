@@ -84,12 +84,17 @@ fn up_on_an_empty_composer_takes_back_only_the_newest_queued_message() {
         "c".to_string(),
         ReclaimOutcome::Reclaimed("dup".to_string()),
     );
+    assert_eq!(chat.composer_text(), "dup");
+    assert_eq!(
+        queued_rows(&chat),
+        ["alpha", "dup"],
+        "the row stays hidden while the confirming snapshot is still on its way"
+    );
+
     show_queue(
         &mut chat,
         vec![entry("a", "alpha", true), entry("b", "dup", true)],
     );
-
-    assert_eq!(chat.composer_text(), "dup");
     assert_eq!(queued_rows(&chat), ["alpha", "dup"]);
 }
 
@@ -226,4 +231,46 @@ fn a_reclaim_that_fails_to_reach_the_harness_shows_the_row_again() {
         .map(|lines| lines_to_single_string(lines))
         .collect::<String>();
     assert!(!history.contains("already started"), "{history:?}");
+}
+
+#[test]
+fn a_reclaimed_message_keeps_the_drafts_attached_image() {
+    let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+    three_queued(&mut chat);
+    chat.set_composer_text("look at".to_string());
+    let image = PathBuf::from("/tmp/queue-recall-draft.png");
+    chat.attach_image(image.clone(), 32, 16, "PNG");
+    while rx.try_recv().is_ok() {}
+
+    press(&mut chat, KeyCode::Up, KeyModifiers::ALT);
+    assert_eq!(reclaim_requests(&mut rx), ["c"]);
+    chat.on_queued_prompt_reclaimed(
+        "c".to_string(),
+        ReclaimOutcome::Reclaimed("dup".to_string()),
+    );
+    assert_eq!(
+        chat.composer_text(),
+        "dup\nlook at[queue-recall-draft.png 32x16]"
+    );
+
+    press(&mut chat, KeyCode::Enter, KeyModifiers::NONE);
+    let submitted = chat.initial_user_message.take().expect("submitted message");
+    assert_eq!(submitted.image_paths, vec![image]);
+}
+
+#[test]
+fn a_follow_only_attachment_never_takes_the_owners_queued_message() {
+    let (mut chat, mut rx, _unused_rx) = make_cloud_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.handle_session_event(
+        generation,
+        super::part10::initialize_follow_only_agent_event(),
+    );
+    three_queued(&mut chat);
+    while rx.try_recv().is_ok() {}
+
+    press(&mut chat, KeyCode::Up, KeyModifiers::ALT);
+
+    assert_eq!(reclaim_requests(&mut rx), Vec::<String>::new());
+    assert_eq!(queued_rows(&chat), ["alpha", "dup", "dup"]);
 }

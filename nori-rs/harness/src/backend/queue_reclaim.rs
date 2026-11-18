@@ -1,5 +1,8 @@
 //! Taking a queued prompt back before it is sent.
 //!
+//! A reclaim returns the one-shot hook context and compact summary the
+//! prompt consumed when it was queued, so the next prompt still carries them.
+//!
 //! The request travels through the serialized session runtime so it is
 //! ordered against the reducer events that drain the queue: either the
 //! prompt is still queued and is removed, or it has already started.
@@ -30,6 +33,21 @@ impl AcpBackend {
     /// Runs on the serialized session runtime task.
     pub(super) async fn apply_queue_reclaim(&self, event_id: &str) -> Option<String> {
         let reclaimed = self.session_driver.lock().await.reclaim_queued(event_id)?;
+        if let Some(restore) = reclaimed.prompt.reclaim.as_deref().cloned() {
+            if let Some(context) = restore.hook_context {
+                let mut pending = self.pending_hook_context.lock().await;
+                *pending = Some(match pending.take() {
+                    Some(newer) => format!("{context}\n{newer}"),
+                    None => context,
+                });
+            }
+            if let Some(summary) = restore.compact_summary {
+                self.pending_compact_summary
+                    .lock()
+                    .await
+                    .get_or_insert(summary);
+            }
+        }
         if let Some(response_tx) = self
             .pending_prompt_submissions
             .lock()
