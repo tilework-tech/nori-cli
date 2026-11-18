@@ -28,6 +28,10 @@ struct Peer {
 
 impl Peer {
     async fn new(binding: &str, enabled: bool) -> Self {
+        Self::start(binding, enabled, false).await.0
+    }
+
+    async fn start(binding: &str, enabled: bool, recovery: bool) -> (Self, ManagedClient) {
         let (host, endpoint, token) = start_config(
             Host::new(),
             format!("[host]\nmanaged = true\nside_sessions = {enabled}\nmax_sessions = 1\n"),
@@ -46,7 +50,7 @@ impl Peer {
             binding,
             [false, false, true, false],
             ADAPTER,
-            false,
+            recovery,
         )
         .await;
         let mut peer = Self {
@@ -69,7 +73,7 @@ impl Peer {
         peer.parent = opened["result"]["sessionId"].clone();
         assert!(peer.parent.is_string(), "{opened}");
         peer.marker = json!({"bindingId":binding,"generation":1,"sessionId":peer.parent});
-        peer
+        (peer, control)
     }
 
     async fn send(&mut self, msg: Value) {
@@ -178,6 +182,71 @@ impl Peer {
         )
         .await;
     }
+}
+
+#[tokio::test]
+async fn durable_parent_releases_the_shared_adapter_with_a_fork_permission_pending() {
+    let (mut peer, mut control) = Peer::start("shutdown", true, true).await;
+    let child = peer.open_fork(3).await;
+    peer.prompt(4, &child, "private-turn").await;
+    let update = peer.recv().await;
+    assert_eq!(update["params"]["sessionId"], child);
+    assert_eq!(
+        update["params"]["update"]["content"]["text"],
+        "private-turn"
+    );
+    assert_eq!(peer.recv().await["result"]["stopReason"], "end_turn");
+    peer.prompt(5, &child, "hold-child").await;
+    let permission = peer.recv().await;
+    assert_eq!(permission["method"], "session/request_permission");
+    assert_eq!(permission["params"]["sessionId"], child);
+    assert_eq!(permission["params"]["_meta"][MARK], peer.marker);
+
+    peer.machine
+        .send(
+            json!({"bindingId":peer.binding,"generation":1,"commandId":"parent-turn","message":{
+            "jsonrpc":"2.0","id":6,"method":"session/prompt","params":{
+                "sessionId":peer.parent,"prompt":[{"type":"text","text":"parent-answer"}]}}}),
+        )
+        .await
+        .unwrap();
+    let parent_update = peer.recv().await;
+    assert_eq!(parent_update["params"]["sessionId"], peer.parent);
+    assert_eq!(peer.recv().await["result"]["stopReason"], "end_turn");
+    let scope = json!({"bindingId":peer.binding,"generation":1});
+    let replay = control
+        .request("_nori/host/replay", scope.clone())
+        .await
+        .unwrap();
+    let records = replay["records"].as_array().unwrap();
+    assert!(records.iter().any(|r| r["message"] == parent_update));
+    assert!(records.iter().all(|r| r["sessionId"] == peer.parent));
+    let checkpoint = control
+        .request("_nori/host/checkpoint", scope)
+        .await
+        .unwrap();
+    assert_eq!(checkpoint["checkpoint"]["mainSessionId"], peer.parent);
+
+    let witness = fs::File::open(peer.cwd.join("adapter.lock")).unwrap();
+    assert!(matches!(
+        witness.try_lock(),
+        Err(fs::TryLockError::WouldBlock)
+    ));
+    let release = tokio::time::timeout(
+        Duration::from_secs(10),
+        control.request(
+            "_nori/host/release",
+            json!({"bindingId":peer.binding,"generation":1,"commandId":"release-parent"}),
+        ),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(release["checkpoint"]["mainSessionId"], peer.parent);
+    assert!(
+        witness.try_lock().is_ok(),
+        "shared adapter still holds its lock at release acknowledgment"
+    );
 }
 
 #[tokio::test]

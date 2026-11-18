@@ -76,13 +76,17 @@ impl NativeForks {
             .await
             .map_err(|_| anyhow!("parent adapter connection ended"))?;
         let commands = self.commands.clone();
-        tokio::spawn(async move {
+        let finished = tokio::spawn(async move {
             while let Some(message) = outgoing.recv().await {
-                if commands.send(Command::Frame(key, message)).await.is_err() {
-                    return;
-                }
+                commands
+                    .send(Command::Frame(key, message))
+                    .await
+                    .map_err(|_| anyhow!("parent adapter connection ended"))?;
             }
-            let _ = commands.send(Command::Dropped(key)).await;
+            commands
+                .send(Command::Dropped(key))
+                .await
+                .map_err(|_| anyhow!("parent adapter connection ended"))
         });
         let result = tokio::time::timeout(Duration::from_secs(10), ready)
             .await
@@ -92,6 +96,7 @@ impl NativeForks {
             StandardAcpConnection {
                 input,
                 output: incoming,
+                finished,
             },
             result,
         ))

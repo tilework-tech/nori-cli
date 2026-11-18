@@ -253,7 +253,7 @@ async fn recovery_checkpoints_and_releases_the_parent_with_a_side_permission_pen
         .await
         .unwrap();
     control.request("initialize", json!({})).await.unwrap();
-    let cwd = admit_fixture(&mut control, &host, "aster", [false; 4], super::FIXTURE, true).await;
+    let cwd = admit_fixture(&mut control, &host, "aster", [false; 4], FIXTURE, true).await;
     fs::write(cwd.join("fixture-modes"), "plan").unwrap();
     let mut machine = ManagedClient::connect(&endpoint, &token).await.unwrap();
     let init = exchange(
