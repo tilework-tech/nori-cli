@@ -102,15 +102,71 @@ async fn concurrent_ensure_uses_one_slot_and_preserves_the_pinned_process() {
             .to_string()
             .contains("conflict")
     );
-    let overflow = request(&host, "beta");
-    assert!(
-        a.request(ENSURE, overflow)
-            .await
-            .unwrap_err()
-            .to_string()
-            .contains("capacity")
-    );
     assert!(a.request("_nori/session/new", json!({})).await.is_err());
+}
+
+async fn refusal_code(client: &mut ManagedClient, params: Value) -> i64 {
+    client
+        .send(json!({"jsonrpc":"2.0","id":"refusal","method":ENSURE,"params":params}))
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let reply = client.recv().await.unwrap();
+            if reply["id"] == "refusal" {
+                return reply["error"]["code"].as_i64().unwrap();
+            }
+        }
+    })
+    .await
+    .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn full_host_refuses_new_binding_with_capacity_code() {
+    let host = start(1, true);
+    let mut client = client(&host);
+    client
+        .request(ENSURE, request(&host, "alpha"))
+        .await
+        .unwrap();
+    assert_eq!(
+        refusal_code(&mut client, request(&host, "beta")).await,
+        -32017
+    );
+    assert!(
+        client
+            .request(STATUS, json!({"bindingId":"beta","generation":1}))
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn invalid_ensure_returns_invalid_params_even_on_a_full_host() {
+    let host = start(1, true);
+    let mut client = client(&host);
+    client
+        .request(ENSURE, request(&host, "alpha"))
+        .await
+        .unwrap();
+    let invalid = request(&host, "beta");
+    for (path, value) in [
+        ("/spec/cwd", json!("relative")),
+        ("/spec/cwd", Value::Null),
+        ("/spec/adapter/args", json!(["arg\0value"])),
+        ("/spec/env", json!({"LABEL":"env\0value"})),
+    ] {
+        let mut invalid = invalid.clone();
+        *invalid.pointer_mut(path).unwrap() = value;
+        assert_eq!(refusal_code(&mut client, invalid).await, -32602, "{path}");
+    }
+    assert!(
+        client
+            .request(STATUS, json!({"bindingId":"beta","generation":1}))
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -177,14 +233,19 @@ async fn managed_roots_and_pins_fail_closed() {
     ] {
         let mut invalid = launch.clone();
         *invalid.pointer_mut(pointer).unwrap() = value;
-        assert!(client.request(ENSURE, invalid).await.is_err(), "{pointer}");
+        assert_eq!(
+            refusal_code(&mut client, invalid).await,
+            -32602,
+            "{pointer}"
+        );
     }
     for component in [".codex", ".nori", ".nori/cli"] {
         let path = root.join("home").join(component);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::os::unix::fs::symlink(outside.path().join("dangling"), &path).unwrap();
-        assert!(
-            client.request(ENSURE, launch.clone()).await.is_err(),
+        assert_eq!(
+            refusal_code(&mut client, launch.clone()).await,
+            -32602,
             "{component}"
         );
         fs::remove_file(path).unwrap();
@@ -279,9 +340,7 @@ async fn dedicated_machine_matches_only_its_existing_roots_and_binding() {
     let home = host.0.path().join("existing-home");
     let cwd = home.join("org/workspace");
     fs::create_dir_all(&cwd).unwrap();
-    fs::write(host.0.path().join("config.toml"), format!(
-        "[host]\nmanaged=true\nmax_sessions=1\n[host.dedicated_roots]\nbinding_id='single'\nhome='{}'\ncwd='{}'\n",
-        home.display(),cwd.display())).unwrap();
+    configure_dedicated(&host, "single", &home, &cwd);
     success(host.run(&["host", "--port", "0"]));
     let mut client = client(&host);
     let mut launch = request(&host, "single");
@@ -293,4 +352,29 @@ async fn dedicated_machine_matches_only_its_existing_roots_and_binding() {
     assert!(client.request(ENSURE, foreign).await.is_err());
     client.request(ENSURE, launch).await.unwrap();
     wait_for_file(&cwd.join("observed"));
+}
+
+fn configure_dedicated(host: &Host, binding: &str, home: &Path, cwd: &Path) {
+    fs::write(host.0.path().join("config.toml"), format!(
+        "[host]\nmanaged=true\nmax_sessions=1\n[host.dedicated_roots]\nbinding_id='{binding}'\nhome='{}'\ncwd='{}'\n",
+        home.display(),cwd.display())).unwrap();
+}
+
+#[test]
+fn unusable_dedicated_layout_fails_before_discovery() {
+    let host = Host::new();
+    let home = host.0.path().join("home");
+    let work = home.join("workspace");
+    fs::create_dir_all(&work).unwrap();
+    let alias = host.0.path().join("alias");
+    std::os::unix::fs::symlink(&home, &alias).unwrap();
+    for (binding, cwd) in [("single", &alias), ("bad/id", &work)] {
+        configure_dedicated(&host, binding, &home, cwd);
+        failure(host.run(&["host", "--port", "0"]));
+        assert!(!host.0.path().join("host/state.json").exists());
+    }
+    fs::write(home.join(".codex"), "file").unwrap();
+    configure_dedicated(&host, "single", &home, &work);
+    failure(host.run(&["host", "--port", "0"]));
+    assert!(!host.0.path().join("host/state.json").exists());
 }

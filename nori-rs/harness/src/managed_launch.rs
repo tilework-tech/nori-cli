@@ -88,6 +88,43 @@ pub fn session_folder(path: &Path) -> anyhow::Result<PathBuf> {
     Ok(folder)
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum LaunchRefusal {
+    #[error("{0}")]
+    InvalidParams(#[source] anyhow::Error),
+    #[error("managed host at capacity")]
+    AtCapacity,
+}
+
+fn validate_binding_id(id: &str) -> anyhow::Result<()> {
+    ensure!(
+        !id.is_empty()
+            && id != "."
+            && id != ".."
+            && id
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-' | b'.')),
+        "invalid bindingId"
+    );
+    Ok(())
+}
+
+fn validate_roots(cwd: &Path, home: &Path) -> anyhow::Result<()> {
+    ensure!(cwd != home, "cwd and home must be distinct");
+    for name in [".codex", ".nori", ".nori/cli"] {
+        let path = home.join(name);
+        match std::fs::symlink_metadata(&path) {
+            Ok(meta) => ensure!(
+                meta.is_dir() && session_folder(&path)?.starts_with(home),
+                "configuration directories must stay inside the binding home"
+            ),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => return Err(err.into()),
+        }
+    }
+    Ok(())
+}
+
 enum Layout {
     Shared(PathBuf),
     Dedicated(nori_config::DedicatedRoots),
@@ -95,7 +132,6 @@ enum Layout {
 
 impl Layout {
     fn validate(&self, binding: &str, cwd: &Path, home: &Path) -> anyhow::Result<()> {
-        ensure!(cwd != home, "cwd and home must be distinct");
         match self {
             Self::Dedicated(roots) => ensure!(
                 binding == roots.binding_id && cwd == roots.cwd && home == roots.home,
@@ -115,18 +151,7 @@ impl Layout {
                 );
             }
         }
-        for name in [".codex", ".nori", ".nori/cli"] {
-            let path = home.join(name);
-            match std::fs::symlink_metadata(&path) {
-                Ok(meta) => ensure!(
-                    meta.is_dir() && session_folder(&path)?.starts_with(home),
-                    "configuration directories must stay inside the binding home"
-                ),
-                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-                Err(err) => return Err(err.into()),
-            }
-        }
-        Ok(())
+        validate_roots(cwd, home)
     }
 }
 
@@ -150,6 +175,14 @@ impl LaunchSpec {
         ensure!(
             self.adapter.path.is_absolute() && self.adapter.path.is_file(),
             "adapter path must name an installed absolute executable"
+        );
+        ensure!(
+            self.adapter
+                .args
+                .iter()
+                .chain(self.env.values())
+                .all(|s| !s.contains('\0')),
+            "adapter arguments and environment values cannot contain NUL"
         );
         for key in self.env.keys() {
             ensure!(
@@ -260,11 +293,15 @@ impl ManagedLaunches {
                 config.bindings_root.is_none() && config.max_sessions == 1,
                 "dedicated roots require max_sessions = 1 and no bindings_root"
             );
+            validate_binding_id(&roots.binding_id)?;
+            let cwd = session_folder(&roots.cwd)?;
+            let home = session_folder(&roots.home)?;
+            validate_roots(&cwd, &home)?;
             return Ok(Self {
                 layout: Layout::Dedicated(nori_config::DedicatedRoots {
                     binding_id: roots.binding_id.clone(),
-                    cwd: session_folder(&roots.cwd)?,
-                    home: session_folder(&roots.home)?,
+                    cwd,
+                    home,
                 }),
                 limit: 1,
                 launches: Mutex::new(Some(HashMap::new())),
@@ -294,17 +331,11 @@ impl ManagedLaunches {
         } = request;
         ensure!(
             !command_id.trim().is_empty() && generation > 0,
-            "commandId and a positive generation are required"
+            LaunchRefusal::InvalidParams(anyhow::anyhow!(
+                "commandId and a positive generation are required"
+            ))
         );
-        ensure!(
-            !binding_id.is_empty()
-                && binding_id != "."
-                && binding_id != ".."
-                && binding_id
-                    .bytes()
-                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-' | b'.')),
-            "invalid bindingId"
-        );
+        validate_binding_id(&binding_id).map_err(LaunchRefusal::InvalidParams)?;
         let digest = hex::encode(Sha256::digest(serde_json::to_vec(&spec)?));
         let mut guard = self
             .launches
@@ -326,10 +357,14 @@ impl ManagedLaunches {
                 .any(|l| l.conversation_id == conversation_id),
             "managed conversation ID conflict"
         );
-        let cwd = session_folder(&spec.cwd)?;
-        let home = session_folder(&spec.home)?;
-        self.layout.validate(&binding_id, &cwd, &home)?;
-        let command = spec.command(&cwd, &home)?;
+        let cwd = session_folder(&spec.cwd).map_err(LaunchRefusal::InvalidParams)?;
+        let home = session_folder(&spec.home).map_err(LaunchRefusal::InvalidParams)?;
+        self.layout
+            .validate(&binding_id, &cwd, &home)
+            .map_err(LaunchRefusal::InvalidParams)?;
+        let command = spec
+            .command(&cwd, &home)
+            .map_err(LaunchRefusal::InvalidParams)?;
         let mut live = 0;
         for record in launches.values_mut() {
             if record.process.as_ref().is_ok_and(|p| !p.has_exited()) {
@@ -338,7 +373,7 @@ impl ManagedLaunches {
                 record.connection = None;
             }
         }
-        ensure!(live < self.limit, "managed host at capacity");
+        ensure!(live < self.limit, LaunchRefusal::AtCapacity);
         let (process, connection) = match AgentProcess::spawn(command) {
             Ok(child) => (
                 Ok(child.handle),

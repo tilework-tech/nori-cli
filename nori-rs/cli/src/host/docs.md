@@ -157,9 +157,12 @@ bindings root. A configured capacity must be positive. Local mode retains
 its own session cap and attach protocol.
 
 A dedicated machine can retain its existing home and workspace. Configure
-one named binding with `max_sessions = 1` and omit `bindings_root`. Both
-paths must already exist. Ensure must supply the configured binding ID and
-the exact canonical pair, including when the workspace is inside the home.
+one named binding with `max_sessions = 1` and omit `bindings_root`. Before
+publishing its endpoint, the host validates the configured binding ID, checks
+that the absolute paths resolve to distinct existing directories, and checks
+the home configuration directories described below. An invalid layout fails
+startup. Ensure must supply the configured binding ID and resolve to the same
+canonical pair. The workspace may be inside the home.
 
 ```toml
 [host]
@@ -248,7 +251,8 @@ own handshake.
   environment. Unknown request or spec fields are rejected.
 - The host clears inherited environment, applies `spec.env`, and sets
   `HOME=home`, `CODEX_HOME=home/.codex` and `NORI_HOME=home/.nori/cli`.
-  Those names and `USERPROFILE` are reserved case-insensitively.
+  Those names and `USERPROFILE` are reserved case-insensitively. Adapter
+  arguments and environment entries must be free of NUL characters.
   Supply variables such as `PATH` explicitly when the adapter needs them.
   Subprocesses inherit the binding environment. Host `.env` values stay
   in the host. Managed launches bypass host-configured hooks and MCP servers.
@@ -270,10 +274,11 @@ the JSON-RPC `result` has the following fields.
 }
 ```
 
-The digest is the lowercase hex SHA-256 of the host's serialized typed spec.
-Store the receipt to correlate retries. Matching concurrent and later ensures
-return the original receipt, including at capacity and after exit. Reusing a
-binding with a different generation, conversation ID or spec, or assigning
+The host computes `specDigest` as lowercase hex SHA-256 of its serialized
+typed spec, including defaults. Treat it as opaque and store it with the
+receipt. Matching concurrent and later ensures return the original receipt,
+including at capacity and after exit. Reusing a binding with a different
+generation, conversation ID or spec, or assigning
 the conversation ID to another binding, returns a conflict. Launch identity
 is determined by the binding, generation, conversation UUID and spec digest,
 independently of the command ID. Preserve the supplied paths on retry. The
@@ -287,12 +292,23 @@ to obtain the same identity and the observed state.
 | `spawned` | OS spawn succeeded. The host has yet to observe exit. ACP initialization can still fail. |
 | `exited` | OS spawn succeeded and the child subsequently exited. `exitCode` is present when the OS provided a numeric exit code. |
 | `spawnFailed` | The admitted OS spawn failed. Ensure and identical retries return an error and preserve that outcome. |
-| JSON-RPC error | The binding or generation is unknown. Validation and capacity refusals leave no launch record. |
+| `-32000` for an unknown binding or generation | The host has no record for the requested pair. |
 
-Launch errors use JSON-RPC `error.code = -32000` with a diagnostic message.
-Only live processes consume capacity. The host keeps receipts in memory
-through exit and discards them on shutdown. Reconciliation across a host
-restart requires external durable state.
+If the first acknowledgement is lost, reconnect, initialize and verify that
+`x-nori-host-instance` still matches. Repeat the original ensure with its
+stored parameters. The host checks the immutable identity and returns the
+original outcome, or performs the launch if the first request never arrived.
+Use status for the current process state, even when the recovered receipt
+says `spawned`. Reconciliation after a host restart requires external durable
+state because receipts live in memory.
+
+Use the JSON-RPC `error.code` to handle an ensure refusal.
+
+| Code | Meaning | Caller action |
+| --- | --- | --- |
+| `-32017` | The request is valid but all live process slots are occupied. This refusal creates no record. | Try another machine. |
+| `-32602` | The ensure parameters failed decoding or admission validation. This refusal creates no record. | Correct the request or its provisioned paths. |
+| `-32000` | Other launch failure, including an immutable identity conflict or a failed OS spawn. | Inspect the diagnostic and query status for the binding and generation. A failed spawn retains its record. |
 
 **Handoff to the ACP relay.**
 `nori_harness::managed_launch::ManagedLaunches::take_connection(binding, generation)`
@@ -305,6 +321,11 @@ observes exit and terminates managed processes during shutdown. See the
 [admission implementation](../../../harness/src/managed_launch.rs),
 [loopback cases](../../tests/host_lifecycle/managed.rs), and
 [pipe handoff test](../../../harness/tests/managed_launch.rs).
+
+On Linux, provision a PID namespace init or ancestor subreaper that waits for
+orphaned processes. The host signals the adapter's process group and waits
+for its direct child. Orphaned descendants can remain as zombies until their
+adopting ancestor reaps them. See [process supervision](../../../acp-host/src/connection/child_lifecycle.rs).
 
 ### Things to Know
 

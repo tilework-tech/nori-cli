@@ -9,6 +9,7 @@ use anyhow::Context;
 use nori_config::NoriConfig;
 use nori_config::NoriConfigOverrides;
 use nori_harness::ConversationId;
+use nori_harness::managed_launch::LaunchRefusal;
 use nori_harness::managed_launch::ManagedLaunches;
 use nori_harness::managed_launch::session_folder;
 use nori_harness::remote_agent::ManagedAgent;
@@ -77,9 +78,11 @@ impl HostService {
                     "agentCapabilities":{"_meta":{"nori.dev/managedHost":launches.capabilities()}},
                     "server_info":{"name":"nori","version":env!("CARGO_PKG_VERSION")}
                 })),
-                "_nori/session/ensure" => Ok(serde_json::to_value(
-                    launches.ensure(serde_json::from_value(params.clone())?)?,
-                )?),
+                "_nori/session/ensure" => {
+                    let request = serde_json::from_value(params.clone())
+                        .map_err(|error| LaunchRefusal::InvalidParams(error.into()))?;
+                    Ok(serde_json::to_value(launches.ensure(request)?)?)
+                }
                 "_nori/session/status" => {
                     let scope: LaunchScope = serde_json::from_value(params.clone())?;
                     Ok(serde_json::to_value(
@@ -196,7 +199,12 @@ impl ManagedAgent for HostService {
         let response = match result {
             Ok(result) => json!({"jsonrpc":"2.0","id":request["id"],"result":result}),
             Err(error) => {
-                json!({"jsonrpc":"2.0","id":request["id"],"error":{"code":-32000,"message":error.to_string()}})
+                let code = match error.downcast_ref::<LaunchRefusal>() {
+                    Some(LaunchRefusal::AtCapacity) => -32017,
+                    Some(LaunchRefusal::InvalidParams(_)) => -32602,
+                    None => -32000,
+                };
+                json!({"jsonrpc":"2.0","id":request["id"],"error":{"code":code,"message":error.to_string()}})
             }
         };
         ManagedReply {
