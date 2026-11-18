@@ -67,7 +67,7 @@ fn queue_input(session: &mut TuiSession, text: &str) {
 
 #[test]
 #[cfg(target_os = "linux")]
-fn up_reclaims_newest_queued_message_and_edited_resubmission_is_delivered_once() {
+fn up_then_enter_reclaims_newest_queued_message_and_edited_resubmission_is_delivered_once() {
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("prompts.jsonl");
     let mut session = spawn_busy_session(&log);
@@ -88,6 +88,7 @@ fn up_reclaims_newest_queued_message_and_edited_resubmission_is_delivered_once()
         .expect("three queued rows");
 
     session.send_key(Key::Up).unwrap();
+    session.send_key(Key::Enter).unwrap();
     session
         .wait_for(
             |screen| queued_rows(screen) == ["alpha", "dup"] && screen.contains("› dup"),
@@ -207,7 +208,7 @@ fn enter_steers_with_the_edited_draft_after_up_withdraws_it() {
             TIMEOUT,
         )
         .unwrap();
-    session.send_key(Key::Up).unwrap();
+    session.send_key(Key::AltUp).unwrap();
     session
         .wait_for(
             |screen| queued_rows(screen).is_empty() && screen.contains("› check the north row"),

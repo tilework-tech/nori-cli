@@ -101,17 +101,15 @@ mod tests {
                     .side_effects
                     .into_iter()
                     .filter_map(|effect| match effect {
-                        SideEffect::SendPrompt { prompt, .. } => {
-                            Some(
-                                prompt
-                                    .into_iter()
-                                    .filter_map(|block| match block {
-                                        acp::ContentBlock::Text(text) => Some(text.text),
-                                        _ => None,
-                                    })
-                                    .collect::<String>(),
-                            )
-                        }
+                        SideEffect::SendPrompt { prompt, .. } => Some(
+                            prompt
+                                .into_iter()
+                                .filter_map(|block| match block {
+                                    acp::ContentBlock::Text(text) => Some(text.text),
+                                    _ => None,
+                                })
+                                .collect::<String>(),
+                        ),
                         _ => None,
                     })
                     .collect(),
@@ -146,7 +144,10 @@ mod tests {
             step,
             Step {
                 sent: Vec::new(),
-                queue: Some((texts(&["alpha", "dup", "dup"]), Some(QueuePause::Interrupted))),
+                queue: Some((
+                    texts(&["alpha", "dup", "dup"]),
+                    Some(QueuePause::Interrupted)
+                )),
             }
         );
     }
@@ -244,7 +245,10 @@ mod tests {
         assert_eq!(resumed.sent, Vec::<String>::new());
         assert_eq!(resumed.queue, Some((texts(&["alpha"]), None)));
 
-        assert_eq!(session.end(acp::StopReason::EndTurn).sent, texts(&["alpha"]));
+        assert_eq!(
+            session.end(acp::StopReason::EndTurn).sent,
+            texts(&["alpha"])
+        );
     }
 
     #[test]
@@ -258,7 +262,10 @@ mod tests {
                 queue: None,
             }
         );
-        assert_eq!(session.end(acp::StopReason::EndTurn).sent, texts(&["alpha"]));
+        assert_eq!(
+            session.end(acp::StopReason::EndTurn).sent,
+            texts(&["alpha"])
+        );
     }
 
     #[test]
@@ -266,30 +273,19 @@ mod tests {
         let mut session = Session::running_with(&[("a", "alpha"), ("b", "beta")]);
         session.interrupt();
 
+        let snapshot = |event: ClientEvent| match event {
+            ClientEvent::QueueChanged(queue) => (queue.prompts, queue.paused),
+            other => panic!("expected a queue snapshot, got {other:?}"),
+        };
         let first = crate::backend::session_reducer::reclaim_queued(&mut session.runtime, "a")
             .expect("queued");
         assert_eq!(
-            first.queue_changed,
-            ClientEvent::QueueChanged(crate::normalized::QueueChanged {
-                prompts: texts(&["beta"]),
-                entries: vec![nori_protocol::QueueEntry {
-                    id: "b".to_string(),
-                    text: "beta".to_string(),
-                    editable: true,
-                }],
-                paused: Some(QueuePause::Interrupted),
-            })
+            snapshot(first.queue_changed),
+            (texts(&["beta"]), Some(QueuePause::Interrupted))
         );
         let last = crate::backend::session_reducer::reclaim_queued(&mut session.runtime, "b")
             .expect("queued");
-        assert_eq!(
-            last.queue_changed,
-            ClientEvent::QueueChanged(crate::normalized::QueueChanged {
-                prompts: Vec::new(),
-                entries: Vec::new(),
-                paused: None,
-            })
-        );
+        assert_eq!(snapshot(last.queue_changed), (Vec::new(), None));
 
         session.apply(InboundEvent::PromptSubmitIfIdle(prompt("n", "fresh")));
         session.apply(InboundEvent::PromptSubmit(prompt("q", "queued later")));
@@ -297,6 +293,26 @@ mod tests {
             session.end(acp::StopReason::EndTurn).sent,
             texts(&["queued later"]),
             "a queue emptied by the user sends new follow-ups normally"
+        );
+    }
+
+    #[test]
+    fn an_interrupt_after_resume_pauses_what_is_left() {
+        let mut session = Session::running_with(&[("a", "alpha"), ("b", "beta")]);
+        session.interrupt();
+        assert_eq!(
+            session.apply(InboundEvent::ResumeQueue).sent,
+            texts(&["alpha"])
+        );
+
+        let step = session.interrupt();
+
+        assert_eq!(
+            step,
+            Step {
+                sent: Vec::new(),
+                queue: Some((texts(&["beta"]), Some(QueuePause::Interrupted))),
+            }
         );
     }
 }

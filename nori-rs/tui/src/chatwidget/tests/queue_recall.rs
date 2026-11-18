@@ -1,5 +1,6 @@
 use super::*;
 use crate::app_event::HarnessAction;
+use crate::app_event::QueuedPromptAction;
 use crate::app_event::ReclaimOutcome;
 use pretty_assertions::assert_eq;
 
@@ -19,6 +20,7 @@ fn show_queue(chat: &mut ChatWidget, entries: Vec<nori_protocol::QueueEntry>) {
             nori_protocol::QueueSnapshot {
                 prompts: entries.iter().map(|entry| entry.text.clone()).collect(),
                 entries,
+                paused: None,
             },
         )),
     );
@@ -27,7 +29,7 @@ fn show_queue(chat: &mut ChatWidget, entries: Vec<nori_protocol::QueueEntry>) {
 fn reclaim_requests(rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>) -> Vec<String> {
     std::iter::from_fn(|| rx.try_recv().ok())
         .filter_map(|event| match event {
-            AppEvent::HarnessAction(HarnessAction::ReclaimQueuedPrompt { event_id }) => {
+            AppEvent::HarnessAction(HarnessAction::ReclaimQueuedPrompt { event_id, .. }) => {
                 Some(event_id)
             }
             _ => None,
@@ -70,18 +72,19 @@ fn three_queued(chat: &mut ChatWidget) {
 }
 
 #[test]
-fn up_on_an_empty_composer_takes_back_only_the_newest_queued_message() {
+fn alt_up_takes_back_only_the_newest_queued_message() {
     let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
     three_queued(&mut chat);
     while rx.try_recv().is_ok() {}
 
-    press(&mut chat, KeyCode::Up, KeyModifiers::NONE);
+    press(&mut chat, KeyCode::Up, KeyModifiers::ALT);
 
     assert_eq!(reclaim_requests(&mut rx), ["c"]);
     assert_eq!(queued_rows(&chat), ["alpha", "dup"]);
 
     chat.on_queued_prompt_reclaimed(
         "c".to_string(),
+        QueuedPromptAction::Edit,
         ReclaimOutcome::Reclaimed("dup".to_string()),
     );
     assert_eq!(chat.composer_text(), "dup");
@@ -112,10 +115,12 @@ fn a_second_press_before_the_first_answer_takes_the_next_message() {
 
     chat.on_queued_prompt_reclaimed(
         "c".to_string(),
+        QueuedPromptAction::Edit,
         ReclaimOutcome::Reclaimed("dup two".to_string()),
     );
     chat.on_queued_prompt_reclaimed(
         "b".to_string(),
+        QueuedPromptAction::Edit,
         ReclaimOutcome::Reclaimed("dup one".to_string()),
     );
 
@@ -137,6 +142,7 @@ fn alt_up_keeps_an_existing_draft_after_the_reclaimed_message() {
     assert_eq!(reclaim_requests(&mut rx), ["c"]);
     chat.on_queued_prompt_reclaimed(
         "c".to_string(),
+        QueuedPromptAction::Edit,
         ReclaimOutcome::Reclaimed("dup".to_string()),
     );
 
@@ -165,7 +171,11 @@ fn a_message_that_already_started_is_reported_and_nothing_is_lost() {
 
     press(&mut chat, KeyCode::Up, KeyModifiers::ALT);
     assert_eq!(reclaim_requests(&mut rx), ["a"]);
-    chat.on_queued_prompt_reclaimed("a".to_string(), ReclaimOutcome::AlreadyStarted);
+    chat.on_queued_prompt_reclaimed(
+        "a".to_string(),
+        QueuedPromptAction::Edit,
+        ReclaimOutcome::AlreadyStarted,
+    );
 
     assert_eq!(chat.composer_text(), "keep me");
     let history = drain_insert_history(&mut rx)
@@ -203,6 +213,7 @@ fn a_queue_without_ids_from_an_older_host_is_shown_but_not_reclaimed() {
             nori_protocol::QueueSnapshot {
                 prompts: vec!["legacy".to_string()],
                 entries: Vec::new(),
+                paused: None,
             },
         )),
     );
@@ -220,9 +231,13 @@ fn a_reclaim_that_fails_to_reach_the_harness_shows_the_row_again() {
     show_queue(&mut chat, vec![entry("a", "alpha", true)]);
     while rx.try_recv().is_ok() {}
 
-    press(&mut chat, KeyCode::Up, KeyModifiers::NONE);
+    press(&mut chat, KeyCode::Up, KeyModifiers::ALT);
     assert_eq!(queued_rows(&chat), Vec::<String>::new());
-    chat.on_queued_prompt_reclaimed("a".to_string(), ReclaimOutcome::Failed);
+    chat.on_queued_prompt_reclaimed(
+        "a".to_string(),
+        QueuedPromptAction::Edit,
+        ReclaimOutcome::Failed,
+    );
 
     assert_eq!(queued_rows(&chat), ["alpha"]);
     assert_eq!(chat.composer_text(), "");
@@ -246,6 +261,7 @@ fn a_reclaimed_message_keeps_the_drafts_attached_image() {
     assert_eq!(reclaim_requests(&mut rx), ["c"]);
     chat.on_queued_prompt_reclaimed(
         "c".to_string(),
+        QueuedPromptAction::Edit,
         ReclaimOutcome::Reclaimed("dup".to_string()),
     );
     assert_eq!(

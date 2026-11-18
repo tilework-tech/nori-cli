@@ -27,7 +27,10 @@ impl ChatWidget {
             return false;
         };
         self.app_event_tx.send(AppEvent::HarnessAction(
-            crate::app_event::HarnessAction::ReclaimQueuedPrompt { event_id },
+            crate::app_event::HarnessAction::ReclaimQueuedPrompt {
+                event_id,
+                action: crate::app_event::QueuedPromptAction::Edit,
+            },
         ));
         true
     }
@@ -41,20 +44,31 @@ impl ChatWidget {
     pub(crate) fn on_queued_prompt_reclaimed(
         &mut self,
         event_id: String,
+        action: crate::app_event::QueuedPromptAction,
         outcome: crate::app_event::ReclaimOutcome,
     ) {
+        use crate::app_event::QueuedPromptAction;
         use crate::app_event::ReclaimOutcome;
-        let text = match outcome {
-            ReclaimOutcome::Reclaimed(text) => text,
-            ReclaimOutcome::AlreadyStarted => {
-                self.bottom_pane.finish_queued_message_reclaim(&event_id);
-                self.add_info_message(
-                    "That queued message already started, so it was sent as written.".to_string(),
-                    None,
-                );
+        let text = match (outcome, action) {
+            (ReclaimOutcome::Reclaimed(_), QueuedPromptAction::Remove) => {
+                self.request_redraw();
                 return;
             }
-            ReclaimOutcome::Failed => {
+            (ReclaimOutcome::Reclaimed(text), QueuedPromptAction::Edit) => text,
+            (ReclaimOutcome::AlreadyStarted, action) => {
+                self.bottom_pane.finish_queued_message_reclaim(&event_id);
+                let message = match action {
+                    QueuedPromptAction::Edit => {
+                        "That queued message already started, so it was sent as written."
+                    }
+                    QueuedPromptAction::Remove => {
+                        "That queued message already started, so it was not removed."
+                    }
+                };
+                self.add_info_message(message.to_string(), None);
+                return;
+            }
+            (ReclaimOutcome::Failed, _) => {
                 self.bottom_pane.finish_queued_message_reclaim(&event_id);
                 return;
             }

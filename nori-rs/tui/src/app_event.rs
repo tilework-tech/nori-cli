@@ -30,13 +30,25 @@ pub(crate) enum ReclaimOutcome {
     Failed,
 }
 
+/// What the user wants done with a queued prompt taken out of the queue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum QueuedPromptAction {
+    /// Put its text back in the composer.
+    Edit,
+    /// Discard it.
+    Remove,
+}
+
 #[derive(Debug)]
 pub(crate) enum HarnessAction {
     Cancel,
-    /// Take a queued prompt back into the composer before it is sent.
+    /// Take a queued prompt out of the queue before it is sent.
     ReclaimQueuedPrompt {
         event_id: String,
+        action: QueuedPromptAction,
     },
+    /// Let a queue paused by an interrupted or failed turn send again.
+    ResumeQueue,
     Shutdown {
         child_grace: std::time::Duration,
     },
@@ -142,6 +154,7 @@ pub(crate) enum AppEvent {
     QueuedPromptReclaimed {
         generation: SessionGeneration,
         event_id: String,
+        action: QueuedPromptAction,
         outcome: ReclaimOutcome,
     },
     CustomPromptsLoaded(Vec<nori_harness::CustomPrompt>),

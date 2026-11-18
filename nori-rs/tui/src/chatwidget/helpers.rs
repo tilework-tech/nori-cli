@@ -346,7 +346,8 @@ impl ChatWidget {
             use crate::app_event::HarnessAction;
             let result = match action {
                 HarnessAction::Cancel => handle.cancel().await,
-                HarnessAction::ReclaimQueuedPrompt { event_id } => {
+                HarnessAction::ResumeQueue => handle.resume_queue().await,
+                HarnessAction::ReclaimQueuedPrompt { event_id, action } => {
                     use crate::app_event::ReclaimOutcome;
                     let result = handle.reclaim_queued_prompt(event_id.clone()).await;
                     let outcome = match &result {
@@ -357,6 +358,7 @@ impl ChatWidget {
                     app_event_tx.send(AppEvent::QueuedPromptReclaimed {
                         generation,
                         event_id,
+                        action,
                         outcome,
                     });
                     result.map(|_| ())

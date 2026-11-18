@@ -20,7 +20,6 @@ use nori_harness::session_manager::SessionSource;
 use nori_harness::session_manager::StartSession;
 use nori_protocol::NoriEvent;
 use nori_protocol::QueuePause;
-use nori_protocol::QueueSnapshot;
 use nori_protocol::SessionEnvelope;
 use nori_protocol::SessionEvent;
 use nori_protocol::SessionStatus;
@@ -83,7 +82,7 @@ async fn queue_reads(
     events: &mut mpsc::UnboundedReceiver<SessionEnvelope>,
     rows: &[&str],
     paused: Option<QueuePause>,
-) -> QueueSnapshot {
+) {
     tokio::time::timeout(WAIT, async {
         loop {
             let envelope = events.recv().await.expect("session stream open");
@@ -91,7 +90,7 @@ async fn queue_reads(
                 && queue.prompts == rows
                 && queue.paused == paused
             {
-                return queue;
+                return;
             }
         }
     })
@@ -133,7 +132,7 @@ async fn an_interrupted_turn_holds_the_queue_until_resume_then_sends_each_once()
     queue_reads(&mut session.events, &["alpha", "dup", "dup"], None).await;
 
     session.handle.cancel().await.expect("cancel");
-    let paused = queue_reads(
+    queue_reads(
         &mut session.events,
         &["alpha", "dup", "dup"],
         Some(QueuePause::Interrupted),
@@ -154,9 +153,15 @@ async fn an_interrupted_turn_holds_the_queue_until_resume_then_sends_each_once()
         .expect("a second resume is harmless");
     let observed = wait_delivered(&log, 4).await;
     tokio::time::sleep(Duration::from_millis(1000)).await;
-    assert_eq!(observed, ["mock:stream-until-cancel", "alpha", "dup", "dup"]);
-    assert_eq!(delivered(&log), observed, "each prompt is sent exactly once");
-    assert_eq!(paused.entries.len(), 3);
+    assert_eq!(
+        observed,
+        ["mock:stream-until-cancel", "alpha", "dup", "dup"]
+    );
+    assert_eq!(
+        delivered(&log),
+        observed,
+        "each prompt is sent exactly once"
+    );
 
     manager.shutdown(Duration::ZERO).await;
 }

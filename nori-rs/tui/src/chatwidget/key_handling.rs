@@ -2,6 +2,9 @@ use super::*;
 
 impl ChatWidget {
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
+        if self.handle_queue_list_key(key_event) {
+            return;
+        }
         match key_event {
             KeyEvent {
                 code: KeyCode::Char(c),
@@ -53,9 +56,32 @@ impl ChatWidget {
                 ..
             } if !self.exiting
                 && !self.bottom_pane.has_active_overlay_or_popup()
-                && (modifiers == KeyModifiers::ALT
-                    || (modifiers.is_empty() && self.bottom_pane.composer_is_empty()))
+                && modifiers == KeyModifiers::ALT
                 && self.start_queued_prompt_reclaim() =>
+            {
+                return;
+            }
+            KeyEvent {
+                code: KeyCode::Up,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            } if !self.exiting
+                && !self.bottom_pane.has_active_overlay_or_popup()
+                && self.bottom_pane.composer_is_empty()
+                && self.focus_queue_list() =>
+            {
+                return;
+            }
+            KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            } if !self.exiting
+                && !self.bottom_pane.has_active_overlay_or_popup()
+                && self.bottom_pane.composer_is_empty()
+                && self.resume_paused_queue() =>
             {
                 return;
             }
