@@ -83,10 +83,15 @@ impl NoriConfig {
                     || path.starts_with("sandbox_workspace_write.")
             });
         // `-c tui.tool_output` is merged into `toml.tui`, so it must also beat the project.
-        let tool_output_from_command_line = overrides
-            .raw_overrides
-            .iter()
-            .any(|(path, _)| matches!(path.as_str(), "tui" | "tui.tool_output"));
+        let tool_output_from_command_line =
+            overrides
+                .raw_overrides
+                .iter()
+                .any(|(path, value)| match path.as_str() {
+                    "tui.tool_output" => true,
+                    "tui" => value.get("tool_output").is_some(),
+                    _ => false,
+                });
         let NoriConfigOverrides {
             agent: agent_override,
             sandbox_mode: sandbox_mode_override,
@@ -244,6 +249,7 @@ impl NoriConfig {
             skillset_per_session,
             file_manager: toml.tui.file_manager,
             tool_output,
+            tool_output_from_command_line,
             pinned_plan_drawer: toml.tui.pinned_plan_drawer.unwrap_or(false),
             custom_working_messages: toml.tui.custom_working_messages.unwrap_or(true),
             custom_working_message_list: toml
@@ -812,6 +818,21 @@ auto_worktree = false
         assert_eq!(
             tool_output_for(&config, &project, vec![("tui".to_string(), tui)]),
             crate::ToolOutput::Full
+        );
+    }
+
+    #[test]
+    fn command_line_tui_table_without_tool_output_keeps_project_setting() {
+        let (_dir, project) = project_dir();
+        let config = format!(
+            "[projects.{:?}]\ntool_output = \"compact\"\n",
+            project.display().to_string(),
+        );
+        let tui: toml::Value = toml::from_str("pinned_plan_drawer = false").unwrap();
+
+        assert_eq!(
+            tool_output_for(&config, &project, vec![("tui".to_string(), tui)]),
+            crate::ToolOutput::Compact
         );
     }
 

@@ -300,7 +300,7 @@ fn test_trust_directory_saves_to_config() {
         .send_key(Key::Char('y'))
         .expect("Failed to send 'y' key");
 
-    // Step 4b: Accept the preselected answer to keep full tool output
+    // Step 4b: Choose the preselected Full tool output
     session
         .wait_for_text("Use compact tool output", TIMEOUT)
         .expect("Compact tool output question did not appear after trust selection");
@@ -341,8 +341,8 @@ fn test_trust_directory_saves_to_config() {
         config_content
     );
     assert!(
-        !config_content.contains("tool_output"),
-        "keeping full output should record no tool output preference, got:\n{config_content}"
+        config_content.contains("tool_output = \"full\""),
+        "choosing full output should be saved for the project, got:\n{config_content}"
     );
 }
 
