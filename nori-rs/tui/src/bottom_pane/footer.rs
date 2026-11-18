@@ -873,7 +873,7 @@ const SHORTCUTS: &[ShortcutDescriptor] = &[
     ShortcutDescriptor {
         id: ShortcutId::TogglePlanDrawer,
         bindings: &[ShortcutBinding {
-            key: key_hint::ctrl(KeyCode::Char('o')),
+            key: key_hint::alt(KeyCode::Char('p')),
             condition: DisplayCondition::Always,
         }],
         prefix: "",

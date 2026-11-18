@@ -135,5 +135,7 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   The suffix uppercases the model name and replaces hyphens with underscores
   (for example, `MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT`). Multi-agent PTY tests
   use this to prove which subprocess produced a visible response.
+- `MOCK_AGENT_SEND_PLAN` sends a two-step plan update before the reply, so
+  PTY tests can drive the plan drawer and plan-dependent keys.
 
 Created and maintained by Nori.
