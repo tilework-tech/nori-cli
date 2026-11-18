@@ -77,6 +77,7 @@ ignore = [
     { id = "RUSTSEC-2026-0097", reason = "rand 0.8.x pinned by oauth2/zbus/secret-service; no custom logger uses ThreadRng in this codebase" },
     { id = "RUSTSEC-2026-0194", reason = "quick-xml <0.41 pinned transitively by plist (via os_info/syntect); no untrusted XML is parsed. Remove once parents move to quick-xml 0.41" },
     { id = "RUSTSEC-2026-0195", reason = "quick-xml <0.41 pinned transitively by plist (via os_info/syntect); no untrusted XML is parsed. Remove once parents move to quick-xml 0.41" },
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained and has no patched version. Migrate off chrono in a follow-up." },
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
