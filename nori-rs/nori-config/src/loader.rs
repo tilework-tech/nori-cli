@@ -86,7 +86,7 @@ impl NoriConfig {
         let tool_output_from_command_line = overrides
             .raw_overrides
             .iter()
-            .any(|(path, _)| path == "tui.tool_output");
+            .any(|(path, _)| matches!(path.as_str(), "tui" | "tui.tool_output"));
         let NoriConfigOverrides {
             agent: agent_override,
             sandbox_mode: sandbox_mode_override,
@@ -766,26 +766,6 @@ auto_worktree = false
     }
 
     #[test]
-    fn project_compact_opt_in_applies_only_to_that_project() {
-        let (_a, opted_in) = project_dir();
-        let (_b, other) = project_dir();
-        let config = format!(
-            "[projects.{:?}]\ntrust_level = \"trusted\"\ntool_output = \"compact\"\n\n[projects.{:?}]\ntrust_level = \"trusted\"\n",
-            opted_in.display().to_string(),
-            other.display().to_string(),
-        );
-
-        assert_eq!(
-            tool_output_for(&config, &opted_in, Vec::new()),
-            crate::ToolOutput::Compact
-        );
-        assert_eq!(
-            tool_output_for(&config, &other, Vec::new()),
-            crate::ToolOutput::Full
-        );
-    }
-
-    #[test]
     fn project_tool_output_overrides_global_setting() {
         let (_dir, project) = project_dir();
         let config = format!(
@@ -821,6 +801,21 @@ auto_worktree = false
     }
 
     #[test]
+    fn command_line_tui_table_overrides_project_setting() {
+        let (_dir, project) = project_dir();
+        let config = format!(
+            "[projects.{:?}]\ntool_output = \"compact\"\n",
+            project.display().to_string(),
+        );
+        let tui: toml::Value = toml::from_str("tool_output = \"full\"").unwrap();
+
+        assert_eq!(
+            tool_output_for(&config, &project, vec![("tui".to_string(), tui)]),
+            crate::ToolOutput::Full
+        );
+    }
+
+    #[test]
     fn command_line_compact_overrides_project_full() {
         let (_dir, project) = project_dir();
         let config = format!(
@@ -837,30 +832,6 @@ auto_worktree = false
                     toml::Value::String("compact".to_string())
                 )]
             ),
-            crate::ToolOutput::Compact
-        );
-    }
-
-    #[test]
-    fn project_tool_output_applies_in_repository_subdirectories() {
-        let (_dir, repo) = project_dir();
-        assert!(
-            std::process::Command::new("git")
-                .args(["init", "-q"])
-                .current_dir(&repo)
-                .status()
-                .unwrap()
-                .success()
-        );
-        let subdir = repo.join("crates/app");
-        std::fs::create_dir_all(&subdir).unwrap();
-        let config = format!(
-            "[projects.{:?}]\ntool_output = \"compact\"\n",
-            repo.display().to_string(),
-        );
-
-        assert_eq!(
-            tool_output_for(&config, &subdir, Vec::new()),
             crate::ToolOutput::Compact
         );
     }

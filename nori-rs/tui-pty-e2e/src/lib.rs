@@ -107,6 +107,7 @@ pub struct TuiSession {
     raw_output: Vec<u8>,
     child: Box<dyn portable_pty::Child + Send>,
     _temp_dir: Option<tempfile::TempDir>,
+    nori_home: Option<std::path::PathBuf>,
 }
 
 pub use emulator::Emulator;
@@ -131,8 +132,8 @@ impl Drop for TuiSession {
             let screen = self.screen_contents();
             eprintln!("{}", indent_lines(&screen, indent).style(s.cyan));
 
-            if let Some(tmpdir) = &self._temp_dir {
-                let log_tail = if let Some(log_path) = find_acp_log_file(tmpdir.path()) {
+            if let Some(nori_home) = &self.nori_home {
+                let log_tail = if let Some(log_path) = find_acp_log_file(nori_home) {
                     if let Ok(content) = std::fs::read_to_string(&log_path) {
                         let lines: Vec<&str> = content.lines().collect();
                         let start = lines.len().saturating_sub(150);
@@ -422,6 +423,9 @@ trust_level = "trusted"
             emulator: Emulator::new(rows, cols),
             raw_output: Vec::new(),
             child,
+            nori_home: config
+                .nori_home
+                .or_else(|| temp_dir.as_ref().map(|dir| dir.path().to_path_buf())),
             _temp_dir: temp_dir,
         })
     }
@@ -725,17 +729,15 @@ trust_level = "trusted"
     /// by parsing the ACP tracing logs. Logs are stored in `$NORI_HOME/log/`
     /// with rolling daily naming: `nori-acp.YYYY-MM-DD`.
     pub fn acp_log_path(&self) -> Option<std::path::PathBuf> {
-        self._temp_dir
-            .as_ref()
-            .and_then(|d| find_acp_log_file(d.path()))
+        self.nori_home.as_deref().and_then(find_acp_log_file)
     }
 
-    /// Get the NORI_HOME path (temp directory used for config storage)
+    /// Get the NORI_HOME path (the caller's `with_nori_home` or the temp directory)
     ///
     /// This is useful for E2E tests that need to verify config.toml contents
     /// after user interactions (e.g., trust directory selection).
     pub fn nori_home_path(&self) -> Option<std::path::PathBuf> {
-        self._temp_dir.as_ref().map(|d| d.path().to_path_buf())
+        self.nori_home.clone()
     }
 }
 

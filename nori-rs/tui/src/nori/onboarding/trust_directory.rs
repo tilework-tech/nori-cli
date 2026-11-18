@@ -201,9 +201,10 @@ impl NoriTrustDirectoryWidget {
                 "Failed to save trust for {}: {e}",
                 target.display()
             ));
+        } else {
+            self.trust_target = Some(target);
         }
         self.selection = Some(selection);
-        self.trust_target = Some(target);
         if self.current_tool_output == ToolOutput::Compact {
             return;
         }
