@@ -1,0 +1,87 @@
+Head 286991c3, supported adapter
+{"event": "model_input", "ms": 4583.8, "original": 1, "correction": 0, "queue": 0, "other": 0}
+{"event": "queue_receipt", "ms": 4637.4, "message_id": "d8aeb5d5-78e3-4f97-a7b3-965f3a698ab7", "sender": "host-controller", "status": "queued"}
+{"event": "steer_receipt", "ms": 4659.1, "message_id": "6dfb5442-3892-4592-aef4-e58a5635d0e8", "sender": "host-controller", "status": "injected"}
+{"event": "model_input", "ms": 4795.2, "original": 1, "correction": 1, "queue": 0, "other": 0}
+{"event": "post_reconnect_dedup", "ms": 4795.3, "steer": "injected", "queue": "queued"}
+{"event": "release_correction", "ms": 4795.5, "originalSettled": false}
+{"event": "model_input", "ms": 5012.8, "original": 1, "correction": 1, "queue": 1, "other": 0}
+{"event": "model_input", "ms": 5322.7, "original": 1, "correction": 1, "queue": 2, "other": 0}
+{"event": "drain_settled", "ms": 6077.1, "model_requests": 4}
+claude 0.109.0 /sessions PASS  one steer, two identical queued inputs, three completed prompts
+{"event": "initialize", "ms": 926.7, "name": "@agentclientprotocol/claude-agent-acp", "version": "0.109.0", "steering": true}
+{"event": "model_input", "ms": 4163.7, "original": 1, "correction": 0, "queue": 0, "other": 0}
+{"event": "queue_receipt", "ms": 4183.5, "message_id": "db3761f1-2b33-466e-8442-3665bd26dc98", "sender": "machine-client", "status": "queued"}
+{"event": "steer_receipt", "ms": 4227.3, "message_id": "e5be88fa-faa7-4d1f-b5e2-d08b6d3715e1", "sender": "machine-client", "status": "injected"}
+{"event": "reattached", "ms": 4267.5, "generation": 1}
+{"event": "post_reconnect_dedup", "ms": 4280.5, "steer": "injected", "queue": "queued"}
+{"event": "model_input", "ms": 4556.3, "original": 1, "correction": 1, "queue": 0, "other": 0}
+{"event": "release_correction", "ms": 4556.4, "originalSettled": false}
+{"event": "text", "ms": 4573.2, "text": "Synthetic correction applied."}
+{"event": "original_reply", "ms": 4588.2, "id": "original-prompt", "stop": "end_turn", "usage": 2}
+{"event": "started", "ms": 4590.4, "id": "db3761f1-2b33-466e-8442-3665bd26dc98", "turn": "nori-follow-up-54687ebb-da68-46c5-884b-955674cc00aa"}
+{"event": "model_input", "ms": 4701.9, "original": 1, "correction": 1, "queue": 1, "other": 0}
+{"event": "text", "ms": 4723.1, "text": "Synthetic response."}
+{"event": "finished", "ms": 4738.5, "id": "db3761f1-2b33-466e-8442-3665bd26dc98", "turn": "nori-follow-up-54687ebb-da68-46c5-884b-955674cc00aa", "stop": "end_turn"}
+{"event": "started", "ms": 4739, "id": "275680d8-8089-4c32-abf0-d745bef70f46", "turn": "nori-follow-up-96e193d7-501e-43b6-b925-63ccc844ecdc"}
+{"event": "model_input", "ms": 4884.6, "original": 1, "correction": 1, "queue": 2, "other": 0}
+{"event": "text", "ms": 4906.4, "text": "Synthetic response."}
+{"event": "finished", "ms": 4917.6, "id": "275680d8-8089-4c32-abf0-d745bef70f46", "turn": "nori-follow-up-96e193d7-501e-43b6-b925-63ccc844ecdc", "stop": "end_turn"}
+{"event": "drain_settled", "ms": 5661.5, "model_requests": 4}
+claude 0.109.0 /managed PASS  one steer, two identical queued inputs, three completed prompts
+{"event": "initialize", "ms": 670, "name": "@agentclientprotocol/claude-agent-acp", "version": "0.109.0", "steering": true}
+{"event": "model_input", "ms": 2000.5, "original": 1, "correction": 0, "queue": 0, "other": 0}
+{"event": "steer_receipt", "ms": 2114.8, "message_id": "74f98295-660f-48c8-bf6c-abdd0a562bce", "sender": "machine-client", "status": "injected"}
+{"event": "model_input", "ms": 2172.5, "original": 1, "correction": 0, "queue": 0, "other": 0}
+{"event": "text", "ms": 2176.6, "text": "Synthetic response."}
+{"event": "model_input", "ms": 2234.9, "original": 1, "correction": 1, "queue": 0, "other": 0}
+{"event": "text", "ms": 2243.2, "text": "Synthetic response."}
+{"event": "original_reply", "ms": 2254.8, "id": "original-prompt", "stop": "end_turn", "usage": 6}
+claude 0.109.0 /managed PASS  permission rejected after injection. Original stopReason=end_turn
+Head 286991c3, unadmitted adapter
+{"event": "initialize", "ms": 936.6, "name": "@agentclientprotocol/claude-agent-acp", "version": "0.108.0", "steering": true}
+{"event": "model_input", "ms": 3936.4, "original": 1, "correction": 0, "queue": 0, "other": 0}
+{"event": "queue_receipt", "ms": 3949.4, "message_id": "de14137e-79ae-4779-8541-ede0d5cfab1a", "sender": "machine-client", "status": "queued"}
+{"event": "steer_receipt", "ms": 4001.6, "message_id": "c536de6f-fcb1-40b3-84f6-76967ae05ae1", "sender": "machine-client", "status": "unsupported_queued"}
+{"event": "reattached", "ms": 4084, "generation": 1}
+{"event": "post_reconnect_dedup", "ms": 4094.9, "steer": "unsupported_queued", "queue": "queued"}
+{"event": "release_initial", "ms": 4095.1}
+{"event": "text", "ms": 4137.8, "text": "Synthetic response."}
+{"event": "original_reply", "ms": 4166.9, "id": "original-prompt", "stop": "end_turn", "usage": 2}
+{"event": "started", "ms": 4168.3, "id": "de14137e-79ae-4779-8541-ede0d5cfab1a", "turn": "nori-follow-up-c65bf65f-1214-4d5e-b250-fe9adc2d6022"}
+{"event": "model_input", "ms": 4355, "original": 1, "correction": 0, "queue": 1, "other": 0}
+{"event": "text", "ms": 4365.5, "text": "Synthetic response."}
+{"event": "finished", "ms": 4397.5, "id": "de14137e-79ae-4779-8541-ede0d5cfab1a", "turn": "nori-follow-up-c65bf65f-1214-4d5e-b250-fe9adc2d6022", "stop": "end_turn"}
+{"event": "started", "ms": 4397.6, "id": "c536de6f-fcb1-40b3-84f6-76967ae05ae1", "turn": "nori-follow-up-ee8a8836-8b85-461a-9594-f595a57e0cf3"}
+{"event": "model_input", "ms": 4564.3, "original": 1, "correction": 1, "queue": 1, "other": 0}
+{"event": "text", "ms": 4577.8, "text": "Synthetic response."}
+{"event": "finished", "ms": 4594.6, "id": "c536de6f-fcb1-40b3-84f6-76967ae05ae1", "turn": "nori-follow-up-ee8a8836-8b85-461a-9594-f595a57e0cf3", "stop": "end_turn"}
+{"event": "started", "ms": 4602.6, "id": "0f26c175-9bcc-4cf9-adc9-b321a79eab58", "turn": "nori-follow-up-3a04c0ad-a42d-4226-ae28-48853e8048bb"}
+{"event": "model_input", "ms": 4785.8, "original": 1, "correction": 1, "queue": 2, "other": 0}
+{"event": "text", "ms": 4804, "text": "Synthetic response."}
+{"event": "finished", "ms": 4814.4, "id": "0f26c175-9bcc-4cf9-adc9-b321a79eab58", "turn": "nori-follow-up-3a04c0ad-a42d-4226-ae28-48853e8048bb", "stop": "end_turn"}
+{"event": "provider_suggestion", "ms": 4895.7, "original": 1, "correction": 1, "queue": 2, "other": 0}
+claude 0.108.0 /managed PASS unsupported FIFO: original, queue, deferred steering, second deliberate queue
+Base e5cc1066, same 0.109.0 adapter
+{"event":"initialize","ms":372,"name":"@agentclientprotocol/claude-agent-acp","version":"0.109.0","steering":true}
+{"event":"model_input","ms":1325.3,"original":1,"correction":0,"queue":0,"other":0}
+{"event":"queue_receipt","ms":1326.7,"message_id":"3b58c887-fc25-45d5-9010-5e06f5056037","sender":"machine-client","status":"queued"}
+{"event":"steer_receipt","ms":1329.6,"message_id":"c0f4202d-2e69-4403-b9a8-114e418fc5d4","sender":"machine-client","status":"unsupported_queued"}
+{"event":"reattached","ms":1378,"generation":1}
+{"event":"post_reconnect_dedup","ms":1380,"steer":"unsupported_queued","queue":"queued"}
+{"event":"release_initial","ms":1380.2}
+{"event":"text","ms":1422.6,"text":"Synthetic response."}
+{"event":"original_reply","ms":1422.8,"id":"original-prompt","stop":"end_turn","usage":2}
+{"event":"started","ms":1423,"id":"3b58c887-fc25-45d5-9010-5e06f5056037","turn":"nori-follow-up-c8b95584-b06f-48f2-827b-0f2bbcc33c4f"}
+{"event":"model_input","ms":1470.6,"original":1,"correction":0,"queue":1,"other":0}
+{"event":"text","ms":1475.1,"text":"Synthetic response."}
+{"event":"finished","ms":1485.4,"id":"3b58c887-fc25-45d5-9010-5e06f5056037","turn":"nori-follow-up-c8b95584-b06f-48f2-827b-0f2bbcc33c4f","stop":"end_turn"}
+{"event":"started","ms":1485.8,"id":"c0f4202d-2e69-4403-b9a8-114e418fc5d4","turn":"nori-follow-up-61a156a1-65b8-42a2-9609-c4c55cd4d1fc"}
+{"event":"model_input","ms":1562,"original":1,"correction":1,"queue":1,"other":0}
+{"event":"text","ms":1569.4,"text":"Synthetic response."}
+{"event":"finished","ms":1577.6,"id":"c0f4202d-2e69-4403-b9a8-114e418fc5d4","turn":"nori-follow-up-61a156a1-65b8-42a2-9609-c4c55cd4d1fc","stop":"end_turn"}
+{"event":"started","ms":1578.2,"id":"255fdb76-d09d-4a84-a799-1028ab39393b","turn":"nori-follow-up-df91e51a-2a2f-4f08-a16f-8ca3637931eb"}
+{"event":"model_input","ms":1610.2,"original":1,"correction":1,"queue":2,"other":0}
+{"event":"text","ms":1615.5,"text":"Synthetic response."}
+{"event":"finished","ms":1620.9,"id":"255fdb76-d09d-4a84-a799-1028ab39393b","turn":"nori-follow-up-df91e51a-2a2f-4f08-a16f-8ca3637931eb","stop":"end_turn"}
+claude 0.109.0 /managed PASS unsupported FIFO: original, queue, deferred steering, second deliberate queue

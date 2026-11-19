@@ -1,0 +1,69 @@
+direct | 286991c3 | actual keys and loopback inference, elapsed from ACP initialize
+     0 ms  initialize {'name': '@agentclientprotocol/claude-agent-acp', 'title': 'Claude Agent', 'version': '0.109.0'} {'steering': {'supported': True}}
+  1813 ms  keyboard Enter | Survey the amber grove.
+  1820 ms  ACP session/prompt a88e5adc-ccf2-4733-9511-d07544895cc3 | ['Survey the amber grove.']
+  1996 ms  model [original, correction, queue] = [1, 0, 0]
+  2612 ms  keyboard Tab | Count the blue flags.
+  3553 ms  keyboard Enter | Inspect the east path.
+  3562 ms  ACP _session/steering 4f2a2440-8aff-43d6-b20b-2c5ff51fdd1c | ['Inspect the east path.']
+  3565 ms  ACP reply 4f2a2440-8aff-43d6-b20b-2c5ff51fdd1c | {"outcome": "injected"}
+  3653 ms  model [original, correction, queue] = [1, 1, 0]
+  5244 ms  assistant chunk | East path surveyed.
+  5255 ms  ACP reply a88e5adc-ccf2-4733-9511-d07544895cc3 | {"stopReason": "end_turn", "usage": {"inputTokens": 1, "outputTokens": 1, "cachedReadTokens": 0, "cachedWriteTokens": 0, "totalTokens": 2}}
+  5259 ms  ACP session/prompt 25890556-9a5c-47e9-bbdc-f9a653cbd3f7 | ['Count the blue flags.']
+  5352 ms  model [original, correction, queue] = [1, 1, 1]
+  5375 ms  assistant chunk | Flag count complete.
+  5384 ms  ACP reply 25890556-9a5c-47e9-bbdc-f9a653cbd3f7 | {"stopReason": "end_turn", "usage": {"inputTokens": 1, "outputTokens": 1, "cachedReadTokens": 0, "cachedWriteTokens": 0, "totalTokens": 2}}
+
+direct | e5cc1066 | actual keys and loopback inference, elapsed from ACP initialize
+     0 ms  initialize {'name': '@agentclientprotocol/claude-agent-acp', 'title': 'Claude Agent', 'version': '0.109.0'} {'steering': {'supported': True}}
+  1820 ms  keyboard Enter | Survey the amber grove.
+  1828 ms  ACP session/prompt 7e7b7ca7-fa8f-43c7-8f5f-972a4cd006d0 | ['Survey the amber grove.']
+  1960 ms  model [original, correction, queue] = [1, 0, 0]
+  2566 ms  keyboard Tab | Count the blue flags.
+  3519 ms  keyboard Enter | Inspect the east path.
+  6088 ms  assistant chunk | Grove survey complete.
+  6116 ms  ACP reply 7e7b7ca7-fa8f-43c7-8f5f-972a4cd006d0 | {"stopReason": "end_turn", "usage": {"inputTokens": 1, "outputTokens": 1, "cachedReadTokens": 0, "cachedWriteTokens": 0, "totalTokens": 2}}
+  6117 ms  ACP session/prompt 816f12a1-07b6-43f0-9c58-dec420826061 | ['Count the blue flags.']
+  6229 ms  model [original, correction, queue] = [1, 0, 1]
+  6239 ms  assistant chunk | Flag count complete.
+  6253 ms  ACP reply 816f12a1-07b6-43f0-9c58-dec420826061 | {"stopReason": "end_turn", "usage": {"inputTokens": 1, "outputTokens": 1, "cachedReadTokens": 0, "cachedWriteTokens": 0, "totalTokens": 2}}
+  6264 ms  ACP session/prompt b70add59-099d-4193-b5e0-1ba28580da2d | ['Inspect the east path.']
+  6332 ms  model [original, correction, queue] = [1, 1, 1]
+  6346 ms  assistant chunk | East path surveyed.
+  6366 ms  ACP reply b70add59-099d-4193-b5e0-1ba28580da2d | {"stopReason": "end_turn", "usage": {"inputTokens": 1, "outputTokens": 1, "cachedReadTokens": 0, "cachedWriteTokens": 0, "totalTokens": 2}}
+
+attach | 286991c3 | actual keys and loopback inference, elapsed from ACP initialize
+     0 ms  initialize {'name': '@agentclientprotocol/claude-agent-acp', 'title': 'Claude Agent', 'version': '0.109.0'} {'steering': {'supported': True}}
+  1885 ms  keyboard Enter | Survey the amber grove.
+  1911 ms  ACP session/prompt b76eabf3-2a40-41d1-8c00-891c9b7e6f85 | ['Survey the amber grove.']
+  2359 ms  model [original, correction, queue] = [1, 0, 0]
+  2981 ms  keyboard Tab | Count the blue flags.
+  3901 ms  keyboard Enter | Inspect the east path.
+  3907 ms  ACP _session/steering dc0055cb-b452-45af-94ff-34617d4d8cb7 | ['Inspect the east path.']
+  3909 ms  ACP reply dc0055cb-b452-45af-94ff-34617d4d8cb7 | {"outcome": "injected"}
+  3937 ms  model [original, correction, queue] = [1, 1, 0]
+  6017 ms  assistant chunk | East path surveyed.
+  6058 ms  ACP reply b76eabf3-2a40-41d1-8c00-891c9b7e6f85 | {"stopReason": "end_turn", "usage": {"inputTokens": 1, "outputTokens": 1, "cachedReadTokens": 0, "cachedWriteTokens": 0, "totalTokens": 2}}
+  6061 ms  ACP session/prompt ccf48a23-8259-4123-a3f2-01f18246bb8e | ['Count the blue flags.']
+  6275 ms  model [original, correction, queue] = [1, 1, 1]
+  6295 ms  assistant chunk | Flag count complete.
+  6330 ms  ACP reply ccf48a23-8259-4123-a3f2-01f18246bb8e | {"stopReason": "end_turn", "usage": {"inputTokens": 1, "outputTokens": 1, "cachedReadTokens": 0, "cachedWriteTokens": 0, "totalTokens": 2}}
+
+attach | e5cc1066 | actual keys and loopback inference, elapsed from ACP initialize
+     0 ms  initialize {'name': '@agentclientprotocol/claude-agent-acp', 'title': 'Claude Agent', 'version': '0.109.0'} {'steering': {'supported': True}}
+  1844 ms  keyboard Enter | Survey the amber grove.
+  1853 ms  ACP session/prompt 0e0ed945-bb74-4b14-8949-1f7404b3c548 | ['Survey the amber grove.']
+  2250 ms  model [original, correction, queue] = [1, 0, 0]
+  2860 ms  keyboard Tab | Count the blue flags.
+  3477 ms  keyboard Enter | Inspect the east path.
+  6060 ms  assistant chunk | Grove survey complete.
+  6091 ms  ACP reply 0e0ed945-bb74-4b14-8949-1f7404b3c548 | {"stopReason": "end_turn", "usage": {"inputTokens": 1, "outputTokens": 1, "cachedReadTokens": 0, "cachedWriteTokens": 0, "totalTokens": 2}}
+  6094 ms  ACP session/prompt e94698c5-7ab4-4969-86c5-6df91664d936 | ['Count the blue flags.']
+  6188 ms  model [original, correction, queue] = [1, 0, 1]
+  6198 ms  assistant chunk | Flag count complete.
+  6238 ms  ACP reply e94698c5-7ab4-4969-86c5-6df91664d936 | {"stopReason": "end_turn", "usage": {"inputTokens": 1, "outputTokens": 1, "cachedReadTokens": 0, "cachedWriteTokens": 0, "totalTokens": 2}}
+  6244 ms  ACP session/prompt 5fec8ea7-285d-4561-8dfa-a90d7aea7e41 | ['Inspect the east path.']
+  6369 ms  model [original, correction, queue] = [1, 1, 1]
+  6387 ms  assistant chunk | East path surveyed.
+  6404 ms  ACP reply 5fec8ea7-285d-4561-8dfa-a90d7aea7e41 | {"stopReason": "end_turn", "usage": {"inputTokens": 1, "outputTokens": 1, "cachedReadTokens": 0, "cachedWriteTokens": 0, "totalTokens": 2}}
