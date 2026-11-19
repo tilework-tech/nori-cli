@@ -82,7 +82,12 @@ impl ChatWidget {
         conversation_id: Option<nori_harness::ConversationId>,
         result: Result<ContextSnapshot, String>,
     ) {
-        if generation != self.session_generation || conversation_id != self.conversation_id {
+        // A request made while the session was starting has no conversation
+        // yet. It belongs to this widget's session once that session reports
+        // its ID, so only a different conversation makes the result stale.
+        if generation != self.session_generation
+            || conversation_id.is_some_and(|requested| Some(requested) != self.conversation_id)
+        {
             return;
         }
         match result {
