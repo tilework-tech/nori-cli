@@ -475,10 +475,13 @@ mod tests {
         let mut queue = queue_of(&["alpha", "dup", "dup"]);
         assert!(queue.focus());
         queue.move_selection(-1);
-        assert_snapshot!(
-            "render_focused_list_with_a_selected_row",
-            format!("{:?}", render(&queue, 72))
-        );
+        // crossterm names the Delete key "Fwd Del" on macOS and "Del"
+        // elsewhere, so each platform keeps its own expected hint.
+        #[cfg(target_os = "macos")]
+        let name = "render_focused_list_with_a_selected_row_macos";
+        #[cfg(not(target_os = "macos"))]
+        let name = "render_focused_list_with_a_selected_row";
+        assert_snapshot!(name, format!("{:?}", render(&queue, 72)));
     }
 
     #[test]
