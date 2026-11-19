@@ -43,7 +43,7 @@ pub fn supports_guarded_steering(initialize: &Value) -> bool {
             ),
             (
                 Some("@agentclientprotocol/claude-agent-acp"),
-                Some("0.102.0" | "0.108.1")
+                Some("0.102.0" | "0.108.1" | "0.109.0")
             ) | (Some("@agentclientprotocol/codex-acp"), Some("2.7.0"))
         )
 }
