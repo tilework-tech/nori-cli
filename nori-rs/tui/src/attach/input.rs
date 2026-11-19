@@ -37,21 +37,23 @@ impl Runtime {
         {
             return true;
         }
-        if crate::nori::hotkey_match::matches_binding(&self.state.parent_binding, &key)
-            && let Some(parent) = self.state.selected.as_ref().and_then(|id| {
+        // The parent key only ever navigates. Without a parent it does
+        // nothing, so it never reaches the composer or its history recall.
+        if crate::nori::hotkey_match::matches_binding(&self.state.parent_binding, &key) {
+            if let Some(parent) = self.state.selected.as_ref().and_then(|id| {
                 self.state
                     .sessions
                     .iter()
                     .find(|row| &row.session_id == id)
                     .and_then(|row| row.delegating_parent().map(str::to_owned))
-            })
-            && self
+            }) && self
                 .state
                 .sessions
                 .iter()
                 .any(|row| row.session_id == parent)
-        {
-            self.open_session(parent);
+            {
+                self.open_session(parent);
+            }
             return true;
         }
         if crate::nori::hotkey_match::matches_binding(&self.session_list_binding, &key) {

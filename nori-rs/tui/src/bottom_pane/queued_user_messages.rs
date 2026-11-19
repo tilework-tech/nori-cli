@@ -123,9 +123,10 @@ impl QueuedUserMessages {
         self.focus = ListFocus::Blurred;
     }
 
-    /// Move the selection by `step` editable rows, stopping at either end.
-    /// After the selection was cleared, j picks the row now in its place and
-    /// k the one before it.
+    /// Move the selection by `step` editable rows. Moving up stops at the
+    /// oldest row; moving down past the newest row leaves the list so the
+    /// composer has focus again. After the selection was cleared, j picks the
+    /// row now in its place and k the one before it.
     pub(crate) fn move_selection(&mut self, step: isize) {
         let ids = self.editable_ids();
         let last = ids.len().saturating_sub(1);
@@ -135,6 +136,10 @@ impl QueuedUserMessages {
                 let Some(index) = self.selected_index() else {
                     return;
                 };
+                if step > 0 && index >= last {
+                    self.focus = ListFocus::Blurred;
+                    return;
+                }
                 index.saturating_add_signed(step)
             }
             ListFocus::Cleared { index } if step > 0 => *index,
@@ -158,19 +163,6 @@ impl QueuedUserMessages {
         if let Some(next) = ids.get(index).or_else(|| ids.last()) {
             self.focus = ListFocus::Selected(next.clone());
         }
-        Some(id)
-    }
-
-    /// Hide and return the ID of the newest visible message that can return
-    /// to the composer.
-    pub(crate) fn start_reclaim_newest(&mut self) -> Option<String> {
-        let id = self
-            .visible_rows()
-            .filter(|row| row.editable)
-            .last()?
-            .id
-            .clone();
-        self.reclaiming.push(id.clone());
         Some(id)
     }
 
@@ -303,9 +295,7 @@ impl QueuedUserMessages {
                 Line::from(vec![
                     "    ".into(),
                     key_hint::plain(KeyCode::Up).into(),
-                    " select · ".into(),
-                    key_hint::alt(KeyCode::Up).into(),
-                    " edit".into(),
+                    " select".into(),
                 ])
                 .dim(),
             );
@@ -432,10 +422,11 @@ mod tests {
     #[test]
     fn a_row_being_reclaimed_is_hidden_until_the_queue_confirms() {
         let mut queue = queue_of(&["first", "second"]);
+        assert!(queue.focus());
 
-        assert_eq!(queue.start_reclaim_newest().as_deref(), Some("evt-1"));
-        assert_eq!(queue.start_reclaim_newest().as_deref(), Some("evt-0"));
-        assert_eq!(queue.start_reclaim_newest(), None);
+        assert_eq!(queue.start_reclaim_selected().as_deref(), Some("evt-1"));
+        assert_eq!(queue.start_reclaim_selected().as_deref(), Some("evt-0"));
+        assert_eq!(queue.start_reclaim_selected(), None);
         assert!(queue.is_empty());
         assert_eq!(queue.desired_height(40), 0);
     }
@@ -443,7 +434,8 @@ mod tests {
     #[test]
     fn a_failed_reclaim_shows_the_row_again_while_it_is_still_queued() {
         let mut queue = queue_of(&["first"]);
-        let id = queue.start_reclaim_newest().expect("editable row");
+        assert!(queue.focus());
+        let id = queue.start_reclaim_selected().expect("editable row");
 
         queue.finish_reclaim(&id);
 

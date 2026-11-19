@@ -51,8 +51,8 @@ impl App {
             tui.frame_requester().schedule_frame();
             return true;
         }
-        // Outside a delegated child there is no parent: the key takes back a
-        // queued message when there is one, and otherwise does nothing.
+        // Outside a delegated child there is no parent, so the key does
+        // nothing and never reaches the queue, the draft, or history recall.
         if parent_session {
             if let Some(parent) = self.on_screen_parent()
                 && let Some(target) = self
@@ -62,9 +62,8 @@ impl App {
             {
                 self.show_session(target.generation);
                 tui.frame_requester().schedule_frame();
-                return true;
             }
-            return !self.chat_widget.has_reclaimable_queued_message();
+            return true;
         }
         let Some(direction) = direction else {
             return false;
