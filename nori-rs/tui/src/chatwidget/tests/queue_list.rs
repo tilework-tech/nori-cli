@@ -292,25 +292,119 @@ fn typing_leaves_the_list_and_reaches_the_composer() {
     assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
 }
 
+/// The head `dup` is selected while two identical `dup` rows wait behind it.
+fn select_the_head_of_identical_rows(chat: &mut ChatWidget) {
+    show_queue(
+        chat,
+        vec![
+            entry("a", "dup", true),
+            entry("b", "dup", true),
+            entry("c", "tail", true),
+        ],
+        None,
+    );
+    press(chat, KeyCode::Up);
+    press(chat, KeyCode::Up);
+    press(chat, KeyCode::Up);
+    assert_eq!(rows(chat), ["> dup", "dup", "tail"]);
+}
+
+fn head_starts(chat: &mut ChatWidget) {
+    show_queue(
+        chat,
+        vec![entry("b", "dup", true), entry("c", "tail", true)],
+        None,
+    );
+}
+
 #[test]
-fn the_selection_moves_on_when_its_message_starts() {
+fn delete_after_the_selected_message_starts_waits_for_a_fresh_pick() {
+    let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+    select_the_head_of_identical_rows(&mut chat);
+    while rx.try_recv().is_ok() {}
+
+    head_starts(&mut chat);
+    assert_eq!(rows(&chat), ["dup", "tail"], "nothing is selected now");
+    press(&mut chat, KeyCode::Char('x'));
+    press(&mut chat, KeyCode::Delete);
+
+    assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
+    assert_eq!(rows(&chat), ["dup", "tail"], "the neighbour survives");
+    assert_eq!(chat.composer_text(), "");
+
+    press(&mut chat, KeyCode::Char('j'));
+    assert_eq!(rows(&chat), ["> dup", "tail"]);
+    press(&mut chat, KeyCode::Char('x'));
+    assert_eq!(harness_requests(&mut rx), ["Remove b"]);
+}
+
+#[test]
+fn edit_after_the_selected_message_starts_waits_for_a_fresh_pick() {
+    let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+    select_the_head_of_identical_rows(&mut chat);
+    while rx.try_recv().is_ok() {}
+
+    head_starts(&mut chat);
+    press(&mut chat, KeyCode::Enter);
+    press(&mut chat, KeyCode::Char('e'));
+
+    assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
+    assert_eq!(chat.composer_text(), "", "nothing lands in the composer");
+    assert_eq!(rows(&chat), ["dup", "tail"]);
+
+    press(&mut chat, KeyCode::Char('k'));
+    assert_eq!(rows(&chat), ["> dup", "tail"]);
+    press(&mut chat, KeyCode::Enter);
+    assert_eq!(harness_requests(&mut rx), ["Edit b"]);
+}
+
+#[test]
+fn the_list_says_why_the_selection_was_cleared() {
+    let (mut chat, _rx, _unused_rx) = make_chatwidget_manual();
+    select_the_head_of_identical_rows(&mut chat);
+
+    head_starts(&mut chat);
+
+    let lines = queue_lines(&chat);
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("selected message started")),
+        "{lines:#?}"
+    );
+}
+
+#[test]
+fn the_selection_stays_on_its_message_when_another_one_starts() {
     let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
     three_queued(&mut chat, None);
     while rx.try_recv().is_ok() {}
 
     press(&mut chat, KeyCode::Up);
-    press(&mut chat, KeyCode::Up);
-    press(&mut chat, KeyCode::Up);
-    assert_eq!(rows(&chat), ["> alpha", "dup", "dup"]);
-
+    assert_eq!(rows(&chat), ["alpha", "dup", "> dup"]);
     show_queue(
         &mut chat,
         vec![entry("b", "dup", true), entry("c", "dup", true)],
         None,
     );
-    assert_eq!(rows(&chat), ["> dup", "dup"]);
-    press(&mut chat, KeyCode::Enter);
-    assert_eq!(harness_requests(&mut rx), ["Edit b"]);
+
+    assert_eq!(rows(&chat), ["dup", "> dup"]);
+    press(&mut chat, KeyCode::Char('x'));
+    assert_eq!(harness_requests(&mut rx), ["Remove c"]);
+}
+
+#[test]
+fn esc_closes_a_list_whose_selection_was_cleared() {
+    let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+    select_the_head_of_identical_rows(&mut chat);
+    head_starts(&mut chat);
+    while rx.try_recv().is_ok() {}
+
+    press(&mut chat, KeyCode::Esc);
+    type_text(&mut chat, "x");
+
+    assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
+    assert_eq!(chat.composer_text(), "x");
 }
 
 #[test]

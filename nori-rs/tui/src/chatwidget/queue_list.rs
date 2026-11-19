@@ -35,8 +35,9 @@ impl ChatWidget {
             KeyCode::Char('j') | KeyCode::Down => self.bottom_pane.move_queue_selection(1),
             KeyCode::Char('k') | KeyCode::Up => self.bottom_pane.move_queue_selection(-1),
             KeyCode::Enter | KeyCode::Char('e') => {
-                self.take_selected_queued_message(QueuedPromptAction::Edit);
-                self.bottom_pane.blur_queue_list();
+                if self.take_selected_queued_message(QueuedPromptAction::Edit) {
+                    self.bottom_pane.blur_queue_list();
+                }
             }
             KeyCode::Delete | KeyCode::Char('x') => {
                 self.take_selected_queued_message(QueuedPromptAction::Remove);
@@ -51,12 +52,15 @@ impl ChatWidget {
         true
     }
 
-    fn take_selected_queued_message(&mut self, action: QueuedPromptAction) {
-        if let Some(event_id) = self.bottom_pane.start_selected_queued_message_reclaim() {
-            self.app_event_tx.send(AppEvent::HarnessAction(
-                HarnessAction::ReclaimQueuedPrompt { event_id, action },
-            ));
-        }
+    /// Returns `false` when nothing is selected, so the key does nothing.
+    fn take_selected_queued_message(&mut self, action: QueuedPromptAction) -> bool {
+        let Some(event_id) = self.bottom_pane.start_selected_queued_message_reclaim() else {
+            return false;
+        };
+        self.app_event_tx.send(AppEvent::HarnessAction(
+            HarnessAction::ReclaimQueuedPrompt { event_id, action },
+        ));
+        true
     }
 
     /// Returns `false` when there is no editable message to select, so Up

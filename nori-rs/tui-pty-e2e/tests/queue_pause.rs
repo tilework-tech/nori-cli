@@ -210,3 +210,81 @@ fn a_turn_error_holds_the_queue_until_enter_resumes_it() {
     std::thread::sleep(Duration::from_secs(2));
     assert_eq!(delivered_prompts(&log), delivered, "each is sent once");
 }
+
+/// Queue two identical rows and a tail behind `turn one`, then select the
+/// head row and wait until it leaves the queue to start its turn.
+fn select_head_and_let_it_start(session: &mut TuiSession, log: &Path) {
+    session.submit_input("turn one").unwrap();
+    wait_for_deliveries(log, 1, TIMEOUT);
+    for text in ["dup", "dup", "tail"] {
+        queue_input(session, text);
+    }
+    session
+        .wait_for(
+            |screen| queued_rows(screen) == ["dup", "dup", "tail"],
+            TIMEOUT,
+        )
+        .expect("three queued rows");
+    key(session, Key::Up);
+    key(session, Key::Char('k'));
+    key(session, Key::Char('k'));
+    session
+        .wait_for(
+            |screen| queued_rows(screen) == ["> dup", "dup", "tail"],
+            TIMEOUT,
+        )
+        .expect("the head row is selected");
+    assert_eq!(
+        wait_for_deliveries(log, 2, Duration::from_secs(30)).len(),
+        2
+    );
+    session
+        .wait_for(|screen| queued_rows(screen).len() == 2, TIMEOUT)
+        .expect("the selected row started");
+    assert_eq!(
+        queued_rows(&session.screen_contents()),
+        ["dup", "tail"],
+        "nothing is selected once the selected row started"
+    );
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn delete_after_the_selected_message_starts_spares_its_identical_neighbour() {
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("prompts.jsonl");
+    let mut session = spawn_session(&log, "6000");
+    select_head_and_let_it_start(&mut session, &log);
+
+    key(&mut session, Key::Char('x'));
+    std::thread::sleep(Duration::from_secs(1));
+    assert_eq!(
+        queued_rows(&session.screen_contents()),
+        ["dup", "tail"],
+        "the neighbour is still queued"
+    );
+
+    let delivered = wait_for_deliveries(&log, 4, Duration::from_secs(40));
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(delivered, ["turn one", "dup", "dup", "tail"]);
+    assert_eq!(delivered_prompts(&log), delivered, "each is sent once");
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn edit_after_the_selected_message_starts_spares_its_identical_neighbour() {
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("prompts.jsonl");
+    let mut session = spawn_session(&log, "6000");
+    select_head_and_let_it_start(&mut session, &log);
+
+    key(&mut session, Key::Enter);
+    std::thread::sleep(Duration::from_secs(1));
+    let screen = session.screen_contents();
+    assert_eq!(queued_rows(&screen), ["dup", "tail"], "{screen}");
+
+    let delivered = wait_for_deliveries(&log, 4, Duration::from_secs(40));
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(delivered, ["turn one", "dup", "dup", "tail"]);
+    assert_eq!(delivered_prompts(&log), delivered, "each is sent once");
+}
