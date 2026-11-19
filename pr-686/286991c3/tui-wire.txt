@@ -1,0 +1,15 @@
+direct / built-in npx @agentclientprotocol/claude-agent-acp@latest / live ACP 0.109.0
+  original ACP session/prompt af4b2f7c-01f4-41d7-9bb3-4ae07acc490c
+  Tab: queued cedar; Enter: _session/steering north; receipt injected
+  corrected provider request held; queue absent; original returned only after north-row output
+  original af4b2f7c-01f4-41d7-9bb3-4ae07acc490c returned end_turn / totalTokens=2
+  queued ACP session/prompt 56f69229-960d-4096-a540-514d535eef66 dispatched once, returned end_turn / totalTokens=2
+  provider input multiplicities [original, correction, queue]: [1,0,0] -> [1,1,0] -> [1,1,1]
+
+attach / built-in npx @agentclientprotocol/claude-agent-acp@latest / live ACP 0.109.0
+  original ACP session/prompt 83aefc8f-46cb-46d9-819a-a6ae0e63b30e
+  Tab: queued cedar; Enter: _session/steering north; receipt injected
+  corrected provider request held; queue absent; original returned only after north-row output
+  original 83aefc8f-46cb-46d9-819a-a6ae0e63b30e returned end_turn / totalTokens=2
+  queued ACP session/prompt e2d72642-9646-4e0b-ab71-d5a9a4bc517f dispatched once, returned end_turn / totalTokens=2
+  provider input multiplicities [original, correction, queue]: [1,0,0] -> [1,1,0] -> [1,1,1]

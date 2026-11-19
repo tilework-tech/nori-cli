@@ -1,0 +1,10 @@
+init claude-agent-acp {'name': '@agentclientprotocol/claude-agent-acp', 'title': 'Claude Agent', 'version': '0.109.0'} {'steering': {'supported': True}} []
+idle {'outcome': 'promptRequired', 'reason': 'noRunningTurn'}
+at HTTP gate True original open True
+wire reply id 5
+busy {'outcome': 'injected'} original open True
+http /v1/messages?beta=true base follow
+update agent_message_chunk {'type': 'text', 'text': 'SYNTHETIC_CORRECTED_REPLY'}
+wire reply id 4
+original id 4: end_turn; totalTokens=2
+after {'outcome': 'promptRequired', 'reason': 'noRunningTurn'}
