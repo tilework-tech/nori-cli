@@ -106,7 +106,9 @@ edits show only the file and line counts.
 
 The setting is read in this order, first match wins:
 
-1. `-c tui.tool_output=...` on the command line.
+1. `-c tui.tool_output=...` (or a `-c tui={...}` table that sets
+   `tool_output`) on the command line. It applies to that run only and is
+   never saved.
 2. `tool_output` in the active project's `[projects."<path>"]` entry. The
    active project is the entry for the exact working directory, otherwise the
    entry for its git repository root; linked worktrees use the main
@@ -118,12 +120,14 @@ The transcript view (Ctrl+T or Ctrl+O) always shows the full form. `nori
 attach` does not read project settings and always shows full output.
 
 After the first-run directory-trust question, Nori asks "Use compact tool
-output in this project?" with Full preselected. Choosing Compact writes
-`tool_output = "compact"` to the same project entry the trust answer was saved
-under (the git repository root, or the working directory outside a
-repository). Choosing Full or pressing Esc writes nothing. The question is
-skipped when compact output already applies (from `[tui] tool_output` or the
-command line). Directories that are already trusted never see the trust
+output in this project?" with Full preselected. Choosing Compact or Full
+writes `tool_output = "compact"` or `"full"` to the same project entry the
+trust answer was saved under (the git repository root, or the working directory
+outside a repository). Pressing Esc writes nothing, so the project keeps
+following `[tui] tool_output` (including a value added later) or the full
+default. The question is skipped only when a saved `[tui] tool_output =
+"compact"` already applies; a one-off `-c` override does not skip it.
+Directories that are already trusted never see the trust
 screen, so they keep full output unless you set the key yourself.
 
 ## Several sessions in one TUI: `[features] multi_session`

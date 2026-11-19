@@ -5,10 +5,13 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fs::File;
+use std::fs::TryLockError;
 use std::fs::{self};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
@@ -34,6 +37,9 @@ use self::store::private_file;
 use self::store::sync_directory;
 use super::StorageFailure;
 
+const LOCK_WAIT: Duration = Duration::from_secs(2);
+const LOCK_RETRY: Duration = Duration::from_millis(10);
+
 pub struct Journal {
     root: PathBuf,
     incarnation: String,
@@ -55,8 +61,21 @@ impl Journal {
             .create(true)
             .truncate(false)
             .open(root.join("journal.lock"))?;
-        lock.try_lock()
-            .context("managed journal already has a writer")?;
+        // flock belongs to the open file description, so a child spawned on
+        // another thread holds it until exec or exit. Wait out that window
+        // before treating the lock as owned by another writer.
+        let deadline = Instant::now() + LOCK_WAIT;
+        loop {
+            match lock.try_lock() {
+                Ok(()) => break,
+                Err(TryLockError::WouldBlock) if Instant::now() < deadline => {
+                    std::thread::sleep(LOCK_RETRY);
+                }
+                Err(error) => {
+                    return Err(error).context("managed journal already has a writer");
+                }
+            }
+        }
         sync_directory(root)?;
         if let Some(parent) = root.parent().filter(|path| !path.as_os_str().is_empty()) {
             sync_directory(parent)?;

@@ -567,12 +567,14 @@ Ctrl+C, Ctrl+T, and Ctrl+O close it.
 The directory-trust onboarding step
 ([`trust_directory`](src/nori/onboarding/trust_directory.rs)) asks a second,
 skippable question after either trust answer: "Use compact tool output in this
-project?" Full is preselected. Compact writes `tool_output = "compact"` for the
-same project path the trust answer used (git root or cwd) through
-`NoriConfigEdits::set_project_tool_output`; Full and Esc write nothing, so no
-preference is recorded. The onboarding screen passes the resolved
-`config.tool_output` to the widget, and the question is not shown when compact
-already applies. The step completes only after the question is answered or
+project?" Full is preselected. Either choice writes `tool_output` (`"compact"`
+or `"full"`) for the same project path the trust answer used (git root or cwd)
+through `NoriConfigEdits::set_project_tool_output`. Esc writes nothing, so the
+project keeps inheriting `[tui] tool_output` or the full default. The
+onboarding screen tells the widget whether to ask: it asks when the resolved
+`config.tool_output` is full or when `config.tool_output_from_command_line` is
+set, so a one-off `-c` override never hides the question and is never saved.
+The step completes only after the question is answered or
 skipped. Directories that are already trusted never reach this step.
 
 #### Inline transcript reflow

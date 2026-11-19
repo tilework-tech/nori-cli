@@ -133,7 +133,11 @@ fn context_can_inspect_an_unfinished_turn_without_interrupting_it() {
 #[test]
 fn context_command_renders_unknown_usage_without_prompting_the_agent() {
     let mut session = TuiSession::spawn(45, 100).expect("start Nori");
-    session.wait_for_text("›", TIMEOUT).expect("composer");
+    // The welcome card also contains the composer's prompt mark. Wait for the
+    // session itself, which announces its options once it has started.
+    session
+        .wait_for_text("Mock ACP options", TIMEOUT)
+        .expect("session started");
     session.submit_input("/context").expect("submit command");
     session
         .wait_for_text("Waiting for context usage", TIMEOUT)

@@ -39,8 +39,8 @@ pub(crate) struct NoriTrustDirectoryWidget {
     /// User's selection, if any.
     pub selection: Option<TrustDirectorySelection>,
     menu: MenuState<TrustDirectorySelection>,
-    /// Inline tool output that applies here before any project opt-in.
-    current_tool_output: ToolOutput,
+    /// Whether to ask the tool output question after the trust answer.
+    ask_tool_output: bool,
     /// Project saved by the trust answer; the compact opt-in uses the same key.
     trust_target: Option<PathBuf>,
     /// Second, skippable question shown after the trust choice.
@@ -112,19 +112,17 @@ impl KeyboardHandler for NoriTrustDirectoryWidget {
         };
         if let Some(menu) = &mut self.tool_output_menu {
             match menu.handle(action) {
-                MenuOutcome::Activated(ToolOutput::Compact) => {
+                MenuOutcome::Activated(tool_output) => {
                     if let Some(target) = &self.trust_target
                         && let Err(e) = NoriConfigEdits::new(&self.nori_home)
-                            .set_project_tool_output(target, ToolOutput::Compact)
+                            .set_project_tool_output(target, tool_output)
                             .apply_blocking()
                     {
                         tracing::error!("Failed to save tool_output: {e:?}");
                     }
                     self.tool_output_menu = None;
                 }
-                MenuOutcome::Activated(ToolOutput::Full) | MenuOutcome::Cancelled => {
-                    self.tool_output_menu = None;
-                }
+                MenuOutcome::Cancelled => self.tool_output_menu = None,
                 MenuOutcome::Unchanged | MenuOutcome::SelectionChanged(_) => {}
             }
             return;
@@ -150,7 +148,7 @@ impl NoriTrustDirectoryWidget {
         nori_home: PathBuf,
         cwd: PathBuf,
         is_git_repo: bool,
-        current_tool_output: ToolOutput,
+        ask_tool_output: bool,
     ) -> Self {
         let items = [
             MenuItem::new(
@@ -178,7 +176,7 @@ impl NoriTrustDirectoryWidget {
             is_git_repo,
             selection: None,
             menu,
-            current_tool_output,
+            ask_tool_output,
             trust_target: None,
             tool_output_menu: None,
             error: None,
@@ -205,7 +203,7 @@ impl NoriTrustDirectoryWidget {
             self.trust_target = Some(target);
         }
         self.selection = Some(selection);
-        if self.current_tool_output == ToolOutput::Compact {
+        if !self.ask_tool_output {
             return;
         }
 
@@ -234,7 +232,7 @@ mod tests {
             nori_home.path().to_path_buf(),
             PathBuf::from("/workspace/project"),
             is_git_repo,
-            ToolOutput::Full,
+            true,
         );
         (widget, nori_home)
     }
@@ -340,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    fn trust_then_offers_compact_with_full_preselected() {
+    fn trust_then_full_choice_is_saved_for_this_project() {
         let (mut widget, tmp) = create_widget(true);
         answer_trust(&mut widget, TrustDirectorySelection::Trust);
 
@@ -356,7 +354,7 @@ mod tests {
             project_settings(&tmp),
             nori_config::ProjectConfig {
                 trust_level: Some(TrustLevel::Trusted),
-                tool_output: None,
+                tool_output: Some(ToolOutput::Full),
             }
         );
         assert_eq!(written_config(&tmp).tui.tool_output, None);
@@ -411,21 +409,6 @@ mod tests {
                 tool_output: Some(ToolOutput::Compact),
             }
         );
-    }
-
-    #[test]
-    fn no_compact_question_when_compact_is_already_configured() {
-        let nori_home = TempDir::new().expect("create temp dir");
-        let mut widget = NoriTrustDirectoryWidget::new(
-            nori_home.path().to_path_buf(),
-            PathBuf::from("/workspace/project"),
-            true,
-            ToolOutput::Compact,
-        );
-        answer_trust(&mut widget, TrustDirectorySelection::Trust);
-
-        assert_eq!(widget.get_step_state(), StepState::Complete);
-        assert_eq!(project_settings(&nori_home).tool_output, None);
     }
 
     #[test]

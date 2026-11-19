@@ -42,8 +42,11 @@ shows the full view. It resolves from, in order: a `-c tui.tool_output=...`
 command-line override, the active project's `tool_output`, `[tui]
 tool_output`, then `Full`. Because `-c` overrides are merged into the parsed
 `[tui]` table before resolution, the loader checks the raw overrides for
-`tui.tool_output` or a whole `tui` table to know whether the `[tui]` value came
-from the command line and must beat the project value.
+`tui.tool_output`, or a `tui` table that contains `tool_output`, to know
+whether the `[tui]` value came from the command line and must beat the project
+value; a `tui` table without that key leaves the project value in charge. The
+result is exposed as `NoriConfig::tool_output_from_command_line`, which lets
+callers tell a one-off override apart from a saved setting.
 
 `[projects."<path>"]` entries deserialize to `ProjectConfig`, which holds
 `trust_level` and `tool_output`. The active project is the entry for the exact

@@ -49,7 +49,10 @@ boundary for session-addressed JSON-RPC requests and atomic replay/live
 subscriptions. The harness owns the session registry and the in-memory replay
 used by attached terminals. The managed machine transport uses a separate
 [durable journal](src/recovery/journal.rs) for acknowledged delivery to the
-broker. The dependency direction stays `nori-harness -> nori-acp-host`.
+broker. One process owns a journal directory at a time through a
+`flock` on `journal.lock`. Opening waits up to two seconds for that lock,
+because a child spawned on another thread holds an inherited copy until it
+execs or exits; a writer still holding it after that is refused. The dependency direction stays `nori-harness -> nori-acp-host`.
 
 ### Core Implementation
 
