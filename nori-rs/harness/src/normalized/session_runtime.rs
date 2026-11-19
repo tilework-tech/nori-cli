@@ -240,6 +240,9 @@ pub struct SessionRuntime {
     pub persisted: PersistedSessionState,
     pub active: Option<ActiveRequestState>,
     pub queue: VecDeque<QueuedPrompt>,
+    /// Set when a turn ended without completing while prompts were queued;
+    /// the queue then waits for an explicit resume.
+    pub queue_pause: Option<nori_protocol::QueuePause>,
     /// Tracks whether we have already emitted the "no active local request"
     /// warning since the last time a request became active. Reset on each new
     /// prompt/load start so a later unowned burst can warn again.
@@ -257,6 +260,7 @@ impl SessionRuntime {
             persisted: PersistedSessionState::default(),
             active: None,
             queue: VecDeque::new(),
+            queue_pause: None,
             orphan_update_warning_emitted: false,
             observer_turn_active: false,
         }

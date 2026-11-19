@@ -963,13 +963,16 @@ impl App {
             AppEvent::QueuedPromptReclaimed {
                 generation,
                 event_id,
+                action,
                 outcome,
             } => {
                 if self.chat_widget.session_generation() == generation {
                     self.chat_widget
-                        .on_queued_prompt_reclaimed(event_id, outcome);
+                        .on_queued_prompt_reclaimed(event_id, action, outcome);
                 } else if let Some(parked) = self.session_deck.parked_mut(generation) {
-                    parked.widget.on_queued_prompt_reclaimed(event_id, outcome);
+                    parked
+                        .widget
+                        .on_queued_prompt_reclaimed(event_id, action, outcome);
                 }
             }
             AppEvent::HistorySearchLoaded(entries) => {

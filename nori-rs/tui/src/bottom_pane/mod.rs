@@ -665,8 +665,9 @@ impl BottomPane {
         &mut self,
         prompts: Vec<String>,
         entries: Vec<nori_protocol::QueueEntry>,
+        paused: Option<nori_protocol::QueuePause>,
     ) {
-        self.queued_user_messages.set(prompts, entries);
+        self.queued_user_messages.set(prompts, entries, paused);
         self.request_redraw();
     }
 
@@ -680,6 +681,40 @@ impl BottomPane {
 
     pub(crate) fn has_reclaimable_queued_message(&self) -> bool {
         self.queued_user_messages.has_editable()
+    }
+
+    pub(crate) fn queued_messages_paused(&self) -> bool {
+        self.queued_user_messages.is_paused()
+    }
+
+    pub(crate) fn queue_list_is_focused(&self) -> bool {
+        self.queued_user_messages.is_focused()
+    }
+
+    /// Focus the queue list on its newest editable message; `false` when
+    /// there is none.
+    pub(crate) fn focus_queue_list(&mut self) -> bool {
+        let focused = self.queued_user_messages.focus();
+        self.request_redraw();
+        focused
+    }
+
+    pub(crate) fn blur_queue_list(&mut self) {
+        self.queued_user_messages.blur();
+        self.request_redraw();
+    }
+
+    pub(crate) fn move_queue_selection(&mut self, step: isize) {
+        self.queued_user_messages.move_selection(step);
+        self.request_redraw();
+    }
+
+    /// Hide the selected queued message and return its ID so the caller can
+    /// ask the harness to take it out of the queue.
+    pub(crate) fn start_selected_queued_message_reclaim(&mut self) -> Option<String> {
+        let id = self.queued_user_messages.start_reclaim_selected();
+        self.request_redraw();
+        id
     }
 
     pub(crate) fn finish_queued_message_reclaim(&mut self, id: &str) {
@@ -793,7 +828,9 @@ impl BottomPane {
     /// overlays or popups and not running a task. This is the safe context to
     /// use Esc-Esc for backtracking from the main view.
     pub(crate) fn is_normal_backtrack_mode(&self) -> bool {
-        !self.is_task_running && !self.has_active_overlay_or_popup()
+        !self.is_task_running
+            && !self.has_active_overlay_or_popup()
+            && !self.queued_user_messages.is_focused()
     }
 
     pub(crate) fn show_view(&mut self, view: Box<dyn BottomPaneView>) {
@@ -1806,6 +1843,7 @@ mod tests {
                 text: "Queued follow-up question".to_string(),
                 editable: true,
             }],
+            None,
         );
         pane.hide_status_indicator();
 
@@ -1849,6 +1887,7 @@ mod tests {
                 text: "Queued follow-up question".to_string(),
                 editable: true,
             }],
+            None,
         );
 
         let width = 48;

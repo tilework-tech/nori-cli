@@ -937,39 +937,70 @@ Quitting an attached cloud session detaches through connection teardown;
 While the direct composer observes a working turn, Enter steers that turn and
 Tab queues a composed follow-up. The harness owns the queue. The bottom pane's queued-message preview
 ([`queued_user_messages.rs`](src/bottom_pane/queued_user_messages.rs)) mirrors
-each `QueueChanged` snapshot, keeping its `entries` IDs. Taking a message back
-lives in [`queue_recall.rs`](src/chatwidget/queue_recall.rs):
+each `QueueChanged` snapshot, keeping its `entries` IDs and `paused` reason.
+Two paths take a message out of the queue; both use the same harness reclaim by
+stable ID:
+
+| Path | Keys | Module |
+| --- | --- | --- |
+| Quick recall | Alt+Up takes the newest editable row back into the composer | [`queue_recall.rs`](src/chatwidget/queue_recall.rs) |
+| Queue list | Up on an empty composer focuses the list on the newest editable row | [`queue_list.rs`](src/chatwidget/queue_list.rs) |
 
 ```
-Up (empty composer) / Alt+Up, no popup or overlay
-  -> preview hides newest editable row at once
-  -> HarnessAction::ReclaimQueuedPrompt{id} -> HarnessHandle::reclaim_queued_prompt
-  -> AppEvent::QueuedPromptReclaimed{generation, id, outcome}
+Alt+Up, or Enter/e / Delete/x in the focused list (no popup or overlay)
+  -> preview hides the row at once
+  -> HarnessAction::ReclaimQueuedPrompt{id, action: Edit|Remove}
+  -> HarnessHandle::reclaim_queued_prompt
+  -> AppEvent::QueuedPromptReclaimed{generation, id, action, outcome}
        -> active widget, or the parked widget with that generation
-  Reclaimed(text): text goes into the composer before any existing draft
-  AlreadyStarted:  info line "That queued message already started, so it
-                   was sent as written."; composer untouched
-  Failed:          the row shows again; the error is a failed harness action
+  Reclaimed + Edit:   text goes into the composer before any existing draft
+  Reclaimed + Remove: text is discarded; composer untouched
+  AlreadyStarted:     info line "That queued message already started, so it
+                      was sent as written." (Edit) / "... so it was not
+                      removed." (Remove); composer untouched
+  Failed:             the row shows again; the error is a failed harness action
 ```
 
-- Hiding the row before the harness answers means a second press takes the
-  next older editable row, never the same one twice. After a successful
-  reclaim the row stays hidden until a snapshot without it arrives, because
-  the snapshot and the answer travel on different channels.
-- Reclaims run newest first, so inserting each one at the start of the draft
-  keeps the original queue order. The insertion keeps the draft's paste
+- The focused list selects only editable rows and marks the selection with a
+  green `›`. j/k or Down/Up move it and stop at either end. Enter or e edits
+  and leaves the list; Delete or x removes and keeps focus on the neighbouring
+  editable row. Esc leaves without interrupting the turn, and
+  `BottomPane::is_normal_backtrack_mode` is false while the list is focused, so
+  Esc never primes backtrack. Any other key, or any modifier (so Alt+Up still
+  quick-recalls), leaves the list and reaches the composer.
+- The selection is tracked by entry ID, so duplicate texts and rows that start
+  sending never move it onto another message. When the selected row leaves
+  the queue the selection moves to the editable row now in its place, or the
+  last one; with none left the list loses focus.
+- Removing reuses the harness reclaim rather than a separate delete, so the
+  consumed hook context and compact summary are restored for the next prompt.
+- Hiding a row before the harness answers means a second press takes a
+  different row, never the same one twice. After a successful reclaim the row
+  stays hidden until a snapshot without it arrives, because the snapshot and
+  the answer travel on different channels.
+- Quick recalls run newest first, so inserting each one at the start of the
+  draft keeps the original queue order. The insertion keeps the draft's paste
   placeholders, attached images, and cursor. When the composer cannot take the
   text (input disabled, or a shell-mode draft), it is shown in an info line
   instead of being dropped.
-- Follow-only attachments never reclaim; the queue belongs to the owner.
-- The `alt + ↑ edit` hint renders only while an editable row is visible. Rows
-  from a host that sends only `prompts` (no `entries`) render without the hint
-  and cannot be taken back; prompts with images are never editable.
+- A paused queue (see the harness queue pause) renders a header
+  `N queued · paused (interrupted|turn error) · enter resumes`. Enter on an
+  empty composer sends `HarnessAction::ResumeQueue`; a non-empty composer keeps
+  its ordinary Enter and Tab, so a newly typed prompt runs ahead of the held
+  rows and the queue stays paused.
+- Follow-only attachments never select, reclaim, or resume; the queue belongs
+  to the owner.
+- The `↑ select · alt+↑ edit` hint renders only while an editable row is
+  visible; a focused list shows `j/k select · enter/e edit · del/x remove ·
+  esc back` instead. Rows from a host that sends only `prompts` (no `entries`)
+  render without a hint and cannot be taken back; prompts with images are
+  never editable.
 - The edited text goes through the composer as new input. Enter sends it when
   idle or steers the observed working turn. Tab during that turn places it at
   the end of the queue. The widget ignores `PromptWithdrawn` when reclaiming
   an item whose original submission is awaiting a prompt result.
-- When Up does not reclaim, it falls through to composer history recall.
+- When there is no editable row to focus, Up falls through to composer
+  history recall.
 
 #### Multi-session view
 

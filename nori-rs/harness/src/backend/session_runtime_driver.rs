@@ -139,7 +139,7 @@ impl SessionDriver {
 
     pub(crate) fn prompt_is_busy(&self) -> bool {
         self.runtime.phase != SessionPhase::Idle
-            || !self.runtime.queue.is_empty()
+            || (!self.runtime.queue.is_empty() && self.runtime.queue_pause.is_none())
             || self.steer_pending()
     }
 
@@ -526,6 +526,7 @@ impl AcpBackend {
                 nori_protocol::QueueSnapshot {
                     prompts: queue.prompts.clone(),
                     entries: queue.entries.clone(),
+                    paused: queue.paused,
                 },
             )),
             ClientEvent::ContextCompacted(compacted) => Some(

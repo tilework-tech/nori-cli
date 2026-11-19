@@ -70,7 +70,8 @@ and then release or cancel it without a timing guess. The same fixtures drive
 Some scenarios can also be chosen per prompt, so several sessions on one mock
 binary can behave differently without sharing an environment. A prompt whose
 text block is exactly `mock:exit-during-prompt`, or that contains
-`mock:stream-until-cancel` or `mock:request-permission` anywhere, selects the
+`mock:stream-until-cancel`, `mock:prompt-fail-after-delay`, or
+`mock:request-permission` anywhere, selects the
 scenario for that turn. A named permission command runs from the colon to the
 end of the text block:
 
@@ -78,6 +79,7 @@ end of the text block:
 | --- | --- | --- |
 | `mock:stream-until-cancel` | Streams text chunks until the turn is cancelled | `MOCK_AGENT_STREAM_UNTIL_CANCEL` |
 | `mock:exit-during-prompt` | Exits with status 17 mid-prompt | `MOCK_AGENT_EXIT_DURING_PROMPT` |
+| `mock:prompt-fail-after-delay` | Waits `MOCK_AGENT_DELAY_MS`, then fails the prompt with a JSON-RPC error, so prompts can queue behind a failing turn | `MOCK_AGENT_PROMPT_FAIL` (fails at once) |
 | `mock:request-permission` | Sends a permission request for the default `echo` command | `MOCK_AGENT_REQUEST_PERMISSION` |
 | `mock:request-permission:<command>` | Sends a permission request naming `<command>` | none |
 

@@ -594,6 +594,18 @@ impl MockAgent {
             eprintln!("Mock agent: simulating prompt failure");
             return Err(acp::Error::new(-32001, "Mock prompt failure for testing"));
         }
+        if last_prompt_text_block(&arguments.prompt)
+            .is_some_and(|text| text.contains("mock:prompt-fail-after-delay"))
+        {
+            if let Some(delay) = std::env::var("MOCK_AGENT_DELAY_MS")
+                .ok()
+                .and_then(|value| value.parse::<u64>().ok())
+            {
+                sleep(Duration::from_millis(delay)).await;
+            }
+            eprintln!("Mock agent: simulating prompt failure after the delay");
+            return Err(acp::Error::new(-32001, "Mock prompt failure for testing"));
+        }
 
         // Support simulating a structured prompt failure (JSON-RPC code -32010,
         // "agent unreachable") whose `data` includes both a `detail` string and

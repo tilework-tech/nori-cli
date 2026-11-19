@@ -245,6 +245,7 @@ async fn respond_to_agent(
 ) -> Result<()>;
 async fn cancel() -> Result<()>;
 async fn reclaim_queued_prompt(String) -> Result<Option<String>>;
+async fn resume_queue() -> Result<()>;
 async fn shutdown() -> Result<()>;
 
 // Harness-owned commands and queries.
@@ -316,6 +317,39 @@ The returned text is the caller's original content, never the hook, goal, or
 compact context added to the wire prompt. The withdrawn prompt's pending
 `prompt()` call resolves with `backend::PromptWithdrawn`.
 
+The queue drains one prompt per prompt response with stop reason `end_turn`.
+Any other ending while prompts are queued pauses the queue instead
+([`session_reducer/queue_pause.rs`](src/backend/session_reducer/queue_pause.rs)):
+`SessionRuntime.queue_pause` records why, every entry keeps its order and ID,
+and a `QueueChanged` snapshot carrying `paused` is published. Only a queue
+holding at least one user prompt pauses, so a pause is always visible to
+clients; hidden work alone (a queued compact or goal continuation) is left as
+it was.
+
+| Turn ending | `QueuePause` |
+| --- | --- |
+| Stop reason `cancelled`, or a prompt failure while the turn was cancelling | `Interrupted` |
+| Any other non-`end_turn` stop reason (`max_tokens`, `refusal`, ...) or a prompt failure | `TurnFailed` |
+
+While paused:
+
+- `drain_queue` sends nothing, which also holds the deferred drain that a
+  settling steer would otherwise run.
+- An idle-only submission (`submit_prompt_if_idle`, used by the TUI's idle
+  Enter and by remote prompts) is admitted from idle: it runs ahead of the held
+  entries and the queue stays paused. `prompt_is_busy` ignores a paused queue
+  for the same reason.
+- Reclaiming the last held user prompt clears the pause, so later follow-ups
+  drain normally.
+
+`resume_queue()` sends `InboundEvent::ResumeQueue` through
+[`queue_reclaim.rs`](src/backend/queue_reclaim.rs) onto the serialized runtime.
+It clears the pause; an idle session starts the next queued prompt at once
+(or defers to the steer fence), and a busy one drains after its running turn
+ends with `end_turn`. Draining then continues one prompt per completed turn. A
+resume without a pause, or while a session load is in flight, is a no-op, and an interrupt or failure after a resume
+pauses whatever is still queued.
+
 #### Remote ACP hosting
 
 [`remote_agent.rs`](src/remote_agent.rs) implements the acp-host `HostedAgent`
@@ -365,8 +399,8 @@ not keep a process-global host or own listener policy.
   transport still has one controller, while the fan-out remains the common
   source for the TUI and future bounded observers.
 - Remote prompt admission is serialized with the session runtime and rejects
-  with ACP error `-32015` while a turn is active or a local prompt is already
-  queued. Local submissions keep the ordinary harness queue. The admission
+  with ACP error `-32015` while a turn is active or a local prompt is queued
+  and the queue is not paused. Local submissions keep the ordinary harness queue. The admission
   barrier provides a fast rejection before prompt hooks and snapshots, while
   the reducer repeats the same decision at the state transition boundary.
 - Turn ownership is tracked by harness request id after a remote prompt is

@@ -31,6 +31,7 @@ pub(super) fn queue_changed(runtime: &SessionRuntime) -> ClientEvent {
     ClientEvent::QueueChanged(QueueChanged {
         prompts: entries.iter().map(|entry| entry.text.clone()).collect(),
         entries,
+        paused: runtime.queue_pause,
     })
 }
 
@@ -71,6 +72,9 @@ pub(crate) fn reclaim_queued(runtime: &mut SessionRuntime, event_id: &str) -> Op
         .position(|prompt| prompt.event_id == event_id)?;
     let text = editable_text(&runtime.queue[index])?;
     let prompt = runtime.queue.remove(index)?;
+    if !super::queue_pause::has_user_prompt(runtime) {
+        runtime.queue_pause = None;
+    }
     Some(Reclaimed {
         prompt,
         text,
@@ -174,6 +178,7 @@ mod tests {
             ClientEvent::QueueChanged(QueueChanged {
                 prompts: vec!["alpha".to_string(), "dup".to_string()],
                 entries: vec![entry("a", "alpha"), entry("b", "dup")],
+                paused: None,
             })
         );
         assert_eq!(end_turn(&mut runtime, &mut normalizer), ["alpha"]);
@@ -220,6 +225,7 @@ mod tests {
                     editable: false,
                     ..entry("img", "look at this")
                 }],
+                paused: None,
             })
         );
     }
@@ -239,6 +245,7 @@ mod tests {
                     editable: false,
                     ..entry("child", "result from a delegated session")
                 }],
+                paused: None,
             })
         );
     }

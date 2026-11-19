@@ -110,6 +110,20 @@ pub struct QueueSnapshot {
     /// `HarnessHandle::reclaim_queued_prompt`. Empty from hosts that predate it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entries: Vec<QueueEntry>,
+    /// Set while queued prompts wait for an explicit resume instead of
+    /// starting on their own. Absent from hosts that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paused: Option<QueuePause>,
+}
+
+/// Why the queue stopped sending on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QueuePause {
+    /// The turn before the queued prompts was interrupted.
+    Interrupted,
+    /// The turn before the queued prompts failed or stopped early.
+    TurnFailed,
 }
 
 /// One queued user prompt, in delivery order.

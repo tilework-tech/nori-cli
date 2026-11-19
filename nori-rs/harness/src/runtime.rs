@@ -101,6 +101,10 @@ enum HarnessCommand {
     Cancel {
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
+    /// Let a paused queue send again.
+    ResumeQueue {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
     /// Take a queued prompt back before it is sent.
     ReclaimQueuedPrompt {
         event_id: String,
@@ -488,6 +492,15 @@ impl HarnessHandle {
 
     pub async fn cancel(&self) -> anyhow::Result<()> {
         self.request(|response_tx| HarnessCommand::Cancel { response_tx })
+            .await
+    }
+
+    /// Let a queue paused by an interrupted or failed turn send again. The
+    /// next queued prompt starts at once when the session is idle; otherwise
+    /// the queue drains after the running turn completes. A queue that is not
+    /// paused is left alone.
+    pub async fn resume_queue(&self) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::ResumeQueue { response_tx })
             .await
     }
 
@@ -1188,6 +1201,9 @@ pub(crate) fn launch_session_from(
                     }
                     HarnessCommand::Cancel { response_tx } => {
                         let _ = response_tx.send(backend_for_agent.cancel().await);
+                    }
+                    HarnessCommand::ResumeQueue { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.resume_queue().await);
                     }
                     HarnessCommand::ReclaimQueuedPrompt {
                         event_id,

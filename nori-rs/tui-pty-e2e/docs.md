@@ -169,11 +169,19 @@ setting, that a one-off `-c` override still shows the question without being
 saved, and that an unrelated `-c tui={...}` table keeps the project's choice.
 
 [Queue recall scenarios](tests/queue_recall.rs) press Tab to queue a follow-up
-during a running turn, then Up or Alt+Up to move it back into the composer.
-After an edit, Tab appends the revised text to the queue and Enter steers the
-active turn. The mock agent's prompt log checks that the withdrawn text never
-runs as a separate prompt. Coverage includes identical messages and Alt+Up
-outside a delegated child with `[features] multi_session` on.
+during a running turn, then Up+Enter (focus the queue list, edit the selection)
+or Alt+Up to move it back into the composer. After an edit, Tab appends the
+revised text to the queue and Enter steers the active turn. The mock agent's
+prompt log checks that the withdrawn text never runs as a separate prompt.
+Coverage includes identical messages and Alt+Up outside a delegated child with
+`[features] multi_session` on.
+
+[Queue pause scenarios](tests/queue_pause.rs) queue follow-ups behind a slow
+turn and assert on the mock agent's prompt log. They cover editing a selected
+duplicate (delivered once), removing a selected message (never delivered), and
+a queue held after an interrupt or after a turn that fails via
+`mock:prompt-fail-after-delay`, which sends nothing until Enter on an empty
+composer resumes it and then delivers each held prompt once, in order.
 
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same

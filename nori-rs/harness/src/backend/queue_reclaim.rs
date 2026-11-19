@@ -30,6 +30,15 @@ impl AcpBackend {
             .map_err(|_| anyhow::anyhow!("ACP session runtime closed during queue reclaim"))
     }
 
+    pub(crate) async fn resume_queue(&self) -> anyhow::Result<()> {
+        self.session_event_tx
+            .send(SessionRuntimeInput::Reducer(
+                super::session_reducer::InboundEvent::ResumeQueue,
+            ))
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP session runtime closed before queue resume"))
+    }
+
     /// Runs on the serialized session runtime task.
     pub(super) async fn apply_queue_reclaim(&self, event_id: &str) -> Option<String> {
         let reclaimed = self.session_driver.lock().await.reclaim_queued(event_id)?;
