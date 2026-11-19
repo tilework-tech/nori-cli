@@ -10,25 +10,40 @@ use nori_protocol::QueuePause;
 use super::ReduceOutput;
 use super::drain_queue;
 use super::reclaim::queue_changed;
+use crate::normalized::session_runtime::QueuedPromptKind;
 use crate::normalized::session_runtime::SessionPhase;
 use crate::normalized::session_runtime::SessionRuntime;
 use crate::normalized::session_runtime::SteerFence;
 
-/// Hold whatever is queued after a turn that did not complete.
-pub(super) fn pause(runtime: &mut SessionRuntime, reason: QueuePause, out: &mut ReduceOutput) {
-    if runtime.queue.is_empty() {
+/// Hold whatever is queued after a turn that did not complete. Only a queue
+/// that holds a user prompt pauses, so a pause is always visible to clients.
+pub(super) fn pause(runtime: &mut SessionRuntime, interrupted: bool, out: &mut ReduceOutput) {
+    if !has_user_prompt(runtime) {
         return;
     }
-    runtime.queue_pause = Some(reason);
+    runtime.queue_pause = Some(if interrupted {
+        QueuePause::Interrupted
+    } else {
+        QueuePause::TurnFailed
+    });
     out.events.push(queue_changed(runtime));
 }
 
-/// Clear a pause. An idle session starts the next queued prompt now; a busy
-/// one drains when its running turn completes.
+pub(super) fn has_user_prompt(runtime: &SessionRuntime) -> bool {
+    runtime
+        .queue
+        .iter()
+        .any(|prompt| prompt.kind == QueuedPromptKind::User)
+}
+
+/// Clear a pause. An idle session starts the next queued prompt now; a
+/// prompt turn drains when it completes. A loading session keeps the pause,
+/// since a load never drains the queue.
 pub(super) fn resume(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
-    if runtime.queue_pause.take().is_none() {
+    if matches!(runtime.phase, SessionPhase::Loading { .. }) || runtime.queue_pause.is_none() {
         return;
     }
+    runtime.queue_pause = None;
     if runtime.phase == SessionPhase::Idle {
         if runtime.steer_fence == SteerFence::Open {
             drain_queue(runtime, out);
@@ -313,6 +328,63 @@ mod tests {
                 sent: Vec::new(),
                 queue: Some((texts(&["beta"]), Some(QueuePause::Interrupted))),
             }
+        );
+    }
+
+    #[test]
+    fn an_interrupt_with_only_a_hidden_compact_queued_does_not_pause() {
+        let mut session = Session::running_with(&[]);
+        let mut compact = prompt("compact", "/compact");
+        compact.kind = QueuedPromptKind::Compact;
+        session.apply(InboundEvent::PromptSubmit(compact));
+
+        let step = session.interrupt();
+
+        assert_eq!(step.queue, None);
+        assert_eq!(
+            session.apply(InboundEvent::ResumeQueue),
+            Step {
+                sent: Vec::new(),
+                queue: None,
+            }
+        );
+    }
+
+    #[test]
+    fn taking_back_the_last_user_prompt_clears_a_pause_held_over_hidden_work() {
+        let mut session = Session::running_with(&[("a", "alpha")]);
+        let mut compact = prompt("compact", "/compact");
+        compact.kind = QueuedPromptKind::Compact;
+        session.apply(InboundEvent::PromptSubmit(compact));
+        session.interrupt();
+
+        let reclaimed = crate::backend::session_reducer::reclaim_queued(&mut session.runtime, "a")
+            .expect("queued");
+
+        assert_eq!(
+            reclaimed.queue_changed,
+            ClientEvent::QueueChanged(crate::normalized::QueueChanged {
+                prompts: Vec::new(),
+                entries: Vec::new(),
+                paused: None,
+            })
+        );
+    }
+
+    #[test]
+    fn resume_while_a_session_loads_keeps_the_pause() {
+        let mut session = Session::running_with(&[("a", "alpha")]);
+        session.interrupt();
+        session.apply(InboundEvent::LoadSubmit {
+            request_id: acp::RequestId::Str("load".to_string()),
+        });
+
+        assert_eq!(session.apply(InboundEvent::ResumeQueue).queue, None);
+        session.apply(InboundEvent::LoadResponse);
+        assert_eq!(
+            session.apply(InboundEvent::ResumeQueue).sent,
+            texts(&["alpha"]),
+            "the pause survives the load and a later resume still sends"
         );
     }
 }

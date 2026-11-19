@@ -321,8 +321,10 @@ The queue drains one prompt per prompt response with stop reason `end_turn`.
 Any other ending while prompts are queued pauses the queue instead
 ([`session_reducer/queue_pause.rs`](src/backend/session_reducer/queue_pause.rs)):
 `SessionRuntime.queue_pause` records why, every entry keeps its order and ID,
-and a `QueueChanged` snapshot carrying `paused` is published. An ending with
-nothing queued does not pause.
+and a `QueueChanged` snapshot carrying `paused` is published. Only a queue
+holding at least one user prompt pauses, so a pause is always visible to
+clients; hidden work alone (a queued compact or goal continuation) is left as
+it was.
 
 | Turn ending | `QueuePause` |
 | --- | --- |
@@ -337,15 +339,15 @@ While paused:
   Enter and by remote prompts) is admitted from idle: it runs ahead of the held
   entries and the queue stays paused. `prompt_is_busy` ignores a paused queue
   for the same reason.
-- Reclaiming the last held entry clears the pause, so later follow-ups drain
-  normally.
+- Reclaiming the last held user prompt clears the pause, so later follow-ups
+  drain normally.
 
 `resume_queue()` sends `InboundEvent::ResumeQueue` through
 [`queue_reclaim.rs`](src/backend/queue_reclaim.rs) onto the serialized runtime.
 It clears the pause; an idle session starts the next queued prompt at once
 (or defers to the steer fence), and a busy one drains after its running turn
 ends with `end_turn`. Draining then continues one prompt per completed turn. A
-resume without a pause is a no-op, and an interrupt or failure after a resume
+resume without a pause, or while a session load is in flight, is a no-op, and an interrupt or failure after a resume
 pauses whatever is still queued.
 
 #### Remote ACP hosting

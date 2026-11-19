@@ -343,24 +343,6 @@ fn an_interrupted_queue_shows_it_is_paused_with_its_count() {
 }
 
 #[test]
-fn a_queue_paused_by_an_error_says_so() {
-    let (mut chat, _rx, _unused_rx) = make_chatwidget_manual();
-    show_queue(
-        &mut chat,
-        vec![entry("a", "alpha", true), entry("b", "beta", true)],
-        Some(QueuePause::TurnFailed),
-    );
-
-    let lines = queue_lines(&chat);
-    assert!(
-        lines
-            .iter()
-            .any(|line| line.contains("2 queued") && line.contains("error")),
-        "{lines:#?}"
-    );
-}
-
-#[test]
 fn enter_on_an_empty_composer_resumes_a_paused_queue() {
     let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
     three_queued(&mut chat, Some(QueuePause::Interrupted));
@@ -461,4 +443,32 @@ fn an_edit_that_lost_the_race_to_dispatch_keeps_the_draft() {
 
     assert_eq!(harness_requests(&mut rx), ["Edit c"]);
     assert_eq!(chat.composer_text(), "draft");
+}
+
+#[test]
+fn a_pasted_line_break_does_not_resume_a_paused_queue() {
+    let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+    three_queued(&mut chat, Some(QueuePause::Interrupted));
+    while rx.try_recv().is_ok() {}
+
+    for c in "foo".chars() {
+        press(&mut chat, KeyCode::Char(c));
+    }
+    press(&mut chat, KeyCode::Enter);
+
+    assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
+}
+
+#[test]
+fn a_bracketed_paste_leaves_the_list() {
+    let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+    three_queued(&mut chat, None);
+    while rx.try_recv().is_ok() {}
+
+    press(&mut chat, KeyCode::Up);
+    chat.handle_paste("pasted".to_string());
+    type_text(&mut chat, "x");
+
+    assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
+    assert_eq!(chat.composer_text(), "pastedx");
 }

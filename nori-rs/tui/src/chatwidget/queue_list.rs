@@ -42,6 +42,7 @@ impl ChatWidget {
                 self.take_selected_queued_message(QueuedPromptAction::Remove);
             }
             KeyCode::Esc => self.bottom_pane.blur_queue_list(),
+            // Every other key belongs to the composer.
             _ => {
                 self.bottom_pane.blur_queue_list();
                 return false;

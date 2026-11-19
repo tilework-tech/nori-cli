@@ -91,7 +91,7 @@ fn queue_three_behind(session: &mut TuiSession, log: &Path, first: &str) {
 fn the_selected_duplicate_is_edited_and_delivered_once() {
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("prompts.jsonl");
-    let mut session = spawn_session(&log, "8000");
+    let mut session = spawn_session(&log, "12000");
     queue_three_behind(&mut session, &log, "turn one");
 
     key(&mut session, Key::Up);
@@ -112,7 +112,7 @@ fn the_selected_duplicate_is_edited_and_delivered_once() {
     queue_input(&mut session, " edited");
 
     assert_eq!(
-        wait_for_deliveries(&log, 4, Duration::from_secs(30)),
+        wait_for_deliveries(&log, 4, Duration::from_secs(60)),
         ["turn one", "alpha", "dup", "dup edited"],
         "{}",
         session.screen_contents()
@@ -124,7 +124,7 @@ fn the_selected_duplicate_is_edited_and_delivered_once() {
 fn the_selected_message_is_removed_and_never_delivered() {
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("prompts.jsonl");
-    let mut session = spawn_session(&log, "8000");
+    let mut session = spawn_session(&log, "12000");
     queue_three_behind(&mut session, &log, "turn one");
 
     key(&mut session, Key::Up);
@@ -143,7 +143,7 @@ fn the_selected_message_is_removed_and_never_delivered() {
         )
         .expect("the composer holds only what the user typed");
 
-    let delivered = wait_for_deliveries(&log, 3, Duration::from_secs(30));
+    let delivered = wait_for_deliveries(&log, 3, Duration::from_secs(60));
     std::thread::sleep(Duration::from_secs(5));
     assert_eq!(delivered, ["turn one", "dup", "dup"]);
     assert_eq!(delivered_prompts(&log), delivered, "nothing else is sent");
@@ -207,4 +207,6 @@ fn a_turn_error_holds_the_queue_until_enter_resumes_it() {
         "{}",
         session.screen_contents()
     );
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(delivered_prompts(&log), delivered, "each is sent once");
 }

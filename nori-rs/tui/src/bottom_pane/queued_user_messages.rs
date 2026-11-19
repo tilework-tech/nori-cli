@@ -126,8 +126,6 @@ impl QueuedUserMessages {
             .id
             .clone();
         self.reclaiming.push(id.clone());
-        let index = self.selected_index();
-        self.reselect(index);
         Some(id)
     }
 

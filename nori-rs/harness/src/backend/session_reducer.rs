@@ -396,12 +396,7 @@ fn reduce_prompt_response(
         }));
 
     if !should_drain_queue {
-        let reason = if stop_reason == acp::StopReason::Cancelled {
-            nori_protocol::QueuePause::Interrupted
-        } else {
-            nori_protocol::QueuePause::TurnFailed
-        };
-        queue_pause::pause(runtime, reason, out);
+        queue_pause::pause(runtime, stop_reason == acp::StopReason::Cancelled, out);
     } else if runtime.steer_fence == SteerFence::Open {
         drain_queue(runtime, out);
     } else {
@@ -444,17 +439,13 @@ fn reduce_prompt_failed(
         return;
     }
 
-    let reason = if matches!(
+    let interrupted = matches!(
         runtime.phase,
         SessionPhase::Prompt {
             cancelling: true,
             ..
         }
-    ) {
-        nori_protocol::QueuePause::Interrupted
-    } else {
-        nori_protocol::QueuePause::TurnFailed
-    };
+    );
     let last_agent_message = finalize_active(runtime);
     runtime.phase = SessionPhase::Idle;
     out.events
@@ -465,7 +456,7 @@ fn reduce_prompt_failed(
             last_agent_message,
             failure,
         }));
-    queue_pause::pause(runtime, reason, out);
+    queue_pause::pause(runtime, interrupted, out);
 }
 
 // ---------------------------------------------------------------------------

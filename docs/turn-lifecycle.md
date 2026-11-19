@@ -473,14 +473,18 @@ Queue draining is harness policy, not ACP protocol.
   Every entry stays queued in order; nothing is restored into the composer.
   The pause reason is `interrupted` for stop reason `cancelled` or a failure
   while cancelling, and `turn_failed` for any other stop reason or failure.
-  An ending with nothing queued does not pause.
+  Only a queue holding at least one user prompt pauses, so every pause is
+  visible in `QueueChanged`; a queue holding only hidden work (a queued
+  `/compact` or goal continuation) is left as it was.
 - A paused queue sends nothing on its own, including the drain deferred behind
   a settling steer. Only an explicit resume clears it: an idle session starts
   the next queued prompt at once, and a busy session drains after its running
   turn ends with `end_turn`. A resume without a pause does nothing.
 - After a resume the queue drains one prompt per completed turn again; a
   later interrupt or failure pauses whatever is still queued.
-- Taking back the last held entry clears the pause.
+- Taking back the last held user prompt clears the pause.
+- A resume while a session load is in flight is ignored and the pause stays,
+  because a load never drains the queue.
 - The pause reason travels as `QueueSnapshot.paused` so clients can show it.
 
 ## UI Event Surface

@@ -72,7 +72,7 @@ pub(crate) fn reclaim_queued(runtime: &mut SessionRuntime, event_id: &str) -> Op
         .position(|prompt| prompt.event_id == event_id)?;
     let text = editable_text(&runtime.queue[index])?;
     let prompt = runtime.queue.remove(index)?;
-    if runtime.queue.is_empty() {
+    if !super::queue_pause::has_user_prompt(runtime) {
         runtime.queue_pause = None;
     }
     Some(Reclaimed {
