@@ -397,7 +397,7 @@ that ID back to the issuing process, whose own request IDs can repeat
 across siblings. Several side sessions may have outstanding
 requests at once, including while a parent prompt awaits permission.
 
-For a marked side pinned to codex-acp 2.7.0 and Codex CLI 0.166.0,
+For a confined rebuilt side pinned to codex-acp 2.7.0 and Codex CLI 0.166.0,
 the parent launch determines the expected `_auth/status_update` after
 `initialize`. A managed subscription requires `authStatus.kind = account`
 before `session/new`. The adapter's account label, email and plan do not

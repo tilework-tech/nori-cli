@@ -152,6 +152,8 @@ async fn stdio_host_serves_the_pinned_adapter_and_a_side_session_as_plain_acp_un
         side["result"]["_meta"]["nori.dev/sideSession"], mark,
         "{side}"
     );
+    #[cfg(not(target_os = "linux"))]
+    assert_eq!(side["result"]["_meta"]["nori.dev/sideConfinement"], "none");
     let side = side["result"]["sessionId"].as_str().unwrap().to_owned();
     assert_ne!(side, "0");
     let settings = host.prompt(5, &side, "inspect-settings").await;

@@ -80,11 +80,13 @@ struct SideHost {
 
 impl SideHost {
     async fn start(dedicated: bool, limit: Option<usize>) -> Self {
-        Self::with_modes(dedicated, limit, "bypassPermissions plan").await
-    }
-
-    async fn with_modes(dedicated: bool, limit: Option<usize>, modes: &str) -> Self {
-        Self::with_settings(dedicated, limit, modes, "side_confinement='required'\n").await
+        Self::with_settings(
+            dedicated,
+            limit,
+            "bypassPermissions plan",
+            "side_confinement='required'\n",
+        )
+        .await
     }
 
     async fn with_settings(
@@ -671,9 +673,14 @@ async fn side_process_trees_end_after_a_parent_crash() {
 
 #[tokio::test]
 async fn bypass_only_adapter_cannot_open_a_side_thread() {
-    let mut host = SideHost::with_modes(true, None, "bypassPermissions").await;
+    let mut host = SideHost::with_settings(true, None, "bypassPermissions", "").await;
     let refused = host.start_side(4, "0").await;
-    assert!(refused["error"].is_object(), "{refused}");
+    assert!(
+        refused["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("no supported restrictive mode")),
+        "{refused}"
+    );
     host.prompt(5, "0", "finish").await;
     assert_eq!(host.reply(5).await["result"]["stopReason"], "end_turn");
 }

@@ -311,11 +311,11 @@ own handshake.
   belongs to the supervisor's child and registers its pidfd. The side must
   then complete the sandboxed ACP handshake before the host returns its ID.
   [Read-only launch](../../../harness/src/managed_launch/side_sandbox.rs)
-- `[host] side_confinement` is `"preferred"` by default. When it starts,
-  the host probes Bubblewrap once with the namespace and mount arguments of a
+- `[host] side_confinement` is `"preferred"` by default. On Linux, the host
+  probes Bubblewrap once at startup with the namespace and mount arguments of a
   read-only launch. A probe that fails or has not finished within five
   seconds marks the machine as unable to confine. When the probe succeeds, a rebuilt side
-  is confined. When Bubblewrap is missing or cannot create its namespaces,
+  is confined. On macOS, or when Linux cannot use Bubblewrap,
   the side starts as an ordinary adapter process with the parent's pinned
   executable, arguments, environment, cwd and home. Its workspace and home
   are writable at the OS level. The host still selects and confirms the

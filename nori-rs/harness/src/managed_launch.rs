@@ -389,7 +389,6 @@ pub struct ManagedLaunches {
     layout: Layout,
     limit: usize,
     side_sessions: bool,
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     side_confinement: nori_config::SideConfinement,
     sandbox: Arc<side_sandbox::Sandbox>,
     launches: Arc<Mutex<Option<HashMap<String, Launch>>>>,
@@ -627,17 +626,6 @@ impl ManagedLaunches {
             .map(|(connection, _)| connection)
     }
 
-    #[cfg(not(target_os = "linux"))]
-    pub(crate) fn spawn_owned_side(
-        &self,
-        _: &str,
-        _: i64,
-        _: &str,
-    ) -> anyhow::Result<(LaunchConnection, Arc<SideProcess>)> {
-        anyhow::bail!("read-only workspace enforcement unavailable on this platform")
-    }
-
-    #[cfg(target_os = "linux")]
     pub(crate) fn spawn_owned_side(
         &self,
         binding: &str,
@@ -674,23 +662,27 @@ impl ManagedLaunches {
                 && session_folder(&launch.home)? == launch.home,
             "pinned launch roots changed"
         );
-        let confined =
-            self.side_confinement == nori_config::SideConfinement::Required || self.sandbox.usable;
-        let (namespace, command) = if confined {
+        #[cfg(target_os = "linux")]
+        let (namespace, side_fds) = if self.sandbox.usable
+            || self.side_confinement == nori_config::SideConfinement::Required
+        {
             let (namespace, fds) = namespace_exit::NamespaceExit::prepare()?;
-            let command =
-                launch
-                    .spec
-                    .command(&launch.cwd, &launch.home, Some(fds), &self.sandbox)?;
-            (Some(namespace), command)
+            (Some(namespace), Some(fds))
         } else {
-            // This machine cannot create the read-only launch. The side runs as
-            // an ordinary adapter process and the caller learns that it did.
-            let command = launch
-                .spec
-                .command(&launch.cwd, &launch.home, None, &self.sandbox)?;
-            (None, command)
+            (None, None)
         };
+        #[cfg(not(target_os = "linux"))]
+        let side_fds = {
+            ensure!(
+                self.side_confinement != nori_config::SideConfinement::Required,
+                "read-only workspace enforcement unavailable on this platform"
+            );
+            None
+        };
+        let confined = side_fds.is_some();
+        let command = launch
+            .spec
+            .command(&launch.cwd, &launch.home, side_fds, &self.sandbox)?;
         let child = AgentProcess::spawn(command).context("side adapter launch failed")?;
         let supervisor = Arc::new(child.handle);
         let outer_exit = supervisor.wait_for_exit();
@@ -704,13 +696,12 @@ impl ManagedLaunches {
         launch.sides.insert(side_id.to_owned(), process.clone());
         tokio::spawn(async move {
             let drain = async {
-                match namespace {
-                    Some(namespace) => namespace.monitor(side.clone(), outer_exit).await,
-                    None => {
-                        outer_exit.await;
-                        Ok(())
-                    }
+                #[cfg(target_os = "linux")]
+                if let Some(namespace) = namespace {
+                    return namespace.monitor(side.clone(), outer_exit).await;
                 }
+                outer_exit.await;
+                anyhow::Ok(())
             };
             tokio::pin!(drain);
             let result = tokio::select! {
