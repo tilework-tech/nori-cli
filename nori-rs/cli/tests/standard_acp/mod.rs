@@ -330,12 +330,19 @@ async fn admit_fixture(
         .request("_nori/session/ensure", request)
         .await
         .unwrap();
-    cwd
+    cwd.canonicalize().unwrap()
 }
 
 #[tokio::test]
 async fn scoped_clients_preserve_agent_sessions_and_permissions() {
-    let (host, endpoint, token) = start(true);
+    // Exercise a symlinked temporary directory even on hosts where TMPDIR is canonical.
+    let temp = tempfile::tempdir().unwrap();
+    let real = temp.path().join("real");
+    let alias = temp.path().join("alias");
+    fs::create_dir(&real).unwrap();
+    std::os::unix::fs::symlink(&real, &alias).unwrap();
+    let host = Host(tempfile::tempdir_in(alias).unwrap());
+    let (host, endpoint, token) = start_config(host, "[host]\nmanaged = true\n".into());
     let mut control = ManagedClient::connect(&endpoint.replace("/managed", "/sessions"), &token)
         .await
         .unwrap();
