@@ -74,8 +74,8 @@ impl StdioHost {
             output: BufReader::new(child.stdout.take().unwrap()).lines(),
             host,
             child,
-            cwd,
-            home,
+            cwd: cwd.canonicalize().unwrap(),
+            home: home.canonicalize().unwrap(),
         }
     }
 
@@ -165,6 +165,34 @@ async fn stdio_host_serves_the_pinned_adapter_and_a_side_session_as_plain_acp_un
     let (status, files) = host.finish().await;
     assert!(status.success(), "{status}");
     assert!(!files.0.path().join("host/state.json").exists());
+}
+
+#[tokio::test]
+async fn stdio_host_exits_and_ends_its_adapter_when_terminated_with_stdin_still_open() {
+    let mut host = StdioHost::start(json!({"FIXTURE_MODEL":"aster"}), &[], &[]);
+    fs::write(host.cwd.join("specimen.txt"), "cedar").unwrap();
+    fs::write(host.home.join("fixture-credential"), "synthetic-access").unwrap();
+    host.open_parent().await;
+    // A machine bridge stops its child with a signal and keeps the pipes.
+    let adapter = fs::File::create(host.cwd.join("hold-lease-adapter")).unwrap();
+    fs::File::create(host.cwd.join("hold-lease-adapter-client")).unwrap();
+    let held = host.prompt(3, "0", "hold-lease-adapter").await;
+    assert_eq!(held["result"]["stopReason"], "end_turn", "{held}");
+    assert!(matches!(
+        adapter.try_lock(),
+        Err(fs::TryLockError::WouldBlock)
+    ));
+
+    let pid = i32::try_from(host.child.id().unwrap()).unwrap();
+    // SAFETY: signals the child this test started and still owns.
+    assert_eq!(unsafe { libc::kill(pid, libc::SIGTERM) }, 0);
+    let status = tokio::time::timeout(Duration::from_secs(20), host.child.wait())
+        .await
+        .expect("the host is still running after the signal")
+        .unwrap();
+    assert!(!status.success());
+    adapter.try_lock().expect("the adapter outlived its host");
+    drop(host.input);
 }
 
 #[tokio::test]

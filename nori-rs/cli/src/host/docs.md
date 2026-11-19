@@ -488,6 +488,7 @@ NORI_HOME=/srv/fixture/nori nori -c features.multi_session=true \
 | stdin reaches EOF | The host stops, ends the adapter and its side sessions, removes its discovery state and exits 0. |
 | The launch file is unreadable or the host refuses the launch | The host stops and exits non-zero with the reason on stderr. stdout stays empty. |
 | The adapter's logical connection closes | The host stops and exits non-zero with the reason on stderr. |
+| The host receives SIGTERM or SIGINT, with stdin open or closed | The host ends the adapter and its side sessions and exits non-zero. A bridge can stop it with a signal and keep its pipes. |
 
 See the [stdio cases](../../tests/standard_acp/stdio.rs).
 
