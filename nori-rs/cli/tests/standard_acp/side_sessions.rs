@@ -120,7 +120,7 @@ impl SideHost {
         let caps = &caps["agentCapabilities"]["_meta"]["nori.dev/managedHost"];
         assert_eq!(caps["rebuiltSideSessions"], 1);
         assert_eq!(caps["maxSessions"], limit.unwrap_or(8));
-        admit(&mut control, &host, "aster", [false, false, true, false]).await;
+        let cwd = admit(&mut control, &host, "aster", [false, false, true, false]).await;
         let mut scenario = Self {
             machine: ManagedClient::connect(&endpoint, &token).await.unwrap(),
             _host: host,

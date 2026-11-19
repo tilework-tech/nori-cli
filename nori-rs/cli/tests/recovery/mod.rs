@@ -139,7 +139,7 @@ impl Binding {
         Self {
             id,
             conversation_id,
-            roots,
+            roots: roots.canonicalize().unwrap(),
         }
     }
 
