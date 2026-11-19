@@ -1,8 +1,7 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/macos-pty-candidate-1119']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +11,7 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: nori-rs
@@ -25,10 +24,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: macOS PTY candidate
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: 066bacc09b3143395cf0bc5ec7cb0e2adf21ff87
+          persist-credentials: false
+
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = 066bacc09b3143395cf0bc5ec7cb0e2adf21ff87 && git rev-parse HEAD && uname -sm
 
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -126,7 +134,91 @@ jobs:
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
           cargo build -p nori-cli --profile ci-test --target ${{ matrix.target }}
+      - name: Complete host lifecycle and managed recovery suites
+        if: success() || failure()
+        run: cargo test --profile ci-test --target ${{ matrix.target }} -p nori-cli --no-fail-fast --test host_lifecycle --test managed_recovery
+      - name: Repeat isolated cases and both parallel test binaries
+        if: success() || failure()
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          set -eu
+          cargo test --profile ci-test --target aarch64-apple-darwin -p tui-pty-e2e --test prepared_startup --test delegation --no-run --message-format=json > "$RUNNER_TEMP/test-build.json"
+          run_binary() {
+            name="$1"
+            shift
+            bin=$(jq -sr --arg name "$name" '[.[] | select(.target.name == $name and .executable != null) | .executable] | last' "$RUNNER_TEMP/test-build.json")
+            test -x "$bin"
+            echo "::group::$name $*"
+            if ! /usr/bin/time -p "$bin" "$@"; then failures=$((failures+1)); fi
+            echo "::endgroup::"
+          }
+          export RUST_TEST_THREADS=4 # nori-rs/.cargo/config.toml for direct libtest launches
+          failures=0
+          for round in 1 2; do
+            echo "Isolated round $round"
+            run_binary prepared_startup --exact slash_new_reuses_in_flight_preparation
+            for case in a_session_that_starts_with_a_delegation_is_titled_by_its_task alt_up_in_a_top_level_session_leaves_the_prompt_alone alt_down_reaches_a_waiting_child_even_with_a_draft_in_the_parent declining_different_kind_does_not_start_child; do
+              run_binary delegation --exact "$case"
+            done
+          done
+          for round in 1 2 3; do
+            echo "Parallel binary round $round"
+            run_binary prepared_startup
+            run_binary delegation
+          done
+          echo "Failed invocations: $failures"
+          test "$failures" -eq 0
+      - name: Capture candidate startup milestones and frame
+        if: success() || failure()
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          set -eu
+          cargo build --profile ci-test --target aarch64-apple-darwin -p tui-pty-e2e --lib --message-format=json > "$RUNNER_TEMP/pty-lib.json"
+          lib=$(jq -sr '[.[] | select(.target.name == "tui_pty_e2e") | .filenames[] | select(endswith(".rlib"))] | last' "$RUNNER_TEMP/pty-lib.json")
+          deps=target/aarch64-apple-darwin/ci-test/deps
+          cat > "$RUNNER_TEMP/terminal_sample.rs" <<'RS'
+          use std::time::{Duration, Instant};
+          use tui_pty_e2e::{SessionConfig, TuiSession};
+          fn main() {
+              let mut session = TuiSession::spawn_with_config(24, 90, SessionConfig::new()).unwrap();
+              let start = Instant::now();
+              let probes: &[(&str, &[u8])] = &[
+                  ("cursor", b"\x1b[6n"), ("keyboard", b"\x1b[?u"), ("attributes", b"\x1b[c"),
+                  ("foreground", b"\x1b]10;?"), ("background", b"\x1b]11;?"),
+              ];
+              let mut observed = vec![false; probes.len()];
+              let mut composer = false;
+              loop {
+                  session.poll().unwrap();
+                  let elapsed = start.elapsed().as_millis();
+                  for (idx,(name,query)) in probes.iter().enumerate() {
+                      if !observed[idx] && session.raw_output().windows(query.len()).any(|s| s == *query) {
+                          observed[idx] = true;
+                          println!("PROBE {name} {elapsed} ms");
+                      }
+                  }
+                  let frame = session.screen_contents();
+                  if !composer && frame.lines().any(|line| line.starts_with("› ")) {
+                      println!("PROBE composer {elapsed} ms");
+                      composer = true;
+                  }
+                  if frame.contains("Mock Default Model") {
+                      println!("PROBE active-model {elapsed} ms\nFRAME START\n{frame}\nFRAME END");
+                      break;
+                  }
+                  if elapsed > 10000 {
+                      panic!("Sample deadline: {frame}");
+                  }
+                  std::thread::sleep(Duration::from_millis(50));
+              }
+          }
+          RS
+          rustc --edition 2024 --target aarch64-apple-darwin -L "dependency=$deps" --extern "tui_pty_e2e=$lib" "$RUNNER_TEMP/terminal_sample.rs" -o "$deps/terminal_sample"
+          for sample in 1 2 3; do "$deps/terminal_sample"; done
       - name: cargo test nori
+        if: success() || failure()
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
@@ -137,8 +229,83 @@ jobs:
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
       - name: cargo clippy
+        if: success() || failure()
         run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
 
+      - name: Read the pinned baseline fixture
+        if: success() || failure()
+        uses: actions/checkout@v6
+        with:
+          ref: 19c6adbbba3448de7faea12af69d6dde9e4d7613
+          path: baseline-source
+          persist-credentials: false
+          sparse-checkout: nori-rs/tui-pty-e2e
+      - name: Use original PTY test sources with the same built application
+        if: success() || failure()
+        run: |
+          test "$(git -C ../baseline-source rev-parse HEAD)" = 19c6adbbba3448de7faea12af69d6dde9e4d7613
+          cp ../baseline-source/nori-rs/tui-pty-e2e/src/lib.rs tui-pty-e2e/src/lib.rs
+          cp ../baseline-source/nori-rs/tui-pty-e2e/tests/prepared_startup.rs tui-pty-e2e/tests/prepared_startup.rs
+      - name: Capture baseline startup milestones and frame
+        if: success() || failure()
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          set -eu
+          cargo build --profile ci-test --target aarch64-apple-darwin -p tui-pty-e2e --lib --message-format=json > "$RUNNER_TEMP/pty-lib.json"
+          lib=$(jq -sr '[.[] | select(.target.name == "tui_pty_e2e") | .filenames[] | select(endswith(".rlib"))] | last' "$RUNNER_TEMP/pty-lib.json")
+          deps=target/aarch64-apple-darwin/ci-test/deps
+          cat > "$RUNNER_TEMP/terminal_sample.rs" <<'RS'
+          use std::time::{Duration, Instant};
+          use tui_pty_e2e::{SessionConfig, TuiSession};
+          fn main() {
+              let mut session = TuiSession::spawn_with_config(24, 90, SessionConfig::new()).unwrap();
+              let start = Instant::now();
+              let probes: &[(&str, &[u8])] = &[
+                  ("cursor", b"\x1b[6n"), ("keyboard", b"\x1b[?u"), ("attributes", b"\x1b[c"),
+                  ("foreground", b"\x1b]10;?"), ("background", b"\x1b]11;?"),
+              ];
+              let mut observed = vec![false; probes.len()];
+              let mut composer = false;
+              loop {
+                  session.poll().unwrap();
+                  let elapsed = start.elapsed().as_millis();
+                  for (idx,(name,query)) in probes.iter().enumerate() {
+                      if !observed[idx] && session.raw_output().windows(query.len()).any(|s| s == *query) {
+                          observed[idx] = true;
+                          println!("PROBE {name} {elapsed} ms");
+                      }
+                  }
+                  let frame = session.screen_contents();
+                  if !composer && frame.lines().any(|line| line.starts_with("› ")) {
+                      println!("PROBE composer {elapsed} ms");
+                      composer = true;
+                  }
+                  if frame.contains("Mock Default Model") {
+                      println!("PROBE active-model {elapsed} ms\nFRAME START\n{frame}\nFRAME END");
+                      break;
+                  }
+                  if elapsed > 10000 {
+                      panic!("Sample deadline: {frame}");
+                  }
+                  std::thread::sleep(Duration::from_millis(50));
+              }
+          }
+          RS
+          rustc --edition 2024 --target aarch64-apple-darwin -L "dependency=$deps" --extern "tui_pty_e2e=$lib" "$RUNNER_TEMP/terminal_sample.rs" -o "$deps/terminal_sample"
+          for sample in 1 2 3; do "$deps/terminal_sample"; done
+      - name: Pinned baseline binaries at the repository four-thread setting
+        if: success() || failure()
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          set -eu
+          fail=0
+          for round in 1 2 3; do
+            echo "Baseline four-thread round $round"
+            cargo test --profile ci-test --target aarch64-apple-darwin -p tui-pty-e2e --no-fail-fast --test prepared_startup --test delegation || fail=1
+          done
+          test "$fail" -eq 0
       # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache
         if: always() && !cancelled() && steps.cache_cargo_home_restore.outputs.cache-hit != 'true'
