@@ -969,9 +969,18 @@ Alt+Up, or Enter/e / Delete/x in the focused list (no popup or overlay)
   Esc never primes backtrack. Any other key, or any modifier (so Alt+Up still
   quick-recalls), leaves the list and reaches the composer.
 - The selection is tracked by entry ID, so duplicate texts and rows that start
-  sending never move it onto another message. When the selected row leaves
-  the queue the selection moves to the editable row now in its place, or the
-  last one; with none left the list loses focus.
+  sending never move it onto another message. After the user's own Delete/x
+  the selection moves to the editable row now in its place, or the last one,
+  and that move is visible before the next key.
+- When the selected row leaves the queue on its own through a snapshot
+  (usually because it started), the selection is not moved: the list stays
+  open with nothing selected (`ListFocus::Cleared`) and shows
+  `selected message left the queue · j/k pick again · esc back`. Enter/e and Delete/x
+  do nothing until j/Down picks the row now at the vacated position or k/Up
+  the one before it; Esc and other keys behave as above. This prevents a
+  wrong-target race where a keypress meant for the started message edited or
+  removed a neighbour the user never picked, which is easy to miss when texts
+  are identical. With no editable rows left the list loses focus.
 - Removing reuses the harness reclaim rather than a separate delete, so the
   consumed hook context and compact summary are restored for the next prompt.
 - Hiding a row before the harness answers means a second press takes a

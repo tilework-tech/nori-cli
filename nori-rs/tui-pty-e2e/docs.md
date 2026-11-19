@@ -182,6 +182,10 @@ duplicate (delivered once), removing a selected message (never delivered), and
 a queue held after an interrupt or after a turn that fails via
 `mock:prompt-fail-after-delay`, which sends nothing until Enter on an empty
 composer resumes it and then delivers each held prompt once, in order.
+Two scenarios select the head of two identical queued rows and wait for it
+to start through the asynchronous queue update, then press x or Enter; the
+prompt log (`MOCK_AGENT_PROMPT_LOG`) shows every message delivered once, proving the key did not
+remove or edit the identical neighbour.
 
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same
