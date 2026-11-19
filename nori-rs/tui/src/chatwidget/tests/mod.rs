@@ -158,6 +158,18 @@ mod part8;
 mod queue_list;
 mod queue_recall;
 
+/// Type `text` as key presses and let the composer settle them.
+pub(crate) fn type_text(chat: &mut ChatWidget, text: &str) {
+    for c in text.chars() {
+        chat.handle_key_event(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
+    }
+    std::thread::sleep(
+        crate::bottom_pane::ChatComposer::recommended_paste_flush_delay()
+            + std::time::Duration::from_millis(5),
+    );
+    chat.bottom_pane.flush_paste_burst_if_due();
+}
+
 pub(crate) fn make_scoped_chatwidget_manual() -> (
     ChatWidget,
     tokio::sync::mpsc::UnboundedReceiver<AppEvent>,

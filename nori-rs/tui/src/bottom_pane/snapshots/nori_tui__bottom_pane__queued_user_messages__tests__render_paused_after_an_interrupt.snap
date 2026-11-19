@@ -9,7 +9,7 @@ Buffer {
         "  ↳ alpha                                                               ",
         "  ↳ dup                                                                 ",
         "  ↳ dup                                                                 ",
-        "    ↑ select · ⌥ + ↑ edit                                               ",
+        "    ↑ select                                                            ",
     ],
     styles: [
         x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
@@ -27,6 +27,6 @@ Buffer {
         x: 4, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: DIM | ITALIC,
         x: 7, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 0, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 25, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 12, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
     ]
 }

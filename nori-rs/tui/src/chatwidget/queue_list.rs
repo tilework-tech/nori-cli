@@ -2,11 +2,12 @@
 //! resuming a queue held after an interrupted or failed turn.
 //!
 //! Up on an empty composer focuses the list on its newest editable message.
-//! j/k (or Down/Up) move between editable messages, Enter or e takes the
+//! j/k (or Down/Up) move between editable messages; Up stops at the oldest,
+//! and Down from the newest returns to the composer. Enter or e takes the
 //! selected one back into the composer, and Delete or x discards it. Both go
-//! through the same harness reclaim by stable ID as Alt+Up, so a message that
-//! already started is reported instead of being sent twice. Esc leaves the
-//! list; any other key leaves it and reaches the composer.
+//! through a harness reclaim by stable ID, so a message that already started
+//! is reported instead of being sent twice. Esc leaves the list; any other
+//! key leaves it and reaches the composer.
 //!
 //! Enter on an empty composer resumes a paused queue. A non-empty composer
 //! keeps its ordinary Enter and Tab behavior.

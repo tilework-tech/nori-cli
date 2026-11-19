@@ -264,6 +264,30 @@ fn alt_up_in_a_top_level_session_stays_put() {
 }
 
 #[test]
+fn alt_up_in_a_top_level_session_keeps_the_composer() {
+    use crossterm::event::KeyEvent;
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.replace_sessions(json!({"sessions":[
+        {"session_id":"parent-session","agent":"mock-model","status":"ready","title":"Parent task"}
+    ]})).unwrap();
+    runtime.state.list_open = false;
+    runtime.composer.set_text("an earlier prompt".to_string());
+    runtime
+        .composer
+        .input(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    runtime.composer.clear();
+
+    runtime.key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    assert_eq!(runtime.composer.text(), "", "no history recall");
+
+    runtime.composer.set_text("half typed".to_string());
+    runtime.key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    assert_eq!(runtime.composer.text(), "half typed");
+}
+
+#[test]
 fn delivered_result_prompt_reads_as_one_line_in_attached_parent() {
     use nori_protocol::acp::v1 as acp;
     let mut state = AttachState {

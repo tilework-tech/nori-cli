@@ -2,6 +2,18 @@ use super::*;
 
 impl ChatWidget {
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
+        // Alt+Up is reserved for moving to a parent session, which the app
+        // does before the widget sees the key. Whatever reaches the widget
+        // has no parent to move to, so it changes nothing: not the queue, its
+        // selection, the draft, or history recall.
+        if key_event.code == KeyCode::Up
+            && key_event.modifiers == KeyModifiers::ALT
+            && matches!(key_event.kind, KeyEventKind::Press | KeyEventKind::Repeat)
+            && !self.exiting
+            && !self.bottom_pane.has_active_overlay_or_popup()
+        {
+            return;
+        }
         if self.handle_queue_list_key(key_event) {
             return;
         }
@@ -46,18 +58,6 @@ impl ChatWidget {
             } if !self.exiting
                 && !self.bottom_pane.has_active_overlay_or_popup()
                 && self.cycle_acp_mode_config() =>
-            {
-                return;
-            }
-            KeyEvent {
-                code: KeyCode::Up,
-                modifiers,
-                kind: KeyEventKind::Press,
-                ..
-            } if !self.exiting
-                && !self.bottom_pane.has_active_overlay_or_popup()
-                && modifiers == KeyModifiers::ALT
-                && self.start_queued_prompt_reclaim() =>
             {
                 return;
             }

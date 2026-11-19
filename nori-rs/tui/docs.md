@@ -938,16 +938,15 @@ While the direct composer observes a working turn, Enter steers that turn and
 Tab queues a composed follow-up. The harness owns the queue. The bottom pane's queued-message preview
 ([`queued_user_messages.rs`](src/bottom_pane/queued_user_messages.rs)) mirrors
 each `QueueChanged` snapshot, keeping its `entries` IDs and `paused` reason.
-Two paths take a message out of the queue; both use the same harness reclaim by
-stable ID:
-
-| Path | Keys | Module |
-| --- | --- | --- |
-| Quick recall | Alt+Up takes the newest editable row back into the composer | [`queue_recall.rs`](src/chatwidget/queue_recall.rs) |
-| Queue list | Up on an empty composer focuses the list on the newest editable row | [`queue_list.rs`](src/chatwidget/queue_list.rs) |
+The queue list is the only way to take a message out of the queue: Up on an
+empty composer focuses it on the newest editable row
+([`queue_list.rs`](src/chatwidget/queue_list.rs)), and both edit and remove use
+the same harness reclaim by stable ID, whose answer
+[`queue_recall.rs`](src/chatwidget/queue_recall.rs) applies. Alt+Up belongs to
+`parent_session` alone and never touches the queue.
 
 ```
-Alt+Up, or Enter/e / Delete/x in the focused list (no popup or overlay)
+Enter/e / Delete/x in the focused list (no popup or overlay)
   -> preview hides the row at once
   -> HarnessAction::ReclaimQueuedPrompt{id, action: Edit|Remove}
   -> HarnessHandle::reclaim_queued_prompt
@@ -962,12 +961,15 @@ Alt+Up, or Enter/e / Delete/x in the focused list (no popup or overlay)
 ```
 
 - The focused list selects only editable rows and marks the selection with a
-  green `›`. j/k or Down/Up move it and stop at either end. Enter or e edits
+  green `›`. j/k or Down/Up move it. Up/k stop at the oldest row; Down/j from
+  the newest row leave the list and return focus to the composer (also with a
+  single queued message). Enter or e edits
   and leaves the list; Delete or x removes and keeps focus on the neighbouring
   editable row. Esc leaves without interrupting the turn, and
   `BottomPane::is_normal_backtrack_mode` is false while the list is focused, so
-  Esc never primes backtrack. Any other key, or any modifier (so Alt+Up still
-  quick-recalls), leaves the list and reaches the composer.
+  Esc never primes backtrack. Any other key, or any modifier, leaves the list
+  and reaches the composer, except Alt+Up: outside a delegated child it does
+  nothing and the selection stays.
 - The selection is tracked by entry ID, so duplicate texts and rows that start
   sending never move it onto another message. After the user's own Delete/x
   the selection moves to the editable row now in its place, or the last one,
@@ -987,9 +989,9 @@ Alt+Up, or Enter/e / Delete/x in the focused list (no popup or overlay)
   different row, never the same one twice. After a successful reclaim the row
   stays hidden until a snapshot without it arrives, because the snapshot and
   the answer travel on different channels.
-- Quick recalls run newest first, so inserting each one at the start of the
-  draft keeps the original queue order. The insertion keeps the draft's paste
-  placeholders, attached images, and cursor. When the composer cannot take the
+- A taken-back message is inserted at the start of any draft typed while its
+  reclaim was in flight. The insertion keeps the draft's paste placeholders,
+  attached images, and cursor. When the composer cannot take the
   text (input disabled, or a shell-mode draft), it is shown in an info line
   instead of being dropped.
 - A paused queue (see the harness queue pause) renders a header
@@ -999,7 +1001,7 @@ Alt+Up, or Enter/e / Delete/x in the focused list (no popup or overlay)
   rows and the queue stays paused.
 - Follow-only attachments never select, reclaim, or resume; the queue belongs
   to the owner.
-- The `↑ select · alt+↑ edit` hint renders only while an editable row is
+- The `↑ select` hint renders only while an editable row is
   visible; a focused list shows `j/k select · enter/e edit · del/x remove ·
   esc back` instead. Rows from a host that sends only `prompts` (no `entries`)
   render without a hint and cannot be taken back; prompts with images are
@@ -1105,7 +1107,7 @@ a binding).
 | `previous_session` / `next_session` | `alt+,` / `alt+.` | Wraps at both ends of the navigation order and skips closed and done sessions |
 | `next_waiting_session` | `alt+down` | Shows the next session after the active one that is waiting on you, even with a draft (the draft stays in the parked widget's composer). With nothing waiting, an empty prompt consumes the key and a draft passes it on to the composer |
 | `open_session_list` | `alt+s` | Needs the composer in front |
-| `parent_session` | `alt+up` | On a delegated child (record source `Session` with a parent) shows the parent's widget. Elsewhere it takes back a queued message when an editable one is visible (see queued follow-ups); otherwise it is consumed and does nothing, so it never reaches history recall |
+| `parent_session` | `alt+up` | On a delegated child (record source `Session` with a parent) shows the parent's widget. Elsewhere it is consumed and does nothing: the queue and any draft stay untouched, and it never reaches history recall |
 
 The Hotkeys view lists these actions only with the flag
 (`HotkeyAction::is_multi_session`).
@@ -1708,8 +1710,9 @@ part of the public harness protocol.
   Composer history already holds each queued text, so editing a recalled
   history entry and submitting it still delivers the queued original too; only
   a reclaim through `HarnessHandle::reclaim_queued_prompt` removes it. With
-  `multi_session`, Alt+Up is shared with `parent_session`, which wins on a
-  delegated child.
+  or without `multi_session`, Alt+Up only navigates to a parent; outside a
+  delegated child it does nothing rather than reaching the queue or history
+  recall.
 - `nori-config` is the source of approval and sandbox policy; ACP session config
   options remain ACP schema values.
 - `-p` belongs to the top-level CLI as `--print`. The TUI's own flag set must not

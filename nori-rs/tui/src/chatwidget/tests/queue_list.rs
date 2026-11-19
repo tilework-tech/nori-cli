@@ -92,18 +92,6 @@ fn press(chat: &mut ChatWidget, code: KeyCode) {
     chat.handle_key_event(KeyEvent::new(code, KeyModifiers::NONE));
 }
 
-/// Type `text` as key presses and let the composer settle them.
-fn type_text(chat: &mut ChatWidget, text: &str) {
-    for c in text.chars() {
-        press(chat, KeyCode::Char(c));
-    }
-    std::thread::sleep(
-        crate::bottom_pane::ChatComposer::recommended_paste_flush_delay()
-            + std::time::Duration::from_millis(5),
-    );
-    chat.bottom_pane.flush_paste_burst_if_due();
-}
-
 #[test]
 fn up_on_an_empty_composer_selects_the_newest_message_without_taking_it() {
     let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
@@ -618,4 +606,89 @@ fn enter_with_the_selection_cleared_neither_edits_nor_resumes_a_paused_queue() {
 
     assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
     assert_eq!(rows(&chat), ["dup"]);
+}
+
+#[test]
+fn down_or_j_from_the_newest_message_returns_to_the_composer() {
+    for key in [KeyCode::Down, KeyCode::Char('j')] {
+        let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+        three_queued(&mut chat, None);
+        while rx.try_recv().is_ok() {}
+
+        press(&mut chat, KeyCode::Up);
+        press(&mut chat, key);
+        assert_eq!(rows(&chat), ["alpha", "dup", "dup"], "{key:?}");
+        assert!(
+            !queue_lines(&chat)
+                .iter()
+                .any(|line| line.contains("j/k select")),
+            "{key:?} closes the list"
+        );
+        // `e` and `x` would edit or remove in the list.
+        type_text(&mut chat, "ex");
+
+        assert_eq!(harness_requests(&mut rx), Vec::<String>::new(), "{key:?}");
+        assert_eq!(chat.composer_text(), "ex", "{key:?}");
+    }
+}
+
+#[test]
+fn alt_up_keeps_the_queue_list_and_its_selection() {
+    let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+    three_queued(&mut chat, None);
+    while rx.try_recv().is_ok() {}
+
+    press(&mut chat, KeyCode::Up);
+    press(&mut chat, KeyCode::Char('k'));
+    chat.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+
+    assert_eq!(rows(&chat), ["alpha", "> dup", "dup"]);
+    assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
+    assert_eq!(chat.composer_text(), "");
+}
+
+#[test]
+fn down_returns_to_the_composer_from_a_single_queued_message() {
+    let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+    show_queue(&mut chat, vec![entry("a", "alpha", true)], None);
+    while rx.try_recv().is_ok() {}
+
+    press(&mut chat, KeyCode::Up);
+    assert_eq!(rows(&chat), ["> alpha"]);
+    press(&mut chat, KeyCode::Down);
+    assert_eq!(rows(&chat), ["alpha"]);
+    type_text(&mut chat, "x");
+
+    assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
+    assert_eq!(chat.composer_text(), "x");
+}
+
+#[test]
+fn up_and_down_round_trip_through_the_list_and_back() {
+    let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+    three_queued(&mut chat, None);
+    while rx.try_recv().is_ok() {}
+
+    press(&mut chat, KeyCode::Up);
+    press(&mut chat, KeyCode::Up);
+    press(&mut chat, KeyCode::Up);
+    press(&mut chat, KeyCode::Up);
+    assert_eq!(
+        rows(&chat),
+        ["> alpha", "dup", "dup"],
+        "Up stops at the oldest"
+    );
+    press(&mut chat, KeyCode::Down);
+    press(&mut chat, KeyCode::Down);
+    assert_eq!(rows(&chat), ["alpha", "dup", "> dup"]);
+    press(&mut chat, KeyCode::Down);
+    assert_eq!(rows(&chat), ["alpha", "dup", "dup"]);
+    press(&mut chat, KeyCode::Up);
+    assert_eq!(
+        rows(&chat),
+        ["alpha", "dup", "> dup"],
+        "Up selects the newest again"
+    );
+
+    assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
 }

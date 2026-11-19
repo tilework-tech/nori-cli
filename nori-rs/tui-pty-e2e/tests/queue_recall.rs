@@ -43,6 +43,16 @@ fn queued_rows(screen: &str) -> Vec<String> {
         .collect()
 }
 
+/// The composer's line: the last line that starts with the prompt marker.
+fn composer_line(screen: &str) -> String {
+    screen
+        .lines()
+        .rfind(|line| line.starts_with("› "))
+        .unwrap_or_default()
+        .trim_end()
+        .to_string()
+}
+
 fn spawn_busy_session(log: &Path) -> TuiSession {
     spawn_busy_session_with(log, SessionConfig::new())
 }
@@ -119,75 +129,104 @@ fn up_then_enter_reclaims_newest_queued_message_and_edited_resubmission_is_deliv
     );
 }
 
+fn alt_up_at_the_root_keeps_queue_and_draft(config: SessionConfig) {
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("prompts.jsonl");
+    let mut session = spawn_busy_session_with(&log, config);
+
+    session.submit_input("turn one").unwrap();
+    wait_for_deliveries(&log, 1, TIMEOUT);
+    queue_input(&mut session, "stay queued");
+    session
+        .wait_for(|screen| queued_rows(screen) == ["stay queued"], TIMEOUT)
+        .expect("queued row");
+
+    // Text typed after each Alt+Up shows the key was handled; the composer
+    // then holds exactly that text, so nothing was recalled into it.
+    session.send_key(Key::AltUp).unwrap();
+    session.type_input("half typed").unwrap();
+    session
+        .wait_for(|screen| composer_line(screen) == "› half typed", TIMEOUT)
+        .expect("Alt+Up on an empty composer recalls nothing");
+    assert_eq!(
+        queued_rows(&session.screen_contents()),
+        ["stay queued"],
+        "{}",
+        session.screen_contents()
+    );
+
+    session.send_key(Key::AltUp).unwrap();
+    session.type_input("!").unwrap();
+    session
+        .wait_for(|screen| composer_line(screen) == "› half typed!", TIMEOUT)
+        .expect("Alt+Up keeps the draft");
+    assert_eq!(
+        queued_rows(&session.screen_contents()),
+        ["stay queued"],
+        "{}",
+        session.screen_contents()
+    );
+
+    assert_eq!(
+        wait_for_deliveries(&log, 2, Duration::from_secs(30)),
+        ["turn one", "stay queued"],
+        "the queued message is still delivered after the turn"
+    );
+    let screen = session.screen_contents();
+    assert_eq!(
+        composer_line(&screen),
+        "› half typed!",
+        "the draft survives:\n{screen}"
+    );
+}
+
 #[test]
 #[cfg(target_os = "linux")]
-fn alt_up_reclaims_the_only_queued_message_so_it_is_never_delivered() {
+fn alt_up_at_the_root_leaves_the_queue_and_the_draft_alone() {
+    alt_up_at_the_root_keeps_queue_and_draft(SessionConfig::new());
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn alt_up_at_the_root_leaves_the_queue_and_the_draft_alone_with_several_sessions_enabled() {
+    alt_up_at_the_root_keeps_queue_and_draft(
+        SessionConfig::new().with_extra_config_toml("[features]\nmulti_session = true\n"),
+    );
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn down_from_the_newest_queued_message_returns_to_the_composer() {
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("prompts.jsonl");
     let mut session = spawn_busy_session(&log);
 
     session.submit_input("turn one").unwrap();
     wait_for_deliveries(&log, 1, TIMEOUT);
-    queue_input(&mut session, "withdraw me");
+    queue_input(&mut session, "only one");
     session
-        .wait_for(|screen| queued_rows(screen) == ["withdraw me"], TIMEOUT)
+        .wait_for(|screen| queued_rows(screen) == ["only one"], TIMEOUT)
         .expect("queued row");
 
-    session.send_key(Key::AltUp).unwrap();
+    session.send_key(Key::Up).unwrap();
+    session
+        .wait_for_text("j/k select", TIMEOUT)
+        .expect("Up focuses the queue on its newest message");
+    session.send_key(Key::Down).unwrap();
     session
         .wait_for(
-            |screen| queued_rows(screen).is_empty() && screen.contains("› withdraw me"),
+            |screen| queued_rows(screen) == ["only one"] && !screen.contains("j/k select"),
             TIMEOUT,
         )
-        .expect("message moves into the composer and the queue empties");
+        .expect("Down leaves the queue");
+    session.type_input("x").unwrap();
+    session
+        .wait_for(|screen| screen.contains("› x"), TIMEOUT)
+        .expect("typing reaches the composer instead of removing the message");
     assert_eq!(
-        delivered_prompts(&log),
-        ["turn one"],
-        "the queue emptied by reclaim, not by dispatch"
+        wait_for_deliveries(&log, 2, Duration::from_secs(30)),
+        ["turn one", "only one"]
     );
-
-    session
-        .wait_for_text("MOCK_TURN_DONE", Duration::from_secs(15))
-        .expect("first turn completes");
-    std::thread::sleep(Duration::from_secs(2));
-    assert_eq!(delivered_prompts(&log), ["turn one"]);
-    assert!(
-        !session.screen_contents().contains("withdrawn"),
-        "taking a message back is not reported as an error:\n{}",
-        session.screen_contents()
-    );
-    assert!(
-        session.screen_contents().contains("› withdraw me"),
-        "the draft stays in the composer:\n{}",
-        session.screen_contents()
-    );
-}
-
-#[test]
-#[cfg(target_os = "linux")]
-fn alt_up_outside_a_delegated_child_reclaims_with_several_sessions_enabled() {
-    let dir = tempfile::tempdir().unwrap();
-    let log = dir.path().join("prompts.jsonl");
-    let mut session = spawn_busy_session_with(
-        &log,
-        SessionConfig::new().with_extra_config_toml("[features]\nmulti_session = true\n"),
-    );
-
-    session.submit_input("turn one").unwrap();
-    wait_for_deliveries(&log, 1, TIMEOUT);
-    queue_input(&mut session, "take me back");
-    session
-        .wait_for(|screen| queued_rows(screen) == ["take me back"], TIMEOUT)
-        .expect("queued row");
-
-    session.send_key(Key::AltUp).unwrap();
-    session
-        .wait_for(
-            |screen| queued_rows(screen).is_empty() && screen.contains("› take me back"),
-            TIMEOUT,
-        )
-        .expect("alt + up reaches the queue when there is no parent session");
-    assert_eq!(delivered_prompts(&log), ["turn one"]);
 }
 
 #[test]
@@ -208,7 +247,8 @@ fn enter_steers_with_the_edited_draft_after_up_withdraws_it() {
             TIMEOUT,
         )
         .unwrap();
-    session.send_key(Key::AltUp).unwrap();
+    session.send_key(Key::Up).unwrap();
+    session.send_key(Key::Enter).unwrap();
     session
         .wait_for(
             |screen| queued_rows(screen).is_empty() && screen.contains("› check the north row"),

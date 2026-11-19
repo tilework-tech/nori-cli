@@ -671,18 +671,6 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    /// Hide the newest editable queued message and return its ID so the
-    /// caller can ask the harness to take it back.
-    pub(crate) fn start_queued_message_reclaim(&mut self) -> Option<String> {
-        let id = self.queued_user_messages.start_reclaim_newest();
-        self.request_redraw();
-        id
-    }
-
-    pub(crate) fn has_reclaimable_queued_message(&self) -> bool {
-        self.queued_user_messages.has_editable()
-    }
-
     pub(crate) fn queued_messages_paused(&self) -> bool {
         self.queued_user_messages.is_paused()
     }
