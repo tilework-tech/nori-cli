@@ -295,7 +295,8 @@ own handshake.
   in the host. Managed launches bypass host-configured hooks and MCP servers.
 - `spec.workspaceReadOnly` selects OS-enforced read-only launch. It defaults
   to false. A confined rebuilt side forces this option when it reuses the
-  parent's pinned executable, arguments, environment, cwd and home. The host
+  parent's pinned executable, arguments, environment, cwd and home. A
+  confined Codex side receives a reduced environment, described below. The host
   uses the spec's model when the side adapter reports a different current
   model. A read-only launch requires Linux with Bubblewrap and permission to
   create the required namespaces and mounts. The host uses `/usr/bin/bwrap`,
@@ -328,8 +329,16 @@ own handshake.
   at exit. Ordinary launches, including explicit `workspaceReadOnly`
   launches, unconfined sides and launches with side sessions disabled, use
   `home/.codex`. The Codex input checks below apply to the private home only.
-  An unconfined Codex side shares the parent's provider home and credentials,
-  including its MCP servers, and skips the side authentication checks.
+  From the parent's `spec.env`, the side with a private home receives only
+  `PATH`, `CODEX_PATH`, `TMPDIR`, `CODEX_SQLITE_HOME`, `LANG`, `LC_ALL`,
+  `TERM` and `TZ`. The host then sets its own `TMPDIR`, `CODEX_HOME`,
+  `CODEX_SQLITE_HOME`, `HOME` and `NORI_HOME`. Every other parent variable is
+  left out, because it could name a credential or redirect the provider. No
+  environment variable causes refusal. The parent launch keeps its full
+  environment, and confined sides of other adapters receive all of it.
+  An unconfined Codex side shares the parent's environment, provider home and
+  credentials, including its MCP servers, and skips the side authentication
+  checks.
 - For a managed subscription, the host recognizes a single entry in the
   parent's admitted `spec.credentialRefs`, `sessions:codex-subscription-file:v1`.
   It opens the binding's `.codex` directory without following symlinks,

@@ -131,12 +131,14 @@ pub(super) fn command(
         settings.write_all(value.as_bytes())?;
         settings.write_all(&[0])
     };
-    for (key, value) in &spec.env {
-        set_env(key, OsStr::new(value))?;
-    }
-    set_env("HOME", home.as_os_str())?;
     let private_codex = (side_fds.is_some() && spec.uses_private_codex_home())
         .then(|| Path::new("/dev/shm").join(format!("codex-{}", uuid::Uuid::new_v4())));
+    for (key, value) in &spec.env {
+        if private_codex.is_none() || super::codex_home::SIDE_ENV.contains(&key.as_str()) {
+            set_env(key, OsStr::new(value))?;
+        }
+    }
+    set_env("HOME", home.as_os_str())?;
     if let Some(private) = &private_codex {
         super::codex_home::validate_launch(spec)?;
         set_env("CODEX_HOME", private.as_os_str())?;

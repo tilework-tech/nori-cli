@@ -404,6 +404,9 @@ before `session/new`. The adapter's account label, email and plan do not
 identify a workspace or select credentials. A credential-free probe requires
 `kind = none` and ends at the adapter's authentication refusal. A conflicting
 status or unexpectedly successful credential-free open issues no side ID.
+A confined Codex side starts with a fixed subset of the parent's environment.
+The parent's other variables, such as integration tokens, do not reach the
+side and do not cause refusal.
 [Codex launch policy](../cli/src/host/docs.md#managed-launch-control-v1)
 
 The host initializes the side adapter with empty client capabilities and opens
@@ -471,6 +474,10 @@ following for the binding generation and the lifetime of every active side.
 - The parent actually uses the official file store at
   `home/.codex/auth.json`. Its effective provider, store, endpoints and
   login restrictions apply equally to the side's private provider home.
+  The side keeps only the parent's `PATH`, `CODEX_PATH`, `TMPDIR`,
+  `CODEX_SQLITE_HOME`, `LANG`, `LC_ALL`, `TERM` and `TZ` variables, so a
+  provider or credential setting supplied through any other variable does
+  not reach it.
   The side starts without the binding's `mcp_servers`. An unconfined side
   has no private provider home and uses `home/.codex` directly.
   Keep these settings fixed. A change of connection, account, workspace or
