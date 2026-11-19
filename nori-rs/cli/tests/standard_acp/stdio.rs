@@ -74,8 +74,8 @@ impl StdioHost {
             output: BufReader::new(child.stdout.take().unwrap()).lines(),
             host,
             child,
-            cwd,
-            home,
+            cwd: cwd.canonicalize().unwrap(),
+            home: home.canonicalize().unwrap(),
         }
     }
 
