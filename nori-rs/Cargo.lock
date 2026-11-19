@@ -4025,6 +4025,7 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width 0.2.1",
  "url",
+ "uuid",
  "vt100 0.16.2",
  "which",
 ]

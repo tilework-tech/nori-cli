@@ -41,3 +41,24 @@ impl ChatComposer {
         self.sync_selection_popups();
     }
 }
+
+impl ChatComposer {
+    /// Put text taken back from the queue before the current draft, keeping
+    /// the draft's placeholders, attachments, and cursor. Returns `false`
+    /// when the text cannot be placed (input disabled, or a shell-mode draft
+    /// it would join), so the caller can show it instead of losing it.
+    pub(crate) fn prepend_reclaimed_text(&mut self, text: &str) -> bool {
+        if !self.input_enabled || (self.is_shell_mode && !self.textarea.is_empty()) {
+            return false;
+        }
+        if self.is_empty() {
+            self.is_shell_mode = false;
+            self.textarea.set_text(text);
+            self.textarea.set_cursor(text.len());
+        } else {
+            self.textarea.insert_str_at(0, &format!("{text}\n"));
+        }
+        self.sync_selection_popups();
+        true
+    }
+}

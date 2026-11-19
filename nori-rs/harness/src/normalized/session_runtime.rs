@@ -193,6 +193,8 @@ pub enum QueuedPromptKind {
 /// A user prompt waiting to be sent to ACP.
 #[derive(Debug, Clone)]
 pub struct QueuedPrompt {
+    /// A follow-up remains scoped to the session that owned its expected turn.
+    pub target_session: Option<acp::SessionId>,
     pub event_id: String,
     pub kind: QueuedPromptKind,
     pub text: String,
@@ -203,20 +205,44 @@ pub struct QueuedPrompt {
     /// Content sent to the downstream agent, including any Nori context.
     pub content: Vec<acp::ContentBlock>,
     pub display_text: Option<String>,
+    /// `Some` only for a prompt the local user typed, which may be taken back
+    /// into the composer before it is sent. Holds the one-shot context the
+    /// prompt consumed when it was queued, so a reclaim can return it.
+    pub reclaim: Option<Box<ReclaimRestore>>,
+}
+
+/// One-shot backend context a queued prompt consumed at submission.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReclaimRestore {
+    /// Hook context that was already pending before this prompt's own
+    /// `pre_user_prompt` hooks ran (their output is regenerated on resubmit).
+    pub hook_context: Option<String>,
+    pub compact_summary: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
 // Session runtime
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SteerFence {
+    Open,
+    AwaitingReply,
+    DrainAfterReply,
+}
+
 /// The single runtime object per ACP session. Everything else is derived
 /// from this.
 #[derive(Debug, Clone)]
 pub struct SessionRuntime {
     pub phase: SessionPhase,
+    pub steer_fence: SteerFence,
     pub persisted: PersistedSessionState,
     pub active: Option<ActiveRequestState>,
     pub queue: VecDeque<QueuedPrompt>,
+    /// Set when a turn ended without completing while prompts were queued;
+    /// the queue then waits for an explicit resume.
+    pub queue_pause: Option<nori_protocol::QueuePause>,
     /// Tracks whether we have already emitted the "no active local request"
     /// warning since the last time a request became active. Reset on each new
     /// prompt/load start so a later unowned burst can warn again.
@@ -230,9 +256,11 @@ impl SessionRuntime {
     pub fn new() -> Self {
         Self {
             phase: SessionPhase::Idle,
+            steer_fence: SteerFence::Open,
             persisted: PersistedSessionState::default(),
             active: None,
             queue: VecDeque::new(),
+            queue_pause: None,
             orphan_update_warning_emitted: false,
             observer_turn_active: false,
         }

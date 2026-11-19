@@ -155,6 +155,8 @@ mod context;
 mod delegation;
 mod part10;
 mod part8;
+mod queue_list;
+mod queue_recall;
 
 pub(crate) fn make_scoped_chatwidget_manual() -> (
     ChatWidget,

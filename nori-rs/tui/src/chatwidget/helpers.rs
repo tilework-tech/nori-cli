@@ -341,10 +341,28 @@ impl ChatWidget {
             return;
         };
         let app_event_tx = self.app_event_tx.clone();
+        let generation = self.session_generation;
         tokio::spawn(async move {
             use crate::app_event::HarnessAction;
             let result = match action {
                 HarnessAction::Cancel => handle.cancel().await,
+                HarnessAction::ResumeQueue => handle.resume_queue().await,
+                HarnessAction::ReclaimQueuedPrompt { event_id, action } => {
+                    use crate::app_event::ReclaimOutcome;
+                    let result = handle.reclaim_queued_prompt(event_id.clone()).await;
+                    let outcome = match &result {
+                        Ok(Some(text)) => ReclaimOutcome::Reclaimed(text.clone()),
+                        Ok(None) => ReclaimOutcome::AlreadyStarted,
+                        Err(_) => ReclaimOutcome::Failed,
+                    };
+                    app_event_tx.send(AppEvent::QueuedPromptReclaimed {
+                        generation,
+                        event_id,
+                        action,
+                        outcome,
+                    });
+                    result.map(|_| ())
+                }
                 HarnessAction::Shutdown { child_grace } => {
                     let result = handle.shutdown_with_grace(child_grace).await;
                     if result.is_err() {
@@ -431,6 +449,9 @@ impl ChatWidget {
         tokio::spawn(async move {
             if let Err(error) = handle.prompt(content).await
                 && !handle.is_expected_shutdown_error(&error)
+                && error
+                    .downcast_ref::<nori_harness::backend::PromptWithdrawn>()
+                    .is_none()
             {
                 app_event_tx.send(AppEvent::HarnessActionFailed(error.to_string()));
             }

@@ -55,6 +55,37 @@ async fn local_context_command_returns_promptly_and_loads_instruction_inventory(
     );
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn context_requested_while_the_session_is_starting_still_prints_its_snapshot() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.conversation_id = None;
+    while rx.try_recv().is_ok() {}
+
+    chat.dispatch_command(SlashCommand::Context);
+    let printed = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        loop {
+            match rx.recv().await.expect("context event channel") {
+                AppEvent::ContextTimelineReady {
+                    generation,
+                    conversation_id,
+                    result,
+                } => {
+                    // The session reports its ID before the snapshot is ready.
+                    chat.conversation_id = Some(nori_harness::ConversationId::new());
+                    chat.handle_context_timeline(generation, conversation_id, result);
+                    break rx
+                        .try_recv()
+                        .is_ok_and(|event| matches!(event, AppEvent::InsertHistoryCell(_)));
+                }
+                _ => {}
+            }
+        }
+    })
+    .await
+    .expect("context snapshot produced");
+    assert!(printed, "the snapshot was discarded");
+}
+
 #[test]
 fn context_command_uses_reported_usage_and_prints_a_detached_snapshot() {
     let (mut chat, mut rx, _op_rx) = make_cloud_chatwidget_manual();

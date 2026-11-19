@@ -2344,6 +2344,9 @@ pub struct NoriConfig {
     /// How tool calls render inline (the transcript view is always full).
     pub tool_output: ToolOutput,
 
+    /// `tool_output` came from a `-c` override, which applies to this run only.
+    pub tool_output_from_command_line: bool,
+
     /// Pin plan updates to a drawer in the viewport instead of history cells.
     pub pinned_plan_drawer: bool,
 
@@ -2469,6 +2472,7 @@ impl Default for NoriConfig {
             file_manager: None,
             pinned_plan_drawer: false,
             tool_output: ToolOutput::default(),
+            tool_output_from_command_line: false,
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             footer_segment_config: FooterSegmentConfig::default(),

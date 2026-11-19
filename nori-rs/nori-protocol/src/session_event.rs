@@ -104,7 +104,38 @@ pub enum SessionEndReason {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueueSnapshot {
+    /// Display text of each queued user prompt, oldest first.
     pub prompts: Vec<String>,
+    /// The same rows with stable IDs, so a client can take one back with
+    /// `HarnessHandle::reclaim_queued_prompt`. Empty from hosts that predate it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub entries: Vec<QueueEntry>,
+    /// Set while queued prompts wait for an explicit resume instead of
+    /// starting on their own. Absent from hosts that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paused: Option<QueuePause>,
+}
+
+/// Why the queue stopped sending on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QueuePause {
+    /// The turn before the queued prompts was interrupted.
+    Interrupted,
+    /// The turn before the queued prompts failed or stopped early.
+    TurnFailed,
+}
+
+/// One queued user prompt, in delivery order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QueueEntry {
+    /// The prompt's submission event ID; unique within the session.
+    pub id: String,
+    pub text: String,
+    /// Whether the prompt is plain text that can return to the composer
+    /// without losing content such as images.
+    #[serde(default)]
+    pub editable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

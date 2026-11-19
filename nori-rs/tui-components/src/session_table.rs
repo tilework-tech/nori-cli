@@ -1,21 +1,4 @@
-//! One layout for every list of sessions: the local session list, the
-//! `nori attach` list, and `nori host ls` on a terminal.
-//!
-//! Each session takes two rows. Row 1 holds the status icon and title, the
-//! agent, the status word and a header-less context column; row 2 holds the
-//! start of the agent's last reply, the model and the time since the last
-//! activity. Columns are separated by two spaces. A 2-cell marker and the
-//! 2-cell status icon come first, then:
-//!
-//! | Column  | Width                          |
-//! |---------|--------------------------------|
-//! | Session | at least 24, takes extra width |
-//! | Agent   | 12, hidden below 58 columns    |
-//! | Status  | 14                             |
-//! | Context | 11, shown from 87 columns      |
-//!
-//! From 58 to 86 columns every extra cell goes to Session; at 87 Session has
-//! 40 and Context appears; beyond that Session takes the rest again.
+//! Shared two-row layout for the local session list, attach list, and terminal host listing.
 
 use crate::PickerColumn;
 use crate::PickerColumnWidth;

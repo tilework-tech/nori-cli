@@ -102,6 +102,7 @@ two-face = { workspace = true }
 unicode-segmentation = { workspace = true }
 unicode-width = { workspace = true }
 url = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 which = { workspace = true }
 
 codex-windows-sandbox = { workspace = true }

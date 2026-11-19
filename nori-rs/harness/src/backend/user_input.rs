@@ -1,4 +1,5 @@
 use super::*;
+use crate::follow_up::PromptOrigin;
 
 impl AcpBackend {
     /// Submit schema-native ACP content through Nori's prompt lifecycle.
@@ -6,9 +7,38 @@ impl AcpBackend {
         &self,
         content: Vec<acp::ContentBlock>,
         id: &str,
-        mut prompt_meta: Option<acp::Meta>,
+        prompt_meta: Option<acp::Meta>,
         admission: PromptAdmission,
     ) -> Result<()> {
+        let origin = if admission == PromptAdmission::Queue && prompt_meta.is_none() {
+            PromptOrigin::LocalComposer
+        } else {
+            PromptOrigin::External
+        };
+        let prompt = self
+            .prepare_user_input(content, id, prompt_meta, origin)
+            .await;
+        let event = match admission {
+            PromptAdmission::Queue => session_reducer::InboundEvent::PromptSubmit(prompt),
+            PromptAdmission::RejectIfBusy => {
+                session_reducer::InboundEvent::PromptSubmitIfIdle(prompt)
+            }
+        };
+        self.session_event_tx
+            .send(session_runtime_driver::SessionRuntimeInput::Reducer(event))
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP session runtime closed during prompt submission"))?;
+
+        Ok(())
+    }
+
+    pub(super) async fn prepare_user_input(
+        &self,
+        content: Vec<acp::ContentBlock>,
+        id: &str,
+        mut prompt_meta: Option<acp::Meta>,
+        origin: PromptOrigin,
+    ) -> crate::normalized::session_runtime::QueuedPrompt {
         let prompt_text = content
             .iter()
             .filter_map(|block| match block {
@@ -23,10 +53,6 @@ impl AcpBackend {
                 prompt_text
             });
 
-        if prompt_text.is_empty() && content.is_empty() {
-            return Ok(());
-        }
-
         // For image-only prompts, use a placeholder for downstream consumers
         // (hooks, transcript, summary, snapshot labels) that expect non-empty text.
         let display_text = if prompt_text.is_empty() && !content.is_empty() {
@@ -34,6 +60,14 @@ impl AcpBackend {
         } else {
             prompt_text.clone()
         };
+
+        // Only text the local user typed may go back to their composer; a
+        // remote controller's or a delegated child's prompt may not. Its
+        // inherited hook context is captured before this prompt's own hooks
+        // add theirs, so a reclaim can return just what it consumed.
+        let local_user_prompt = origin == PromptOrigin::LocalComposer
+            && nori_protocol::delegation_result_summary(&display_text).is_none();
+        let inherited_hook_context = self.pending_hook_context.lock().await.clone();
 
         // Execute pre_user_prompt hooks before sending the prompt
         if !self.pre_user_prompt_hooks.is_empty() {
@@ -147,7 +181,7 @@ impl AcpBackend {
 
         // Check if we have a pending compact summary to prepend
         let pending_summary = self.pending_compact_summary.lock().await.take();
-        let final_prompt_text = if let Some(summary) = pending_summary {
+        let final_prompt_text = if let Some(summary) = &pending_summary {
             use crate::compact::SUMMARY_PREFIX;
             format!("{SUMMARY_PREFIX}\n{summary}\n\n{prompt_with_goal_context}")
         } else {
@@ -201,7 +235,8 @@ impl AcpBackend {
             "Accepted user prompt into ACP backend"
         );
 
-        let prompt = crate::normalized::session_runtime::QueuedPrompt {
+        crate::normalized::session_runtime::QueuedPrompt {
+            target_session: None,
             event_id: id.to_string(),
             kind: crate::normalized::session_runtime::QueuedPromptKind::User,
             text: final_prompt_text,
@@ -209,18 +244,63 @@ impl AcpBackend {
             original_content,
             content: final_content,
             display_text: Some(prompt_text_for_hooks),
-        };
-        let event = match admission {
-            PromptAdmission::Queue => session_reducer::InboundEvent::PromptSubmit(prompt),
-            PromptAdmission::RejectIfBusy => {
-                session_reducer::InboundEvent::PromptSubmitIfIdle(prompt)
-            }
-        };
-        self.session_event_tx
-            .send(session_runtime_driver::SessionRuntimeInput::Reducer(event))
-            .await
-            .map_err(|_| anyhow::anyhow!("ACP session runtime closed during prompt submission"))?;
+            reclaim: local_user_prompt.then_some(Box::new(
+                crate::normalized::session_runtime::ReclaimRestore {
+                    hook_context: inherited_hook_context,
+                    compact_summary: pending_summary,
+                },
+            )),
+        }
+    }
 
-        Ok(())
+    pub(super) async fn publish_user_input(
+        &self,
+        prompt_event_id: &str,
+        display_text: Option<&str>,
+        original_content: Vec<acp::ContentBlock>,
+        prompt_meta: Option<&acp::Meta>,
+    ) {
+        if let Some(recorder) = self.transcript_recorder.read().await.clone()
+            && let Some(display_text) = display_text
+            && let Err(error) = recorder
+                .record_user_message(prompt_event_id, display_text, vec![])
+                .await
+        {
+            warn!("Failed to record user message to transcript: {error}");
+        }
+
+        let session_id = self.session_id.read().await.clone();
+        let message_id = acp::MessageId::new(prompt_event_id.to_owned());
+        let echo_meta = prompt_meta
+            .map(|meta| {
+                meta.iter()
+                    .filter(|(key, _)| {
+                        matches!(
+                            key.as_str(),
+                            nori_protocol::PROMPT_ECHO_ID_META_KEY | crate::follow_up::SENDER_META
+                        )
+                    })
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect::<acp::Meta>()
+            })
+            .filter(|meta| !meta.is_empty());
+        for content in original_content {
+            let notification = acp::SessionNotification::new(
+                session_id.clone(),
+                acp::SessionUpdate::UserMessageChunk(
+                    acp::ContentChunk::new(content)
+                        .message_id(message_id.clone())
+                        .meta(echo_meta.clone()),
+                ),
+            );
+            let _ = self
+                .backend_event_tx
+                .send(BackendEvent::Public(SessionEvent::Acp(
+                    nori_protocol::AcpEvent::Notification(
+                        acp::AgentNotification::SessionNotification(notification),
+                    ),
+                )))
+                .await;
+        }
     }
 }

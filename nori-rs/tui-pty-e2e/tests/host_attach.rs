@@ -32,6 +32,7 @@ const CLEANUP_TIMEOUT: Duration = Duration::from_secs(35);
 struct Host {
     home: tempfile::TempDir,
     binary: PathBuf,
+    steering: bool,
 }
 
 impl Host {
@@ -55,7 +56,11 @@ impl Host {
             .parent()
             .unwrap()
             .join("nori");
-        Self { home, binary }
+        Self {
+            home,
+            binary,
+            steering: false,
+        }
     }
 
     fn args(args: &[&str]) -> Vec<String> {
@@ -79,6 +84,9 @@ impl Host {
             .with_agent_env("NORI_NO_ANALYTICS", "1")
             .with_agent_env("MOCK_AGENT_RESPONSE", ANSWER)
             .with_extra_path(self.binary.parent().unwrap().to_path_buf());
+        if self.steering {
+            config = config.with_agent_env("MOCK_AGENT_STEERING", "1");
+        }
         config.cwd = Some(cwd.to_path_buf());
         Client(TuiSession::spawn_with_config(40, 120, config).unwrap())
     }
@@ -954,4 +962,34 @@ fn new_sessions_start_in_the_attaching_folder_or_a_tab_completed_one() {
     client
         .wait_for_text(&format!("third-folder · {ANSWER}"), TIMEOUT)
         .expect("the list shows each session's folder before its reply");
+}
+
+#[test]
+fn attached_busy_enter_reports_fallback_and_tab_explicitly_queues() {
+    let host = Host::new();
+    host.start();
+    let mut client = host.create_session();
+    client.submit_input("mock:stream-until-cancel").unwrap();
+    client.wait_for_text("Streaming...", TIMEOUT).unwrap();
+    client.submit_input("Chart the orchard first").unwrap();
+    client
+        .wait_for_text("Steering unavailable", TIMEOUT)
+        .unwrap();
+    client.type_input("Count the cedar trees").unwrap();
+    client.send_key(Key::Tab).unwrap();
+    client
+        .wait_for_text("Queued for the next turn", TIMEOUT)
+        .unwrap();
+}
+
+#[path = "support/steering.rs"]
+mod steering;
+
+#[test]
+fn attached_enter_delivers_to_the_original_turn_then_tab_drains_once() {
+    let mut host = Host::new();
+    host.steering = true;
+    host.start();
+    let mut client = host.create_session();
+    steering::exercise(&mut client);
 }

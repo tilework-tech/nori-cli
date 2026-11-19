@@ -208,6 +208,25 @@ fn only_one_host_owns_the_journal_directory() -> Result<()> {
 }
 
 #[test]
+fn reopening_waits_for_a_spawned_child_to_drop_its_inherited_lock() -> Result<()> {
+    let root = tempdir()?;
+    let journal = Journal::open(root.path(), LIMIT)?;
+    // A child forked on another thread shares the lock until it execs or exits.
+    let inherited = journal._lock.try_clone()?;
+    drop(journal);
+    let child = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        drop(inherited);
+    });
+    let reopened = Journal::open(root.path(), LIMIT);
+    child
+        .join()
+        .map_err(|_| anyhow::anyhow!("child thread panicked"))?;
+    reopened?;
+    Ok(())
+}
+
+#[test]
 fn oversized_final_response_neither_completes_command_nor_advances_output() -> Result<()> {
     let root = tempdir()?;
     let mut journal = Journal::open(root.path(), 4096)?;

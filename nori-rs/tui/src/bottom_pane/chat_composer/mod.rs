@@ -77,6 +77,7 @@ const LARGE_PASTE_CHAR_THRESHOLD: usize = 1000;
 #[derive(Debug, PartialEq)]
 pub enum InputResult {
     Submitted(String),
+    Queued(String),
     Command(SlashCommand),
     None,
 }

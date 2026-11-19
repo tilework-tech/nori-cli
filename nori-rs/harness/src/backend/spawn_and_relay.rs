@@ -296,6 +296,7 @@ impl AcpBackend {
             async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
             script_timeout: config.script_timeout,
             session_driver: Arc::clone(&session_driver),
+            follow_ups: Default::default(),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
             is_shutting_down: Arc::new(AtomicBool::new(false)),
@@ -308,22 +309,7 @@ impl AcpBackend {
         let runtime_backend = backend.clone();
         let runtime_task = tokio::spawn(async move {
             while let Some(input) = session_event_rx.recv().await {
-                match input {
-                    session_runtime_driver::SessionRuntimeInput::Reducer(event) => {
-                        runtime_backend.apply_session_event(event).await;
-                    }
-                    session_runtime_driver::SessionRuntimeInput::Barrier { response_tx } => {
-                        let _ = response_tx.send(());
-                    }
-                    session_runtime_driver::SessionRuntimeInput::PermissionRequest {
-                        pending_request,
-                        current_policy,
-                    } => {
-                        runtime_backend
-                            .handle_permission_request(pending_request, current_policy)
-                            .await;
-                    }
-                }
+                runtime_backend.apply_runtime_input(input).await;
             }
         });
         *backend.runtime_task_abort.lock().await = Some(runtime_task.abort_handle());
@@ -378,6 +364,18 @@ impl AcpBackend {
         *backend.relay_task_abort.lock().await = Some(relay_task.abort_handle());
 
         Ok(backend)
+    }
+
+    async fn flush_session_events(&self) {
+        let (response_tx, response_rx) = oneshot::channel();
+        if self
+            .session_event_tx
+            .send(session_runtime_driver::SessionRuntimeInput::Barrier { response_tx })
+            .await
+            .is_ok()
+        {
+            let _ = response_rx.await;
+        }
     }
 
     /// Background task that processes transport events and prompt results
@@ -437,14 +435,13 @@ impl AcpBackend {
                             };
                             if !suppress_next_session_update {
                                 let _ = backend
-                                    .backend_event_tx
-                                    .send(BackendEvent::Public(nori_protocol::SessionEvent::Acp(
-                                        *event,
-                                    )))
+                                    .session_event_tx
+                                    .send(session_runtime_driver::SessionRuntimeInput::PublicAcp(event))
                                     .await;
                             }
                         }
                         Some(crate::connection::ConnectionEvent::SessionClosed) => {
+                            backend.flush_session_events().await;
                             let _ = backend
                                 .backend_event_tx
                                 .send(BackendEvent::Public(SessionEvent::Nori(
@@ -487,6 +484,7 @@ impl AcpBackend {
                         }) => {
                             backend.wait_for_prompt_phase().await;
                             if !backend.is_shutting_down.load(Ordering::Relaxed) {
+                                backend.flush_session_events().await;
                                 let mut message = match status {
                                     Some(code) => format!(
                                         "Agent process exited unexpectedly (exit code {code})."
@@ -579,10 +577,8 @@ impl AcpBackend {
                                         };
                                         if !suppress_next_session_update {
                                             let _ = backend
-                                                .backend_event_tx
-                                                .send(BackendEvent::Public(
-                                                    nori_protocol::SessionEvent::Acp(*event),
-                                                ))
+                                                .session_event_tx
+                                    .send(session_runtime_driver::SessionRuntimeInput::PublicAcp(event))
                                                 .await;
                                         }
                                     }
@@ -608,6 +604,7 @@ impl AcpBackend {
                                             .await;
                                     }
                                     crate::connection::ConnectionEvent::SessionClosed => {
+                                        backend.flush_session_events().await;
                                         let _ = backend
                                             .backend_event_tx
                                             .send(BackendEvent::Public(SessionEvent::Nori(
@@ -656,6 +653,7 @@ impl AcpBackend {
                 }
             }
         }
+        backend.flush_session_events().await;
         if let Some(abort) = backend.runtime_task_abort.lock().await.take() {
             abort.abort();
         }

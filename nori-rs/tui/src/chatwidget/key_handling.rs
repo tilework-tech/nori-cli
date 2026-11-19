@@ -2,6 +2,9 @@ use super::*;
 
 impl ChatWidget {
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
+        if self.handle_queue_list_key(key_event) {
+            return;
+        }
         match key_event {
             KeyEvent {
                 code: KeyCode::Char(c),
@@ -46,33 +49,94 @@ impl ChatWidget {
             {
                 return;
             }
+            KeyEvent {
+                code: KeyCode::Up,
+                modifiers,
+                kind: KeyEventKind::Press,
+                ..
+            } if !self.exiting
+                && !self.bottom_pane.has_active_overlay_or_popup()
+                && modifiers == KeyModifiers::ALT
+                && self.start_queued_prompt_reclaim() =>
+            {
+                return;
+            }
+            KeyEvent {
+                code: KeyCode::Up,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            } if !self.exiting
+                && !self.bottom_pane.has_active_overlay_or_popup()
+                && self.bottom_pane.composer_is_empty()
+                && !self.bottom_pane.is_in_paste_burst()
+                && self.focus_queue_list() =>
+            {
+                return;
+            }
+            KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            } if !self.exiting
+                && !self.bottom_pane.has_active_overlay_or_popup()
+                && self.bottom_pane.composer_is_empty()
+                && !self.bottom_pane.is_in_paste_burst()
+                && self.resume_paused_queue() =>
+            {
+                return;
+            }
             other if other.kind == KeyEventKind::Press => {
                 self.bottom_pane.clear_ctrl_c_quit_hint();
             }
             _ => {}
         }
 
-        match self.bottom_pane.handle_key_event(key_event) {
+        use crate::follow_up::Delivery;
+        use crate::presentation::session_runtime::SessionPhaseView;
+        use nori_harness::FollowUpIntent;
+        let active_turn = self.owned_prompt_request_id.as_ref().filter(|_| {
+            !self.cloud_mode
+                && !self.follow_only_attachment
+                && self.acp_session_phase == Some(SessionPhaseView::Prompt)
+        });
+        let (text, intent) = match self
+            .bottom_pane
+            .handle_key_event_with_queue(key_event, active_turn.is_some())
+        {
             InputResult::Submitted(text)
-                if self.cloud_mode && !self.session_configured_received =>
+                if (self.cloud_mode && !self.session_configured_received)
+                    || self.follow_only_attachment =>
             {
                 self.bottom_pane.restore_composer_submission(text);
+                return;
             }
-            InputResult::Submitted(text) if self.follow_only_attachment => {
-                self.bottom_pane.restore_composer_submission(text);
-            }
-            InputResult::Submitted(text) => {
-                let user_message = UserMessage {
-                    text,
-                    image_paths: self.bottom_pane.take_recent_submission_images(),
-                };
-                self.submit_user_message(user_message);
-            }
+            InputResult::Submitted(text) => (text, FollowUpIntent::Steer),
+            InputResult::Queued(text) => (text, FollowUpIntent::Queue),
             InputResult::Command(cmd) => {
                 self.dispatch_command(cmd);
+                return;
             }
-            InputResult::None => {}
-        }
+            InputResult::None => return,
+        };
+        let message = UserMessage {
+            text,
+            image_paths: self.bottom_pane.take_recent_submission_images(),
+        };
+        let delivery = match active_turn {
+            Some(turn) => Delivery::FollowUp {
+                turn: turn.clone(),
+                intent,
+            },
+            None if !self.cloud_mode
+                && matches!(self.acp_session_phase, None | Some(SessionPhaseView::Idle)) =>
+            {
+                Delivery::IfIdle
+            }
+            None => Delivery::Default,
+        };
+        self.submit_composed_message(message, delivery);
     }
 
     pub(crate) fn attach_image(
@@ -334,6 +398,7 @@ impl ChatWidget {
     }
 
     pub(crate) fn handle_paste(&mut self, text: String) {
+        self.bottom_pane.blur_queue_list();
         self.bottom_pane.handle_paste(text);
     }
 

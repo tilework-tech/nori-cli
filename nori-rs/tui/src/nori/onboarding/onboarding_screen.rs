@@ -100,7 +100,8 @@ impl NoriOnboardingScreen {
                 nori_home.clone(),
                 cwd,
                 is_git_repo,
-                config.tool_output,
+                config.tool_output == nori_config::ToolOutput::Full
+                    || config.tool_output_from_command_line,
             )));
         }
 

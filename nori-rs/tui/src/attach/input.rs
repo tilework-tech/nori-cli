@@ -162,10 +162,23 @@ impl Runtime {
             }
             return true;
         }
-        if let crate::ComposerAction::Submitted(text) = self.composer.input(key) {
-            return self.submit(text);
+        let active_turn = self
+            .state
+            .selected
+            .as_ref()
+            .and_then(|id| self.state.conversations.get(id))
+            .and_then(|conversation| conversation.active_turn.clone());
+        use crate::bottom_pane::InputResult;
+        let result = self.composer.attachment_input(key, active_turn.is_some());
+        match result {
+            InputResult::Queued(text) => {
+                self.submit_with_intent(text, active_turn, nori_harness::FollowUpIntent::Queue)
+            }
+            InputResult::Submitted(text) => {
+                self.submit_with_intent(text, active_turn, nori_harness::FollowUpIntent::Steer)
+            }
+            InputResult::None | InputResult::Command(_) => true,
         }
-        true
     }
 
     /// Returns whether a waiting session was brought on screen.
@@ -322,6 +335,15 @@ impl Runtime {
     }
 
     fn submit(&mut self, text: String) -> bool {
+        self.submit_with_intent(text, None, nori_harness::FollowUpIntent::Steer)
+    }
+
+    fn submit_with_intent(
+        &mut self,
+        text: String,
+        active_turn: Option<acp::RequestId>,
+        intent: nori_harness::FollowUpIntent,
+    ) -> bool {
         let command = text.trim();
         if matches!(command, "/quit" | "/exit" | "/detach") {
             return false;
@@ -381,6 +403,18 @@ impl Runtime {
                 method,
                 json!({"session_id":id}),
                 Pending::Mutation { draft: None },
+            );
+        } else if let Some(expected_turn) = active_turn {
+            let message_id = uuid::Uuid::new_v4().to_string();
+            self.send(
+                "_nori/session/follow_up",
+                json!({"session_id":id, "expected_turn":expected_turn, "message_id":message_id,
+                    "intent":intent,"prompt":[{"type":"text","text":text}]}),
+                Pending::FollowUp {
+                    session_id: id,
+                    message_id,
+                    draft: text,
+                },
             );
         } else {
             match self.state.prompt(&id, &text) {

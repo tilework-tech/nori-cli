@@ -46,6 +46,10 @@ count, image count, image MIME type, and image data through the
 `MOCK_AGENT_EXPECT_*` prompt variables. A mismatch returns a structured prompt
 error, allowing PTY lifecycle tests to verify that deferred positional or typed
 input reaches ACP exactly once without transforming text or attachments.
+`MOCK_AGENT_PROMPT_LOG=<path>` appends each delivered prompt's last text block
+to that file as one JSON string per line, so tests can assert on exactly which
+prompts reached the agent and how many times (for example, that a reclaimed
+queued prompt is never delivered).
 
 Cloud readiness fixtures can hold a successful `session/new` response until a
 `MOCK_AGENT_NEW_SESSION_RELEASE_FILE` appears or return a structured
@@ -66,7 +70,8 @@ and then release or cancel it without a timing guess. The same fixtures drive
 Some scenarios can also be chosen per prompt, so several sessions on one mock
 binary can behave differently without sharing an environment. A prompt whose
 text block is exactly `mock:exit-during-prompt`, or that contains
-`mock:stream-until-cancel` or `mock:request-permission` anywhere, selects the
+`mock:stream-until-cancel`, `mock:prompt-fail-after-delay`, or
+`mock:request-permission` anywhere, selects the
 scenario for that turn. A named permission command runs from the colon to the
 end of the text block:
 
@@ -74,6 +79,7 @@ end of the text block:
 | --- | --- | --- |
 | `mock:stream-until-cancel` | Streams text chunks until the turn is cancelled | `MOCK_AGENT_STREAM_UNTIL_CANCEL` |
 | `mock:exit-during-prompt` | Exits with status 17 mid-prompt | `MOCK_AGENT_EXIT_DURING_PROMPT` |
+| `mock:prompt-fail-after-delay` | Waits `MOCK_AGENT_DELAY_MS`, then fails the prompt with a JSON-RPC error, so prompts can queue behind a failing turn | `MOCK_AGENT_PROMPT_FAIL` (fails at once) |
 | `mock:request-permission` | Sends a permission request for the default `echo` command | `MOCK_AGENT_REQUEST_PERMISSION` |
 | `mock:request-permission:<command>` | Sends a permission request naming `<command>` | none |
 

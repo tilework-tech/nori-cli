@@ -1,13 +1,4 @@
-//! The session list: every session this TUI holds, in navigation order.
-//!
-//! Rows use the shared two-row session layout
-//! (`nori_tui_components::session_table`): a status glyph and the title, the
-//! agent, the status word and the context use, then the start of the agent's
-//! last reply, the model and the time since the last activity. Children sit indented under their parent. Tab
-//! toggles between every session and only those waiting on the user, and
-//! typing filters by title or agent. Ctrl+D closes the selected session (a
-//! busy one takes a second press) and removes a closed one from the list. Rows are replaced while the list is open
-//! without moving the selection.
+//! Interactive session list in navigation order, using the shared two-row layout.
 
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;

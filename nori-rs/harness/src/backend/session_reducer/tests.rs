@@ -28,6 +28,7 @@ fn text_content(text: &str) -> Vec<acp::ContentBlock> {
 
 fn simple_prompt() -> QueuedPrompt {
     QueuedPrompt {
+        target_session: None,
         event_id: "evt-1".to_string(),
         kind: QueuedPromptKind::User,
         text: "hello".to_string(),
@@ -35,6 +36,7 @@ fn simple_prompt() -> QueuedPrompt {
         original_content: text_content("hello"),
         content: text_content("hello"),
         display_text: Some("hello".to_string()),
+        reclaim: None,
     }
 }
 
@@ -164,6 +166,7 @@ fn queued_goal_continuation_is_hidden_from_user_queue_and_transcript() {
     );
 
     let hidden_prompt = QueuedPrompt {
+        target_session: None,
         event_id: "goal-continuation-1".to_string(),
         kind: QueuedPromptKind::GoalContinuation,
         text: "Continue working toward the active thread goal.".to_string(),
@@ -171,6 +174,7 @@ fn queued_goal_continuation_is_hidden_from_user_queue_and_transcript() {
         original_content: Vec::new(),
         content: text_content("Continue working toward the active thread goal."),
         display_text: None,
+        reclaim: None,
     };
     let out = reduce(
         &mut rt,
@@ -548,6 +552,7 @@ fn prompt_submit_while_active_queues() {
     let out = reduce(
         &mut rt,
         InboundEvent::PromptSubmit(QueuedPrompt {
+            target_session: None,
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
@@ -555,6 +560,7 @@ fn prompt_submit_while_active_queues() {
             original_content: text_content("second"),
             content: text_content("second"),
             display_text: Some("second".to_string()),
+            reclaim: None,
         }),
         &mut norm,
     );
@@ -583,6 +589,7 @@ fn end_turn_drains_queue() {
     reduce(
         &mut rt,
         InboundEvent::PromptSubmit(QueuedPrompt {
+            target_session: None,
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
@@ -590,6 +597,7 @@ fn end_turn_drains_queue() {
             original_content: text_content("second"),
             content: text_content("second"),
             display_text: Some("second".to_string()),
+            reclaim: None,
         }),
         &mut norm,
     );
@@ -634,6 +642,7 @@ fn cancelled_does_not_drain_queue() {
     reduce(
         &mut rt,
         InboundEvent::PromptSubmit(QueuedPrompt {
+            target_session: None,
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
@@ -641,6 +650,7 @@ fn cancelled_does_not_drain_queue() {
             original_content: text_content("second"),
             content: text_content("second"),
             display_text: Some("second".to_string()),
+            reclaim: None,
         }),
         &mut norm,
     );

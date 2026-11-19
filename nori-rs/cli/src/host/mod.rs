@@ -5,6 +5,7 @@ mod recovery_history;
 mod service;
 mod session_lookup;
 mod state;
+mod stdio;
 mod table;
 
 use std::io::IsTerminal;
@@ -39,6 +40,17 @@ pub(crate) struct HostCommand {
     port: i32,
     #[arg(long, hide = true)]
     foreground: bool,
+    /// Serve one managed launch as ACP on stdin and stdout, in the foreground,
+    /// until stdin closes. Needs `[host] managed` and `[host.dedicated_roots]`.
+    #[arg(long, requires = "launch", conflicts_with = "foreground")]
+    stdio: bool,
+    /// JSON launch specification for --stdio.
+    #[arg(long, value_name = "FILE", requires = "stdio")]
+    launch: Option<PathBuf>,
+    /// Add this process's environment to the --stdio launch. Variables in the
+    /// specification win.
+    #[arg(long, requires = "stdio")]
+    inherit_env: bool,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -238,6 +250,31 @@ pub(crate) async fn run(
             println!("Host stopped.");
             Ok(())
         }
+        None if command.stdio => {
+            let (config, overrides) = config.context("host configuration is required")?;
+            let binding = config
+                .host
+                .dedicated_roots
+                .as_ref()
+                .filter(|_| config.host.managed)
+                .context("--stdio needs [host] managed = true and [host.dedicated_roots]")?
+                .binding_id
+                .clone();
+            let launch = command.launch.context("--stdio needs --launch")?;
+            let served = serve(0, (config, overrides), &files);
+            tokio::pin!(served);
+            let relayed = tokio::select! {
+                ended = &mut served => {
+                    ended?;
+                    anyhow::bail!("the host stopped before the ACP stream ended");
+                }
+                relayed = stdio::relay(&files, &binding, &launch, command.inherit_env) => relayed,
+            };
+            tokio::time::timeout(Duration::from_secs(35), served)
+                .await
+                .context("the host did not stop")??;
+            relayed
+        }
         None if command.foreground => {
             serve(
                 command.port,
@@ -377,7 +414,7 @@ async fn serve(
     let host = Arc::new(HostService {
         recovery,
         launches,
-        managed: ManagedRemoteHost::new(manager.clone()),
+        managed: ManagedRemoteHost::authenticated_host(manager.clone()),
         manager,
         config: Arc::new(config),
         overrides,

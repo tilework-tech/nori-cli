@@ -70,6 +70,8 @@ mod helpers;
 mod key_handling;
 mod login;
 mod pickers;
+mod queue_list;
+mod queue_recall;
 mod remote_control;
 mod session_close;
 mod session_config_mode;

@@ -74,6 +74,7 @@ struct SessionRuntime {
     persisted: PersistedSessionState,
     active: Option<ActiveRequestState>,
     queue: VecDeque<QueuedPrompt>,
+    queue_pause: Option<QueuePause>,
 }
 ```
 
@@ -195,19 +196,27 @@ timing.
 
 ### `OutgoingQueue`
 
-`OutgoingQueue` is a client-local FIFO of user prompts that have not yet been
-sent to ACP.
+`OutgoingQueue` is the harness-owned FIFO of user prompts that have not yet
+been sent to ACP. Clients see it only through `QueueChanged` snapshots.
 
-It has no protocol meaning. The agent never sees it.
+It has no ACP meaning. The agent never sees it.
 
 It exists for exactly one reason: ACP allows only one prompt in flight per
 session, but the user may keep typing while a request is active.
 
-Queued prompts are unsent local drafts. They are not:
+Queued prompts are unsent drafts. They are not:
 
 - part of the active request
 - restored into the composer on cancel
 - merged into a synthetic user message
+
+The **session harness** owns the only `OutgoingQueue` that is delivered; a
+client never keeps a second deliverable queue. A client may take one queued
+prompt back by its submission event ID before it is sent. That request is
+reduced on the same serialized path as queue draining, so the prompt is either
+removed exactly once or has already started its **prompt turn** and stays
+delivered. A successful reclaim returns a draft. Resubmitting it creates a
+new submission with the intent selected in the composer.
 
 ## Serialized Reducer
 
@@ -366,16 +375,26 @@ into `persisted.transcript`, in request-local order, before clearing `active`.
 
 ### Submitting a prompt
 
-If `phase == Idle`:
+When an idle session admits a new prompt:
 
 - send `session/prompt`
 - create `active = Some(ActiveRequestState { kind: Prompt, .. })`
 - set `phase = Prompt { request_id, cancelling: false }`
 
-If `phase != Idle`:
+An idle-only submission is admitted when the session is idle, no steer is
+settling, and the queue is empty or paused. A prompt admitted over a paused
+queue runs ahead of the held entries and leaves the queue paused.
 
-- append the user prompt to `queue`
-- do not send anything to ACP yet
+Legacy prompt submissions during a busy phase enter the queue. In direct
+`nori` and controller `nori attach`, a composed follow-up targets the observed
+active prompt. Tab queues it for the next turn. Enter asks the host to steer
+the matching session and turn. The original prompt owns completion, usage and
+cancellation after injection.
+
+The host visibly queues a steer when guarded steering is unavailable or the
+target turn just ended. An explicit refusal yields a rejection. When delivery
+is uncertain, the caller retains the same message ID for reconciliation and
+the host holds subsequent delivery. See the [host follow-up contract](../nori-rs/cli/src/host/docs.md#mid-turn-follow-ups).
 
 ### Cancelling a prompt
 
@@ -407,9 +426,9 @@ completion step:
 2. clear `active`
 3. set `phase = Idle`
 4. emit `UiEvent::PromptFinished`
-5. evaluate queue drain policy
+5. apply the queue drain policy (below)
 
-If queue drain is eligible:
+If the turn ended with `end_turn` and the queue is not paused:
 
 - dequeue exactly one prompt
 - send a new `session/prompt`
@@ -446,28 +465,27 @@ Loads never auto-drain the outbound queue.
 
 ## Queue Drain Policy
 
-Queue draining is policy, not protocol truth.
+Queue draining is harness policy, not ACP protocol.
 
-The backend should distinguish two drain outcomes:
-
-```rust
-enum QueueDrainOutcome {
-    SendNextPrompt,
-    RestoreForEditing,
-    LeaveQueued,
-}
-```
-
-Default policy:
-
-- `end_turn` should drain by dequeuing the next prompt and sending it as the
-  next `session/prompt`
-- other stop reasons may still drain by restoring the next queued prompt for
-  editing, but only if doing so would not overwrite an in-progress edit
-- otherwise, leave queued prompts in `OutgoingQueue`
-
-This keeps ACP ownership simple while still supporting the intended UX split
-between "continue immediately" and "surface the next queued draft for editing."
+- A prompt response with stop reason `end_turn` dequeues and sends exactly one
+  queued prompt, unless the queue is paused.
+- Any other ending of a prompt turn while prompts are queued pauses the queue.
+  Every entry stays queued in order; nothing is restored into the composer.
+  The pause reason is `interrupted` for stop reason `cancelled` or a failure
+  while cancelling, and `turn_failed` for any other stop reason or failure.
+  Only a queue holding at least one user prompt pauses, so every pause is
+  visible in `QueueChanged`; a queue holding only hidden work (a queued
+  `/compact` or goal continuation) is left as it was.
+- A paused queue sends nothing on its own, including the drain deferred behind
+  a settling steer. Only an explicit resume clears it: an idle session starts
+  the next queued prompt at once, and a busy session drains after its running
+  turn ends with `end_turn`. A resume without a pause does nothing.
+- After a resume the queue drains one prompt per completed turn again; a
+  later interrupt or failure pauses whatever is still queued.
+- Taking back the last held user prompt clears the pause.
+- A resume while a session load is in flight is ignored and the pause stays,
+  because a load never drains the queue.
+- The pause reason travels as `QueueSnapshot.paused` so clients can show it.
 
 ## UI Event Surface
 
@@ -530,7 +548,10 @@ Future changes should be rejected if they introduce any of these smells:
 - open message buffers survive across request completion
 - tool ownership is inferred from timing instead of stored explicitly
 - cancel is treated as immediate idle
-- queued prompts are merged back into the composer instead of remaining a FIFO
+- queued prompts are merged back into the composer automatically, or a client
+  keeps a second deliverable queue, instead of one harness-owned FIFO
+- queued prompts start on their own after a turn that did not end with
+  `end_turn`
 - request-scoped permission state lives outside the active request
 - a session allows unordered reduction of inbound ACP messages
 
@@ -752,6 +773,10 @@ It is accepted from idle:
 Evidence:
 
 - `nori-acp-trace.log` line 72
+
+Under the current queue drain policy this still holds for a prompt submitted
+from an idle composer after a cancel. Prompts that were already queued behind
+the cancelled turn do not start; the queue pauses until resumed.
 
 #### D. The empty `end_turn` disrupts the following prompt turn, not the cancelled one
 

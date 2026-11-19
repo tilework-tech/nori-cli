@@ -55,7 +55,8 @@ impl AcpBackend {
         if let Some(abort) = self.prompt_task_abort.lock().await.take() {
             abort.abort();
         }
-        if let Some(abort) = self.runtime_task_abort.lock().await.take() {
+        // A successful ACP close is drained by the relay before it stops the runtime.
+        if cancel_session && let Some(abort) = self.runtime_task_abort.lock().await.take() {
             abort.abort();
         }
         if cancel_session {
@@ -215,10 +216,13 @@ impl AcpBackend {
     pub(crate) async fn submit_prompt(
         &self,
         content: Vec<acp::ContentBlock>,
-        prompt_meta: Option<acp::Meta>,
+        mut prompt_meta: Option<acp::Meta>,
         admission: PromptAdmission,
         response_tx: oneshot::Sender<Result<acp::RequestId>>,
     ) {
+        if let Some(meta) = &mut prompt_meta {
+            meta.remove(crate::follow_up::SENDER_META);
+        }
         let has_content = content.iter().any(|block| match block {
             acp::ContentBlock::Text(text) => !text.text.is_empty(),
             _ => true,
@@ -284,6 +288,7 @@ impl AcpBackend {
                 .send(session_runtime_driver::SessionRuntimeInput::Reducer(
                     session_reducer::InboundEvent::PromptSubmit(
                         crate::normalized::session_runtime::QueuedPrompt {
+                            target_session: None,
                             event_id: id.to_string(),
                             kind:
                                 crate::normalized::session_runtime::QueuedPromptKind::NativeCompact,
@@ -294,6 +299,7 @@ impl AcpBackend {
                                 "/compact",
                             ))],
                             display_text: None,
+                            reclaim: None,
                         },
                     ),
                 ))
@@ -306,6 +312,7 @@ impl AcpBackend {
             .send(session_runtime_driver::SessionRuntimeInput::Reducer(
                 session_reducer::InboundEvent::PromptSubmit(
                     crate::normalized::session_runtime::QueuedPrompt {
+                        target_session: None,
                         event_id: id.to_string(),
                         kind: crate::normalized::session_runtime::QueuedPromptKind::Compact,
                         text: SUMMARIZATION_PROMPT.to_string(),
@@ -315,6 +322,7 @@ impl AcpBackend {
                             SUMMARIZATION_PROMPT,
                         ))],
                         display_text: None,
+                        reclaim: None,
                     },
                 ),
             ))

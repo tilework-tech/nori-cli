@@ -69,6 +69,10 @@ pub struct PromptCompleted {
 #[serde(rename_all = "snake_case")]
 pub struct QueueChanged {
     pub prompts: Vec<String>,
+    #[serde(default)]
+    pub entries: Vec<nori_protocol::QueueEntry>,
+    #[serde(default)]
+    pub paused: Option<nori_protocol::QueuePause>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

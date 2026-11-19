@@ -567,12 +567,14 @@ Ctrl+C, Ctrl+T, and Ctrl+O close it.
 The directory-trust onboarding step
 ([`trust_directory`](src/nori/onboarding/trust_directory.rs)) asks a second,
 skippable question after either trust answer: "Use compact tool output in this
-project?" Full is preselected. Compact writes `tool_output = "compact"` for the
-same project path the trust answer used (git root or cwd) through
-`NoriConfigEdits::set_project_tool_output`; Full and Esc write nothing, so no
-preference is recorded. The onboarding screen passes the resolved
-`config.tool_output` to the widget, and the question is not shown when compact
-already applies. The step completes only after the question is answered or
+project?" Full is preselected. Either choice writes `tool_output` (`"compact"`
+or `"full"`) for the same project path the trust answer used (git root or cwd)
+through `NoriConfigEdits::set_project_tool_output`. Esc writes nothing, so the
+project keeps inheriting `[tui] tool_output` or the full default. The
+onboarding screen tells the widget whether to ask: it asks when the resolved
+`config.tool_output` is full or when `config.tool_output_from_command_line` is
+set, so a one-off `-c` override never hides the question and is never saved.
+The step completes only after the question is answered or
 skipped. Directories that are already trusted never reach this step.
 
 #### Inline transcript reflow
@@ -930,6 +932,76 @@ Quitting an attached cloud session detaches through connection teardown;
 `session/close` support, except that with `[features] multi_session` a local
 `/close` closes the session on screen (see the multi-session view below).
 
+#### Queued follow-ups
+
+While the direct composer observes a working turn, Enter steers that turn and
+Tab queues a composed follow-up. The harness owns the queue. The bottom pane's queued-message preview
+([`queued_user_messages.rs`](src/bottom_pane/queued_user_messages.rs)) mirrors
+each `QueueChanged` snapshot, keeping its `entries` IDs and `paused` reason.
+Two paths take a message out of the queue; both use the same harness reclaim by
+stable ID:
+
+| Path | Keys | Module |
+| --- | --- | --- |
+| Quick recall | Alt+Up takes the newest editable row back into the composer | [`queue_recall.rs`](src/chatwidget/queue_recall.rs) |
+| Queue list | Up on an empty composer focuses the list on the newest editable row | [`queue_list.rs`](src/chatwidget/queue_list.rs) |
+
+```
+Alt+Up, or Enter/e / Delete/x in the focused list (no popup or overlay)
+  -> preview hides the row at once
+  -> HarnessAction::ReclaimQueuedPrompt{id, action: Edit|Remove}
+  -> HarnessHandle::reclaim_queued_prompt
+  -> AppEvent::QueuedPromptReclaimed{generation, id, action, outcome}
+       -> active widget, or the parked widget with that generation
+  Reclaimed + Edit:   text goes into the composer before any existing draft
+  Reclaimed + Remove: text is discarded; composer untouched
+  AlreadyStarted:     info line "That queued message already started, so it
+                      was sent as written." (Edit) / "... so it was not
+                      removed." (Remove); composer untouched
+  Failed:             the row shows again; the error is a failed harness action
+```
+
+- The focused list selects only editable rows and marks the selection with a
+  green `›`. j/k or Down/Up move it and stop at either end. Enter or e edits
+  and leaves the list; Delete or x removes and keeps focus on the neighbouring
+  editable row. Esc leaves without interrupting the turn, and
+  `BottomPane::is_normal_backtrack_mode` is false while the list is focused, so
+  Esc never primes backtrack. Any other key, or any modifier (so Alt+Up still
+  quick-recalls), leaves the list and reaches the composer.
+- The selection is tracked by entry ID, so duplicate texts and rows that start
+  sending never move it onto another message. When the selected row leaves
+  the queue the selection moves to the editable row now in its place, or the
+  last one; with none left the list loses focus.
+- Removing reuses the harness reclaim rather than a separate delete, so the
+  consumed hook context and compact summary are restored for the next prompt.
+- Hiding a row before the harness answers means a second press takes a
+  different row, never the same one twice. After a successful reclaim the row
+  stays hidden until a snapshot without it arrives, because the snapshot and
+  the answer travel on different channels.
+- Quick recalls run newest first, so inserting each one at the start of the
+  draft keeps the original queue order. The insertion keeps the draft's paste
+  placeholders, attached images, and cursor. When the composer cannot take the
+  text (input disabled, or a shell-mode draft), it is shown in an info line
+  instead of being dropped.
+- A paused queue (see the harness queue pause) renders a header
+  `N queued · paused (interrupted|turn error) · enter resumes`. Enter on an
+  empty composer sends `HarnessAction::ResumeQueue`; a non-empty composer keeps
+  its ordinary Enter and Tab, so a newly typed prompt runs ahead of the held
+  rows and the queue stays paused.
+- Follow-only attachments never select, reclaim, or resume; the queue belongs
+  to the owner.
+- The `↑ select · alt+↑ edit` hint renders only while an editable row is
+  visible; a focused list shows `j/k select · enter/e edit · del/x remove ·
+  esc back` instead. Rows from a host that sends only `prompts` (no `entries`)
+  render without a hint and cannot be taken back; prompts with images are
+  never editable.
+- The edited text goes through the composer as new input. Enter sends it when
+  idle or steers the observed working turn. Tab during that turn places it at
+  the end of the queue. The widget ignores `PromptWithdrawn` when reclaiming
+  an item whose original submission is awaiting a prompt result.
+- When there is no editable row to focus, Up falls through to composer
+  history recall.
+
 #### Multi-session view
 
 `[features] multi_session` (resolved as `NoriConfig.multi_session`) lets one
@@ -1024,7 +1096,7 @@ a binding).
 | `previous_session` / `next_session` | `alt+,` / `alt+.` | Wraps at both ends of the navigation order and skips closed and done sessions |
 | `next_waiting_session` | `alt+down` | Shows the next session after the active one that is waiting on you, even with a draft (the draft stays in the parked widget's composer). With nothing waiting, an empty prompt consumes the key and a draft passes it on to the composer |
 | `open_session_list` | `alt+s` | Needs the composer in front |
-| `parent_session` | `alt+up` | On a delegated child (record source `Session` with a parent) shows the parent's widget; elsewhere it is consumed and does nothing, so it never reaches history recall |
+| `parent_session` | `alt+up` | On a delegated child (record source `Session` with a parent) shows the parent's widget. Elsewhere it takes back a queued message when an editable one is visible (see queued follow-ups); otherwise it is consumed and does nothing, so it never reaches history recall |
 
 The Hotkeys view lists these actions only with the flag
 (`HotkeyAction::is_multi_session`).
@@ -1623,9 +1695,12 @@ part of the public harness protocol.
   status-line counts, and "next open session" filter it out with
   `SessionStatus::is_closed()`; code that walks the deck directly sees it, and
   a check against `Closed` alone misses finished delegated children.
-- The queued-message preview in the bottom pane advertises `⌥↑ edit`, but no
-  key handler edits a queued message; with `multi_session`, Alt+Up is the
-  `parent_session` key.
+- The queued-message preview reflects the harness queue, not composer history.
+  Composer history already holds each queued text, so editing a recalled
+  history entry and submitting it still delivers the queued original too; only
+  a reclaim through `HarnessHandle::reclaim_queued_prompt` removes it. With
+  `multi_session`, Alt+Up is shared with `parent_session`, which wins on a
+  delegated child.
 - `nori-config` is the source of approval and sandbox policy; ACP session config
   options remain ACP schema values.
 - `-p` belongs to the top-level CLI as `--print`. The TUI's own flag set must not

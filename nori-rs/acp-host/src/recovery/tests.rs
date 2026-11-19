@@ -206,3 +206,25 @@ async fn abandoned_producer_prevents_a_successful_checkpoint() -> Result<()> {
     assert!(recovery.run(move |r| r.checkpoint(&scope)).await.is_err());
     Ok(())
 }
+
+#[test]
+fn queued_follow_up_holds_checkpoint_until_its_own_turn_finishes() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let mut recovery = Recovery::open(root.path())?;
+    let scope = Scope {
+        binding_id: "fixture".into(),
+        generation: 2,
+    };
+    recovery.journal.register("fixture", 2)?;
+    recovery.attach(&scope);
+    let request = json!({"jsonrpc":"2.0","id":7,"method":"_nori/session/follow_up","params":{"session_id":"sample","message_id":"m"}});
+    let receipt = json!({"jsonrpc":"2.0","id":7,"result":{"message_id":"m","status":"queued","sender":"machine-client"}});
+    recovery.incoming(&scope, &request, None)?;
+    recovery.outgoing(&scope, &receipt)?;
+    assert!(recovery.checkpoint(&scope).is_err());
+    recovery.outgoing(&scope,&json!({"jsonrpc":"2.0","method":"_nori/session/follow_up/finished","params":{"sessionId":"sample","message_id":"m"}}))?;
+    recovery.incoming(&scope, &request, None)?;
+    recovery.outgoing(&scope, &receipt)?;
+    recovery.checkpoint(&scope)?;
+    Ok(())
+}
