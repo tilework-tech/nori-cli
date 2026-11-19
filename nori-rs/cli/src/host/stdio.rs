@@ -12,9 +12,7 @@ use anyhow::Context;
 use nori_harness::remote_agent::ManagedClient;
 use serde_json::Value;
 use serde_json::json;
-use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
-use tokio::io::BufReader;
 
 use super::state::HostFiles;
 
@@ -83,12 +81,22 @@ pub(super) async fn relay(
         let mut managed =
             ManagedClient::connect(&host.endpoint.replace("/sessions", "/managed"), &token).await?;
 
-        let mut input = BufReader::new(tokio::io::stdin()).lines();
+        // A pending read on Tokio's stdin keeps the runtime from shutting
+        // down, so a host stopped by a signal while its pipe is still open
+        // would never exit. A plain thread ends with the process.
+        let (lines, mut input) = tokio::sync::mpsc::channel(64);
+        std::thread::spawn(move || {
+            for line in std::io::stdin().lines() {
+                if lines.blocking_send(line).is_err() {
+                    break;
+                }
+            }
+        });
         let mut output = tokio::io::stdout();
         loop {
             let line = tokio::select! {
-                line = input.next_line() => {
-                    let Some(line) = line? else {
+                line = input.recv() => {
+                    let Some(line) = line.transpose()? else {
                         return Ok(());
                     };
                     if line.trim().is_empty() {
