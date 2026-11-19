@@ -6,7 +6,9 @@ export const original = "SYNTHETIC_ORIGINAL_7041";
 export const correction = "SYNTHETIC_CORRECTION_9352";
 export const queued = "SYNTHETIC_NEXT_TURN_2810";
 
-function anthropicEvents(model, writePath) {
+export const correctedReply = "Synthetic correction applied.";
+
+function anthropicEvents(model, writePath, reply) {
   return [
     ["message_start", { message: { id: "msg_fixture", type: "message", role: "assistant", model,
       content: [], stop_reason: null, usage: { input_tokens: 1, output_tokens: 0 } } }],
@@ -14,24 +16,24 @@ function anthropicEvents(model, writePath) {
       ? { type: "tool_use", id: "toolu_synthetic", name: "Write", input: {} } : { type: "text", text: "" } }],
     ["content_block_delta", { index: 0, delta: writePath
       ? { type: "input_json_delta", partial_json: JSON.stringify({ file_path: writePath, content: "synthetic" }) }
-      : { type: "text_delta", text: "Synthetic response." } }],
+      : { type: "text_delta", text: reply } }],
     ["content_block_stop", { index: 0 }],
     ["message_delta", { delta: { stop_reason: writePath ? "tool_use" : "end_turn", stop_sequence: null }, usage: { output_tokens: 1 } }],
     ["message_stop", {}],
   ];
 }
 
-function responsesEvents(ask) {
+function responsesEvents(ask, reply) {
   const message = ask ? {
     id: "fc_fixture", call_id: "call_fixture", type: "function_call", name: "exec_command",
     arguments: JSON.stringify({ cmd: "printf synthetic", sandbox_permissions: "require_escalated", justification: "Allow synthetic printf?" }),
     status: "completed",
   } : { id: "msg_fixture", type: "message", role: "assistant", status: "completed",
-    content: [{ type: "output_text", text: "Synthetic response.", annotations: [] }] };
+    content: [{ type: "output_text", text: reply, annotations: [] }] };
   return [
     ["response.created", { response: { id: "resp_fixture", status: "in_progress", output: [] } }],
     ["response.output_item.added", { output_index: 0, item: { ...message, content: [] } }],
-    ...(!ask ? [["response.output_text.delta", { output_index: 0, content_index: 0, item_id: message.id, delta: "Synthetic response." }]] : []),
+    ...(!ask ? [["response.output_text.delta", { output_index: 0, content_index: 0, item_id: message.id, delta: reply }]] : []),
     ["response.output_item.done", { output_index: 0, item: message }],
     ["response.completed", { response: { id: "resp_fixture", status: "completed", output: [message],
       usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } }],
@@ -42,6 +44,8 @@ export function startModel(permissionPath) {
   let asked = false;
   const reached = Promise.withResolvers();
   const release = Promise.withResolvers();
+  const corrected = Promise.withResolvers();
+  const finishCorrection = Promise.withResolvers();
   const requests = [];
   const server = Bun.serve({
     hostname: "127.0.0.1", port: 0,
@@ -56,11 +60,17 @@ export function startModel(permissionPath) {
       const claude = path.endsWith("/messages");
       // Claude may send title requests without tools. Only count inference traffic.
       let ask = false;
+      let reply = "Synthetic response.";
       if (!claude || body.tools?.length) {
         const input = JSON.stringify(claude ? body.messages : body.input);
         const counts = Object.fromEntries([original, correction, queued, refused].map(marker =>
           [marker, input.split(marker).length - 1]));
         requests.push(counts);
+        if (!permissionPath && counts[correction] && !counts[queued]) {
+          reply = correctedReply;
+          corrected.resolve();
+          await finishCorrection.promise;
+        }
         if (counts[original]) {
           reached.resolve();
           if (permissionPath && !asked) {
@@ -70,14 +80,15 @@ export function startModel(permissionPath) {
           if (!permissionPath) await release.promise;
         }
       }
-      const events = claude ? anthropicEvents(body.model, ask && permissionPath) : responsesEvents(ask);
+      const events = claude ? anthropicEvents(body.model, ask && permissionPath, reply) : responsesEvents(ask, reply);
       const sse = events.map(([type, data]) =>
         'event: ' + type + '\ndata: ' + JSON.stringify({ ...data, type }) + '\n\n').join("");
       return new Response(sse, { headers: { "content-type": "text/event-stream" } });
     },
   });
   return { origin: server.url.origin, requests, reached: reached.promise,
-    release: () => release.resolve(), close() { release.resolve(); server.stop(true); } };
+    corrected: corrected.promise, finishCorrection: () => finishCorrection.resolve(),
+    release: () => release.resolve(), close() { release.resolve(); finishCorrection.resolve(); server.stop(true); } };
 }
 
 export function checkDeliveries(requests) {

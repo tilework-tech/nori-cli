@@ -39,7 +39,7 @@ export async function connect(endpoint, token, binding) {
     if (!call) return;
     pending.delete(msg.id);
     if (msg.error) call.reject(Object.assign(new Error(call.method + ": " + msg.error.message), { code: msg.error.code }));
-    else call.resolve(msg.result);
+    else call.resolve({ result: msg.result, notificationCount: notifications.length });
   };
   await bounded(opened.promise, "open WebSocket");
   function send(msg, commandId) {
@@ -58,11 +58,11 @@ export async function connect(endpoint, token, binding) {
       ws.send(JSON.stringify({ bindingId: binding, generation: 1, attachFrom: [] }));
       return bounded(attached.promise, "recovery attach marker");
     },
-    request(method, params = {}, id = crypto.randomUUID(), commandId) {
+    async request(method, params = {}, id = crypto.randomUUID(), commandId) {
       const msg = { jsonrpc: "2.0", id, method, params };
       const reply = waitForReply(id, method);
       send(msg, commandId);
-      return reply;
+      return (await reply).result;
     },
     close() { ws.close(); return bounded(closed.promise, "WebSocket close"); },
   };

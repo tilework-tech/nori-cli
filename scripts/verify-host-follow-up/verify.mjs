@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { startModel, original, correction, queued, refused, checkDeliveries } from "./model.mjs";
+import { startModel, original, correction, queued, refused, correctedReply, checkDeliveries } from "./model.mjs";
 import { bounded, connect } from "./rpc.mjs";
 
 const binary = resolve(process.argv[2] ?? "nori-rs/target/debug/nori");
@@ -153,7 +153,11 @@ async function run(provider, transport, scenario) {
       await observer.request("initialize", { observe: true });
       await assert.rejects(observer.request(follow, steer), e => e.code === -32016);
     }
+    let nextReceipt;
     if (!permission) {
+      nextReceipt = await client.request(follow, next);
+      assert.equal(nextReceipt.status, "queued");
+      assert.equal(nextReceipt.message_id, next.message_id);
       const invalid = () => command("steer", refused);
       await assert.rejects(client.request(follow, { ...invalid(), sender: "forged" }), e => e.code === -32602);
       const wrongTurn = await client.request(follow, { ...invalid(), expected_turn: "expired-turn" });
@@ -181,9 +185,6 @@ async function run(provider, transport, scenario) {
     }
     await assert.rejects(client.request(follow, { ...steer, prompt: text(refused) }),
       e => [-32602, -32000].includes(e.code));
-    const nextReceipt = await client.request(follow, next);
-    assert.equal(nextReceipt.status, "queued");
-    assert.equal(nextReceipt.message_id, next.message_id);
     const twin = { ...next, message_id: crypto.randomUUID() };
     assert.equal((await client.request(follow, twin)).status, "queued");
     if (transport === "sessions") {
@@ -208,17 +209,32 @@ async function run(provider, transport, scenario) {
     assert.equal(originalSettled, false);
     assert.ok(model.requests.every(item => item[queued] === 0));
     model.release();
+    await bounded(model.corrected, "provider received the active correction");
+    assert.ok(model.requests.every(item => item[queued] === 0), "queue reached the active turn");
+    const ownerResponse = msg => {
+      const event = msg.params?.event?.event;
+      return event?.message_type === "response" && event.request_id === expectedTurn;
+    };
+    assert.equal(originalSettled, false);
+    assert.ok(!control.notifications.some(ownerResponse));
+    model.finishCorrection();
+    let updates;
+    let result;
     if (completion) {
-      const result = await completion;
-      assert.equal(result.stopReason, "end_turn");
-      assert.ok(result.usage?.totalTokens > 0);
+      const reply = await completion;
+      result = reply.result;
+      updates = machine.notifications.slice(0, reply.notificationCount)
+        .filter(msg => msg.method === "session/update").map(msg => msg.params.update);
     } else {
-      await eventually("original prompt completion", () => control.notifications.some(msg => {
-        const event = msg.params?.event?.event;
-        return event?.message_type === "response" && event.request_id === expectedTurn
-          && event.response?.Ok?.stopReason === "end_turn";
-      }));
+      const owner = await eventually("original prompt completion", () => control.notifications.find(ownerResponse));
+      result = owner.params.event.event.response.Ok;
+      updates = control.notifications.slice(0, control.notifications.indexOf(owner)).map(msg => msg.params?.event?.event?.update);
     }
+    const output = updates.filter(update => update?.sessionUpdate === "agent_message_chunk")
+      .map(update => update.content.text).join("");
+    assert.ok(output.includes(correctedReply), "original prompt completed before the corrected reply");
+    assert.equal(result.stopReason, "end_turn");
+    assert.ok(result.usage?.totalTokens > 0);
     if (transport === "managed") {
       const finished = () => machine.notifications.filter(msg => msg.method === follow + "/finished");
       await eventually("queued completion notifications", () => finished().length >= 2);
@@ -234,6 +250,7 @@ async function run(provider, transport, scenario) {
     console.log(provider, pin.version, "/" + transport, "PASS  one steer, two identical queued inputs, three completed prompts");
   } finally {
     model.release();
+    model.finishCorrection();
     observer?.close();
     machine?.close();
     if (control) {

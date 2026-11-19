@@ -20,7 +20,7 @@ fn content(text: &str) -> Vec<acp::ContentBlock> {
 #[tokio::test]
 async fn follow_ups_stay_with_the_target_turn_and_retries_do_not_deliver_twice()
 -> anyhow::Result<()> {
-    let (dir, mut session) = launch("0.102.0").await?;
+    let (dir, mut session) = launch("0.109.0").await?;
     let owner = session.handle.prompt(content("original")).await?;
     let submit = |id: &str, intent, text: &str| {
         session.handle.follow_up(
@@ -189,7 +189,7 @@ async fn missing_steer_ack_fences_new_turns_while_control_stays_responsive() -> 
 #[tokio::test]
 async fn advertising_adapter_with_unverified_guard_runs_the_follow_up_as_a_prompt()
 -> anyhow::Result<()> {
-    let (dir, session) = launch("0.80.0").await?;
+    let (dir, session) = launch("0.109.1").await?;
     let owner = session.handle.prompt(content("wait for release")).await?;
     let receipt = session
         .handle
