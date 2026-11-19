@@ -369,7 +369,7 @@ fn the_list_says_why_the_selection_was_cleared() {
     assert!(
         lines
             .iter()
-            .any(|line| line.contains("selected message started")),
+            .any(|line| line.contains("selected message left the queue")),
         "{lines:#?}"
     );
 }
@@ -565,4 +565,57 @@ fn a_bracketed_paste_leaves_the_list() {
 
     assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
     assert_eq!(chat.composer_text(), "pastedx");
+}
+
+#[test]
+fn a_fresh_pick_starts_from_the_row_now_in_the_selected_rows_place() {
+    let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+    show_queue(
+        &mut chat,
+        vec![
+            entry("a", "alpha", true),
+            entry("b", "beta", true),
+            entry("c", "gamma", true),
+            entry("d", "delta", true),
+        ],
+        None,
+    );
+    press(&mut chat, KeyCode::Up);
+    press(&mut chat, KeyCode::Up);
+    press(&mut chat, KeyCode::Up);
+    assert_eq!(rows(&chat), ["alpha", "> beta", "gamma", "delta"]);
+    while rx.try_recv().is_ok() {}
+
+    show_queue(
+        &mut chat,
+        vec![entry("c", "gamma", true), entry("d", "delta", true)],
+        None,
+    );
+    press(&mut chat, KeyCode::Char('j'));
+
+    assert_eq!(rows(&chat), ["> gamma", "delta"]);
+}
+
+#[test]
+fn enter_with_the_selection_cleared_neither_edits_nor_resumes_a_paused_queue() {
+    let (mut chat, mut rx, _unused_rx) = make_chatwidget_manual();
+    show_queue(
+        &mut chat,
+        vec![entry("a", "dup", true), entry("b", "dup", true)],
+        Some(QueuePause::Interrupted),
+    );
+    press(&mut chat, KeyCode::Up);
+    press(&mut chat, KeyCode::Up);
+    assert_eq!(rows(&chat), ["> dup", "dup"]);
+    while rx.try_recv().is_ok() {}
+
+    show_queue(
+        &mut chat,
+        vec![entry("b", "dup", true)],
+        Some(QueuePause::Interrupted),
+    );
+    press(&mut chat, KeyCode::Enter);
+
+    assert_eq!(harness_requests(&mut rx), Vec::<String>::new());
+    assert_eq!(rows(&chat), ["dup"]);
 }

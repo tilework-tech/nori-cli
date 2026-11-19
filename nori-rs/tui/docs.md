@@ -975,7 +975,7 @@ Alt+Up, or Enter/e / Delete/x in the focused list (no popup or overlay)
 - When the selected row leaves the queue on its own through a snapshot
   (usually because it started), the selection is not moved: the list stays
   open with nothing selected (`ListFocus::Cleared`) and shows
-  `selected message started · j/k pick again · esc back`. Enter/e and Delete/x
+  `selected message left the queue · j/k pick again · esc back`. Enter/e and Delete/x
   do nothing until j/Down picks the row now at the vacated position or k/Up
   the one before it; Esc and other keys behave as above. This prevents a
   wrong-target race where a keypress meant for the started message edited or

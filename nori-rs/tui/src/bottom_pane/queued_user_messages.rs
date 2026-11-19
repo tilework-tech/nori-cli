@@ -63,7 +63,7 @@ impl QueuedUserMessages {
         entries: Vec<nori_protocol::QueueEntry>,
         paused: Option<nori_protocol::QueuePause>,
     ) {
-        let selected_index = self.selected_index();
+        let before_selected = self.editable_ids_before_selected();
         self.rows = if entries.is_empty() {
             prompts
                 .into_iter()
@@ -82,10 +82,12 @@ impl QueuedUserMessages {
         let ids = self.editable_ids();
         self.focus = match std::mem::replace(&mut self.focus, ListFocus::Blurred) {
             ListFocus::Blurred => ListFocus::Blurred,
-            _ if ids.is_empty() => ListFocus::Blurred,
+            ListFocus::Selected(_) | ListFocus::Cleared { .. } if ids.is_empty() => {
+                ListFocus::Blurred
+            }
             ListFocus::Selected(id) if ids.contains(&id) => ListFocus::Selected(id),
             ListFocus::Selected(_) => ListFocus::Cleared {
-                index: selected_index.unwrap_or_default(),
+                index: ids.iter().filter(|id| before_selected.contains(id)).count(),
             },
             ListFocus::Cleared { index } => ListFocus::Cleared { index },
         };
@@ -152,14 +154,10 @@ impl QueuedUserMessages {
             return None;
         };
         self.reclaiming.push(id.clone());
-        self.focus = match self
-            .editable_ids()
-            .get(index)
-            .or(self.editable_ids().last())
-        {
-            Some(next) => ListFocus::Selected(next.clone()),
-            None => ListFocus::Blurred,
-        };
+        let ids = self.editable_ids();
+        if let Some(next) = ids.get(index).or_else(|| ids.last()) {
+            self.focus = ListFocus::Selected(next.clone());
+        }
         Some(id)
     }
 
@@ -195,6 +193,17 @@ impl QueuedUserMessages {
     }
 
     /// Position of the selection among editable rows, before any change.
+    /// Editable visible rows above the selection, oldest first.
+    fn editable_ids_before_selected(&self) -> Vec<String> {
+        let ListFocus::Selected(selected) = &self.focus else {
+            return Vec::new();
+        };
+        self.editable_ids()
+            .into_iter()
+            .take_while(|id| id != selected)
+            .collect()
+    }
+
     fn selected_index(&self) -> Option<usize> {
         let ListFocus::Selected(selected) = &self.focus else {
             return None;
@@ -238,7 +247,7 @@ impl QueuedUserMessages {
         }
 
         for row in self.visible_rows() {
-            let selected = self.focus == ListFocus::Selected(row.id.clone());
+            let selected = matches!(&self.focus, ListFocus::Selected(id) if id == &row.id);
             let (initial, text_style): (Line, Style) = if selected {
                 (
                     Line::from(vec!["  ".into(), "› ".green()]),
@@ -270,7 +279,7 @@ impl QueuedUserMessages {
         if let ListFocus::Cleared { .. } = self.focus {
             lines.push(
                 Line::from(vec![
-                    "    selected message started · j/k pick again · ".into(),
+                    "    selected message left the queue · j/k pick again · ".into(),
                     key_hint::plain(KeyCode::Esc).into(),
                     " back".into(),
                 ])
