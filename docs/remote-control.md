@@ -369,7 +369,7 @@ The envelope supplies routing identity even when an embedded ACP payload uses
 the downstream agent's own session ID. Both ACP and Nori lifecycle events cross
 this boundary. A prompt result acknowledges admission, not completion; observe
 the correlated response in the event stream for the completed turn. Busy
-sessions reject remote prompts instead of queuing them. Permission replies
+sessions return `-32015` for `_nori/session/prompt`. The authenticated background host additionally accepts an explicit [mid-turn follow-up](../nori-rs/cli/src/host/docs.md#mid-turn-follow-ups) from its controller. Permission replies
 address the pair of conversation and request IDs, and a repeated managed answer
 is rejected once claimed. `RequestResolved` tells subscribers that the request
 has been answered. In managed exec, an extension answer can also resolve a

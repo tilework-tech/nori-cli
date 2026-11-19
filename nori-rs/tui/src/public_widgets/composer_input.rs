@@ -93,6 +93,15 @@ impl ComposerInput {
         action
     }
 
+    pub(crate) fn attachment_input(&mut self, key: KeyEvent, has_active_turn: bool) -> InputResult {
+        let result = self
+            .inner
+            .handle_key_event_with_queue(key, has_active_turn)
+            .0;
+        self.drain_app_events();
+        result
+    }
+
     pub fn handle_paste(&mut self, pasted: String) -> bool {
         let handled = self.inner.handle_paste(pasted);
         self.drain_app_events();

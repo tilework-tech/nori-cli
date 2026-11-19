@@ -21,6 +21,7 @@ const REMOTE_QUEUE_EVENTS: i32 = 256;
 /// A transport-independent view of a manager. Disconnection does not stop sessions.
 pub struct ManagedRemoteHost {
     manager: SessionManager,
+    authenticated_controller: bool,
     selected: Mutex<Option<ConversationId>>,
     answers: tokio::sync::Mutex<Vec<(ConversationId, acp::RequestId)>>,
 }
@@ -80,8 +81,17 @@ impl ManagedRemoteHost {
     pub fn new(manager: SessionManager) -> Self {
         Self {
             manager,
+            authenticated_controller: false,
             selected: Mutex::new(None),
             answers: tokio::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    /// The background host checks the bearer and controller role before dispatch.
+    pub fn authenticated_host(manager: SessionManager) -> Self {
+        Self {
+            authenticated_controller: true,
+            ..Self::new(manager)
         }
     }
 
@@ -179,6 +189,26 @@ impl ManagedRemoteHost {
                     .subscribe_from(session, &params.cursors, REMOTE_QUEUE_EVENTS)
                     .map_err(|error| RemoteError::new(-32003, error))?;
                 Ok((json!({"subscribed":true}), Some(subscription)))
+            }
+            crate::follow_up_rpc::METHOD if self.authenticated_controller => {
+                let params = crate::follow_up_rpc::FollowUpParams::parse(params)
+                    .map_err(|error| RemoteError::new(-32602, error))?;
+                let id = self.target(Some(&params.session_id))?;
+                let handle = self
+                    .manager
+                    .handle(&id)
+                    .ok_or_else(|| RemoteError::new(-32002, "session is not running"))?;
+                let receipt = handle
+                    .follow_up(
+                        params.message_id,
+                        params.expected_turn,
+                        params.intent,
+                        params.prompt,
+                        "host-controller".to_owned(),
+                    )
+                    .await
+                    .map_err(|error| RemoteError::new(-32000, error))?;
+                Ok((json!(receipt), None))
             }
             "_nori/session/prompt" => {
                 let params: PromptParams = serde_json::from_value(params)

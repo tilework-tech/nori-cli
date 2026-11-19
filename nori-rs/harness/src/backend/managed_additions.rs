@@ -174,7 +174,16 @@ impl ManagedSessionAdditions {
         for block in prompt {
             if let Ok(content) = serde_json::from_value::<acp::ContentBlock>(block.clone()) {
                 let update = acp::SessionUpdate::UserMessageChunk(
-                    acp::ContentChunk::new(content).message_id(message_id.clone()),
+                    acp::ContentChunk::new(content)
+                        .message_id(message_id.clone())
+                        .meta(params["_meta"][crate::follow_up::SENDER_META].as_str().map(
+                            |sender| {
+                                acp::Meta::from_iter([(
+                                    crate::follow_up::SENDER_META.to_string(),
+                                    serde_json::json!(sender),
+                                )])
+                            },
+                        )),
                 );
                 Self::record_update(
                     recorder,

@@ -254,6 +254,8 @@ agent and returns its result or full error, including any `data`.
 along with agent-provided modes, config options, models and metadata.
 [Session routing](../harness/src/managed_acp.rs)
 
+A machine client can submit a correction or queue input against that original prompt ID using the [host follow-up contract](../cli/src/host/docs.md#mid-turn-follow-ups). The request uses the same binding and generation envelope as the prompt.
+
 The immutable launch controls the following additions independently for
 regular sessions. Switching all four off preserves the agent's original updates, caller-supplied prompt
 metadata and MCP servers. [Optional session services](../harness/src/backend/managed_additions.rs)

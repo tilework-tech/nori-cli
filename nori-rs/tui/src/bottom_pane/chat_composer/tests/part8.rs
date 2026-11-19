@@ -94,3 +94,14 @@ fn uppercase_exit_submits_literal_text() {
 
     assert_eq!(InputResult::Submitted("Exit".to_string()), result);
 }
+
+#[test]
+fn tab_on_a_command_draft_does_not_run_the_command_while_working() {
+    for draft in ["quit", "exit", "!echo command", " /cancel "] {
+        let (mut composer, _rx) = new_composer();
+        composer.handle_paste(draft.to_owned());
+        let (result, _) = composer
+            .handle_key_event_with_queue(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), true);
+        assert_eq!(result, InputResult::None, "draft {draft}");
+    }
+}

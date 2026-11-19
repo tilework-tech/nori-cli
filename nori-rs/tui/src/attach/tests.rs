@@ -449,3 +449,81 @@ include!("tests_requests.rs");
 include!("tests_list.rs");
 
 include!("tests_folders.rs");
+
+fn working_runtime() -> (
+    super::runtime::Runtime,
+    tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>,
+) {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("orchard".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.watching = false;
+    runtime
+        .state
+        .apply(SessionEnvelope {
+            conversation_id: "orchard".into(),
+            agent: "fixture".into(),
+            seq: 1,
+            event: nori_protocol::SessionEvent::Nori(
+                nori_protocol::NoriEvent::SessionPhaseChanged(
+                    nori_protocol::SessionPhase::Prompting {
+                        request_id: nori_protocol::acp::v1::RequestId::Str("original-turn".into()),
+                    },
+                ),
+            ),
+        })
+        .unwrap();
+    runtime.state.replace_sessions(json!({"sessions":[{"session_id":"orchard","agent":"test agent","status":"working","title":"Orchard survey"}]})).unwrap();
+    (runtime, rx)
+}
+
+#[test]
+fn busy_submissions_bind_each_intent_to_the_observed_turn_and_a_distinct_message() {
+    use crossterm::event::KeyEvent;
+    let (mut runtime, mut rx) = working_runtime();
+    let mut ids = Vec::new();
+    for (key, intent) in [(KeyCode::Enter, "steer"), (KeyCode::Tab, "queue")] {
+        runtime.composer.handle_paste("same content".into());
+        runtime.key(KeyEvent::new(key, KeyModifiers::NONE));
+        let wire = rx.try_recv().unwrap();
+        assert_eq!(wire["method"], "_nori/session/follow_up");
+        assert_eq!(wire["params"]["session_id"], "orchard");
+        assert_eq!(wire["params"]["expected_turn"], "original-turn");
+        assert_eq!(wire["params"]["intent"], intent);
+        let message_id = wire["params"]["message_id"].as_str().unwrap().to_owned();
+        runtime.connection_event(super::connection::ConnectionEvent::Message(json!({
+            "jsonrpc": "2.0", "id": wire["id"],
+            "result":{"message_id":message_id,"sender":"controller", "status":if intent == "queue" {"queued"} else {"injected"}}
+        }))).unwrap();
+        ids.push(message_id);
+    }
+    assert_ne!(ids[0], ids[1]);
+    insta::assert_snapshot!("attached_follow_up_receipts", screen(&runtime.state));
+}
+
+#[test]
+fn disconnect_retains_uncertain_follow_up_with_its_originating_session() {
+    use super::connection::ConnectionEvent;
+    use crossterm::event::KeyEvent;
+    let (mut runtime, mut rx) = working_runtime();
+    runtime.composer.handle_paste("Sketch the wetlands".into());
+    runtime.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let wire = rx.try_recv().unwrap();
+    let id = wire["params"]["message_id"].as_str().unwrap();
+    runtime.open_session("other".into());
+    runtime
+        .composer
+        .set_text("Draft for the other session".into());
+    runtime
+        .connection_event(ConnectionEvent::Disconnected("fixture disconnect".into()))
+        .unwrap();
+    runtime
+        .connection_event(ConnectionEvent::Connected)
+        .unwrap();
+    assert_eq!(runtime.composer.text(), "Draft for the other session");
+    assert!(runtime.state.conversations["orchard"].parts.iter().any(|part| matches!(part,
+        super::state::Part::Notice(text) if text.contains("Delivery unknown") && text.contains(id) && text.contains("Sketch the wetlands"))));
+    while let Ok(request) = rx.try_recv() {
+        assert_ne!(request["method"], "_nori/session/follow_up");
+    }
+}

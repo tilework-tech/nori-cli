@@ -377,7 +377,7 @@ async fn serve(
     let host = Arc::new(HostService {
         recovery,
         launches,
-        managed: ManagedRemoteHost::new(manager.clone()),
+        managed: ManagedRemoteHost::authenticated_host(manager.clone()),
         manager,
         config: Arc::new(config),
         overrides,

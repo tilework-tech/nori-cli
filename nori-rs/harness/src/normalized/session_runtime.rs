@@ -193,6 +193,8 @@ pub enum QueuedPromptKind {
 /// A user prompt waiting to be sent to ACP.
 #[derive(Debug, Clone)]
 pub struct QueuedPrompt {
+    /// A follow-up remains scoped to the session that owned its expected turn.
+    pub target_session: Option<acp::SessionId>,
     pub event_id: String,
     pub kind: QueuedPromptKind,
     pub text: String,
@@ -222,11 +224,19 @@ pub struct ReclaimRestore {
 // Session runtime
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SteerFence {
+    Open,
+    AwaitingReply,
+    DrainAfterReply,
+}
+
 /// The single runtime object per ACP session. Everything else is derived
 /// from this.
 #[derive(Debug, Clone)]
 pub struct SessionRuntime {
     pub phase: SessionPhase,
+    pub steer_fence: SteerFence,
     pub persisted: PersistedSessionState,
     pub active: Option<ActiveRequestState>,
     pub queue: VecDeque<QueuedPrompt>,
@@ -243,6 +253,7 @@ impl SessionRuntime {
     pub fn new() -> Self {
         Self {
             phase: SessionPhase::Idle,
+            steer_fence: SteerFence::Open,
             persisted: PersistedSessionState::default(),
             active: None,
             queue: VecDeque::new(),

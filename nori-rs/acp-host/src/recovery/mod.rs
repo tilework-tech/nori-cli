@@ -87,6 +87,7 @@ struct Active {
     has_side_namespace: bool,
     load_session: bool,
     pending: HashMap<String, Request>,
+    follow_ups: HashMap<(String, String), bool>,
     faulted: bool,
     storage_failure: Option<StorageFailure>,
     frozen: bool,
@@ -95,7 +96,8 @@ struct Active {
 
 impl Active {
     fn has_unfinished_requests(&self) -> bool {
-        self.pending.values().any(|r| !matches!(r, Request::Side))
+        self.follow_ups.values().any(|finished| !finished)
+            || self.pending.values().any(|r| !matches!(r, Request::Side))
     }
 }
 
@@ -105,6 +107,7 @@ enum Request {
     Load(String),
     Prompt { command: String, session: String },
     Side,
+    FollowUp { session: String, message: String },
     Other,
 }
 
@@ -312,6 +315,16 @@ impl Recovery {
                     session: session.to_owned(),
                 }
             }
+            Some("_nori/session/follow_up") => Request::FollowUp {
+                session: message["params"]["session_id"]
+                    .as_str()
+                    .context("missing session_id")?
+                    .to_owned(),
+                message: message["params"]["message_id"]
+                    .as_str()
+                    .context("missing message_id")?
+                    .to_owned(),
+            },
             _ => Request::Other,
         };
         state.pending.insert(id, entry);
@@ -355,6 +368,18 @@ impl Recovery {
                         .or(load);
                     return Ok(None);
                 }
+                Some(Request::FollowUp {
+                    session,
+                    message: key,
+                }) => {
+                    if matches!(
+                        message["result"]["status"].as_str(),
+                        Some("queued" | "idle_queued" | "unsupported_queued")
+                    ) {
+                        state.follow_ups.entry((session, key)).or_insert(false);
+                    }
+                    return Ok(None);
+                }
                 Some(Request::Prompt { command, session }) => self
                     .journal
                     .finish_prompt(binding, generation, &command, &session, message),
@@ -364,6 +389,13 @@ impl Recovery {
             let Some(session) = message["params"]["sessionId"].as_str() else {
                 return Ok(None);
             };
+            if message["method"] == "_nori/session/follow_up/finished"
+                && let Some(key) = message["params"]["message_id"].as_str()
+            {
+                state
+                    .follow_ups
+                    .insert((session.to_owned(), key.to_owned()), true);
+            }
             if state.main.as_deref() != Some(session)
                 || state
                     .pending

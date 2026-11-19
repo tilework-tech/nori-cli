@@ -90,6 +90,7 @@ pub(super) struct Permission {
 #[derive(Default)]
 pub(super) struct Conversation {
     pub parts: Vec<Part>,
+    pub active_turn: Option<acp::RequestId>,
     pub permissions: Vec<Permission>,
     pub delegations: Vec<nori_protocol::Delegation>,
     pub cwd: std::path::PathBuf,
@@ -472,6 +473,7 @@ impl AttachState {
                     .retain(|permission| permission.request_id != resolved.request_id);
             }
             SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
+                conversation.active_turn = None;
                 conversation.parts.push(Part::Ended(ended.message));
                 conversation.permissions.clear();
                 conversation.message_boundary = true;
@@ -484,6 +486,12 @@ impl AttachState {
                 conversation.message_boundary = true;
             }
             SessionEvent::Nori(NoriEvent::SessionPhaseChanged(phase)) => {
+                conversation.active_turn = match &phase {
+                    nori_protocol::SessionPhase::Prompting { request_id } => {
+                        Some(request_id.clone())
+                    }
+                    _ => None,
+                };
                 if matches!(
                     phase,
                     nori_protocol::SessionPhase::Idle

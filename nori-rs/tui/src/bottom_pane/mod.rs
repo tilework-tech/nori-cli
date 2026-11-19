@@ -215,7 +215,16 @@ impl BottomPane {
     }
 
     /// Forward a key event to the active view or the composer.
+    #[cfg(test)]
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> InputResult {
+        self.handle_key_event_with_queue(key_event, false)
+    }
+
+    pub fn handle_key_event_with_queue(
+        &mut self,
+        key_event: KeyEvent,
+        has_active_turn: bool,
+    ) -> InputResult {
         // Once exit is in progress every key is inert, including the
         // task-status Esc interrupt below — teardown owns the backend.
         if !self.composer.input_enabled() {
@@ -254,7 +263,9 @@ impl BottomPane {
                 self.request_redraw();
                 return InputResult::None;
             }
-            let (input_result, needs_redraw) = self.composer.handle_key_event(key_event);
+            let (input_result, needs_redraw) = self
+                .composer
+                .handle_key_event_with_queue(key_event, has_active_turn);
             if needs_redraw {
                 self.request_redraw();
             }

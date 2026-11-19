@@ -5,6 +5,14 @@ use nori_config::VimEnterBehavior;
 impl ChatComposer {
     /// Handle a key event coming from the main UI.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
+        self.handle_key_event_with_queue(key_event, false)
+    }
+
+    pub(crate) fn handle_key_event_with_queue(
+        &mut self,
+        key_event: KeyEvent,
+        has_active_turn: bool,
+    ) -> (InputResult, bool) {
         if !self.input_enabled {
             return (InputResult::None, false);
         }
@@ -47,13 +55,15 @@ impl ChatComposer {
                 ActivePopup::HistorySearch(_) => {
                     self.handle_key_event_with_history_popup(key_event)
                 }
-                ActivePopup::None => self.handle_key_event_without_popup(key_event),
+                ActivePopup::None => {
+                    self.handle_key_event_without_popup(key_event, has_active_turn)
+                }
             }
         };
 
         if matches!(
             &result.0,
-            InputResult::Submitted(_) | InputResult::Command(_)
+            InputResult::Submitted(_) | InputResult::Queued(_) | InputResult::Command(_)
         ) {
             self.textarea.enter_vim_normal_mode();
         }
@@ -293,7 +303,7 @@ impl ChatComposer {
                     }
                 }
                 // Fallback to default newline handling if no command selected.
-                self.handle_key_event_without_popup(key_event)
+                self.handle_key_event_without_popup(key_event, false)
             }
             _ if in_vim_normal => (InputResult::None, true),
             input => self.handle_input_basic(input),
@@ -673,6 +683,7 @@ impl ChatComposer {
     pub(super) fn handle_key_event_without_popup(
         &mut self,
         key_event: KeyEvent,
+        has_active_turn: bool,
     ) -> (InputResult, bool) {
         if !self.is_shell_mode && self.handle_shortcut_overlay_key(&key_event) {
             return (InputResult::None, true);
@@ -719,6 +730,31 @@ impl ChatComposer {
             }
         } else {
             self.footer_mode = reset_mode_after_activity(self.footer_mode);
+        }
+        if has_active_turn
+            && key_event.code == KeyCode::Tab
+            && key_event.kind == KeyEventKind::Press
+            && key_event.modifiers.is_empty()
+            && !self.is_shell_mode
+            && !self.is_empty()
+            && !self.paste_burst.is_active()
+        {
+            let draft = self.expand_pending_pastes(self.textarea.text().to_owned());
+            let text = draft.trim();
+            let is_command = text.starts_with('!')
+                || parse_slash_name(text).is_some_and(|(name, _)| !name.contains('/'))
+                || (!self.literal_commands
+                    && !draft.starts_with(' ')
+                    && matches!(text, "exit" | "quit"));
+            if text.is_empty() || is_command {
+                if draft != self.textarea.text() {
+                    self.textarea.set_text(&draft);
+                }
+                return self.handle_input_basic(key_event);
+            }
+            self.history.record_local_submission(text);
+            self.textarea.set_text("");
+            return (InputResult::Queued(text.to_owned()), true);
         }
         match key_event {
             KeyEvent {

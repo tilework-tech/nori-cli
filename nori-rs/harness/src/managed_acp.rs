@@ -1,5 +1,6 @@
 //! Duplex relay for one admitted binding and generation.
 
+mod follow_ups;
 mod native;
 
 pub use native::NativeForks;
@@ -52,6 +53,7 @@ struct Request {
 
 struct Relay {
     cwd: PathBuf,
+    follow_ups: follow_ups::FollowUps,
     native: native::Native,
     initialize: Option<Value>,
     requests: HashMap<Value, Request>,
@@ -88,7 +90,11 @@ impl Relay {
         {
             return Some((-32602, "unknown session"));
         }
-        if id.is_some_and(|id| self.requests.contains_key(id) || self.native.reserved(id)) {
+        if id.is_some_and(|id| {
+            self.requests.contains_key(id)
+                || self.native.reserved(id)
+                || self.follow_ups.reserved(id)
+        }) {
             return Some((-32600, "duplicate request ID on logical connection"));
         }
         if params["_meta"].get(side_sessions::SIDE_META).is_some() {
@@ -108,6 +114,11 @@ impl Relay {
         let Some(initialize) = &self.initialize else {
             return Some((-32001, "initialize must complete first"));
         };
+        if method == crate::follow_up_rpc::METHOD {
+            return id
+                .is_none()
+                .then_some((-32600, "follow_up requires a request id"));
+        }
         if method.starts_with("_nori/") {
             return Some((-32601, "host control is unavailable on a scoped connection"));
         }
@@ -147,6 +158,9 @@ impl Relay {
             let Some(sid) = params["sessionId"].as_str().filter(|s| !s.is_empty()) else {
                 return Some((-32602, "sessionId is required"));
             };
+            if method == "session/prompt" && self.follow_ups.busy(sid) {
+                return Some((-32015, "session has pending follow-up delivery"));
+            }
             if method == "session/prompt"
                 && self
                     .requests
@@ -178,7 +192,11 @@ impl Relay {
                     .as_ref()
                     .is_some_and(|id| self.agent_requests.remove(id) && !self.native.ambiguous(id))
             {
+                let sid = id.as_ref().and_then(|id| self.follow_ups.answer(id));
                 self.native.write(writer, message)?;
+                if let Some(sid) = sid {
+                    self.advance_follow_ups(&sid, writer).await?;
+                }
             }
             return Ok(());
         };
@@ -190,8 +208,23 @@ impl Relay {
             }
             return Ok(());
         }
+        if method == crate::follow_up_rpc::METHOD {
+            return self
+                .submit_follow_up(&message["id"], message["params"].clone(), writer)
+                .await;
+        }
         let mut mcp = None;
         let sid = message["params"]["sessionId"].as_str().map(str::to_owned);
+        if method == "session/cancel"
+            && let Some(sid) = &sid
+        {
+            self.follow_ups.cancel(sid);
+        }
+        if method == "session/close"
+            && let Some(sid) = &sid
+        {
+            self.follow_ups.closing(sid, true);
+        }
         if matches!(
             method.as_str(),
             "session/new" | "session/load" | "session/resume" | "session/fork"
@@ -203,31 +236,81 @@ impl Relay {
                 .await?;
         }
         if method == "session/prompt"
-            && let Some(sid) = &sid
+            && let (Some(sid), Some(id)) = (&sid, &id)
         {
-            let params = &mut message["params"];
-            if self.echo {
-                let key = nori_protocol::PROMPT_ECHO_ID_META_KEY;
-                let echo_id = params["_meta"][key]
-                    .as_str()
-                    .map_or_else(|| uuid::Uuid::new_v4().to_string(), str::to_owned);
-                params["_meta"][key] = json!(echo_id);
-                if let Some(blocks) = params["prompt"].as_array() {
-                    for block in blocks {
-                        self.notify(sid, json!({"sessionUpdate":"user_message_chunk","content":block,"messageId":echo_id,"_meta":{(key):echo_id}})).await?;
-                    }
-                }
+            // Sender is a host assertion. Caller metadata cannot impersonate it.
+            if let Some(meta) = message["params"]
+                .get_mut("_meta")
+                .and_then(Value::as_object_mut)
+            {
+                meta.remove(crate::follow_up::SENDER_META);
             }
-            self.additions.prompt(sid, params).await?;
-            if self.status {
-                self.turn_status(sid, "working").await?;
-            }
+            self.prepare_prompt(sid, &mut message["params"], id).await?;
         }
         if let Some(id) = id {
             self.requests.insert(id, Request { method, sid, mcp });
         }
         self.native.write(writer, message)?;
         Ok(())
+    }
+
+    async fn prepare_prompt(&mut self, sid: &str, params: &mut Value, id: &Value) -> Result<()> {
+        self.follow_ups.start(sid, id);
+        let author = params["_meta"][crate::follow_up::SENDER_META]
+            .as_str()
+            .map(str::to_owned);
+        self.record_input(sid, params, author.as_deref()).await?;
+        if self.status {
+            self.turn_status(sid, "working").await?;
+        }
+        Ok(())
+    }
+
+    async fn record_input(
+        &self,
+        sid: &str,
+        params: &mut Value,
+        sender: Option<&str>,
+    ) -> Result<()> {
+        if self.echo {
+            let key = nori_protocol::PROMPT_ECHO_ID_META_KEY;
+            let echo_id = params["_meta"][key]
+                .as_str()
+                .map_or_else(|| uuid::Uuid::new_v4().to_string(), str::to_owned);
+            params["_meta"][key] = json!(echo_id);
+            let mut meta = json!({(key):echo_id});
+            if let Some(sender) = sender {
+                meta[crate::follow_up::SENDER_META] = json!(sender);
+            }
+            if let Some(blocks) = params["prompt"].as_array() {
+                for block in blocks {
+                    self.notify(sid,json!({"sessionUpdate":"user_message_chunk","content":block,"messageId":echo_id,"_meta":meta})).await?;
+                }
+            }
+        }
+        self.additions.prompt(sid, params).await
+    }
+
+    async fn send_prompt(
+        &mut self,
+        sid: &str,
+        mut params: Value,
+        id: Value,
+        writer: &mpsc::Sender<Value>,
+    ) -> Result<()> {
+        self.prepare_prompt(sid, &mut params, &id).await?;
+        self.requests.insert(
+            id.clone(),
+            Request {
+                method: "session/prompt".into(),
+                sid: Some(sid.into()),
+                mcp: None,
+            },
+        );
+        self.native.write(
+            writer,
+            json!({"jsonrpc":"2.0","id":id,"method":"session/prompt","params":params}),
+        )
     }
 
     async fn agent(&mut self, mut message: Value, writer: &mpsc::Sender<Value>) -> Result<()> {
@@ -238,7 +321,22 @@ impl Relay {
         {
             return Ok(());
         }
+        if message["method"].is_null() && self.steer_reply(&message, writer).await? {
+            return Ok(());
+        }
         if message["method"].is_string() {
+            if matches!(
+                message["method"].as_str(),
+                Some(follow_ups::FINISHED | follow_ups::STARTED | follow_ups::SUBMITTED)
+            ) {
+                return Ok(());
+            }
+            if message["method"] == "session/request_permission"
+                && let (Some(sid), Some(id)) =
+                    (message["params"]["sessionId"].as_str(), message.get("id"))
+            {
+                self.follow_ups.permission(sid, id);
+            }
             if let Some(id) = message.get("id") {
                 ensure!(
                     self.agent_requests.insert(id.clone()),
@@ -266,6 +364,13 @@ impl Relay {
             {
                 normalize_close(&mut message);
             }
+            if request.method == "session/close"
+                && message.get("error").is_some()
+                && let Some(sid) = sid
+            {
+                self.follow_ups.closing(sid, false);
+                self.advance_follow_ups(sid, writer).await?;
+            }
             if let Some(result) = message.get("result") {
                 match request.method.as_str() {
                     "initialize" => self.initialize = Some(result.clone()),
@@ -281,11 +386,13 @@ impl Relay {
                             self.output.send(json!({"jsonrpc":"2.0","id":message["id"],"error":{"code":-32603,"message":"adapter returned an existing session ID"}})).await?;
                             return Ok(());
                         }
+                        self.follow_ups.closing(resolved, false);
                         self.native.observed(resolved);
                         self.additions.opened(resolved, request.mcp).await?;
                     }
                     "session/close" => {
                         if let Some(sid) = sid {
+                            self.closed_follow_ups(sid).await?;
                             self.native.parent_closed(sid, writer)?;
                             self.additions.closed(sid).await?;
                         }
@@ -311,6 +418,11 @@ impl Relay {
                 && let Some(sid) = sid
             {
                 self.turn_status(sid, "idle").await?;
+            }
+            if request.method == "session/prompt"
+                && let Some(sid) = sid
+            {
+                return self.terminal(sid, message, writer).await;
             }
         }
         self.output.send(message).await?;
@@ -403,6 +515,7 @@ fn start(
                 echo,
                 status,
                 output,
+                follow_ups: Default::default(),
                 initialize: None,
                 requests: HashMap::new(),
                 agent_requests: HashSet::new(),
@@ -410,7 +523,9 @@ fn start(
             let mut lines =
                 FramedRead::new(reader, LinesCodec::new_with_max_length(16 * 1024 * 1024));
             loop {
+                let deadline = state.follow_ups.deadline();
                 tokio::select! {
+                    _ = async { if let Some(at) = deadline {tokio::time::sleep_until(at).await} else { std::future::pending().await } } => state.expire_steers().await?,
                     permit = to_agent.reserve(), if state.native.deferred() => {
                         state.native.flush(permit?);
                     },
@@ -438,5 +553,7 @@ fn start(
     }
 }
 
+#[cfg(test)]
+mod follow_up_tests;
 #[cfg(test)]
 mod native_tests;

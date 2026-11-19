@@ -214,8 +214,8 @@ client never keeps a second deliverable queue. A client may take one queued
 prompt back by its submission event ID before it is sent. That request is
 reduced on the same serialized path as queue draining, so the prompt is either
 removed exactly once or has already started its **prompt turn** and stays
-delivered. A prompt that goes back to the composer and is submitted again is a
-new queued prompt at the end of the FIFO.
+delivered. A successful reclaim returns a draft. Resubmitting it creates a
+new submission with the intent selected in the composer.
 
 ## Serialized Reducer
 
@@ -374,16 +374,22 @@ into `persisted.transcript`, in request-local order, before clearing `active`.
 
 ### Submitting a prompt
 
-If `phase == Idle`:
+When an idle session admits a new prompt:
 
 - send `session/prompt`
 - create `active = Some(ActiveRequestState { kind: Prompt, .. })`
 - set `phase = Prompt { request_id, cancelling: false }`
 
-If `phase != Idle`:
+Legacy prompt submissions during a busy phase enter the queue. In direct
+`nori` and controller `nori attach`, a composed follow-up targets the observed
+active prompt. Tab queues it for the next turn. Enter asks the host to steer
+the matching session and turn. The original prompt owns completion, usage and
+cancellation after injection.
 
-- append the user prompt to `queue`
-- do not send anything to ACP yet
+The host visibly queues a steer when guarded steering is unavailable or the
+target turn just ended. An explicit refusal yields a rejection. When delivery
+is uncertain, the caller retains the same message ID for reconciliation and
+the host holds subsequent delivery. See the [host follow-up contract](../nori-rs/cli/src/host/docs.md#mid-turn-follow-ups).
 
 ### Cancelling a prompt
 

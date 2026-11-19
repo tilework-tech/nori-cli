@@ -12,10 +12,19 @@ use super::state::AttachState;
 pub(super) enum Pending {
     Initialize,
     List,
-    Subscribe { session_id: String },
+    Subscribe {
+        session_id: String,
+    },
     New,
     TakeControl,
-    Mutation { draft: Option<String> },
+    Mutation {
+        draft: Option<String>,
+    },
+    FollowUp {
+        session_id: String,
+        message_id: String,
+        draft: String,
+    },
 }
 
 pub(super) struct Runtime {
@@ -193,12 +202,30 @@ impl Runtime {
             ConnectionEvent::Disconnected(reason) => {
                 self.state.connected = false;
                 self.next_waiting_after_refresh = false;
-                let uncertain = self
-                    .pending
-                    .values()
-                    .any(|pending| matches!(pending, Pending::New | Pending::Mutation { .. }));
+                let uncertain = self.pending.values().any(|pending| {
+                    matches!(
+                        pending,
+                        Pending::New | Pending::Mutation { .. } | Pending::FollowUp { .. }
+                    )
+                });
                 self.uncertain_delivery |= uncertain;
-                self.pending.clear();
+                for pending in std::mem::take(&mut self.pending).into_values() {
+                    if let Pending::FollowUp {
+                        session_id,
+                        message_id,
+                        draft,
+                    } = pending
+                    {
+                        self.follow_up_notice(
+                            &session_id,
+                            crate::follow_up::delivery_notice(
+                                nori_harness::FollowUpStatus::Unknown,
+                                &message_id,
+                                &draft,
+                            ),
+                        );
+                    }
+                }
                 self.state.show_notice(if uncertain {
                     "Connection lost. A request may have reached the host; it will not be retried. Check the conversation after reconnecting.".to_string()
                 } else {
@@ -213,6 +240,15 @@ impl Runtime {
         }
         self.note_request_on_screen();
         Ok(())
+    }
+
+    fn follow_up_notice(&mut self, session_id: &str, text: String) {
+        self.state
+            .conversations
+            .entry(session_id.to_owned())
+            .or_default()
+            .parts
+            .push(super::state::Part::Notice(text));
     }
 
     fn message(&mut self, message: Value) -> anyhow::Result<()> {
@@ -269,6 +305,18 @@ impl Runtime {
                     "Replay unavailable: {text}. Existing conversation retained."
                 ));
             }
+            if let Pending::FollowUp {
+                session_id,
+                message_id,
+                draft,
+            } = &pending
+            {
+                if self.state.selected.as_ref() == Some(session_id) && self.composer.is_empty() {
+                    self.composer.set_text(draft.clone());
+                }
+                self.follow_up_notice(session_id, format!("{text} [{message_id}] {draft}"));
+                return Ok(());
+            }
             if let Pending::Mutation { draft: Some(draft) } = &pending
                 && self.composer.is_empty()
             {
@@ -314,6 +362,29 @@ impl Runtime {
             Pending::TakeControl => {
                 self.state
                     .role_changed(result["role"].as_str().unwrap_or("watcher"));
+            }
+            Pending::FollowUp {
+                session_id,
+                message_id,
+                draft,
+            } => {
+                let status =
+                    serde_json::from_value::<nori_harness::FollowUpReceipt>(result.clone())
+                        .ok()
+                        .filter(|receipt| receipt.message_id == message_id)
+                        .map_or(nori_harness::FollowUpStatus::Unknown, |receipt| {
+                            receipt.status
+                        });
+                if status == nori_harness::FollowUpStatus::Rejected
+                    && self.state.selected.as_ref() == Some(&session_id)
+                    && self.composer.is_empty()
+                {
+                    self.composer.set_text(draft.clone());
+                }
+                self.follow_up_notice(
+                    &session_id,
+                    crate::follow_up::delivery_notice(status, &message_id, &draft),
+                );
             }
             Pending::Subscribe { .. } | Pending::Mutation { .. } => self.refresh_list(),
         }

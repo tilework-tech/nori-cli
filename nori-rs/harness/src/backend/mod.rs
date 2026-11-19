@@ -31,6 +31,7 @@ use crate::transcript::ContentBlock;
 use crate::transcript::TranscriptRecorder;
 use crate::undo::GhostSnapshotStack;
 
+mod follow_up;
 mod remote_control_ext;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -344,6 +345,7 @@ pub struct AcpBackend {
     async_post_agent_response_hooks: Vec<PathBuf>,
     /// Timeout for hook script execution
     script_timeout: std::time::Duration,
+    follow_ups: Arc<Mutex<follow_up::Receipts>>,
     /// Serialized reducer-owned ACP session runtime.
     session_driver: Arc<Mutex<session_runtime_driver::SessionDriver>>,
     /// MCP server configuration forwarded to ACP agents at session creation.

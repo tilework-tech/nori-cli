@@ -51,12 +51,18 @@ fn spawn_busy_session_with(log: &Path, config: SessionConfig) -> TuiSession {
     let config = config
         .with_agent("mock-model".to_owned())
         .with_mock_response("MOCK_TURN_DONE")
+        .with_agent_env("MOCK_AGENT_STEERING", "1")
         .with_agent_env("MOCK_AGENT_DELAY_MS", TURN_DELAY_MS)
         .with_agent_env("MOCK_AGENT_PROMPT_LOG", log.display().to_string());
     let mut session = TuiSession::spawn_with_config(30, 90, config).expect("spawn nori");
     session.wait_for_text("›", TIMEOUT).expect("composer ready");
     std::thread::sleep(TIMEOUT_INPUT);
     session
+}
+
+fn queue_input(session: &mut TuiSession, text: &str) {
+    session.type_input(text).unwrap();
+    session.send_key(Key::Tab).unwrap();
 }
 
 #[test]
@@ -68,9 +74,12 @@ fn up_reclaims_newest_queued_message_and_edited_resubmission_is_delivered_once()
 
     session.submit_input("turn one").unwrap();
     wait_for_deliveries(&log, 1, TIMEOUT);
-    session.submit_input("alpha").unwrap();
-    session.submit_input("dup").unwrap();
-    session.submit_input("dup").unwrap();
+    queue_input(&mut session, "alpha");
+    session
+        .wait_for_text("• Queued for the next turn.", TIMEOUT)
+        .expect("explicit queue receipt");
+    queue_input(&mut session, "dup");
+    queue_input(&mut session, "dup");
     session
         .wait_for(
             |screen| queued_rows(screen) == ["alpha", "dup", "dup"],
@@ -86,9 +95,7 @@ fn up_reclaims_newest_queued_message_and_edited_resubmission_is_delivered_once()
         )
         .expect("the newest duplicate leaves the queue and enters the composer");
 
-    session.send_str(" edited").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    queue_input(&mut session, " edited");
     session
         .wait_for(
             |screen| queued_rows(screen) == ["alpha", "dup", "dup edited"],
@@ -96,12 +103,17 @@ fn up_reclaims_newest_queued_message_and_edited_resubmission_is_delivered_once()
         )
         .expect("edited message is queued once, after the others");
 
-    let delivered = wait_for_deliveries(&log, 4, Duration::from_secs(30));
-    std::thread::sleep(Duration::from_millis(500));
+    queue_input(&mut session, "after edited follow-up");
     assert_eq!(
-        delivered_prompts(&log),
-        ["turn one", "alpha", "dup", "dup edited"],
-        "delivered so far: {delivered:?}\n{}",
+        wait_for_deliveries(&log, 5, Duration::from_secs(30)),
+        [
+            "turn one",
+            "alpha",
+            "dup",
+            "dup edited",
+            "after edited follow-up"
+        ],
+        "{}",
         session.screen_contents()
     );
 }
@@ -115,7 +127,7 @@ fn alt_up_reclaims_the_only_queued_message_so_it_is_never_delivered() {
 
     session.submit_input("turn one").unwrap();
     wait_for_deliveries(&log, 1, TIMEOUT);
-    session.submit_input("withdraw me").unwrap();
+    queue_input(&mut session, "withdraw me");
     session
         .wait_for(|screen| queued_rows(screen) == ["withdraw me"], TIMEOUT)
         .expect("queued row");
@@ -162,7 +174,7 @@ fn alt_up_outside_a_delegated_child_reclaims_with_several_sessions_enabled() {
 
     session.submit_input("turn one").unwrap();
     wait_for_deliveries(&log, 1, TIMEOUT);
-    session.submit_input("take me back").unwrap();
+    queue_input(&mut session, "take me back");
     session
         .wait_for(|screen| queued_rows(screen) == ["take me back"], TIMEOUT)
         .expect("queued row");
@@ -175,4 +187,48 @@ fn alt_up_outside_a_delegated_child_reclaims_with_several_sessions_enabled() {
         )
         .expect("alt + up reaches the queue when there is no parent session");
     assert_eq!(delivered_prompts(&log), ["turn one"]);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn enter_steers_with_the_edited_draft_after_up_withdraws_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("prompts.jsonl");
+    let mut session = spawn_busy_session(&log);
+
+    session.submit_input("Sketch the orchard plan").unwrap();
+    session
+        .wait_for_text("Survey in progress", TIMEOUT)
+        .unwrap();
+    queue_input(&mut session, "check the north row");
+    session
+        .wait_for(
+            |screen| queued_rows(screen) == ["check the north row"],
+            TIMEOUT,
+        )
+        .unwrap();
+    session.send_key(Key::Up).unwrap();
+    session
+        .wait_for(
+            |screen| queued_rows(screen).is_empty() && screen.contains("› check the north row"),
+            TIMEOUT,
+        )
+        .unwrap();
+
+    session.submit_input(" first").unwrap();
+    session
+        .wait_for(
+            |screen| {
+                screen.contains("Survey correction received: check the north row first.")
+                    && !screen.contains("esc to interrupt")
+            },
+            TIMEOUT,
+        )
+        .expect("the original turn consumed the edited correction");
+    session.submit_input("after correction").unwrap();
+    assert_eq!(
+        wait_for_deliveries(&log, 2, TIMEOUT),
+        ["Sketch the orchard plan", "after correction"],
+        "the withdrawn draft was never sent as a separate prompt"
+    );
 }

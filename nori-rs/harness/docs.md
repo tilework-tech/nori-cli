@@ -407,13 +407,15 @@ manager envelope, including Nori events; legacy ACP projection stays separate.
 The [wire contract](../../docs/remote-control.md) defines request parameters,
 acknowledgements, and reconnect errors.
 
-Prompt admission calls `HarnessHandle::prompt_with_meta_if_idle` and returns
+Legacy `_nori/session/prompt` admission calls `HarnessHandle::prompt_with_meta_if_idle` and returns
 the harness request ID; completion remains in the envelope stream. Permission
 answers validate the session/request pair against manager pending requests and
 serialize managed answer claims until the event pump observes resolution.
 They use the remote responder label, so TUI and remote observers see the same
 `RequestResolved`. Managed disconnect does not cancel a turn or resolve its
 pending permission: the continuing session can be controlled after reconnect.
+
+The [follow-up operation](../cli/src/host/docs.md#mid-turn-follow-ups) uses the same harness session driver for direct input and background-host controllers. It checks the expected turn, retains a receipt keyed by message ID and routes an explicit queue or guarded fallback through the existing prompt FIFO. A successful injection leaves the original prompt responsible for completion, usage and cancellation.
 
 The background [`HostService`](../cli/src/host/service.rs) composes this
 adapter with manager lifecycle operations for new, close, cancel, and resume.
@@ -787,10 +789,11 @@ Execute call is read-only.
   receives a correlated prompt outcome. Prompt registration belongs to
   `HarnessRemoteHost`, so controller replacement cannot strand admission state,
   while hosted-session replacement invalidates the old registration token.
-- Only a prompt the local user typed is reclaimable: one submitted without
-  caller metadata that is not a delegated child's result. Remote controllers'
-  prompts and child results are queued with `reclaim: None` and are never
-  editable, so a reclaim cannot strand their submitters.
+- The harness uses the submission path to decide whether the local composer
+  may reclaim a queued item. For follow-ups, `HarnessHandle::local_follow_up`
+  marks composer input as local. An authenticated controller uses
+  `HarnessHandle::follow_up`; its queued input stays read-only even if its
+  displayed sender is `local`. Delegated child results also stay read-only.
 - A queued prompt runs its `pre_user_prompt` hooks, consumes pending hook
   context and any compact summary, and pushes its `/undo` snapshot at
   submission, not at dispatch. Reclaiming returns the hook context that was

@@ -110,9 +110,15 @@ impl<R: AsyncRead + Unpin> AsyncRead for ExitOnEof<R> {
 struct MockState {
     next_session_id: AtomicI64,
     context_prompt_index: AtomicI64,
+    steering_turns: Mutex<HashMap<String, tokio::sync::oneshot::Sender<Steer>>>,
     cancel_requested: AtomicBool,
     session_configs: Mutex<HashMap<String, MockSessionConfig>>,
     delegation_servers: Mutex<HashMap<String, acp::McpServerHttp>>,
+}
+
+struct Steer {
+    text: String,
+    reply: Responder<serde_json::Value>,
 }
 
 #[derive(Clone)]
@@ -305,7 +311,45 @@ impl MockAgent {
         arguments: acp::PromptRequest,
     ) -> Result<acp::PromptResponse, acp::Error> {
         eprintln!("Mock agent: prompt");
+        // Record each delivered prompt's user text, one JSON string per line,
+        // so tests can assert exactly which prompts reached the agent.
+        if let Some(path) = std::env::var_os("MOCK_AGENT_PROMPT_LOG") {
+            use std::io::Write as _;
+            let text = last_prompt_text_block(&arguments.prompt).unwrap_or_default();
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .map_err(|error| acp::Error::new(-32001, error.to_string()))?;
+            writeln!(file, "{}", serde_json::Value::String(text.to_string()))
+                .map_err(|error| acp::Error::new(-32001, error.to_string()))?;
+        }
         if let Some(prompt) = last_prompt_text_block(&arguments.prompt) {
+            if std::env::var_os("MOCK_AGENT_STEERING").is_some() {
+                if prompt == "Sketch the orchard plan" {
+                    let (send, receive) = tokio::sync::oneshot::channel();
+                    self.state
+                        .steering_turns
+                        .lock()
+                        .unwrap()
+                        .insert(arguments.session_id.to_string(), send);
+                    self.send_text_chunk(arguments.session_id.clone(), "Survey in progress.\n")
+                        .await?;
+                    let correction = receive.await.map_err(|_| acp::Error::internal_error())?;
+                    self.send_text_chunk(
+                        arguments.session_id.clone(),
+                        &format!("Survey correction received: {}.", correction.text),
+                    )
+                    .await?;
+                    correction.reply.respond(json!({"outcome":"injected"}))?;
+                    return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+                }
+                if prompt == "Count the cedar trees" {
+                    self.send_text_chunk(arguments.session_id.clone(), "Cedar count complete.")
+                        .await?;
+                    return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+                }
+            }
             if prompt.starts_with("[Nori delegation result]") {
                 self.send_text_chunk(
                     arguments.session_id.clone(),
@@ -351,19 +395,6 @@ impl MockAgent {
                     .await?;
                 }
             }
-        }
-        // Record each delivered prompt's user text, one JSON string per line,
-        // so tests can assert exactly which prompts reached the agent.
-        if let Some(path) = std::env::var_os("MOCK_AGENT_PROMPT_LOG") {
-            use std::io::Write as _;
-            let text = last_prompt_text_block(&arguments.prompt).unwrap_or_default();
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(path)
-                .map_err(|error| acp::Error::new(-32001, error.to_string()))?;
-            writeln!(file, "{}", serde_json::Value::String(text.to_string()))
-                .map_err(|error| acp::Error::new(-32001, error.to_string()))?;
         }
         if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK") {
             let actual = last_prompt_text_block(&arguments.prompt);
@@ -1780,6 +1811,10 @@ fn mock_agent() -> impl ConnectTo<Client> {
                     .and_then(|value| value.as_object().cloned())
                     .unwrap_or_default();
 
+                if std::env::var_os("MOCK_AGENT_STEERING").is_some() {
+                    response = response.agent_info(acp::Implementation::new("@agentclientprotocol/claude-agent-acp", "0.102.0"));
+                    meta.insert("steering".into(), json!({"supported": true}));
+                }
                 if std::env::var("MOCK_AGENT_GOAL_EXT").is_ok() {
                     eprintln!("Mock agent: advertising the _session/goal goal extension");
                     meta.insert(
@@ -2181,6 +2216,7 @@ fn mock_agent() -> impl ConnectTo<Client> {
                 // Native goal store for the `_session/goal` extension. Matches
                 // any method (untyped fallback), so it must stay registered
                 // after every typed request handler.
+                let state = state.clone();
                 let goal_objective: Arc<std::sync::Mutex<Option<String>>> =
                     Arc::new(std::sync::Mutex::new(None));
                 async move |arguments: agent_client_protocol::UntypedMessage,
@@ -2191,6 +2227,20 @@ fn mock_agent() -> impl ConnectTo<Client> {
                     // (agent-client-protocol schema/mod.rs `parse_message`)
                     // strips the leading underscore instead. Accept both so
                     // the mock does not depend on which path dispatched it.
+                    if matches!(arguments.method(), "_session/steering" | "session/steering")
+                        && std::env::var_os("MOCK_AGENT_STEERING").is_some()
+                    {
+                        let params = &arguments.params;
+                        if params["_meta"]["steering"]["idleBehavior"] != "promptRequired" {
+                            return responder.respond_with_error(acp::Error::invalid_params());
+                        }
+                        let session_id = params["sessionId"].as_str().unwrap_or_default();
+                        let Some(turn) = state.steering_turns.lock().unwrap().remove(session_id) else {
+                            return responder.respond(json!({"outcome":"promptRequired","reason":"noRunningTurn"}));
+                        };
+                        let text = params["prompt"][0]["text"].as_str().unwrap_or_default().to_owned();
+                        return turn.send(Steer { text, reply: responder }).map_err(|_| acp::Error::internal_error());
+                    }
                     let is_goal_method =
                         matches!(arguments.method(), "_session/goal" | "session/goal");
                     if !is_goal_method || std::env::var("MOCK_AGENT_GOAL_EXT").is_err() {
