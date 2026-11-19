@@ -1,10 +1,4 @@
 //! Process-free state of the session manager.
-//!
-//! The registry owns every session record, the per-conversation envelope
-//! sequence, status derivation, family rollup and the concurrency cap. It
-//! never touches an agent process: the manager feeds it each session's events
-//! and reads the results back, which keeps every rule here testable with plain
-//! [`SessionEvent`] values.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
