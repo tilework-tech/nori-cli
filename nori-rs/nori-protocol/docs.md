@@ -61,6 +61,10 @@ prompt's submission event ID, unique within the session), `text`, and
 `editable` (plain-text content that can return to the composer). A client
 passes an `id` to `HarnessHandle::reclaim_queued_prompt`; hosts that send no
 `entries` still deserialize, and their rows simply cannot be reclaimed.
+The additive `paused` field (serde default, omitted when `None`) is a
+`QueuePause` (`interrupted` or `turn_failed`, snake_case) while queued prompts
+wait for `HarnessHandle::resume_queue` instead of starting on their own; hosts
+that predate it never send it.
 
 `NoriEvent` carries harness-owned lifecycle and product behavior that has no
 ACP event of its own. A `session/update` received without a locally owned

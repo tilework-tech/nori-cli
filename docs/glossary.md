@@ -87,6 +87,7 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 | **Agent-turn metadata**    | Nori metadata that establishes an **agent-owned turn** on the receiving connection.                        | Broker projection, synthetic request |
 | **Nori agent-turn status** | The `working` or `idle` value in `_meta.nori.status` carried by **agent-turn metadata**.                   | Session status, ACP lifecycle event  |
 | **Status-only frame**      | Session metadata containing a recognized **Nori agent-turn status** but no displayable title or timestamp. | Prompt response, completion event    |
+| **Paused queue**           | Queued prompts held after a **prompt turn** that did not end with `end_turn`, until an explicit resume.    | Stuck queue, cancelled queue         |
 
 ### Relationships
 
