@@ -315,6 +315,13 @@ impl AcpBackend {
                     session_runtime_driver::SessionRuntimeInput::Barrier { response_tx } => {
                         let _ = response_tx.send(());
                     }
+                    session_runtime_driver::SessionRuntimeInput::ReclaimQueuedPrompt {
+                        event_id,
+                        response_tx,
+                    } => {
+                        let _ =
+                            response_tx.send(runtime_backend.apply_queue_reclaim(&event_id).await);
+                    }
                     session_runtime_driver::SessionRuntimeInput::PermissionRequest {
                         pending_request,
                         current_policy,

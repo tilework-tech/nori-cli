@@ -393,7 +393,7 @@ fn initialize_agent_event(name: &str, title: &str, version: &str) -> nori_protoc
     })
 }
 
-fn initialize_follow_only_agent_event() -> nori_protocol::SessionEvent {
+pub(super) fn initialize_follow_only_agent_event() -> nori_protocol::SessionEvent {
     let meta = serde_json::json!({
         "nori": { "attachmentMode": "follow" }
     })

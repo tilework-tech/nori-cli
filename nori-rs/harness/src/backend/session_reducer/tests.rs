@@ -35,6 +35,7 @@ fn simple_prompt() -> QueuedPrompt {
         original_content: text_content("hello"),
         content: text_content("hello"),
         display_text: Some("hello".to_string()),
+        reclaim: None,
     }
 }
 
@@ -171,6 +172,7 @@ fn queued_goal_continuation_is_hidden_from_user_queue_and_transcript() {
         original_content: Vec::new(),
         content: text_content("Continue working toward the active thread goal."),
         display_text: None,
+        reclaim: None,
     };
     let out = reduce(
         &mut rt,
@@ -555,6 +557,7 @@ fn prompt_submit_while_active_queues() {
             original_content: text_content("second"),
             content: text_content("second"),
             display_text: Some("second".to_string()),
+            reclaim: None,
         }),
         &mut norm,
     );
@@ -590,6 +593,7 @@ fn end_turn_drains_queue() {
             original_content: text_content("second"),
             content: text_content("second"),
             display_text: Some("second".to_string()),
+            reclaim: None,
         }),
         &mut norm,
     );
@@ -641,6 +645,7 @@ fn cancelled_does_not_drain_queue() {
             original_content: text_content("second"),
             content: text_content("second"),
             display_text: Some("second".to_string()),
+            reclaim: None,
         }),
         &mut norm,
     );

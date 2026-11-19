@@ -54,6 +54,14 @@ forked), queue and replay bracketing, compaction, goals, capabilities, undo,
 user-shell and hook output, prompt summaries, notices, request failure and
 resolution, and delegation changes (`DelegationChanged`).
 
+`QueueChanged` carries a `QueueSnapshot` of queued user prompts, oldest first.
+`prompts` holds their display texts. The additive `entries` list (serde
+default, omitted when empty) repeats each row as a `QueueEntry` with `id` (the
+prompt's submission event ID, unique within the session), `text`, and
+`editable` (plain-text content that can return to the composer). A client
+passes an `id` to `HarnessHandle::reclaim_queued_prompt`; hosts that send no
+`entries` still deserialize, and their rows simply cannot be reclaimed.
+
 `NoriEvent` carries harness-owned lifecycle and product behavior that has no
 ACP event of its own. A `session/update` received without a locally owned
 request remains a schema-native, unowned update; no synthetic request ID or

@@ -97,6 +97,11 @@ enum HarnessCommand {
     Cancel {
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
+    /// Take a queued prompt back before it is sent.
+    ReclaimQueuedPrompt {
+        event_id: String,
+        response_tx: oneshot::Sender<anyhow::Result<Option<String>>>,
+    },
     CancelRequest {
         request_id: acp::v1::RequestId,
         response_tx: oneshot::Sender<anyhow::Result<()>>,
@@ -401,6 +406,18 @@ impl HarnessHandle {
     pub async fn cancel(&self) -> anyhow::Result<()> {
         self.request(|response_tx| HarnessCommand::Cancel { response_tx })
             .await
+    }
+
+    /// Remove the queued prompt `event_id` (a [`nori_protocol::QueueEntry`]
+    /// ID) before it is sent and return the text the user typed. `None` means
+    /// it already started, was already reclaimed, or is not editable. Its
+    /// pending `prompt` call fails with [`crate::backend::PromptWithdrawn`].
+    pub async fn reclaim_queued_prompt(&self, event_id: String) -> anyhow::Result<Option<String>> {
+        self.request(|response_tx| HarnessCommand::ReclaimQueuedPrompt {
+            event_id,
+            response_tx,
+        })
+        .await
     }
 
     pub(crate) async fn cancel_request(
@@ -1080,6 +1097,13 @@ pub(crate) fn launch_session_from(
                     }
                     HarnessCommand::Cancel { response_tx } => {
                         let _ = response_tx.send(backend_for_agent.cancel().await);
+                    }
+                    HarnessCommand::ReclaimQueuedPrompt {
+                        event_id,
+                        response_tx,
+                    } => {
+                        let _ = response_tx
+                            .send(backend_for_agent.reclaim_queued_prompt(event_id).await);
                     }
                     HarnessCommand::CancelRequest {
                         request_id,

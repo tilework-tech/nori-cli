@@ -1,0 +1,16 @@
+---
+source: tui/src/bottom_pane/queued_user_messages.rs
+assertion_line: 217
+expression: "format!(\"{:?}\", render(&queue, 40))"
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 40, height: 1 },
+    content: [
+        "  ↳ From an older host                  ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
+        x: 4, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: DIM | ITALIC,
+        x: 22, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}

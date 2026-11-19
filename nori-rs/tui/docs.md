@@ -932,6 +932,44 @@ Quitting an attached cloud session detaches through connection teardown;
 `session/close` support, except that with `[features] multi_session` a local
 `/close` closes the session on screen (see the multi-session view below).
 
+#### Queued follow-ups
+
+Prompts submitted while a turn runs wait in the harness queue, the only queue
+that is delivered. The bottom pane's queued-message preview
+([`queued_user_messages.rs`](src/bottom_pane/queued_user_messages.rs)) mirrors
+each `QueueChanged` snapshot, keeping its `entries` IDs. Taking a message back
+lives in [`queue_recall.rs`](src/chatwidget/queue_recall.rs):
+
+```
+Up (empty composer) / Alt+Up, no popup or overlay
+  -> preview hides newest editable row at once
+  -> HarnessAction::ReclaimQueuedPrompt{id} -> HarnessHandle::reclaim_queued_prompt
+  -> AppEvent::QueuedPromptReclaimed{generation, id, outcome}
+       -> active widget, or the parked widget with that generation
+  Reclaimed(text): text goes into the composer before any existing draft
+  AlreadyStarted:  info line "That queued message already started, so it
+                   was sent as written."; composer untouched
+  Failed:          the row shows again; the error is a failed harness action
+```
+
+- Hiding the row before the harness answers means a second press takes the
+  next older editable row, never the same one twice. After a successful
+  reclaim the row stays hidden until a snapshot without it arrives, because
+  the snapshot and the answer travel on different channels.
+- Reclaims run newest first, so inserting each one at the start of the draft
+  keeps the original queue order. The insertion keeps the draft's paste
+  placeholders, attached images, and cursor. When the composer cannot take the
+  text (input disabled, or a shell-mode draft), it is shown in an info line
+  instead of being dropped.
+- Follow-only attachments never reclaim; the queue belongs to the owner.
+- The `alt + ↑ edit` hint renders only while an editable row is visible. Rows
+  from a host that sends only `prompts` (no `entries`) render without the hint
+  and cannot be taken back; prompts with images are never editable.
+- The edited text is submitted through the normal prompt path and joins the end
+  of the queue as a new prompt. The withdrawn prompt's original submission
+  fails with `PromptWithdrawn`, which the widget ignores.
+- When Up does not reclaim, it falls through to composer history recall.
+
 #### Multi-session view
 
 `[features] multi_session` (resolved as `NoriConfig.multi_session`) lets one
@@ -1026,7 +1064,7 @@ a binding).
 | `previous_session` / `next_session` | `alt+,` / `alt+.` | Wraps at both ends of the navigation order and skips closed and done sessions |
 | `next_waiting_session` | `alt+down` | Shows the next session after the active one that is waiting on you, even with a draft (the draft stays in the parked widget's composer). With nothing waiting, an empty prompt consumes the key and a draft passes it on to the composer |
 | `open_session_list` | `alt+s` | Needs the composer in front |
-| `parent_session` | `alt+up` | On a delegated child (record source `Session` with a parent) shows the parent's widget; elsewhere it is consumed and does nothing, so it never reaches history recall |
+| `parent_session` | `alt+up` | On a delegated child (record source `Session` with a parent) shows the parent's widget. Elsewhere it takes back a queued message when an editable one is visible (see queued follow-ups); otherwise it is consumed and does nothing, so it never reaches history recall |
 
 The Hotkeys view lists these actions only with the flag
 (`HotkeyAction::is_multi_session`).
@@ -1625,9 +1663,12 @@ part of the public harness protocol.
   status-line counts, and "next open session" filter it out with
   `SessionStatus::is_closed()`; code that walks the deck directly sees it, and
   a check against `Closed` alone misses finished delegated children.
-- The queued-message preview in the bottom pane advertises `⌥↑ edit`, but no
-  key handler edits a queued message; with `multi_session`, Alt+Up is the
-  `parent_session` key.
+- The queued-message preview reflects the harness queue, not composer history.
+  Composer history already holds each queued text, so editing a recalled
+  history entry and submitting it still delivers the queued original too; only
+  a reclaim through `HarnessHandle::reclaim_queued_prompt` removes it. With
+  `multi_session`, Alt+Up is shared with `parent_session`, which wins on a
+  delegated child.
 - `nori-config` is the source of approval and sandbox policy; ACP session config
   options remain ACP schema values.
 - `-p` belongs to the top-level CLI as `--print`. The TUI's own flag set must not

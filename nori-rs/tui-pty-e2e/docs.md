@@ -168,6 +168,12 @@ subdirectories), that Esc saves nothing and keeps inheriting the global
 setting, that a one-off `-c` override still shows the question without being
 saved, and that an unrelated `-c tui={...}` table keeps the project's choice.
 
+[Queue recall scenarios](tests/queue_recall.rs) queue follow-ups behind a
+running turn and check that Up or Alt+Up returns the newest queued message to
+the composer, removes it from the preview, and that the agent receives the
+edited text once and the original never, including Alt+Up outside a
+delegated child with `[features] multi_session` on.
+
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same
 typed `HarnessHandle` methods available to headless embedders.

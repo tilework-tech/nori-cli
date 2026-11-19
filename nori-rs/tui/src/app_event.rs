@@ -19,9 +19,24 @@ pub(crate) struct ConversationPathResponseEvent {
     pub(crate) conversation_id: nori_harness::ConversationId,
 }
 
+/// How a request to take a queued prompt back ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReclaimOutcome {
+    /// Removed from the queue; this is the text the user typed.
+    Reclaimed(String),
+    /// It had already started (or was not editable) and was sent as written.
+    AlreadyStarted,
+    /// The request did not reach the harness; the queue is unknown.
+    Failed,
+}
+
 #[derive(Debug)]
 pub(crate) enum HarnessAction {
     Cancel,
+    /// Take a queued prompt back into the composer before it is sent.
+    ReclaimQueuedPrompt {
+        event_id: String,
+    },
     Shutdown {
         child_grace: std::time::Duration,
     },
@@ -123,6 +138,12 @@ pub(crate) enum AppEvent {
         entry: Option<nori_harness::HistoryEntry>,
     },
     HistorySearchLoaded(Vec<nori_harness::HistoryEntry>),
+    /// The harness answered a queued-prompt reclaim.
+    QueuedPromptReclaimed {
+        generation: SessionGeneration,
+        event_id: String,
+        outcome: ReclaimOutcome,
+    },
     CustomPromptsLoaded(Vec<nori_harness::CustomPrompt>),
     UndoSnapshotsLoaded(Vec<nori_harness::UndoSnapshot>),
     GoalLoaded(Option<nori_protocol::ThreadGoal>),

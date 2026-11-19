@@ -209,6 +209,14 @@ Queued prompts are unsent local drafts. They are not:
 - restored into the composer on cancel
 - merged into a synthetic user message
 
+The **session harness** owns the only `OutgoingQueue` that is delivered; a
+client never keeps a second deliverable queue. A client may take one queued
+prompt back by its submission event ID before it is sent. That request is
+reduced on the same serialized path as queue draining, so the prompt is either
+removed exactly once or has already started its **prompt turn** and stays
+delivered. A prompt that goes back to the composer and is submitted again is a
+new queued prompt at the end of the FIFO.
+
 ## Serialized Reducer
 
 Per session, all ACP traffic must flow through one ordered reducer:
@@ -530,7 +538,8 @@ Future changes should be rejected if they introduce any of these smells:
 - open message buffers survive across request completion
 - tool ownership is inferred from timing instead of stored explicitly
 - cancel is treated as immediate idle
-- queued prompts are merged back into the composer instead of remaining a FIFO
+- queued prompts are merged back into the composer automatically, or a client
+  keeps a second deliverable queue, instead of one harness-owned FIFO
 - request-scoped permission state lives outside the active request
 - a session allows unordered reduction of inbound ACP messages
 
