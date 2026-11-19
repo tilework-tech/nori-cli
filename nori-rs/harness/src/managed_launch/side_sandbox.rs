@@ -43,33 +43,33 @@ impl Sandbox {
         } else {
             which::which("bwrap").unwrap_or(system)
         };
-        let probe = std::process::Command::new(&launcher)
-            .env_clear()
-            .args(NAMESPACE_ARGS)
-            .arg("--")
-            .arg(&launcher)
-            .arg("--version")
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
         let usable = cfg!(target_os = "linux")
-            && probe.is_ok_and(|mut probe| {
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-                loop {
-                    match probe.try_wait() {
-                        Ok(Some(status)) => return status.success(),
-                        Ok(None) if std::time::Instant::now() < deadline => {
-                            std::thread::sleep(std::time::Duration::from_millis(5));
-                        }
-                        Ok(None) | Err(_) => {
-                            let _ = probe.kill();
-                            let _ = probe.wait();
-                            return false;
+            && std::process::Command::new(&launcher)
+                .env_clear()
+                .args(NAMESPACE_ARGS)
+                .arg("--")
+                .arg(&launcher)
+                .arg("--version")
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .is_ok_and(|mut probe| {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                    loop {
+                        match probe.try_wait() {
+                            Ok(Some(status)) => return status.success(),
+                            Ok(None) if std::time::Instant::now() < deadline => {
+                                std::thread::sleep(std::time::Duration::from_millis(5));
+                            }
+                            Ok(None) | Err(_) => {
+                                let _ = probe.kill();
+                                let _ = probe.wait();
+                                return false;
+                            }
                         }
                     }
-                }
-            });
+                });
         Self { launcher, usable }
     }
 }
