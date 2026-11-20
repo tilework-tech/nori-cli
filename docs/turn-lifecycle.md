@@ -234,6 +234,7 @@ failed user prompt. The category picks the user message and the
 | `ApiServerError` | Provider 5xx | retryable |
 | `QuotaExceeded` | Rate limit or usage quota | retryable |
 | `AgentUnreachable` | ACP `-32010` | retryable |
+| `AgentBusy` | ACP `-32011`: the agent is still finishing a turn from an earlier connection | retryable |
 | `Authentication` | Auth required or failed | fatal |
 | `ExecutableNotFound` | Agent binary missing | fatal |
 | `Initialization` | Agent failed to start | fatal |
@@ -441,6 +442,13 @@ See [remote control](remote-control.md) for delegation controls.
 `SessionPhaseChanged(Loading)`, the setup events including the load response,
 then `Idle`. Replayed updates follow as a `ReplayStarted`/`ReplayFinished`
 batch, and the TUI does not treat them as unowned activity.
+
+A `session/load` refused with `-32011` (`AgentBusy`) means the original turn
+is still running on the agent. The harness ends the resume with the
+agent's error and does not fall back to transcript replay, since a
+new session would fork the conversation. Any other load failure falls back to
+replay when a transcript is available. Recover by relaunching the CLI after
+the turn ends; see [transcripts](transcripts.md#busy-agent-on-load).
 
 ## TUI Projection
 

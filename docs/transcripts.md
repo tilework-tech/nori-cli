@@ -303,12 +303,34 @@ supports
 | --- | --- | --- |
 | `loadSession` | `session/load` with the recorded ACP session ID | Agent replay (`ReplayStarted` source `agent`) |
 | `session/resume` | Live reattach with `session/resume` | None replayed; a failure is returned, not retried with `session/new` |
-| Neither, or `session/load` failed with a transcript available | `session/new`, then transcript replay | Transcript replay (source `transcript`) plus a summary prepended to the first prompt |
+| Neither, or `session/load` failed with any code other than `-32011` and a transcript is available | `session/new`, then transcript replay | Transcript replay (source `transcript`) plus a summary prepended to the first prompt |
 
 The TUI resume picker and `nori resume` open the selected transcript in a new
 conversation with a new file. When that file starts, Nori first copies the old
 transcript's context-timeline evidence into it as `historical_evidence`, then
 records the replay normally.
+
+### Busy agent on load
+
+A load can fail in two ways that need different handling:
+
+| Load result | What Nori does | What the user does |
+| --- | --- | --- |
+| `-32011`: the agent is still finishing a turn from an earlier connection | Ends the resume with an error. It never calls `session/new` and never replays the transcript, so the original session and its transcript file stay unchanged. | After the turn ends, relaunch the CLI and resume the same session (steps below). |
+| Any other error, with a transcript available | Falls back to `session/new` plus transcript replay into the new agent session. | Nothing; the conversation continues in the replacement session. |
+
+To retry a busy session:
+
+1. Wait for the original turn to finish.
+2. Quit and relaunch `nori`. Do not retry `/resume` in the refused window:
+   it fails with `ACP agent command channel closed` and sends no load.
+3. Run `nori resume <SESSION_ID>` with the saved session ID, or select the
+   original session in the picker of the freshly launched CLI. Either path
+   loads and continues the original session.
+
+The TUI displays the agent's own error message for `-32011`, so its wording,
+and whether it includes a retry hint, depends on the agent. `-32011` is
+retryable, so an unattended `/loop` stays armed after a busy prompt failure.
 
 ### Restarting a failed session
 
