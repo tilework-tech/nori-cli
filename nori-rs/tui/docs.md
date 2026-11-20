@@ -1403,7 +1403,7 @@ Alt+T requests control without disconnecting another terminal. Prompts and
 permission answers require controller status locally and on the server. Socket
 recovery retains view state and resumes from applied per-session sequence
 cursors; mutation requests are never retransmitted. See the
-[host contract](../../docs/remote-control.md#11-background-host-and-attached-terminals)
+[host contract](../../docs/remote-control.md#6-attached-terminal-nori-attach)
 for command behavior and the distinction from the legacy listener below.
 
 #### Remote ACP transport activation

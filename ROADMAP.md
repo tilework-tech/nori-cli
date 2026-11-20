@@ -32,7 +32,7 @@ session lifecycle             message queue                                     
 | Agent discovery       | `🟡 next`  | custom agents are easier to find   | support the official ACP Registry                              | local config registration already works                                 |
 | Agent-driven auth     | `⚪ later` | agents can own login/logout flows  | auth methods and `logout`                                      | wait until lifecycle, config, and registry are settled                  |
 | Multi-session UX      | `⚪ later` | users can move across active work  | multi-session support and navigation                           | keep this separate from single-session lifecycle cleanup                |
-| Steering messages     | `⚪ later` | users can redirect an active turn  | wait for ACP support, then design Nori behavior                | unsupported by ACP today                                                |
+| Steering messages     | `✅ done`  | users can redirect an active turn  | allowlist new adapter versions after checks                    | adapter `_session/steering` extension; others queue                     |
 | Subagent UX           | `⚪ later` | group subagent updates             | wait for ACP support, then design Nori behavior                | unsupported by ACP today                                                |
 | Experimental ACP      | `⚪ later` | adopt new protocol ideas carefully | elicitation, NES, `session/delete`, provider endpoint work     | do not let draft features complicate the core client                    |
 
@@ -52,7 +52,7 @@ This table keeps the roadmap grounded in the current ACP spec and draft surface.
 | Session metadata      | `session_info_update`, context/usage metadata | stable + unstable landed     | done                  |
 | Session metadata      | `messageId` and `userMessageId`               | unstable landed              | partial               |
 | Turn control          | queued messages                               | client behavior              | in progress           |
-| Turn control          | steering messages                             | ACP draft                    | later                 |
+| Turn control          | steering messages                             | adapter extension            | done                  |
 | Workspace             | `additionalDirectories`                       | unstable landed              | partial               |
 | File attachments      | `@` path references + `readTextFile`          | ACP filesystem capability    | done                  |
 | File attachments      | `ResourceLink` / embedded `Resource` context  | baseline + `embeddedContext` | todo                  |
