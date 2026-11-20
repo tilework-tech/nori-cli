@@ -30,6 +30,15 @@ struct FakeRemoteHandroll {
     script: PathBuf,
 }
 
+impl Drop for FakeRemoteHandroll {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            eprintln!("Fixture PIDs: {:?}", self.read("pids"));
+            eprintln!("Fixture stderr:\n{}", self.read("agent_stderr"));
+        }
+    }
+}
+
 impl FakeRemoteHandroll {
     fn new() -> Self {
         let dir = tempfile::tempdir().expect("create fixture directory");

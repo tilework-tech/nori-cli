@@ -11,6 +11,7 @@ use std::io::Write;
 use std::sync::LazyLock;
 use std::time::Duration;
 use std::time::Instant;
+use terminal_queries::TerminalQueries;
 
 /// Longer than the TUI's request answer grace period (400 ms).
 pub const ANSWER_GRACE: Duration = Duration::from_millis(500);
@@ -96,6 +97,7 @@ fn set_nonblocking(fd: std::os::unix::io::RawFd) -> Result<()> {
 pub use keys::Key;
 mod input;
 mod keys;
+mod terminal_queries;
 
 /// PTY session for driving the codex TUI
 pub struct TuiSession {
@@ -103,8 +105,11 @@ pub struct TuiSession {
     reader: Box<dyn Read + Send>,
     writer: Box<dyn Write + Send>,
     emulator: Emulator,
-    /// Every byte the TUI wrote, before control-sequence interception.
+    /// Every byte read from the PTY, including terminal queries.
     raw_output: Vec<u8>,
+    spawned_at: Instant,
+    first_output_after: Option<Duration>,
+    terminal_queries: TerminalQueries,
     child: Box<dyn portable_pty::Child + Send>,
     _temp_dir: Option<tempfile::TempDir>,
     nori_home: Option<std::path::PathBuf>,
@@ -131,6 +136,10 @@ impl Drop for TuiSession {
             // Screen contents with indentation
             let screen = self.screen_contents();
             eprintln!("{}", indent_lines(&screen, indent).style(s.cyan));
+
+            // A PTY combines stdout and stderr; the parsed frame can hide early errors.
+            let tail = &self.raw_output[self.raw_output.len().saturating_sub(512)..];
+            eprintln!("PTY output tail (escaped): {}", tail.escape_ascii());
 
             if let Some(nori_home) = &self.nori_home {
                 let log_tail = if let Some(log_path) = find_acp_log_file(nori_home) {
@@ -402,6 +411,7 @@ trust_level = "trusted"
             "codex_core=info,nori_tui=info,codex_rmcp_client=info,nori_harness=debug,nori_acp_host=debug",
         );
 
+        let spawned_at = Instant::now();
         let child = pair.slave.spawn_command(cmd)?;
 
         // Set master PTY to non-blocking mode before cloning reader
@@ -422,6 +432,9 @@ trust_level = "trusted"
             writer,
             emulator: Emulator::new(rows, cols),
             raw_output: Vec::new(),
+            spawned_at,
+            first_output_after: None,
+            terminal_queries: TerminalQueries::default(),
             child,
             nori_home: config
                 .nori_home
@@ -509,10 +522,12 @@ trust_level = "trusted"
                         n
                     );
                 }
-                // Intercept and respond to control sequences before parsing
-                self.raw_output.extend_from_slice(&buf[..n]);
-                let processed = self.intercept_control_sequences(&buf[..n])?;
-                self.emulator.process(&processed);
+                let bytes = &buf[..n];
+                self.first_output_after
+                    .get_or_insert_with(|| self.spawned_at.elapsed());
+                self.raw_output.extend_from_slice(bytes);
+                self.terminal_queries.respond(bytes, &mut self.writer)?;
+                self.emulator.process(bytes);
                 Ok(())
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -536,35 +551,6 @@ trust_level = "trusted"
                 Err(e.into())
             }
         }
-    }
-
-    /// Intercept control sequences and inject responses
-    ///
-    /// Detects cursor position queries (ESC[6n) and writes responses back to the PTY
-    /// Returns filtered data with control sequences removed
-    fn intercept_control_sequences(&mut self, data: &[u8]) -> Result<Vec<u8>> {
-        let mut result = Vec::with_capacity(data.len());
-        let mut i = 0;
-
-        while i < data.len() {
-            // Detect cursor position query: ESC[6n
-            if i + 3 < data.len()
-                && data[i] == 0x1b      // ESC
-                && data[i+1] == b'['
-                && data[i+2] == b'6'
-                && data[i+3] == b'n'
-            {
-                // Write response back to PTY: ESC[1;1R (cursor at row 1, col 1)
-                self.writer.write_all(b"\x1b[1;1R")?;
-                self.writer.flush()?;
-                // Skip the control sequence - don't pass it to the parser
-                i += 4;
-            } else {
-                result.push(data[i]);
-                i += 1;
-            }
-        }
-        Ok(result)
     }
 
     /// The whole terminal history: every scrollback line, oldest first,
@@ -688,7 +674,15 @@ trust_level = "trusted"
                         start.elapsed()
                     );
                 }
-                return Err("Timeout waiting for condition.".to_string());
+                let status = self.child.try_wait();
+                let pid = self.child.process_id();
+                return Err(format!(
+                    "Timed out after {:?} ({iteration} polls, {:?} since spawn, {} PTY bytes, first output {:?}, pid {pid:?}, status {status:?})",
+                    start.elapsed(),
+                    self.spawned_at.elapsed(),
+                    self.raw_output.len(),
+                    self.first_output_after,
+                ));
             }
 
             if debug {
@@ -704,6 +698,7 @@ trust_level = "trusted"
     /// Wait for specific text to appear
     pub fn wait_for_text(&mut self, needle: &str, timeout: Duration) -> Result<(), String> {
         self.wait_for(|s| s.contains(needle), timeout)
+            .map_err(|error| format!("waiting for {needle:?}: {error}"))
     }
 
     /// Get current screen contents as string

@@ -25,6 +25,17 @@ PTY -> nori-tui -> nori-harness -> nori-acp-host -> mock ACP agent
 keys, type and submit composer input, wait for stable text, capture output, and
 enforce exit deadlines.
 
+At startup the synthetic terminal reports a cursor at row 1, column 1.
+Its primary device attributes select legacy keyboard input, and its palette
+replies report white text on black. The responder recognizes queries across
+PTY reads, including a read that ends halfway through an escape sequence.
+
+A timed-out wait reports the child PID and status, elapsed wait and launch
+times, poll count, total PTY bytes, and when the fixture first read output.
+Text waits include the expected text. On panic, the fixture prints the final
+screen, the last 512 bytes of combined stdout and stderr with control bytes
+escaped, and the ACP log tail when available.
+
 The `Emulator` wraps a `vt100` parser with `SCROLLBACK_ROWS` lines of
 history. `vt100` ignores `ESC[3J`, which the TUI sends whenever it reprints a
 session, so the emulator applies it itself: the visible screen stays and the
