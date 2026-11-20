@@ -83,8 +83,7 @@ value; the id is not validated here (an agent may accept models its ACP picker
 never advertised). `nori-acp-host` reads `model_override` to build a
 `ModelInjection` strategy — `env` names an environment variable, `arg` a CLI
 flag, and `env` wins if both are set — so an out-of-catalog default model can be
-forced through the agent subprocess at spawn. Built-in agents (Claude, Codex,
-Gemini) know their own channel and ignore `model_override`. The user-facing
+forced through the agent subprocess at spawn. The built-in Claude Code and Codex runtimes supply their own injection channels. Antigravity and Grok Build use their advertised ACP model options. The user-facing
 `config.toml` schema, including these tables and the `[[agents]]` fields, is
 described in [`config.md`](../config.md).
 

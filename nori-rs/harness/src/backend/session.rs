@@ -111,7 +111,7 @@ async fn forward_setup_session_events(
 }
 
 fn response_request_id(events: &[nori_protocol::SessionEvent]) -> Option<acp::RequestId> {
-    events.iter().find_map(|event| match event {
+    events.iter().rev().find_map(|event| match event {
         nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
             request_id, ..
         }) => Some(request_id.clone()),
@@ -196,12 +196,12 @@ impl AcpBackend {
             // Collect replay events into a buffer. The collector runs until
             // load_session() finishes and signals completion via the oneshot.
             let (load_done_tx, load_done_rx) = tokio::sync::oneshot::channel::<()>();
-            let (load_started_tx, load_started_rx) = tokio::sync::oneshot::channel();
+            let (load_started_tx, mut load_started_rx) = tokio::sync::mpsc::unbounded_channel();
             let collect_handle = tokio::spawn(async move {
                 let mut event_rx = event_rx;
                 let mut session_driver = session_runtime_driver::SessionDriver::new();
                 let mut buffered_session_events = Vec::new();
-                let load_request_id = load_started_rx.await.map_err(|_| {
+                let load_request_id = load_started_rx.recv().await.ok_or_else(|| {
                     anyhow::anyhow!("session/load did not expose its wire request ID")
                 })?;
                 let mut buffered_events = client_events_to_replay_client_events(
@@ -215,6 +215,16 @@ impl AcpBackend {
                 loop {
                     tokio::select! {
                         biased;
+                        Some(retry_id) = load_started_rx.recv() => {
+                            // An authentication challenge ended the first load before replay.
+                            // The retried load owns all subsequent history and its completion.
+                            session_driver.apply(session_reducer::InboundEvent::LoadResponse);
+                            buffered_events.extend(client_events_to_replay_client_events(
+                                session_driver.apply(session_reducer::InboundEvent::LoadSubmit {
+                                    request_id: retry_id,
+                                }).events,
+                            ));
+                        }
                         maybe_event = event_rx.recv() => {
                             match maybe_event {
                                 Some(crate::connection::ConnectionEvent::Acp(event)) => {

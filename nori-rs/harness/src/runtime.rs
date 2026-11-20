@@ -895,7 +895,15 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
         async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
         async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
         script_timeout: config.script_timeout.as_duration(),
-        default_model: config.default_models.get(&agent).cloned(),
+        default_model: config
+            .default_models
+            .get(&agent)
+            .or_else(|| {
+                config
+                    .default_models
+                    .get(&crate::resolve_agent_slug(&agent))
+            })
+            .cloned(),
         initial_context,
         session_context,
         mcp_servers: config.mcp_servers.clone(),

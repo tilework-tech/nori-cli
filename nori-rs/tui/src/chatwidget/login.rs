@@ -22,68 +22,19 @@ impl ChatWidget {
     /// Handle the /login <agent> command with explicit agent name
     pub(super) fn handle_login_command_with_agent(&mut self, agent_name: &str) {
         match LoginHandler::check_agent_support(agent_name) {
-            AgentLoginSupport::Supported {
-                agent,
-                is_installed,
-                login_method,
-            } => {
-                if !is_installed {
-                    let display_name = agent.display_name();
-                    let npm_package = agent.npm_package();
-                    self.add_info_message(
-                        format!(
-                            "{display_name} is not installed. To install, run:\n\n  npm install -g {npm_package}\n\nThen run /login again to authenticate."
-                        ),
-                        Some("Install the agent first, then authenticate".to_string()),
-                    );
-                    return;
-                }
+            AgentLoginSupport::OAuthBrowser => {
+                let mut handler = LoginHandler::new();
+                handler.start_oauth();
 
-                match login_method {
-                    LoginMethod::OAuthBrowser => {
-                        let mut handler = LoginHandler::new();
-                        handler.start_oauth();
-
-                        self.add_info_message(
+                self.add_info_message(
                             "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
                             Some("Press Esc to cancel".to_string()),
                         );
 
-                        self.start_oauth_login_flow(handler);
-                    }
-                    LoginMethod::ExternalCli { command, args } => {
-                        let mut handler = LoginHandler::new();
-                        let agent_display_name = agent.display_name().to_string();
-                        handler.start_external_cli(agent_display_name.clone());
-
-                        self.add_info_message(
-                            format!(
-                                "Starting authentication for {agent_display_name}...\n\nThe {agent_display_name} login process will run in-app.",
-                            ),
-                            Some("Press Esc to cancel".to_string()),
-                        );
-
-                        self.start_external_cli_login_flow(
-                            handler,
-                            command,
-                            args,
-                            agent_display_name,
-                        );
-                    }
-                }
+                self.start_oauth_login_flow(handler);
             }
-            AgentLoginSupport::NotSupported { agent_name } => {
-                let instructions = match agent_name.as_str() {
-                    "Claude Code" => {
-                        "In-app login for Claude Code is not yet supported.\n\n\
-                         To authenticate, run `claude` in a separate terminal and use the /login command.\n\n\
-                         Alternatively, set the ANTHROPIC_API_KEY environment variable."
-                    }
-                    _ => {
-                        "In-app login for this agent is not yet supported. Please authenticate externally using the agent's native login command or API keys."
-                    }
-                };
-                self.add_info_message(instructions.to_string(), None);
+            AgentLoginSupport::NotSupported { instructions } => {
+                self.add_info_message(instructions, None);
             }
             AgentLoginSupport::Unknown { agent_name } => {
                 self.add_info_message(
@@ -147,103 +98,6 @@ impl ChatWidget {
         }
     }
 
-    /// Start the external CLI login flow (e.g., gemini login)
-    #[cfg(feature = "login")]
-    pub(super) fn start_external_cli_login_flow(
-        &mut self,
-        mut handler: LoginHandler,
-        command: String,
-        args: Vec<String>,
-        agent_display_name: String,
-    ) {
-        use std::collections::HashMap;
-
-        let app_event_tx = self.app_event_tx.clone();
-        let cwd = self.config.cwd.clone();
-
-        // Spawn the PTY process and stream output
-        let task_handle = tokio::spawn(async move {
-            // Build environment - inherit current environment
-            let mut env: HashMap<String, String> = std::env::vars().collect();
-            // Ensure TERM is set for proper terminal behavior
-            env.entry("TERM".to_string())
-                .or_insert_with(|| "xterm-256color".to_string());
-
-            match codex_utils_pty::spawn_pty_process(&command, &args, &cwd, &env, &None).await {
-                Ok(spawned) => {
-                    // Keep session alive so process keeps running
-                    let _session = spawned.session;
-                    let mut output_rx = spawned.output_rx;
-                    let exit_rx = spawned.exit_rx;
-
-                    // Spawn a task to stream output
-                    let output_event_tx = app_event_tx.clone();
-                    let output_task = tokio::spawn(async move {
-                        loop {
-                            match output_rx.recv().await {
-                                Ok(data) => {
-                                    // Convert bytes to string, stripping invalid UTF-8
-                                    let text = String::from_utf8_lossy(&data);
-                                    // Strip ANSI escape codes using a simple regex-like approach
-                                    let stripped = strip_ansi_codes(&text);
-                                    if !stripped.is_empty() {
-                                        output_event_tx.send(AppEvent::ExternalCliLoginOutput {
-                                            data: stripped,
-                                        });
-                                    }
-                                }
-                                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                                    // Receiver lagged, continue
-                                    continue;
-                                }
-                            }
-                        }
-                    });
-
-                    // Wait for process exit
-                    let exit_code = exit_rx.await.unwrap_or(-1);
-
-                    // Cancel output task
-                    output_task.abort();
-
-                    // Send completion event
-                    let success = exit_code == 0;
-                    app_event_tx.send(AppEvent::ExternalCliLoginComplete {
-                        success,
-                        agent_name: agent_display_name,
-                    });
-                }
-                Err(e) => {
-                    tracing::error!("Failed to spawn external CLI login: {e}");
-                    app_event_tx.send(AppEvent::ExternalCliLoginComplete {
-                        success: false,
-                        agent_name: agent_display_name,
-                    });
-                }
-            }
-        });
-
-        // Store the task handle for cancellation support
-        handler.set_pty_task_handle(task_handle);
-        self.login_handler = Some(handler);
-    }
-
-    /// Start the external CLI login flow (stub for non-login builds)
-    #[cfg(not(feature = "login"))]
-    pub(super) fn start_external_cli_login_flow(
-        &mut self,
-        _handler: LoginHandler,
-        _command: String,
-        _args: Vec<String>,
-        _agent_display_name: String,
-    ) {
-        self.add_error_message(
-            "Login feature is not enabled. Rebuild with --features login".to_string(),
-        );
-    }
-
-    /// Handle login completion event
     pub(crate) fn handle_login_complete(&mut self, success: bool) {
         if let Some(mut handler) = self.login_handler.take() {
             if success {
@@ -257,33 +111,6 @@ impl ChatWidget {
                 handler.cancel();
                 self.add_info_message("Login cancelled or failed.".to_string(), None);
             }
-        }
-        self.request_redraw();
-    }
-
-    /// Handle external CLI login output (streaming text from the PTY process)
-    pub(crate) fn handle_external_cli_login_output(&mut self, data: String) {
-        // Display the output as an info message (append to existing or create new)
-        self.add_info_message(data, None);
-        self.request_redraw();
-    }
-
-    /// Handle external CLI login completion
-    pub(crate) fn handle_external_cli_login_complete(&mut self, success: bool, agent_name: String) {
-        if let Some(mut handler) = self.login_handler.take() {
-            handler.cancel(); // Clear any handler state
-        }
-
-        if success {
-            self.login_agent_override = None;
-            self.add_info_message(
-                format!(
-                    "Successfully authenticated with {agent_name}!\n\nYou can now use {agent_name}."
-                ),
-                None,
-            );
-        } else {
-            self.add_info_message(format!("{agent_name} login failed or was cancelled."), None);
         }
         self.request_redraw();
     }

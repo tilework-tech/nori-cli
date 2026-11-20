@@ -70,7 +70,7 @@ fn detect_agent_kind(agent: &str) -> Option<AgentKindSimple> {
         Some(AgentKindSimple::Claude)
     } else if lower.starts_with("codex") {
         Some(AgentKindSimple::Codex)
-    } else if lower.starts_with("gemini") {
+    } else if lower.starts_with("gemini") || matches!(lower.as_str(), "antigravity" | "agy") {
         Some(AgentKindSimple::Gemini)
     } else {
         None

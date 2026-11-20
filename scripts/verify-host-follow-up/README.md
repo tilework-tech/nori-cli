@@ -6,7 +6,7 @@ Run from the repository root after building the candidate binary. The independen
 bun scripts/verify-host-follow-up/verify.mjs nori-rs/target/debug/nori
 ```
 
-The default module directory is `~/.nori/npm/cli-runtime/node_modules`. Set `NORI_TEST_ADAPTER_MODULES` to use another installed tree containing the Claude 0.102.0 and Codex 2.7.0 adapters and their provider binaries. For a standalone Claude adapter, point the module directory at the isolated install and set `NORI_TEST_CLAUDE_ADAPTER_VERSION` to the release under test. The verifier checks the package metadata and the live adapter identity on `/managed`. Each host runs in a temporary home with synthetic credentials, loopback provider URLs and an explicit child environment.
+The default module directory is `~/.nori/npm/cli-runtime/node_modules`. Set `NORI_TEST_ADAPTER_MODULES` to an isolated install containing the Claude and Codex adapters and their provider binaries. The verifier reads their versions from package metadata and checks the live adapter identity on `/managed`. To require exact candidates, set `NORI_TEST_CLAUDE_ADAPTER_VERSION` and `NORI_TEST_CODEX_ADAPTER_VERSION`. Each host runs in a temporary home with synthetic credentials, loopback provider URLs and an explicit child environment.
 
 - On both `/sessions` and the scoped `/managed` transport, the provider receives an initial prompt. While the first model request is held, the client queues a follow-up, steers, retries the steer with the same message ID and queues identical text under a second ID. When the model receives the correction, the original prompt is still open and both queued messages are absent from provider input. The client checks that the corrected output precedes the original prompt’s `end_turn` with usage and that each queued submission runs once on its own subsequent turn.
 - Each transport checks negative cases against two live sessions. A forged sender, stale turn, mismatched session and changed payload under a reused ID are refused. The endpoint checks that the sentinel in these requests never appears in model input.
@@ -16,13 +16,17 @@ The default module directory is `~/.nori/npm/cli-runtime/node_modules`. Set `NOR
 
 Select a single path with positional arguments, for example `bun scripts/verify-host-follow-up/verify.mjs nori-rs/target/debug/nori codex managed permission`. The final three arguments accept `claude|codex|both`, `sessions|managed|both` and `delivery|permission|both`. Permission scenarios use the scoped transport.
 
+## Checking the four built-in providers
+
+Install Google Antigravity with the upstream installer and place `agy` on PATH. Run `bun scripts/verify-host-follow-up/providers.mjs nori-rs/target/debug/nori` from the repository root. The verifier creates a new home, launches `nori host new --agent` for each built-in, and checks the ACP identity and model. It compares npm providers with their upstream `latest` tags and Antigravity with `agy --version`. It holds model traffic on loopback and checks that a running agent without verified steering queues a correction and returns the same receipt on retry. Set `NORI_MANAGED_BY_NPM=1` or `NORI_MANAGED_BY_BUN=1` to exercise a particular package runner.
+
 ## Checking a Claude adapter upgrade
 
-Record what the default `@latest` launch resolves to. Install that exact release into an isolated tree with its provider binary, and record the SDK version so the run can be repeated.
+Install the candidate release into an isolated tree with its provider binary. Record the adapter and SDK versions so the run can be repeated.
 
 ```sh
 package=@agentclientprotocol/claude-agent-acp
-version=$(npm view "$package@latest" version)  # use 0.109.0 to repeat that release
+version=0.109.0  # replace with the candidate being checked
 fixture=$(mktemp -d)
 npm install --prefix "$fixture" --ignore-scripts --no-audit --no-fund "$package@$version"
 npm ls --prefix "$fixture" "$package" @anthropic-ai/claude-agent-sdk

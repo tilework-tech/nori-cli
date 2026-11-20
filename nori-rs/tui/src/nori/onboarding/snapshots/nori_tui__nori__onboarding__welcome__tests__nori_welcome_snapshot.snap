@@ -12,7 +12,8 @@ expression: output
 
   Welcome to Nori, your AI coding assistant
 
-  Let's get you set up...
+  Choose your provider with /agent:
+  Claude Code, Codex, Antigravity, or Grok Build.
 
 
   Press Enter to continue

@@ -296,7 +296,7 @@ pub(crate) fn provider_display_name(agent_slug: &str) -> String {
     match detect_agent_kind(agent_slug) {
         Some(AgentKindSimple::Claude) => "Claude".to_string(),
         Some(AgentKindSimple::Codex) => "Codex".to_string(),
-        Some(AgentKindSimple::Gemini) => "Gemini".to_string(),
+        Some(AgentKindSimple::Gemini) => nori_harness::get_agent_display_name(agent_slug),
         None => nori_harness::get_agent_display_name(agent_slug),
     }
 }

@@ -138,12 +138,6 @@ pub async fn run_main(
     _codex_linux_sandbox_exe: Option<PathBuf>,
     analytics: Option<nori_installed::AnalyticsReporter>,
 ) -> std::io::Result<AppExitInfo> {
-    // Pre-warm the ACP agent installation cache in a background thread.
-    // This runs `which` commands early so the agent picker opens quickly.
-    std::thread::spawn(|| {
-        nori_harness::prewarm_installation_cache();
-    });
-
     // Track install/session in background (non-blocking, fire-and-forget)
     // This updates ~/.nori/cli/.nori-install.json with launch metadata
     if let Ok(nori_home) = nori_config::find_nori_home() {
@@ -569,7 +563,8 @@ fn resume_target_from_metadata(
 ) -> std::result::Result<resume_picker::ResumeTarget, String> {
     if let (Some(requested_agent), Some(recorded_agent)) =
         (requested_agent, metadata.agent.as_deref())
-        && requested_agent != recorded_agent
+        && nori_harness::resolve_agent_slug(requested_agent)
+            != nori_harness::resolve_agent_slug(recorded_agent)
     {
         return Err(format!(
             "Session {} was recorded with agent `{recorded_agent}`, but `--agent {requested_agent}` was requested.",
@@ -670,6 +665,17 @@ mod tests {
         .expect("recorded agent should be accepted");
 
         assert_eq!(target.agent.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn resume_accepts_an_alias_of_the_recorded_agent() {
+        let target = resume_target_from_metadata(
+            PathBuf::from("/synthetic"),
+            session_metadata(Some("gemini")),
+            Some("antigravity"),
+        )
+        .expect("the recorded provider matches the requested alias");
+        assert_eq!(target.agent.as_deref(), Some("gemini"));
     }
 
     #[test]

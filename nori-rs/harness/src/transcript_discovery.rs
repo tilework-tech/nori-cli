@@ -1,8 +1,8 @@
 //! Transcript location discovery for external ACP agents.
 //!
 //! This module provides functions to detect the current running transcript file
-//! for Claude Code, Codex, and Gemini agents. This enables session statistics
-//! display (e.g., token usage) in the TUI footer.
+//! for Claude Code and Codex. Historical Gemini CLI files can also be parsed
+//! for token usage.
 //!
 //! ## Discovery Method
 //!
@@ -11,10 +11,9 @@
 //! (`rg` if available, falling back to `grep`) to avoid coupling to any specific
 //! agent's JSON schema.
 //!
-//! Each agent stores transcripts in its own base directory:
+//! Live discovery searches these directories:
 //! - **Claude Code**: `~/.claude/projects/`
 //! - **Codex**: `~/.codex/sessions/`
-//! - **Gemini**: `~/.gemini/tmp/`
 //!
 //! Discovery requires a first_message to match against; without it, no transcript
 //! will be detected. This prevents returning the wrong transcript.
@@ -113,7 +112,10 @@ pub fn discover_transcript_for_agent_with_message(
     first_message: Option<&str>,
 ) -> Result<TranscriptLocation, DiscoveryError> {
     let home = dirs::home_dir().ok_or_else(|| DiscoveryError::HomeNotFound("~".to_string()))?;
-    let base_dir = home.join(agent.transcript_base_dir());
+    let relative = agent
+        .transcript_base_dir()
+        .ok_or_else(|| DiscoveryError::NoSessionsFound(cwd.to_path_buf()))?;
+    let base_dir = home.join(relative);
 
     if !base_dir.exists() {
         return Err(DiscoveryError::NoSessionsFound(cwd.to_path_buf()));
@@ -313,6 +315,7 @@ pub fn parse_transcript_tokens(path: &Path, agent: AgentKind) -> Option<Transcri
         AgentKind::ClaudeCode => parse_claude_tokens(path),
         AgentKind::Codex => parse_codex_tokens(path),
         AgentKind::Gemini => parse_gemini_tokens(path),
+        AgentKind::GrokBuild => None,
     }
 }
 
@@ -647,6 +650,15 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::io::Write;
     use tempfile::TempDir;
+
+    #[test]
+    fn grok_does_not_attribute_legacy_transcript_usage_to_a_new_session() {
+        let temp_dir = TempDir::new().unwrap();
+        let file = temp_dir.path().join("session.json");
+        fs::write(&file, r#"{"messages":[{"tokens":{"input":9,"output":3}}]}"#).unwrap();
+        let agent = AgentKind::from_slug("grok-build").expect("built-in provider");
+        assert_eq!(parse_transcript_tokens(&file, agent), None);
+    }
 
     #[test]
     fn test_parse_transcript_subagents_extracts_codex_spawn_agent_arguments() {

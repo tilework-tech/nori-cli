@@ -439,7 +439,13 @@ impl TranscriptLoader {
         };
 
         if let Some(agent_filter) = agent_filter {
-            sessions.retain(|session| session.agent.as_deref() == Some(agent_filter));
+            let slug = crate::resolve_agent_slug(agent_filter);
+            sessions.retain(|session| {
+                session
+                    .agent
+                    .as_deref()
+                    .is_some_and(|agent| crate::resolve_agent_slug(agent) == slug)
+            });
         }
         sessions.sort_by(|a, b| b.started_at.cmp(&a.started_at));
         Ok(sessions)

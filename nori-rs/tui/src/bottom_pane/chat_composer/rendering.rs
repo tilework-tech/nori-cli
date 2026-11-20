@@ -78,7 +78,7 @@ impl ChatComposer {
             .and_then(|s| s.transcript_location.as_ref());
         let token_breakdown = transcript_location.and_then(|loc| loc.token_breakdown.as_ref());
         let context_window_size =
-            transcript_location.map(|loc| loc.agent_kind.context_window_size());
+            transcript_location.and_then(|loc| loc.agent_kind.context_window_size());
         // Use last_context_tokens (input-side tokens from the most recent
         // main-chain message) for context window fill display and percentage.
         // Falls back to cumulative total() when last_context_tokens is not
@@ -210,7 +210,7 @@ impl ChatComposer {
                     .and_then(|usage| usage.last_context_tokens)
                     .filter(|tokens| *tokens >= 0),
                 window_tokens: transcript
-                    .map(|location| location.agent_kind.context_window_size())
+                    .and_then(|location| location.agent_kind.context_window_size())
                     .filter(|tokens| *tokens > 0),
                 percent_used: None,
             },

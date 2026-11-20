@@ -301,8 +301,8 @@ fn provider_kind(agent_name: &str) -> ProviderKind {
         ProviderKind::Claude
     } else if name.contains("codex") {
         ProviderKind::Codex
-    } else if name.contains("gemini") {
-        ProviderKind::Gemini
+    } else if name.contains("gemini") || matches!(name.as_str(), "antigravity" | "agy") {
+        ProviderKind::Antigravity
     } else if name == "pi" || name.starts_with("pi-") {
         ProviderKind::Pi
     } else if name.contains("nori") {

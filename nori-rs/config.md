@@ -14,7 +14,7 @@ part of the file, plus tool call display and the opt-in multi-session feature.
 agent = "claude-code"
 ```
 
-Built-in agents are `claude-code`, `codex`, and `gemini`.
+Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), and `grok-build`. An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
 
 ## Default models: `[default_models]`
 
@@ -27,20 +27,9 @@ claude-code = "claude-opus-4-6"
 codex = "gpt-5.1-codex"
 ```
 
-The value is **not** validated against the agent's advertised model catalog. ACP
-adapters advertise only a subset of the models they can actually run and reject
-anything outside that list over the live `session/set_config_option` RPC. To make
-an out-of-catalog model usable, Nori forces it through the agent's own
-out-of-band channel at spawn time (see model injection below), so it becomes the
-session's current model. An invalid id is only rejected at the first prompt;
-recovery is manual (pick another model via `/model`).
+A default is looked up under the requested agent ID, then its canonical ID. For Antigravity and Grok Build, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
 
-When you pick a custom model with `/model` and the agent rejects it, Nori writes
-the value here and restarts the session so the model is injected on the next
-spawn. The `/model` picker also surfaces a curated per-agent **Other** section of
-known-good models the adapter does not advertise, so you can select one instead
-of typing its id; choosing one follows the same reject → persist-here → restart
-path.
+Claude Code, Codex, and custom agents with a configured injection channel can also accept model IDs at process startup. For these agents, `/model` offers a custom ID and any curated additional choices. If the agent rejects a custom choice over ACP, Nori can save it here and restart the session to apply it. A provider may still reject an unknown model at the first prompt.
 
 ## Custom agents: `[[agents]]`
 
@@ -78,9 +67,7 @@ tells Nori which out-of-band channel carries a forced model id so a
 | `env` | Environment variable set to the model id on the spawned subprocess |
 | `arg` | CLI flag appended, followed by the model id |
 
-Set exactly one; `env` wins if both are present. Built-in agents know their own
-channel (Claude → `ANTHROPIC_MODEL`, Gemini → `GEMINI_MODEL`, Codex → the `model`
-key of `CODEX_CONFIG`) and ignore this field. For env-based channels, Nori's
+Set exactly one. If both are present, `env` wins. This field configures custom agents. The built-in Claude Code uses `ANTHROPIC_MODEL` and Codex uses the `model` key of `CODEX_CONFIG`. For env-based channels, Nori's
 injected value takes precedence over the agent's own configured model (for
 example `~/.claude/settings.json`) for Nori-spawned sessions — Nori's
 `[default_models]` is authoritative there by design.

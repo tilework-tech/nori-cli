@@ -41,8 +41,6 @@ use crate::history_cell::HistoryCell;
 use crate::history_cell::PlainHistoryCell;
 use crate::login_handler::AgentLoginSupport;
 use crate::login_handler::LoginHandler;
-#[allow(unused_imports)]
-use crate::login_handler::LoginMethod;
 use crate::render::Insets;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::FlexRenderable;
@@ -93,53 +91,6 @@ use nori_config::SandboxPolicy;
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const DEFAULT_PROJECT_DOC_FILENAME: &str = "AGENTS.md";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
-/// Strip ANSI escape codes from a string.
-/// Uses a simple state machine approach to handle common escape sequences.
-#[cfg(feature = "login")]
-fn strip_ansi_codes(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-
-    while let Some(c) = chars.next() {
-        if c == '\x1b' {
-            // Skip escape sequence
-            if chars.peek() == Some(&'[') {
-                chars.next(); // consume '['
-                // Skip until we hit a letter (the terminator)
-                while let Some(&next) = chars.peek() {
-                    chars.next();
-                    if next.is_ascii_alphabetic() {
-                        break;
-                    }
-                }
-            } else if chars.peek() == Some(&']') {
-                // OSC sequence (Operating System Command)
-                chars.next(); // consume ']'
-                // Skip until BEL (\x07) or ST (ESC \)
-                while let Some(&next) = chars.peek() {
-                    if next == '\x07' {
-                        chars.next();
-                        break;
-                    } else if next == '\x1b' {
-                        chars.next();
-                        if chars.peek() == Some(&'\\') {
-                            chars.next();
-                        }
-                        break;
-                    }
-                    chars.next();
-                }
-            }
-        } else if c == '\r' {
-            // Skip carriage return (handle Windows line endings)
-            continue;
-        } else {
-            result.push(c);
-        }
-    }
-
-    result
-}
 
 /// Common initialization parameters shared by all `ChatWidget` constructors.
 pub(crate) struct ChatWidgetInit {

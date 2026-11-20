@@ -146,7 +146,7 @@ struct ExecCommand {
     #[arg(long)]
     acp: bool,
 
-    /// ACP agent to run behind the facade.
+    /// Agent to run: claude-code, codex, gemini (Antigravity), grok-build, or a configured agent.
     #[arg(long)]
     agent: Option<String>,
 
@@ -376,7 +376,8 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
     }
 
     match subcommand {
-        Some(Subcommand::Host(command)) => {
+        Some(Subcommand::Host(mut command)) => {
+            interactive.agent = command.select_agent(interactive.agent.take());
             let config = if command.needs_config() {
                 let overrides = host_overrides(interactive, root_config_overrides)?;
                 Some((
