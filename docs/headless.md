@@ -103,9 +103,11 @@ The facade handles:
 
 - `initialize`
 - `session/new`
-- `session/set_config_option`, only while no facade `session/prompt` is
-  running (in single-session mode, only before the one prompt). A turn started
-  another way does not block it here; the call then fails with `-32000`.
+- `session/set_config_option`, rejected with invalid params while a facade
+  `session/prompt` is running (in single-session mode, once the one prompt
+  starts). A turn started another way (for example `_nori/session/prompt`)
+  does not block it: the call goes to the agent, and the result depends on
+  that agent.
 - `session/prompt`
 - `session/cancel`
 - agent-to-client `session/request_permission`
