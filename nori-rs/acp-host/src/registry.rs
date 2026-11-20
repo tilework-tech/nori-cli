@@ -698,11 +698,37 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
 
 /// Resolve aliases after checking configured slugs, which may deliberately shadow an alias.
 pub fn resolve_agent_slug(name: &str) -> String {
+    registered_slug(name, &get_registry())
+}
+
+fn registered_slug(name: &str, registry: &[RegisteredAgent]) -> String {
     let normalized = name.to_lowercase();
-    if get_registry().iter().any(|entry| entry.slug == normalized) {
+    if registry.iter().any(|entry| entry.slug == normalized) {
         return normalized;
     }
     AgentKind::from_slug(&normalized).map_or(normalized, |kind| kind.slug().to_owned())
+}
+
+/// Resolve the launch identity and its saved model with the same registry.
+pub fn resolve_agent_selection(
+    requested: &str,
+    defaults: &HashMap<String, String>,
+) -> (String, Option<String>) {
+    let registry = get_registry();
+    let agent = registered_slug(requested, &registry);
+    let model = defaults
+        .get(&agent)
+        .or_else(|| {
+            // Older clients wrote the spelling used to launch the agent. When several
+            // old spellings disagree, choose consistently, regardless of the current spelling.
+            defaults
+                .iter()
+                .filter(|(key, _)| registered_slug(key, &registry) == agent)
+                .min_by_key(|(key, _)| *key)
+                .map(|(_, model)| model)
+        })
+        .cloned();
+    (agent, model)
 }
 
 /// Get ACP agent configuration for a given agent name

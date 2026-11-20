@@ -27,7 +27,9 @@ claude-code = "claude-opus-4-6"
 codex = "gpt-5.1-codex"
 ```
 
-A default is looked up under the requested agent ID, then its canonical ID. For Antigravity and Grok Build, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
+Nori saves model choices under the agent’s canonical ID. For example, selecting a model after launching `--agent agy` saves it under `gemini`. If the canonical entry is missing, Nori reads an existing alias entry, choosing the first key in alphabetical order if several match. A custom agent with an alias as its slug keeps its own model preference.
+
+For Antigravity and Grok Build, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
 
 Claude Code, Codex, and custom agents with a configured injection channel can also accept model IDs at process startup. For these agents, `/model` offers a custom ID and any curated additional choices. If the agent rejects a custom choice over ACP, Nori can save it here and restart the session to apply it. A provider may still reject an unknown model at the first prompt.
 

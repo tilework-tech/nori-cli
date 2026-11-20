@@ -859,10 +859,11 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
     } else {
         crate::config::AutoWorktree::Off
     };
-    let agent = config.active_agent.clone();
+    let (agent, default_model) =
+        crate::registry::resolve_agent_selection(&config.active_agent, &config.default_models);
 
     AcpBackendConfig {
-        agent: agent.clone(),
+        agent,
         multi_session: config.multi_session,
         delegation_context: None,
         cwd: config.cwd.clone(),
@@ -895,15 +896,7 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
         async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
         async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
         script_timeout: config.script_timeout.as_duration(),
-        default_model: config
-            .default_models
-            .get(&agent)
-            .or_else(|| {
-                config
-                    .default_models
-                    .get(&crate::resolve_agent_slug(&agent))
-            })
-            .cloned(),
+        default_model,
         initial_context,
         session_context,
         mcp_servers: config.mcp_servers.clone(),
@@ -1427,6 +1420,32 @@ mod tests {
     use nori_protocol::acp::v1::SessionConfigOptionCategory;
     use nori_protocol::acp::v1::SessionConfigSelectOption;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn launch_uses_one_agent_and_model_across_provider_aliases() {
+        for (requested, saved, expected) in [
+            ("agy", "antigravity", "gemini"),
+            ("gemini", "agy", "gemini"),
+            ("grok", "grok-build", "grok-build"),
+            ("grok-build", "grok", "grok-build"),
+        ] {
+            let config = crate::config::NoriConfig {
+                active_agent: requested.into(),
+                default_models: [(saved.into(), "selected".into())].into(),
+                ..Default::default()
+            };
+            let backend = build_backend_config(AgentPrepareSpec {
+                config: Arc::new(config),
+                cli_version: "test".into(),
+                initial_context: None,
+                session_context: None,
+            });
+            assert_eq!(
+                (backend.agent.as_str(), backend.default_model.as_deref()),
+                (expected, Some("selected"))
+            );
+        }
+    }
 
     fn mode_option(current_value: &str) -> SessionConfigOption {
         SessionConfigOption::select(

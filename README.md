@@ -23,7 +23,7 @@ Or download binaries from [GitHub Releases](https://github.com/tilework-tech/nor
 nori
 ```
 
-Use `/agent` to switch agents, or select one at launch with `nori --agent grok-build`. To start a session on a running Nori host, use `nori host new --agent grok-build`.
+Use `/agent` to switch agents, or select one at launch with `nori --agent grok-build`. To start a session on a running Nori host, use `nori host new --agent grok-build`. Aliases use the same provider ID in the session list and share its saved model. An exact `[[agents]]` slug keeps its own settings.
 
 ## Providers
 

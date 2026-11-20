@@ -515,6 +515,8 @@ async fn run_ratatui_app(
         config.active_agent = agent.clone();
     }
 
+    config.active_agent = nori_harness::resolve_agent_slug(&config.active_agent);
+
     let startup_remote_addr = cli
         .remote
         .as_deref()

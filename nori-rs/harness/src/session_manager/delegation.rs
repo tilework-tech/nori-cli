@@ -81,6 +81,7 @@ impl SessionManager {
         let _admission = self.shared.admission.lock().await;
         let task = task.trim().to_string();
         anyhow::ensure!(!task.is_empty(), "delegation task must not be empty");
+        let agent = crate::resolve_agent_slug(&agent);
         crate::get_agent_config(&agent)?;
         let value = {
             let mut state = self.shared.state();
