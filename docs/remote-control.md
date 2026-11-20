@@ -151,7 +151,8 @@ prompt.
   normal harness queue. A remote `session/prompt` is never queued: it is
   rejected with `-32015` when the session is not idle, when the queue holds
   entries and is not paused, or while a steer is unsettled. When the
-  queue is paused (after an interrupt or a failed turn), the remote prompt
+  queue is paused (after any turn ending other than `end_turn`, if it holds a
+  user prompt), the remote prompt
   runs at once and the queue stays paused. See
   [turn lifecycle](turn-lifecycle.md) for the queue and pause rules.
 - For a remote-owned turn, both the TUI and the remote client may answer the
@@ -251,8 +252,15 @@ pending request IDs, `source`, `depth`, `delegations`, `latest_seq`,
 ### Paused queues
 
 A paused queue cannot be resumed or discarded from `nori attach` or any remote
-client; only the local TUI that owns the harness can resume it. Remote clients
-do not see the queue's contents.
+client; only the local TUI that owns the harness can resume it. Queue
+visibility depends on the surface:
+
+- `/sessions` subscribers, including `nori host` watchers, receive
+  `QueueChanged` snapshots with each entry's text and the paused reason
+  (for example `"paused":"interrupted"`). They cannot edit, remove, resume,
+  or discard entries.
+- `/acp` drops `QueueChanged`.
+- `nori attach` receives the snapshots but does not render them.
 
 ### Reconnect and replay
 
@@ -400,12 +408,13 @@ it. `initialize` returns `result.control` with `role` and
 | `_nori/session/resume` | controller | Restart a failed session (see below). |
 | `_nori/host/stop` | any | Shut the host down. |
 
-Watchers may list, subscribe, start sessions, stop the host, and take
-control. Prompts, follow-ups, permission answers, delegation, close, cancel,
-and resume from a watcher fail with `-32016`. `_nori/control/changed` tells
-affected terminals their new role. A request already admitted may finish
-after control moves. When the controller disconnects, no watcher is promoted
-automatically.
+Watchers may list, subscribe, start sessions, stop the host, and take control.
+On a host with `[host] managed = true`, watchers may also call
+`_nori/session/ensure` and `_nori/session/status`. Prompts, follow-ups,
+permission answers, delegation, close, cancel, and resume from a watcher fail
+with `-32016`. `_nori/control/changed` tells affected terminals their new
+role. A request already admitted may finish after control moves. When the
+controller disconnects, no watcher is promoted automatically.
 
 ## 4. Host on stdio (`nori host --stdio`)
 
@@ -450,8 +459,8 @@ that changes a session needs control.
 
 | Input | Effect |
 | --- | --- |
-| Enter (turn running) | Steer: `_nori/session/follow_up` with `intent: "steer"`. |
-| Tab (turn running) | Queue: `_nori/session/follow_up` with `intent: "queue"`. Tab first completes a `/new` folder. |
+| Enter (turn running) | Steer: `_nori/session/follow_up` with `intent: "steer"`. Every draft except the attach commands below is steered, including `!` and other slash text. |
+| Tab (turn running) | Queue: `_nori/session/follow_up` with `intent: "queue"`. Tab first completes a `/new` folder. Slash and `!` drafts are not queued; a bare `exit` or `quit` is. |
 | Enter (idle) | `_nori/session/prompt`. |
 | Ctrl+C | Empty composer: send `/cancel`. Otherwise clear the draft. |
 | Ctrl+D, `/quit`, `/exit`, `/detach` | Detach. The host and its sessions keep running. |
@@ -465,7 +474,9 @@ that changes a session needs control.
 | `hotkeys.parent_session` (Alt+Up) | From a delegated child, open its parent. |
 | Alt+T | Take control. |
 
-Follow-up delivery notices match the local TUI. Attach has no queue list: it
+Follow-up delivery notices match the local TUI. Unlike the local TUI, attach
+puts the draft back in an empty composer after a `rejected` receipt or an
+error response. Attach has no queue list: it
 cannot show, edit, remove, resume, or discard queued prompts, and a queue
 paused by an interrupt (for example after `/cancel`) stays paused until the
 TUI that owns the harness resumes it.

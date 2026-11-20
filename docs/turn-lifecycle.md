@@ -280,9 +280,14 @@ running turn:
 | Enter | Steer into the running turn. |
 | Tab | Queue for the next turn. |
 
-- Slash commands, `!` shell commands, and bare `exit`/`quit` drafts keep their
-  normal behavior and are never sent as follow-ups; Tab falls back to its
-  ordinary meaning for them.
+- In direct `nori`, slash commands, `!` shell commands, and bare
+  `exit`/`quit` drafts keep their normal behavior and are never sent as
+  follow-ups; Tab falls back to its ordinary meaning for them.
+- In `nori attach`, only the attach commands (`/quit`, `/exit`, `/detach`,
+  `/sessions`, `/new`, `/delegate`, `/close`, `/cancel`, `/resume`) are
+  handled locally. Enter sends any other draft, including `!` text and other
+  slash text, as a steer follow-up. Tab does not queue slash or `!` drafts,
+  but it does queue a bare `exit` or `quit`.
 - In direct `nori`, the running turn must be in `Prompting`. While the turn is
   cancelling, or in cloud mode, Enter submits an ordinary prompt (queued if
   busy) and Tab does not queue. A follow-only attachment keeps the draft and
@@ -332,15 +337,17 @@ result without a Nori release.
 | `injected` | The agent accepted the input into the running turn. |
 | `queued` | Explicit `queue` intent admitted to the next turn. |
 | `unsupported_queued` | Steering unavailable (guard mismatch or agent `-32601`); queued instead. |
-| `idle_queued` | The expected turn already ended with `end_turn`, or the agent answered outcome `promptRequired` with reason `noRunningTurn`; queued as the next prompt. |
+| `idle_queued` | The session is `Idle` and the expected turn already ended with `end_turn`, or the agent answered outcome `promptRequired` with reason `noRunningTurn`; queued as the next prompt. |
 | `rejected` | Refused: wrong turn, steer while cancelling, another steer unsettled, the expected turn ended by cancel or error, or an agent refusal. |
 | `unknown` | Delivery not confirmed. Keep the message ID for reconciliation. |
 
 - A retry with the same `message_id` and an identical submission returns the
   stored receipt. Any difference (content, intent, expected turn, sender, or
   origin) under the same ID is an error.
-- The TUI reports each outcome as a notice. The draft is not restored on
-  `rejected` or `unknown`.
+- The TUI reports each outcome as a notice. Direct `nori` does not restore
+  the draft on `rejected` or `unknown`. `nori attach` puts the draft back in
+  an empty composer on a `rejected` receipt or an error response, but not on
+  `unknown`.
 
 ### Steer timeout
 
@@ -379,8 +386,9 @@ merged into another message or restored into the composer automatically.
   later interrupt or error pauses what is left.
 - Taking back the last held user prompt clears the pause.
 - Resume and discard are possible only from the local TUI that owns the
-  harness. `nori attach` and remote clients cannot see, edit, resume, or
-  discard the harness queue.
+  harness. No other client can edit, resume, or discard the harness queue.
+  `/sessions` subscribers receive `QueueChanged` snapshots, `/acp` drops
+  them, and `nori attach` does not render them.
 
 ### Recall, edit, and delete
 

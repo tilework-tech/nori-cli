@@ -92,14 +92,16 @@ term names.
 | --- | --- | --- |
 | **[Follow-up](turn-lifecycle.md#follow-ups)** | A message the user sends while a **prompt turn** is running, aimed at that turn. It is either **steered** or **queued**, and returns a delivery receipt. | Interrupt, managed follow-up |
 | **[Steer](turn-lifecycle.md#keys)** | Enter during a running turn: inject the **follow-up** into that turn through `_session/steering`. Only allowlisted adapter versions support it; otherwise the message is queued. | Interrupt, append, send now |
-| **[Queue](turn-lifecycle.md#prompt-queue)** | Tab during a running turn: hold the **follow-up** in the harness-owned FIFO and send it as a new **prompt turn** after the current turn ends with `end_turn`. Clients see it only through `QueueChanged`. | Buffer, outbox, pending prompts |
+| **[Queue](turn-lifecycle.md#prompt-queue)** | Tab during a running turn: hold the **follow-up** in the harness-owned FIFO and send it as a new **prompt turn** after the current turn ends with `end_turn`. `/sessions` subscribers see it through `QueueChanged` snapshots; `/acp` drops them and `nori attach` does not render them. | Buffer, outbox, pending prompts |
 | **[Paused queue](turn-lifecycle.md#drain-and-pause)** | A **queue** holding user prompts after a turn that did not end with `end_turn` (`interrupted` or `turn_failed`). It sends nothing until resumed; only the local TUI that owns the harness can resume it. | Stuck queue, cancelled queue |
 
 - A **steer** adds input to the running turn; it does not start a new
   `session/prompt`, and the original turn still owns completion and
   cancellation.
 - ACP v1 defines neither steering nor queueing; both are Nori behavior.
-- The `/managed` relay keeps its own follow-up FIFO, which never pauses.
+- The `/managed` relay keeps its own follow-up FIFO. It never shows a paused
+  state, but after a turn ending other than `end_turn` it holds its items until
+  a later turn ends with `end_turn`.
 - "Queue" alone may mean the harness **queue** or the composer's prompt
   history; qualify it.
 
@@ -125,7 +127,7 @@ term names.
 | **[Request resolved](remote-control.md)** | A **session envelope** announcing that a client answered a pending agent request, and which client. | Approval event |
 | **[Active session](remote-control.md)** | The one **session** the TUI shows; the prompt, terminal title, and scrollback belong to it. | Current tab |
 | **[Parked session](remote-control.md)** | A live **session** the TUI holds off screen with its own history view, input, and pending requests. | Hidden, paused |
-| **[Session cap](remote-control.md)** | The most managed **sessions** that may run at once, set by `[tui] max_sessions` for the TUI and `[host] max_sessions` for `nori host` (default 8 each). | Limit, quota |
+| **[Session cap](remote-control.md)** | The most managed **sessions** that may run at once, set by `[tui] max_sessions` (default 8) for both the TUI and `nori host`. `[host] max_sessions` is a separate limit that bounds only managed launches. | Limit, quota |
 
 ### Delegation
 

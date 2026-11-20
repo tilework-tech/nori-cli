@@ -103,8 +103,9 @@ The facade handles:
 
 - `initialize`
 - `session/new`
-- `session/set_config_option`, only while no prompt is running (in
-  single-session mode, only before the one prompt)
+- `session/set_config_option`, only while no facade `session/prompt` is
+  running (in single-session mode, only before the one prompt). A turn started
+  another way does not block it here; the call then fails with `-32000`.
 - `session/prompt`
 - `session/cancel`
 - agent-to-client `session/request_permission`
@@ -150,9 +151,11 @@ manager:
   `{"version": 1}`.
 - `session/new` may be called several times. It returns a Nori conversation
   ID, and updates and permission requests use that ID as `sessionId`.
-- Each session accepts repeated prompts, one at a time. A prompt sent while
-  the session has an active turn fails with `-32015` ("session already has an
-  active turn"); it is never queued.
+- Each session accepts repeated prompts, one at a time. A prompt is never
+  queued. It fails with `-32015` ("session already has an active turn")
+  while an earlier facade `session/prompt` is still running. If the active
+  turn was started another way (for example `_nori/session/prompt`), it fails
+  with `-32000` and the same message.
 - Other methods go to the managed session wire: `_nori/session/list`,
   `_nori/session/subscribe`, `_nori/session/prompt`, `_nori/session/delegate`,
   `_nori/session/delegation/resolve`, and `_nori/session/respond`, with
