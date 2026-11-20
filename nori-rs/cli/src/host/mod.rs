@@ -35,6 +35,9 @@ use self::state::HostState;
 pub(crate) struct HostCommand {
     #[command(subcommand)]
     action: Option<HostAction>,
+    /// Agent for this host or its new session.
+    #[arg(long, short = 'a')]
+    agent: Option<String>,
     /// Loopback port; zero chooses an available port.
     #[arg(long, default_value = "7420")]
     port: i32,
@@ -70,7 +73,7 @@ struct NewCommand {
     /// with --host uses its own folder by default.
     #[arg(long)]
     cwd: Option<PathBuf>,
-    /// Agent to run instead of the host's default.
+    /// Agent to run: claude-code, codex, gemini (Antigravity), grok-build, or a configured agent.
     #[arg(long)]
     agent: Option<String>,
     /// First prompt to send once the session starts.
@@ -88,6 +91,15 @@ struct NewCommand {
 }
 
 impl HostCommand {
+    pub(crate) fn select_agent(&mut self, root_agent: Option<String>) -> Option<String> {
+        let agent = self.agent.take().or(root_agent);
+        if let Some(HostAction::New(command)) = &mut self.action {
+            command.agent = command.agent.take().or(agent);
+            return None;
+        }
+        agent
+    }
+
     pub(crate) fn needs_config(&self) -> bool {
         self.action.is_none()
     }
@@ -449,4 +461,28 @@ async fn serve(
     );
     drop(lock);
     Ok(())
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+
+    #[test]
+    fn new_session_uses_the_nearest_explicit_agent() {
+        for (args, expected) in [
+            (vec!["host", "new"], "codex"),
+            (vec!["host", "--agent", "agy", "new"], "agy"),
+            (
+                vec!["host", "--agent", "agy", "new", "--agent", "grok"],
+                "grok",
+            ),
+        ] {
+            let mut host = HostCommand::try_parse_from(args).unwrap();
+            host.select_agent(Some("codex".into()));
+            let Some(HostAction::New(command)) = host.action else {
+                panic!("expected new");
+            };
+            assert_eq!(command.agent.as_deref(), Some(expected));
+        }
+    }
 }

@@ -1246,10 +1246,10 @@ mod tests {
         pane.show_selection_view(
             crate::nori::session_config_picker::acp_session_config_value_picker_params(
                 &option,
-                &[nori_harness::OtherModel {
+                Some(&[nori_harness::OtherModel {
                     id: "experimental",
                     label: "Experimental",
-                }],
+                }]),
             ),
         );
         let model_render = render_snapshot(&pane, Rect::new(0, 0, 100, 18));

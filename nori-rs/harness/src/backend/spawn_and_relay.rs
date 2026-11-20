@@ -194,7 +194,13 @@ impl AcpBackend {
 
         // Apply default model from config if one is set for this agent
         if let Some(ref default_model) = config.default_model {
-            session_defaults::apply_default_model(&connection, &session_id, default_model).await;
+            session_defaults::apply_default_model(
+                &connection,
+                &session_id,
+                default_model,
+                agent_config.builtin_kind.is_some(),
+            )
+            .await;
         }
         forward_available_setup_events(&mut event_rx, &backend_event_tx).await?;
 

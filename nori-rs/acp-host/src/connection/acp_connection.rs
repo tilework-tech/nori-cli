@@ -73,6 +73,9 @@ pub struct AcpConnection {
     /// Connection context for sending requests to the agent.
     cx: ConnectionTo<Agent>,
 
+    /// Advertised API-key method for a built-in launched with a key.
+    key_auth_method: Option<&'static str>,
+
     /// Agent capabilities from the initialization handshake.
     agent_capabilities: acp::AgentCapabilities,
 
@@ -412,6 +415,7 @@ async fn establish_connection(
     Ok(AcpConnection {
         cx,
         agent_capabilities: capabilities,
+        key_auth_method: None,
         initialize_meta,
         initialize_result,
         permissions,
@@ -615,9 +619,72 @@ impl AcpConnection {
                 );
             }
         };
+        let key_method = match config.builtin_kind {
+            Some(crate::registry::AgentKind::Gemini) => {
+                Some(("gemini-api-key", &["GEMINI_API_KEY"][..]))
+            }
+            Some(crate::registry::AgentKind::Codex) => {
+                Some(("api-key", &["CODEX_API_KEY", "OPENAI_API_KEY"][..]))
+            }
+            _ => None,
+        };
+        connection.key_auth_method = key_method.and_then(|(method, keys)| {
+            let key_available = keys.iter().any(|key| {
+                config.env.get(*key).map_or_else(
+                    || std::env::var_os(key).is_some_and(|value| !value.is_empty()),
+                    |value| !value.is_empty(),
+                )
+            });
+            let advertised = connection.initialize_result["authMethods"]
+                .as_array()
+                .is_some_and(|methods| {
+                    methods
+                        .iter()
+                        .any(|item| item["id"].as_str() == Some(method))
+                });
+            (key_available && advertised).then_some(method)
+        });
         connection.child = Some(child_handle);
         connection.stderr_task = Some(stderr_task);
         Ok(connection)
+    }
+
+    /// Give existing sign-ins the first attempt. Some adapters require an explicit
+    /// ACP authenticate request even when their API key is in the environment.
+    async fn session_request<T: agent_client_protocol::JsonRpcResponse>(
+        &self,
+        send: impl Fn() -> agent_client_protocol::SentRequest<T>,
+        started: Option<mpsc::UnboundedSender<RequestId>>,
+    ) -> (RequestId, Result<T, acp::Error>) {
+        let request = send();
+        let id = schema_request_id(request.id());
+        if let Some(started) = &started {
+            let _ = started.send(id.clone());
+        }
+        let response = request.block_task().await;
+        if let (Err(error), Some(method)) = (&response, self.key_auth_method)
+            && error.code == acp::ErrorCode::AuthRequired
+        {
+            let auth = self.cx.send_request(acp::AuthenticateRequest::new(method));
+            if let Err(auth_error) = auth.block_task().await {
+                warn!("ACP authentication with {method} failed: {auth_error}");
+                return (id, response);
+            }
+            let _ = self
+                .event_tx
+                .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
+                    request_id: id,
+                    response: Err(error.clone()),
+                })))
+                .await;
+            let retry = send();
+            let retry_id = schema_request_id(retry.id());
+            if let Some(started) = &started {
+                let _ = started.send(retry_id.clone());
+            }
+            return (retry_id, retry.block_task().await);
+        }
+        (id, response)
     }
 
     /// Create a new session with the agent.
@@ -629,11 +696,10 @@ impl AcpConnection {
         cwd: &Path,
         mcp_servers: Vec<acp::McpServer>,
     ) -> Result<acp::SessionId> {
-        let request = self
-            .cx
-            .send_request(acp::NewSessionRequest::new(cwd).mcp_servers(mcp_servers));
-        let request_id = schema_request_id(request.id());
-        let response = request.block_task().await;
+        let params = acp::NewSessionRequest::new(cwd).mcp_servers(mcp_servers);
+        let (request_id, response) = self
+            .session_request(|| self.cx.send_request(params.clone()), None)
+            .await;
         let _ = self
             .event_tx
             .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
@@ -662,16 +728,13 @@ impl AcpConnection {
         session_id: &str,
         cwd: &Path,
         mcp_servers: Vec<acp::McpServer>,
-        request_started: Option<oneshot::Sender<RequestId>>,
+        request_started: Option<mpsc::UnboundedSender<RequestId>>,
     ) -> Result<acp::SessionId> {
-        let request = self.cx.send_request(
-            acp::LoadSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers),
-        );
-        let request_id = schema_request_id(request.id());
-        if let Some(request_started) = request_started {
-            let _ = request_started.send(request_id.clone());
-        }
-        let response = request.block_task().await;
+        let params =
+            acp::LoadSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers);
+        let (request_id, response) = self
+            .session_request(|| self.cx.send_request(params.clone()), request_started)
+            .await;
         let _ = self
             .event_tx
             .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
@@ -706,11 +769,11 @@ impl AcpConnection {
         cwd: &Path,
         mcp_servers: Vec<acp::McpServer>,
     ) -> Result<acp::SessionId> {
-        let request = self.cx.send_request(
-            acp::ResumeSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers),
-        );
-        let request_id = schema_request_id(request.id());
-        let response = request.block_task().await;
+        let params =
+            acp::ResumeSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers);
+        let (request_id, response) = self
+            .session_request(|| self.cx.send_request(params.clone()), None)
+            .await;
         let _ = self
             .event_tx
             .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
@@ -807,9 +870,9 @@ impl AcpConnection {
                 request = request.cursor(cursor);
             }
 
-            let request = self.cx.send_request(request);
-            let request_id = schema_request_id(request.id());
-            let response = request.block_task().await;
+            let (request_id, response) = self
+                .session_request(|| self.cx.send_request(request.clone()), None)
+                .await;
             let _ = self
                 .event_tx
                 .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {

@@ -94,6 +94,15 @@ impl NoriConfig {
                 _ => None,
             })
             .unwrap_or(false);
+        // Keep command-line precedence until the registry can resolve custom agent aliases.
+        // A whole-table assignment replaces every dotted assignment before it.
+        let default_model_override_keys = overrides
+            .raw_overrides
+            .iter()
+            .rev()
+            .take_while(|(path, _)| path != "default_models")
+            .filter_map(|(path, _)| path.strip_prefix("default_models.").map(str::to_owned))
+            .collect();
         let NoriConfigOverrides {
             agent: agent_override,
             sandbox_mode: sandbox_mode_override,
@@ -286,6 +295,7 @@ impl NoriConfig {
             async_pre_agent_response_hooks,
             async_post_agent_response_hooks,
             default_models: toml.default_models,
+            default_model_override_keys,
             agents: toml.agents,
             cloud_broker_url: toml.cloud.broker_url,
         })

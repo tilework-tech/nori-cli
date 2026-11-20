@@ -110,15 +110,6 @@ async fn forward_setup_session_events(
     Ok(())
 }
 
-fn response_request_id(events: &[nori_protocol::SessionEvent]) -> Option<acp::RequestId> {
-    events.iter().find_map(|event| match event {
-        nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
-            request_id, ..
-        }) => Some(request_id.clone()),
-        nori_protocol::SessionEvent::Acp(_) | nori_protocol::SessionEvent::Nori(_) => None,
-    })
-}
-
 impl AcpBackend {
     /// Resume a previous ACP session.
     ///
@@ -196,18 +187,19 @@ impl AcpBackend {
             // Collect replay events into a buffer. The collector runs until
             // load_session() finishes and signals completion via the oneshot.
             let (load_done_tx, load_done_rx) = tokio::sync::oneshot::channel::<()>();
-            let (load_started_tx, load_started_rx) = tokio::sync::oneshot::channel();
+            let (load_started_tx, mut load_started_rx) =
+                tokio::sync::mpsc::unbounded_channel::<acp::RequestId>();
             let collect_handle = tokio::spawn(async move {
                 let mut event_rx = event_rx;
                 let mut session_driver = session_runtime_driver::SessionDriver::new();
                 let mut buffered_session_events = Vec::new();
-                let load_request_id = load_started_rx.await.map_err(|_| {
+                let mut load_request_id = load_started_rx.recv().await.ok_or_else(|| {
                     anyhow::anyhow!("session/load did not expose its wire request ID")
                 })?;
                 let mut buffered_events = client_events_to_replay_client_events(
                     session_driver
                         .apply(session_reducer::InboundEvent::LoadSubmit {
-                            request_id: load_request_id,
+                            request_id: load_request_id.clone(),
                         })
                         .events,
                 );
@@ -215,6 +207,17 @@ impl AcpBackend {
                 loop {
                     tokio::select! {
                         biased;
+                        Some(retry_id) = load_started_rx.recv() => {
+                            // An authentication challenge ended the first load before replay.
+                            // The retried load owns all subsequent history and its completion.
+                            load_request_id = retry_id.clone();
+                            session_driver.apply(session_reducer::InboundEvent::LoadResponse);
+                            buffered_events.extend(client_events_to_replay_client_events(
+                                session_driver.apply(session_reducer::InboundEvent::LoadSubmit {
+                                    request_id: retry_id,
+                                }).events,
+                            ));
+                        }
                         maybe_event = event_rx.recv() => {
                             match maybe_event {
                                 Some(crate::connection::ConnectionEvent::Acp(event)) => {
@@ -291,6 +294,7 @@ impl AcpBackend {
                     event_rx,
                     buffered_events,
                     buffered_session_events,
+                    load_request_id,
                 ))
             });
 
@@ -316,6 +320,7 @@ impl AcpBackend {
                         recovered_rx,
                         buffered_client_events,
                         buffered_session_events,
+                        load_request_id,
                     ) = collect_handle.await.map_err(|err| {
                         anyhow::anyhow!("load session collector task panicked: {err}")
                     })??;
@@ -325,8 +330,6 @@ impl AcpBackend {
                             buffered_client_events.len()
                         );
                     }
-                    let load_request_id = response_request_id(&buffered_session_events)
-                        .ok_or_else(|| anyhow::anyhow!("session/load produced no raw response"))?;
                     let mut setup_session_events = vec![nori_protocol::SessionEvent::Nori(
                         nori_protocol::NoriEvent::SessionPhaseChanged(
                             nori_protocol::SessionPhase::Loading {
@@ -367,14 +370,15 @@ impl AcpBackend {
                 Err(e) => {
                     warn!("Server-side session/load failed: {e}");
                     let _ = load_done_tx.send(());
-                    let (_failed_driver, mut recovered_rx, _, buffered_session_events) =
-                        collect_handle.await.map_err(|err| {
-                            anyhow::anyhow!("load session collector task panicked: {err}")
-                        })??;
-                    let load_request_id = response_request_id(&buffered_session_events)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!("failed session/load produced no raw response")
-                        })?;
+                    let (
+                        _failed_driver,
+                        mut recovered_rx,
+                        _,
+                        buffered_session_events,
+                        load_request_id,
+                    ) = collect_handle.await.map_err(|err| {
+                        anyhow::anyhow!("load session collector task panicked: {err}")
+                    })??;
                     let mut setup_session_events = vec![nori_protocol::SessionEvent::Nori(
                         nori_protocol::NoriEvent::SessionPhaseChanged(
                             nori_protocol::SessionPhase::Loading {
@@ -435,6 +439,7 @@ impl AcpBackend {
                             &connection,
                             &session_id,
                             default_model,
+                            agent_config.builtin_kind.is_some(),
                         )
                         .await;
                     }
@@ -534,8 +539,13 @@ impl AcpBackend {
             };
 
             if let Some(ref default_model) = config.default_model {
-                session_defaults::apply_default_model(&connection, &session_id, default_model)
-                    .await;
+                session_defaults::apply_default_model(
+                    &connection,
+                    &session_id,
+                    default_model,
+                    agent_config.builtin_kind.is_some(),
+                )
+                .await;
             }
             let setup_session_events = drain_setup_session_events(&mut event_rx)?;
 

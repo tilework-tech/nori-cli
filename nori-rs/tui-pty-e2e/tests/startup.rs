@@ -428,6 +428,50 @@ fn model_command_works_before_first_prompt() {
 
 #[cfg(target_os = "linux")]
 #[test]
+fn picker_choice_supersedes_an_alias_override_in_the_next_session() {
+    let bin = tempfile::tempdir().unwrap();
+    let test_binary = std::env::current_exe().unwrap();
+    let mock = test_binary
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("mock_acp_agent");
+    std::os::unix::fs::symlink(mock, bin.path().join("agy")).unwrap();
+    let config = SessionConfig::new()
+        .with_agent("antigravity".into())
+        .with_extra_path(bin.path().to_owned())
+        .with_extra_config_toml(
+            "[features]\nmulti_session = true\n[default_models]\ngemini = 'mock-model-fast'",
+        )
+        .with_arg("-c")
+        .with_arg("default_models.agy=mock-model-default");
+
+    let mut session = TuiSession::spawn_with_config(40, 120, config).unwrap();
+    session
+        .wait_for_text("Model=Mock Default Model", TIMEOUT)
+        .unwrap();
+    session.submit_input("/model").unwrap();
+    session.wait_for_text("Mock Fast Model", TIMEOUT).unwrap();
+    session.send_key(Key::Down).unwrap();
+    session.send_key(Key::Enter).unwrap();
+    session.wait_for_text("saved as default", TIMEOUT).unwrap();
+    session.send_key(Key::Escape).unwrap();
+    session
+        .wait_for(
+            |screen| !screen.contains("Select an ACP session setting"),
+            TIMEOUT,
+        )
+        .unwrap();
+    session.submit_input("/new").unwrap();
+    session.wait_for_text("2 ready", TIMEOUT).unwrap();
+    session
+        .wait_for_text("Antigravity · Mock Fast Model", TIMEOUT)
+        .unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
 fn skillset_per_session_activates_after_selection() {
     // With per-session skillsets the session must auto-activate once a skillset
     // is applied (after `.claude/CLAUDE.md` is written), not wait for a prompt.

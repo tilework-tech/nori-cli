@@ -9,9 +9,9 @@ import { bounded, connect } from "./rpc.mjs";
 
 const binary = resolve(process.argv[2] ?? "nori-rs/target/debug/nori");
 const packages = resolve(process.env.NORI_TEST_ADAPTER_MODULES ?? join(homedir(), ".nori/npm/cli-runtime/node_modules"));
-const pins = {
-  claude: { name: "claude-agent-acp", version: process.env.NORI_TEST_CLAUDE_ADAPTER_VERSION ?? "0.102.0" },
-  codex: { name: "codex-acp", version: "2.7.0" },
+const candidates = {
+  claude: { name: "claude-agent-acp", version: process.env.NORI_TEST_CLAUDE_ADAPTER_VERSION },
+  codex: { name: "codex-acp", version: process.env.NORI_TEST_CODEX_ADAPTER_VERSION },
 };
 const text = value => [{ type: "text", text: value }];
 const follow = "_nori/session/follow_up";
@@ -27,9 +27,10 @@ async function eventually(description, check) {
 }
 
 async function run(provider, transport, scenario) {
-  const pin = pins[provider];
-  const module = join(packages, "@agentclientprotocol", pin.name);
-  assert.equal((await Bun.file(join(module, "package.json")).json()).version, pin.version);
+  const candidate = candidates[provider];
+  const module = join(packages, "@agentclientprotocol", candidate.name);
+  const { version } = await Bun.file(join(module, "package.json")).json();
+  if (candidate.version) assert.equal(version, candidate.version);
   const home = await mkdtemp(join(tmpdir(), "nori-follow-up-"));
   const noriHome = join(home, ".nori/cli");
   const binding = "synthetic";
@@ -121,13 +122,13 @@ async function run(provider, transport, scenario) {
       await control.request("_nori/session/ensure", {
         bindingId: binding, generation: 1, recoveryVersion: durable ? 1 : undefined, commandId: "launch", conversationId: crypto.randomUUID(),
         spec: { projectId: "fixture", runId: "fixture", agent: provider, cwd, home: agentHome, env,
-          adapter: { path: bun, version: pin.version, args: [script] },
+          adapter: { path: bun, version, args: [script] },
           additions: { promptEcho: false, statusEvents: false, recording: false, clientMcp: false } },
       });
       machine = await connect(endpoint.replace(/\/sessions$/, "/managed"), token, binding);
       const init = await machine.request("initialize", { protocolVersion: 1, clientCapabilities: {} });
-      assert.equal(init.agentInfo.name, "@agentclientprotocol/" + pin.name);
-      assert.equal(init.agentInfo.version, pin.version);
+      assert.equal(init.agentInfo.name, "@agentclientprotocol/" + candidate.name);
+      assert.equal(init.agentInfo.version, version);
       assert.equal(init._meta.steering.supported, true);
       if (provider === "codex") await machine.request("authenticate", { methodId: "api-key" });
       ({ sessionId } = await machine.request("session/new", { cwd, mcpServers: [] }));
@@ -180,7 +181,7 @@ async function run(provider, transport, scenario) {
       assert.equal(result.stopReason, provider === "codex" ? "cancelled" : "end_turn");
       assert.ok(result.usage?.totalTokens > 0);
       assert.equal(existsSync(testFile), false);
-      console.log(provider, pin.version, "/" + transport, "PASS  permission rejected after injection. Original stopReason=" + result.stopReason);
+      console.log(provider, version, "/" + transport, "PASS  permission rejected after injection. Original stopReason=" + result.stopReason);
       return;
     }
     await assert.rejects(client.request(follow, { ...steer, prompt: text(refused) }),
@@ -247,7 +248,7 @@ async function run(provider, transport, scenario) {
       assert.equal(new Set(done().map(event => event.request_id)).size, 3);
     }
     checkDeliveries(model.requests);
-    console.log(provider, pin.version, "/" + transport, "PASS  one steer, two identical queued inputs, three completed prompts");
+    console.log(provider, version, "/" + transport, "PASS  one steer, two identical queued inputs, three completed prompts");
   } finally {
     model.release();
     model.finishCorrection();
@@ -275,7 +276,7 @@ const scenario = process.argv[5] ?? "both";
 assert.ok(["delivery", "permission", "both"].includes(scenario));
 if (transport === "sessions" && scenario === "permission") throw new Error("Permission probe uses /managed");
 for (const surface of transport === "both" ? ["sessions", "managed"] : [transport]) {
-  for (const agent of provider === "both" ? Object.keys(pins) : [provider]) {
+  for (const agent of provider === "both" ? Object.keys(candidates) : [provider]) {
     if (scenario !== "permission") await run(agent, surface, "delivery");
     if (surface === "managed" && scenario !== "delivery") await run(agent, surface, "permission");
   }

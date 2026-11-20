@@ -829,6 +829,7 @@ fn script_agent_config(dir: &std::path::Path, body: &str) -> crate::registry::Ac
     }
     crate::registry::AcpAgentConfig {
         agent: crate::registry::AgentKind::ClaudeCode, // placeholder, like custom agents
+        builtin_kind: None,
         provider_slug: "script-agent".to_string(),
         command: script.to_string_lossy().to_string(),
         args: vec![],
@@ -1403,4 +1404,72 @@ async fn test_close_session_failure_categorizes_as_session_not_found() {
         crate::categorize_acp_error_chain(&err).category,
         crate::AcpErrorCategory::SessionNotFound
     );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn authenticated_load_reports_both_attempts_with_their_wire_ids() {
+    let temp = tempdir().unwrap();
+    let mut config = script_agent_config(
+        temp.path(),
+        r#"#!/usr/bin/env python3
+import json, sys
+authenticated = False
+for raw in sys.stdin:
+    msg = json.loads(raw)
+    reply = {"jsonrpc":"2.0", "id":msg["id"]}
+    if msg["method"] == "initialize":
+        reply["result"] = {"protocolVersion":1,"agentCapabilities":{"loadSession":True},"authMethods":[{"id":"gemini-api-key","name":"Test key"}]}
+    elif msg["method"] == "session/load":
+        if authenticated:
+            reply["result"] = {}
+        else:
+            reply["error"] = {"code":-32000,"message":"Key method required"}
+    elif msg["method"] == "authenticate" and msg["params"]["methodId"] == "gemini-api-key":
+        authenticated = True
+        reply["result"] = {}
+    print(json.dumps(reply), flush=True)
+"#,
+    );
+    config.builtin_kind = Some(crate::registry::AgentKind::Gemini);
+    config
+        .env
+        .insert("GEMINI_API_KEY".into(), "synthetic".into());
+    let mut connection = AcpConnection::spawn(
+        &config,
+        temp.path(),
+        nori_config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .unwrap();
+    let mut events = connection.take_event_receiver();
+    let (started, mut ids) = tokio::sync::mpsc::unbounded_channel();
+    connection
+        .load_session("synthetic-session", temp.path(), vec![], Some(started))
+        .await
+        .unwrap();
+    let first = ids.try_recv().expect("initial load");
+    let retry = ids.try_recv().expect("retried load");
+    assert_ne!(first, retry);
+    let mut completed = Vec::new();
+    while let Ok(event) = events.try_recv() {
+        if let ConnectionEvent::Acp(event) = event
+            && let nori_protocol::AcpEvent::Response {
+                request_id,
+                response,
+            } = *event
+            && (request_id == first || request_id == retry)
+        {
+            completed.push((request_id, response.is_ok()));
+        }
+    }
+    assert_eq!(completed, [(first, false), (retry, true)]);
+    // The provider already has a selected sign-in on this connection.
+    let (started, mut ids) = tokio::sync::mpsc::unbounded_channel();
+    connection
+        .load_session("synthetic-session", temp.path(), vec![], Some(started))
+        .await
+        .unwrap();
+    assert!(ids.try_recv().is_ok());
+    assert!(ids.try_recv().is_err());
 }

@@ -459,7 +459,9 @@ impl SessionManager {
         if record.status != SessionStatus::Failed {
             return Err(ResumeError::NotFailed(*failed));
         }
-        if spec.config.active_agent != record.agent {
+        if crate::resolve_agent_slug(&spec.config.active_agent)
+            != crate::resolve_agent_slug(&record.agent)
+        {
             return Err(ResumeError::AgentMismatch {
                 id: *failed,
                 expected: record.agent,

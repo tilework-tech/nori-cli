@@ -81,7 +81,7 @@ pub(crate) fn acp_session_config_picker_params(
 
 pub(crate) fn acp_session_config_value_picker_params(
     option: &acp::SessionConfigOption,
-    other_models: &[OtherModel],
+    extra_models: Option<&[OtherModel]>,
 ) -> SelectionViewParams {
     let acp::SessionConfigKind::Select(select) = &option.kind else {
         return SelectionViewParams {
@@ -133,7 +133,7 @@ pub(crate) fn acp_session_config_value_picker_params(
     // "Other": curated models the agent does not advertise, forced via spawn-time
     // injection. Deduplicated against advertised values so nothing appears twice.
     let mut other: Vec<SelectionItem> = Vec::new();
-    if is_model {
+    if is_model && let Some(other_models) = extra_models {
         let advertised = advertised_value_strings(&select.options);
         let current_value = select.current_value.to_string();
         for model in other_models {
@@ -157,7 +157,7 @@ pub(crate) fn acp_session_config_value_picker_params(
         items.append(&mut other);
     }
 
-    if is_model {
+    if is_model && extra_models.is_some() {
         let config_id = option.id.to_string();
         let option_name = option.name.clone();
         items.push(SelectionItem {
@@ -423,7 +423,8 @@ mod tests {
 
     #[test]
     fn value_picker_preserves_group_order_and_current_selection() {
-        let params = super::acp_session_config_value_picker_params(&grouped_mode_option(), &[]);
+        let params =
+            super::acp_session_config_value_picker_params(&grouped_mode_option(), Some(&[]));
         let names = params
             .items
             .iter()
@@ -441,7 +442,7 @@ mod tests {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let app_event_tx = crate::app_event_sender::AppEventSender::new(tx);
         let mut current_view = crate::bottom_pane::ListSelectionView::new(
-            super::acp_session_config_value_picker_params(&model_option(), &[]),
+            super::acp_session_config_value_picker_params(&model_option(), Some(&[])),
             app_event_tx.clone(),
         );
 
@@ -458,7 +459,7 @@ mod tests {
         );
 
         let mut alternate_view = crate::bottom_pane::ListSelectionView::new(
-            super::acp_session_config_value_picker_params(&model_option(), &[]),
+            super::acp_session_config_value_picker_params(&model_option(), Some(&[])),
             app_event_tx,
         );
         crate::bottom_pane::BottomPaneView::handle_key_event(
@@ -504,8 +505,21 @@ mod tests {
     }
 
     #[test]
+    fn catalog_only_model_picker_offers_the_advertised_models() {
+        let params = super::acp_session_config_value_picker_params(&model_option(), None);
+        assert_eq!(
+            params
+                .items
+                .iter()
+                .map(|item| item.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Mock Default Model", "Mock Fast Model"]
+        );
+    }
+
+    #[test]
     fn model_picker_includes_custom_model_entry() {
-        let params = super::acp_session_config_value_picker_params(&model_option(), &[]);
+        let params = super::acp_session_config_value_picker_params(&model_option(), Some(&[]));
         let names: Vec<&str> = params.items.iter().map(|i| i.name.as_str()).collect();
 
         assert_eq!(
@@ -526,7 +540,8 @@ mod tests {
 
     #[test]
     fn non_model_picker_does_not_include_custom_entry() {
-        let params = super::acp_session_config_value_picker_params(&grouped_mode_option(), &[]);
+        let params =
+            super::acp_session_config_value_picker_params(&grouped_mode_option(), Some(&[]));
 
         assert!(!params.items.iter().any(|i| i.name == "Use custom model..."));
     }
@@ -561,7 +576,8 @@ mod tests {
 
     #[test]
     fn model_picker_splits_recommended_and_other_sections() {
-        let params = super::acp_session_config_value_picker_params(&model_option(), OTHER_MODELS);
+        let params =
+            super::acp_session_config_value_picker_params(&model_option(), Some(OTHER_MODELS));
 
         assert_eq!(
             item_names(&params),
@@ -608,7 +624,7 @@ mod tests {
             },
         ];
 
-        let params = super::acp_session_config_value_picker_params(&model_option(), others);
+        let params = super::acp_session_config_value_picker_params(&model_option(), Some(others));
 
         assert_eq!(
             item_names(&params),
@@ -628,7 +644,8 @@ mod tests {
     fn selecting_other_model_requests_injected_config_change() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let app_event_tx = crate::app_event_sender::AppEventSender::new(tx);
-        let params = super::acp_session_config_value_picker_params(&model_option(), OTHER_MODELS);
+        let params =
+            super::acp_session_config_value_picker_params(&model_option(), Some(OTHER_MODELS));
 
         let other = params
             .items
@@ -663,7 +680,7 @@ mod tests {
     fn current_injected_other_model_is_marked_and_not_resettable() {
         let params = super::acp_session_config_value_picker_params(
             &model_option_with_current("legacy-a"),
-            OTHER_MODELS,
+            Some(OTHER_MODELS),
         );
 
         let other = params

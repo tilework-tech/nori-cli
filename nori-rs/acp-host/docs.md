@@ -77,8 +77,8 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   requests to its ACP client.
 - A private `SessionUpdate` copy feeds the harness reducer after the matching
   raw notification; it is implementation state, not another public protocol.
-- `registry.rs` resolves built-in and configured agents to spawnable process
-  definitions. The built-in Codex definition uses the maintained
+- The [registry](src/registry.rs) checks configured slugs before resolving built-in aliases. Claude Code and Codex launch through the preferred package runner with upstream `@latest` resolution. Grok Build uses npm to run the upstream package’s native install step. Antigravity runs `agy acp --disable-telemetry` from the host’s `PATH`. Explicit runtime settings and custom distributions continue to control the launch. See the [provider table](../../README.md#providers) for commands and authentication.
+- The built-in Codex definition uses the maintained
   `@agentclientprotocol/codex-acp` adapter and disables Codex-native goals in
   its subprocess configuration. It merges a valid ambient `CODEX_CONFIG`,
   preserving unrelated top-level and feature settings while forcing only
@@ -174,8 +174,8 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   `None` }) forces a chosen model through the agent's own out-of-band channel at
   spawn, so the model becomes the adapter's advertised `currentValue` (which ACP
   always treats as valid), bypassing the catalog. `AgentKind::model_injection()`
-  maps built-in agents to their channel (Claude → `ANTHROPIC_MODEL` env, Gemini
-  → `GEMINI_MODEL` env, Codex → merge `model` into the `CODEX_CONFIG` JSON).
+  maps Claude Code to `ANTHROPIC_MODEL` and Codex to the `model` key of `CODEX_CONFIG`.
+  Antigravity and Grok Build expose their supported models through ACP config options.
   Custom/BYO agents resolve their strategy from `[[agents]].model_override` in
   `nori-config`; the default is `None` (no channel → live RPC only).
   `AcpAgentConfig::inject_model` applies the resolved strategy to the spawn env
