@@ -19,6 +19,9 @@ pub enum AcpErrorCategory {
     SessionNotFound,
     /// The agent's backing service is unreachable (ACP `-32010`)
     AgentUnreachable,
+    /// The agent is still finishing a turn from an earlier connection (ACP
+    /// `-32011`)
+    AgentBusy,
     /// The session exists but cannot be reattached (ACP `-32012`)
     SessionNotResumable,
     /// No session is active on the agent connection (ACP `-32014`)
@@ -33,14 +36,15 @@ impl AcpErrorCategory {
     /// Whether this error is transient and worth retrying (e.g. for an
     /// unattended loop that should survive a momentary API blip). Server
     /// errors are momentary, rate/quota limits ease over time (seconds for
-    /// rate limits, longer for usage windows), and an unreachable backing
-    /// service is a network condition; everything else reflects a persistent
-    /// problem that a retry cannot fix.
+    /// rate limits, longer for usage windows), an unreachable backing service
+    /// is a network condition, and a busy agent frees up once its turn ends;
+    /// everything else reflects a persistent problem that a retry cannot fix.
     pub fn is_retryable(&self) -> bool {
         match self {
             AcpErrorCategory::ApiServerError
             | AcpErrorCategory::QuotaExceeded
-            | AcpErrorCategory::AgentUnreachable => true,
+            | AcpErrorCategory::AgentUnreachable
+            | AcpErrorCategory::AgentBusy => true,
             AcpErrorCategory::Authentication
             | AcpErrorCategory::ExecutableNotFound
             | AcpErrorCategory::Initialization
@@ -69,7 +73,8 @@ pub struct AcpErrorDetails {
 ///
 /// The code table mirrors the agent side (`nori-handroll acp`): `-32000`
 /// auth_required, `-32002` resource/session not found, `-32010` backing
-/// service unreachable, `-32012` session not resumable, `-32014` no active
+/// service unreachable, `-32011` agent still busy with an earlier turn,
+/// `-32012` session not resumable, `-32014` no active
 /// session, `-32015` a session is already active.
 pub fn categorize_acp_error_chain(error: &anyhow::Error) -> AcpErrorDetails {
     for cause in error.chain() {
@@ -86,6 +91,7 @@ pub fn categorize_acp_error_chain(error: &anyhow::Error) -> AcpErrorDetails {
             -32000 => AcpErrorCategory::Authentication,
             -32002 => AcpErrorCategory::SessionNotFound,
             -32010 => AcpErrorCategory::AgentUnreachable,
+            -32011 => AcpErrorCategory::AgentBusy,
             -32012 => AcpErrorCategory::SessionNotResumable,
             -32014 => AcpErrorCategory::NoActiveSession,
             -32015 => AcpErrorCategory::SessionAlreadyActive,
@@ -196,6 +202,7 @@ mod tests {
         let cases = [
             (-32002, AcpErrorCategory::SessionNotFound),
             (-32010, AcpErrorCategory::AgentUnreachable),
+            (-32011, AcpErrorCategory::AgentBusy),
             (-32012, AcpErrorCategory::SessionNotResumable),
             (-32014, AcpErrorCategory::NoActiveSession),
             (-32015, AcpErrorCategory::SessionAlreadyActive),
@@ -235,8 +242,9 @@ mod tests {
     }
 
     #[test]
-    fn broker_unreachable_is_retryable_but_session_states_are_not() {
+    fn broker_unreachable_and_busy_agents_are_retryable_but_session_states_are_not() {
         assert!(AcpErrorCategory::AgentUnreachable.is_retryable());
+        assert!(AcpErrorCategory::AgentBusy.is_retryable());
         assert!(!AcpErrorCategory::SessionNotFound.is_retryable());
         assert!(!AcpErrorCategory::SessionNotResumable.is_retryable());
         assert!(!AcpErrorCategory::SessionAlreadyActive.is_retryable());

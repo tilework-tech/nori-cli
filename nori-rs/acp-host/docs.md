@@ -84,7 +84,11 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   preserving unrelated top-level and feature settings while forcing only
   `features.goals = false`, leaving Nori-owned goal state to the `nori-client`
   MCP server. `error_category.rs` preserves structured ACP errors before
-  falling back to message classification.
+  falling back to message classification. A `session/load` refusal with
+  code `-32011` means the agent is still finishing the original turn. The
+  harness asks the user to retry that session after the turn ends, even when
+  a local transcript is available for replay. Code `-32012` identifies a
+  session the agent cannot resume.
 - The legacy remote surface serves ACP through one or more exact-address
   axum listeners. `RemoteAcpServer::bind_many` binds every socket before any
   begins serving; a zero port after the first address reuses the first
