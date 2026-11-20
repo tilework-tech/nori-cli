@@ -591,7 +591,7 @@ Recovering model context never entails submitting an interrupted prompt.
   rediscovery callback. Token contents never appear in startup output.
 - The authenticated listener serves `/sessions` and adds `/managed` when
   managed launches are enabled. For the local attach protocol, see the
-  [wire contract](../../../../docs/remote-control.md#11-background-host-and-attached-terminals).
+  [wire contract](../../../../docs/remote-control.md#2-managed-session-wire-sessions).
 - Delegation requests pass through `ManagedRemoteHost` to the same manager
   used by local sessions. Child sessions consume the ordinary session cap
   and inherit the parent's backend configuration, so they work in the

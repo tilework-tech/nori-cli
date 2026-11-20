@@ -279,7 +279,7 @@ remote /session/delegate ----------+         |
 
 Agents without HTTP MCP support can still receive children started by the
 user's `/delegate`; an agent-side stdio delegation tool is not provided.
-The [managed remote contract](../../../../docs/remote-control.md#delegation) defines
+The [managed remote contract](../../../../docs/remote-control.md#delegation-as-seen-by-remote-clients) defines
 controller authorization and request payloads.
 
 Created and maintained by Nori.

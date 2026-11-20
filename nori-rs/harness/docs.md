@@ -399,8 +399,8 @@ not keep a process-global host or own listener policy.
   transport still has one controller, while the fan-out remains the common
   source for the TUI and future bounded observers.
 - Remote prompt admission is serialized with the session runtime and rejects
-  with ACP error `-32015` while a turn is active or a local prompt is queued
-  and the queue is not paused. Local submissions keep the ordinary harness queue. The admission
+  with ACP error `-32015` while a turn is active, a steer is unsettled, or a
+  local prompt is queued and the queue is not paused. Local submissions keep the ordinary harness queue. The admission
   barrier provides a fast rejection before prompt hooks and snapshots, while
   the reducer repeats the same decision at the state transition boundary.
 - Turn ownership is tracked by harness request id after a remote prompt is

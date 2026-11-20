@@ -1,857 +1,497 @@
-# ACP Turn State and Session Update Model
+# Turn Lifecycle
 
-Canonical terms live in [Turns and Ownership](glossary.md#turns-and-ownership).
-Existing `proactive_*` identifiers name presentation state only.
-
-## Goal
-
-Define a minimal, ACP-faithful model for turn state and `session/update`
-handling in the Nori TUI and ACP backend.
-
-The design must:
-
-- follow the ACP protocol as written
-- avoid accidental complexity in the TUI
-- remove duplicated turn-state bookkeeping between backend and TUI
-- stay small enough that the implementation is likely to be a net negative diff
+How Nori starts, routes, and ends ACP prompt turns, and how follow-ups and
+the prompt queue behave around them. Terms follow the [glossary](glossary.md).
+Remote transports are covered in [remote control](remote-control.md).
 
 ## ACP Ground Truth
 
-ACP gives the client two distinct ownership boundaries:
+Nori follows ACP v1 (https://agentclientprotocol.com/protocol/v1/prompt-turn):
 
-1. request-owned flows
-   - `session/prompt`
-   - `session/load`
-2. session-owned flows
-   - `session/update`
-   - `session/request_permission`
+- A prompt turn starts with one `session/prompt` request and ends only when
+  that request's response arrives with a `stopReason`.
+- `session/cancel` is a notification. It does not end the turn: the agent may
+  keep sending `session/update` until it answers the original prompt with
+  `cancelled`, and the client must accept those updates.
+- `session/load` replays history through `session/update` and finishes when
+  the load response arrives.
+- Chunk updates carry no reliable message identity, so message assembly stays
+  local to the active request.
+- ACP v1 has no agent-initiated turn and no steering or queue mechanism.
+  Nori's agent-turn metadata, steering, and queue are extensions.
 
-The protocol rules that matter most here are:
+## Ownership
 
-- a prompt turn begins when the client sends `session/prompt`
-- streamed prompt-turn content arrives via `session/update`
-- the prompt turn ends only when the response to that same `session/prompt`
-  arrives with a `stopReason`
-- `session/cancel` does not end the prompt; the prompt remains active until its
-  response arrives
-- `session/load` replays conversation state via `session/update` and finishes
-  only when the `session/load` response arrives
-- ACP explicitly calls out ordering hazards between `session/update`
-  notifications and request responses
-- ACP currently has no stable message identity for chunk updates, which means
-  clients must keep message assembly local to the active request and avoid
-  cross-turn heuristics
+- The **session harness** owns ACP request lifecycle. The TUI, remote
+  controllers, and observers derive their view from its public event stream.
+  None of them may open, complete, or cancel a request on their own authority.
+- A turn is client-owned only on the connection that sent its prompt. That
+  ownership never grants cancel or permission rights on another connection.
+- Never invent a request ID, and never attribute an unowned update to an
+  earlier or later local request.
 
-This design follows those boundaries exactly.
+## Runtime State
 
-## Ownership Vocabulary
+Each ACP session has one `SessionRuntime`
+(`nori-rs/harness/src/normalized/session_runtime.rs`):
 
-- A **client-owned turn** is initiated by this connection with
-  `session/prompt`; its lifecycle is correlated to that request and ends with
-  its response.
-- An **agent-owned turn** is established on this connection by explicit Nori
-  agent-turn metadata. ACP v1 has no corresponding primitive.
-- An **unowned update** is an individual `session/update` received while this
-  client has no active local request. It is not a protocol error or evidence
-  of a turn.
-- **Unowned presentation** groups unowned updates without creating a turn or
-  request.
+| Field | Meaning |
+| --- | --- |
+| `phase` | `Idle`, `Loading { request_id }`, or `Prompt { request_id, cancelling }`. The only source of truth for whether a local request is active. |
+| `active` | Open message buffers, the request's tool call IDs, pending permission request IDs, and the originating queued prompt. Present only while `phase` is not `Idle`. |
+| `persisted` | Transcript, plan, tool snapshots, commands, mode, config options, session info, and usage. Survives request boundaries. |
+| `queue` | Harness-owned FIFO of prompts not yet sent. The agent never sees it. |
+| `queue_pause` | Set when the queue is paused after an interrupt or error. |
+| `steer_fence` | `Open`, or held while a steer's reply is unsettled. |
+| `observer_turn_active` | Set by `working`/`idle` agent-turn metadata while no local request is active. |
+| `orphan_update_warning_emitted` | Limits the unowned-update warning to once per burst. |
 
-- while a local request is active, request-scoped updates belong to that
-  request
-- without a local request, request-scoped updates are unowned activity; warn
-  once per unowned burst, but accept, preserve, and render them
-- never invent a request ID or assign unowned activity to an earlier or later
-  local request
-
-## Proposed Runtime Model
-
-Per ACP session, the backend owns exactly one runtime object:
-
-```rust
-struct SessionRuntime {
-    phase: SessionPhase,
-    persisted: PersistedSessionState,
-    active: Option<ActiveRequestState>,
-    queue: VecDeque<QueuedPrompt>,
-    queue_pause: Option<QueuePause>,
-}
-```
-
-Everything else should be derived from this.
-
-### `SessionPhase`
-
-`SessionPhase` is the single source of truth for whether the session is idle,
-loading history, or processing a prompt.
-
-```rust
-enum SessionPhase {
-    Idle,
-    Loading {
-        request_id: JsonRpcId,
-    },
-    Prompt {
-        request_id: JsonRpcId,
-        cancelling: bool,
-    },
-}
-```
-
-Properties:
-
-- `Idle` means no ACP request currently owns streamed content.
-- `Loading` means `session/load` owns replay content until its response arrives.
-- `Prompt` means `session/prompt` owns prompt-turn content until its response
-  arrives.
-- `cancelling` means `session/cancel` has been sent for the active prompt, but
-  the prompt still remains in flight until its response arrives.
-
-There is no second request-lifecycle FSM beyond this. The TUI may retain
-presentation-only state for grouping unowned output, but that state does not
-own ACP requests or change this phase.
-
-### `PersistedSessionState`
-
-`PersistedSessionState` is the long-lived session state that survives across
-request boundaries.
-
-```rust
-struct PersistedSessionState {
-    transcript: Transcript,
-    plan: Option<PlanSnapshot>,
-    tool_calls: HashMap<ToolCallId, ToolSnapshot>,
-    available_commands: AvailableCommands,
-    current_mode: Option<ModeSnapshot>,
-    config_options: ConfigOptions,
-    session_info: Option<SessionInfoSnapshot>,
-    usage: Option<UsageSnapshot>,
-}
-```
-
-This is session state, not turn state.
-
-### `ActiveRequestState`
-
-`ActiveRequestState` is the concrete in-flight request state. It is the ACP
-analogue of pi-mono's active run.
-
-```rust
-enum ActiveRequestKind {
-    Loading,
-    Prompt,
-}
-
-struct ActiveRequestState {
-    request_id: JsonRpcId,
-    kind: ActiveRequestKind,
-    open_user_message: Option<OpenMessage>,
-    open_agent_message: Option<OpenMessage>,
-    open_thought_message: Option<OpenMessage>,
-    tool_call_ids: IndexSet<ToolCallId>,
-    pending_permission_requests: HashSet<JsonRpcId>,
-}
-```
-
-This is where all in-flight, request-local state lives. If a piece of state does
-not survive the request boundary, it belongs here.
-
-### `OpenMessage`
-
-Because ACP chunk updates currently do not reliably identify individual
-messages, each active request owns at most one open message buffer per stream
-kind.
-
-```rust
-struct OpenMessage {
-    message_id: Option<String>,
-    chunks: Vec<ContentBlock>,
-}
-```
-
-The buffer exists only inside the active request. It must never survive into
-`Idle`.
-
-### `ToolSnapshot`
-
-Tool snapshots persist across turns. They record a local owner when a request
-created them, while unowned updates remain ownerless.
-
-```rust
-struct ToolSnapshot {
-    owner_request_id: Option<JsonRpcId>,
-    status: ToolStatus,
-    title: String,
-    kind: ToolKind,
-    content: Vec<ToolCallContent>,
-    locations: Vec<ToolCallLocation>,
-    raw_input: Option<JsonValue>,
-    raw_output: Option<JsonValue>,
-}
-```
-
-`owner_request_id` is `Some(active.request_id)` for locally owned tool activity
-and `None` for unowned activity. The client never invents ownership from
-timing.
-
-### `OutgoingQueue`
-
-`OutgoingQueue` is the harness-owned FIFO of user prompts that have not yet
-been sent to ACP. Clients see it only through `QueueChanged` snapshots.
-
-It has no ACP meaning. The agent never sees it.
-
-It exists for exactly one reason: ACP allows only one prompt in flight per
-session, but the user may keep typing while a request is active.
-
-Queued prompts are unsent drafts. They are not:
-
-- part of the active request
-- restored into the composer on cancel
-- merged into a synthetic user message
-
-The **session harness** owns the only `OutgoingQueue` that is delivered; a
-client never keeps a second deliverable queue. A client may take one queued
-prompt back by its submission event ID before it is sent. That request is
-reduced on the same serialized path as queue draining, so the prompt is either
-removed exactly once or has already started its **prompt turn** and stays
-delivered. A successful reclaim returns a draft. Resubmitting it creates a
-new submission with the intent selected in the composer.
+The public projection is `nori_protocol::SessionPhase` (`Idle`,
+`Loading { request_id }`, `Prompting { request_id }`,
+`Cancelling { request_id }`), published as `SessionPhaseChanged`. The
+`request_id` is the ACP wire request ID.
 
 ## Serialized Reducer
 
-Per session, all ACP traffic must flow through one ordered reducer:
-
-```rust
-fn reduce(session: &mut SessionRuntime, event: InboundAcpEvent) -> Vec<UiEvent>
-```
-
-Requirements:
-
-- `session/update` notifications are reduced serially
-- `session/request_permission` requests are reduced serially
-- `session/prompt` responses are reduced serially
-- `session/load` responses are reduced serially
-- transport or protocol errors that affect the session are reduced serially
-- no later inbound message for that session is processed until the current one
-  is fully handled
-
-This is not an optimization. It is a correctness requirement. ACP explicitly
-calls out that unordered handling can allow a request response to overtake a
-prior `session/update`, which makes turn completion ambiguous in practice.
-
-The harness reducer maintains private phase, persisted state, and local request
-ownership while separately forwarding raw ACP traffic. The TUI builds its own
-private display projections from that public traffic; neither projection
-changes ACP ownership or semantics.
-
-## Routing Rules
-
-The reducer answers one question for every inbound message:
-
-- does it patch `persisted`
-- does it patch `active`
-- does it finish `active`
-
-### 1. Session metadata updates
-
-The following updates patch `persisted` in any phase:
-
-- `available_commands_update`
-- `current_mode_update`
-- `config_option_update`
-- `session_info_update`
-- `usage_update`
-
-Rules:
-
-- accept them in `Idle`, `Loading`, or `Prompt`
-- patch `PersistedSessionState`
-- never treat them as turn boundaries
-
-### 2. Request-scoped content updates
-
-The following updates ordinarily belong to an active request:
-
-- `user_message_chunk`
-- `agent_message_chunk`
-- `agent_thought_chunk`
-- `plan`
-- `tool_call`
-
-Rules:
-
-- if `active.is_some()`, patch `ActiveRequestState` or create request-owned state
-- if `active.is_none()`, handle the update as unowned activity
-
-More specifically:
-
-- `user_message_chunk` appends only to `active.open_user_message`
-- `agent_message_chunk` appends only to `active.open_agent_message`
-- `agent_thought_chunk` appends only to `active.open_thought_message`
-- `plan` patches `persisted.plan`
-- `tool_call` creates or replaces `persisted.tool_calls[toolCallId]`; when
-  active, it records that request as owner and adds the id to
-  `active.tool_call_ids`, otherwise ownership remains `None`
-
-The client never invents a turn owner when ACP did not provide one.
-
-### 3. Unowned updates and agent-owned turns
-
-Well-formed user, agent, thought, plan, or tool content received with
-`active.is_none()` is a valid unowned update. The
-harness normalizes and projects it after emitting `Received update with no
-active local request` for the first non-metadata update in the unowned burst.
-Later updates do not repeat the warning until a local prompt or load starts.
-The warning does not reopen `active`, fabricate a request ID or completion
-signal, or attribute the update to an earlier or later local request. An idle
-user chunk therefore does not create a synthetic prompt phase.
-
-The harness forwards schema-native ACP metadata and does not use it to complete
-a prompt. Any unowned user, agent, thought, plan, or tool update starts or
-confirms unowned presentation. Without a lifecycle hint, content still renders,
-and a later local prompt or load start separates it without fabricating
-completion.
-
-Nori's brokered Sessions product may send status-only `SessionInfoUpdate`
-notifications with `_meta.nori.status`:
-
-- exact `working` establishes or confirms an agent-owned turn and starts its
-  presentation when no local prompt or load is active
-- exact `idle` ends that turn and completes its presentation under the same
-  condition
-
-The TUI hides a known status-only frame. If the same frame also carries
-`title` or `updated_at`, those fields remain visible. Unknown status values are
-ordinary session metadata. Agent ownership implies no queue, cancellation,
-loop, permission, or request semantics.
-
-### 4. Attributed tool updates
-
-`tool_call_update` is special because it carries a stable `toolCallId`.
-
-Rules:
-
-- if `persisted.tool_calls` already contains the id, patch that snapshot
-- if the id is unknown, normalize it from a default `ToolCall`, apply the
-  update, and persist the resulting snapshot
-
-Tool snapshots are persisted session state. Their optional ownership is
-explicit via `owner_request_id`, not inferred from timing.
-
-### 5. Permission requests
-
-`session/request_permission` is neither plain session metadata nor plain turn
-content. It is a request scoped to the active prompt.
-
-Rules:
-
-- require `phase == SessionPhase::Prompt { .. }`
-- record the permission request id in `active.pending_permission_requests`
-- emit `UiEvent::PermissionRequested`
-- if no prompt is active, emit `UiEvent::Warning` and reject or fail the request
-  per transport policy
-
-Pending permission requests must live inside the active prompt so cancellation
-can resolve them deterministically.
-
-## Message Assembly
-
-ACP today leaves same-type chunk boundaries ambiguous. The client therefore uses
-one minimal assembly rule:
-
-- assemble chunks only inside the current `ActiveRequestState`
-- keep at most one open message per stream kind when no `messageId` is present
-- if ACP starts providing `messageId`, append only to the matching open message
-- never carry an open message across request completion
-- never assemble across `Idle`
-
-This is the smallest acceptable rule until ACP message ids are standardized.
-
-When a request completes, the reducer finalizes any open messages from `active`
-into `persisted.transcript`, in request-local order, before clearing `active`.
-
-## Lifecycle
-
-### Submitting a prompt
-
-When an idle session admits a new prompt:
-
-- send `session/prompt`
-- create `active = Some(ActiveRequestState { kind: Prompt, .. })`
-- set `phase = Prompt { request_id, cancelling: false }`
-
-An idle-only submission is admitted when the session is idle, no steer is
-settling, and the queue is empty or paused. A prompt admitted over a paused
-queue runs ahead of the held entries and leaves the queue paused.
-
-Legacy prompt submissions during a busy phase enter the queue. In direct
-`nori` and controller `nori attach`, a composed follow-up targets the observed
-active prompt. Tab queues it for the next turn. Enter asks the host to steer
-the matching session and turn. The original prompt owns completion, usage and
-cancellation after injection.
-
-The host visibly queues a steer when guarded steering is unavailable or the
-target turn just ended. An explicit refusal yields a rejection. When delivery
-is uncertain, the caller retains the same message ID for reconciliation and
-the host holds subsequent delivery. See the [host follow-up contract](../nori-rs/cli/src/host/docs.md#mid-turn-follow-ups).
-
-### Cancelling a prompt
-
-If `phase == Prompt { cancelling: false, .. }`:
-
-- send `session/cancel`
-- set `cancelling = true`
-- mark every non-finished tool snapshot with
-  `owner_request_id == active.request_id` as cancelled in the UI
-- resolve every id in `active.pending_permission_requests` with the ACP
-  `cancelled` outcome
-- keep `active` intact
-
-If already cancelling, do nothing.
-
-`session/cancel` does not transition the session to `Idle`. The prompt remains
-active until the response to the original `session/prompt` arrives.
-
-### Prompt response handling
-
-The response to `session/prompt` is the only locally owned prompt-turn
-boundary. Presentation of unowned updates or an agent-owned turn does not
-create an active backend prompt or publish a separate Nori completion event.
-
-When the response to the active prompt arrives, the reducer performs one ordered
-completion step:
-
-1. finalize open messages from `active` into `persisted.transcript`
-2. clear `active`
-3. set `phase = Idle`
-4. emit `UiEvent::PromptFinished`
-5. apply the queue drain policy (below)
-
-If the turn ended with `end_turn` and the queue is not paused:
-
-- dequeue exactly one prompt
-- send a new `session/prompt`
-- create a fresh `active`
-- set `phase = Prompt { cancelling: false, .. }`
-- emit the resulting `UiEvent::QueueChanged` and `UiEvent::PhaseChanged`
-
-The reducer owns this whole sequence. The TUI never observes an ambiguous gap
-where it must decide for itself whether the queue should drain.
-
-### Load handling
-
-If `phase == Idle`:
-
-- send `session/load`
-- create `active = Some(ActiveRequestState { kind: Loading, .. })`
-- set `phase = Loading { request_id }`
-
-While loading:
-
-- accept replay content updates into `active`
-- accept metadata updates into `persisted`
-- do not drain queued prompts
-
-When the load response arrives, the reducer performs one ordered completion
-step:
-
-1. finalize replayed open messages from `active` into `persisted.transcript`
-2. clear `active`
-3. set `phase = Idle`
-4. emit `UiEvent::LoadFinished`
-
-Loads never auto-drain the outbound queue.
-
-## Queue Drain Policy
-
-Queue draining is harness policy, not ACP protocol.
-
-- A prompt response with stop reason `end_turn` dequeues and sends exactly one
-  queued prompt, unless the queue is paused.
-- Any other ending of a prompt turn while prompts are queued pauses the queue.
-  Every entry stays queued in order; nothing is restored into the composer.
-  The pause reason is `interrupted` for stop reason `cancelled` or a failure
-  while cancelling, and `turn_failed` for any other stop reason or failure.
-  Only a queue holding at least one user prompt pauses, so every pause is
-  visible in `QueueChanged`; a queue holding only hidden work (a queued
-  `/compact` or goal continuation) is left as it was.
-- A paused queue sends nothing on its own, including the drain deferred behind
-  a settling steer. Only an explicit resume clears it: an idle session starts
-  the next queued prompt at once, and a busy session drains after its running
-  turn ends with `end_turn`. A resume without a pause does nothing.
-- After a resume the queue drains one prompt per completed turn again; a
-  later interrupt or failure pauses whatever is still queued.
+All traffic that affects `SessionRuntime` flows through `reduce()` in
+`nori-rs/harness/src/backend/session_reducer.rs`, driven by one runtime task
+that reads one channel. The one exception is resume bootstrap: the
+`session/load` collector reduces the replay before the runtime task starts.
+The channel carries:
+
+- `session/update` notifications, `session/request_permission` requests,
+  prompt and load responses, transport failures, local submits, cancels,
+  follow-ups, and queue actions are reduced one at a time in arrival order.
+- The ACP host publishes every notification, request, and response onto one
+  ordered connection inbox. Do not split public ACP traffic into racing
+  channels.
+- The relay `select!` is `biased` toward that inbox. The prompt task publishes
+  the raw response before it reports the stop reason, so every update sent
+  before the response is reduced first. On `end_turn` the prompt task also
+  waits for in-flight permission answers.
+- Reducer output is side effects (`SendPrompt`, `SendCancel`,
+  `ResolvePermissionCancelled`, `RejectPromptBusy`) that the driver runs after
+  reduction.
+
+Child exit is the one terminal path that does not pass through the reducer
+(see [How a turn ends](#how-a-turn-ends)).
+
+## `session/update` Routing
+
+### Session metadata
+
+`available_commands_update`, `current_mode_update`, `config_option_update`,
+`session_info_update`, and `usage_update` patch `persisted` in any phase.
+They are never turn boundaries.
+
+### Request-scoped content
+
+`user_message_chunk`, `agent_message_chunk`, `agent_thought_chunk`, `plan`,
+`tool_call`, and `tool_call_update`:
+
+- With `active` set, a text chunk appends to the open buffer of its kind. A
+  chunk of another kind first flushes the other open buffers into the
+  transcript, which keeps interleaved order. Non-text chunks are not
+  assembled.
+- Open buffers are finalized into the transcript when the request completes.
+  They never survive completion and are never assembled across `Idle`.
+- Without `active`, the update is **unowned**. The harness still normalizes
+  and publishes it, does not assemble it, and emits the notice
+  `Received update with no active local request` once per burst. The burst
+  resets when a local prompt or load starts or on `idle` agent-turn metadata.
+  The notice is suppressed during an agent-owned turn.
+
+### Tool ownership
+
+Tool snapshots are keyed by `toolCallId`. Each update stamps the snapshot's
+`owner_request_id` with the local request active when that update arrived, or
+`None` when no request is active. Ownership is never inferred from timing
+across requests: a tool updated after its request ended becomes ownerless.
+
+### Agent-owned turns
+
+A `session_info_update` with `_meta.nori.status`:
+
+- exact `working` starts an agent-owned turn when no local prompt or load is
+  active; exact `idle` ends it. Both are ignored while a local request is
+  active.
+- any other value is ordinary session metadata.
+- The TUI hides a status-only frame. A frame that also carries `title` or
+  `updated_at` keeps those fields visible.
+- Agent ownership grants no queue, cancel, loop, or permission controls. The
+  TUI does not send cancel for an agent-owned turn.
+
+### Permission requests
+
+- `session/request_permission` is valid only in the `Prompt` phase, including
+  while cancelling. Its ID is recorded in `active`.
+- Outside a prompt, the harness answers with the `cancelled` outcome and
+  publishes a warning. During bootstrap and `session/load` it answers
+  `cancelled` without a warning.
+- Under approval policy `Never`, the harness picks the first allow option, or
+  answers `cancelled` when there is none.
+
+## Starting a Turn
+
+- `PromptSubmit` starts a prompt from `Idle` when the steer fence is open.
+  Otherwise the prompt is appended to `queue` and `QueueChanged` is published.
+- `PromptSubmitIfIdle` starts a prompt only when the session is `Idle`, the
+  queue is empty or paused, and no steer is unsettled. Otherwise it is
+  rejected as busy. A prompt admitted over a paused queue runs ahead of the
+  held entries and leaves the queue paused.
+- Each prompt is sent as exactly one `session/prompt`. The harness uses a
+  provisional ID until the transport assigns the wire ID, then publishes
+  `SessionPhaseChanged(Prompting)`. Consumers correlate on the wire ID only.
+
+### Public turn brackets
+
+Remote and cloud observers do not receive the initiator's prompt response, so
+the harness brackets every local turn on its public stream, in order:
+
+1. `SessionPhaseChanged(Prompting { request_id })`
+2. a status-only `working` frame
+3. for user prompts, the caller's prompt content as `user_message_chunk`
+   updates with `messageId` set to the echo ID and
+   `_meta["nori.dev/promptEchoId"]`
+4. agent updates and the raw prompt response
+5. `SessionPhaseChanged(Idle)`, then a status-only `idle` frame
+
+Transport events wait on the prompt phase gate until step 3 is published, so
+no agent output precedes the bracket. Between a completed turn and a drained
+queued turn, consumers see `Idle` and the `idle` frame before the next
+`Prompting`.
+
+When a downstream agent echoes the active prompt back as a
+`user_message_chunk` whose `promptEchoId` matches and whose content is part of
+the sent prompt, the harness drops that echo so the prompt renders once. A
+user message without a matching echo ID is never dropped.
+
+## How a Turn Ends
+
+The prompt response is the normal boundary. The table lists every terminal
+path and what clients observe.
+
+| Cause | Harness | Public stream | Queue |
+| --- | --- | --- | --- |
+| Response with `end_turn` | Finalize, clear `active`, `Idle` | Raw ACP `Response`, `Idle`, `idle` frame | Drains one prompt |
+| Response with another stop reason (including `cancelled`) | Same | Same | Pauses |
+| Transport or agent error | Completes as `Cancelled` with a failure | `RequestFailed` (retryable or fatal), `Idle`, `idle` frame | Pauses |
+| Forced cancel after 10 s | Aborts the prompt task, completes as `Cancelled` | Notice at 3 s, then `Idle` and `idle` frame. No `Response` and no `RequestFailed` | Pauses |
+| Agent process exit | Prompt task aborted; reducer does not complete | `RequestFailed` (fatal) for the active wire ID, then `SessionEnded(ConnectionLost)`. No `Idle` and no `idle` frame | Not reduced |
+
+Current behavior to account for:
+
+- A forced cancel publishes no prompt outcome. A client that completes its
+  turn only on `Response` or `RequestFailed` (the TUI, the remote host) does
+  not see that turn finish.
+- Child exit publishes no `Idle`. Treat `SessionEnded` as the end of the
+  session. The message is `Agent process exited unexpectedly (exit code N).`,
+  or the same text without the code when none is available, plus the stderr
+  tail.
+- `PromptCompleted` and `LoadCompleted` are harness-private. Never depend on
+  them outside the harness.
+- Summarize-and-swap compaction delays the private completion and the `idle`
+  frame until the session swap finishes.
+
+Boundary rules:
+
+- One prompt is one `session/prompt`. Its response, whatever its content, is
+  its terminal response.
+- A successful empty `EndTurn` is a valid terminal response. Never absorb it
+  into a previous cancelled turn or resend the prompt.
+- Do not add client-side cancel-tail retry or delay logic.
+- The TUI completes its owned turn only on the raw `Response` or the
+  correlated `RequestFailed` whose request ID matches `SessionPhaseChanged`.
+  A raw error `Response` pairs with its `RequestFailed`; responses for other
+  IDs never complete the turn.
+
+## Cancellation
+
+From `Prompt { cancelling: false }` the reducer:
+
+- sets `cancelling` and publishes `SessionPhaseChanged(Cancelling)`
+- marks unfinished tools owned by the request as failed in harness state (ACP
+  v1 has no `cancelled` tool status); no tool event is published for this
+- answers every pending permission request with the `cancelled` outcome
+- sends `session/cancel`, keeps `active`, and starts the cancel watchdog
+
+A second cancel is a no-op. Cancel never moves the session to `Idle` by
+itself. If the agent does not answer, the harness publishes
+`Agent is slow to cancel. Will force-cancel in 7s…` after 3 s and forces the
+turn to end after 10 s.
+
+A remote cancel names its request ID and cancels only when that ID matches
+the active prompt, so it never cancels a turn started by the local TUI.
+
+## Error Categories
+
+`AcpErrorCategory` in `nori-rs/acp-host/src/error_category.rs` classifies a
+failed user prompt. The category picks the user message and the
+`RequestFailed` kind.
+
+| Category | Trigger | Kind |
+| --- | --- | --- |
+| `ApiServerError` | Provider 5xx | retryable |
+| `QuotaExceeded` | Rate limit or usage quota | retryable |
+| `AgentUnreachable` | ACP `-32010` | retryable |
+| `AgentBusy` | ACP `-32011`: the agent is still finishing a turn from an earlier connection | retryable |
+| `Authentication` | Auth required or failed | fatal |
+| `ExecutableNotFound` | Agent binary missing | fatal |
+| `Initialization` | Agent failed to start | fatal |
+| `PromptTooLong` | Context window exceeded | fatal |
+| `SessionNotFound` | ACP `-32002` | fatal |
+| `SessionNotResumable` | ACP `-32012` | fatal |
+| `NoActiveSession` | ACP `-32014` | fatal |
+| `SessionAlreadyActive` | ACP `-32015` | fatal |
+| `Unknown` | Anything else | fatal |
+
+- Only user prompts are categorized. A failed compaction (`Compact failed: …`)
+  or goal continuation (`Goal continuation failed: …`) is always fatal.
+- An agent-supplied `error.data.detail` is appended in parentheses.
+- In the TUI, a fatal failure stops `/loop`; a retryable failure leaves it
+  armed so the next iteration retries. A failure shows its own error cell
+  instead of the generic "Conversation interrupted" notice.
+- Child exit is always fatal.
+
+## Remote Prompts
+
+Remote prompts (`session/prompt` from a remote-control client, or
+`_nori/session/prompt` from a host controller) use `PromptSubmitIfIdle` and
+never queue. They are rejected as busy with `-32015` when the session is not
+`Idle`, when the queue holds entries and is not paused, or while a steer is
+unsettled. A paused queue does not make the session busy: a remote prompt
+runs ahead of it and leaves it paused. The controller's
+`_nori/session/follow_up` is the deliberate way to queue remote input (see
+below).
+
+## Follow-ups
+
+A follow-up is input sent while a turn is running, either **steered** into
+that turn or **queued** for the next one. No config flag gates follow-ups;
+steering depends only on the agent capability check below.
+
+### Keys
+
+In direct `nori` and the `nori attach` controller, with a composed draft and a
+running turn:
+
+| Key | Effect |
+| --- | --- |
+| Enter | Steer into the running turn. |
+| Tab | Queue for the next turn. |
+
+- In direct `nori`, slash commands, `!` shell commands, and bare
+  `exit`/`quit` drafts keep their normal behavior and are never sent as
+  follow-ups; Tab falls back to its ordinary meaning for them.
+- In `nori attach`, only the attach commands (`/quit`, `/exit`, `/detach`,
+  `/sessions`, `/new`, `/delegate`, `/close`, `/cancel`, `/resume`) are
+  handled locally. Enter sends any other draft, including `!` text and other
+  slash text, as a steer follow-up. Tab does not queue slash or `!` drafts,
+  but it does queue a bare `exit` or `quit`.
+- In direct `nori`, the running turn must be in `Prompting`. While the turn is
+  cancelling, or in cloud mode, Enter submits an ordinary prompt (queued if
+  busy) and Tab does not queue. A follow-only attachment keeps the draft and
+  submits nothing.
+- In `nori attach`, Tab first tries `/new` path completion.
+- When idle, Enter submits immediately. Direct `nori` uses
+  `PromptSubmitIfIdle` and shows `Could not submit …` on rejection;
+  `nori attach` sends `_nori/session/prompt` and shows the host's error.
+
+### Wire path
+
+1. The client sends the follow-up. Direct `nori` calls the in-process harness
+   with sender `local`. An attached controller sends
+   `_nori/session/follow_up` to the host with `session_id`, `expected_turn`,
+   `message_id`, `intent` (`steer` or `queue`), and `prompt`.
+2. For a steer, the harness sends the ACP extension request
+   `_session/steering` to the agent with
+   `_meta.steering.idleBehavior = "promptRequired"`.
+3. The caller gets a delivery receipt. Queued and fallback input enters the
+   ordinary harness queue. Injected input is published as a user message with
+   the echo ID; the original prompt keeps ownership of output, completion,
+   usage, and cancellation.
+
+The host request format and transports are in the
+[host follow-up contract](../nori-rs/cli/src/host/docs.md#mid-turn-follow-ups).
+
+### Steering capability
+
+The harness steers only when the live initialize result has
+`protocolVersion == 1`, `_meta.steering.supported == true`, and an exact
+`agentInfo` match:
+
+| `agentInfo.name` | Versions |
+| --- | --- |
+| `@agentclientprotocol/claude-agent-acp` | 0.102.0, 0.108.1, 0.109.0 |
+| `@agentclientprotocol/codex-acp` | 2.7.0 |
+
+Any other agent or version gets `unsupported_queued`: the input is queued for
+the next turn instead. Default Claude and Codex launches resolve `@latest`
+(`nori-rs/acp-host/src/registry.rs`), so an adapter release can change the
+result without a Nori release.
+
+### Receipts
+
+| Status | Meaning |
+| --- | --- |
+| `injected` | The agent accepted the input into the running turn. |
+| `queued` | Explicit `queue` intent admitted to the next turn. |
+| `unsupported_queued` | Steering unavailable (guard mismatch or agent `-32601`); queued instead. |
+| `idle_queued` | The session is `Idle` and the expected turn already ended with `end_turn`, or the agent answered outcome `promptRequired` with reason `noRunningTurn`; queued as the next prompt. |
+| `rejected` | Refused: wrong turn, steer while cancelling, another steer unsettled, the expected turn ended by cancel or error, or an agent refusal. |
+| `unknown` | Delivery not confirmed. Keep the message ID for reconciliation. |
+
+- A retry with the same `message_id` and an identical submission returns the
+  stored receipt. Any difference (content, intent, expected turn, sender, or
+  origin) under the same ID is an error.
+- The TUI reports each outcome as a notice. Direct `nori` does not restore
+  the draft on `rejected` or `unknown`. `nori attach` puts the draft back in
+  an empty composer on a `rejected` receipt or an error response, but not on
+  `unknown`.
+
+### Steer timeout
+
+The harness waits 5 s for the agent to answer `_session/steering`. On
+timeout the receipt is `unknown` and the steer fence is raised until the late
+reply settles. While the fence is up, `PromptSubmitIfIdle` is rejected as
+busy, an idle `PromptSubmit` is queued, and queue draining waits for the
+reply. Other `unknown` causes (a transport error or an unmapped result) do
+not raise the fence.
+
+## Prompt Queue
+
+The harness queue holds prompts that have not been sent. Entries are never
+merged into another message or restored into the composer automatically.
+
+### Drain and pause
+
+- A response with `end_turn` dequeues and starts exactly one prompt, unless
+  the queue is paused. If a steer is unsettled, the drain waits for it.
+- Any other ending pauses the queue when it holds at least one user prompt.
+  Entries stay in order and nothing is sent. The reason is `interrupted` for
+  `cancelled` or a failure while cancelling, and `turn_failed` otherwise. It
+  travels as `QueueSnapshot.paused`.
+- A queue holding only hidden work (a queued `/compact` or goal continuation)
+  does not pause.
+- A paused queue sends nothing on its own, including a drain deferred behind
+  a steer.
+- Loads never drain the queue, and a resume during a load is ignored.
+
+### Resume
+
+- Enter on an empty composer resumes a paused queue. An idle session starts
+  the next entry at once (after any unsettled steer); a busy session drains
+  after its running turn ends with `end_turn`.
+- After a resume the queue drains one prompt per completed turn again. A
+  later interrupt or error pauses what is left.
 - Taking back the last held user prompt clears the pause.
-- A resume while a session load is in flight is ignored and the pause stays,
-  because a load never drains the queue.
-- The pause reason travels as `QueueSnapshot.paused` so clients can show it.
+- Resume and discard are possible only from the local TUI that owns the
+  harness. No other client can edit, resume, or discard the harness queue.
+  `/sessions` subscribers receive `QueueChanged` snapshots, `/acp` drops
+  them, and `nori attach` does not render them.
 
-## UI Event Surface
+### Recall, edit, and delete
 
-The harness may project reduced state into private client events for its own
-behavior, but those events are not a public protocol or a second source of
-truth.
+Only text-only prompts typed in the local composer are editable. Delegation
+results, remote and host follow-ups, and prompts with images stay queued and
+cannot be taken back.
 
-A flat event model is sufficient:
+| Situation | Key | Effect |
+| --- | --- | --- |
+| Empty composer, editable entries | Up | Select the newest editable entry. |
+| Entry selected | k / Up | Move to the older entry; stops at the oldest. |
+| Entry selected | j / Down | Move to the newer entry; past the newest, focus returns to the composer. |
+| Entry selected | Enter / e | Take the entry back into the composer to edit. |
+| Entry selected | Delete / x | Remove the entry; the list stays open on a neighbor. |
+| Entry selected | Esc | Leave the list. |
+| Entry selected | Any other key, or a key with modifiers | Leave the list and pass the key to the composer. |
 
-```rust
-enum UiEvent {
-    PhaseChanged(SessionPhaseView),
-    TranscriptPatched,
-    ToolPatched(ToolCallId),
-    PlanPatched,
-    SessionMetadataPatched,
-    PermissionRequested(PermissionRequestView),
-    PromptFinished(PromptFinishedView),
-    LoadFinished,
-    QueueChanged,
-    Warning(WarningView),
-}
-```
+- Take-back is a harness reclaim by the entry's event ID on the reducer path,
+  so an entry is removed exactly once or has already started and stays
+  delivered. The TUI reports an entry that already started instead of sending
+  it twice.
+- If the selected entry starts or leaves the queue, the selection clears.
+  Enter, e, Delete, and x then do nothing (Enter does not resume); press j or
+  k to select again.
+- A taken-back draft is resubmitted with whichever key you press: Enter
+  steers, Tab queues.
 
-Recommended `SessionPhaseView`:
+### Local queue vs `/managed` queue
 
-```rust
-enum SessionPhaseView {
-    Idle,
-    Loading,
-    Prompt,
-    Cancelling,
-}
-```
+| | Local (TUI, harness, `nori host` `/sessions`) | `/managed` relay (`[host] managed = true`) |
+| --- | --- | --- |
+| Owner | Session harness reducer | Per-session FIFO in `nori-rs/harness/src/managed_acp/follow_ups.rs` |
+| Pause after interrupt or error | Yes, visible in `QueueSnapshot.paused` | No pause state |
+| After a non-`end_turn` ending | Held until explicit resume | Held; drains after the next turn that ends with `end_turn` |
+| Drain condition | `end_turn`, not paused, steer settled | `end_turn` and no pending permissions |
+| New `session/prompt` while items are held | Admitted ahead of a paused queue | Refused with `-32015` (`session has pending follow-up delivery`) while a steer is in flight, or while items are queued and either ready to drain or waiting on a permission. Items held after a non-`end_turn` ending do not block it |
+| Edit or remove entries | Local TUI only | Not supported |
+| Started-item notifications | Ordinary session events | `_nori/session/follow_up/submitted`, `/started`, `/finished` |
 
-The TUI instead normalizes raw public ACP traffic for display and observes Nori
-phase events for locally owned lifecycle. Its unowned presentation bit may
-group unowned output, but it cannot complete a prompt or mutate harness-owned
-request state.
+## Delegated Child Results
 
-## Non-Goals
+Delegation requires `[features] multi_session = true` (default false). When a
+child session finishes, its result returns to the parent as an ordinary
+queued prompt:
 
-This document does not define:
+- The prompt starts with `[Nori delegation result] from <agent>` and names the
+  child session.
+- It is submitted with `PromptSubmit`, so it starts at once when the parent is
+  idle and waits in the parent queue when the parent is busy.
+- It is not editable and waits behind a paused queue like any other entry.
+- The harness retains the delivery until the parent's correlated prompt
+  response arrives.
 
-- a full implementation plan
-- speculative handling beyond the current ACP message-id direction
-- heuristics for attaching idle bare content to a previous or future turn
-- UI polish details such as exact spinner wording or footer copy
+See [remote control](remote-control.md) for delegation controls.
 
-If a behavior requires guessing request ownership, it is out of scope for this
-design.
+## Load
+
+`session/load` runs during resume bootstrap from `Idle`. The harness publishes
+`SessionPhaseChanged(Loading)`, the setup events including the load response,
+then `Idle`. Replayed updates follow as a `ReplayStarted`/`ReplayFinished`
+batch, and the TUI does not treat them as unowned activity.
+
+A `session/load` refused with `-32011` (`AgentBusy`) means the original turn
+is still running on the agent. The harness ends the resume with the
+agent's error and does not fall back to transcript replay, since a
+new session would fork the conversation. Any other load failure falls back to
+replay when a transcript is available. Recover by relaunching the CLI after
+the turn ends; see [transcripts](transcripts.md#busy-agent-on-load).
+
+## TUI Projection
+
+- The TUI renders raw public ACP traffic and uses `SessionPhaseChanged` for
+  local lifecycle. It holds no second request state machine.
+- `proactive_turn_active` groups unowned output: unowned content or `working`
+  starts it, `idle` completes it, and a local `Prompting` or `Loading` start
+  separates statusless unowned output without completing it.
+- A follow-only attachment never submits prompts or follow-ups.
 
 ## Drift Guards
 
-Future changes should be rejected if they introduce any of these smells:
-
-- TUI presentation state becomes an authority for ACP request lifecycle
-- owned-turn completion is inferred from anything other than the request
-  response
-- open message buffers survive across request completion
-- tool ownership is inferred from timing instead of stored explicitly
-- cancel is treated as immediate idle
-- queued prompts are merged back into the composer automatically, or a client
-  keeps a second deliverable queue, instead of one harness-owned FIFO
-- queued prompts start on their own after a turn that did not end with
-  `end_turn`
-- request-scoped permission state lives outside the active request
-- a session allows unordered reduction of inbound ACP messages
-
-The simplest ACP-faithful design is the correct default.
-
-## Appendix: ACP Cancel Turn Boundary Investigation
-
-**Status: Historical investigation, superseded as current protocol guidance.**
-The evidence artifacts were removed (see git history). The ACP-canonical
-boundary now treats each Harness prompt as exactly one `session/prompt` request
-and accepts a successful empty `EndTurn` as that request's terminal response. Nori does not
-absorb the response or resend the prompt. Any remaining user-visible issue in
-this scenario must be investigated from the correlated wire request/response,
-not repaired with client-side cancel-tail retry logic.
-
-### Summary
-
-Nori releases the ACP session back to the UI too early after a cancelled prompt turn.
-In the reproduced Claude ACP session, Nori emits `SessionPhaseChanged(Idle)` and
-`PromptCompleted(stop_reason=Cancelled)` immediately after the cancelled prompt
-response, then accepts the user's next prompt as a fresh turn. That follow-up
-prompt is then immediately completed with `stopReason=end_turn` and no content.
-
-This appears to be a Nori turn-boundary handling bug, not an ACP adapter bug.
-The reproduced wire stream is permissible ACP behavior and matches the shape
-that other ACP clients are expected to tolerate.
-
-This document records the investigation only. It does not propose a fix.
-
-### Impact
-
-- User presses `Ctrl-C` during an ACP agent turn.
-- Nori shows the interrupted state and returns the prompt.
-- The next user prompt is accepted immediately.
-- That prompt is then completed immediately with an empty `end_turn`.
-- The UI appears to consume a stale stop/completion signal instead of treating
-  the post-cancel tail as part of the cancelled turn's completion lifecycle.
-
-### Reproduction
-
-#### Environment
-
-- Branch: `debug-acp-cancel-ordering-trace`
-- Binary: `codex-rs/target/debug/nori`
-- Agent: `claude-debug-acp`
-- Logging:
-  - `RUST_LOG=acp_event_flow=debug,sacp::jsonrpc::handlers=debug,nori_tui=info`
-- Runtime home:
-  - `.tmp/claude-debug-repro-home-2`
-
-#### Steps
-
-1. Start `nori --agent claude-debug-acp --skip-trust-directory`.
-2. Submit:
-   - `I'm testing something. Just run a foreground sleep 30 task, then say 'all done!'`
-3. Wait until the tool call shows `sleep 30`.
-4. Press `Ctrl-C`.
-5. Submit:
-   - `what have you finished`
-
-#### Observed Result
-
-- The cancelled turn ends.
-- Nori returns to idle and accepts the follow-up prompt.
-- The follow-up prompt immediately receives `stopReason=end_turn` with zero usage.
-- The TUI jumps to a fresh prompt with no assistant answer.
-
-### Raw Wire Evidence
-
-The reproduced wire sequence for the main session is:
-
-1. Client sends `session/cancel`.
-2. Agent sends `session/update` with `usage_update`.
-3. Agent responds to the original prompt request with `stopReason=cancelled`.
-4. Client sends the next `session/prompt`.
-5. Agent immediately responds with `stopReason=end_turn` and zero usage.
-
-From the captured wire session log:
-
-- line 22: `session/cancel`
-- line 23: post-cancel `usage_update`
-- line 24: cancelled prompt response
-- line 25: next `session/prompt`
-- line 26: immediate empty `end_turn`
-
-This ordering is also visible in the original log copy:
-
-- [codex-rs/debug-acp-claude.log](/home/clifford/Documents/source/nori/cli/.worktrees/debug-acp-cancel-ordering-trace/codex-rs/debug-acp-claude.log:22)
-
-### ACP Specification References
-
-The ACP reference explicitly allows final `session/update` traffic after cancel,
-as long as those updates are sent before the cancelled prompt response:
-
-- `acp-cancellation-spec.txt`
-- Source reference:
-  - `/home/clifford/Documents/source/nori/docs/references/acp-llms-full.txt:3048`
-  - `/home/clifford/Documents/source/nori/docs/references/acp-llms-full.txt:3078`
-
-Key points from the reference:
-
-- The client may cancel with `session/cancel`.
-- The agent must eventually respond to the original `session/prompt` with
-  `stopReason=cancelled`.
-- The agent may still send `session/update` notifications after receiving
-  `session/cancel`, but before responding to `session/prompt`.
-- The client should still accept those updates.
-
-There is also a specific note in the `session/update` section that clients
-should continue accepting updates after cancel:
-
-- `acp-session-update-note.txt`
-- Source reference:
-  - `/home/clifford/Documents/source/nori/docs/references/acp-llms-full.txt:3895`
-
-Nothing in the reproduced wire stream violates these requirements.
-
-### Investigation Log
-
-#### 1. Initial hypothesis check
-
-The first investigation pass considered whether Nori was locally reordering
-`session/update` notifications and prompt results while merging:
-
-- transport notifications from `event_rx`
-- prompt results from `prompt_result_rx`
-
-Instrumentation was added at:
-
-- transport ingress:
-  - [codex-rs/acp/src/connection/sacp_connection.rs](/home/clifford/Documents/source/nori/cli/.worktrees/debug-acp-cancel-ordering-trace/codex-rs/acp/src/connection/sacp_connection.rs:168)
-- relay merge point:
-  - [codex-rs/acp/src/backend/spawn_and_relay.rs](/home/clifford/Documents/source/nori/cli/.worktrees/debug-acp-cancel-ordering-trace/codex-rs/acp/src/backend/spawn_and_relay.rs:258)
-- reducer:
-  - [codex-rs/acp/src/backend/session_reducer.rs](/home/clifford/Documents/source/nori/cli/.worktrees/debug-acp-cancel-ordering-trace/codex-rs/acp/src/backend/session_reducer.rs:44)
-- runtime driver:
-  - [codex-rs/acp/src/backend/session_runtime_driver.rs](/home/clifford/Documents/source/nori/cli/.worktrees/debug-acp-cancel-ordering-trace/codex-rs/acp/src/backend/session_runtime_driver.rs:127)
-
-That tracing established that Nori did see the post-cancel `usage_update` before
-the cancelled prompt response in the reproduced run.
-
-#### 2. Added turn-boundary tracing
-
-To determine exactly when Nori released control back to the UI, two more
-tracing points were added:
-
-- prompt admission into the ACP backend:
-  - [codex-rs/acp/src/backend/user_input.rs](/home/clifford/Documents/source/nori/cli/.worktrees/debug-acp-cancel-ordering-trace/codex-rs/acp/src/backend/user_input.rs:164)
-- emitted client events, especially:
-  - `SessionPhaseChanged`
-  - `PromptCompleted`
-  - [codex-rs/acp/src/backend/session_runtime_driver.rs](/home/clifford/Documents/source/nori/cli/.worktrees/debug-acp-cancel-ordering-trace/codex-rs/acp/src/backend/session_runtime_driver.rs:304)
-
-These extra traces are what closed the loop.
-
-#### 3. Reproduced with boundary tracing enabled
-
-The decisive sequence in the captured Nori ACP trace is:
-
-1. Nori marks the active prompt as cancelling.
-   - line 54
-2. Nori forwards `SessionPhaseChanged(Cancelling)`.
-   - line 56
-3. Nori sends `session/cancel`.
-   - line 57
-4. Nori receives the cancelled prompt response.
-   - lines 64-66
-5. Nori finalizes that prompt response.
-   - line 68
-6. Nori forwards `SessionPhaseChanged(Idle)`.
-   - line 70
-7. Nori forwards `PromptCompleted(stop_reason=Cancelled)`.
-   - line 71
-8. Only after that, Nori accepts the user's follow-up prompt as a new turn.
-   - line 72
-9. That new turn immediately receives `stopReason=EndTurn`.
-   - lines 78-85
-
-This sequence is the key investigation result.
-
-### What The Trace Proves
-
-The new trace proves all of the following in the reproduced session:
-
-#### A. Nori can receive and parse both stop reasons off the wire
-
-Nori successfully parses:
-
-- the cancelled response for the interrupted turn
-- the subsequent `end_turn` response that arrives after the next `session/prompt`
-
-Evidence:
-
-- `wire-session.log` lines 24 and 26
-- `nori-acp-trace.log` lines 64-66 and 78-80
-
-So this is not a failure to deserialize or understand the wire payloads.
-
-#### B. Nori releases the cancelled turn before the next logical stop boundary is fully resolved
-
-Nori explicitly emits:
-
-- `SessionPhaseChanged(Idle)` at line 70
-- `PromptCompleted(Cancelled)` at line 71
-
-and then admits the follow-up prompt at line 72.
-
-That is the precise point where control returns to the UI and a new user turn
-becomes possible.
-
-#### C. The follow-up prompt is treated as a brand new turn
-
-The follow-up prompt is not queued behind additional cancel-tail processing.
-It is accepted from idle:
-
-- `phase_before_submit="idle"`
-- `active_request_id_before_submit="<none>"`
-
-Evidence:
-
-- `nori-acp-trace.log` line 72
-
-Under the current queue drain policy this still holds for a prompt submitted
-from an idle composer after a cancel. Prompts that were already queued behind
-the cancelled turn do not start; the queue pauses until resumed.
-
-#### D. The empty `end_turn` disrupts the following prompt turn, not the cancelled one
-
-The prompt request for `what have you finished` is started with a new request id:
-
-- line 73
-
-That request then immediately gets `EndTurn`:
-
-- lines 78-85
-
-This means the disruptive `end_turn` is observed as the response to the new
-prompt turn after Nori has already returned to idle.
-
-### Comparison With SACP Ordering APIs
-
-Nori's current prompt path uses `block_task()`:
-
-- [codex-rs/acp/src/connection/sacp_connection.rs](/home/clifford/Documents/source/nori/cli/.worktrees/debug-acp-cancel-ordering-trace/codex-rs/acp/src/connection/sacp_connection.rs:527)
-
-SACP documents that `block_task()` acknowledges the response immediately:
-
-- `sacp-ordering-excerpt.txt`
-- source:
-  - `/home/clifford/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sacp-10.1.0/src/jsonrpc.rs:2747`
-
-By contrast, `on_receiving_result()` keeps ordering until the callback completes:
-
-- `sacp-ordering-excerpt.txt`
-- source:
-  - `/home/clifford/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sacp-10.1.0/src/jsonrpc.rs:2915`
-
-The session-oriented helper in SACP uses `on_receiving_result()` for prompt
-completion and then keeps reading updates until a stop reason is drained:
-
-- `sacp-session-excerpt.txt`
-- source:
-  - `/home/clifford/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sacp-10.1.0/src/session.rs:554`
-  - `/home/clifford/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sacp-10.1.0/src/session.rs:588`
-
-This comparison does not by itself prove the root cause, but it is relevant
-because Nori's current prompt handling takes the "ack immediately and process
-later" path rather than a session-scoped "keep consuming until the turn is
-actually over" path.
-
-### Comparison With Toad
-
-The example ACP client `toad` is also useful as a reference point.
-
-Its conversation layer waits for `agent.send_prompt(prompt)` and only then
-calls `agent_turn_over(stop_reason)`:
-
-- `toad-conversation-excerpt.py`
-- source:
-  - `/home/clifford/Documents/source/nori/cli/.worktrees/plan-session-update-support/toad/src/toad/widgets/conversation.py:822`
-
-Its ACP agent layer waits on the ACP prompt request and returns the stop reason:
-
-- `toad-agent-excerpt.py`
-- source:
-  - `/home/clifford/Documents/source/nori/cli/.worktrees/plan-session-update-support/toad/src/toad/acp/agent.py:739`
-
-Again, this report is not claiming a fix from Toad's implementation. The
-comparison is included because the same adapter is known to work in other ACP
-clients, so Nori's turn-boundary handling is the thing under investigation.
-
-### Conclusion
-
-The evidence gathered here supports the following bug statement:
-
-> Nori completes and releases a cancelled ACP turn too early. It forwards
-> `PromptCompleted(Cancelled)` and `SessionPhaseChanged(Idle)` immediately after
-> the cancelled prompt response, then admits the next user prompt as a fresh
-> turn. In the reproduced session, that fresh turn is immediately completed by
-> an empty `end_turn`, producing the visible off-by-one stop-boundary bug.
-
-This report intentionally stops at attribution and evidence. It does not
-recommend or document a fix.
+Reject changes that:
+
+- make TUI presentation state an authority for ACP request lifecycle
+- complete a client-owned turn from anything but its prompt response or
+  correlated `RequestFailed`, other than the forced-cancel timeout and child
+  exit
+- resend a prompt or retry around an empty `EndTurn` after cancel
+- let open buffers survive request completion, or infer tool ownership from
+  timing
+- treat cancel as immediate idle
+- start queued prompts after a turn that did not end with `end_turn` without
+  an explicit resume
+- queue a remote `session/prompt`, or let a remote cancel affect a local turn
+- reduce inbound ACP traffic for a session out of order
+
+| Rule | Tests |
+| --- | --- |
+| Phase, cancel, drain, ownership, warnings, assembly | `nori-rs/harness/src/backend/session_reducer/tests.rs` |
+| Ordered inbox; prompt after cancel gets its own response | `nori-rs/acp-host/src/connection/acp_connection_tests.rs` |
+| Prompt echo order and suppression; child exit | `nori-rs/harness/tests/session_event_boundary.rs` |
+| Observer brackets; remote busy and cancel scoping | `nori-rs/harness/tests/remote_host.rs`, `nori-rs/acp-host/tests/remote_ws.rs` |
+| Follow-ups, steering guard, steer timeout | `nori-rs/harness/tests/follow_up.rs`, `nori-rs/harness/src/managed_acp/follow_up_tests.rs` |
+| Queue pause, resume, and reclaim | `nori-rs/harness/tests/queue_pause.rs`, `nori-rs/harness/tests/queue_reclaim.rs` |
+| Delegated results in a busy parent | `nori-rs/harness/tests/delegation.rs` |
+| TUI correlation and agent-owned turns | `nori-rs/tui/src/chatwidget/tests/part10.rs` |
+| End to end: cancel, queue keys, pause, attach | `nori-rs/tui-pty-e2e/tests/streaming.rs`, `nori-rs/tui-pty-e2e/tests/queue_recall.rs`, `nori-rs/tui-pty-e2e/tests/queue_pause.rs`, `nori-rs/tui-pty-e2e/tests/host_attach.rs` |

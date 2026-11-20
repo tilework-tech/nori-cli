@@ -60,7 +60,7 @@ configuration file cannot prevent shutdown.
 On a dedicated managed machine, `host --stdio --launch <FILE> [--inherit-env]`
 runs the host in the foreground and serves one pinned adapter as plain ACP on
 stdin and stdout until stdin closes; see [managed launch on stdio](src/host/docs.md#managed-launch-on-stdio).
-See [the command and wire contract](../../docs/remote-control.md#11-background-host-and-attached-terminals).
+See [the command and wire contract](../../docs/remote-control.md#3-background-host-nori-host).
 
 **ExecCommand**: Provides two terminal-independent execution surfaces:
 - `nori exec [PROMPT]` runs one prompt through the selected ACP agent and writes only the complete assistant text to stdout. The prompt may come from the positional argument, from piped stdin, or from both (see **Prompt Sources**). Diagnostics and failures remain on stderr so the answer can be piped or redirected directly.
