@@ -214,7 +214,7 @@ exists are cancelled. A raw ACP setup error precedes
 `SessionEnded(SpawnFailed)` and is not mirrored as
 `NoriEvent::RequestFailed`.
 
-The persisted `[default_models]` entry (`AcpBackendConfig.default_model`) is
+The resolved model preference (`AcpBackendConfig.default_model`) is
 applied at both process and session boundaries. During preparation,
 [`prepared.rs`](src/backend/prepared.rs) calls the injection helper in
 [`spawn_and_relay.rs`](src/backend/spawn_and_relay.rs) before spawning the exact

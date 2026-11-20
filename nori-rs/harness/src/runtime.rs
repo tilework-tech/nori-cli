@@ -859,8 +859,15 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
     } else {
         crate::config::AutoWorktree::Off
     };
-    let (agent, default_model) =
+    let (agent, saved_model) =
         crate::registry::resolve_agent_selection(&config.active_agent, &config.default_models);
+    let default_model = config
+        .default_model_override_keys
+        .iter()
+        .find(|key| crate::resolve_agent_slug(key) == agent)
+        .and_then(|key| config.default_models.get(key))
+        .cloned()
+        .or(saved_model);
 
     AcpBackendConfig {
         agent,
@@ -1444,6 +1451,50 @@ mod tests {
                 (backend.agent.as_str(), backend.default_model.as_deref()),
                 (expected, Some("selected"))
             );
+        }
+    }
+
+    #[test]
+    fn last_explicit_model_override_wins_across_aliases() {
+        let home = tempfile::tempdir().unwrap();
+        let path = home.path().join("config.toml");
+        std::fs::write(&path, "[default_models]\ngemini = 'saved'\n").unwrap();
+        let before_table = ("default_models.agy".into(), "early".into());
+        let table: toml::Table = "gemini = 'canonical'\nagy = 'legacy'".parse().unwrap();
+        for (raw_overrides, expected) in [
+            (
+                vec![("default_models.agy".into(), "explicit".into())],
+                "explicit",
+            ),
+            (
+                vec![
+                    ("default_models.gemini".into(), "first".into()),
+                    ("default_models.antigravity".into(), "last".into()),
+                    ("default_models.codex".into(), "other-agent".into()),
+                ],
+                "last",
+            ),
+            (
+                vec![before_table, ("default_models".into(), table.into())],
+                "canonical",
+            ),
+        ] {
+            let config = nori_config::NoriConfig::load_from_path_with_overrides(
+                &path,
+                nori_config::NoriConfigOverrides {
+                    agent: Some("agy".into()),
+                    raw_overrides,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let backend = build_backend_config(AgentPrepareSpec {
+                config: Arc::new(config),
+                cli_version: "test".into(),
+                initial_context: None,
+                session_context: None,
+            });
+            assert_eq!(backend.default_model.as_deref(), Some(expected));
         }
     }
 

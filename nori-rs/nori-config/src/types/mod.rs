@@ -2424,6 +2424,9 @@ pub struct NoriConfig {
     /// Default model overrides per agent (e.g., "claude-code" -> "haiku")
     pub default_models: HashMap<String, String>,
 
+    /// Agent keys explicitly set with `-c default_models.<agent>`, latest first.
+    pub default_model_override_keys: Vec<String>,
+
     /// Custom agent definitions from config
     pub agents: Vec<AgentConfigToml>,
 
@@ -2497,6 +2500,7 @@ impl Default for NoriConfig {
             async_pre_agent_response_hooks: Vec::new(),
             async_post_agent_response_hooks: Vec::new(),
             default_models: HashMap::new(),
+            default_model_override_keys: Vec::new(),
             agents: Vec::new(),
             cloud_broker_url: None,
         }

@@ -64,6 +64,14 @@ impl App {
         self.chat_widget.set_config(self.config.clone());
     }
 
+    fn apply_saved_model(&mut self, key: String, value: &str) {
+        self.config
+            .default_model_override_keys
+            .retain(|name| nori_harness::resolve_agent_slug(name) != key);
+        self.config.default_models.insert(key, value.to_owned());
+        self.sync_runtime_config();
+    }
+
     pub(super) async fn persist_default_model_selection(
         &mut self,
         agent: &str,
@@ -82,8 +90,7 @@ impl App {
         let Some(key) = persisted else {
             return Ok(false);
         };
-        self.config.default_models.insert(key, value.to_owned());
-        self.sync_runtime_config();
+        self.apply_saved_model(key, value);
         Ok(true)
     }
 
@@ -104,8 +111,7 @@ impl App {
                 return false;
             }
         };
-        self.config.default_models.insert(key, value.to_owned());
-        self.sync_runtime_config();
+        self.apply_saved_model(key, value);
         true
     }
 
