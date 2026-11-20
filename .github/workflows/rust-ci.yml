@@ -32,11 +32,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: 7651ac0e75f370c22bbe7e8442f375d663707e5e
+          ref: 4c224e5768f4ff6945b5cd48105fbf89c968f5c0
           persist-credentials: false
 
       - name: Verify source revision
-        run: test "$(git rev-parse HEAD)" = 7651ac0e75f370c22bbe7e8442f375d663707e5e && git rev-parse HEAD && uname -sm
+        run: test "$(git rev-parse HEAD)" = 4c224e5768f4ff6945b5cd48105fbf89c968f5c0 && git rev-parse HEAD && uname -sm
 
       - name: Free disk space
         if: runner.os == 'Linux'
