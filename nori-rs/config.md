@@ -14,7 +14,7 @@ part of the file, plus tool call display and the opt-in multi-session feature.
 agent = "claude-code"
 ```
 
-Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), `grok-build`, `opencode`, and `cursor` (Cursor Agent). An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
+Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), `grok-build`, `opencode`, `cursor` (Cursor Agent), and `hermes` (Hermes Agent). An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
 
 ## Default models: `[default_models]`
 
@@ -31,7 +31,7 @@ Nori saves model choices under the agent’s canonical ID. For example, selectin
 
 For a single launch, `nori --agent agy -c 'default_models.antigravity="gemini-3.6-flash"'` overrides the saved Gemini model. If several dotted `-c` assignments name the same agent through different aliases, the last one wins. Assigning the entire `default_models` table replaces earlier assignments.
 
-For Antigravity, Grok Build, and OpenCode, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
+For Antigravity, Grok Build, OpenCode, and Hermes Agent, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
 
 OpenCode advertises enabled models for the session's working directory, using IDs such as `nori-gateway/<model>` for a gateway configured under that provider name. OpenCode reads its provider, endpoint, and default model from its native configuration, including a file selected with `OPENCODE_CONFIG`. It uses the credentials for that provider from its saved accounts, supported environment variables, or the provider configuration. [OpenCode providers](https://opencode.ai/docs/cli/providers/) · [OpenCode models](https://opencode.ai/docs/models/)
 
