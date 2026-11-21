@@ -1,6 +1,6 @@
 ---
 source: tui/src/nori/onboarding/welcome.rs
-assertion_line: 219
+assertion_line: 213
 expression: output
 ---
   _   _  ___  ____  ___
