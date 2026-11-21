@@ -47,7 +47,9 @@ export function startEndpoint(logPath, port = 0) {
         stream = toolCall(model, "call_bash", "bash", { command: "printf 'synthetic terminal: '; wc -l < notes.txt" });
       } else {
         const note = tools[0].match(/token=[\w-]+/)?.[0] ?? "no token";
-        const terminal = tools[1].match(/synthetic terminal: *\d+/)?.[0] ?? "no terminal output";
+        // `wc -l` pads its count on BSD and macOS, so report the parsed number.
+        const count = tools[1].match(/synthetic terminal:\s*(\d+)/)?.[1];
+        const terminal = count === undefined ? "no terminal output" : `synthetic terminal: ${Number(count)}`;
         stream = chunk(model, { role: "assistant", content: `Read ${note}; ran ${terminal}.` })
           + chunk(model, {}, "stop");
       }
