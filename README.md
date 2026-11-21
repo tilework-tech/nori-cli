@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/npm/l/nori-ai-cli)](https://github.com/tilework-tech/nori-cli/blob/main/LICENSE)
 [![npm downloads](https://img.shields.io/npm/dm/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
 
-Nori lets you use Claude Code, Codex, Antigravity, Grok Build, and your own ACP agents from one terminal.
+Nori lets you use Claude Code, Codex, Antigravity, Grok Build, Hermes Agent, and your own ACP agents from one terminal.
 
 ![Nori TUI Screenshot](https://raw.githubusercontent.com/tilework-tech/nori-cli/refs/heads/main/assets/nori-cli_2026-01-13.png)
 
@@ -35,8 +35,15 @@ Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` rele
 | Codex | `codex` | `@agentclientprotocol/codex-acp@latest` | Use `/login` for ChatGPT or set `OPENAI_API_KEY`. |
 | Antigravity | `gemini` (also `antigravity` or `agy`) | `agy acp --disable-telemetry` | Open `agy` for Google sign-in or set `GEMINI_API_KEY`. |
 | Grok Build | `grok-build` (also `grok`) | `@xai-official/grok@latest agent stdio` | Use `/login` for the Grok sign-in command or set `XAI_API_KEY`. |
+| Hermes Agent | `hermes` (also `hermes-agent`) | `hermes acp` | Run `hermes model` in another terminal to choose a provider and configure credentials. |
 
 The `gemini` ID keeps existing configs and Nori history associated with the Google provider. Each agent supplies its own model choices through `/model`.
+
+### Hermes Agent
+
+Install Hermes and its ACP extra on the machine running Nori. Make `hermes` available on that machine’s `PATH` and run `hermes acp --check`. [Nous Research’s ACP installation guide for v0.23.3](https://github.com/NousResearch/hermes-agent/blob/v0.23.3/website/docs/user-guide/features/acp.md#installation)
+
+Start it with `nori --agent hermes` or create a session on a running host with `nori host new --agent hermes`. With `features.multi_session = true` in your Nori configuration, enter `/delegate hermes Read README.md and summarize the setup steps` from another agent’s conversation. Approve the child when prompted. Its result returns to the parent conversation.
 
 ## Bring Your Own Agent
 
@@ -75,7 +82,7 @@ Want your AI agent to configure this automatically? Point it at the raw skill fi
 
 ## Features
 
-- **Multi-provider**: Use Claude Code, Codex, Antigravity, Grok Build, or your own ACP-compatible agent from the same CLI.
+- **Multi-provider**: Use Claude Code, Codex, Antigravity, Grok Build, Hermes Agent, or your own ACP-compatible agent from the same CLI.
 - **Fast native interface**: Incremental Ratatui rendering, double-buffered scrollback history, and a Rust core keep long sessions responsive.
 - **Solid ACP client support**: Nori supports ACP session listing, loading, resume, context and usage metadata.
 - **Agent Integrations**: Your agents keep their configurations, whether that's slash commands, skills, and MCP server forwarding.

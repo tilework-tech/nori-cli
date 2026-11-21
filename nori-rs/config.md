@@ -14,7 +14,7 @@ part of the file, plus tool call display and the opt-in multi-session feature.
 agent = "claude-code"
 ```
 
-Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), and `grok-build`. An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
+Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), `grok-build`, and `hermes` (Hermes Agent). An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
 
 ## Default models: `[default_models]`
 
@@ -31,7 +31,7 @@ Nori saves model choices under the agent’s canonical ID. For example, selectin
 
 For a single launch, `nori --agent agy -c 'default_models.antigravity="gemini-3.6-flash"'` overrides the saved Gemini model. If several dotted `-c` assignments name the same agent through different aliases, the last one wins. Assigning the entire `default_models` table replaces earlier assignments.
 
-For Antigravity and Grok Build, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
+For Antigravity, Grok Build, and Hermes Agent, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
 
 Claude Code, Codex, and custom agents with a configured injection channel can also accept model IDs at process startup. For these agents, `/model` offers a custom ID and any curated additional choices. If the agent rejects a custom choice over ACP, Nori can save it here and restart the session to apply it. A provider may still reject an unknown model at the first prompt.
 

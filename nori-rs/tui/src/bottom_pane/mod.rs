@@ -1173,7 +1173,7 @@ mod tests {
             false,
         ));
 
-        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 20));
 
         assert_selected_row_has_symmetric_rails(&rendered, "Mock ACP");
         assert!(!rendered.contains("/ search"), "{rendered}");
@@ -1182,7 +1182,7 @@ mod tests {
 
         pane.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         pane.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
-        let navigated = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        let navigated = render_snapshot(&pane, Rect::new(0, 0, 100, 20));
         let mock_row = navigated
             .lines()
             .find(|row| row.contains("Mock ACP"))

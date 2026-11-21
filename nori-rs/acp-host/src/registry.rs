@@ -8,12 +8,14 @@
 //! - `codex` - OpenAI's Codex CLI agent
 //! - `gemini` - Google Antigravity
 //! - `grok-build` - xAI Grok Build
+//! - `hermes` - Nous Research Hermes Agent
 //!
 //! ## Provider Names
 //! - `anthropic` - Anthropic
 //! - `openai` - OpenAI
 //! - `google` - Google
 //! - `xai` - xAI
+//! - `nous-research` - Nous Research
 
 use anyhow::Context;
 use anyhow::Result;
@@ -120,6 +122,8 @@ pub enum AgentKind {
     Gemini,
     /// xAI Grok Build.
     GrokBuild,
+    /// Nous Research Hermes Agent.
+    Hermes,
 }
 
 impl AgentKind {
@@ -130,6 +134,7 @@ impl AgentKind {
             AgentKind::Codex => "codex",
             AgentKind::Gemini => "gemini",
             AgentKind::GrokBuild => "grok-build",
+            AgentKind::Hermes => "hermes",
         }
     }
 
@@ -140,6 +145,7 @@ impl AgentKind {
             AgentKind::Codex => "Codex",
             AgentKind::Gemini => "Antigravity",
             AgentKind::GrokBuild => "Grok Build",
+            AgentKind::Hermes => "Hermes Agent",
         }
     }
 
@@ -154,7 +160,7 @@ impl AgentKind {
             AgentKind::ClaudeCode => Some(1_000_000),
             AgentKind::Codex => Some(258_000),
             AgentKind::Gemini => Some(1_000_000),
-            AgentKind::GrokBuild => None,
+            AgentKind::GrokBuild | AgentKind::Hermes => None,
         }
     }
 
@@ -165,6 +171,7 @@ impl AgentKind {
             AgentKind::Codex => Provider::OpenAI,
             AgentKind::Gemini => Provider::Google,
             AgentKind::GrokBuild => Provider::Xai,
+            AgentKind::Hermes => Provider::NousResearch,
         }
     }
 
@@ -175,17 +182,18 @@ impl AgentKind {
             AgentKind::Codex,
             AgentKind::Gemini,
             AgentKind::GrokBuild,
+            AgentKind::Hermes,
         ]
     }
 
     /// The out-of-band channel this built-in agent uses to receive a forced
-    /// model id at spawn time. Antigravity and Grok negotiate models over ACP.
+    /// model id at spawn time. Native servers can advertise their model options over ACP.
     pub fn model_injection(&self) -> ModelInjection {
         match self {
             AgentKind::ClaudeCode => ModelInjection::Env {
                 var: "ANTHROPIC_MODEL".to_string(),
             },
-            AgentKind::Gemini | AgentKind::GrokBuild => ModelInjection::None,
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::Hermes => ModelInjection::None,
             AgentKind::Codex => ModelInjection::CodexConfig,
         }
     }
@@ -197,7 +205,7 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => Some(".claude/projects"),
             AgentKind::Codex => Some(".codex/sessions"),
-            AgentKind::Gemini | AgentKind::GrokBuild => None,
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::Hermes => None,
         }
     }
 
@@ -209,6 +217,9 @@ impl AgentKind {
             AgentKind::ClaudeCode => "Run /login for instructions, or set ANTHROPIC_API_KEY.",
             AgentKind::Codex => "Run /login to authenticate, or set OPENAI_API_KEY.",
             AgentKind::Gemini => "Run /login for Antigravity instructions, or set GEMINI_API_KEY.",
+            AgentKind::Hermes => {
+                "Run `hermes model` in another terminal to configure the provider and its credentials."
+            }
             AgentKind::GrokBuild => "Run /login for Grok Build instructions, or set XAI_API_KEY.",
         }
     }
@@ -222,6 +233,7 @@ impl AgentKind {
             "gemini" | "gemini-acp" | "gemini-2.5-flash" | "antigravity" | "agy" => {
                 Some(AgentKind::Gemini)
             }
+            "hermes" | "hermes-agent" => Some(AgentKind::Hermes),
             "grok-build" | "grok" => Some(AgentKind::GrokBuild),
             _ => None,
         }
@@ -255,7 +267,7 @@ impl AgentKind {
                 id: "gpt-5.3-codex",
                 label: "GPT-5.3-Codex",
             }],
-            AgentKind::Gemini | AgentKind::GrokBuild => &[],
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::Hermes => &[],
         }
     }
 }
@@ -277,6 +289,8 @@ pub enum Provider {
     Google,
     /// xAI
     Xai,
+    /// Nous Research
+    NousResearch,
 }
 
 impl Provider {
@@ -287,6 +301,7 @@ impl Provider {
             Provider::OpenAI => "openai",
             Provider::Google => "google",
             Provider::Xai => "xai",
+            Provider::NousResearch => "nous-research",
         }
     }
 
@@ -297,6 +312,7 @@ impl Provider {
             Provider::OpenAI => "OpenAI",
             Provider::Google => "Google",
             Provider::Xai => "xAI",
+            Provider::NousResearch => "Nous Research",
         }
     }
 }
@@ -512,6 +528,7 @@ fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>)
         AgentKind::Codex => "codex-acp",
         AgentKind::Gemini => "agy",
         AgentKind::GrokBuild => "grok",
+        AgentKind::Hermes => "hermes",
     };
     (which::which(binary).is_ok(), None)
 }
@@ -826,7 +843,7 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
             AgentKind::ClaudeCode => Some("@agentclientprotocol/claude-agent-acp@latest"),
             AgentKind::Codex => Some("@agentclientprotocol/codex-acp@latest"),
             AgentKind::GrokBuild => Some("@xai-official/grok@latest"),
-            AgentKind::Gemini => None,
+            AgentKind::Gemini | AgentKind::Hermes => None,
         };
         let (command, args, install_hint) = if let Some(package) = package {
             // Grok relies on npm's postinstall to select the package's native
@@ -850,6 +867,12 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
                 manager.command()
             );
             (manager.command(), args, hint)
+        } else if agent == AgentKind::Hermes {
+            (
+                "hermes",
+                vec!["acp".to_string()],
+                "install Hermes Agent with its ACP extra on PATH and run `hermes acp --check`: https://hermes-agent.nousresearch.com/docs/user-guide/features/acp".to_string(),
+            )
         } else {
             (
                 "agy",
@@ -1490,7 +1513,7 @@ mod tests {
     fn test_list_available_agents_debug_build() {
         reset_registry();
         let agents = list_available_agents();
-        assert_eq!(agents.len(), 6);
+        assert_eq!(agents.len(), AgentKind::all().len() + 2);
 
         let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
         assert!(names.contains(&"Mock ACP"), "Should have Mock ACP");
@@ -1538,6 +1561,19 @@ mod tests {
     }
 
     #[test]
+    fn hermes_launches_the_native_acp_server() {
+        for name in ["hermes", "hermes-agent"] {
+            let config = get_agent_config(name).expect("registered Hermes agent");
+            assert_eq!(config.provider_slug, "hermes");
+            assert_eq!(config.display_name, "Hermes Agent");
+            assert_eq!(config.command, "hermes");
+            assert_eq!(config.args, ["acp"]);
+            assert_eq!(config.model_injection, ModelInjection::None);
+            assert!(config.env.is_empty());
+        }
+    }
+
+    #[test]
     fn test_agent_transcript_base_dir() {
         // Each agent should return the correct base directory path relative to home
         assert_eq!(
@@ -1562,14 +1598,15 @@ mod tests {
     }
 
     #[test]
-    fn test_build_default_agents_returns_four_builtins() {
+    fn test_build_default_agents_lists_builtins() {
         let agents = build_default_agents();
-        assert_eq!(agents.len(), 4);
+        assert_eq!(agents.len(), AgentKind::all().len());
         let slugs: Vec<&str> = agents.iter().map(|a| a.slug.as_str()).collect();
         assert!(slugs.contains(&"claude-code"));
         assert!(slugs.contains(&"codex"));
         assert!(slugs.contains(&"gemini"));
         assert!(slugs.contains(&"grok-build"));
+        assert!(slugs.contains(&"hermes"));
     }
 
     #[test]
@@ -1598,7 +1635,7 @@ mod tests {
     #[test]
     fn test_build_registry_with_no_custom_agents() {
         let registry = build_registry(vec![]).unwrap();
-        assert_eq!(registry.len(), 4);
+        assert_eq!(registry.len(), AgentKind::all().len());
     }
 
     #[test]
@@ -1622,7 +1659,7 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom]).unwrap();
-        assert_eq!(registry.len(), 5);
+        assert_eq!(registry.len(), AgentKind::all().len() + 1);
         let kimi = registry.iter().find(|a| a.slug == "kimi").unwrap();
         assert_eq!(kimi.name, "Kimi");
         assert!(kimi.kind.is_none());
@@ -1650,8 +1687,7 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom_claude]).unwrap();
-        // Should still be 3 agents (override, not add)
-        assert_eq!(registry.len(), 4);
+        assert_eq!(registry.len(), AgentKind::all().len());
         let claude = registry.iter().find(|a| a.slug == "claude-code").unwrap();
         assert_eq!(claude.name, "My Claude");
         assert_eq!(claude.context_window_size, Some(300_000));
