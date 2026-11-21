@@ -1,0 +1,159 @@
+{
+ "subconscious_shaped_hermes_requests (host new --agent hermes)": [
+  {
+   "path": "/v1/chat/completions",
+   "model": "subconscious/glm-5.3-marathon",
+   "stream": true,
+   "roles": [
+    "system",
+    "user"
+   ],
+   "tools_offered": 18,
+   "read_file_offered": true,
+   "authorization": "<redacted len=39>",
+   "user_agent": "OpenAI/Python 2.54.0",
+   "tool_result_excerpt": null,
+   "synthetic_reply": {
+    "kind": "tool",
+    "name": "read_file",
+    "args": {
+     "path": "synthetic-note.txt"
+    }
+   }
+  },
+  {
+   "path": "/v1/chat/completions",
+   "model": "subconscious/glm-5.3-marathon",
+   "stream": true,
+   "roles": [
+    "system",
+    "user",
+    "assistant",
+    "tool"
+   ],
+   "tools_offered": 18,
+   "read_file_offered": true,
+   "authorization": "<redacted len=39>",
+   "user_agent": "OpenAI/Python 2.54.0",
+   "tool_result_excerpt": "{\"content\": \"1|shelf label: lantern-93\", \"total_",
+   "synthetic_reply": {
+    "kind": "text",
+    "text": "Hermes read synthetic-note.txt: shelf label is lantern-93."
+   }
+  },
+  {
+   "path": "/v1/chat/completions",
+   "model": "subconscious/glm-5.3-marathon",
+   "stream": false,
+   "roles": [
+    "system",
+    "user"
+   ],
+   "tools_offered": 0,
+   "read_file_offered": false,
+   "authorization": "<redacted len=39>",
+   "user_agent": "OpenAI/Python 2.54.0",
+   "tool_result_excerpt": null,
+   "synthetic_reply": {
+    "kind": "text",
+    "text": "Synthetic reply."
+   }
+  },
+  {
+   "path": "/v1/chat/completions",
+   "model": "subconscious/glm-5.3-marathon",
+   "stream": true,
+   "roles": [
+    "system",
+    "user"
+   ],
+   "tools_offered": 18,
+   "read_file_offered": true,
+   "authorization": "<redacted len=39>",
+   "user_agent": "OpenAI/Python 2.54.0",
+   "tool_result_excerpt": null,
+   "synthetic_reply": {
+    "kind": "tool",
+    "name": "read_file",
+    "args": {
+     "path": "synthetic-note.txt"
+    }
+   }
+  },
+  {
+   "path": "/v1/chat/completions",
+   "model": "subconscious/glm-5.3-marathon",
+   "stream": true,
+   "roles": [
+    "system",
+    "user",
+    "assistant",
+    "tool"
+   ],
+   "tools_offered": 18,
+   "read_file_offered": true,
+   "authorization": "<redacted len=39>",
+   "user_agent": "OpenAI/Python 2.54.0",
+   "tool_result_excerpt": "{\"content\": \"1|shelf label: lantern-93\", \"total_",
+   "synthetic_reply": {
+    "kind": "text",
+    "text": "Hermes read synthetic-note.txt: shelf label is lantern-93."
+   }
+  },
+  {
+   "path": "/v1/chat/completions",
+   "model": "subconscious/glm-5.3-marathon",
+   "stream": false,
+   "roles": [
+    "system",
+    "user"
+   ],
+   "tools_offered": 0,
+   "read_file_offered": false,
+   "authorization": "<redacted len=39>",
+   "user_agent": "OpenAI/Python 2.54.0",
+   "tool_result_excerpt": null,
+   "synthetic_reply": {
+    "kind": "text",
+    "text": "Synthetic reply."
+   }
+  }
+ ],
+ "hermes_probe_gets": [
+  "/api/v1/models",
+  "/v1/models",
+  "/v1/models/subconscious/glm-5.3-marathon"
+ ],
+ "chat_completions_header_names": [
+  "accept",
+  "accept-encoding",
+  "authorization",
+  "connection",
+  "content-length",
+  "content-type",
+  "host",
+  "user-agent",
+  "x-stainless-arch",
+  "x-stainless-async",
+  "x-stainless-lang",
+  "x-stainless-os",
+  "x-stainless-package-version",
+  "x-stainless-read-timeout",
+  "x-stainless-retry-count",
+  "x-stainless-runtime",
+  "x-stainless-runtime-version"
+ ],
+ "claude_parent_turns (standalone TUI delegation)": [
+  {
+   "n_messages": 4,
+   "last_user": "[Nori delegation result] from hermes \u00b7 Read synthetic-note.txt and report the shelf label. \u00b7 done\nChild session: 08ed0ba5-5251-422f-aed8-ac293a28947e\nThe user started this delegation with /delegate; you did not request it.\n\n\nHermes read synthetic-note.txt: shelf label is lantern-93.",
+   "synthetic_reply": "PARENT_CONTINUED_WITH_HERMES_RESULT: the Hermes child reported shelf label lantern-93."
+  },
+  {
+   "n_messages": 6,
+   "last_user": "Please continue with the next step.",
+   "synthetic_reply": "PARENT_CONTINUED_WITH_HERMES_RESULT: continuing after the Hermes child result."
+  }
+ ],
+ "synthetic_key_note": "SUBCONSCIOUS_API_KEY was a 32-character synthetic value; \"Bearer \" + 32 = 39 characters."
+}
