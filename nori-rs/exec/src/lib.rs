@@ -73,22 +73,27 @@ pub async fn run_plaintext(
     {
         Ok(id) => id,
         Err(error) => {
-            // A failed launch drops queued prompts after publishing its startup diagnostic.
-            while let Some(event) = launched.events.recv().await {
-                match event {
-                    SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
-                        if ended.reason == SessionEndReason::SpawnFailed
-                            && let Some(message) = ended.message
-                        {
-                            anyhow::bail!(message);
+            // A failed launch can publish its diagnostic as the first pending prompt closes.
+            let startup_failure = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                while let Some(event) = launched.events.recv().await {
+                    match event {
+                        SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
+                            if ended.reason == SessionEndReason::SpawnFailed {
+                                return ended.message;
+                            }
+                            break;
                         }
-                        break;
+                        SessionEvent::Nori(NoriEvent::SessionStarted(_)) => break,
+                        _ => {}
                     }
-                    SessionEvent::Nori(NoriEvent::SessionStarted(_)) => break,
-                    _ => {}
                 }
-            }
-            return Err(error);
+                None
+            })
+            .await;
+            return Err(match startup_failure {
+                Ok(Some(message)) => anyhow::anyhow!(message),
+                Ok(None) | Err(_) => error,
+            });
         }
     };
     let result = collect_prompt(

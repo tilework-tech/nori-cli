@@ -40,13 +40,13 @@ try {
   await writeFile(join(noriHome, "config.toml"), [
     `agent = "pi"`,
     ``,
-    `[default_models]`,
-    `pi = "subconscious/subconscious/glm-5.2"`,
-    ``,
-    `[token_providers.subconscious]`,
+    `[[token_providers]]`,
+    `name = "subconscious"`,
     `preset = "subconscious"`,
-    `api_key_env = "SUBCONSCIOUS_API_KEY"`,
-    `base_url = "${baseUrl}"`,
+    `protocol = "openai-completions"`,
+    `model = "subconscious/glm-5.2"`,
+    `env_key = "SUBCONSCIOUS_API_KEY"`,
+    `base_url = "https://api.subconscious.dev/v1"`,
     ``,
     `[agent_token_providers]`,
     `pi = "subconscious"`,
@@ -54,6 +54,8 @@ try {
   ].join("\n"));
   const env = {
     HOME: home, PATH: process.env.PATH, NORI_HOME: noriHome, NORI_NO_ANALYTICS: "1",
+    NODE_OPTIONS: `--require=${JSON.stringify(join(import.meta.dirname, "loopback.cjs"))}`,
+    NORI_PI_TEST_ENDPOINT: baseUrl,
     PI_SKIP_VERSION_CHECK: "1", PI_TELEMETRY: "0", TERM: "dumb",
     npm_config_cache: process.env.npm_config_cache ?? join(process.env.HOME, ".npm"),
     ...(process.env.npm_config_offline ? { npm_config_offline: process.env.npm_config_offline } : {}),

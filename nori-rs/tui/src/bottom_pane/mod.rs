@@ -1200,7 +1200,7 @@ mod tests {
     fn token_provider_steps_use_the_shared_picker() {
         let mut pane = test_bottom_pane();
         pane.show_selection_view(
-            crate::nori::token_provider_picker::token_provider_picker_params("pi", "Pi", None),
+            crate::nori::token_provider_picker::token_provider_picker_params("pi", "Pi", None, &[]),
         );
         assert_snapshot!(
             "token_provider_picker",

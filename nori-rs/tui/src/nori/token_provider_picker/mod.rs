@@ -9,8 +9,11 @@ use std::path::Path;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
+use nori_config::token_providers::TokenProvider;
 use nori_harness::token_provider::compatible_presets;
 use nori_harness::token_provider::preset;
+use nori_harness::token_provider::supports_pi_connection;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -35,18 +38,13 @@ use crate::style::user_message_style;
 
 /// A completed token provider choice for one agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct TokenProviderChoice {
-    /// Preset id, also used as the provider id in config.
-    pub preset_id: String,
-    /// Name of the environment variable that holds the key.
-    pub api_key_env: String,
-    /// Provider model id.
-    pub model: String,
-}
-
-/// Whether picking this agent should first ask for a token provider.
-pub(crate) fn offers_token_providers(agent_name: &str) -> bool {
-    !compatible_presets(agent_name).is_empty()
+pub(crate) enum TokenProviderChoice {
+    Saved(String),
+    Preset {
+        preset_id: String,
+        api_key_env: String,
+        model: String,
+    },
 }
 
 /// The provider step: the agent's own settings, or one of its token providers.
@@ -54,6 +52,7 @@ pub(crate) fn token_provider_picker_params(
     agent_name: &str,
     display_name: &str,
     current: Option<&str>,
+    saved: &[TokenProvider],
 ) -> SelectionViewParams {
     let own_agent = agent_name.to_string();
     let own_display = display_name.to_string();
@@ -71,6 +70,28 @@ pub(crate) fn token_provider_picker_params(
         dismiss_on_select: true,
         ..Default::default()
     }];
+    for provider in saved.iter().filter(|entry| supports_pi_connection(entry)) {
+        let agent_name = agent_name.to_string();
+        let display_name = display_name.to_string();
+        let name = provider.name.clone();
+        items.push(SelectionItem {
+            name: format!("{} (saved)", provider.name),
+            description: Some(format!(
+                "{} · key from ${}",
+                provider.model, provider.env_key
+            )),
+            is_current: current == Some(&provider.name),
+            actions: vec![Box::new(move |tx| {
+                tx.send(AppEvent::ChooseTokenProvider {
+                    agent_name: agent_name.clone(),
+                    display_name: display_name.clone(),
+                    choice: Some(TokenProviderChoice::Saved(name.clone())),
+                });
+            })],
+            dismiss_on_select: true,
+            ..Default::default()
+        });
+    }
     items.extend(compatible_presets(agent_name).into_iter().map(|preset| {
         let agent_name = agent_name.to_string();
         let display_name = display_name.to_string();
@@ -84,7 +105,7 @@ pub(crate) fn token_provider_picker_params(
         SelectionItem {
             name: preset.name.to_string(),
             description: Some(format!("Token provider · key from ${}", preset.api_key_env)),
-            is_current: current == Some(preset.id),
+            is_current: false,
             actions,
             dismiss_on_select: true,
             ..Default::default()
@@ -118,7 +139,7 @@ pub(crate) fn token_provider_model_picker_params(
         .map(|model| {
             let agent_name = agent_name.to_string();
             let display_name = display_name.to_string();
-            let choice = TokenProviderChoice {
+            let choice = TokenProviderChoice::Preset {
                 preset_id: preset.id.to_string(),
                 api_key_env: api_key_env.to_string(),
                 model: model.id.to_string(),
@@ -155,47 +176,64 @@ pub(crate) fn token_provider_model_picker_params(
     .picker()
 }
 
-/// Persist a choice and bind the agent to it, or clear the agent's binding.
-///
-/// Clearing keeps the provider definition and drops the agent's saved model
-/// when that model belonged to the provider.
+/// Save the named route independently of the agent's native default model.
 pub(crate) fn persist_token_provider_choice(
     nori_home: &Path,
     agent: &str,
     choice: Option<&TokenProviderChoice>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<TokenProvider>> {
     let edits = nori_config::NoriConfigEdits::new(nori_home);
-    let edits = match choice {
-        Some(choice) => edits
-            .set_path(
-                &["token_providers", &choice.preset_id, "preset"],
-                choice.preset_id.as_str(),
-            )
-            .set_path(
-                &["token_providers", &choice.preset_id, "api_key_env"],
-                choice.api_key_env.as_str(),
-            )
-            .set_path(&["agent_token_providers", agent], choice.preset_id.as_str())
-            .set_default_model(agent, &format!("{}/{}", choice.preset_id, choice.model)),
-        None => {
-            let config_path = nori_home.join(nori_config::CONFIG_FILE);
-            let saved = nori_config::NoriConfig::load_from_path(&config_path).ok();
-            let bound_model = saved.as_ref().and_then(|config| {
-                let provider = config.agent_token_providers.get(agent)?;
-                config
-                    .default_models
-                    .get(agent)
-                    .filter(|model| model.starts_with(&format!("{provider}/")))
-            });
-            let edits = edits.clear_path(&["agent_token_providers", agent]);
-            if bound_model.is_some() {
-                edits.clear_path(&["default_models", agent])
-            } else {
-                edits
+    let binding_path = ["agent_token_providers", agent];
+    let Some(choice) = choice else {
+        edits.clear_path(&binding_path).apply_blocking()?;
+        return Ok(None);
+    };
+    let saved = nori_config::NoriConfig::load_from_path(&nori_home.join(nori_config::CONFIG_FILE))?;
+    let (edits, provider) = match choice {
+        TokenProviderChoice::Saved(name) => {
+            let provider = saved
+                .token_providers
+                .iter()
+                .find(|entry| &entry.name == name && supports_pi_connection(entry))
+                .ok_or_else(|| {
+                    anyhow::anyhow!("the saved connection is no longer available for Pi")
+                })?;
+            (edits, provider.clone())
+        }
+        TokenProviderChoice::Preset {
+            preset_id,
+            api_key_env,
+            model,
+        } => {
+            let preset = preset(preset_id)
+                .ok_or_else(|| anyhow::anyhow!("unknown Pi token provider preset"))?;
+            let mut connection = preset.connection(preset_id, api_key_env, model);
+            anyhow::ensure!(
+                supports_pi_connection(&connection),
+                "this connection cannot launch Pi"
+            );
+            // Preserve existing connections, including ones used by a different agent.
+            let mut suffix = 2;
+            loop {
+                match saved
+                    .token_providers
+                    .iter()
+                    .find(|entry| entry.name == connection.name)
+                {
+                    Some(existing) if existing == &connection => break (edits, connection),
+                    Some(_) => {
+                        connection.name = format!("{preset_id}-{suffix}");
+                        suffix += 1;
+                    }
+                    None => break (edits.append_token_provider(connection.clone()), connection),
+                }
             }
         }
     };
-    edits.apply_blocking()
+    edits
+        .set_path(&binding_path, provider.name.as_str())
+        .apply_blocking()?;
+    Ok(Some(provider))
 }
 
 /// Asks for the environment variable that holds a provider's key.
@@ -212,10 +250,12 @@ pub(crate) struct TokenProviderKeyInputView {
 }
 
 impl TokenProviderKeyInputView {
+    /// `saved` is the variable already configured for this provider, if any.
     pub(crate) fn new(
         agent_name: String,
         display_name: String,
         preset_id: String,
+        saved: Option<String>,
         is_set: Box<dyn Fn(&str) -> bool>,
         app_event_tx: AppEventSender,
     ) -> Self {
@@ -224,8 +264,8 @@ impl TokenProviderKeyInputView {
             agent_name,
             display_name,
             provider_name: preset.map_or_else(|| preset_id.clone(), |preset| preset.name.into()),
-            input: preset
-                .map(|preset| preset.api_key_env.to_string())
+            input: saved
+                .or_else(|| preset.map(|preset| preset.api_key_env.to_string()))
                 .unwrap_or_default(),
             preset_id,
             error: None,
@@ -235,22 +275,21 @@ impl TokenProviderKeyInputView {
         }
     }
 
+    fn reject_non_name(&mut self) {
+        // The text may be the key itself, so it is cleared, not echoed.
+        self.input.clear();
+        self.error = Some("That is not an environment variable name; enter the name.".to_string());
+    }
+
     fn submit(&mut self) {
         let name = self.input.trim().to_string();
-        let mut characters = name.chars();
-        let valid = characters
-            .next()
-            .is_some_and(|first| first == '_' || first.is_ascii_alphabetic())
-            && characters.all(|character| character == '_' || character.is_ascii_alphanumeric());
-        if !valid {
-            // The text may be the key itself, so it is cleared, not echoed.
-            self.input.clear();
-            self.error =
-                Some("That is not an environment variable name; enter the name.".to_string());
+        if !is_variable_name(&name) {
+            self.reject_non_name();
             return;
         }
         if !(self.is_set)(&name) {
-            self.error = Some(format!("{name} is not set in nori's environment."));
+            self.input.clear();
+            self.error = Some("That variable is not set in nori's environment.".to_string());
             return;
         }
         self.app_event_tx
@@ -262,6 +301,14 @@ impl TokenProviderKeyInputView {
             });
         self.complete = true;
     }
+}
+
+fn is_variable_name(text: &str) -> bool {
+    let mut characters = text.chars();
+    characters
+        .next()
+        .is_some_and(|first| first == '_' || first.is_ascii_alphabetic())
+        && characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
 }
 
 impl BottomPaneView for TokenProviderKeyInputView {
@@ -277,7 +324,16 @@ impl BottomPaneView for TokenProviderKeyInputView {
             KeyCode::Backspace => {
                 self.input.pop();
             }
-            KeyCode::Char(character) => self.input.push(character),
+            KeyCode::Char('u') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.input.clear();
+            }
+            KeyCode::Char(character)
+                if !key_event
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                self.input.push(character);
+            }
             _ => {}
         }
     }
@@ -292,7 +348,12 @@ impl BottomPaneView for TokenProviderKeyInputView {
     }
 
     fn handle_paste(&mut self, pasted: String) -> bool {
-        self.input.push_str(&pasted);
+        let combined = format!("{}{}", self.input, pasted.trim());
+        if is_variable_name(&combined) {
+            self.input = combined;
+        } else {
+            self.reject_non_name();
+        }
         true
     }
 }

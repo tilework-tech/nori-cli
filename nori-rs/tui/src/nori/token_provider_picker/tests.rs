@@ -6,6 +6,8 @@ use crate::test_backend::VT100Backend;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use nori_config::token_providers::Preset;
+use nori_config::token_providers::Protocol;
 use pretty_assertions::assert_eq;
 use ratatui::Terminal;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -35,6 +37,7 @@ fn key_input(
         "pi".to_string(),
         "Pi".to_string(),
         "subconscious".to_string(),
+        None,
         Box::new(move |name| present.contains(&name)),
         tx,
     );
@@ -46,9 +49,7 @@ fn press(view: &mut TokenProviderKeyInputView, code: KeyCode) {
 }
 
 fn retype(view: &mut TokenProviderKeyInputView, text: &str) {
-    for _ in 0..64 {
-        press(view, KeyCode::Backspace);
-    }
+    view.handle_key_event(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
     for character in text.chars() {
         press(view, KeyCode::Char(character));
     }
@@ -65,14 +66,42 @@ fn render(view: &TokenProviderKeyInputView) -> String {
 #[test]
 fn choosing_pi_settings_starts_pi_without_a_token_provider() {
     let (tx, mut rx) = sender();
-    let params = token_provider_picker_params("pi", "Pi", Some("subconscious"));
+    let saved = TokenProvider {
+        name: "team-lab".into(),
+        preset: Preset::Subconscious,
+        protocol: Protocol::OpenaiCompletions,
+        base_url: "https://api.subconscious.dev/v1".into(),
+        env_key: "TEAM_KEY".into(),
+        model: "subconscious/glm-5.2".into(),
+    };
+    let other = TokenProvider {
+        name: "another-lab".into(),
+        ..saved.clone()
+    };
+    let codex = TokenProvider {
+        name: "codex-only".into(),
+        preset: Preset::Custom,
+        protocol: Protocol::OpenaiResponses,
+        ..saved.clone()
+    };
+    let params = token_provider_picker_params("pi", "Pi", Some("team-lab"), &[saved, other, codex]);
+    assert!(
+        params
+            .items
+            .iter()
+            .all(|item| !item.name.contains("codex-only"))
+    );
+    choose(&params, "another-lab (saved)", &tx);
+    assert!(
+        matches!(rx.try_recv(), Ok(AppEvent::ChooseTokenProvider { choice: Some(TokenProviderChoice::Saved(name)), .. }) if name == "another-lab")
+    );
     let current: Vec<&str> = params
         .items
         .iter()
         .filter(|item| item.is_current)
         .map(|item| item.name.as_str())
         .collect();
-    assert_eq!(current, ["Subconscious"]);
+    assert_eq!(current, ["team-lab (saved)"]);
     choose(&params, "Pi settings", &tx);
     assert!(matches!(
         rx.try_recv(),
@@ -83,7 +112,7 @@ fn choosing_pi_settings_starts_pi_without_a_token_provider() {
 #[test]
 fn choosing_subconscious_asks_for_its_key_variable() {
     let (tx, mut rx) = sender();
-    let params = token_provider_picker_params("pi", "Pi", None);
+    let params = token_provider_picker_params("pi", "Pi", None, &[]);
     let current: Vec<&str> = params
         .items
         .iter()
@@ -120,6 +149,45 @@ fn the_key_input_refuses_a_variable_that_is_not_set() {
     assert!(!view.is_complete());
     assert!(rx.try_recv().is_err());
     insta::assert_snapshot!("token_provider_key_input_unset", render(&view));
+}
+
+#[test]
+fn an_unset_variable_is_reported_without_repeating_what_was_typed() {
+    let (mut view, _rx) = key_input(&[]);
+    retype(&mut view, "subc_synthetic_0004");
+    press(&mut view, KeyCode::Enter);
+    let rendered = render(&view);
+    assert!(!rendered.contains("subc_synthetic_0004"), "{rendered}");
+    assert!(rendered.contains("not set"), "{rendered}");
+}
+
+#[test]
+fn pasted_text_that_is_not_a_variable_name_is_never_shown() {
+    let (mut view, mut rx) = key_input(&[]);
+    retype(&mut view, "");
+    view.handle_paste("sk-synthetic-0005".to_string());
+    let rendered = render(&view);
+    assert!(!rendered.contains("sk-synthetic-0005"), "{rendered}");
+    press(&mut view, KeyCode::Enter);
+    assert!(rx.try_recv().is_err());
+}
+
+#[test]
+fn the_key_input_starts_from_the_saved_variable() {
+    let (tx, mut rx) = sender();
+    let mut view = TokenProviderKeyInputView::new(
+        "pi".to_string(),
+        "Pi".to_string(),
+        "subconscious".to_string(),
+        Some("TEAM_SUBC_KEY".to_string()),
+        Box::new(|name| name == "TEAM_SUBC_KEY"),
+        tx,
+    );
+    press(&mut view, KeyCode::Enter);
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(AppEvent::OpenTokenProviderModelPicker { api_key_env, .. }) if api_key_env == "TEAM_SUBC_KEY"
+    ));
 }
 
 #[test]
@@ -171,7 +239,7 @@ fn the_model_picker_offers_the_catalog_and_records_the_full_choice() {
     assert_eq!(agent_name, "pi");
     assert_eq!(
         choice,
-        TokenProviderChoice {
+        TokenProviderChoice::Preset {
             preset_id: "subconscious".to_string(),
             api_key_env: "SUBCONSCIOUS_API_KEY".to_string(),
             model: "subconscious/glm-5.2".to_string(),
@@ -183,45 +251,64 @@ fn the_model_picker_offers_the_catalog_and_records_the_full_choice() {
 fn a_persisted_choice_loads_back_as_the_agent_binding_and_can_be_cleared() {
     let home = tempfile::tempdir().unwrap();
     let config_path = home.path().join("config.toml");
-    let choice = TokenProviderChoice {
+    let choice = TokenProviderChoice::Preset {
         preset_id: "subconscious".to_string(),
         api_key_env: "SUBCONSCIOUS_API_KEY".to_string(),
         model: "subconscious/glm-5.2".to_string(),
     };
     std::fs::write(
         &config_path,
-        "# kept\nagent = \"codex\"\n\n[default_models]\ncodex = \"gpt-synthetic\"\n",
+        r#"# kept
+agent = "codex"
+
+[default_models]
+codex = "gpt-synthetic"
+pi = "native/synthetic"
+
+[[token_providers]]
+name = "subconscious"
+preset = "custom"
+protocol = "openai-responses"
+env_key = "CODEX_TEST_KEY"
+model = "gpt-synthetic"
+base_url = "https://gateway.example.invalid/v1"
+
+[agent_token_providers]
+codex = "subconscious"
+"#,
     )
     .unwrap();
-    persist_token_provider_choice(home.path(), "pi", Some(&choice)).unwrap();
+    let binding = persist_token_provider_choice(home.path(), "pi", Some(&choice))
+        .unwrap()
+        .unwrap();
+    assert_eq!(binding.name, "subconscious-2");
+    assert_eq!(binding.env_key, "SUBCONSCIOUS_API_KEY");
+    assert_eq!(binding.model, "subconscious/glm-5.2");
     let written = std::fs::read_to_string(&config_path).unwrap();
     assert!(written.contains("# kept"), "{written}");
-
     let loaded = nori_config::NoriConfig::load_from_path(&config_path).unwrap();
+    assert_eq!(loaded.agent_token_providers.get("pi"), Some(&binding));
     assert_eq!(
-        loaded.agent_token_providers.get("pi").map(String::as_str),
-        Some("subconscious")
+        loaded.agent_token_providers["codex"].env_key,
+        "CODEX_TEST_KEY"
     );
-    assert_eq!(
-        loaded.token_providers.get("subconscious"),
-        Some(&nori_config::TokenProviderToml {
-            preset: "subconscious".to_string(),
-            api_key_env: "SUBCONSCIOUS_API_KEY".to_string(),
-            base_url: None,
-        })
-    );
-    assert_eq!(
-        loaded.default_models.get("pi").map(String::as_str),
-        Some("subconscious/subconscious/glm-5.2")
-    );
-
+    persist_token_provider_choice(home.path(), "pi", Some(&choice)).unwrap();
     persist_token_provider_choice(home.path(), "pi", None).unwrap();
     let cleared = nori_config::NoriConfig::load_from_path(&config_path).unwrap();
-    assert!(cleared.agent_token_providers.is_empty());
-    assert!(cleared.token_providers.contains_key("subconscious"));
-    assert_eq!(cleared.default_models.get("pi"), None);
+    assert!(!cleared.agent_token_providers.contains_key("pi"));
     assert_eq!(
-        cleared.default_models.get("codex").map(String::as_str),
-        Some("gpt-synthetic")
+        cleared.agent_token_providers["codex"],
+        loaded.agent_token_providers["codex"]
     );
+    assert_eq!(cleared.token_providers.len(), 2);
+    assert_eq!(cleared.default_models["pi"], "native/synthetic");
+
+    persist_token_provider_choice(
+        home.path(),
+        "pi",
+        Some(&TokenProviderChoice::Saved(binding.name.clone())),
+    )
+    .unwrap();
+    let rebound = nori_config::NoriConfig::load_from_path(&config_path).unwrap();
+    assert_eq!(rebound.agent_token_providers["pi"], binding);
 }

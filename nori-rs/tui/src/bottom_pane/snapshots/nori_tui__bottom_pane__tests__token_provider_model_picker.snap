@@ -1,6 +1,5 @@
 ---
 source: tui/src/bottom_pane/mod.rs
-assertion_line: 1220
 expression: "render_snapshot(&pane, Rect::new(0, 0, 100, 16))"
 ---
                                                                                                     

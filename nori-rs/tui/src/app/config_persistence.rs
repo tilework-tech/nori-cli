@@ -64,7 +64,7 @@ impl App {
         self.chat_widget.set_config(self.config.clone());
     }
 
-    pub(super) fn apply_saved_model(&mut self, key: String, value: &str) {
+    fn apply_saved_model(&mut self, key: String, value: &str) {
         self.config
             .default_model_override_keys
             .retain(|name| nori_harness::resolve_agent_slug(name) != key);

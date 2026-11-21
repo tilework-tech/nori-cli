@@ -872,7 +872,7 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
     let token_provider = config.agent_token_providers.get(&agent).cloned();
     let default_model = token_provider
         .as_ref()
-        .map(|binding| binding.model.clone())
+        .map(|binding| nori_acp_host::token_provider::bound_model_id(&agent, binding))
         .or(default_model);
     AcpBackendConfig {
         agent_token_providers: Arc::new(config.agent_token_providers.clone()),

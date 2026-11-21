@@ -476,7 +476,9 @@ impl AcpConnection {
         let credential = config
             .token_provider
             .as_ref()
-            .map(|binding| crate::token_launch::apply_codex_binding(&mut cmd, binding))
+            .map(|binding| {
+                crate::token_launch::apply_binding(&mut cmd, config.builtin_kind, binding)
+            })
             .transpose()?;
 
         let AgentProcess {

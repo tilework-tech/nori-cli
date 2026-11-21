@@ -1,6 +1,5 @@
 ---
 source: tui/src/nori/token_provider_picker/tests.rs
-assertion_line: 105
 expression: render(&view)
 ---
 ┌ Subconscious key ────────────────────────────────────────────────────┐

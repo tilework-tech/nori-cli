@@ -5,7 +5,6 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
@@ -74,12 +73,17 @@ fn picking_pi_with_subconscious_launches_pi_with_its_own_provider_directory() {
         .wait_for_text("Start a new session", TIMEOUT)
         .unwrap();
     session.send_key(Key::Enter).unwrap();
-    session.wait_for_text("Agent        Pi", TIMEOUT).unwrap();
+    session
+        .wait_for(
+            |screen| screen.contains("Started new conversation with agent: Pi"),
+            TIMEOUT,
+        )
+        .unwrap();
     session.submit_input("show the provider directory").unwrap();
     session
         .wait_for(
             |screen| screen.contains("token-providers/subconscious-pi-acp"),
-            Duration::from_secs(10),
+            TIMEOUT,
         )
         .unwrap_or_else(|_| panic!("{}", session.screen_contents()));
 
@@ -103,7 +107,7 @@ fn pi_bound_to_subconscious_without_a_key_explains_and_does_not_start() {
         .with_agent("pi".into())
         .with_extra_path(bin.path().to_owned())
         .with_extra_config_toml(
-            "[token_providers.subconscious]\npreset = 'subconscious'\napi_key_env = 'NORI_E2E_SUBC_KEY_UNSET'\n\n[agent_token_providers]\npi = 'subconscious'\n",
+            "[[token_providers]]\nname = 'subconscious'\npreset = 'subconscious'\nprotocol = 'openai-completions'\nenv_key = 'NORI_E2E_SUBC_KEY_UNSET'\nbase_url = 'https://api.subconscious.dev/v1'\nmodel = 'subconscious/glm-5.2'\n\n[agent_token_providers]\npi = 'subconscious'\n",
         );
     let mut session = TuiSession::spawn_with_config(40, 120, config).unwrap();
     session

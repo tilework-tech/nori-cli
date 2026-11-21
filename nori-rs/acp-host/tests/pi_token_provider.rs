@@ -1,35 +1,16 @@
 //! Pi launches as a built-in and can be bound to a token provider such as
 //! Subconscious without the key ever reaching a file.
 use nori_acp_host::registry::get_agent_config;
+use nori_acp_host::registry::get_agent_launch_config;
 use nori_acp_host::registry::list_available_agents;
-use nori_acp_host::token_provider::TokenProviderSelection;
-use nori_acp_host::token_provider::apply_token_provider;
+use nori_acp_host::token_provider::bound_model_id;
 use nori_acp_host::token_provider::compatible_presets;
-use nori_acp_host::token_provider::resolve_token_provider;
-use nori_config::TokenProviderToml;
+use nori_acp_host::token_provider::prepare_pi_profile;
+use nori_acp_host::token_provider::preset;
+use nori_acp_host::token_provider::supports_pi_connection;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
-use std::collections::BTreeMap;
 use std::path::Path;
-
-fn subconscious(api_key_env: &str) -> BTreeMap<String, TokenProviderToml> {
-    BTreeMap::from([(
-        "subconscious".to_string(),
-        TokenProviderToml {
-            preset: "subconscious".to_string(),
-            api_key_env: api_key_env.to_string(),
-            base_url: None,
-        },
-    )])
-}
-
-fn pi_bound_to(provider: &str) -> BTreeMap<String, String> {
-    BTreeMap::from([("pi".to_string(), provider.to_string())])
-}
-
-fn present(name: &'static str, value: &'static str) -> impl Fn(&str) -> Option<String> {
-    move |requested| (requested == name).then(|| value.to_string())
-}
 
 #[expect(
     clippy::unwrap_used,
@@ -78,9 +59,15 @@ fn only_pi_offers_subconscious_in_this_cli() {
 
 #[test]
 fn an_unbound_pi_keeps_its_own_configuration() {
-    let selection =
-        resolve_token_provider("pi", &subconscious("SUBC_KEY"), &BTreeMap::new(), None).unwrap();
-    assert_eq!(selection, None);
+    let mut config = get_agent_config("pi").unwrap();
+    let home = tempfile::tempdir().unwrap();
+    prepare_pi_profile(&mut config, home.path(), &|_| {
+        panic!("native Pi must not read a named key")
+    })
+    .unwrap();
+    assert!(config.token_provider.is_none());
+    assert!(!config.env.contains_key("PI_CODING_AGENT_DIR"));
+    assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
 }
 
 #[test]
@@ -88,28 +75,21 @@ fn a_subconscious_binding_points_pi_at_a_private_directory_that_names_the_key_va
     let variable = "NORI_TEST_SUBC_KEY_PRESENT";
     let secret = "subc-synthetic-key-0001";
     let nori_home = tempfile::tempdir().unwrap();
-
-    let selection = resolve_token_provider(
-        "pi",
-        &subconscious(variable),
-        &pi_bound_to("subconscious"),
-        Some("subconscious/subconscious/glm-5.2"),
-    )
-    .unwrap()
-    .expect("explicit binding");
-    let mut config = get_agent_config("pi").unwrap();
-    apply_token_provider(
-        &mut config,
-        &selection,
-        nori_home.path(),
-        &present(variable, secret),
-    )
+    let binding =
+        preset("subconscious")
+            .unwrap()
+            .connection("lab", variable, "subconscious/glm-5.2");
+    assert_eq!(bound_model_id("pi", &binding), "lab/subconscious/glm-5.2");
+    let mut config = get_agent_launch_config("pi-acp", Some(&binding)).unwrap();
+    prepare_pi_profile(&mut config, nori_home.path(), &|name| {
+        (name == variable).then(|| secret.to_owned())
+    })
     .unwrap();
 
     let agent_dir = Path::new(config.env.get("PI_CODING_AGENT_DIR").expect("agent dir"));
     assert!(agent_dir.starts_with(nori_home.path()));
     let models = read_json(&agent_dir.join("models.json"));
-    let provider = &models["providers"]["subconscious"];
+    let provider = &models["providers"]["lab"];
     assert_eq!(provider["baseUrl"], "https://api.subconscious.dev/v1");
     assert_eq!(provider["api"], "openai-completions");
     assert_eq!(provider["apiKey"], format!("${variable}"));
@@ -123,7 +103,7 @@ fn a_subconscious_binding_points_pi_at_a_private_directory_that_names_the_key_va
     assert!(model_ids.contains(&"subconscious/glm-5.3-marathon"));
     assert!(model_ids.contains(&"subconscious/glm-5.2"));
     let settings = read_json(&agent_dir.join("settings.json"));
-    assert_eq!(settings["defaultProvider"], "subconscious");
+    assert_eq!(settings["defaultProvider"], "lab");
     assert_eq!(settings["defaultModel"], "subconscious/glm-5.2");
 
     assert!(config.env.values().all(|value| !value.contains(secret)));
@@ -148,77 +128,33 @@ fn a_subconscious_binding_points_pi_at_a_private_directory_that_names_the_key_va
 }
 
 #[test]
-fn a_binding_without_a_saved_model_starts_on_the_preset_default() {
-    let variable = "NORI_TEST_SUBC_KEY_DEFAULT_MODEL";
-    let nori_home = tempfile::tempdir().unwrap();
-    let selection = resolve_token_provider(
-        "pi",
-        &subconscious(variable),
-        &pi_bound_to("subconscious"),
-        None,
-    )
-    .unwrap()
-    .unwrap();
-    let mut config = get_agent_config("pi").unwrap();
-    apply_token_provider(
-        &mut config,
-        &selection,
-        nori_home.path(),
-        &present(variable, "subc-synthetic-key-0002"),
-    )
-    .unwrap();
-    let agent_dir = Path::new(config.env.get("PI_CODING_AGENT_DIR").unwrap());
-    let settings = read_json(&agent_dir.join("settings.json"));
-    assert_eq!(settings["defaultModel"], "subconscious/glm-5.3-marathon");
-}
-
-#[test]
 fn a_missing_credential_stops_the_launch_and_names_the_variable() {
     let variable = "NORI_TEST_SUBC_KEY_ABSENT";
-    let nori_home = tempfile::tempdir().unwrap();
-    let selection: TokenProviderSelection = resolve_token_provider(
-        "pi",
-        &subconscious(variable),
-        &pi_bound_to("subconscious"),
-        None,
-    )
-    .unwrap()
-    .unwrap();
-    let mut config = get_agent_config("pi").unwrap();
-
-    let error = apply_token_provider(&mut config, &selection, nori_home.path(), &|_| None)
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains(variable), "{error}");
-    assert!(error.contains("Subconscious"), "{error}");
+    let home = tempfile::tempdir().unwrap();
+    let preset = preset("subconscious").unwrap();
+    let binding = preset.connection("another-name", variable, preset.default_model);
+    let mut config = get_agent_launch_config("pi", Some(&binding)).unwrap();
+    let error = prepare_pi_profile(&mut config, home.path(), &|_| None).unwrap_err();
+    assert!(error.to_string().contains(variable));
     assert!(!config.env.contains_key("PI_CODING_AGENT_DIR"));
-    assert_eq!(std::fs::read_dir(nori_home.path()).unwrap().count(), 0);
+    assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
 }
 
 #[test]
-fn explicit_bindings_that_cannot_be_honored_are_errors() {
-    let providers = subconscious("SUBC_KEY");
-    let unknown = resolve_token_provider("pi", &providers, &pi_bound_to("missing"), None);
-    assert!(unknown.unwrap_err().to_string().contains("missing"));
+fn named_connections_must_match_the_contract_endpoint_and_pi_catalog() {
+    let preset = preset("subconscious").unwrap();
+    let mut binding = preset.connection("team_gateway", "SUBC_KEY", preset.default_model);
+    assert!(supports_pi_connection(&binding));
+    binding.model = "other-model".into();
+    assert!(!supports_pi_connection(&binding));
+    binding.model = preset.default_model.into();
+    binding.base_url = "https://example.invalid/v1".into();
+    assert!(!supports_pi_connection(&binding));
+}
 
-    let unsupported = resolve_token_provider(
-        "claude-code",
-        &providers,
-        &BTreeMap::from([("claude-code".to_string(), "subconscious".to_string())]),
-        None,
-    );
-    assert!(unsupported.unwrap_err().to_string().contains("Claude Code"));
-
-    let foreign_model = resolve_token_provider(
-        "pi",
-        &providers,
-        &pi_bound_to("subconscious"),
-        Some("subconscious/not-a-subconscious-model"),
-    );
-    assert!(
-        foreign_model
-            .unwrap_err()
-            .to_string()
-            .contains("not-a-subconscious-model")
-    );
+#[test]
+fn provider_ids_must_be_safe_directory_names() {
+    let preset = preset("subconscious").unwrap();
+    let binding = preset.connection("../outside", "SUBC_KEY", preset.default_model);
+    assert!(!supports_pi_connection(&binding));
 }

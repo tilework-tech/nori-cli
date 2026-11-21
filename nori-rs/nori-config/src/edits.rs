@@ -4,6 +4,7 @@ use crate::CONFIG_FILE;
 use crate::McpServerConfig;
 use crate::ToolOutput;
 use crate::TrustLevel;
+use crate::token_providers::TokenProvider;
 use anyhow::Context;
 use anyhow::Result;
 use serde::Serialize;
@@ -44,6 +45,7 @@ enum ConfigEdit {
     ClearPath {
         path: Vec<String>,
     },
+    AppendTokenProvider(TokenProvider),
     ReplaceMcpServers(BTreeMap<String, McpServerConfig>),
 }
 
@@ -110,6 +112,12 @@ impl NoriConfigEdits {
         self
     }
 
+    /// Add a named connection without replacing other entries or their comments.
+    pub fn append_token_provider(mut self, provider: TokenProvider) -> Self {
+        self.edits.push(ConfigEdit::AppendTokenProvider(provider));
+        self
+    }
+
     /// Replace the complete MCP server table with canonical protocol config.
     pub fn replace_mcp_servers(mut self, servers: &BTreeMap<String, McpServerConfig>) -> Self {
         self.edits
@@ -166,6 +174,37 @@ impl NoriConfigEdits {
                 }
                 ConfigEdit::ClearPath { path } => {
                     clear_path(&mut document, &path);
+                }
+                ConfigEdit::AppendTokenProvider(provider) => {
+                    let table = toml::to_string(&provider)?
+                        .parse::<DocumentMut>()?
+                        .into_table();
+                    let entries = document
+                        .as_table_mut()
+                        .entry("token_providers")
+                        .or_insert_with(|| Item::ArrayOfTables(Default::default()));
+                    if let Some(tables) = entries.as_array_of_tables_mut() {
+                        anyhow::ensure!(
+                            !tables
+                                .iter()
+                                .any(|t| t.get("name").and_then(Item::as_str)
+                                    == Some(&provider.name)),
+                            "token provider name is already in use"
+                        );
+                        tables.push(table);
+                    } else if let Some(array) = entries.as_array_mut() {
+                        anyhow::ensure!(
+                            !array
+                                .iter()
+                                .filter_map(Value::as_inline_table)
+                                .any(|t| t.get("name").and_then(Value::as_str)
+                                    == Some(&provider.name)),
+                            "token provider name is already in use"
+                        );
+                        array.push(Value::InlineTable(table.into_inline_table()));
+                    } else {
+                        anyhow::bail!("token_providers must be an array of named connections");
+                    }
                 }
                 ConfigEdit::ReplaceMcpServers(servers) => {
                     replace_mcp_servers(&mut document, &servers)?;

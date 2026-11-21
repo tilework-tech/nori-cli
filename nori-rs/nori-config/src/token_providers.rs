@@ -86,7 +86,8 @@ pub(crate) fn deserialize_bindings<'de, D: Deserializer<'de>>(
 }
 
 impl TokenProvider {
-    fn validate(&self) -> Result<()> {
+    /// Check connection metadata and the preset's endpoint and protocol constraints.
+    pub fn validate(&self) -> Result<()> {
         ensure!(
             !self.name.is_empty()
                 && self

@@ -13,9 +13,11 @@ use tokio::process::Command;
 
 const CHILD_KEY: &str = "NORI_PROVIDER_API_KEY";
 
-pub(crate) fn apply_codex_binding(cmd: &mut Command, binding: &TokenProvider) -> Result<Arc<str>> {
-    let key = std::env::var(&binding.env_key)
-        .ok()
+pub(crate) fn credential(
+    binding: &TokenProvider,
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> Result<Arc<str>> {
+    let key = lookup(&binding.env_key)
         .filter(|s| !s.trim().is_empty())
         .with_context(|| {
             format!(
@@ -26,6 +28,23 @@ pub(crate) fn apply_codex_binding(cmd: &mut Command, binding: &TokenProvider) ->
     ensure!(
         !key.chars().any(char::is_control),
         "token provider credential contains control characters"
+    );
+    Ok(Arc::from(key))
+}
+
+pub(crate) fn apply_binding(
+    cmd: &mut Command,
+    kind: Option<crate::registry::AgentKind>,
+    binding: &TokenProvider,
+) -> Result<Arc<str>> {
+    let key = credential(binding, &|key| std::env::var(key).ok())?;
+    if kind == Some(crate::registry::AgentKind::Pi) {
+        cmd.env(&binding.env_key, key.as_ref());
+        return Ok(key);
+    }
+    ensure!(
+        kind == Some(crate::registry::AgentKind::Codex),
+        "no named token provider launch adapter"
     );
     let mut provider = json!({
         "name": binding.name,
@@ -48,8 +67,8 @@ pub(crate) fn apply_codex_binding(cmd: &mut Command, binding: &TokenProvider) ->
         .env_remove("CODEX_API_KEY")
         .env("MODEL_PROVIDER", "nori_binding")
         .env("CODEX_CONFIG", config.to_string())
-        .env(CHILD_KEY, &key);
-    Ok(Arc::from(key))
+        .env(CHILD_KEY, key.as_ref());
+    Ok(key)
 }
 
 pub(crate) fn redact<'a>(text: &'a str, key: Option<&str>) -> Cow<'a, str> {

@@ -251,7 +251,7 @@ fn exec_reports_why_the_agent_could_not_start() -> Result<(), Box<dyn std::error
     let nori_home = TempDir::new()?;
     std::fs::write(
         nori_home.path().join("config.toml"),
-        "[token_providers.subconscious]\npreset = 'subconscious'\napi_key_env = 'NORI_EXEC_TEST_SUBC_KEY_UNSET'\n\n[agent_token_providers]\npi = 'subconscious'\n",
+        "[[token_providers]]\nname = 'subconscious'\npreset = 'subconscious'\nprotocol = 'openai-completions'\nbase_url = 'https://api.subconscious.dev/v1'\nenv_key = 'NORI_EXEC_TEST_SUBC_KEY_UNSET'\nmodel = 'subconscious/glm-5.2'\n\n[agent_token_providers]\npi = 'subconscious'\n",
     )?;
     let output = Command::cargo_bin("nori")?
         .env("NORI_HOME", nori_home.path())
