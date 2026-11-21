@@ -71,6 +71,12 @@ pi = "subconscious/subconscious/glm-5.2" # <provider id>/<model id>
   removes the entry and drops a saved model that belonged to the provider.
 - For a bound Pi launch, Nori writes a private Pi agent directory under
   `$NORI_HOME/token-providers/` and points `PI_CODING_AGENT_DIR` at it.
+  Pi then does not load `~/.pi/agent`: its extensions, skills, settings and
+  session history stay with unbound launches, so resuming a Pi session works
+  only under the same binding.
+- While bound, `/model` can still list other Pi providers whose own key
+  variables are set. Saving one of those makes the next launch stop with a
+  "not offered by" error until you choose a model again in `/agent`.
 
 This is an interim, CLI-local representation. A shared token-provider
 configuration is expected to replace it.

@@ -1520,7 +1520,7 @@ mod tests {
     fn test_list_available_agents_debug_build() {
         reset_registry();
         let agents = list_available_agents();
-        assert_eq!(agents.len(), 7);
+        assert_eq!(agents.len(), AgentKind::all().len() + 2);
 
         let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
         assert!(names.contains(&"Mock ACP"), "Should have Mock ACP");
@@ -1592,9 +1592,9 @@ mod tests {
     }
 
     #[test]
-    fn test_build_default_agents_returns_five_builtins() {
+    fn test_build_default_agents_returns_every_builtin() {
         let agents = build_default_agents();
-        assert_eq!(agents.len(), 5);
+        assert_eq!(agents.len(), AgentKind::all().len());
         let slugs: Vec<&str> = agents.iter().map(|a| a.slug.as_str()).collect();
         assert!(slugs.contains(&"claude-code"));
         assert!(slugs.contains(&"codex"));
@@ -1629,7 +1629,7 @@ mod tests {
     #[test]
     fn test_build_registry_with_no_custom_agents() {
         let registry = build_registry(vec![]).unwrap();
-        assert_eq!(registry.len(), 5);
+        assert_eq!(registry.len(), AgentKind::all().len());
     }
 
     #[test]
@@ -1653,7 +1653,7 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom]).unwrap();
-        assert_eq!(registry.len(), 6);
+        assert_eq!(registry.len(), AgentKind::all().len() + 1);
         let kimi = registry.iter().find(|a| a.slug == "kimi").unwrap();
         assert_eq!(kimi.name, "Kimi");
         assert!(kimi.kind.is_none());
@@ -1681,8 +1681,8 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom_claude]).unwrap();
-        // Should still be 3 agents (override, not add)
-        assert_eq!(registry.len(), 5);
+        // An override replaces the built-in rather than adding an agent.
+        assert_eq!(registry.len(), AgentKind::all().len());
         let claude = registry.iter().find(|a| a.slug == "claude-code").unwrap();
         assert_eq!(claude.name, "My Claude");
         assert_eq!(claude.context_window_size, Some(300_000));

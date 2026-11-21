@@ -9,6 +9,7 @@ use std::path::Path;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use nori_harness::token_provider::compatible_presets;
 use nori_harness::token_provider::preset;
 use ratatui::buffer::Buffer;
@@ -42,11 +43,6 @@ pub(crate) struct TokenProviderChoice {
     pub api_key_env: String,
     /// Provider model id.
     pub model: String,
-}
-
-/// Whether picking this agent should first ask for a token provider.
-pub(crate) fn offers_token_providers(agent_name: &str) -> bool {
-    !compatible_presets(agent_name).is_empty()
 }
 
 /// The provider step: the agent's own settings, or one of its token providers.
@@ -179,20 +175,23 @@ pub(crate) fn persist_token_provider_choice(
             .set_default_model(agent, &format!("{}/{}", choice.preset_id, choice.model)),
         None => {
             let config_path = nori_home.join(nori_config::CONFIG_FILE);
-            let saved = nori_config::NoriConfig::load_from_path(&config_path).ok();
-            let bound_model = saved.as_ref().and_then(|config| {
-                let provider = config.agent_token_providers.get(agent)?;
-                config
-                    .default_models
-                    .get(agent)
-                    .filter(|model| model.starts_with(&format!("{provider}/")))
-            });
-            let edits = edits.clear_path(&["agent_token_providers", agent]);
-            if bound_model.is_some() {
-                edits.clear_path(&["default_models", agent])
-            } else {
-                edits
+            let mut edits = edits;
+            if config_path.exists() {
+                let saved = nori_config::NoriConfig::load_from_path(&config_path)?;
+                let same_agent = |key: &str| nori_harness::resolve_agent_slug(key) == agent;
+                for (key, provider) in &saved.agent_token_providers {
+                    if !same_agent(key) {
+                        continue;
+                    }
+                    edits = edits.clear_path(&["agent_token_providers", key]);
+                    for (model_key, model) in &saved.default_models {
+                        if same_agent(model_key) && model.starts_with(&format!("{provider}/")) {
+                            edits = edits.clear_path(&["default_models", model_key]);
+                        }
+                    }
+                }
             }
+            edits
         }
     };
     edits.apply_blocking()
@@ -212,10 +211,12 @@ pub(crate) struct TokenProviderKeyInputView {
 }
 
 impl TokenProviderKeyInputView {
+    /// `saved` is the variable already configured for this provider, if any.
     pub(crate) fn new(
         agent_name: String,
         display_name: String,
         preset_id: String,
+        saved: Option<String>,
         is_set: Box<dyn Fn(&str) -> bool>,
         app_event_tx: AppEventSender,
     ) -> Self {
@@ -224,8 +225,8 @@ impl TokenProviderKeyInputView {
             agent_name,
             display_name,
             provider_name: preset.map_or_else(|| preset_id.clone(), |preset| preset.name.into()),
-            input: preset
-                .map(|preset| preset.api_key_env.to_string())
+            input: saved
+                .or_else(|| preset.map(|preset| preset.api_key_env.to_string()))
                 .unwrap_or_default(),
             preset_id,
             error: None,
@@ -235,22 +236,21 @@ impl TokenProviderKeyInputView {
         }
     }
 
+    fn reject_non_name(&mut self) {
+        // The text may be the key itself, so it is cleared, not echoed.
+        self.input.clear();
+        self.error = Some("That is not an environment variable name; enter the name.".to_string());
+    }
+
     fn submit(&mut self) {
         let name = self.input.trim().to_string();
-        let mut characters = name.chars();
-        let valid = characters
-            .next()
-            .is_some_and(|first| first == '_' || first.is_ascii_alphabetic())
-            && characters.all(|character| character == '_' || character.is_ascii_alphanumeric());
-        if !valid {
-            // The text may be the key itself, so it is cleared, not echoed.
-            self.input.clear();
-            self.error =
-                Some("That is not an environment variable name; enter the name.".to_string());
+        if !is_variable_name(&name) {
+            self.reject_non_name();
             return;
         }
         if !(self.is_set)(&name) {
-            self.error = Some(format!("{name} is not set in nori's environment."));
+            self.input.clear();
+            self.error = Some("That variable is not set in nori's environment.".to_string());
             return;
         }
         self.app_event_tx
@@ -262,6 +262,14 @@ impl TokenProviderKeyInputView {
             });
         self.complete = true;
     }
+}
+
+fn is_variable_name(text: &str) -> bool {
+    let mut characters = text.chars();
+    characters
+        .next()
+        .is_some_and(|first| first == '_' || first.is_ascii_alphabetic())
+        && characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
 }
 
 impl BottomPaneView for TokenProviderKeyInputView {
@@ -277,7 +285,16 @@ impl BottomPaneView for TokenProviderKeyInputView {
             KeyCode::Backspace => {
                 self.input.pop();
             }
-            KeyCode::Char(character) => self.input.push(character),
+            KeyCode::Char('u') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.input.clear();
+            }
+            KeyCode::Char(character)
+                if !key_event
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                self.input.push(character);
+            }
             _ => {}
         }
     }
@@ -292,7 +309,12 @@ impl BottomPaneView for TokenProviderKeyInputView {
     }
 
     fn handle_paste(&mut self, pasted: String) -> bool {
-        self.input.push_str(&pasted);
+        let combined = format!("{}{}", self.input, pasted.trim());
+        if is_variable_name(&combined) {
+            self.input = combined;
+        } else {
+            self.reject_non_name();
+        }
         true
     }
 }

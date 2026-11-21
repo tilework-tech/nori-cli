@@ -5,7 +5,6 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
@@ -72,12 +71,17 @@ fn picking_pi_with_subconscious_launches_pi_with_its_own_provider_directory() {
         .wait_for_text("Start a new session", TIMEOUT)
         .unwrap();
     session.send_key(Key::Enter).unwrap();
-    session.wait_for_text("Agent        Pi", TIMEOUT).unwrap();
+    session
+        .wait_for(
+            |screen| screen.contains("Started new conversation with agent: Pi"),
+            TIMEOUT,
+        )
+        .unwrap();
     session.submit_input("show the provider directory").unwrap();
     session
         .wait_for(
             |screen| screen.contains("token-providers/subconscious-pi-acp"),
-            Duration::from_secs(10),
+            TIMEOUT,
         )
         .unwrap_or_else(|_| panic!("{}", session.screen_contents()));
 

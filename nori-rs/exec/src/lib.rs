@@ -67,15 +67,20 @@ pub async fn run_plaintext(
     {
         Ok(request_id) => request_id,
         Err(error) => {
-            // A session that never started reports why before it closes.
-            while let Ok(event) = launched.events.try_recv() {
-                if let SessionEvent::Nori(NoriEvent::SessionEnded(ended)) = event
-                    && let Some(message) = ended.message
-                {
-                    return Err(anyhow::anyhow!(message));
+            // A session that never started reports why as it closes.
+            let startup_failure = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                while let Some(event) = launched.events.recv().await {
+                    if let SessionEvent::Nori(NoriEvent::SessionEnded(ended)) = event {
+                        return ended.message;
+                    }
                 }
-            }
-            return Err(error);
+                None
+            })
+            .await;
+            return Err(match startup_failure {
+                Ok(Some(message)) => anyhow::anyhow!(message),
+                Ok(None) | Err(_) => error,
+            });
         }
     };
     let result = collect_prompt(

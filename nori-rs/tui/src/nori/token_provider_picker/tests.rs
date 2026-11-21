@@ -35,6 +35,7 @@ fn key_input(
         "pi".to_string(),
         "Pi".to_string(),
         "subconscious".to_string(),
+        None,
         Box::new(move |name| present.contains(&name)),
         tx,
     );
@@ -46,9 +47,7 @@ fn press(view: &mut TokenProviderKeyInputView, code: KeyCode) {
 }
 
 fn retype(view: &mut TokenProviderKeyInputView, text: &str) {
-    for _ in 0..64 {
-        press(view, KeyCode::Backspace);
-    }
+    view.handle_key_event(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
     for character in text.chars() {
         press(view, KeyCode::Char(character));
     }
@@ -120,6 +119,60 @@ fn the_key_input_refuses_a_variable_that_is_not_set() {
     assert!(!view.is_complete());
     assert!(rx.try_recv().is_err());
     insta::assert_snapshot!("token_provider_key_input_unset", render(&view));
+}
+
+#[test]
+fn an_unset_variable_is_reported_without_repeating_what_was_typed() {
+    let (mut view, _rx) = key_input(&[]);
+    retype(&mut view, "subc_synthetic_0004");
+    press(&mut view, KeyCode::Enter);
+    let rendered = render(&view);
+    assert!(!rendered.contains("subc_synthetic_0004"), "{rendered}");
+    assert!(rendered.contains("not set"), "{rendered}");
+}
+
+#[test]
+fn pasted_text_that_is_not_a_variable_name_is_never_shown() {
+    let (mut view, mut rx) = key_input(&[]);
+    retype(&mut view, "");
+    view.handle_paste("sk-synthetic-0005".to_string());
+    let rendered = render(&view);
+    assert!(!rendered.contains("sk-synthetic-0005"), "{rendered}");
+    press(&mut view, KeyCode::Enter);
+    assert!(rx.try_recv().is_err());
+}
+
+#[test]
+fn the_key_input_starts_from_the_saved_variable() {
+    let (tx, mut rx) = sender();
+    let mut view = TokenProviderKeyInputView::new(
+        "pi".to_string(),
+        "Pi".to_string(),
+        "subconscious".to_string(),
+        Some("TEAM_SUBC_KEY".to_string()),
+        Box::new(|name| name == "TEAM_SUBC_KEY"),
+        tx,
+    );
+    press(&mut view, KeyCode::Enter);
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(AppEvent::OpenTokenProviderModelPicker { api_key_env, .. }) if api_key_env == "TEAM_SUBC_KEY"
+    ));
+}
+
+#[test]
+fn choosing_pi_settings_clears_bindings_saved_under_an_alias() {
+    let home = tempfile::tempdir().unwrap();
+    let config_path = home.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        "[token_providers.subconscious]\npreset = 'subconscious'\napi_key_env = 'SUBCONSCIOUS_API_KEY'\n\n[agent_token_providers]\npi-acp = 'subconscious'\n\n[default_models]\npi-acp = 'subconscious/subconscious/glm-5.2'\n",
+    )
+    .unwrap();
+    persist_token_provider_choice(home.path(), "pi", None).unwrap();
+    let cleared = nori_config::NoriConfig::load_from_path(&config_path).unwrap();
+    assert!(cleared.agent_token_providers.is_empty());
+    assert!(cleared.default_models.is_empty());
 }
 
 #[test]

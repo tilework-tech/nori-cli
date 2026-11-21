@@ -113,6 +113,7 @@ static PRESETS: &[TokenProviderPreset] = &[TokenProviderPreset {
             "DeepSeek-V4.1-Flash Marathon",
         ),
     ],
+    // Mirrors the broker's compatibility table; this CLI configures `pi-acp`.
     harnesses: &[
         HarnessProtocol {
             harness: "pi-acp",
@@ -143,11 +144,6 @@ static PRESETS: &[TokenProviderPreset] = &[TokenProviderPreset {
     session_affinity: true,
 }];
 
-/// Every preset this CLI knows.
-pub fn presets() -> &'static [TokenProviderPreset] {
-    PRESETS
-}
-
 /// Look up a preset by id.
 pub fn preset(id: &str) -> Option<&'static TokenProviderPreset> {
     PRESETS.iter().find(|preset| preset.id == id)
@@ -172,10 +168,13 @@ fn harness_protocol(
         .find(|entry| entry.harness == harness)
 }
 
-/// Presets the named agent can launch with in this CLI.
+/// Presets the named agent can launch with in this CLI. A custom agent that
+/// reuses a built-in slug is not offered any.
 pub fn compatible_presets(agent_name: &str) -> Vec<&'static TokenProviderPreset> {
-    let Some(harness) =
-        AgentKind::from_slug(&resolve_agent_slug(agent_name)).and_then(configurable_harness)
+    let Some(harness) = crate::registry::get_agent_config(agent_name)
+        .ok()
+        .and_then(|config| config.builtin_kind)
+        .and_then(configurable_harness)
     else {
         return Vec::new();
     };
@@ -197,23 +196,18 @@ pub struct TokenProviderSelection {
     pub model: &'static PresetModel,
 }
 
-impl TokenProviderSelection {
-    /// The model id as the agent advertises it over ACP.
-    pub fn agent_model_id(&self) -> String {
-        format!("{}/{}", self.provider_id, self.model.id)
-    }
-}
-
 /// Find the token provider an agent is bound to.
 ///
 /// Returns `Ok(None)` when the agent has no binding, so it uses its own login
 /// and settings. A binding that cannot be honored is an error: the agent is
 /// never started without the provider the user chose.
 ///
-/// `model` is the saved model for the agent in its ACP form
-/// (`<provider id>/<model id>`).
+/// `builtin` is the registered agent's built-in kind, `None` for a custom
+/// agent. `model` is the saved model for the agent in its ACP form
+/// (`<provider id>/<model id>`) or a bare catalog id.
 pub fn resolve_token_provider(
     agent_name: &str,
+    builtin: Option<AgentKind>,
     providers: &BTreeMap<String, TokenProviderToml>,
     bindings: &BTreeMap<String, String>,
     model: Option<&str>,
@@ -226,9 +220,18 @@ pub fn resolve_token_provider(
     else {
         return Ok(None);
     };
-    let Some(agent) = AgentKind::from_slug(&canonical) else {
-        bail!("Agent `{canonical}` cannot use token provider `{provider_id}`.");
+    let Some(agent) = builtin else {
+        bail!(
+            "The custom agent `{canonical}` cannot use token provider `{provider_id}`. Remove it from [agent_token_providers]."
+        );
     };
+    let safe_id = !provider_id.is_empty()
+        && provider_id
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'));
+    if !safe_id {
+        bail!("Token provider id `{provider_id}` may contain only letters, digits, `-` and `_`.");
+    }
     let display = agent.display_name();
     let Some(provider) = providers.get(provider_id) else {
         bail!(
@@ -250,13 +253,14 @@ pub fn resolve_token_provider(
             preset.name
         );
     }
-    let model_id = match model {
-        Some(saved) => saved
+    let model_id = model.unwrap_or(preset.default_model);
+    let catalog_entry = |id: &str| preset.models.iter().find(|entry| entry.id == id);
+    let found = catalog_entry(model_id).or_else(|| {
+        model_id
             .strip_prefix(&format!("{provider_id}/"))
-            .unwrap_or(saved),
-        None => preset.default_model,
-    };
-    let Some(model) = preset.models.iter().find(|entry| entry.id == model_id) else {
+            .and_then(catalog_entry)
+    });
+    let Some(model) = found else {
         bail!(
             "Model `{model_id}` is not offered by {}. Choose one with /agent.",
             preset.name
@@ -385,10 +389,26 @@ fn write_pi_agent_dir(
     Ok(())
 }
 
+/// Write through a private temporary file and rename it into place, so a Pi
+/// starting at the same moment never reads a partial file.
 fn write_private(path: &Path, contents: &str) -> Result<()> {
-    std::fs::write(path, contents)
-        .with_context(|| format!("failed to write {}", path.display()))?;
-    restrict(path, 0o600)
+    use std::io::Write as _;
+    let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&temporary)
+        .with_context(|| format!("failed to write {}", temporary.display()))?;
+    file.write_all(contents.as_bytes())
+        .with_context(|| format!("failed to write {}", temporary.display()))?;
+    restrict(&temporary, 0o600)?;
+    std::fs::rename(&temporary, path)
+        .with_context(|| format!("failed to replace {}", path.display()))
 }
 
 #[cfg(unix)]

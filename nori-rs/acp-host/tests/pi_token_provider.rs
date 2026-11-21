@@ -1,5 +1,6 @@
 //! Pi launches as a built-in and can be bound to a token provider such as
 //! Subconscious without the key ever reaching a file.
+use nori_acp_host::registry::AgentKind;
 use nori_acp_host::registry::get_agent_config;
 use nori_acp_host::registry::list_available_agents;
 use nori_acp_host::token_provider::TokenProviderSelection;
@@ -78,8 +79,14 @@ fn only_pi_offers_subconscious_in_this_cli() {
 
 #[test]
 fn an_unbound_pi_keeps_its_own_configuration() {
-    let selection =
-        resolve_token_provider("pi", &subconscious("SUBC_KEY"), &BTreeMap::new(), None).unwrap();
+    let selection = resolve_token_provider(
+        "pi",
+        Some(AgentKind::Pi),
+        &subconscious("SUBC_KEY"),
+        &BTreeMap::new(),
+        None,
+    )
+    .unwrap();
     assert_eq!(selection, None);
 }
 
@@ -91,6 +98,7 @@ fn a_subconscious_binding_points_pi_at_a_private_directory_that_names_the_key_va
 
     let selection = resolve_token_provider(
         "pi",
+        Some(AgentKind::Pi),
         &subconscious(variable),
         &pi_bound_to("subconscious"),
         Some("subconscious/subconscious/glm-5.2"),
@@ -153,6 +161,7 @@ fn a_binding_without_a_saved_model_starts_on_the_preset_default() {
     let nori_home = tempfile::tempdir().unwrap();
     let selection = resolve_token_provider(
         "pi",
+        Some(AgentKind::Pi),
         &subconscious(variable),
         &pi_bound_to("subconscious"),
         None,
@@ -178,6 +187,7 @@ fn a_missing_credential_stops_the_launch_and_names_the_variable() {
     let nori_home = tempfile::tempdir().unwrap();
     let selection: TokenProviderSelection = resolve_token_provider(
         "pi",
+        Some(AgentKind::Pi),
         &subconscious(variable),
         &pi_bound_to("subconscious"),
         None,
@@ -198,11 +208,18 @@ fn a_missing_credential_stops_the_launch_and_names_the_variable() {
 #[test]
 fn explicit_bindings_that_cannot_be_honored_are_errors() {
     let providers = subconscious("SUBC_KEY");
-    let unknown = resolve_token_provider("pi", &providers, &pi_bound_to("missing"), None);
+    let unknown = resolve_token_provider(
+        "pi",
+        Some(AgentKind::Pi),
+        &providers,
+        &pi_bound_to("missing"),
+        None,
+    );
     assert!(unknown.unwrap_err().to_string().contains("missing"));
 
     let unsupported = resolve_token_provider(
         "claude-code",
+        Some(AgentKind::ClaudeCode),
         &providers,
         &BTreeMap::from([("claude-code".to_string(), "subconscious".to_string())]),
         None,
@@ -211,6 +228,7 @@ fn explicit_bindings_that_cannot_be_honored_are_errors() {
 
     let foreign_model = resolve_token_provider(
         "pi",
+        Some(AgentKind::Pi),
         &providers,
         &pi_bound_to("subconscious"),
         Some("subconscious/not-a-subconscious-model"),
@@ -221,4 +239,54 @@ fn explicit_bindings_that_cannot_be_honored_are_errors() {
             .to_string()
             .contains("not-a-subconscious-model")
     );
+}
+
+#[test]
+fn a_catalog_model_id_without_the_provider_prefix_is_accepted() {
+    let selection = resolve_token_provider(
+        "pi",
+        Some(AgentKind::Pi),
+        &subconscious("SUBC_KEY"),
+        &pi_bound_to("subconscious"),
+        Some("subconscious/glm-5.2"),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(selection.model.id, "subconscious/glm-5.2");
+}
+
+#[test]
+fn a_custom_agent_that_reuses_the_pi_slug_cannot_be_bound() {
+    let error = resolve_token_provider(
+        "pi",
+        None,
+        &subconscious("SUBC_KEY"),
+        &pi_bound_to("subconscious"),
+        None,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("custom"), "{error}");
+}
+
+#[test]
+fn provider_ids_must_be_safe_directory_names() {
+    let providers = BTreeMap::from([(
+        "../outside".to_string(),
+        TokenProviderToml {
+            preset: "subconscious".to_string(),
+            api_key_env: "SUBC_KEY".to_string(),
+            base_url: None,
+        },
+    )]);
+    let error = resolve_token_provider(
+        "pi",
+        Some(AgentKind::Pi),
+        &providers,
+        &pi_bound_to("../outside"),
+        None,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("../outside"), "{error}");
 }

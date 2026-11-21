@@ -670,3 +670,20 @@ async fn pi_bound_to_a_token_provider_without_its_key_fails_before_launch() {
         "no Pi configuration may be written when its credential is missing"
     );
 }
+
+#[tokio::test]
+#[serial]
+async fn a_token_provider_change_while_preparing_is_not_activated_on_the_old_process() {
+    let temp = tempfile::tempdir().expect("create test directory");
+    let mut prepared = prepare_agent(prepare_spec(temp.path(), temp.path().join("wire-logs")))
+        .await
+        .expect("prepare agent");
+    let mut changed = prepare_spec(temp.path(), temp.path().join("wire-logs"));
+    Arc::make_mut(&mut changed.config).agent_token_providers =
+        [("mock-model".to_string(), "subconscious".to_string())].into();
+
+    let error = refresh_prepared_agent(&mut prepared, changed)
+        .expect_err("a binding change must not reuse the prepared process");
+    assert!(format!("{error:#}").contains("token provider"), "{error:#}");
+    prepared.shutdown().await;
+}

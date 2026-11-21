@@ -54,7 +54,7 @@ pub fn agent_picker_params_with_subtitle(
             // Start preparing the selected agent as soon as the picker closes,
             // after asking for a model provider when the agent offers several.
             let choose_provider =
-                crate::nori::token_provider_picker::offers_token_providers(&agent_name);
+                !nori_harness::token_provider::compatible_presets(&agent_name).is_empty();
             let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
                 let agent_name = agent_name.clone();
                 let display_name = display_name.clone();

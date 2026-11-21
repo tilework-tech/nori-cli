@@ -74,6 +74,7 @@ impl PreparedAgent {
             .map_err(|error| AgentPrepareFailure::new(error, Vec::new()))?;
         if let Some(selection) = nori_acp_host::token_provider::resolve_token_provider(
             &config.agent,
+            agent_config.builtin_kind,
             &config.token_providers,
             &config.agent_token_providers,
             config.default_model.as_deref(),
@@ -237,6 +238,11 @@ impl PreparedAgent {
         anyhow::ensure!(
             prepared_config.default_model == config.default_model,
             "prepared agent default model changed while the agent was preparing; retry the switch"
+        );
+        anyhow::ensure!(
+            prepared_config.token_providers == config.token_providers
+                && prepared_config.agent_token_providers == config.agent_token_providers,
+            "token provider configuration changed while the agent was preparing; retry the switch"
         );
         self.config = Some(config);
         Ok(())
