@@ -10,6 +10,7 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use nori_config::token_providers::Protocol;
 use nori_config::token_providers::TokenProvider;
 use nori_harness::token_provider::compatible_presets;
 use nori_harness::token_provider::preset;
@@ -181,30 +182,23 @@ pub(crate) fn persist_token_provider_choice(
     nori_home: &Path,
     agent: &str,
     choice: Option<&TokenProviderChoice>,
-) -> anyhow::Result<Option<TokenProvider>> {
-    let edits = nori_config::NoriConfigEdits::new(nori_home);
-    let binding_path = ["agent_token_providers", agent];
-    let Some(choice) = choice else {
-        edits.clear_path(&binding_path).apply_blocking()?;
-        return Ok(None);
-    };
-    let saved = nori_config::NoriConfig::load_from_path(&nori_home.join(nori_config::CONFIG_FILE))?;
-    let (edits, provider) = match choice {
-        TokenProviderChoice::Saved(name) => {
+) -> anyhow::Result<Option<(TokenProvider, Protocol)>> {
+    nori_config::NoriConfigEdits::select_token_provider(nori_home, agent, |saved| match choice {
+        None => Ok(None),
+        Some(TokenProviderChoice::Saved(name)) => {
             let provider = saved
-                .token_providers
                 .iter()
                 .find(|entry| &entry.name == name && supports_pi_connection(entry))
                 .ok_or_else(|| {
                     anyhow::anyhow!("the saved connection is no longer available for Pi")
                 })?;
-            (edits, provider.clone())
+            Ok(Some(provider.clone()))
         }
-        TokenProviderChoice::Preset {
+        Some(TokenProviderChoice::Preset {
             preset_id,
             api_key_env,
             model,
-        } => {
+        }) => {
             let preset = preset(preset_id)
                 .ok_or_else(|| anyhow::anyhow!("unknown Pi token provider preset"))?;
             let mut connection = preset.connection(preset_id, api_key_env, model);
@@ -212,28 +206,17 @@ pub(crate) fn persist_token_provider_choice(
                 supports_pi_connection(&connection),
                 "this connection cannot launch Pi"
             );
-            // Preserve existing connections, including ones used by a different agent.
             let mut suffix = 2;
-            loop {
-                match saved
-                    .token_providers
-                    .iter()
-                    .find(|entry| entry.name == connection.name)
-                {
-                    Some(existing) if existing == &connection => break (edits, connection),
-                    Some(_) => {
-                        connection.name = format!("{preset_id}-{suffix}");
-                        suffix += 1;
-                    }
-                    None => break (edits.append_token_provider(connection.clone()), connection),
+            while let Some(existing) = saved.iter().find(|entry| entry.name == connection.name) {
+                if existing == &connection {
+                    break;
                 }
+                connection.name = format!("{preset_id}-{suffix}");
+                suffix += 1;
             }
+            Ok(Some(connection))
         }
-    };
-    edits
-        .set_path(&binding_path, provider.name.as_str())
-        .apply_blocking()?;
-    Ok(Some(provider))
+    })
 }
 
 /// Asks for the environment variable that holds a provider's key.

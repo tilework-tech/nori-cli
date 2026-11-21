@@ -278,7 +278,7 @@ codex = "subconscious"
 "#,
     )
     .unwrap();
-    let binding = persist_token_provider_choice(home.path(), "pi", Some(&choice))
+    let (binding, _) = persist_token_provider_choice(home.path(), "pi", Some(&choice))
         .unwrap()
         .unwrap();
     assert_eq!(binding.name, "subconscious-2");
@@ -311,4 +311,78 @@ codex = "subconscious"
     .unwrap();
     let rebound = nori_config::NoriConfig::load_from_path(&config_path).unwrap();
     assert_eq!(rebound.agent_token_providers["pi"], binding);
+}
+
+#[test]
+fn saved_responses_connection_negotiates_completions_for_pi() {
+    let home = tempfile::tempdir().unwrap();
+    let config = home.path().join("config.toml");
+    std::fs::write(
+        &config,
+        r#"[[token_providers]]
+name = "lab"
+preset = "subconscious"
+protocol = "openai-responses"
+base_url = "https://api.subconscious.dev/v1"
+env_key = "LAB_KEY"
+model = "subconscious/glm-5.2"
+"#,
+    )
+    .unwrap();
+    let (connection, protocol) = persist_token_provider_choice(
+        home.path(),
+        "pi",
+        Some(&TokenProviderChoice::Saved("lab".into())),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(connection.protocol, Protocol::OpenaiResponses);
+    assert_eq!(protocol, Protocol::OpenaiCompletions);
+    let loaded = nori_config::NoriConfig::load_from_path(&config).unwrap();
+    assert_eq!(loaded.token_providers[0], connection);
+    assert_eq!(loaded.agent_token_providers["pi"].protocol, protocol);
+}
+
+#[test]
+fn simultaneous_setup_preserves_each_new_connection_and_other_config_edits() {
+    let home = tempfile::tempdir().unwrap();
+    let path = home.path();
+    let barrier = &std::sync::Barrier::new(9);
+    std::thread::scope(|scope| {
+        for index in 0..8 {
+            scope.spawn(move || {
+                barrier.wait();
+                let choice = TokenProviderChoice::Preset {
+                    preset_id: "subconscious".into(),
+                    api_key_env: format!("TEAM_KEY_{index}"),
+                    model: "subconscious/glm-5.2".into(),
+                };
+                persist_token_provider_choice(path, "pi", Some(&choice)).unwrap();
+            });
+        }
+        barrier.wait();
+        nori_config::NoriConfigEdits::new(path)
+            .set_default_model("pi", "native/synthetic")
+            .apply_blocking()
+            .unwrap();
+    });
+    let loaded = nori_config::NoriConfig::load_from_path(&path.join("config.toml")).unwrap();
+    let mut keys: Vec<_> = loaded
+        .token_providers
+        .iter()
+        .map(|row| row.env_key.clone())
+        .collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        (0..8)
+            .map(|index| format!("TEAM_KEY_{index}"))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        loaded
+            .token_providers
+            .contains(&loaded.agent_token_providers["pi"])
+    );
+    assert_eq!(loaded.default_models["pi"], "native/synthetic");
 }

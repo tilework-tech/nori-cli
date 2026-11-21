@@ -841,7 +841,12 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
         if index > 0 {
             session.send_key(Key::Down).unwrap();
         }
-        let selected = format!("▏{}. {provider}", index + 1);
+        // Only the first nine rows have digit shortcuts.
+        let selected = if index < 9 {
+            format!("▏{}. {provider}", index + 1)
+        } else {
+            format!("▏  {provider}")
+        };
         session
             .wait_for_text(&selected, TIMEOUT)
             .unwrap_or_else(|_| panic!("Missing picker selection {selected}"));
@@ -851,7 +856,7 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
     session.wait_for_text("▏1. Mock ACP", TIMEOUT).unwrap();
     session.send_str("\x1b[F").unwrap(); // End
     session
-        .wait_for_text("▏10. Pi", TIMEOUT)
+        .wait_for_text("▏  Pi", TIMEOUT)
         .expect("Scrolling to the end should reveal Pi");
 }
 

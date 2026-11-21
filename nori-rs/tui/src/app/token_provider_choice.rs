@@ -83,7 +83,7 @@ impl App {
     ) {
         let agent = nori_harness::resolve_agent_slug(&agent_name);
         match persist_token_provider_choice(&self.config.nori_home, &agent, choice.as_ref()) {
-            Ok(Some(provider)) => {
+            Ok(Some((mut provider, protocol))) => {
                 if let Some(existing) = self
                     .config
                     .token_providers
@@ -94,6 +94,7 @@ impl App {
                 } else {
                     self.config.token_providers.push(provider.clone());
                 }
+                provider.protocol = protocol;
                 self.config
                     .agent_token_providers
                     .insert(agent.clone(), provider);

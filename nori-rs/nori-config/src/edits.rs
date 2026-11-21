@@ -2,8 +2,10 @@
 
 use crate::CONFIG_FILE;
 use crate::McpServerConfig;
+use crate::NoriConfigToml;
 use crate::ToolOutput;
 use crate::TrustLevel;
+use crate::token_providers::Protocol;
 use crate::token_providers::TokenProvider;
 use anyhow::Context;
 use anyhow::Result;
@@ -45,7 +47,6 @@ enum ConfigEdit {
     ClearPath {
         path: Vec<String>,
     },
-    AppendTokenProvider(TokenProvider),
     ReplaceMcpServers(BTreeMap<String, McpServerConfig>),
 }
 
@@ -112,10 +113,62 @@ impl NoriConfigEdits {
         self
     }
 
-    /// Add a named connection without replacing other entries or their comments.
-    pub fn append_token_provider(mut self, provider: TokenProvider) -> Self {
-        self.edits.push(ConfigEdit::AppendTokenProvider(provider));
-        self
+    /// Select a connection from the locked configuration and save the binding atomically.
+    /// Returns the connection as declared and the protocol negotiated for this agent.
+    pub fn select_token_provider(
+        nori_home: &Path,
+        agent: &str,
+        choose: impl FnOnce(&[TokenProvider]) -> Result<Option<TokenProvider>>,
+    ) -> Result<Option<(TokenProvider, Protocol)>> {
+        let (_lock, mut document) = read_for_edit(nori_home)?;
+        let saved: NoriConfigToml = toml::from_str(&document.to_string())
+            .map_err(|_| anyhow::anyhow!("could not read stored token provider configuration"))?;
+        let connection = choose(&saved.token_providers)?;
+        let binding_path = ["agent_token_providers".to_owned(), agent.to_owned()];
+        let selected = if let Some(connection) = connection {
+            connection.validate()?;
+            let protocol = connection.protocol_for(agent)?;
+            match saved
+                .token_providers
+                .iter()
+                .find(|p| p.name == connection.name)
+            {
+                Some(existing) => anyhow::ensure!(
+                    existing == &connection,
+                    "token provider name is already in use"
+                ),
+                None => {
+                    let table = toml::to_string(&connection)?
+                        .parse::<DocumentMut>()?
+                        .into_table();
+                    let entries = document
+                        .as_table_mut()
+                        .entry("token_providers")
+                        .or_insert_with(|| Item::ArrayOfTables(Default::default()));
+                    if let Some(tables) = entries.as_array_of_tables_mut() {
+                        tables.push(table);
+                    } else if let Some(array) = entries.as_array_mut() {
+                        array.push(Value::InlineTable(table.into_inline_table()));
+                    } else {
+                        anyhow::bail!("token_providers must be an array of named connections");
+                    }
+                }
+            }
+            set_path(
+                &mut document,
+                &binding_path,
+                connection.name.as_str().into(),
+            );
+            Some((connection, protocol))
+        } else {
+            clear_path(&mut document, &binding_path);
+            None
+        };
+        write_config(
+            &nori_home.join(CONFIG_FILE),
+            document.to_string().as_bytes(),
+        )?;
+        Ok(selected)
     }
 
     /// Replace the complete MCP server table with canonical protocol config.
@@ -132,23 +185,7 @@ impl NoriConfigEdits {
 
     /// Apply the queued edits with a same-directory replacement of `config.toml`.
     pub fn apply_blocking(self) -> Result<()> {
-        let config_path = self.nori_home.join(CONFIG_FILE);
-        let content = match std::fs::read_to_string(&config_path) {
-            Ok(content) => content,
-            Err(error) if error.kind() == ErrorKind::NotFound => String::new(),
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("Failed to read {}", config_path.display()));
-            }
-        };
-        let mut document = if content.is_empty() {
-            DocumentMut::new()
-        } else {
-            content
-                .parse::<DocumentMut>()
-                .with_context(|| format!("Failed to parse {}", config_path.display()))?
-        };
-
+        let (_lock, mut document) = read_for_edit(&self.nori_home)?;
         for edit in self.edits {
             match edit {
                 ConfigEdit::Agent(agent) => document["agent"] = value(agent),
@@ -175,45 +212,53 @@ impl NoriConfigEdits {
                 ConfigEdit::ClearPath { path } => {
                     clear_path(&mut document, &path);
                 }
-                ConfigEdit::AppendTokenProvider(provider) => {
-                    let table = toml::to_string(&provider)?
-                        .parse::<DocumentMut>()?
-                        .into_table();
-                    let entries = document
-                        .as_table_mut()
-                        .entry("token_providers")
-                        .or_insert_with(|| Item::ArrayOfTables(Default::default()));
-                    if let Some(tables) = entries.as_array_of_tables_mut() {
-                        anyhow::ensure!(
-                            !tables
-                                .iter()
-                                .any(|t| t.get("name").and_then(Item::as_str)
-                                    == Some(&provider.name)),
-                            "token provider name is already in use"
-                        );
-                        tables.push(table);
-                    } else if let Some(array) = entries.as_array_mut() {
-                        anyhow::ensure!(
-                            !array
-                                .iter()
-                                .filter_map(Value::as_inline_table)
-                                .any(|t| t.get("name").and_then(Value::as_str)
-                                    == Some(&provider.name)),
-                            "token provider name is already in use"
-                        );
-                        array.push(Value::InlineTable(table.into_inline_table()));
-                    } else {
-                        anyhow::bail!("token_providers must be an array of named connections");
-                    }
-                }
                 ConfigEdit::ReplaceMcpServers(servers) => {
                     replace_mcp_servers(&mut document, &servers)?;
                 }
             }
         }
 
-        write_config(&config_path, document.to_string().as_bytes())
+        write_config(
+            &self.nori_home.join(CONFIG_FILE),
+            document.to_string().as_bytes(),
+        )
     }
+}
+
+// The lock lives beside config.toml so it survives atomic replacement of the config inode.
+fn read_for_edit(nori_home: &Path) -> Result<(std::fs::File, DocumentMut)> {
+    std::fs::create_dir_all(nori_home)?;
+    let lock = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(nori_home.join(".config.toml.lock"))?;
+    lock.lock().context("Failed to lock Nori configuration")?;
+    let config_path = nori_home.join(CONFIG_FILE);
+    let content = match std::fs::read_to_string(&config_path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == ErrorKind::NotFound => String::new(),
+        Err(error) => {
+            return Err(error).with_context(|| format!("Failed to read {}", config_path.display()));
+        }
+    };
+    let document = if content.is_empty() {
+        DocumentMut::new()
+    } else {
+        content
+            .parse::<DocumentMut>()
+            .map_err(|error| {
+                if content.contains("token_providers") {
+                    anyhow::anyhow!("invalid TOML in provider configuration")
+                } else {
+                    error.into()
+                }
+            })
+            .with_context(|| format!("Failed to parse {}", config_path.display()))?
+    };
+
+    Ok((lock, document))
 }
 
 fn replace_mcp_servers(

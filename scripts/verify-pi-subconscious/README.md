@@ -7,7 +7,7 @@ Run from the repository root after building the candidate binary. The Bun client
 bun scripts/verify-pi-subconscious/verify.mjs nori-rs/target/debug/nori
 ```
 
-The verifier creates a temporary home with a synthetic project and a `config.toml` that binds `pi` to a named Subconscious connection at its published gateway URL. The verification child redirects gateway requests to the loopback fixture and uses a synthetic key.
+The verifier creates a temporary home with a synthetic project and a `config.toml` that binds `pi` to a named Subconscious connection at its published gateway URL. Before starting the upstream adapter, the test launcher checks the generated gateway URL, copies the Pi profile into its temporary home, and changes only that copy’s endpoint to loopback. The adapter uses the synthetic key and the copied profile for the tool turn.
 
 - Without `SUBCONSCIOUS_API_KEY`, `nori exec --agent pi` must exit unsuccessfully, name the variable, and send no request to the endpoint.
 - With the key set, the endpoint drives three model turns: Pi reads `notes.txt`, runs a shell command that counts its lines, then answers with both results. The client checks the final answer, that every Chat Completions request carries the bearer key, the `x-subconscious-client: pi` header and the saved model, and that the key appears in neither `config.toml` nor the generated `models.json`.

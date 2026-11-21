@@ -3,7 +3,7 @@
 // Drives the real pi-acp adapter and Pi coding agent (installed by npx) through
 // `nori exec`, against a loopback Subconscious endpoint with a synthetic key.
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { startEndpoint } from "./endpoint.mjs";
@@ -15,6 +15,9 @@ const project = join(home, "synthetic-project");
 const log = join(home, "endpoint.jsonl");
 const key = "subc-synthetic-key-7f3a";
 const endpoint = startEndpoint(log);
+const bin = join(home, "bin");
+const realNpx = Bun.which("npx");
+assert.ok(realNpx, "verification needs npx on PATH");
 const baseUrl = `http://127.0.0.1:${endpoint.port}/v1`;
 
 const requests = async () =>
@@ -34,6 +37,9 @@ async function exec(env) {
 }
 
 try {
+  await mkdir(bin);
+  await copyFile(join(import.meta.dirname, "loopback-npx.mjs"), join(bin, "npx"));
+  await chmod(join(bin, "npx"), 0o700);
   await mkdir(noriHome, { recursive: true });
   await mkdir(project);
   await writeFile(join(project, "notes.txt"), "token=orchid-42\nsecond synthetic line\nthird synthetic line\n");
@@ -53,8 +59,8 @@ try {
     ``,
   ].join("\n"));
   const env = {
-    HOME: home, PATH: process.env.PATH, NORI_HOME: noriHome, NORI_NO_ANALYTICS: "1",
-    NODE_OPTIONS: `--require=${JSON.stringify(join(import.meta.dirname, "loopback.cjs"))}`,
+    HOME: home, PATH: `${bin}:${process.env.PATH}`, NORI_HOME: noriHome, NORI_NO_ANALYTICS: "1",
+    NORI_PI_TEST_NPX: realNpx,
     NORI_PI_TEST_ENDPOINT: baseUrl,
     PI_SKIP_VERSION_CHECK: "1", PI_TELEMETRY: "0", TERM: "dumb",
     npm_config_cache: process.env.npm_config_cache ?? join(process.env.HOME, ".npm"),
