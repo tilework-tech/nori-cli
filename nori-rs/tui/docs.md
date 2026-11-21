@@ -1339,8 +1339,8 @@ attached frontend, hides its hint.
 
 Same-kind requests start immediately. Different-kind requests open a selection
 view built from `approval_lines`: a question worded by origin ("Would you like
-<parent agent> to start a <agent> session?" or "Would you like to start a
-<agent> session for your task?"), then `asked by`, `runs on`, and `task` rows.
+<parent agent> to start a session with <agent>?" or "Would you like to start a
+session with <agent> for your task?"), then `asked by`, `runs on`, and `task` rows.
 The choices are "Yes, start it" and "No, decline"; Esc (dismiss) declines.
 The prompt carries an `AnswerGuard`, so option keys wait out the request
 answer grace period described under permission requests.
