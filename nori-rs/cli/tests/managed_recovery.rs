@@ -180,7 +180,35 @@ async fn cold_import(supports_load: bool) {
     }
     let other_host = Host::start(other_home.path(), true).await;
     let mut restored = other_host.connect().await;
-    let imported = restored.import(&destination, 2, checkpoint).await;
+    let mut spec = destination.spec();
+    let runtime = std::path::Path::new(spec["home"].as_str().unwrap()).join("restaged");
+    std::fs::create_dir(&runtime).unwrap();
+    std::fs::write(runtime.join("generation"), "second").unwrap();
+    let adapter = spec["adapter"]["path"].clone();
+    spec["adapter"]["path"] = json!("/bin/sh");
+    spec["adapter"]["args"] = json!([
+        "-c",
+        r#"read -r generation < "$NORI_AGENT_RUNTIME_DIR/generation"; test "$generation" = second || exit 1; exec "$0""#,
+        adapter
+    ]);
+    spec["runtimeDir"] = json!(runtime);
+    spec["credentialRefs"] = json!(["sessions:token-connection:destination:v1"]);
+    let imported = restored.client.request("_nori/host/import", json!({
+        "bindingId": destination.id, "generation": 2, "checkpoint": checkpoint, "launchSpec": spec,
+    })).await.unwrap();
+    let listed = restored
+        .client
+        .request("_nori/session/list", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(
+        listed["sessions"][0]["session_id"],
+        destination.conversation_id
+    );
+    assert_eq!(
+        listed["sessions"][0]["credential_refs"],
+        spec["credentialRefs"]
+    );
     assert_eq!(imported["conversationId"], destination.conversation_id);
     let mode = if supports_load { "load" } else { "fresh" };
     assert_eq!(imported["continuation"], mode);

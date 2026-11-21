@@ -20,11 +20,13 @@ use anyhow::Context;
 use clap::Parser;
 use nori_config::NoriConfig;
 use nori_config::NoriConfigOverrides;
+use nori_harness::managed_launch::HostSessionIdentity;
 use nori_harness::remote_agent::ManagedClient;
 use nori_harness::remote_agent::ManagedRemoteHost;
 use nori_harness::remote_agent::RemoteAcpServer;
 use nori_harness::session_manager::SessionManager;
 use nori_harness::session_manager::SessionManagerConfig;
+use serde::Deserialize;
 use serde_json::json;
 
 use self::service::HostService;
@@ -61,7 +63,11 @@ enum HostAction {
     /// Stop the host and all of its sessions.
     Stop,
     /// List sessions in a flat table, plain when piped.
-    Ls,
+    Ls {
+        /// Print session IDs and public credential reference labels as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Start a session on the running host and print its ID.
     New(NewCommand),
 }
@@ -224,9 +230,15 @@ pub(crate) async fn run(
     let files = HostFiles::new(&home)?;
     match command.action {
         Some(HostAction::New(new)) => new_session(new, &files).await,
-        Some(HostAction::Ls) => {
+        Some(HostAction::Ls { json }) => {
             let (mut client, _) = connect(&files).await?;
             let listing = client.request("_nori/session/list", json!({})).await?;
+            if json {
+                let sessions = Vec::<HostSessionIdentity>::deserialize(&listing["sessions"])
+                    .context("host returned an invalid session list")?;
+                println!("{}", json!({"sessions":sessions}));
+                return Ok(());
+            }
             let tty = std::io::stdout().is_terminal();
             let width = tty
                 .then(|| crossterm::terminal::size().map_or(80, |(width, _)| usize::from(width)));

@@ -79,6 +79,7 @@ pub(super) fn command(
     _: &LaunchSpec,
     _: &Path,
     _: &Path,
+    _: Option<&Path>,
     _: Option<[std::fs::File; 2]>,
     _: &Path,
 ) -> anyhow::Result<Command> {
@@ -90,6 +91,7 @@ pub(super) fn command(
     spec: &LaunchSpec,
     cwd: &Path,
     home: &Path,
+    runtime_dir: Option<&Path>,
     side_fds: Option<[std::fs::File; 2]>,
     launcher: &Path,
 ) -> anyhow::Result<Command> {
@@ -137,6 +139,13 @@ pub(super) fn command(
         if private_codex.is_none() || super::codex_home::SIDE_ENV.contains(&key.as_str()) {
             set_env(key, OsStr::new(value))?;
         }
+    }
+    if let Some(dir) = runtime_dir {
+        ensure!(
+            private_codex.is_none(),
+            "prepared runtimes are unsupported for a private Codex side"
+        );
+        set_env(super::RUNTIME_ENV, dir.as_os_str())?;
     }
     set_env("HOME", home.as_os_str())?;
     if let Some(private) = &private_codex {

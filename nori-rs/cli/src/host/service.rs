@@ -79,6 +79,7 @@ impl HostService {
                     "agentCapabilities":{"_meta":{"nori.dev/managedHost":launches.capabilities(),"nori.dev/durableRecovery":{"version":1},"nori.dev/followUp":{"version":1}}},
                     "server_info":{"name":"nori","version":env!("CARGO_PKG_VERSION")}
                 })),
+                "_nori/session/list" => Ok(json!({"sessions": launches.list()?})),
                 "_nori/session/ensure" => recovery.ensure(launches, params.clone()).await,
                 method if method.starts_with("_nori/host/") => {
                     recovery.control(launches, method, params).await

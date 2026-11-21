@@ -123,6 +123,94 @@ async fn refusal_code(client: &mut ManagedClient, params: Value) -> i64 {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn prepared_runtimes_and_public_labels_follow_their_binding() {
+    let host = start(2, true);
+    let mut client = client(&host);
+    let mut expected = Vec::new();
+    for name in ["alpha", "beta"] {
+        let mut launch = request(&host, name);
+        let spec = &mut launch["spec"];
+        let runtime = Path::new(spec["home"].as_str().unwrap()).join("prepared");
+        let cwd = Path::new(spec["cwd"].as_str().unwrap()).to_owned();
+        fs::create_dir(&runtime).unwrap();
+        fs::write(runtime.join("marker"), name).unwrap();
+        let label = format!("sessions:token-connection:{name}:v1");
+        spec["runtimeDir"] = json!(runtime);
+        spec["credentialRefs"] = json!([label, "opaque-legacy-reference"]);
+        spec["env"]["API_KEY"] = json!("synthetic-secret");
+        spec["adapter"]["path"] = json!("/bin/sh");
+        spec["adapter"]["args"] = json!([
+            "-c",
+            r#"set -eu; test "$API_KEY" = synthetic-secret; /bin/cat "$NORI_AGENT_RUNTIME_DIR/marker" > result.tmp; /bin/mv result.tmp result"#
+        ]);
+        let receipt = client.request(ENSURE, launch.clone()).await.unwrap();
+        assert_eq!(client.request(ENSURE, launch).await.unwrap(), receipt);
+        wait_for_file(&cwd.join("result"));
+        assert_eq!(fs::read_to_string(cwd.join("result")).unwrap(), name);
+        expected.push(json!({"session_id": receipt["conversationId"], "credential_refs": [label]}));
+    }
+    let listing: Value =
+        serde_json::from_str(&success(host.run(&["host", "ls", "--json"]))).unwrap();
+    assert_eq!(listing, json!({"sessions": expected}));
+    let wire = client
+        .request("_nori/session/list", json!({}))
+        .await
+        .unwrap()
+        .to_string();
+    for private in [
+        "synthetic-secret",
+        "opaque-legacy-reference",
+        "API_KEY",
+        "marker",
+    ] {
+        assert!(!wire.contains(private));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn invalid_runtime_or_token_label_refuses_the_launch_before_spawn() {
+    let host = start(1, true);
+    let mut client = client(&host);
+    let mut launch = request(&host, "alpha");
+    let home = Path::new(launch["spec"]["home"].as_str().unwrap()).to_owned();
+    let foreign = request(&host, "beta");
+    let other = Path::new(foreign["spec"]["home"].as_str().unwrap());
+    fs::write(home.join("file"), "fixture").unwrap();
+    std::os::unix::fs::symlink(other, home.join("redirect")).unwrap();
+    for dir in [
+        json!("relative"),
+        json!(home.join("missing")),
+        json!(home.join("file")),
+        json!(other),
+        json!(home.join("redirect")),
+    ] {
+        launch["spec"]["runtimeDir"] = dir;
+        assert_eq!(refusal_code(&mut client, launch.clone()).await, -32602);
+    }
+    launch["spec"].as_object_mut().unwrap().remove("runtimeDir");
+    for label in [
+        "sessions:token-connection::v1",
+        "sessions:token-connection:../beta:v1",
+        "sessions:token-connection:alpha:v2",
+    ] {
+        launch["spec"]["credentialRefs"] = json!([label]);
+        assert_eq!(refusal_code(&mut client, launch.clone()).await, -32602);
+    }
+    launch["spec"]["credentialRefs"] = json!(["sessions:codex-subscription-file:v1"]);
+    let mut spoofed = launch.clone();
+    spoofed["spec"]["env"]["nori_agent_runtime_dir"] = json!(other);
+    assert_eq!(refusal_code(&mut client, spoofed).await, -32602);
+    client.request(ENSURE, launch.clone()).await.unwrap();
+    let listing: Value =
+        serde_json::from_str(&success(host.run(&["host", "ls", "--json"]))).unwrap();
+    assert_eq!(
+        listing,
+        json!({"sessions": [{"session_id": launch["conversationId"],
+        "credential_refs": ["sessions:codex-subscription-file:v1"]}]})
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn full_host_refuses_new_binding_with_capacity_code() {
     let host = start(1, true);
     let mut client = client(&host);
