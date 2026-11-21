@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/proj · Agent approvals
+  Agent        Claude
+
+• Claude Code options: Model=Default (recommended), Effort=Default, Fast mode=Off, Ultracode=Off, Mode=Auto (/config
+to change)
+
+• Preparing Pi…
+
+  › Nori CLI v0.0.0
+
+  System       ~/proj · Agent approvals
+  Agent        Pi · subconscious/DeepSeek-V4-Flash Marathon · Thinking: off
+
+• Started new conversation with agent: Pi
+
+
+› @ for file mentions
+
+                                                                                                   ⎇ master · 0% / 5.00M
+
+
+
+
+

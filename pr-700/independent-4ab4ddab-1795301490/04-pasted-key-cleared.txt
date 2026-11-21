@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/proj · Agent approvals
+  Agent        Claude
+
+• Claude Code options: Model=Default (recommended), Effort=Default, Fast mode=Off, Ultracode=Off, Mode=Auto (/config
+to change)
+
+┌ Subconscious key ────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Environment variable that holds your Subconscious API key                                                            │
+│                                                                                                                      │
+│ › │                                                                                                                  │
+│ That is not an environment variable name; enter the name.                                                            │
+│ Enter to continue · Esc to cancel · nori stores only the name                                                        │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+
+
+
+
+
+
+
+
+
