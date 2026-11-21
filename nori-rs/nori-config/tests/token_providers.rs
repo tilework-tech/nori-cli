@@ -88,3 +88,28 @@ fn messages_auth_is_specific_to_the_selected_gateway() -> anyhow::Result<()> {
     assert!(!custom.agent_token_providers["claude-code"].bearer_messages());
     Ok(())
 }
+
+#[test]
+fn provisional_connections_need_a_concrete_local_route() -> anyhow::Result<()> {
+    let custom = load("hermes", "custom", "openai-completions", "")?;
+    assert_eq!(
+        custom.agent_token_providers["hermes"].protocol.as_str(),
+        "openai-completions"
+    );
+    for (preset, reason) in [
+        ("custom", "protocol-mismatch"),
+        ("openrouter", "no concrete protocol"),
+    ] {
+        let result = load("hermes", preset, "openai-responses", "");
+        let error = result.expect_err("no usable named connection");
+        assert!(format!("{error:#}").contains(reason), "{error:#}");
+    }
+    Ok(())
+}
+
+#[test]
+fn binding_keys_use_the_registry_canonical_slug() {
+    let result = load("codex-acp", "custom", "openai-responses", "");
+    let error = result.expect_err("alias binding would be missed at launch");
+    assert!(format!("{error:#}").contains("canonical agent slug"));
+}

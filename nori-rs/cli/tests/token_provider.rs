@@ -89,3 +89,59 @@ env_key = "EXAMPLE_ROUTE_KEY"
     assert!(!probe.exists());
     Ok(())
 }
+
+#[test]
+fn named_binding_reports_eligibility_and_adapter_failures_before_spawn() -> anyhow::Result<()> {
+    let dir = tempdir()?;
+    let path = dir.path();
+    for (slug, protocol, expected) in [
+        ("hermes", "openai-responses", "protocol-mismatch"),
+        (
+            "hermes",
+            "openai-completions",
+            "no named token provider launch adapter",
+        ),
+        (
+            "pi",
+            "openai-responses",
+            "no named token provider launch adapter",
+        ),
+    ] {
+        let config = format!(
+            r#"
+[agent_token_providers]
+{slug} = "lab"
+
+[[agents]]
+name = "Fixture"
+slug = "{slug}"
+[agents.distribution.local]
+command = "fixture-command-must-not-run"
+
+[[token_providers]]
+name = "lab"
+preset = "custom"
+protocol = "{protocol}"
+base_url = "http://127.0.0.1:9/v1"
+env_key = "FIXTURE_KEY"
+model = "fixture-model"
+"#
+        );
+        std::fs::write(path.join("config.toml"), config)?;
+        let output = Command::new(env!("CARGO_BIN_EXE_nori"))
+            .env_clear()
+            .env("HOME", path)
+            .env("NORI_HOME", path)
+            .env("PATH", path)
+            .env("NORI_MANAGED_BY_NPM", "1")
+            .args(["--agent", slug, "exec", "hello"])
+            .output()?;
+        let diagnostics = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success());
+        assert!(
+            diagnostics.contains(expected),
+            "{slug} {protocol}: {diagnostics}"
+        );
+    }
+    Ok(())
+}
