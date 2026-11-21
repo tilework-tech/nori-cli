@@ -9,12 +9,14 @@
 //! - `gemini` - Google Antigravity
 //! - `grok-build` - xAI Grok Build
 //! - `opencode` - OpenCode with its configured providers
+//! - `cursor` - Cursor Agent
 //!
 //! ## Provider Names
 //! - `anthropic` - Anthropic
 //! - `openai` - OpenAI
 //! - `google` - Google
 //! - `xai` - xAI
+//! - `cursor` - Cursor
 
 use anyhow::Context;
 use anyhow::Result;
@@ -123,6 +125,8 @@ pub enum AgentKind {
     GrokBuild,
     /// OpenCode with its native provider configuration.
     OpenCode,
+    /// Cursor CLI in ACP mode.
+    Cursor,
 }
 
 impl AgentKind {
@@ -134,6 +138,7 @@ impl AgentKind {
             AgentKind::Gemini => "gemini",
             AgentKind::GrokBuild => "grok-build",
             AgentKind::OpenCode => "opencode",
+            AgentKind::Cursor => "cursor",
         }
     }
 
@@ -145,6 +150,7 @@ impl AgentKind {
             AgentKind::Gemini => "Antigravity",
             AgentKind::GrokBuild => "Grok Build",
             AgentKind::OpenCode => "OpenCode",
+            AgentKind::Cursor => "Cursor Agent",
         }
     }
 
@@ -159,7 +165,7 @@ impl AgentKind {
             AgentKind::ClaudeCode => Some(1_000_000),
             AgentKind::Codex => Some(258_000),
             AgentKind::Gemini => Some(1_000_000),
-            AgentKind::GrokBuild | AgentKind::OpenCode => None,
+            AgentKind::GrokBuild | AgentKind::OpenCode | AgentKind::Cursor => None,
         }
     }
 
@@ -171,6 +177,7 @@ impl AgentKind {
             AgentKind::Gemini => Provider::Google,
             AgentKind::GrokBuild => Provider::Xai,
             AgentKind::OpenCode => Provider::OpenCode,
+            AgentKind::Cursor => Provider::Cursor,
         }
     }
 
@@ -182,6 +189,7 @@ impl AgentKind {
             AgentKind::Gemini,
             AgentKind::GrokBuild,
             AgentKind::OpenCode,
+            AgentKind::Cursor,
         ]
     }
 
@@ -194,6 +202,9 @@ impl AgentKind {
             },
             AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::OpenCode => ModelInjection::None,
             AgentKind::Codex => ModelInjection::CodexConfig,
+            AgentKind::Cursor => ModelInjection::Arg {
+                flag: "--model".to_string(),
+            },
         }
     }
 
@@ -204,7 +215,9 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => Some(".claude/projects"),
             AgentKind::Codex => Some(".codex/sessions"),
-            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::OpenCode => None,
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::OpenCode | AgentKind::Cursor => {
+                None
+            }
         }
     }
 
@@ -220,6 +233,9 @@ impl AgentKind {
             AgentKind::OpenCode => {
                 "Run `opencode auth login` in another terminal or configure a provider in OpenCode."
             }
+            AgentKind::Cursor => {
+                "Run `agent login` (or `cursor-agent login`) in another terminal, or set CURSOR_API_KEY to a user API key from your Cursor dashboard."
+            }
         }
     }
 
@@ -234,6 +250,7 @@ impl AgentKind {
             }
             "grok-build" | "grok" => Some(AgentKind::GrokBuild),
             "opencode" => Some(AgentKind::OpenCode),
+            "cursor" | "cursor-agent" => Some(AgentKind::Cursor),
             _ => None,
         }
     }
@@ -266,7 +283,9 @@ impl AgentKind {
                 id: "gpt-5.3-codex",
                 label: "GPT-5.3-Codex",
             }],
-            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::OpenCode => &[],
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::OpenCode | AgentKind::Cursor => {
+                &[]
+            }
         }
     }
 }
@@ -290,6 +309,8 @@ pub enum Provider {
     Xai,
     /// The model provider selected in OpenCode.
     OpenCode,
+    /// Cursor
+    Cursor,
 }
 
 impl Provider {
@@ -301,6 +322,7 @@ impl Provider {
             Provider::Google => "google",
             Provider::Xai => "xai",
             Provider::OpenCode => "opencode",
+            Provider::Cursor => "cursor",
         }
     }
 
@@ -312,6 +334,7 @@ impl Provider {
             Provider::Google => "Google",
             Provider::Xai => "xAI",
             Provider::OpenCode => "Configured in OpenCode",
+            Provider::Cursor => "Cursor",
         }
     }
 }
@@ -521,6 +544,15 @@ impl AcpAgentInfo {
 // Installation Detection
 // =============================================================================
 
+// Prefer Cursor’s unambiguous executable if another program also installs `agent`.
+fn cursor_command() -> &'static str {
+    if which::which("cursor-agent").is_ok() {
+        "cursor-agent"
+    } else {
+        "agent"
+    }
+}
+
 fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>) {
     let binary = match agent {
         AgentKind::ClaudeCode => "claude-agent-acp",
@@ -528,6 +560,7 @@ fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>)
         AgentKind::Gemini => "agy",
         AgentKind::GrokBuild => "grok",
         AgentKind::OpenCode => "opencode",
+        AgentKind::Cursor => cursor_command(),
     };
     (which::which(binary).is_ok(), None)
 }
@@ -873,7 +906,7 @@ fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentCo
             AgentKind::ClaudeCode => Some("@agentclientprotocol/claude-agent-acp@latest"),
             AgentKind::Codex => Some("@agentclientprotocol/codex-acp@latest"),
             AgentKind::GrokBuild => Some("@xai-official/grok@latest"),
-            AgentKind::Gemini | AgentKind::OpenCode => None,
+            AgentKind::Gemini | AgentKind::OpenCode | AgentKind::Cursor => None,
         };
         let (command, args, install_hint) = if let Some(package) = package {
             // Grok relies on npm's postinstall to select the package's native
@@ -902,6 +935,12 @@ fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentCo
                 "opencode",
                 vec!["acp".to_string()],
                 "install OpenCode and add `opencode` to PATH".to_string(),
+            )
+        } else if agent == AgentKind::Cursor {
+            (
+                cursor_command(),
+                vec!["acp".to_string()],
+                "install the Cursor CLI from https://cursor.com/docs/cli/installation and add `agent` or `cursor-agent` to PATH".to_string(),
             )
         } else {
             (
@@ -1643,6 +1682,7 @@ mod tests {
         assert!(slugs.contains(&"codex"));
         assert!(slugs.contains(&"gemini"));
         assert!(slugs.contains(&"grok-build"));
+        assert!(slugs.contains(&"cursor"));
     }
 
     #[test]
@@ -1723,6 +1763,7 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom_claude]).unwrap();
+        // An override keeps the built-in registry size.
         assert_eq!(registry.len(), AgentKind::all().len());
         let claude = registry.iter().find(|a| a.slug == "claude-code").unwrap();
         assert_eq!(claude.name, "My Claude");

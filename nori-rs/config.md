@@ -14,7 +14,7 @@ part of the file, plus tool call display and the opt-in multi-session feature.
 agent = "claude-code"
 ```
 
-Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), `grok-build`, and `opencode`. An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
+Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), `grok-build`, `opencode`, and `cursor` (Cursor Agent). An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
 
 ## Default models: `[default_models]`
 
