@@ -78,7 +78,7 @@ pub fn enhanced_error_message(
             format!("Rate limit or quota exceeded for {provider_name}: {original_error}")
         }
         AcpErrorCategory::ExecutableNotFound => {
-            format!("Could not find the {display_name} CLI. Please install it with: {install_hint}")
+            format!("Could not find the {display_name} CLI. Suggested fix: {install_hint}")
         }
         AcpErrorCategory::Initialization => {
             format!(
