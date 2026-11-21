@@ -786,6 +786,24 @@ supersession, or application exit tears down only the candidate and leaves the
 current session promptable. Prompt submission always targets the current
 widget; there is no pending switch-on-next-prompt state.
 
+An agent that can use a token provider (today only Pi) inserts a short chooser
+before its candidate starts. [`agent_picker.rs`](src/nori/agent_picker.rs)
+sends `OpenTokenProviderPicker` instead of `PrepareAgentCandidate` for such an
+agent, and [`token_provider_picker/`](src/nori/token_provider_picker/) supplies
+three steps: "Model provider for Pi" (the agent's own settings or a compatible
+preset), a key-variable input prefilled with the preset's suggested variable,
+and a model picker listing the preset catalog with its default first. The key
+input accepts only an environment-variable name; text that is not a valid
+identifier is cleared without being echoed, because it may be the key itself,
+and a name that is not set in Nori's environment is refused. The final choice
+reaches [`token_provider_choice.rs`](src/app/token_provider_choice.rs), which
+persists it through `NoriConfigEdits`, mirrors it into the in-memory config,
+and then calls `begin_agent_candidate`, so the normal transactional switch
+follows. Choosing the agent's own settings clears the binding and drops a saved
+model that belonged to the provider. Launch-time checks live in the harness, so
+a binding edited by hand fails the candidate through the usual spawn-failure
+path.
+
 Candidate activation classifies hidden candidate events in
 [`App`](src/app/event_handling.rs) before they reach the candidate widget. An
 ACP error or pre-start `RequestFailed` is logged and captured rather than

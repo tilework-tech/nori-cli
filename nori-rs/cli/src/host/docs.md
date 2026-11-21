@@ -136,6 +136,8 @@ host ls / stop / new --------------+                   SessionManager
   sending, and the host checks the folder exists on its machine. Without
   `--cwd` the local host starts the session in the caller's directory; a host
   named with `--host` may be another machine, so it uses its own folder.
+  The host applies the agent's token-provider binding from its own config, so
+  the key variable must be set in the host's environment, not the caller's.
 
 #### Mid-turn follow-ups
 
@@ -163,7 +165,7 @@ Send exactly the fields shown. Choose `steer` or `queue` for `intent`, supply no
 | `rejected` | The host or adapter refused this delivery, for example because a different turn already owns the session. |
 | `unknown` | Delivery could not be confirmed. Keep the message ID for reconciliation. |
 
-The local harness and the machine host use the [same steering guard](../../../harness/src/follow_up.rs). The live ACP v1 initialize result must advertise `_meta.steering.supported == true` and report an exact verified `agentInfo.name` and `agentInfo.version` pair. Verified versions are `@agentclientprotocol/claude-agent-acp` 0.102.0, 0.108.1 and 0.109.0, and `@agentclientprotocol/codex-acp` 2.7.0 and 2.8.0. The standalone CLI follows the upstream releases. A newly resolved adapter version must pass the steering checks before Nori admits it. Antigravity and Grok Build queue active-turn input for the next turn. Explicit managed launch specifications supply their own adapter path, arguments and version. An unverified version gets `unsupported_queued` until its [wire behavior is checked](../../../../scripts/verify-host-follow-up/README.md#checking-a-claude-adapter-upgrade).
+The local harness and the machine host use the [same steering guard](../../../harness/src/follow_up.rs). The live ACP v1 initialize result must advertise `_meta.steering.supported == true` and report an exact verified `agentInfo.name` and `agentInfo.version` pair. Verified versions are `@agentclientprotocol/claude-agent-acp` 0.102.0, 0.108.1 and 0.109.0, and `@agentclientprotocol/codex-acp` 2.7.0 and 2.8.0. The standalone CLI follows the upstream releases. A newly resolved adapter version must pass the steering checks before Nori admits it. Antigravity, Grok Build and Pi queue active-turn input for the next turn. Explicit managed launch specifications supply their own adapter path, arguments and version. An unverified version gets `unsupported_queued` until its [wire behavior is checked](../../../../scripts/verify-host-follow-up/README.md#checking-a-claude-adapter-upgrade).
 
 The host sends `_session/steering` with `_meta.steering.idleBehavior = "promptRequired"`. A pending permission still needs its own response. Normal turn completion and settlement of pending permission requests allow the FIFO to drain. With prompt echo enabled, `/managed` emits `_nori/session/follow_up/submitted` before writing a steer. Use its message ID to place the pending input ahead of provider output and update it from the delivery receipt. For host-started queued prompts on `/managed`, correlate `_nori/session/follow_up/started` and `_nori/session/follow_up/finished` using `message_id` and `turn_id`. The finished notification carries the result or error. Local-host clients follow the ordinary managed session envelopes.
 

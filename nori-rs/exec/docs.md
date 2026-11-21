@@ -28,6 +28,11 @@ Path: @/nori-rs/exec
   session. When supplied, its reporter emits `nori_agent_session_started` with
   `session_mode = exec` after that prompt receives a downstream wire request ID,
   then performs a bounded final flush without changing the plaintext outcome.
+- If the prompt cannot be submitted because the agent never started,
+  `run_plaintext` drains the already-buffered events and returns the
+  `SessionEnded` message (for example the `SpawnFailed` reason, such as a
+  missing token-provider key) instead of the generic prompt-rejection error.
+  The generic error remains only when no ended message was buffered.
 - Unattended permission requests are rejected immediately using a schema-provided reject option, with cancellation as the safe fallback.
 - With `multi_session` disabled, `run_acp` handles standard `initialize`, `session/new`,
   `session/set_config_option`, `session/prompt`, and `session/cancel` traffic

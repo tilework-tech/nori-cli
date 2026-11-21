@@ -67,6 +67,10 @@ The script temporarily patches the broker to prevent it from deleting or refresh
 
 Validates the standard targets (`help`, `dev`, `test`, `doctor`) defined by the Shared Local Runner Layer spec in `@/justfile`. The test uses string-matching assertions (`assert_contains`) against command output and `just --summary` / `just --show` for structural checks. Run with `bash scripts/test_justfile.sh`.
 
+### Agent verification scripts
+
+The `verify-*` directories hold Bun clients that drive a built `nori` binary against real ACP adapters with synthetic credentials and loopback model endpoints, so agent and provider integrations can be checked without real keys or model traffic. Each directory has its own README with the command and what it asserts. `verify-host-follow-up` covers mid-turn follow-ups across host transports; `verify-pi-subconscious` covers Pi launched through a Subconscious token provider via `nori exec`, including refusal before launch when the key variable is unset.
+
 ### Things to Know
 
 - Git tags are the single source of truth for version enumeration -- `list_tags()` reads the repository's `origin` remote rather than GitHub Releases, so the caller must run in a checkout with an accessible `origin`; this also preserves versions whose tag exists even if a cancelled or failed workflow never created the corresponding GitHub Release

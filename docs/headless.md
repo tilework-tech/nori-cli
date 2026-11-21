@@ -43,7 +43,7 @@ until an unrelated pipe closed. Supplying no prompt from any source is an error.
 A piped prompt is capped at 10 MiB; anything larger is rejected rather than
 buffered.
 
-The complete assistant response is the only content written to stdout. Diagnostics and failures are written to stderr, so stdout can be redirected or piped without filtering terminal rendering or progress messages.
+The complete assistant response is the only content written to stdout. Diagnostics and failures are written to stderr, so stdout can be redirected or piped without filtering terminal rendering or progress messages. When the agent cannot start, for example because its package cannot be launched or its token-provider key variable is unset, the error names that cause.
 
 Plaintext mode never displays an interactive approval prompt. If an ACP-visible permission request occurs, Nori immediately selects a reject option supplied by the agent, or cancels the request when none exists. The agent may still return a final explanation; Nori prints that text but exits unsuccessfully to distinguish the run from fully authorized completion.
 

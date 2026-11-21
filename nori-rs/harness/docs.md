@@ -214,6 +214,19 @@ exists are cancelled. A raw ACP setup error precedes
 `SessionEnded(SpawnFailed)` and is not mirrored as
 `NoriEvent::RequestFailed`.
 
+Before spawning, preparation also applies the agent's token-provider binding.
+`AcpBackendConfig` carries the resolved `token_providers` and
+`agent_token_providers` maps; [`prepared.rs`](src/backend/prepared.rs) resolves
+them against the agent and its saved model right after building the spawn
+config, then lets `nori-acp-host` check the key variable and write the agent's
+provider settings into that config. Any resolution or apply error fails
+preparation like a spawn failure, so a bound agent never starts without its
+provider. Because this sits in shared preparation, it covers the TUI,
+`nori exec`, and the unmanaged `nori host`; managed launches that bring an
+explicit launch specification are not affected. The harness re-exports the
+module as `nori_harness::token_provider` for the TUI picker (see
+[`nori-acp-host`](../acp-host/docs.md)).
+
 The resolved model preference (`AcpBackendConfig.default_model`) is
 applied at both process and session boundaries. During preparation,
 [`prepared.rs`](src/backend/prepared.rs) calls the injection helper in

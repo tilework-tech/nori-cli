@@ -60,10 +60,24 @@ pub async fn run_plaintext(
     if let Some(reporter) = analytics.as_ref() {
         launched.handle = reporter.attach(launched.handle);
     }
-    let request_id = launched
+    let request_id = match launched
         .handle
         .prompt(vec![acp::ContentBlock::Text(acp::TextContent::new(prompt))])
-        .await?;
+        .await
+    {
+        Ok(request_id) => request_id,
+        Err(error) => {
+            // A session that never started reports why before it closes.
+            while let Ok(event) = launched.events.try_recv() {
+                if let SessionEvent::Nori(NoriEvent::SessionEnded(ended)) = event
+                    && let Some(message) = ended.message
+                {
+                    return Err(anyhow::anyhow!(message));
+                }
+            }
+            return Err(error);
+        }
+    };
     let result = collect_prompt(
         &launched.handle,
         &mut launched.events,

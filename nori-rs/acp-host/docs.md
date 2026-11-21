@@ -77,7 +77,7 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   requests to its ACP client.
 - A private `SessionUpdate` copy feeds the harness reducer after the matching
   raw notification; it is implementation state, not another public protocol.
-- The [registry](src/registry.rs) checks configured slugs before resolving built-in aliases. Claude Code and Codex launch through the preferred package runner with upstream `@latest` resolution. Grok Build uses npm to run the upstream package’s native install step. Antigravity runs `agy acp --disable-telemetry` from the host’s `PATH`. Explicit runtime settings and custom distributions continue to control the launch. See the [provider table](../../README.md#providers) for commands and authentication.
+- The [registry](src/registry.rs) checks configured slugs before resolving built-in aliases. Claude Code and Codex launch through the preferred package runner with upstream `@latest` resolution. Grok Build uses npm to run the upstream package’s native install step. Antigravity runs `agy acp --disable-telemetry` from the host’s `PATH`. Pi always runs through `npx` with both the `pi-acp` adapter and Earendil's `@earendil-works/pi-coding-agent` package, because the adapter spawns `pi` from `PATH` and npx exposes both packages' binaries there; it never uses bunx. Explicit runtime settings and custom distributions continue to control the launch. See the [provider table](../../README.md#providers) for commands and authentication.
 - The built-in Codex definition uses the maintained
   `@agentclientprotocol/codex-acp` adapter and disables Codex-native goals in
   its subprocess configuration. It merges a valid ambient `CODEX_CONFIG`,
@@ -175,7 +175,7 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   spawn, so the model becomes the adapter's advertised `currentValue` (which ACP
   always treats as valid), bypassing the catalog. `AgentKind::model_injection()`
   maps Claude Code to `ANTHROPIC_MODEL` and Codex to the `model` key of `CODEX_CONFIG`.
-  Antigravity and Grok Build expose their supported models through ACP config options.
+  Antigravity, Grok Build and Pi expose their supported models through ACP config options.
   Custom/BYO agents resolve their strategy from `[[agents]].model_override` in
   `nori-config`; the default is `None` (no channel → live RPC only).
   `AcpAgentConfig::inject_model` applies the resolved strategy to the spawn env
@@ -190,6 +190,26 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   the `/model` picker's "Other" section without a second source of truth.
   Selecting one routes through injection exactly like a `[default_models]` custom
   id. `OtherModel` is re-exported from `nori-harness` for that picker.
+
+- [`token_provider.rs`](src/token_provider.rs) binds a built-in agent to a
+  token provider: an endpoint that serves models with a key the user keeps in
+  an environment variable. Its preset catalog reuses the Sessions broker
+  vocabulary (preset ids, `openai-completions` / `openai-responses` /
+  `anthropic-messages` protocols, broker harness ids such as `pi-acp`, an
+  optional per-harness client header, and a session-affinity flag), so the
+  same preset means the same thing on both sides. Each preset lists every
+  harness the broker supports, but `compatible_presets` returns only presets
+  for agents this CLI can configure, which is Pi alone.
+  `resolve_token_provider` reads the `[token_providers]` and
+  `[agent_token_providers]` maps from `nori-config` plus the saved model. An
+  unbound agent resolves to `None` and keeps its own settings; every binding it
+  cannot honor (missing provider entry, unknown preset, unsupported agent,
+  model outside the catalog) is an error rather than a silent fallback.
+  `apply_token_provider` checks that the key variable is set before writing
+  anything, then writes a private Pi agent directory (`models.json` and
+  `settings.json`) under `$NORI_HOME/token-providers/<provider id>-pi-acp/`
+  and sets `PI_CODING_AGENT_DIR` on the spawn config. The harness calls both
+  during agent preparation.
 
 ### Managed machine connection
 
@@ -533,6 +553,12 @@ following for the binding generation and the lifetime of every active side.
   authenticates the agent. Nori's own in-process `AuthManager` (which reads
   `nori_home`) is not consumed by the ACP path, so the login flow's
   `auth_manager.reload()` has no effect on the Codex agent.
+- Pi has no spawn-time model injection. A bound Pi launch names its starting
+  model in the generated `settings.json`, and the provider's catalog in
+  `models.json`. `models.json` stores the key as `"$VAR"`; Pi 0.79.4 and later
+  read a bare uppercase name as a literal key, so the `$` prefix is required.
+  The key itself never reaches disk. The directory is `0700` and its files
+  `0600`, and they are rewritten on every bound launch.
 - Model injection does not validate the model id: an invalid model is accepted at
   spawn and only fails at the first prompt. For env-based channels, nori's
   injected value takes precedence over the agent's own configured model (e.g.

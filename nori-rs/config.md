@@ -14,7 +14,7 @@ part of the file, plus tool call display and the opt-in multi-session feature.
 agent = "claude-code"
 ```
 
-Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), and `grok-build`. An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
+Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), `grok-build`, and `pi`. An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
 
 ## Default models: `[default_models]`
 
@@ -31,9 +31,49 @@ Nori saves model choices under the agent’s canonical ID. For example, selectin
 
 For a single launch, `nori --agent agy -c 'default_models.antigravity="gemini-3.6-flash"'` overrides the saved Gemini model. If several dotted `-c` assignments name the same agent through different aliases, the last one wins. Assigning the entire `default_models` table replaces earlier assignments.
 
-For Antigravity and Grok Build, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
+For Antigravity, Grok Build, and Pi, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
 
 Claude Code, Codex, and custom agents with a configured injection channel can also accept model IDs at process startup. For these agents, `/model` offers a custom ID and any curated additional choices. If the agent rejects a custom choice over ACP, Nori can save it here and restart the session to apply it. A provider may still reject an unknown model at the first prompt.
+
+## Token providers: `[token_providers]` and `[agent_token_providers]`
+
+A token provider is an API endpoint that serves models to an agent with a key
+you keep in an environment variable. Only Pi can use one today, and the only
+preset is `subconscious`. Choosing a provider for Pi in `/agent` writes these
+tables for you.
+
+```toml
+[token_providers.subconscious]
+preset = "subconscious"                 # catalog preset
+api_key_env = "SUBCONSCIOUS_API_KEY"    # name of the variable, never the key
+# base_url = "https://proxy.example/v1" # optional; replaces the preset endpoint
+
+[agent_token_providers]
+pi = "subconscious"                     # agent slug -> provider id
+
+[default_models]
+pi = "subconscious/subconscious/glm-5.2" # <provider id>/<model id>
+```
+
+- The table key under `[token_providers]` is the provider id that agents bind
+  to. The saved model uses Pi's ACP form, the provider id followed by the
+  preset's model id. Without a saved model Nori uses the preset's default.
+- Nori never writes the key. Before launch it checks that the named variable
+  is set and non-empty in the environment that started Nori, and refuses to
+  start the agent if it is not. The generated Pi settings refer to the
+  variable by name, so Pi reads the key from the environment it inherits.
+- A binding Nori cannot honor stops the launch with an error: an unknown
+  provider id or preset, an agent that cannot use the preset, or a model
+  outside the preset's catalog. Nori never falls back to the agent's own
+  settings.
+- An agent without an `[agent_token_providers]` entry uses its own sign-in and
+  settings; for Pi that is `~/.pi/agent`. Choosing "Pi settings" in `/agent`
+  removes the entry and drops a saved model that belonged to the provider.
+- For a bound Pi launch, Nori writes a private Pi agent directory under
+  `$NORI_HOME/token-providers/` and points `PI_CODING_AGENT_DIR` at it.
+
+This is an interim, CLI-local representation. A shared token-provider
+configuration is expected to replace it.
 
 ## Custom agents: `[[agents]]`
 

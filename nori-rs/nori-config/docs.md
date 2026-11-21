@@ -21,6 +21,8 @@ The crate owns:
   `[default_models]` and the optional `[[agents]].model_override`
   (`ModelOverrideToml { env, arg }`) declaring how a custom agent accepts a
   forced model id at spawn time (see below);
+- named token providers (`[token_providers.<id>]` as `TokenProviderToml`) and
+  the `[agent_token_providers]` agent-to-provider binding;
 - `AskForApproval`, `SandboxPolicy`, `SandboxMode`, and `TrustLevel`;
 - `McpServerConfig` and MCP transport configuration;
 - `ShellEnvironmentPolicy` and related environment patterns;
@@ -81,9 +83,18 @@ cannot create the OS read-only launch.
 `[default_models]` maps an agent slug to a model id. The loader keeps the order of dotted model overrides so the harness can resolve precedence after registering custom agents. The agent validates its model ID at launch or through ACP. `nori-acp-host` reads `model_override` to build a
 `ModelInjection` strategy — `env` names an environment variable, `arg` a CLI
 flag, and `env` wins if both are set — so an out-of-catalog default model can be
-forced through the agent subprocess at spawn. The built-in Claude Code and Codex runtimes supply their own injection channels. Antigravity and Grok Build use their advertised ACP model options. The user-facing
+forced through the agent subprocess at spawn. The built-in Claude Code and Codex runtimes supply their own injection channels. Antigravity, Grok Build and Pi use their advertised ACP model options. The user-facing
 `config.toml` schema, including these tables and the `[[agents]]` fields, is
 described in [`config.md`](../config.md).
+
+`[token_providers]` and `[agent_token_providers]` are plain maps on
+`NoriConfig`; this crate only parses and edits them. `TokenProviderToml`
+rejects unknown fields and holds a preset id, the *name* of the environment
+variable that carries the API key, and an optional endpoint override. The key
+value never appears in config. Interpreting a binding (preset catalog, model
+validation, writing the agent's settings) belongs to
+[`nori-acp-host`](../acp-host/docs.md), and the TUI writes the tables through
+`NoriConfigEdits` when the user picks a provider in `/agent`.
 
 ### Things to Know
 

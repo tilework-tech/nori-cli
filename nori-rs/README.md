@@ -2,7 +2,7 @@
 
 The Rust workspace behind the `nori` binary — a multi-provider terminal AI
 coding assistant. Nori is an ACP (Agent Client Protocol) host: it spawns
-Claude Code, Codex, Antigravity, Grok Build, or a configured agent and drives it
+Claude Code, Codex, Antigravity, Grok Build, Pi, or a configured agent and drives it
 over JSON-RPC/stdio, presenting one terminal interface for all of them.
 
 The workspace began as a fork of the OpenAI Codex CLI. The codex agent engine

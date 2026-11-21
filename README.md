@@ -27,7 +27,7 @@ Use `/agent` to switch agents, or select one at launch with `nori --agent grok-b
 
 ## Providers
 
-Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` release. Grok Build uses `npx` so its native executable is installed by the upstream npm package. The adapters use their upstream dependencies and authentication settings. For Antigravity, install Google's CLI and make `agy` available on the host's `PATH`. [Antigravity CLI installation](https://antigravity.google/cli)
+Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` release. Grok Build uses `npx` so its native executable is installed by the upstream npm package. Pi always uses `npx`, which installs the `pi-acp` adapter together with Earendil's Pi coding agent so the adapter finds `pi` on `PATH`. The adapters use their upstream dependencies and authentication settings. For Antigravity, install Google's CLI and make `agy` available on the host's `PATH`. [Antigravity CLI installation](https://antigravity.google/cli)
 
 | Agent | ID for `--agent` or `config.toml` | ACP launch | Sign in |
 | --- | --- | --- | --- |
@@ -35,8 +35,11 @@ Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` rele
 | Codex | `codex` | `@agentclientprotocol/codex-acp@latest` | Use `/login` for ChatGPT or set `OPENAI_API_KEY`. |
 | Antigravity | `gemini` (also `antigravity` or `agy`) | `agy acp --disable-telemetry` | Open `agy` for Google sign-in or set `GEMINI_API_KEY`. |
 | Grok Build | `grok-build` (also `grok`) | `@xai-official/grok@latest agent stdio` | Use `/login` for the Grok sign-in command or set `XAI_API_KEY`. |
+| Pi | `pi` (also `pi-acp`) | `pi-acp@latest` with `@earendil-works/pi-coding-agent@latest` | Use Pi's own settings in `~/.pi/agent`, or choose a token provider such as Subconscious in `/agent`. |
 
 The `gemini` ID keeps existing configs and Nori history associated with the Google provider. Each agent supplies its own model choices through `/model`.
+
+Picking Pi in `/agent` first asks where Pi gets its models: Pi's own settings, or a token provider. A token provider asks for the name of the environment variable that holds its API key, then a model from its catalog. Nori saves only the variable name. See [token providers](nori-rs/config.md#token-providers-token_providers-and-agent_token_providers).
 
 ## Bring Your Own Agent
 
@@ -75,7 +78,7 @@ Want your AI agent to configure this automatically? Point it at the raw skill fi
 
 ## Features
 
-- **Multi-provider**: Use Claude Code, Codex, Antigravity, Grok Build, or your own ACP-compatible agent from the same CLI.
+- **Multi-provider**: Use Claude Code, Codex, Antigravity, Grok Build, Pi, or your own ACP-compatible agent from the same CLI.
 - **Fast native interface**: Incremental Ratatui rendering, double-buffered scrollback history, and a Rust core keep long sessions responsive.
 - **Solid ACP client support**: Nori supports ACP session listing, loading, resume, context and usage metadata.
 - **Agent Integrations**: Your agents keep their configurations, whether that's slash commands, skills, and MCP server forwarding.
