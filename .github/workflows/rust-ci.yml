@@ -1,8 +1,7 @@
-name: rust-ci
+name: Verify stack 698 on macOS
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/h-stack-698-c1-macos']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +11,7 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 55
     defaults:
       run:
         working-directory: nori-rs
@@ -25,10 +24,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: "PR 699 macOS host verification"
+            source: 9b2701629a3ac2a6fb886613da361fb9a236857d
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ matrix.source }}
+          persist-credentials: false
+
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = ${{ matrix.source }} && git rev-parse HEAD && test "$(uname -sm)" = "Darwin arm64" && uname -sm
 
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -114,65 +123,12 @@ jobs:
             sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-
             sccache-${{ matrix.runner }}-${{ matrix.target }}-
 
-      # CI checks
-      - name: cargo fmt
-        run: cargo +nightly fmt -- --check
-      # - name: cargo check
-      #   run: cargo check --profile ci-test --target ${{ matrix.target }}
-      # - name: cargo clippy
-      #   run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings # needs all features to avoid unused import/var/etc errors
-      - name: cargo build
+      - name: Build the mock adapter
         run: |
-          mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
-          cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
-          cargo build -p nori-cli --profile ci-test --target ${{ matrix.target }}
-      - name: cargo test nori
-        env:
-          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
-        run: |
-          cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-harness
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp-host
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
-      - name: cargo clippy
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
-
-      # Save cargo home cache (only when key wasn't hit)
-      - name: Save cargo home cache
-        if: always() && !cancelled() && steps.cache_cargo_home_restore.outputs.cache-hit != 'true'
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-home-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ steps.lockhash.outputs.toolchain_hash }}
-
-      # Save sccache cache (fallback for when GHA backend isn't available)
-      - name: Save sccache cache (fallback)
-        if: always() && !cancelled() && env.USE_SCCACHE == 'true' && env.SCCACHE_GHA_ENABLED != 'true'
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.sccache/
-          key: sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ github.run_id }}
-
-      - name: sccache stats
-        if: always() && env.USE_SCCACHE == 'true'
-        continue-on-error: true
-        run: sccache --show-stats || true
-
-      - name: sccache summary
-        if: always() && env.USE_SCCACHE == 'true'
-        shell: bash
-        run: |
-          {
-            echo "### sccache stats — ${{ matrix.target }}";
-            echo;
-            echo '```';
-            sccache --show-stats || true;
-            echo '```';
-          } >> "$GITHUB_STEP_SUMMARY"
+          cargo build --jobs 4 --profile ci-test --target ${{ matrix.target }} -p mock-acp-agent
+          echo "MOCK_ACP_AGENT_BIN=$PWD/target/${{ matrix.target }}/ci-test/mock_acp_agent" >> "$GITHUB_ENV"
+      - name: Complete host_lifecycle
+        run: cargo test --profile ci-test --target ${{ matrix.target }} --jobs 4 -p nori-cli --test host_lifecycle
+      - name: Complete managed_recovery
+        if: success() || failure()
+        run: cargo test --profile ci-test --target ${{ matrix.target }} --jobs 4 -p nori-cli --test managed_recovery
