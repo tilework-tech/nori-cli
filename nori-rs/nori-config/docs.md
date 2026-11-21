@@ -95,14 +95,21 @@ key. Codex's launch adapter reads the key for the child process.
 [Resolver](src/token_providers.rs) · [Launch adapter](../acp-host/src/token_launch.rs) · [Configuration example](../config.md#named-api-token-providers)
 
 The CLI embeds the Sessions contract byte-for-byte at version 1, revision 1.
-The reader checks the major version. Keep the source commit, embedded bytes
-and broker parity fixture together when updating the contract.
-[Embedded contract](data/harness-compat.json) · [Pinned Sessions source](https://github.com/tilework-tech/nori-sessions/blob/f2c787a47128f8dff118fb327906d1f09effc795/broker/server/src/shared-definitions/harness-compat.json) · [Evaluator](src/harness_compat.rs) · [Parity tests](tests/harness_compat.rs)
+The runtime reader accepts any revision of the supported major version.
+An offline test checks that the embedded revision meets the minimum declared in
+the release notes. Edit the tracked declaration when raising that minimum. The
+release workflow copies it verbatim into the published notes.
+[Release-note declaration](data/harness-compat-release-note.md) · [Revision check and parity tests](tests/harness_compat.rs)
 
-The evaluator resolves harness IDs and aliases, selects rules for the source,
-environment and model, and returns a status with the effective protocol,
-exclusion reason or supporting evidence. Each named CLI connection must declare
-a protocol valid for its preset. It uses local eligibility and the selected
+Keep the source commit, embedded bytes and broker parity fixture together when
+updating the contract.
+[Embedded contract](data/harness-compat.json) · [Pinned Sessions source](https://github.com/tilework-tech/nori-sessions/blob/f2c787a47128f8dff118fb327906d1f09effc795/broker/server/src/shared-definitions/harness-compat.json) · [Evaluator](src/harness_compat.rs)
+
+The evaluator accepts harness IDs and aliases declared in the contract. Resolve
+the CLI launch aliases `hermes-agent` and `cursor-agent` to
+`hermes` and `cursor` before querying it. The source, environment and model
+determine the status, effective protocol, exclusion reason and evidence.
+Each named CLI connection must declare a protocol valid for its preset. It uses local eligibility and the selected
 model. A saved gateway tries its declared protocol first. A custom endpoint
 uses only its declared protocol. Native sign-in and subscription-backed
 sources have their own credential paths.

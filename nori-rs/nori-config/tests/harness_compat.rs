@@ -14,6 +14,42 @@ use sha2::Sha256;
 
 const DOCUMENT: &str = include_str!("../data/harness-compat.json");
 
+const RELEASE_NOTE: &str = include_str!("../data/harness-compat-release-note.md");
+
+fn check_release_floor(revision: i64, note: &str) -> anyhow::Result<()> {
+    let minimum: i64 = note
+        .trim_end()
+        .strip_prefix("Minimum harness-compat revision: ")
+        .context("expected the harness-compat minimum in the release note")?
+        .parse()?;
+    anyhow::ensure!(minimum >= 0, "negative harness-compat minimum");
+    anyhow::ensure!(
+        revision >= minimum,
+        "embedded harness-compat revision {revision} is older than release-note minimum {minimum}"
+    );
+    Ok(())
+}
+
+#[test]
+fn embedded_contract_meets_release_note_minimum() -> anyhow::Result<()> {
+    check_release_floor(embedded()?.revision(), RELEASE_NOTE)
+}
+
+#[test]
+fn release_floor_accepts_current_and_newer_copies_and_rejects_stale_ones() -> anyhow::Result<()> {
+    let note = "Minimum harness-compat revision: 8";
+    for revision in [7, 8, 9] {
+        let mut doc: Value = serde_json::from_str(DOCUMENT)?;
+        doc["revision"] = json!(revision);
+        let contract = Contract::read(&doc.to_string())?;
+        assert_eq!(
+            check_release_floor(contract.revision(), note).is_ok(),
+            revision >= 8
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn pinned_document_accepts_new_v1_revisions_only() {
     assert_eq!(
@@ -116,6 +152,35 @@ fn exact_custom_and_native_evidence() -> anyhow::Result<()> {
                 protocol: None,
                 evidence: None
             }
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn cli_only_aliases_use_canonical_ids_for_native_eligibility() -> anyhow::Result<()> {
+    let contract = embedded()?;
+    for (alias, id, source) in [
+        ("hermes-agent", "hermes", "native:anthropic-api-key"),
+        ("cursor-agent", "cursor", "native:cursor-api-key"),
+    ] {
+        let query = Pairing {
+            harness: id,
+            source,
+            environment: Environment::Local,
+            protocol: None,
+            model: None,
+            exact: false,
+            trust_saved_protocol: false,
+        };
+        assert_eq!(contract.evaluate(query).status, Status::Unverified);
+        let raw = contract.evaluate(Pairing {
+            harness: alias,
+            ..query
+        });
+        assert_eq!(
+            (raw.status, raw.reason),
+            (Status::Excluded, Some("protocol-mismatch"))
         );
     }
     Ok(())
