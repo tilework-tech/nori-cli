@@ -96,9 +96,9 @@ selection saves those entries as named connections. The selected Pi
 catalog model moves from `[default_models]` into the connection. Other
 agents' models and Pi's native model preferences stay in place.
 If an earlier entry used a custom endpoint, Nori keeps that URL and
-labels the connection `custom`. The Pi Subconscious adapter requires the
-standard endpoint. Select Pi settings to use native Pi, or explicitly
-choose a Subconscious connection to use the standard service.
+labels the connection `custom`. Pi can use this endpoint with an explicit
+`openai-completions` protocol and a model from the Subconscious catalog.
+The connection keeps its own key variable, Pi client header and session affinity settings.
 
 In `/agent`, choose **Pi**, then select a saved Subconscious connection or configure one by choosing **Subconscious**. For a new connection, enter the name of an environment variable holding the key and choose a catalog model. The equivalent configuration for a named connection is:
 

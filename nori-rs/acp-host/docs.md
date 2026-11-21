@@ -197,7 +197,7 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   Selecting one routes through injection exactly like a `[default_models]` custom
   id. `OtherModel` is re-exported from `nori-harness` for that picker.
 
-- The [Pi launch adapter](src/token_provider.rs) takes a named Subconscious connection and its resolved Chat Completions protocol. It checks the catalog model and key variable, writes `models.json` and `settings.json` in the connection's private Pi directory, and sets `PI_CODING_AGENT_DIR` for the child. Pi reads the key through the `$VARIABLE` reference in its model file. The file also supplies the Pi client header and session affinity settings. An unbound Pi launch uses the native profile. The [configuration reference](../config.md#pi-with-subconscious) shows the on-disk representation.
+- The [Pi launch adapter](src/token_provider.rs) accepts named Subconscious connections and custom endpoints that explicitly declare Chat Completions and serve a Subconscious catalog model. It checks the catalog model and key variable, writes `models.json` and `settings.json` in the connection's private Pi directory, and sets `PI_CODING_AGENT_DIR` for the child. Pi reads the key through the `$VARIABLE` reference in its model file. The file also supplies the Pi client header and session affinity settings. An unbound Pi launch uses the native profile. The [configuration reference](../config.md#pi-with-subconscious) shows the on-disk representation.
 
 ### Managed machine connection
 

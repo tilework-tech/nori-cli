@@ -28,16 +28,21 @@ impl App {
         display_name: String,
         preset_id: String,
     ) {
+        // A saved key belongs to the endpoint for which it was configured.
+        let matches_preset = |entry: &nori_config::token_providers::TokenProvider| {
+            entry.preset == nori_config::token_providers::Preset::Subconscious
+                && nori_harness::token_provider::supports_pi_connection(entry)
+        };
         let saved = self
             .config
             .agent_token_providers
             .get(&agent_name)
-            .filter(|entry| nori_harness::token_provider::supports_pi_connection(entry))
+            .filter(|entry| matches_preset(entry))
             .or_else(|| {
-                self.config.token_providers.iter().find(|entry| {
-                    entry.name == preset_id
-                        && nori_harness::token_provider::supports_pi_connection(entry)
-                })
+                self.config
+                    .token_providers
+                    .iter()
+                    .find(|entry| entry.name == preset_id && matches_preset(entry))
             })
             .map(|entry| entry.env_key.clone());
         let view = TokenProviderKeyInputView::new(

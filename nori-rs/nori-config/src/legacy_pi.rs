@@ -9,13 +9,17 @@ use toml_edit::ArrayOfTables;
 use toml_edit::DocumentMut;
 use toml_edit::Item;
 
+use crate::AgentConfigToml;
 use crate::token_providers::Preset;
 use crate::token_providers::Protocol;
 use crate::token_providers::SUBCONSCIOUS_DEFAULT_MODEL;
+use crate::token_providers::SUBCONSCIOUS_MODELS;
 use crate::token_providers::TokenProvider;
 
 #[derive(Deserialize)]
 struct LegacyConfig {
+    #[serde(default)]
+    agents: Vec<AgentConfigToml>,
     token_providers: BTreeMap<String, LegacyProvider>,
     #[serde(default)]
     agent_token_providers: BTreeMap<String, String>,
@@ -38,13 +42,10 @@ fn is_pi(slug: &str) -> bool {
 /// A legacy picker saved `<connection>/<wire model>`. Handwritten entries also
 /// accepted the wire model itself; it may start with the connection's name.
 fn wire_model<'a>(model: &'a str, connection: &str) -> Option<&'a str> {
-    let stripped = model
-        .strip_prefix(connection)
-        .and_then(|suffix| suffix.strip_prefix('/'));
-    match stripped {
-        Some(raw) if raw.starts_with("subconscious/") => Some(raw),
-        _ if model.starts_with("subconscious/") => Some(model),
-        raw => raw,
+    if SUBCONSCIOUS_MODELS.iter().any(|entry| entry.id == model) {
+        Some(model)
+    } else {
+        model.strip_prefix(connection)?.strip_prefix('/')
     }
 }
 
@@ -60,22 +61,40 @@ pub(crate) fn normalize(document: &mut DocumentMut) -> Result<()> {
             "invalid legacy Pi token provider; expected preset, api_key_env and optional base_url"
         )
     })?;
+    // The registry checks exact custom slugs before resolving "pi-acp" to "pi".
+    let shadowed = |slug: &str| {
+        saved.agents.iter().any(|agent| {
+            agent.slug == "pi" || (agent.slug == "pi-acp" && slug.eq_ignore_ascii_case("pi-acp"))
+        })
+    };
+    let belongs_to_pi = |slug: &str| is_pi(slug) && !shadowed(slug);
+    ensure!(
+        !saved
+            .agent_token_providers
+            .keys()
+            .any(|slug| is_pi(slug) && shadowed(slug)),
+        "legacy Pi token provider binding targets a custom agent; remove its [agent_token_providers] entry"
+    );
     let mut bindings = saved
         .agent_token_providers
         .iter()
-        .filter(|(slug, _)| is_pi(slug));
+        .filter(|(slug, _)| belongs_to_pi(slug));
     let bound = bindings.next().map(|(_, name)| name);
     ensure!(
         bindings.all(|(_, name)| Some(name) == bound),
         "conflicting Pi token provider bindings"
     );
-    let selected = saved.default_models.get("pi").or_else(|| {
-        saved
-            .default_models
-            .iter()
-            .find(|(slug, _)| is_pi(slug))
-            .map(|(_, model)| model)
-    });
+    let selected = saved
+        .default_models
+        .get("pi")
+        .filter(|_| belongs_to_pi("pi"))
+        .or_else(|| {
+            saved
+                .default_models
+                .iter()
+                .find(|(slug, _)| belongs_to_pi(slug))
+                .map(|(_, model)| model)
+        });
 
     let standard_url = Preset::Subconscious
         .source()?
@@ -122,7 +141,7 @@ pub(crate) fn normalize(document: &mut DocumentMut) -> Result<()> {
         for key in saved
             .agent_token_providers
             .keys()
-            .filter(|key| is_pi(key) && *key != "pi")
+            .filter(|key| belongs_to_pi(key) && *key != "pi")
         {
             aliases.remove(key);
         }
@@ -132,7 +151,7 @@ pub(crate) fn normalize(document: &mut DocumentMut) -> Result<()> {
             .and_then(Item::as_table_like_mut)
         {
             for (key, model) in saved.default_models {
-                if is_pi(&key) && wire_model(&model, name).is_some() {
+                if belongs_to_pi(&key) && wire_model(&model, name).is_some() {
                     defaults.remove(&key);
                 }
             }

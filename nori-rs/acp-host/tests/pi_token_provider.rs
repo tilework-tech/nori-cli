@@ -158,3 +158,37 @@ fn provider_ids_must_be_safe_directory_names() {
     let binding = preset.connection("../outside", "SUBC_KEY", preset.default_model);
     assert!(!supports_pi_connection(&binding));
 }
+
+#[test]
+fn migrated_custom_endpoint_reaches_pi_only_with_its_explicit_protocol_and_catalog_model() {
+    use nori_config::token_providers::Preset;
+    use nori_config::token_providers::Protocol;
+    let variable = "SYNTHETIC_PROXY_KEY";
+    let preset = preset("subconscious").unwrap();
+    let mut binding = preset.connection("team", variable, preset.default_model);
+    binding.preset = Preset::Custom;
+    binding.base_url = "http://127.0.0.1:4567/v1".into();
+    let mut config = get_agent_launch_config("pi", Some(&binding)).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    prepare_pi_profile(&mut config, home.path(), &|name| {
+        (name == variable).then(|| "synthetic".into())
+    })
+    .unwrap();
+    let profile = Path::new(&config.env["PI_CODING_AGENT_DIR"]);
+    let models = read_json(&profile.join("models.json"));
+    let team = &models["providers"]["team"];
+    assert_eq!(team["baseUrl"], binding.base_url);
+    assert_eq!(team["apiKey"], "$SYNTHETIC_PROXY_KEY");
+    assert_eq!(team["api"], "openai-completions");
+    assert_eq!(team["headers"]["x-subconscious-client"], "pi");
+    assert_eq!(
+        team["models"][0]["compat"]["sendSessionAffinityHeaders"],
+        true
+    );
+
+    binding.protocol = Protocol::OpenaiResponses;
+    assert!(get_agent_launch_config("pi", Some(&binding)).is_err());
+    binding.protocol = Protocol::OpenaiCompletions;
+    binding.model = "subconscious/private-native-model".into();
+    assert!(get_agent_launch_config("pi", Some(&binding)).is_err());
+}

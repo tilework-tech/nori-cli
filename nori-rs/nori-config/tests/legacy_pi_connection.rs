@@ -144,3 +144,63 @@ fn rejects_literal_keys_without_disclosing_or_rewriting_them() -> Result<()> {
     assert_eq!(std::fs::read_to_string(path)?, invalid);
     Ok(())
 }
+
+const CUSTOM_ALIAS: &str = r#"
+[[agents]]
+name = "Custom Pi client"
+slug = "pi-acp"
+[agents.distribution.local]
+command = "custom-pi"
+"#;
+
+#[test]
+fn custom_agent_owning_pi_alias_keeps_its_model_when_builtin_pi_changes() -> Result<()> {
+    let home = tempdir()?;
+    let path = home.path().join("config.toml");
+    let legacy = format!("{ORIGINAL}pi-acp = 'subconscious/subconscious/glm-5.2'\n{CUSTOM_ALIAS}");
+    std::fs::write(&path, legacy)?;
+    NoriConfigEdits::select_token_provider(home.path(), "pi", |_| Ok(None))?;
+    let config = NoriConfig::load_from_path(&path)?;
+    assert_eq!(
+        config.default_models["pi-acp"],
+        "subconscious/subconscious/glm-5.2"
+    );
+    assert_eq!(config.active_agent, "codex");
+    Ok(())
+}
+
+#[test]
+fn explicit_binding_to_custom_pi_alias_cannot_be_reassigned_to_builtin_pi() -> Result<()> {
+    let home = tempdir()?;
+    let path = home.path().join("config.toml");
+    let legacy =
+        ORIGINAL.replace("pi = \"subconscious\"", "pi-acp = \"subconscious\"") + CUSTOM_ALIAS;
+    std::fs::write(&path, &legacy)?;
+    let error = NoriConfig::load_from_path(&path).unwrap_err();
+    assert!(format!("{error:#}").contains("custom agent"));
+    assert!(NoriConfigEdits::select_token_provider(home.path(), "pi", |_| Ok(None)).is_err());
+    assert_eq!(std::fs::read_to_string(path)?, legacy);
+    Ok(())
+}
+
+#[test]
+fn unknown_native_model_with_provider_prefix_survives_removing_a_renamed_connection() -> Result<()>
+{
+    let home = tempdir()?;
+    let path = home.path().join("config.toml");
+    let legacy = ORIGINAL
+        .replace("token_providers.subconscious", "token_providers.team")
+        .replace("pi = \"subconscious\"", "pi = \"team\"")
+        .replace(
+            "subconscious/subconscious/glm-5.2",
+            "subconscious/private-native-model",
+        );
+    std::fs::write(&path, legacy)?;
+    NoriConfigEdits::select_token_provider(home.path(), "pi", |_| Ok(None))?;
+    let config = NoriConfig::load_from_path(&path)?;
+    assert_eq!(
+        config.default_models["pi"],
+        "subconscious/private-native-model"
+    );
+    Ok(())
+}

@@ -12,15 +12,7 @@ use serde_json::json;
 use crate::registry::AcpAgentConfig;
 use crate::registry::AgentKind;
 
-/// A model a preset serves.
-#[derive(Debug, PartialEq, Eq)]
-pub struct PresetModel {
-    /// Provider model id, sent verbatim on the wire.
-    pub id: &'static str,
-    pub name: &'static str,
-    pub context_window: i64,
-    pub max_output_tokens: i64,
-}
+pub use nori_config::token_providers::PresetModel;
 
 /// A known token provider.
 #[derive(Debug, PartialEq, Eq)]
@@ -35,37 +27,13 @@ pub struct TokenProviderPreset {
     pub models: &'static [PresetModel],
 }
 
-const SUBCONSCIOUS_CONTEXT_WINDOW: i64 = 5_000_000;
-const SUBCONSCIOUS_MAX_OUTPUT_TOKENS: i64 = 65_536;
-
-const fn subconscious_model(id: &'static str, name: &'static str) -> PresetModel {
-    PresetModel {
-        id,
-        name,
-        context_window: SUBCONSCIOUS_CONTEXT_WINDOW,
-        max_output_tokens: SUBCONSCIOUS_MAX_OUTPUT_TOKENS,
-    }
-}
-
 static SUBCONSCIOUS: TokenProviderPreset = TokenProviderPreset {
     id: "subconscious",
     name: "Subconscious",
     base_url: "https://api.subconscious.dev/v1",
     api_key_env: "SUBCONSCIOUS_API_KEY",
     default_model: nori_config::token_providers::SUBCONSCIOUS_DEFAULT_MODEL,
-    models: &[
-        subconscious_model("subconscious/glm-5.3-marathon", "GLM-5.3 Marathon"),
-        subconscious_model("subconscious/glm-5.2", "GLM-5.2"),
-        subconscious_model("subconscious/tim-qwen3.6-27b", "Tim-Qwen3.6-27b"),
-        subconscious_model(
-            "subconscious/deepseek-v4-flash-marathon",
-            "DeepSeek-V4-Flash Marathon",
-        ),
-        subconscious_model(
-            "subconscious/deepseek-v4.1-flash-marathon",
-            "DeepSeek-V4.1-Flash Marathon",
-        ),
-    ],
+    models: nori_config::token_providers::SUBCONSCIOUS_MODELS,
 };
 
 /// Look up a preset by id.
@@ -75,7 +43,7 @@ pub fn preset(id: &str) -> Option<&'static TokenProviderPreset> {
 
 /// Whether this connection can use the local Pi adapter and its known model catalog.
 pub fn supports_pi_connection(binding: &TokenProvider) -> bool {
-    binding.preset == Preset::Subconscious
+    matches!(binding.preset, Preset::Subconscious | Preset::Custom)
         && binding.validate().is_ok()
         && binding.protocol_for("pi").ok() == Some(Protocol::OpenaiCompletions)
         && SUBCONSCIOUS
