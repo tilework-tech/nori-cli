@@ -94,10 +94,26 @@ variable name. This lets frontends load configuration without access to a
 key. Codex's launch adapter reads the key for the child process.
 [Resolver](src/token_providers.rs) · [Launch adapter](../acp-host/src/token_launch.rs) · [Configuration example](../config.md#named-api-token-providers)
 
-The gateway compatibility rules come from the Sessions broker. Its custom
-preset declares one wire protocol; known gateways can dispatch different
-protocols through the same connection. Subscription-backed ChatGPT is a
-separate credential class. [Broker catalog and resolver](https://github.com/tilework-tech/nori-sessions/blob/b9ad780d6c25f214d0b4a6697d51ae602975162e/broker/server/src/core-services/agents/token-providers.ts#L250-L330)
+The CLI embeds the Sessions contract byte-for-byte at version 1, revision 1.
+The reader checks the major version. Keep the source commit, embedded bytes
+and broker parity fixture together when updating the contract.
+[Embedded contract](data/harness-compat.json) · [Pinned Sessions source](https://github.com/tilework-tech/nori-sessions/blob/f2c787a47128f8dff118fb327906d1f09effc795/broker/server/src/shared-definitions/harness-compat.json) · [Evaluator](src/harness_compat.rs) · [Parity tests](tests/harness_compat.rs)
+
+The evaluator resolves harness IDs and aliases, selects rules for the source,
+environment and model, and returns a status with the effective protocol,
+exclusion reason or supporting evidence. Each named CLI connection must declare
+a protocol valid for its preset. It uses local eligibility and the selected
+model. A saved gateway tries its declared protocol first. A custom endpoint
+uses only its declared protocol. Native sign-in and subscription-backed
+sources have their own credential paths.
+
+An exact query checks only the requested protocol. A provisional candidate
+needs a protocol-specific rule to pass that check. Locally, custom Responses
+is unverified for Pi and excluded for Hermes. Custom Completions is unverified
+for Hermes. A broad Hermes query for OpenRouter can yield an unverified result
+without a wire protocol. Such a result cannot supply a CLI binding. The ACP
+registry separately checks that the selected command implements a named
+connection adapter before launch. [Launch registry](../acp-host/src/registry.rs)
 
 Upstream Codex separates a named provider from its selected model and accepts
 an environment reference for the provider's key. Pi composes a model from

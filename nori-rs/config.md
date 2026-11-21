@@ -62,7 +62,9 @@ and excludes credentials, query parameters and fragments.
 Run `nori --agent codex`, `nori --agent codex exec "hello"`, or
 `nori host new --agent codex` with a locally configured host. A binding's
 `model` supplies the exact API model ID and takes precedence over
-`[default_models]` for that agent. A missing or blank key stops launch,
+`[default_models]` for that agent. A built-in launch alias such as `codex-acp` uses the saved `codex` binding.
+Use the canonical slug as the key in `[agent_token_providers]`. A missing or
+blank key stops launch,
 including when native credentials are available. Remove the agent's binding
 to resume its usual model and authentication settings. ChatGPT subscriptions
 use Codex's native sign-in. Codex ACP can also generate a thread title using
@@ -71,17 +73,17 @@ its own auxiliary model on the selected connection.
 **Protocol compatibility.** The resolver understands `openai-completions`,
 `openai-responses`, and `anthropic-messages`. A `custom` endpoint exposes
 exactly its declared protocol. `openrouter`, `fireworks`, and `subconscious`
-can select a compatible protocol on the same connection, keeping its endpoint,
-model and key reference. `cloudflare` accepts only `openai-completions`.
+try the declared protocol first, then other eligible protocols on the same
+connection, keeping its endpoint, model and key reference. `cloudflare` accepts only `openai-completions`.
 Subconscious uses Completions for Pi and OpenCode, Responses for Codex, and
 Messages for Claude Code. Use the published gateway base URL for a named
 preset or the account-scoped Workers AI URL for Cloudflare.
 
-Built-in Codex is the available launch adapter for named connections.
-A binding on a custom command that shadows Codex fails before that command
-starts. The shared compatibility rules also cover `pi`, `opencode`, and
-`claude-code`; each requires its own adapter to launch. Broker-managed Sessions
-supply a separate launch specification.
+A launch requires an eligible pairing, a concrete wire protocol and a named
+connection adapter. Built-in Codex supplies the Responses adapter. A custom
+command that shadows Codex cannot use that adapter. An excluded pairing
+or a missing adapter stops the bound launch. Broker-managed Sessions supply
+a separate launch specification. [Compatibility contract](nori-config/docs.md#api-token-provider-resolution)
 
 ## Custom agents: `[[agents]]`
 
