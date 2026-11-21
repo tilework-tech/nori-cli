@@ -299,6 +299,12 @@ fn new_session_folder_defaults_to_and_resolves_against_the_callers_directory() {
     let plain = new_in(&[]);
     assert_eq!(plain["cwd"], canonical(caller.path()));
     assert!(plain["session_id"].is_string());
+    let listing: serde_json::Value =
+        serde_json::from_str(&success(host.run(&["host", "ls", "--json"]))).unwrap();
+    assert_eq!(
+        listing,
+        serde_json::json!({"sessions": [{"session_id": plain["session_id"], "credential_refs": []}]})
+    );
     let relative = new_in(&["--cwd", "nested"]);
     assert_eq!(relative["cwd"], canonical(&caller.path().join("nested")));
 }

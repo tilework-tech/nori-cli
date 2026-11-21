@@ -204,6 +204,7 @@ async fn stdio_host_can_give_the_adapter_its_own_environment_but_not_its_home() 
         &[
             ("FIXTURE_MODEL", "aster"),
             ("HOME", "/nonexistent-caller-home"),
+            ("NORI_AGENT_RUNTIME_DIR", "/nonexistent-caller-runtime"),
         ],
         &["--inherit-env"],
     );

@@ -54,11 +54,11 @@ pub(super) async fn relay(
                 let (Some(key), Some(value)) = (key.to_str(), value.to_str()) else {
                     continue;
                 };
-                // The host assigns the adapter's home variables itself.
-                let reserved = ["HOME", "USERPROFILE", "CODEX_HOME", "NORI_HOME"]
-                    .iter()
-                    .any(|name| key.eq_ignore_ascii_case(name));
-                if !reserved && !key.is_empty() && !key.contains('=') && !value.contains('\0') {
+                if !nori_harness::managed_launch::reserved_launch_env(key)
+                    && !key.is_empty()
+                    && !key.contains('=')
+                    && !value.contains('\0')
+                {
                     env.entry(key).or_insert_with(|| json!(value));
                 }
             }
