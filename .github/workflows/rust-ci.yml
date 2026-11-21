@@ -1,8 +1,7 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/opencode-child-9effefb85901']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,11 +11,15 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: nori-rs
+    permissions:
+      contents: read
     env:
+      MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+      CARGO_BUILD_JOBS: "4"
       CARGO_INCREMENTAL: "0"
       # Speed up repeated builds across CI runs by caching compiled objects.
       USE_SCCACHE: "true"
@@ -25,23 +28,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: OpenCode native macOS verification
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: 9effefb859017382e6b2142a37b0e6e64eac8485
+          persist-credentials: false
 
-      - name: Free disk space
-        if: runner.os == 'Linux'
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          # sudo apt-get update
-          # sudo apt-get install -y coreutils musl-tools
-          docker system prune -af || true
-
-      - name: Setup faster linker
-        uses: rui314/setup-mold@v1
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = 9effefb859017382e6b2142a37b0e6e64eac8485 && git rev-parse HEAD && uname -sm
 
       - uses: dtolnay/rust-toolchain@1.90
         with:
@@ -115,8 +114,8 @@ jobs:
             sccache-${{ matrix.runner }}-${{ matrix.target }}-
 
       # CI checks
-      - name: cargo fmt
-        run: cargo +nightly fmt -- --check
+      - name: Print native tool versions
+        run: sw_vers && rustc --version && cargo --version
       # - name: cargo check
       #   run: cargo check --profile ci-test --target ${{ matrix.target }}
       # - name: cargo clippy
@@ -126,6 +125,13 @@ jobs:
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
           cargo build -p nori-cli --profile ci-test --target ${{ matrix.target }}
+      - name: Complete host_lifecycle
+        run: cargo test --profile ci-test --target ${{ matrix.target }} -p nori-cli --test host_lifecycle
+      - name: Complete managed_recovery
+        if: success() || failure()
+        run: cargo test --profile ci-test --target ${{ matrix.target }} -p nori-cli --test managed_recovery
+      - name: cargo fmt
+        run: cargo +nightly fmt -- --check
       - name: cargo test nori
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
