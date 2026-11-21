@@ -16,6 +16,9 @@ impl ChatComposer {
         if !self.input_enabled {
             return (InputResult::None, false);
         }
+        // Popup handlers act on the textarea and popup selection directly, so
+        // a held burst tail that is already due must land before they run.
+        self.handle_paste_burst_flush(Instant::now());
         let is_newline_shortcut = !matches!(self.active_popup, ActivePopup::HistorySearch(_))
             && matches!(
                 key_event,

@@ -223,7 +223,11 @@ typed `HarnessHandle` methods available to headless embedders.
   `TuiSession::submit_input`, never a bare `send_str` followed by a sleep. A
   string written in one PTY burst is classified as a paste, and Enter is folded
   into that buffer as a newline until the buffer flushes, so the helpers wait
-  for the composer to render the text before sending the next key.
+  for the composer to render the text before sending the next key. That
+  render check ignores slash-popup rows: a leading `/` or `!` counts only
+  when it renders as the composer's mode sigil followed by whitespace
+  (`/ context`), because the popup lists `/context` as soon as it opens on a
+  prefix, before the rest of the input has reached the composer.
 - Timing-sensitive scenarios use bounded waits, but assertions target visible
   behavior rather than private reducer calls.
 - Prepared-lifecycle scenarios assert process ownership as well as terminal
