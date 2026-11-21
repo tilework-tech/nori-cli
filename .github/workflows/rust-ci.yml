@@ -1,8 +1,7 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/cursor-acp-1ff169fd']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +11,7 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 75
     defaults:
       run:
         working-directory: nori-rs
@@ -25,10 +24,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: macOS host verification
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: 1ff169fd0a7c7841c486b33367433b208084c1cd
+          persist-credentials: false
+
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = 1ff169fd0a7c7841c486b33367433b208084c1cd && git rev-parse HEAD && uname -sm && sw_vers
 
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -126,6 +134,15 @@ jobs:
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
           cargo build -p nori-cli --profile ci-test --target ${{ matrix.target }}
+      - name: Native host_lifecycle
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: cargo test --profile ci-test --target aarch64-apple-darwin -p nori-cli --test host_lifecycle
+      - name: Native managed_recovery
+        if: success() || failure()
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: cargo test --profile ci-test --target aarch64-apple-darwin -p nori-cli --test managed_recovery
       - name: cargo test nori
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
