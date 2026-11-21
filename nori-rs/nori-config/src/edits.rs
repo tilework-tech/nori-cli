@@ -121,6 +121,7 @@ impl NoriConfigEdits {
         choose: impl FnOnce(&[TokenProvider]) -> Result<Option<TokenProvider>>,
     ) -> Result<Option<(TokenProvider, Protocol)>> {
         let (_lock, mut document) = read_for_edit(nori_home)?;
+        crate::legacy_pi::normalize(&mut document)?;
         let saved: NoriConfigToml = toml::from_str(&document.to_string())
             .map_err(|_| anyhow::anyhow!("could not read stored token provider configuration"))?;
         let connection = choose(&saved.token_providers)?;

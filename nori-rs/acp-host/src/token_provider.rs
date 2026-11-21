@@ -52,7 +52,7 @@ static SUBCONSCIOUS: TokenProviderPreset = TokenProviderPreset {
     name: "Subconscious",
     base_url: "https://api.subconscious.dev/v1",
     api_key_env: "SUBCONSCIOUS_API_KEY",
-    default_model: "subconscious/glm-5.3-marathon",
+    default_model: nori_config::token_providers::SUBCONSCIOUS_DEFAULT_MODEL,
     models: &[
         subconscious_model("subconscious/glm-5.3-marathon", "GLM-5.3 Marathon"),
         subconscious_model("subconscious/glm-5.2", "GLM-5.2"),

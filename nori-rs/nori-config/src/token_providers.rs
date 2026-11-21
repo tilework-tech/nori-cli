@@ -14,6 +14,8 @@ use crate::harness_compat::Pairing;
 use crate::harness_compat::Status;
 use crate::harness_compat::{self};
 
+pub const SUBCONSCIOUS_DEFAULT_MODEL: &str = "subconscious/glm-5.3-marathon";
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Protocol {
@@ -53,7 +55,7 @@ impl Preset {
         }
     }
 
-    fn source(self) -> Result<&'static harness_compat::Source> {
+    pub(crate) fn source(self) -> Result<&'static harness_compat::Source> {
         harness_compat::embedded()?
             .source(self.source_id())
             .ok_or_else(|| anyhow::anyhow!("token preset missing from harness-compat"))
