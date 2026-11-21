@@ -144,6 +144,9 @@ impl ModelFilter {
 
 #[derive(Clone, Copy)]
 pub struct Pairing<'a> {
+    /// A harness ID or alias declared by the broker contract. Resolve CLI
+    /// command aliases such as `hermes-agent` and `cursor-agent` to their
+    /// canonical IDs (`hermes` and `cursor`) before querying eligibility.
     pub harness: &'a str,
     pub source: &'a str,
     pub environment: Environment,
