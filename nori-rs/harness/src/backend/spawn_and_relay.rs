@@ -139,6 +139,7 @@ impl AcpBackend {
         backend_event_tx: mpsc::Sender<BackendEvent>,
     ) -> Result<Self> {
         let super::prepared::PreparedAgentParts {
+            agent_config,
             connection,
             mut event_rx,
             config,
@@ -147,7 +148,6 @@ impl AcpBackend {
         let config = &config;
         let cwd = config.cwd.clone();
 
-        let agent_config = get_agent_config(&config.agent)?;
         debug!(
             "Activating prepared ACP backend for agent: {}",
             config.agent
@@ -288,6 +288,7 @@ impl AcpBackend {
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(true)),
             prompt_summary_enabled: config.prompt_summary_enabled,
+            agent_config,
             agent_name: config.agent.clone(),
             cli_version: config.cli_version.clone(),
             auto_worktree: config.auto_worktree,

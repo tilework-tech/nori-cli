@@ -517,12 +517,17 @@ following for the binding generation and the lifetime of every active side.
 - Disabling native goals is a policy of Nori's built-in Codex launch only.
   User-defined agent processes retain their explicit command and environment;
   goal ownership and routing remain a harness concern.
-- Ambient `CODEX_CONFIG` must be a JSON object whose `features` value, when
+- For a native Codex launch, ambient `CODEX_CONFIG` must be a JSON object whose `features` value, when
   present, is also an object. Invalid JSON or incompatible shapes fail built-in
   Codex configuration explicitly instead of silently discarding user settings.
   Codex model injection merges only the `model` key into that same object,
   preserving the goals-disabled flag.
-- The Codex agent subprocess is spawned with `CODEX_HOME` stripped
+- A named Codex token provider uses a process-local Responses provider definition.
+  The adapter's startup configuration contains an environment reference. The
+  child receives the selected key when it starts, and Nori disables its native
+  API-key authentication retry for that binding.
+  [Launch adapter](src/token_launch.rs) · [Codex ACP startup](https://github.com/agentclientprotocol/codex-acp/blob/e3a679f193458f8d4825803a4744063e7d4a5e80/src/index.ts)
+- The native Codex agent subprocess is spawned with `CODEX_HOME` stripped
   (`.env_remove("CODEX_HOME")` in `connection/acp_connection.rs`), so it resolves
   its home to `$HOME/.codex` and reads its credentials from
   `~/.codex/auth.json`, ignoring any `CODEX_HOME` override. The invariant this

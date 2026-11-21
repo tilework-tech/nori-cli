@@ -26,7 +26,6 @@ use tracing::warn;
 
 use crate::connection::DelegatedRequest;
 use crate::connection::acp_connection::AcpConnection;
-use crate::registry::get_agent_config;
 use crate::transcript::ContentBlock;
 use crate::transcript::TranscriptRecorder;
 use crate::undo::GhostSnapshotStack;
@@ -223,6 +222,8 @@ pub struct AcpBackendConfig {
     pub script_timeout: std::time::Duration,
     /// Default model to apply on session start (from config.toml [default_models])
     pub default_model: Option<String>,
+    pub agent_token_providers:
+        std::sync::Arc<HashMap<String, nori_config::token_providers::TokenProvider>>,
     /// Optional initial context to inject into the first prompt.
     /// Used by fork to provide conversation history as context to the new session.
     pub initial_context: Option<String>,
@@ -323,6 +324,7 @@ pub struct AcpBackend {
     is_first_prompt: Arc<Mutex<bool>>,
     /// Whether the first prompt should be summarized for the footer.
     prompt_summary_enabled: bool,
+    agent_config: crate::registry::AcpAgentConfig,
     /// Agent name stored for spawning summarization connection
     agent_name: String,
     /// CLI version recorded in transcript metadata (including forked transcripts)

@@ -294,6 +294,11 @@ impl NoriConfig {
             async_post_tool_call_hooks,
             async_pre_agent_response_hooks,
             async_post_agent_response_hooks,
+            agent_token_providers: crate::token_providers::resolve_bindings(
+                &toml.token_providers,
+                toml.agent_token_providers,
+            )?,
+            token_providers: toml.token_providers,
             default_models: toml.default_models,
             default_model_override_keys,
             agents: toml.agents,
@@ -313,6 +318,14 @@ fn load_toml(
             toml::Value::Table(toml::Table::new())
         } else {
             toml::from_str::<toml::Value>(&content)
+                .map_err(|error| {
+                    if content.contains("token_providers") {
+                        // TOML syntax errors include the offending source line.
+                        anyhow::anyhow!("invalid TOML in provider configuration")
+                    } else {
+                        error.into()
+                    }
+                })
                 .with_context(|| format!("Failed to parse {}", config_path.display()))?
         }
     } else {

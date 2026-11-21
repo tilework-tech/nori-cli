@@ -114,7 +114,7 @@ impl AcpBackend {
                 if !skip_summary && (self.prompt_summary_enabled || self.auto_worktree.is_enabled())
                 {
                     let event_tx = self.backend_event_tx.clone();
-                    let agent_name = self.agent_name.clone();
+                    let agent = self.agent_config.clone();
                     let cwd = self.cwd.clone();
                     let prompt_for_summary = display_text.clone();
                     let auto_worktree = self.auto_worktree;
@@ -123,7 +123,7 @@ impl AcpBackend {
                     tokio::spawn(async move {
                         if let Err(e) = run_prompt_summary(
                             &event_tx,
-                            &agent_name,
+                            &agent,
                             &cwd,
                             &prompt_for_summary,
                             auto_worktree,

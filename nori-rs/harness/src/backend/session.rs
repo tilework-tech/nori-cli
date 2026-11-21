@@ -126,6 +126,7 @@ impl AcpBackend {
         backend_event_tx: mpsc::Sender<BackendEvent>,
     ) -> Result<Self> {
         let super::prepared::PreparedAgentParts {
+            agent_config,
             connection,
             event_rx,
             config,
@@ -139,7 +140,6 @@ impl AcpBackend {
             acp_session_id, config.agent
         );
 
-        let agent_config = get_agent_config(&config.agent)?;
         forward_setup_session_events(&backend_event_tx, setup_events).await?;
         let mut event_rx = event_rx;
 
@@ -714,6 +714,7 @@ impl AcpBackend {
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(is_first_prompt_val)),
             prompt_summary_enabled: config.prompt_summary_enabled,
+            agent_config,
             agent_name: config.agent.clone(),
             cli_version: config.cli_version.clone(),
             auto_worktree: config.auto_worktree,
@@ -874,10 +875,7 @@ impl AcpBackend {
         self.connection
             .close_session(&session_id.to_string())
             .await
-            .map_err(|e| match get_agent_config(&self.agent_name) {
-                Ok(agent_config) => enhance_agent_error(e, &agent_config),
-                Err(_) => e,
-            })?;
+            .map_err(|e| enhance_agent_error(e, &self.agent_config))?;
         self.teardown(false, None).await;
         Ok(())
     }

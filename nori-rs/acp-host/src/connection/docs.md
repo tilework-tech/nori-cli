@@ -87,7 +87,7 @@ remain unrestricted. Host-handled requests do not leak duplicate public
   respectively.
 - The connection uses `ProtocolVersion::LATEST` while enforcing ACP v1 as the
   minimum supported version.
-- Spawn strips `CODEX_HOME` (`.env_remove("CODEX_HOME")`), so a Codex agent
+- Spawn strips `CODEX_HOME` (`.env_remove("CODEX_HOME")`), so a natively authenticated Codex
   subprocess resolves its home to `$HOME/.codex` and reads credentials from
   `~/.codex/auth.json`. Anything writing those credentials (notably the TUI's
   in-app OAuth `/login`) must target that same home; see

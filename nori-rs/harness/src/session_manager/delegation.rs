@@ -82,7 +82,6 @@ impl SessionManager {
         let task = task.trim().to_string();
         anyhow::ensure!(!task.is_empty(), "delegation task must not be empty");
         let agent = crate::resolve_agent_slug(&agent);
-        crate::get_agent_config(&agent)?;
         let value = {
             let mut state = self.shared.state();
             anyhow::ensure!(
@@ -101,6 +100,10 @@ impl SessionManager {
                 .configs
                 .get(&process)
                 .ok_or_else(|| anyhow::anyhow!("parent session configuration is unavailable"))?;
+            crate::registry::get_agent_launch_config(
+                &agent,
+                config.agent_token_providers.get(&agent),
+            )?;
             anyhow::ensure!(
                 config.multi_session,
                 "delegation requires [features] multi_session = true"
@@ -300,7 +303,10 @@ impl SessionManager {
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("parent configuration unavailable"))?;
             if config.agent != value.agent {
-                config.default_model = None;
+                config.default_model = config
+                    .agent_token_providers
+                    .get(&value.agent)
+                    .map(|provider| provider.model.clone());
             }
             config.agent.clone_from(&value.agent);
             config.conversation_id = Some(child);

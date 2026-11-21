@@ -572,6 +572,8 @@ impl Default for AcpProviderInfo {
 /// Configuration for an ACP agent subprocess
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcpAgentConfig {
+    /// Explicit API route containing only a credential reference.
+    pub token_provider: Option<nori_config::token_providers::TokenProvider>,
     /// Agent identifier (placeholder for custom agents)
     pub agent: AgentKind,
     /// Built-in provider using its default launch configuration. Custom commands have no built-in identity.
@@ -743,6 +745,34 @@ pub fn resolve_agent_selection(
 /// # Errors
 /// Returns error if agent_name is not recognized
 pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
+    get_agent_launch_config(agent_name, None)
+}
+
+/// Resolve the command and an optional named API connection together.
+pub fn get_agent_launch_config(
+    agent_name: &str,
+    binding: Option<&nori_config::token_providers::TokenProvider>,
+) -> Result<AcpAgentConfig> {
+    let config = agent_command(agent_name, binding.is_none())?;
+    let Some(binding) = binding else {
+        return Ok(config);
+    };
+    anyhow::ensure!(
+        config.builtin_kind == Some(AgentKind::Codex),
+        "this agent has no named token provider launch adapter"
+    );
+    anyhow::ensure!(
+        binding.protocol == nori_config::token_providers::Protocol::OpenaiResponses,
+        "Codex requires openai-responses"
+    );
+    Ok(AcpAgentConfig {
+        auth_hint: format!("Check the credential referenced by {}.", binding.env_key),
+        token_provider: Some(binding.clone()),
+        ..config
+    })
+}
+
+fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentConfig> {
     // Normalize agent name: lowercase
     let normalized = resolve_agent_slug(agent_name);
 
@@ -803,6 +833,7 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
         };
 
         return Ok(AcpAgentConfig {
+            token_provider: None,
             agent: registered.kind.unwrap_or(AgentKind::ClaudeCode),
             builtin_kind: None,
             provider_slug: registered.slug.clone(),
@@ -859,7 +890,7 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
             )
         };
         let mut env = HashMap::new();
-        if agent == AgentKind::Codex {
+        if use_native_config && agent == AgentKind::Codex {
             let ambient_config = std::env::var("CODEX_CONFIG").ok();
             env.insert(
                 "CODEX_CONFIG".to_string(),
@@ -868,6 +899,7 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
         }
 
         return Ok(AcpAgentConfig {
+            token_provider: None,
             agent,
             builtin_kind: Some(agent),
             provider_slug: agent.slug().to_string(),
@@ -963,6 +995,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
             };
 
             Some(AcpAgentConfig {
+                token_provider: None,
                 agent: AgentKind::ClaudeCode, // Dummy
                 builtin_kind: None,
                 provider_slug: "mock-acp".to_string(),
@@ -1015,6 +1048,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
             };
 
             Some(AcpAgentConfig {
+                token_provider: None,
                 agent: AgentKind::ClaudeCode, // Dummy
                 builtin_kind: None,
                 provider_slug: "mock-acp-alt".to_string(),

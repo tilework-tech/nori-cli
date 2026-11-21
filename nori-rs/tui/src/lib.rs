@@ -196,6 +196,9 @@ pub async fn run_main(
     });
     registry_agents.extend(cli.extra_agents.clone());
     if let Err(e) = nori_harness::initialize_registry(registry_agents) {
+        if !config.agent_token_providers.is_empty() {
+            return Err(std::io::Error::other(e));
+        }
         tracing::warn!("Failed to initialize agent registry with custom agents: {e}");
     }
 

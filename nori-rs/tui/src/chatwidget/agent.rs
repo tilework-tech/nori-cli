@@ -58,7 +58,11 @@ pub(crate) fn spawn_agent(
     fork_context: Option<String>,
     analytics: Option<AnalyticsReporter>,
 ) -> SpawnAgentResult {
-    match nori_harness::get_agent_config(&config.active_agent) {
+    let slug = nori_harness::resolve_agent_slug(&config.active_agent);
+    match nori_harness::registry::get_agent_launch_config(
+        &slug,
+        config.agent_token_providers.get(&slug),
+    ) {
         Ok(_) => prepare_and_launch_acp_agent(
             manager,
             config,
@@ -68,17 +72,21 @@ pub(crate) fn spawn_agent(
             SessionStart::New,
             analytics,
         ),
-        Err(_) => {
+        Err(error) => {
             let agent_name = config.active_agent;
             let known: Vec<String> = list_available_agents()
                 .iter()
                 .map(|a| a.agent_name.clone())
                 .collect();
-            let error_msg = format!(
-                "Agent '{agent_name}' is not registered as an ACP agent. \
+            let error_msg = if config.agent_token_providers.contains_key(&slug) {
+                error.to_string()
+            } else {
+                format!(
+                    "Agent '{agent_name}' is not registered as an ACP agent. \
                  Known ACP agents: {}",
-                known.join(", ")
-            );
+                    known.join(", ")
+                )
+            };
             spawn_error_agent(agent_name, error_msg, app_event_tx);
             SpawnAgentResult {
                 handle: None,

@@ -21,7 +21,10 @@ use futures::io::AsyncRead;
 use nori_config::NoriConfig;
 use nori_harness::runtime::AgentPrepareSpec;
 use nori_harness::runtime::HarnessHandle;
+use nori_harness::runtime::SessionLaunchSpec;
 use nori_harness::runtime::SessionStart;
+use nori_harness::runtime::launch_session;
+use nori_harness::runtime::prepare_agent;
 use nori_harness::runtime::prepare_and_launch_session;
 use nori_installed::AnalyticsReporter;
 use nori_protocol::AcpEvent;
@@ -48,15 +51,17 @@ pub async fn run_plaintext(
     prompt: String,
     analytics: Option<AnalyticsReporter>,
 ) -> anyhow::Result<PlaintextOutcome> {
-    let mut launched = prepare_and_launch_session(
-        AgentPrepareSpec {
-            config,
-            cli_version,
-            session_context: None,
-            initial_context: None,
-        },
-        SessionStart::New,
-    );
+    let agent = prepare_agent(AgentPrepareSpec {
+        config,
+        cli_version,
+        session_context: None,
+        initial_context: None,
+    })
+    .await?;
+    let mut launched = launch_session(SessionLaunchSpec {
+        agent,
+        start: SessionStart::New,
+    });
     if let Some(reporter) = analytics.as_ref() {
         launched.handle = reporter.attach(launched.handle);
     }
