@@ -1,0 +1,7 @@
+---
+source: tui/src/chatwidget/tests/part10.rs
+expression: history
+---
+• Run hermes model to choose a provider.
+
+■ ACP prompt failed: Internal error
