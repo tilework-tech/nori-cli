@@ -9,6 +9,7 @@ pub mod patch;
 pub mod recovery;
 pub mod registry;
 pub mod remote;
+pub mod token_provider;
 
 pub use error_category::AcpErrorCategory;
 pub use error_category::AcpErrorDetails;

@@ -1173,7 +1173,7 @@ mod tests {
             false,
         ));
 
-        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 20));
 
         assert_selected_row_has_symmetric_rails(&rendered, "Mock ACP");
         assert!(!rendered.contains("/ search"), "{rendered}");
@@ -1182,7 +1182,7 @@ mod tests {
 
         pane.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         pane.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
-        let navigated = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        let navigated = render_snapshot(&pane, Rect::new(0, 0, 100, 20));
         let mock_row = navigated
             .lines()
             .find(|row| row.contains("Mock ACP"))
@@ -1193,6 +1193,33 @@ mod tests {
                 .lines()
                 .any(|row| row.contains('▏') && row.contains('▕')),
             "{navigated}"
+        );
+    }
+
+    #[test]
+    fn token_provider_steps_use_the_shared_picker() {
+        let mut pane = test_bottom_pane();
+        pane.show_selection_view(
+            crate::nori::token_provider_picker::token_provider_picker_params("pi", "Pi", None),
+        );
+        assert_snapshot!(
+            "token_provider_picker",
+            render_snapshot(&pane, Rect::new(0, 0, 100, 10))
+        );
+
+        let mut pane = test_bottom_pane();
+        pane.show_selection_view(
+            crate::nori::token_provider_picker::token_provider_model_picker_params(
+                "pi",
+                "Pi",
+                "subconscious",
+                "SUBCONSCIOUS_API_KEY",
+                Some("subconscious/glm-5.2"),
+            ),
+        );
+        assert_snapshot!(
+            "token_provider_model_picker",
+            render_snapshot(&pane, Rect::new(0, 0, 100, 16))
         );
     }
 

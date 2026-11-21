@@ -72,6 +72,22 @@ impl PreparedAgent {
     ) -> std::result::Result<Self, AgentPrepareFailure> {
         let mut agent_config = get_agent_config(&config.agent)
             .map_err(|error| AgentPrepareFailure::new(error, Vec::new()))?;
+        if let Some(selection) = nori_acp_host::token_provider::resolve_token_provider(
+            &config.agent,
+            &config.token_providers,
+            &config.agent_token_providers,
+            config.default_model.as_deref(),
+        )
+        .map_err(|error| AgentPrepareFailure::new(error, Vec::new()))?
+        {
+            nori_acp_host::token_provider::apply_token_provider(
+                &mut agent_config,
+                &selection,
+                &config.nori_home,
+                &|name| std::env::var(name).ok(),
+            )
+            .map_err(|error| AgentPrepareFailure::new(error, Vec::new()))?;
+        }
         super::spawn_and_relay::inject_default_model(
             &mut agent_config,
             config.default_model.as_deref(),

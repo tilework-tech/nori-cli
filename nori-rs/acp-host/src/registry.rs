@@ -120,6 +120,8 @@ pub enum AgentKind {
     Gemini,
     /// xAI Grok Build.
     GrokBuild,
+    /// Earendil's Pi coding agent, through the pi-acp adapter.
+    Pi,
 }
 
 impl AgentKind {
@@ -130,6 +132,7 @@ impl AgentKind {
             AgentKind::Codex => "codex",
             AgentKind::Gemini => "gemini",
             AgentKind::GrokBuild => "grok-build",
+            AgentKind::Pi => "pi",
         }
     }
 
@@ -140,6 +143,7 @@ impl AgentKind {
             AgentKind::Codex => "Codex",
             AgentKind::Gemini => "Antigravity",
             AgentKind::GrokBuild => "Grok Build",
+            AgentKind::Pi => "Pi",
         }
     }
 
@@ -149,12 +153,14 @@ impl AgentKind {
     /// - Claude Code: 1M tokens
     /// - Codex: 258K tokens
     /// - Gemini: 1M tokens
+    ///
+    /// Grok Build and Pi depend on the model chosen at runtime.
     pub fn context_window_size(&self) -> Option<i64> {
         match self {
             AgentKind::ClaudeCode => Some(1_000_000),
             AgentKind::Codex => Some(258_000),
             AgentKind::Gemini => Some(1_000_000),
-            AgentKind::GrokBuild => None,
+            AgentKind::GrokBuild | AgentKind::Pi => None,
         }
     }
 
@@ -165,6 +171,7 @@ impl AgentKind {
             AgentKind::Codex => Provider::OpenAI,
             AgentKind::Gemini => Provider::Google,
             AgentKind::GrokBuild => Provider::Xai,
+            AgentKind::Pi => Provider::Earendil,
         }
     }
 
@@ -175,17 +182,19 @@ impl AgentKind {
             AgentKind::Codex,
             AgentKind::Gemini,
             AgentKind::GrokBuild,
+            AgentKind::Pi,
         ]
     }
 
     /// The out-of-band channel this built-in agent uses to receive a forced
-    /// model id at spawn time. Antigravity and Grok negotiate models over ACP.
+    /// model id at spawn time. Antigravity, Grok and Pi negotiate models over
+    /// ACP; a Pi token provider also names its starting model in Pi's settings.
     pub fn model_injection(&self) -> ModelInjection {
         match self {
             AgentKind::ClaudeCode => ModelInjection::Env {
                 var: "ANTHROPIC_MODEL".to_string(),
             },
-            AgentKind::Gemini | AgentKind::GrokBuild => ModelInjection::None,
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::Pi => ModelInjection::None,
             AgentKind::Codex => ModelInjection::CodexConfig,
         }
     }
@@ -197,7 +206,7 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => Some(".claude/projects"),
             AgentKind::Codex => Some(".codex/sessions"),
-            AgentKind::Gemini | AgentKind::GrokBuild => None,
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::Pi => None,
         }
     }
 
@@ -210,6 +219,9 @@ impl AgentKind {
             AgentKind::Codex => "Run /login to authenticate, or set OPENAI_API_KEY.",
             AgentKind::Gemini => "Run /login for Antigravity instructions, or set GEMINI_API_KEY.",
             AgentKind::GrokBuild => "Run /login for Grok Build instructions, or set XAI_API_KEY.",
+            AgentKind::Pi => {
+                "Choose a token provider for Pi with /agent, or run /login for Pi's own sign-in."
+            }
         }
     }
 
@@ -223,6 +235,7 @@ impl AgentKind {
                 Some(AgentKind::Gemini)
             }
             "grok-build" | "grok" => Some(AgentKind::GrokBuild),
+            "pi" | "pi-acp" => Some(AgentKind::Pi),
             _ => None,
         }
     }
@@ -255,7 +268,7 @@ impl AgentKind {
                 id: "gpt-5.3-codex",
                 label: "GPT-5.3-Codex",
             }],
-            AgentKind::Gemini | AgentKind::GrokBuild => &[],
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::Pi => &[],
         }
     }
 }
@@ -277,6 +290,8 @@ pub enum Provider {
     Google,
     /// xAI
     Xai,
+    /// Earendil, the maker of Pi
+    Earendil,
 }
 
 impl Provider {
@@ -287,6 +302,7 @@ impl Provider {
             Provider::OpenAI => "openai",
             Provider::Google => "google",
             Provider::Xai => "xai",
+            Provider::Earendil => "earendil",
         }
     }
 
@@ -297,6 +313,7 @@ impl Provider {
             Provider::OpenAI => "OpenAI",
             Provider::Google => "Google",
             Provider::Xai => "xAI",
+            Provider::Earendil => "Earendil",
         }
     }
 }
@@ -512,6 +529,7 @@ fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>)
         AgentKind::Codex => "codex-acp",
         AgentKind::Gemini => "agy",
         AgentKind::GrokBuild => "grok",
+        AgentKind::Pi => "pi-acp",
     };
     (which::which(binary).is_ok(), None)
 }
@@ -826,9 +844,21 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
             AgentKind::ClaudeCode => Some("@agentclientprotocol/claude-agent-acp@latest"),
             AgentKind::Codex => Some("@agentclientprotocol/codex-acp@latest"),
             AgentKind::GrokBuild => Some("@xai-official/grok@latest"),
-            AgentKind::Gemini => None,
+            AgentKind::Gemini | AgentKind::Pi => None,
         };
-        let (command, args, install_hint) = if let Some(package) = package {
+        let (command, args, install_hint) = if agent == AgentKind::Pi {
+            // pi-acp runs `pi` from PATH; npx puts both packages' binaries there.
+            (
+                PackageManager::Npm.command(),
+                vec![
+                    "--yes".to_string(),
+                    "--package=pi-acp@latest".to_string(),
+                    "--package=@earendil-works/pi-coding-agent@latest".to_string(),
+                    "pi-acp".to_string(),
+                ],
+                "install npm and make `npx` available on PATH".to_string(),
+            )
+        } else if let Some(package) = package {
             // Grok relies on npm's postinstall to select the package's native
             // binary. Bun skips the hook and can run an older ~/.grok/bin/grok.
             let manager = if agent == AgentKind::GrokBuild {
@@ -1490,7 +1520,7 @@ mod tests {
     fn test_list_available_agents_debug_build() {
         reset_registry();
         let agents = list_available_agents();
-        assert_eq!(agents.len(), 6);
+        assert_eq!(agents.len(), 7);
 
         let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
         assert!(names.contains(&"Mock ACP"), "Should have Mock ACP");
@@ -1562,14 +1592,15 @@ mod tests {
     }
 
     #[test]
-    fn test_build_default_agents_returns_four_builtins() {
+    fn test_build_default_agents_returns_five_builtins() {
         let agents = build_default_agents();
-        assert_eq!(agents.len(), 4);
+        assert_eq!(agents.len(), 5);
         let slugs: Vec<&str> = agents.iter().map(|a| a.slug.as_str()).collect();
         assert!(slugs.contains(&"claude-code"));
         assert!(slugs.contains(&"codex"));
         assert!(slugs.contains(&"gemini"));
         assert!(slugs.contains(&"grok-build"));
+        assert!(slugs.contains(&"pi"));
     }
 
     #[test]
@@ -1598,7 +1629,7 @@ mod tests {
     #[test]
     fn test_build_registry_with_no_custom_agents() {
         let registry = build_registry(vec![]).unwrap();
-        assert_eq!(registry.len(), 4);
+        assert_eq!(registry.len(), 5);
     }
 
     #[test]
@@ -1622,7 +1653,7 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom]).unwrap();
-        assert_eq!(registry.len(), 5);
+        assert_eq!(registry.len(), 6);
         let kimi = registry.iter().find(|a| a.slug == "kimi").unwrap();
         assert_eq!(kimi.name, "Kimi");
         assert!(kimi.kind.is_none());
@@ -1651,7 +1682,7 @@ mod tests {
         };
         let registry = build_registry(vec![custom_claude]).unwrap();
         // Should still be 3 agents (override, not add)
-        assert_eq!(registry.len(), 4);
+        assert_eq!(registry.len(), 5);
         let claude = registry.iter().find(|a| a.slug == "claude-code").unwrap();
         assert_eq!(claude.name, "My Claude");
         assert_eq!(claude.context_window_size, Some(300_000));

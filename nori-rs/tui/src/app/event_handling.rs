@@ -1244,6 +1244,71 @@ impl App {
             } => {
                 self.begin_agent_candidate(agent_name, display_name);
             }
+            AppEvent::OpenTokenProviderPicker {
+                agent_name,
+                display_name,
+            } => {
+                let canonical = nori_harness::resolve_agent_slug(&agent_name);
+                let current = self
+                    .config
+                    .agent_token_providers
+                    .iter()
+                    .find(|(agent, _)| nori_harness::resolve_agent_slug(agent) == canonical)
+                    .and_then(|(_, provider)| self.config.token_providers.get(provider))
+                    .map(|provider| provider.preset.clone());
+                self.chat_widget.show_selection_view(
+                    crate::nori::token_provider_picker::token_provider_picker_params(
+                        &canonical,
+                        &display_name,
+                        current.as_deref(),
+                    ),
+                );
+            }
+            AppEvent::OpenTokenProviderKeyInput {
+                agent_name,
+                display_name,
+                preset_id,
+            } => {
+                let view = crate::nori::token_provider_picker::TokenProviderKeyInputView::new(
+                    agent_name,
+                    display_name,
+                    preset_id,
+                    Box::new(|name| {
+                        std::env::var(name).is_ok_and(|value| !value.trim().is_empty())
+                    }),
+                    self.app_event_tx.clone(),
+                );
+                self.chat_widget.show_view(Box::new(view));
+            }
+            AppEvent::OpenTokenProviderModelPicker {
+                agent_name,
+                display_name,
+                preset_id,
+                api_key_env,
+            } => {
+                let current_model = self
+                    .config
+                    .default_models
+                    .get(&agent_name)
+                    .and_then(|model| model.strip_prefix(&format!("{preset_id}/")))
+                    .map(str::to_owned);
+                self.chat_widget.show_selection_view(
+                    crate::nori::token_provider_picker::token_provider_model_picker_params(
+                        &agent_name,
+                        &display_name,
+                        &preset_id,
+                        &api_key_env,
+                        current_model.as_deref(),
+                    ),
+                );
+            }
+            AppEvent::ChooseTokenProvider {
+                agent_name,
+                display_name,
+                choice,
+            } => {
+                self.choose_token_provider(agent_name, display_name, choice);
+            }
             AppEvent::CancelAgentCandidate => {
                 self.discard_candidate();
                 self.chat_widget

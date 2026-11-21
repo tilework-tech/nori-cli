@@ -8,6 +8,7 @@ mod edits;
 mod git_root;
 mod loader;
 mod policy;
+mod token_provider;
 mod types;
 
 pub use config_types::EnvironmentVariablePattern;
@@ -27,6 +28,7 @@ pub use loader::find_nori_home;
 pub use policy::AskForApproval;
 pub use policy::SandboxPolicy;
 pub use policy::WritableRoot;
+pub use token_provider::TokenProviderToml;
 pub use types::AcpProxyConfig;
 pub use types::AcpProxyConfigToml;
 pub use types::AgentConfigToml;

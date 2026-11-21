@@ -51,6 +51,7 @@ impl LoginHandler {
                     Some(AgentKind::GrokBuild) => "Run npx --yes @xai-official/grok@latest login in another terminal, or set XAI_API_KEY.".to_owned(),
                     Some(AgentKind::ClaudeCode) => "Run claude in another terminal and use /login, or set ANTHROPIC_API_KEY.".to_owned(),
                     Some(AgentKind::Codex) => return AgentLoginSupport::OAuthBrowser,
+                    Some(AgentKind::Pi) => "Run npx --yes @earendil-works/pi-coding-agent@latest in another terminal and use /login, or choose a token provider with /agent.".to_owned(),
                     None if !config.auth_hint.is_empty() => config.auth_hint,
                     None => format!("Use the authentication method for {}.", config.display_name),
                 };

@@ -1,5 +1,6 @@
 ---
 source: tui/src/bottom_pane/mod.rs
+assertion_line: 1181
 expression: rendered
 ---
                                                                                                     
@@ -18,4 +19,6 @@ expression: rendered
       Google                                                                                        
    6. Grok Build                                                                                    
       xAI                                                                                           
+   7. Pi                                                                                            
+      Earendil                                                                                      
   ↑↓/j/k move  enter select  shift-tab rec on  esc close

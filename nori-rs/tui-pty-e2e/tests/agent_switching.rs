@@ -839,6 +839,14 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
             "Missing {provider} in the agent picker:\n{screen}"
         );
     }
+
+    // The picker shows six rows at a time; the seventh scrolls into view.
+    for _ in 0..6 {
+        session.send_key(Key::Down).unwrap();
+    }
+    session
+        .wait_for_text("7. Pi", TIMEOUT)
+        .unwrap_or_else(|_| panic!("Missing Pi:\n{}", session.screen_contents()));
 }
 
 // ============================================================================

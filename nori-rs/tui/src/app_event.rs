@@ -316,6 +316,35 @@ pub(crate) enum AppEvent {
         display_name: String,
     },
 
+    /// Ask which model provider an agent that offers token providers uses.
+    OpenTokenProviderPicker {
+        agent_name: String,
+        display_name: String,
+    },
+
+    /// Ask for the environment variable that holds a token provider's key.
+    OpenTokenProviderKeyInput {
+        agent_name: String,
+        display_name: String,
+        preset_id: String,
+    },
+
+    /// Ask which of a token provider's models the agent starts on.
+    OpenTokenProviderModelPicker {
+        agent_name: String,
+        display_name: String,
+        preset_id: String,
+        api_key_env: String,
+    },
+
+    /// Save an agent's token provider choice (`None` uses the agent's own
+    /// settings) and start the agent with it.
+    ChooseTokenProvider {
+        agent_name: String,
+        display_name: String,
+        choice: Option<crate::nori::token_provider_picker::TokenProviderChoice>,
+    },
+
     /// Abandon the prepared candidate while keeping the active session.
     CancelAgentCandidate,
 

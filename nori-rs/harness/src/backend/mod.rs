@@ -187,6 +187,10 @@ pub struct AcpBackendConfig {
     pub auto_worktree_repo_root: Option<PathBuf>,
     /// Whether the first prompt should be summarized for the footer.
     pub prompt_summary_enabled: bool,
+    /// Named token providers from config.
+    pub token_providers: std::collections::BTreeMap<String, nori_config::TokenProviderToml>,
+    /// Token provider id each agent launches with, keyed by agent slug.
+    pub agent_token_providers: std::collections::BTreeMap<String, String>,
     /// Scripts to run when a session starts
     pub session_start_hooks: Vec<PathBuf>,
     /// Scripts to run when a session ends

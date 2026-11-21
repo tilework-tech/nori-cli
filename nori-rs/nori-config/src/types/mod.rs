@@ -9,6 +9,7 @@ use crate::ShellEnvironmentPolicyToml;
 use crate::TrustLevel;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
@@ -357,6 +358,15 @@ pub struct NoriConfigToml {
     /// Custom agent definitions
     #[serde(default)]
     pub agents: Vec<AgentConfigToml>,
+
+    /// Named token providers, keyed by provider id.
+    #[serde(default)]
+    pub token_providers: BTreeMap<String, crate::TokenProviderToml>,
+
+    /// Token provider id each agent launches with, keyed by agent slug. An
+    /// agent without an entry uses its own login and settings.
+    #[serde(default)]
+    pub agent_token_providers: BTreeMap<String, String>,
 
     /// Cloud session settings
     #[serde(default)]
@@ -2430,6 +2440,12 @@ pub struct NoriConfig {
     /// Custom agent definitions from config
     pub agents: Vec<AgentConfigToml>,
 
+    /// Named token providers, keyed by provider id.
+    pub token_providers: BTreeMap<String, crate::TokenProviderToml>,
+
+    /// Token provider id each agent launches with, keyed by agent slug.
+    pub agent_token_providers: BTreeMap<String, String>,
+
     /// Cloud broker URL from config (e.g., "https://nori-broker.myorg.fly.dev")
     pub cloud_broker_url: Option<String>,
 }
@@ -2502,6 +2518,8 @@ impl Default for NoriConfig {
             default_models: HashMap::new(),
             default_model_override_keys: Vec::new(),
             agents: Vec::new(),
+            token_providers: BTreeMap::new(),
+            agent_token_providers: BTreeMap::new(),
             cloud_broker_url: None,
         }
     }

@@ -886,6 +886,8 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
         auto_worktree,
         auto_worktree_repo_root,
         prompt_summary_enabled: config.footer_segment_config.prompt_summary,
+        token_providers: config.token_providers.clone(),
+        agent_token_providers: config.agent_token_providers.clone(),
         session_start_hooks: config.session_start_hooks.clone(),
         session_end_hooks: config.session_end_hooks.clone(),
         pre_user_prompt_hooks: config.pre_user_prompt_hooks.clone(),
