@@ -48,6 +48,30 @@ pub(crate) enum TokenProviderChoice {
     },
 }
 
+/// The key variable the key step starts from for a preset: the agent's bound
+/// connection when it uses that preset, else a saved connection named after
+/// the preset, else `None` for the preset's suggested variable.
+pub(crate) fn saved_key_env(
+    preset_id: &str,
+    bound: Option<&TokenProvider>,
+    saved: &[TokenProvider],
+) -> Option<String> {
+    let uses_preset = |entry: &&TokenProvider| {
+        serde_json::to_value(entry.preset)
+            .ok()
+            .is_some_and(|value| value == preset_id)
+            && supports_pi_connection(entry)
+    };
+    bound
+        .filter(uses_preset)
+        .or_else(|| {
+            saved
+                .iter()
+                .find(|entry| entry.name == preset_id && uses_preset(entry))
+        })
+        .map(|entry| entry.env_key.clone())
+}
+
 /// The provider step: the agent's own settings, or one of its token providers.
 pub(crate) fn token_provider_picker_params(
     agent_name: &str,
@@ -93,7 +117,10 @@ pub(crate) fn token_provider_picker_params(
             ..Default::default()
         });
     }
+    let bound = current.and_then(|name| saved.iter().find(|entry| entry.name == name));
     items.extend(compatible_presets(agent_name).into_iter().map(|preset| {
+        let key_env = saved_key_env(preset.id, bound, saved)
+            .unwrap_or_else(|| preset.api_key_env.to_string());
         let agent_name = agent_name.to_string();
         let display_name = display_name.to_string();
         let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
@@ -105,7 +132,7 @@ pub(crate) fn token_provider_picker_params(
         })];
         SelectionItem {
             name: preset.name.to_string(),
-            description: Some(format!("Token provider · key from ${}", preset.api_key_env)),
+            description: Some(format!("Token provider · key from ${key_env}")),
             is_current: false,
             actions,
             dismiss_on_select: true,
@@ -306,9 +333,11 @@ impl BottomPaneView for TokenProviderKeyInputView {
             KeyCode::Enter => self.submit(),
             KeyCode::Backspace => {
                 self.input.pop();
+                self.error = None;
             }
             KeyCode::Char('u') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.input.clear();
+                self.error = None;
             }
             KeyCode::Char(character)
                 if !key_event
@@ -316,6 +345,7 @@ impl BottomPaneView for TokenProviderKeyInputView {
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 self.input.push(character);
+                self.error = None;
             }
             _ => {}
         }
@@ -334,6 +364,7 @@ impl BottomPaneView for TokenProviderKeyInputView {
         let combined = format!("{}{}", self.input, pasted.trim());
         if is_variable_name(&combined) {
             self.input = combined;
+            self.error = None;
         } else {
             self.reject_non_name();
         }

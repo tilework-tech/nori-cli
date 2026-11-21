@@ -51,7 +51,7 @@ Install Hermes and its ACP extra on the machine running Nori. Make `hermes` avai
 
 Start it with `nori --agent hermes` or create a session on a running host with `nori host new --agent hermes`. With `features.multi_session = true` in your Nori configuration, enter `/delegate hermes Read README.md and summarize the setup steps` from another agent’s conversation. Approve the child when prompted. Its result returns to the parent conversation.
 
-For Pi, use `/agent` to choose **Pi settings**, select a saved Subconscious connection, or configure one with the name of your key variable and a catalog model. [Named API token providers](nori-rs/config.md#named-api-token-providers)
+For Pi, use `/agent` to choose **Pi settings**, select a saved Subconscious connection, or configure one with the name of your key variable and a catalog model. Nori then prepares Pi and lists its sessions for this folder; choose **Start a new session**, or a previous Pi session to resume it. The provider row shows the key variable the next step will use. [Named API token providers](nori-rs/config.md#named-api-token-providers)
 
 ## Bring Your Own Agent
 

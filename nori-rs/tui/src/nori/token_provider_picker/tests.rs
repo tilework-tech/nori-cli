@@ -110,6 +110,47 @@ fn choosing_pi_settings_starts_pi_without_a_token_provider() {
 }
 
 #[test]
+fn the_provider_row_names_the_variable_the_key_step_will_use() {
+    let saved = TokenProvider {
+        name: "subconscious".into(),
+        preset: Preset::Subconscious,
+        protocol: Protocol::OpenaiCompletions,
+        base_url: "https://api.subconscious.dev/v1".into(),
+        env_key: "SYNTH_GATEWAY_TOKEN".into(),
+        model: "subconscious/glm-5.2".into(),
+    };
+    for current in [Some("subconscious"), None] {
+        let params =
+            token_provider_picker_params("pi", "Pi", current, std::slice::from_ref(&saved));
+        let row = params
+            .items
+            .iter()
+            .find(|item| item.name == "Subconscious")
+            .expect("preset row");
+        let description = row.description.clone().unwrap_or_default();
+        assert!(
+            description.contains("$SYNTH_GATEWAY_TOKEN"),
+            "{description}"
+        );
+        assert!(
+            !description.contains("SUBCONSCIOUS_API_KEY"),
+            "{description}"
+        );
+    }
+    let fresh = token_provider_picker_params("pi", "Pi", None, &[]);
+    let row = fresh
+        .items
+        .iter()
+        .find(|item| item.name == "Subconscious")
+        .expect("preset row");
+    assert!(
+        row.description
+            .as_deref()
+            .is_some_and(|description| description.contains("$SUBCONSCIOUS_API_KEY"))
+    );
+}
+
+#[test]
 fn choosing_subconscious_asks_for_its_key_variable() {
     let (tx, mut rx) = sender();
     let params = token_provider_picker_params("pi", "Pi", None, &[]);
@@ -204,6 +245,28 @@ fn the_key_input_refuses_text_that_is_not_a_variable_name() {
             "{rendered}"
         );
     }
+}
+
+#[test]
+fn correcting_the_name_clears_the_previous_error_without_showing_the_rejected_text() {
+    let (mut view, _rx) = key_input(&["SYNTH_GATEWAY_TOKEN"]);
+    retype(&mut view, "sk-synthetic-0007");
+    press(&mut view, KeyCode::Enter);
+    assert!(render(&view).contains("not an environment variable name"));
+
+    press(&mut view, KeyCode::Char('S'));
+    let rendered = render(&view);
+    assert!(
+        !rendered.contains("not an environment variable name"),
+        "{rendered}"
+    );
+    assert!(!rendered.contains("sk-synthetic-0007"), "{rendered}");
+
+    retype(&mut view, "MISSING_SYNTH_VAR");
+    press(&mut view, KeyCode::Enter);
+    assert!(render(&view).contains("not set"));
+    press(&mut view, KeyCode::Backspace);
+    assert!(!render(&view).contains("not set"));
 }
 
 #[test]
