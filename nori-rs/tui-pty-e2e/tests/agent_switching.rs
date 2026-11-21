@@ -833,6 +833,7 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
         "Codex",
         "Antigravity",
         "Grok Build",
+        "OpenCode",
     ] {
         assert!(
             screen.contains(provider),

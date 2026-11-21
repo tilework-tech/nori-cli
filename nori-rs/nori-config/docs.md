@@ -81,7 +81,7 @@ cannot create the OS read-only launch.
 `[default_models]` maps an agent slug to a model id. The loader keeps the order of dotted model overrides so the harness can resolve precedence after registering custom agents. The agent validates its model ID at launch or through ACP. `nori-acp-host` reads `model_override` to build a
 `ModelInjection` strategy — `env` names an environment variable, `arg` a CLI
 flag, and `env` wins if both are set — so an out-of-catalog default model can be
-forced through the agent subprocess at spawn. The built-in Claude Code and Codex runtimes supply their own injection channels. Antigravity and Grok Build use their advertised ACP model options. The user-facing
+forced through the agent subprocess at spawn. The built-in Claude Code and Codex runtimes supply their own injection channels. Antigravity, Grok Build, and OpenCode use their advertised ACP model options. The user-facing
 `config.toml` schema, including these tables and the `[[agents]]` fields, is
 described in [`config.md`](../config.md).
 
