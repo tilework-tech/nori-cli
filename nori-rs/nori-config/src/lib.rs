@@ -6,6 +6,7 @@
 mod config_types;
 mod edits;
 mod git_root;
+pub mod harness_compat;
 mod loader;
 mod policy;
 pub mod token_providers;

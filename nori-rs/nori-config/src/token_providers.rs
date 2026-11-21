@@ -5,10 +5,16 @@ use anyhow::Result;
 use anyhow::ensure;
 use serde::Deserialize;
 use serde::Deserializer;
+use serde::Serialize;
 use serde::de::Error;
 use url::Url;
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+use crate::harness_compat::Environment;
+use crate::harness_compat::Pairing;
+use crate::harness_compat::Status;
+use crate::harness_compat::{self};
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Protocol {
     OpenaiCompletions,
@@ -34,6 +40,24 @@ pub enum Preset {
     Fireworks,
     Cloudflare,
     Custom,
+}
+
+impl Preset {
+    fn source_id(self) -> &'static str {
+        match self {
+            Self::Openrouter => "token:openrouter",
+            Self::Subconscious => "token:subconscious",
+            Self::Fireworks => "token:fireworks",
+            Self::Cloudflare => "token:cloudflare",
+            Self::Custom => "token:custom",
+        }
+    }
+
+    fn source(self) -> Result<&'static harness_compat::Source> {
+        harness_compat::embedded()?
+            .source(self.source_id())
+            .ok_or_else(|| anyhow::anyhow!("token preset missing from harness-compat"))
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -100,11 +124,12 @@ impl TokenProvider {
             "base_url must be an HTTP(S) endpoint without credentials, query or fragment"
         );
         let endpoint = self.base_url.trim_end_matches('/');
+        let source = self.preset.source()?;
         let matches_preset = match self.preset {
             Preset::Custom => true,
-            Preset::Openrouter => endpoint == "https://openrouter.ai/api/v1",
-            Preset::Fireworks => endpoint == "https://api.fireworks.ai/inference/v1",
-            Preset::Subconscious => endpoint == "https://api.subconscious.dev/v1",
+            Preset::Openrouter | Preset::Fireworks | Preset::Subconscious => {
+                source.base_url.as_deref() == Some(endpoint)
+            }
             Preset::Cloudflare => endpoint
                 .strip_prefix("https://api.cloudflare.com/client/v4/accounts/")
                 .and_then(|path| path.strip_suffix("/ai/v1"))
@@ -115,8 +140,8 @@ impl TokenProvider {
             "base_url does not match the named gateway; use the custom preset for other endpoints"
         );
         ensure!(
-            self.preset != Preset::Cloudflare || self.protocol == Protocol::OpenaiCompletions,
-            "Cloudflare requires openai-completions"
+            source.protocols.contains(&self.protocol),
+            "declared protocol is incompatible with the named gateway"
         );
         Ok(())
     }
@@ -124,36 +149,37 @@ impl TokenProvider {
     /// These gateways authenticate Messages requests using an Authorization bearer token.
     pub fn bearer_messages(&self) -> bool {
         self.protocol == Protocol::AnthropicMessages
-            && matches!(
-                self.preset,
-                Preset::Openrouter | Preset::Subconscious | Preset::Fireworks
-            )
+            && self
+                .preset
+                .source()
+                .is_ok_and(|source| source.messages_auth.as_deref() == Some("bearer"))
     }
 
-    /// Effective wire format for a canonical CLI agent slug.
+    /// Resolve a saved local binding. Bindings are keyed by canonical CLI slug so
+    /// an alias cannot route around an explicit selection or shadow a custom command.
     pub fn protocol_for(&self, agent: &str) -> Result<Protocol> {
-        use Protocol::*;
-        let supported = |protocol| match agent {
-            "codex" => protocol == OpenaiResponses,
-            "claude-code" => protocol == AnthropicMessages,
-            "pi" | "opencode" => {
-                self.preset != Preset::Subconscious || protocol == OpenaiCompletions
-            }
-            _ => false,
-        };
-        if supported(self.protocol) {
-            return Ok(self.protocol);
-        }
-        if matches!(
-            self.preset,
-            Preset::Openrouter | Preset::Subconscious | Preset::Fireworks
-        ) && let Some(protocol) = [OpenaiCompletions, OpenaiResponses, AnthropicMessages]
-            .into_iter()
-            .find(|p| supported(*p))
-        {
-            return Ok(protocol);
-        }
-        anyhow::bail!("incompatible token provider protocol or agent; use the canonical agent slug")
+        let contract = harness_compat::embedded()?;
+        let decision = contract.evaluate(Pairing {
+            harness: agent,
+            source: self.preset.source_id(),
+            environment: Environment::Local,
+            protocol: Some(self.protocol),
+            model: Some(&self.model),
+            exact: false,
+            trust_saved_protocol: false,
+        });
+        ensure!(
+            decision.status != Status::Excluded,
+            "incompatible token provider: {}",
+            decision.reason.unwrap_or("protocol-mismatch")
+        );
+        ensure!(
+            contract.cli_slug(agent) == Some(agent),
+            "use the canonical agent slug for a named token provider binding"
+        );
+        decision.protocol.ok_or_else(|| {
+            anyhow::anyhow!("token provider has no concrete protocol for this agent")
+        })
     }
 }
 

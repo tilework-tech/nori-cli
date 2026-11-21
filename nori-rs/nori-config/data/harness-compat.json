@@ -1,0 +1,506 @@
+{
+  "version": 1,
+  "revision": 1,
+  "sessionsIds": {
+    "connection": "token-source:<connectionId>",
+    "runtime": "token-<connectionId>-<sessionsHarnessId>",
+    "nativeCodexConnection": "native:codex",
+    "nativeCodexSource": "codex"
+  },
+  "harnesses": [
+    {
+      "id": "pi",
+      "name": "Pi",
+      "sessionsId": "pi-acp",
+      "cliSlug": "pi",
+      "aliases": ["pi-acp"],
+      "protocols": [
+        "openai-completions",
+        "openai-responses",
+        "anthropic-messages"
+      ],
+      "nativeSources": ["native:pi-api-key"]
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "sessionsId": "opencode",
+      "cliSlug": "opencode",
+      "aliases": [],
+      "protocols": [
+        "openai-completions",
+        "openai-responses",
+        "anthropic-messages"
+      ],
+      "nativeSources": ["native:opencode-api-key", "native:opencode-login"]
+    },
+    {
+      "id": "codex",
+      "name": "Codex",
+      "sessionsId": "codex",
+      "cliSlug": "codex",
+      "aliases": ["codex-acp"],
+      "protocols": ["openai-responses"],
+      "nativeSources": ["native:chatgpt-subscription", "native:openai-api-key"]
+    },
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "sessionsId": "claude",
+      "cliSlug": "claude-code",
+      "aliases": ["claude", "claude-acp", "claude-4.5"],
+      "protocols": ["anthropic-messages"],
+      "nativeSources": [
+        "native:anthropic-subscription",
+        "native:anthropic-api-key",
+        "native:anthropic-setup-token"
+      ]
+    },
+    {
+      "id": "unreal-agent",
+      "name": "Unreal Agent",
+      "sessionsId": "unreal-agent",
+      "cliSlug": "unreal-agent",
+      "aliases": [],
+      "protocols": ["openai-responses", "anthropic-messages"],
+      "nativeSources": ["native:chatgpt-subscription"]
+    },
+    {
+      "id": "antigravity",
+      "name": "Antigravity",
+      "sessionsId": "gemini",
+      "cliSlug": "gemini",
+      "aliases": ["antigravity", "agy", "gemini-acp", "gemini-2.5-flash"],
+      "protocols": [],
+      "nativeSources": ["native:gemini-api-key"]
+    },
+    {
+      "id": "grok-build",
+      "name": "Grok Build",
+      "sessionsId": "grok-build",
+      "cliSlug": "grok-build",
+      "aliases": ["grok"],
+      "protocols": [],
+      "nativeSources": ["native:xai-api-key"]
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "sessionsId": "cursor",
+      "cliSlug": "cursor",
+      "aliases": [],
+      "protocols": [],
+      "nativeSources": ["native:cursor-api-key", "native:cursor-login"]
+    },
+    {
+      "id": "hermes",
+      "name": "Hermes Agent",
+      "sessionsId": null,
+      "cliSlug": "hermes",
+      "aliases": [],
+      "protocols": [],
+      "nativeSources": ["native:anthropic-api-key", "native:openrouter-api-key"]
+    }
+  ],
+  "sources": [
+    {
+      "id": "token:openrouter",
+      "kind": "token",
+      "sessionsId": "openrouter",
+      "name": "OpenRouter",
+      "protocols": [
+        "openai-completions",
+        "openai-responses",
+        "anthropic-messages"
+      ],
+      "protocolSelection": "saved-first",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "modelMode": "discover",
+      "recommendedModel": "anthropic/claude-opus-5.5",
+      "messagesAuth": "bearer"
+    },
+    {
+      "id": "token:fireworks",
+      "kind": "token",
+      "sessionsId": "fireworks",
+      "name": "Fireworks AI",
+      "protocols": [
+        "openai-completions",
+        "openai-responses",
+        "anthropic-messages"
+      ],
+      "protocolSelection": "saved-first",
+      "baseUrl": "https://api.fireworks.ai/inference/v1",
+      "modelMode": "discover",
+      "recommendedModel": "accounts/fireworks/models/glm-5p3",
+      "messagesAuth": "bearer"
+    },
+    {
+      "id": "token:subconscious",
+      "kind": "token",
+      "sessionsId": "subconscious",
+      "name": "Subconscious",
+      "protocols": [
+        "openai-completions",
+        "openai-responses",
+        "anthropic-messages"
+      ],
+      "protocolSelection": "saved-first",
+      "baseUrl": "https://api.subconscious.dev/v1",
+      "modelMode": "discover",
+      "recommendedModel": "subconscious/glm-5.3-marathon",
+      "messagesAuth": "bearer"
+    },
+    {
+      "id": "token:cloudflare",
+      "kind": "token",
+      "sessionsId": "cloudflare",
+      "name": "Cloudflare Workers AI",
+      "protocols": ["openai-completions"],
+      "protocolSelection": "saved-first",
+      "baseUrl": null,
+      "modelMode": "discover"
+    },
+    {
+      "id": "token:custom",
+      "kind": "token",
+      "sessionsId": "custom",
+      "name": "Custom API",
+      "protocols": [
+        "openai-completions",
+        "openai-responses",
+        "anthropic-messages"
+      ],
+      "protocolSelection": "saved-only",
+      "baseUrl": null,
+      "modelMode": "discover"
+    },
+    {
+      "id": "token:chatgpt",
+      "kind": "token",
+      "sessionsId": "chatgpt",
+      "name": "ChatGPT",
+      "protocols": ["openai-responses"],
+      "protocolSelection": "saved-first",
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:anthropic-subscription",
+      "kind": "native",
+      "sessionsId": "claude-oauth",
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:anthropic-api-key",
+      "kind": "native",
+      "sessionsId": "claude-api-key",
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:anthropic-setup-token",
+      "kind": "native",
+      "sessionsId": "claude-setup-token",
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:chatgpt-subscription",
+      "kind": "native",
+      "sessionsId": "codex-oauth",
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:openai-api-key",
+      "kind": "native",
+      "sessionsId": "codex-api-key",
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:pi-api-key",
+      "kind": "native",
+      "sessionsId": "pi-acp-api-key",
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:opencode-api-key",
+      "kind": "native",
+      "sessionsId": "opencode-api-key",
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:opencode-login",
+      "kind": "native",
+      "sessionsId": null,
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:gemini-api-key",
+      "kind": "native",
+      "sessionsId": "gemini-api-key",
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:xai-api-key",
+      "kind": "native",
+      "sessionsId": "grok-build-api-key",
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:cursor-login",
+      "kind": "native",
+      "sessionsId": null,
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:cursor-api-key",
+      "kind": "native",
+      "sessionsId": "cursor-api-key",
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    },
+    {
+      "id": "native:openrouter-api-key",
+      "kind": "native",
+      "sessionsId": null,
+      "protocols": [],
+      "baseUrl": null,
+      "modelMode": "preset"
+    }
+  ],
+  "rules": [
+    {
+      "scope": {
+        "kind": "token"
+      },
+      "environments": ["local", "managed"],
+      "status": "unverified"
+    },
+    {
+      "scope": {
+        "kind": "native"
+      },
+      "environments": ["local", "managed"],
+      "status": "unverified"
+    },
+    {
+      "scope": {
+        "harness": "antigravity",
+        "kind": "token"
+      },
+      "environments": ["local", "managed"],
+      "status": "excluded",
+      "reason": "native-only"
+    },
+    {
+      "scope": {
+        "harness": "grok-build",
+        "kind": "token"
+      },
+      "environments": ["local", "managed"],
+      "status": "excluded",
+      "reason": "native-only"
+    },
+    {
+      "scope": {
+        "harness": "cursor",
+        "kind": "token"
+      },
+      "environments": ["local", "managed"],
+      "status": "excluded",
+      "reason": "native-only"
+    },
+    {
+      "scope": {
+        "harness": "hermes"
+      },
+      "environments": ["managed"],
+      "status": "excluded",
+      "reason": "no-managed-handoff"
+    },
+    {
+      "scope": {
+        "source": "native:opencode-login"
+      },
+      "environments": ["managed"],
+      "status": "excluded",
+      "reason": "no-managed-handoff"
+    },
+    {
+      "scope": {
+        "source": "native:cursor-login"
+      },
+      "environments": ["managed"],
+      "status": "excluded",
+      "reason": "no-managed-handoff"
+    },
+    {
+      "scope": {
+        "harness": "hermes",
+        "source": "token:subconscious"
+      },
+      "environments": ["local"],
+      "status": "unverified",
+      "provisional": true
+    },
+    {
+      "scope": {
+        "harness": "hermes",
+        "source": "token:openrouter"
+      },
+      "environments": ["local"],
+      "status": "unverified",
+      "provisional": true
+    },
+    {
+      "scope": {
+        "harness": "hermes",
+        "source": "token:custom",
+        "protocol": "openai-completions"
+      },
+      "environments": ["local"],
+      "status": "unverified",
+      "provisional": true
+    },
+    {
+      "scope": {
+        "source": "token:openrouter",
+        "protocol": "anthropic-messages",
+        "exceptHarnesses": ["pi", "opencode", "claude-code"]
+      },
+      "environments": ["local", "managed"],
+      "status": "excluded",
+      "reason": "bearer-messages"
+    },
+    {
+      "scope": {
+        "source": "token:fireworks",
+        "protocol": "anthropic-messages",
+        "exceptHarnesses": ["pi", "opencode", "claude-code"]
+      },
+      "environments": ["local", "managed"],
+      "status": "excluded",
+      "reason": "bearer-messages"
+    },
+    {
+      "scope": {
+        "source": "token:subconscious",
+        "protocol": "openai-completions",
+        "exceptHarnesses": ["pi", "opencode"]
+      },
+      "environments": ["local", "managed"],
+      "status": "excluded",
+      "reason": "gateway-runbook"
+    },
+    {
+      "scope": {
+        "source": "token:subconscious",
+        "protocol": "openai-responses",
+        "exceptHarnesses": ["codex", "unreal-agent"]
+      },
+      "environments": ["local", "managed"],
+      "status": "excluded",
+      "reason": "gateway-runbook"
+    },
+    {
+      "scope": {
+        "source": "token:subconscious",
+        "protocol": "anthropic-messages",
+        "exceptHarnesses": ["claude-code"]
+      },
+      "environments": ["local", "managed"],
+      "status": "excluded",
+      "reason": "gateway-runbook"
+    },
+    {
+      "scope": {
+        "harness": "unreal-agent",
+        "source": "token:subconscious",
+        "protocol": "anthropic-messages"
+      },
+      "environments": ["local", "managed"],
+      "status": "excluded",
+      "reason": "bearer-messages"
+    },
+    {
+      "scope": {
+        "harness": "claude-code",
+        "source": "token:chatgpt"
+      },
+      "environments": ["local", "managed"],
+      "status": "excluded",
+      "reason": "subscription-scope"
+    },
+    {
+      "scope": {
+        "harness": "opencode",
+        "source": "token:chatgpt"
+      },
+      "environments": ["local", "managed"],
+      "status": "excluded",
+      "reason": "model-rule",
+      "modelFilter": {
+        "harnessVersion": "2.2.6",
+        "denyExact": ["gpt-5.6"],
+        "versionPrefix": "^gpt-([0-9]+)(?:\\.([0-9]+))?",
+        "greaterThan": [5, 5]
+      }
+    },
+    {
+      "scope": {
+        "harness": "claude-code",
+        "source": "native:anthropic-subscription"
+      },
+      "environments": ["local", "managed"],
+      "status": "supported",
+      "evidence": {
+        "runId": "tilework-tech/nori-sessions#3075",
+        "date": "2026-11-19",
+        "harnessVersion": "0.3.321",
+        "adapterVersion": "0.102.0",
+        "environment": "managed",
+        "source": "https://github.com/tilework-tech/nori-sessions/pull/3075",
+        "subscriptionAudit": "https://github.com/tilework-tech/nori-monorepo/blob/dcd8e7efcc3ee33d59b2a5111a95e6dd4a3a74e4/docs/specs/nori-multi-session-h-harness-coverage-plan.md#where-things-stand-2026-11-21"
+      }
+    },
+    {
+      "scope": {
+        "harness": "codex",
+        "source": "native:chatgpt-subscription"
+      },
+      "environments": ["local", "managed"],
+      "status": "supported",
+      "evidence": {
+        "runId": "tilework-tech/nori-sessions#3075",
+        "date": "2026-11-19",
+        "harnessVersion": "0.166.0",
+        "adapterVersion": "2.7.0",
+        "environment": "managed",
+        "source": "https://github.com/tilework-tech/nori-sessions/pull/3075",
+        "subscriptionAudit": "https://github.com/tilework-tech/nori-monorepo/blob/dcd8e7efcc3ee33d59b2a5111a95e6dd4a3a74e4/docs/specs/nori-multi-session-h-harness-coverage-plan.md#where-things-stand-2026-11-21"
+      }
+    }
+  ]
+}
