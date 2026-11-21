@@ -228,9 +228,23 @@ to contain `{"version":1,"maxSessions":2,"standardAcp":1}` for the shared config
 (or `maxSessions: 8` for the dedicated configuration).
 The ordinary local host omits that key. The `standardAcp` field advertises version 1 of the scoped ACP transport at
 `/managed`. The control socket accepts `_nori/session/ensure`,
-`_nori/session/status` and `_nori/host/stop` from any authenticated,
+`_nori/session/list`, `_nori/session/status` and `_nori/host/stop` from any authenticated,
 initialized connection. The transport also implements its existing
 `_nori/control/status` and `_nori/control/take` role operations.
+
+**List admitted sessions.** `nori host ls --json` observes the authenticated
+`/sessions` endpoint. Its output contains only the host’s stable conversation
+IDs and public credential reference labels. A binding named `sample` could produce this row.
+
+```json
+{"sessions":[{"session_id":"00000000-0000-4000-8000-000000000001","credential_refs":["sessions:token-connection:sample:v1"]}]}
+```
+
+The [managed inventory](../../../harness/src/managed_launch/listing.rs) reads
+the current host’s launch registry, including resident exit and spawn-failure
+records. Release removes the row. After a cold import, the row carries the
+same conversation ID and the labels from the destination launch specification.
+The recovery journal alone does not create an inventory entry.
 
 **Ensure a process.** ACP session setup requires a running adapter, so the
 machine sends this administrative request before the ACP client starts its
@@ -281,16 +295,30 @@ own handshake.
   dangling links. The provisioner must control directory
   replacement during launch. Same-UID filesystem access remains subject
   to OS permissions.
-- Optional fields inside `spec` are `model` (string or null), `env`
-  (string-to-string map), `credentialRefs` and `resumeArtifacts` (string
-  arrays). Missing maps and arrays default to empty. Project, run, agent,
+- The broker may set `spec.runtimeDir` to the absolute path of an existing
+  directory it prepared for this binding. Its canonical path must lie strictly
+  inside the shared binding root or the dedicated home. It must be disjoint
+  from the workspace and cannot contain or equal the binding home. The
+  adapter receives this path as `NORI_AGENT_RUNTIME_DIR`. Rebuilt sides
+  revalidate the canonical path pinned at admission. A confined side using
+  the private Codex home refuses a prepared runtime. The broker stages
+  the directory and its contents again at a recovery destination.
+- The broker supplies public labels in `credentialRefs`. The inventory
+  recognizes `sessions:codex-subscription-file:v1` and
+  `sessions:token-connection:<id>:v1`. A connection ID matches
+  `^[a-z0-9][a-z0-9-]{0,63}$`. Malformed token-connection labels fail
+  admission. Older opaque references stay private. The host leaves
+  credential resolution and provider configuration to the provisioner.
+- Other optional fields inside `spec` are `model` (string or null), `env`
+  (string-to-string map) and `resumeArtifacts` (string array). Missing maps
+  and arrays default to empty. Project, run, agent,
   model, credential and resume metadata stay with the immutable spec.
   The executable receives only its arguments, working directory and child
   environment. Unknown request or spec fields are rejected.
 - The host clears inherited environment, applies `spec.env`, and sets
   `HOME=home` and `NORI_HOME=home/.nori/cli`. The default `CODEX_HOME`
   is `home/.codex`.
-  Those names and `USERPROFILE` are reserved case-insensitively. Adapter
+  Those names, `USERPROFILE`, and `NORI_AGENT_RUNTIME_DIR` are reserved case-insensitively. Adapter
   arguments and environment entries must be free of NUL characters.
   Supply variables such as `PATH` explicitly when the adapter needs them.
   Subprocesses inherit the binding environment. Host `.env` values stay
@@ -479,8 +507,8 @@ NORI_HOME=/srv/fixture/nori nori -c features.multi_session=true \
 - Blank input lines are ignored. A line that is not JSON receives a JSON-RPC
   `-32700` error with a null `id` on stdout.
 - `--inherit-env` adds the host process's environment to the launch's `env`.
-  Variables in the specification win. `HOME`, `USERPROFILE`, `CODEX_HOME` and
-  `NORI_HOME` are never inherited, because the host assigns them. Entries
+  Variables in the specification win. The relay skips the host-assigned
+  `HOME`, `USERPROFILE`, `CODEX_HOME`, `NORI_HOME`, and `NORI_AGENT_RUNTIME_DIR`. Entries
   that are not UTF-8 are skipped. Without the flag the adapter receives only
   `spec.env` and the host-assigned variables.
 - stdout carries only ACP messages. Logs never go to stdout.

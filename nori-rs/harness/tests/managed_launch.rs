@@ -760,3 +760,35 @@ async fn subscription_sides_follow_the_admitted_files_atomic_replacement() {
         "subscription-generation-two\n"
     );
 }
+
+#[tokio::test]
+async fn rebuilt_side_refuses_a_redirected_prepared_directory() {
+    let root = tempfile::tempdir().unwrap();
+    let home = root.path().join("sample/home");
+    let cwd = root.path().join("sample/work");
+    let runtime = home.join("prepared");
+    fs::create_dir_all(&runtime).unwrap();
+    fs::create_dir(&cwd).unwrap();
+    let launches = ManagedLaunches::from_config(
+        &nori_config::HostConfig {
+            managed: true,
+            side_sessions: true,
+            bindings_root: Some(root.path().into()),
+            ..Default::default()
+        },
+        root.path(),
+    )
+    .unwrap();
+    let request = serde_json::from_value(json!({
+        "commandId":"start","conversationId":uuid::Uuid::new_v4(),"bindingId":"sample","generation":1,
+        "spec":{"agent":"fixture","projectId":"project","runId":"run","cwd":cwd,"home":home,
+            "runtimeDir":runtime,"adapter":{"path":"/bin/sh","version":"fixture","args":["-c","read -r line"]},
+            "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
+    })).unwrap();
+    launches.ensure(request).unwrap();
+    let moved = home.join("elsewhere");
+    fs::rename(&runtime, &moved).unwrap();
+    std::os::unix::fs::symlink(moved, runtime).unwrap();
+    assert!(launches.spawn_side("sample", 1, "side").is_err());
+    launches.shutdown().await.unwrap();
+}
