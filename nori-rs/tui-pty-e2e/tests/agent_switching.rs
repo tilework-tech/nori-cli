@@ -833,6 +833,7 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
         "OpenCode",
         "Cursor Agent",
         "Hermes Agent",
+        "Pi",
     ]
     .into_iter()
     .enumerate()
@@ -850,8 +851,8 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
     session.wait_for_text("▏1. Mock ACP", TIMEOUT).unwrap();
     session.send_str("\x1b[F").unwrap(); // End
     session
-        .wait_for_text("▏9. Hermes Agent", TIMEOUT)
-        .expect("Scrolling to the end should reveal Hermes Agent");
+        .wait_for_text("▏10. Pi", TIMEOUT)
+        .expect("Scrolling to the end should reveal Pi");
 }
 
 // ============================================================================

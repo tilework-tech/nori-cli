@@ -52,6 +52,11 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Show a custom view in the bottom pane.
+    pub(crate) fn show_view(&mut self, view: Box<dyn crate::bottom_pane::BottomPaneView>) {
+        self.bottom_pane.show_view(view);
+    }
+
     /// Open the viewonly session picker to select a previous session to view.
     pub(crate) fn open_viewonly_session_picker(&mut self) {
         let cwd = self.config.cwd.clone();

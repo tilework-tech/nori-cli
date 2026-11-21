@@ -632,3 +632,41 @@ async fn refresh_rejects_spawn_fixed_changes_without_destroying_the_prepared_age
     assert!(methods.iter().any(|method| method == "session/new"));
     session.handle.shutdown().await.expect("shutdown session");
 }
+
+#[tokio::test]
+#[serial]
+async fn pi_bound_to_a_token_provider_without_its_key_fails_before_launch() {
+    let temp = tempfile::tempdir().expect("create test directory");
+    let wire_log_dir = temp.path().join("wire-logs");
+    let mut spec = prepare_spec(temp.path(), wire_log_dir.clone());
+    let config = Arc::make_mut(&mut spec.config);
+    config.active_agent = "pi-acp".to_string();
+    config.token_providers = [(
+        "subconscious".to_string(),
+        nori_config::TokenProviderToml {
+            preset: "subconscious".to_string(),
+            api_key_env: "NORI_TEST_PI_SUBCONSCIOUS_KEY_NEVER_SET".to_string(),
+            base_url: None,
+        },
+    )]
+    .into();
+    config.agent_token_providers = [("pi".to_string(), "subconscious".to_string())].into();
+
+    let error = prepare_agent(spec)
+        .await
+        .expect_err("a missing token-provider key must stop the launch");
+
+    let message = format!("{error:#}");
+    assert!(
+        message.contains("NORI_TEST_PI_SUBCONSCIOUS_KEY_NEVER_SET"),
+        "{message}"
+    );
+    assert!(
+        !wire_log_dir.exists() || recorded_client_methods(&wire_log_dir).is_empty(),
+        "no agent may be started when its credential is missing"
+    );
+    assert!(
+        !temp.path().join("token-providers").exists(),
+        "no Pi configuration may be written when its credential is missing"
+    );
+}

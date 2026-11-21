@@ -131,6 +131,8 @@ pub enum AgentKind {
     Cursor,
     /// Nous Research Hermes Agent.
     Hermes,
+    /// Earendil's Pi coding agent, through the pi-acp adapter.
+    Pi,
 }
 
 impl AgentKind {
@@ -144,6 +146,7 @@ impl AgentKind {
             AgentKind::OpenCode => "opencode",
             AgentKind::Cursor => "cursor",
             AgentKind::Hermes => "hermes",
+            AgentKind::Pi => "pi",
         }
     }
 
@@ -157,6 +160,7 @@ impl AgentKind {
             AgentKind::OpenCode => "OpenCode",
             AgentKind::Cursor => "Cursor Agent",
             AgentKind::Hermes => "Hermes Agent",
+            AgentKind::Pi => "Pi",
         }
     }
 
@@ -166,12 +170,14 @@ impl AgentKind {
     /// - Claude Code: 1M tokens
     /// - Codex: 258K tokens
     /// - Gemini: 1M tokens
+    ///
+    /// Grok Build and Pi depend on the model chosen at runtime.
     pub fn context_window_size(&self) -> Option<i64> {
         match self {
             AgentKind::ClaudeCode => Some(1_000_000),
             AgentKind::Codex => Some(258_000),
             AgentKind::Gemini => Some(1_000_000),
-            AgentKind::GrokBuild | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Hermes => {
+            AgentKind::GrokBuild | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Hermes | AgentKind::Pi => {
                 None
             }
         }
@@ -187,6 +193,7 @@ impl AgentKind {
             AgentKind::OpenCode => Provider::OpenCode,
             AgentKind::Cursor => Provider::Cursor,
             AgentKind::Hermes => Provider::NousResearch,
+            AgentKind::Pi => Provider::Earendil,
         }
     }
 
@@ -200,6 +207,7 @@ impl AgentKind {
             AgentKind::OpenCode,
             AgentKind::Cursor,
             AgentKind::Hermes,
+            AgentKind::Pi,
         ]
     }
 
@@ -210,7 +218,7 @@ impl AgentKind {
             AgentKind::ClaudeCode => ModelInjection::Env {
                 var: "ANTHROPIC_MODEL".to_string(),
             },
-            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::OpenCode | AgentKind::Hermes => {
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::OpenCode | AgentKind::Hermes | AgentKind::Pi => {
                 ModelInjection::None
             }
             AgentKind::Codex => ModelInjection::CodexConfig,
@@ -231,7 +239,7 @@ impl AgentKind {
             | AgentKind::GrokBuild
             | AgentKind::OpenCode
             | AgentKind::Cursor
-            | AgentKind::Hermes => None,
+            | AgentKind::Hermes | AgentKind::Pi => None,
         }
     }
 
@@ -253,6 +261,9 @@ impl AgentKind {
             AgentKind::Cursor => {
                 "Run `agent login` (or `cursor-agent login`) in another terminal, or set CURSOR_API_KEY to a user API key from your Cursor dashboard."
             }
+            AgentKind::Pi => {
+                "Choose a token provider for Pi with /agent, or run /login for Pi's own sign-in."
+            }
         }
     }
 
@@ -269,6 +280,7 @@ impl AgentKind {
             "grok-build" | "grok" => Some(AgentKind::GrokBuild),
             "opencode" => Some(AgentKind::OpenCode),
             "cursor" | "cursor-agent" => Some(AgentKind::Cursor),
+            "pi" | "pi-acp" => Some(AgentKind::Pi),
             _ => None,
         }
     }
@@ -305,7 +317,7 @@ impl AgentKind {
             | AgentKind::GrokBuild
             | AgentKind::OpenCode
             | AgentKind::Cursor
-            | AgentKind::Hermes => &[],
+            | AgentKind::Hermes | AgentKind::Pi => &[],
         }
     }
 }
@@ -333,6 +345,8 @@ pub enum Provider {
     Cursor,
     /// Nous Research
     NousResearch,
+    /// Earendil, the maker of Pi
+    Earendil,
 }
 
 impl Provider {
@@ -346,6 +360,7 @@ impl Provider {
             Provider::OpenCode => "opencode",
             Provider::Cursor => "cursor",
             Provider::NousResearch => "nous-research",
+            Provider::Earendil => "earendil",
         }
     }
 
@@ -359,6 +374,7 @@ impl Provider {
             Provider::OpenCode => "Configured in OpenCode",
             Provider::Cursor => "Cursor",
             Provider::NousResearch => "Nous Research",
+            Provider::Earendil => "Earendil",
         }
     }
 }
@@ -586,6 +602,7 @@ fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>)
         AgentKind::OpenCode => "opencode",
         AgentKind::Cursor => cursor_command(),
         AgentKind::Hermes => "hermes",
+        AgentKind::Pi => "pi-acp",
     };
     (which::which(binary).is_ok(), None)
 }
@@ -831,14 +848,19 @@ pub fn get_agent_launch_config(
     let Some(binding) = binding else {
         return Ok(config);
     };
-    anyhow::ensure!(
-        config.builtin_kind == Some(AgentKind::Codex),
-        "this agent has no named token provider launch adapter"
-    );
-    anyhow::ensure!(
-        binding.protocol == nori_config::token_providers::Protocol::OpenaiResponses,
-        "Codex requires openai-responses"
-    );
+    use nori_config::token_providers::{Preset, Protocol};
+    match config.builtin_kind {
+        Some(AgentKind::Codex) => anyhow::ensure!(
+            binding.protocol == Protocol::OpenaiResponses,
+            "Codex requires openai-responses"
+        ),
+        Some(AgentKind::Pi) => anyhow::ensure!(
+            binding.preset == Preset::Subconscious
+                && binding.protocol_for("pi")? == Protocol::OpenaiCompletions,
+            "Pi requires a compatible Subconscious connection"
+        ),
+        _ => anyhow::bail!("this agent has no named token provider launch adapter"),
+    }
     Ok(AcpAgentConfig {
         auth_hint: format!("Check the credential referenced by {}.", binding.env_key),
         token_provider: Some(binding.clone()),
@@ -931,9 +953,21 @@ fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentCo
             AgentKind::ClaudeCode => Some("@agentclientprotocol/claude-agent-acp@latest"),
             AgentKind::Codex => Some("@agentclientprotocol/codex-acp@latest"),
             AgentKind::GrokBuild => Some("@xai-official/grok@latest"),
-            AgentKind::Gemini | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Hermes => None,
+            AgentKind::Gemini | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Hermes | AgentKind::Pi => None,
         };
-        let (command, args, install_hint) = if let Some(package) = package {
+        let (command, args, install_hint) = if agent == AgentKind::Pi {
+            // pi-acp runs `pi` from PATH; npx puts both packages' binaries there.
+            (
+                PackageManager::Npm.command(),
+                vec![
+                    "--yes".to_string(),
+                    "--package=pi-acp@latest".to_string(),
+                    "--package=@earendil-works/pi-coding-agent@latest".to_string(),
+                    "pi-acp".to_string(),
+                ],
+                "install npm and make `npx` available on PATH".to_string(),
+            )
+        } else if let Some(package) = package {
             // Grok relies on npm's postinstall to select the package's native
             // binary. Bun skips the hook and can run an older ~/.grok/bin/grok.
             let manager = if agent == AgentKind::GrokBuild {
@@ -1729,6 +1763,7 @@ mod tests {
         assert!(slugs.contains(&"opencode"));
         assert!(slugs.contains(&"cursor"));
         assert!(slugs.contains(&"hermes"));
+        assert!(slugs.contains(&"pi"));
     }
 
     #[test]

@@ -28,6 +28,7 @@ pub mod hooks;
 pub mod message_history;
 pub(crate) mod normalized;
 pub use nori_acp_host::registry;
+pub use nori_acp_host::token_provider;
 pub mod follow_up;
 pub use follow_up::FollowUpIntent;
 pub use follow_up::FollowUpReceipt;

@@ -1,0 +1,12 @@
+---
+source: tui/src/nori/token_provider_picker/tests.rs
+assertion_line: 105
+expression: render(&view)
+---
+┌ Subconscious key ────────────────────────────────────────────────────┐
+│ Environment variable that holds your Subconscious API key            │
+│                                                                      │
+│ › SUBCONSCIOUS_API_KEY│                                              │
+│                                                                      │
+│ Enter to continue · Esc to cancel · nori stores only the name        │
+└──────────────────────────────────────────────────────────────────────┘

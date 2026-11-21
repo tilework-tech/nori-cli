@@ -60,11 +60,11 @@ pub(super) async fn persist_default_model_value(
 }
 
 impl App {
-    fn sync_runtime_config(&mut self) {
+    pub(super) fn sync_runtime_config(&mut self) {
         self.chat_widget.set_config(self.config.clone());
     }
 
-    fn apply_saved_model(&mut self, key: String, value: &str) {
+    pub(super) fn apply_saved_model(&mut self, key: String, value: &str) {
         self.config
             .default_model_override_keys
             .retain(|name| nori_harness::resolve_agent_slug(name) != key);

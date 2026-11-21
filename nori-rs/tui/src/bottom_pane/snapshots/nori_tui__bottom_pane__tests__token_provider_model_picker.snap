@@ -1,0 +1,20 @@
+---
+source: tui/src/bottom_pane/mod.rs
+assertion_line: 1220
+expression: "render_snapshot(&pane, Rect::new(0, 0, 100, 16))"
+---
+                                                                                                    
+  Subconscious model for Pi                                                                         
+  Key from $SUBCONSCIOUS_API_KEY                                                                    
+                                                                                                    
+   1. GLM-5.3 Marathon                                                                              
+      subconscious/glm-5.3-marathon · recommended                                                   
+  ▏2. GLM-5.2 (current)                                                                          ▕  
+  ▏   subconscious/glm-5.2                                                                       ▕  
+   3. Tim-Qwen3.6-27b                                                                               
+      subconscious/tim-qwen3.6-27b                                                                  
+   4. DeepSeek-V4-Flash Marathon                                                                    
+      subconscious/deepseek-v4-flash-marathon                                                       
+   5. DeepSeek-V4.1-Flash Marathon                                                                  
+      subconscious/deepseek-v4.1-flash-marathon                                                     
+  ↑↓/j/k move  enter select  esc close
