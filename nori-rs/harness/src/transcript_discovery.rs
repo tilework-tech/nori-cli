@@ -315,7 +315,7 @@ pub fn parse_transcript_tokens(path: &Path, agent: AgentKind) -> Option<Transcri
         AgentKind::ClaudeCode => parse_claude_tokens(path),
         AgentKind::Codex => parse_codex_tokens(path),
         AgentKind::Gemini => parse_gemini_tokens(path),
-        AgentKind::GrokBuild | AgentKind::OpenCode | AgentKind::Cursor => None,
+        AgentKind::GrokBuild | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Hermes => None,
     }
 }
 

@@ -832,6 +832,7 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
         "Grok Build",
         "OpenCode",
         "Cursor Agent",
+        "Hermes Agent",
     ]
     .into_iter()
     .enumerate()
