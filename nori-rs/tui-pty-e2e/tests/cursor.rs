@@ -73,9 +73,7 @@ fn cursor_child_uses_sessions_executable_and_returns_to_its_parent() {
     session
         .submit_input("/delegate cursor mock:request-permission:write-example")
         .unwrap();
-    session
-        .wait_for_text("start a cursor session", TIMEOUT)
-        .unwrap();
+    session.wait_for_text("Yes, start it", TIMEOUT).unwrap();
     session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
     session.wait_for_text("waiting on you", TIMEOUT).unwrap();
