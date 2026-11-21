@@ -14,7 +14,7 @@ part of the file, plus tool call display and the opt-in multi-session feature.
 agent = "claude-code"
 ```
 
-Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), `grok-build`, `opencode`, `cursor` (Cursor Agent), and `hermes` (Hermes Agent). An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
+Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), `grok-build`, `opencode`, `cursor` (Cursor Agent), `hermes` (Hermes Agent), and `pi`. An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
 
 ## Default models: `[default_models]`
 
@@ -31,7 +31,7 @@ Nori saves model choices under the agent’s canonical ID. For example, selectin
 
 For a single launch, `nori --agent agy -c 'default_models.antigravity="gemini-3.6-flash"'` overrides the saved Gemini model. If several dotted `-c` assignments name the same agent through different aliases, the last one wins. Assigning the entire `default_models` table replaces earlier assignments.
 
-For Antigravity, Grok Build, OpenCode, and Hermes Agent, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
+For Antigravity, Grok Build, OpenCode, Hermes Agent, and Pi, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
 
 OpenCode advertises enabled models for the session's working directory, using IDs such as `nori-gateway/<model>` for a gateway configured under that provider name. OpenCode reads its provider, endpoint, and default model from its native configuration, including a file selected with `OPENCODE_CONFIG`. It uses the credentials for that provider from its saved accounts, supported environment variables, or the provider configuration. [OpenCode providers](https://opencode.ai/docs/cli/providers/) · [OpenCode models](https://opencode.ai/docs/models/)
 
@@ -84,10 +84,30 @@ Messages for Claude Code. Use the published gateway base URL for a named
 preset or the account-scoped Workers AI URL for Cloudflare.
 
 A launch requires an eligible pairing, a concrete wire protocol and a named
-connection adapter. Built-in Codex supplies the Responses adapter. A custom
-command that shadows Codex cannot use that adapter. An excluded pairing
+connection adapter. Built-in Codex supplies the Responses adapter. Built-in Pi supports Subconscious over Chat Completions. A custom command shadowing either built-in cannot use its adapter. An excluded pairing
 or a missing adapter stops the bound launch. Broker-managed Sessions supply
 a separate launch specification. [Compatibility contract](nori-config/docs.md#api-token-provider-resolution)
+
+### Pi with Subconscious
+
+In `/agent`, choose **Pi**, then select a saved Subconscious connection or configure one by choosing **Subconscious**. For a new connection, enter the name of an environment variable holding the key and choose a catalog model. The equivalent configuration for a named connection is:
+
+```toml
+[agent_token_providers]
+pi = "lab-pi"
+
+[[token_providers]]
+name = "lab-pi"
+preset = "subconscious"
+protocol = "openai-completions"
+base_url = "https://api.subconscious.dev/v1"
+env_key = "LAB_PI_KEY"
+model = "subconscious/glm-5.2"
+```
+
+Set `LAB_PI_KEY` in the environment that launches Nori, including the local host when using `nori host new --agent pi`. The connection supplies the model sent on the wire. Pi advertises it over ACP as `lab-pi/subconscious/glm-5.2`.
+
+Nori writes Pi's `models.json` and `settings.json` under `$NORI_HOME/token-providers/lab-pi-pi-acp/` and passes that directory to the child through `PI_CODING_AGENT_DIR`. The model file refers to the environment variable as `$LAB_PI_KEY`. Choose **Pi settings** to clear the binding and resume Pi's own profile and saved native model preference.
 
 ## Custom agents: `[[agents]]`
 

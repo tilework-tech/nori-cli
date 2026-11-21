@@ -106,8 +106,8 @@ pub struct AgentConfigToml {
     /// spawn time. Custom ACP clients advertise only a subset of the models
     /// they can actually run; this tells nori which out-of-band channel carries
     /// the model id so a user-chosen model that the picker rejects can still be
-    /// applied by restarting the session. Built-in agents (Claude, Codex,
-    /// Gemini) know their own channel and ignore this field.
+    /// applied by restarting the session. An entry that reuses a built-in
+    /// agent's slug replaces that built-in, including its channel.
     #[serde(default)]
     pub model_override: Option<ModelOverrideToml>,
 }

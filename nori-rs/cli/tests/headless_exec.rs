@@ -247,6 +247,25 @@ fn exec_fails_closed_without_waiting_for_an_approval() -> Result<(), Box<dyn std
 }
 
 #[test]
+fn exec_reports_why_the_agent_could_not_start() -> Result<(), Box<dyn std::error::Error>> {
+    let nori_home = TempDir::new()?;
+    std::fs::write(
+        nori_home.path().join("config.toml"),
+        "[token_providers.subconscious]\npreset = 'subconscious'\napi_key_env = 'NORI_EXEC_TEST_SUBC_KEY_UNSET'\n\n[agent_token_providers]\npi = 'subconscious'\n",
+    )?;
+    let output = Command::cargo_bin("nori")?
+        .env("NORI_HOME", nori_home.path())
+        .env_remove("NORI_EXEC_TEST_SUBC_KEY_UNSET")
+        .args(["--agent", "pi", "exec", "hello"])
+        .output()?;
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(stderr.contains("NORI_EXEC_TEST_SUBC_KEY_UNSET"), "{stderr}");
+    Ok(())
+}
+
+#[test]
 fn exec_reports_agent_prompt_failures_on_stderr() -> Result<(), Box<dyn std::error::Error>> {
     let nori_home = TempDir::new()?;
     let output = nori_command(&nori_home)?

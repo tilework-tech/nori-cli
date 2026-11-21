@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/npm/l/nori-ai-cli)](https://github.com/tilework-tech/nori-cli/blob/main/LICENSE)
 [![npm downloads](https://img.shields.io/npm/dm/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
 
-Nori brings Claude Code, Codex, Antigravity, and Grok Build into one terminal. You can select OpenCode, Cursor Agent, or Hermes Agent. You can also bring your own ACP agent.
+Nori brings Claude Code, Codex, Antigravity, and Grok Build into one terminal. You can select OpenCode, Cursor Agent, Hermes Agent, or Pi. You can also bring your own ACP agent.
 
 ![Nori TUI Screenshot](https://raw.githubusercontent.com/tilework-tech/nori-cli/refs/heads/main/assets/nori-cli_2026-01-13.png)
 
@@ -27,7 +27,7 @@ Use `/agent` to switch agents, or select one at launch with `nori --agent grok-b
 
 ## Providers
 
-Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` release. Grok Build uses `npx` so its native executable is installed by the upstream npm package. The adapters use their upstream dependencies and authentication settings. For Antigravity, install Google's CLI and make `agy` available on the host's `PATH`. [Antigravity CLI installation](https://antigravity.google/cli)
+Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` release. Grok Build uses `npx` so its native executable is installed by the upstream npm package. Pi always uses `npx`, which installs the `pi-acp` adapter together with Earendil's Pi coding agent so the adapter finds `pi` on `PATH`. The adapters use their upstream dependencies and authentication settings. For Antigravity, install Google's CLI and make `agy` available on the host's `PATH`. [Antigravity CLI installation](https://antigravity.google/cli)
 
 | Agent | ID for `--agent` or `config.toml` | ACP launch | Sign in |
 | --- | --- | --- | --- |
@@ -37,6 +37,7 @@ Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` rele
 | Grok Build | `grok-build` (also `grok`) | `@xai-official/grok@latest agent stdio` | Use `/login` for the Grok sign-in command or set `XAI_API_KEY`. |
 | Cursor Agent | `cursor` (also `cursor-agent`) | `cursor-agent acp` if available, otherwise `agent acp` | Use your existing `agent login` session or export a Cursor-issued user API key as `CURSOR_API_KEY`. |
 | Hermes Agent | `hermes` (also `hermes-agent`) | `hermes acp` | Run `hermes model` in another terminal to choose a provider and configure credentials. |
+| Pi | `pi` (also `pi-acp`) | `pi-acp@latest` with `@earendil-works/pi-coding-agent@latest` | Use Pi's own settings in `~/.pi/agent`, or choose a token provider such as Subconscious in `/agent`. |
 
 Install Cursor CLI on the machine that runs Nori. If only `agent` is on `PATH`, Nori assumes it belongs to Cursor. If another program uses that name, add Cursor’s `cursor-agent` executable to `PATH` or put Cursor’s directory first. To use an API key with a local host, export `CURSOR_API_KEY` before starting `nori host`. Then use `nori host new --agent cursor`. With multi-session enabled, use `/delegate cursor <task>` to open a Cursor child from another agent. [Cursor CLI installation](https://cursor.com/docs/cli/installation) · [Cursor CLI authentication](https://cursor.com/docs/cli/reference/authentication)
 
@@ -49,6 +50,8 @@ The `gemini` ID keeps existing configs and Nori history associated with the Goog
 Install Hermes and its ACP extra on the machine running Nori. Make `hermes` available on that machine’s `PATH` and run `hermes acp --check`. [Nous Research’s ACP installation guide for v0.23.3](https://github.com/NousResearch/hermes-agent/blob/v0.23.3/website/docs/user-guide/features/acp.md#installation)
 
 Start it with `nori --agent hermes` or create a session on a running host with `nori host new --agent hermes`. With `features.multi_session = true` in your Nori configuration, enter `/delegate hermes Read README.md and summarize the setup steps` from another agent’s conversation. Approve the child when prompted. Its result returns to the parent conversation.
+
+For Pi, use `/agent` to choose **Pi settings**, select a saved Subconscious connection, or configure one with the name of your key variable and a catalog model. [Named API token providers](nori-rs/config.md#named-api-token-providers)
 
 ## Bring Your Own Agent
 

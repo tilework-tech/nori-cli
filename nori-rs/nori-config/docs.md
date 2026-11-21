@@ -21,6 +21,8 @@ The crate owns:
   `[default_models]` and the optional `[[agents]].model_override`
   (`ModelOverrideToml { env, arg }`) declaring how a custom agent accepts a
   forced model id at spawn time (see below);
+- named API connections (`[[token_providers]]`) and
+  the `[agent_token_providers]` agent-to-provider binding;
 - `AskForApproval`, `SandboxPolicy`, `SandboxMode`, and `TrustLevel`;
 - `McpServerConfig` and MCP transport configuration;
 - `ShellEnvironmentPolicy` and related environment patterns;
@@ -81,7 +83,7 @@ cannot create the OS read-only launch.
 `[default_models]` maps an agent slug to a model id. The loader keeps the order of dotted model overrides so the harness can resolve precedence after registering custom agents. The agent validates its model ID at launch or through ACP. `nori-acp-host` reads `model_override` to build a
 `ModelInjection` strategy — `env` names an environment variable, `arg` a CLI
 flag, and `env` wins if both are set — so an out-of-catalog default model can be
-forced through the agent subprocess at spawn. Built-in agents with a spawn-time override get their injection channel from the [ACP registry](../acp-host/src/registry.rs). Antigravity, Grok Build, OpenCode, and Hermes Agent use their advertised ACP model options. The user-facing
+forced through the agent subprocess at spawn. Built-in agents with a spawn-time override get their injection channel from the [ACP registry](../acp-host/src/registry.rs). Antigravity, Grok Build, OpenCode, Hermes Agent, and Pi use their advertised ACP model options. The user-facing
 `config.toml` schema, including these tables and the `[[agents]]` fields, is
 described in [`config.md`](../config.md).
 
@@ -126,8 +128,7 @@ Upstream Codex separates a named provider from its selected model and accepts
 an environment reference for the provider's key. Pi composes a model from
 its provider ID, protocol and endpoint, and its auth resolver checks stored
 credentials before configuration keys. Nori keeps a single explicit
-environment reference. A Pi adapter consuming this contract needs a private
-Pi configuration scope where a stored account cannot supersede that key.
+environment reference. Pi's Subconscious adapter creates a private Pi profile per connection, so the user's stored credentials cannot override the chosen key. [Pi adapter](../acp-host/src/token_provider.rs)
 [Codex configuration](https://github.com/openai/codex/blob/704ffed1c58ac349c129e459c50c71979dfac6b4/codex-rs/config/src/config_toml.rs#L175-L188) · [Codex credential resolution](https://github.com/openai/codex/blob/704ffed1c58ac349c129e459c50c71979dfac6b4/codex-rs/model-provider-info/src/lib.rs#L524-L542) · [Pi provider composition and auth](https://github.com/earendil-works/pi/blob/780bf31fcaeb252fa9b68df3964c735eae75bde3/packages/coding-agent/src/core/provider-composer.ts#L462-L478)
 
 ### Things to Know
