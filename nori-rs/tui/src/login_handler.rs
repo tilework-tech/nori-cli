@@ -50,6 +50,7 @@ impl LoginHandler {
                     Some(AgentKind::Gemini) => "Run agy in another terminal and choose your Google sign-in, or set GEMINI_API_KEY.".to_owned(),
                     Some(AgentKind::GrokBuild) => "Run npx --yes @xai-official/grok@latest login in another terminal, or set XAI_API_KEY.".to_owned(),
                     Some(AgentKind::ClaudeCode) => "Run claude in another terminal and use /login, or set ANTHROPIC_API_KEY.".to_owned(),
+                    Some(AgentKind::OpenCode) => config.auth_hint,
                     Some(AgentKind::Codex) => return AgentLoginSupport::OAuthBrowser,
                     None if !config.auth_hint.is_empty() => config.auth_hint,
                     None => format!("Use the authentication method for {}.", config.display_name),

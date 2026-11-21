@@ -14,7 +14,7 @@ part of the file, plus tool call display and the opt-in multi-session feature.
 agent = "claude-code"
 ```
 
-Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), and `grok-build`. An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
+Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), `grok-build`, and `opencode`. An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
 
 ## Default models: `[default_models]`
 
@@ -31,7 +31,11 @@ Nori saves model choices under the agent’s canonical ID. For example, selectin
 
 For a single launch, `nori --agent agy -c 'default_models.antigravity="gemini-3.6-flash"'` overrides the saved Gemini model. If several dotted `-c` assignments name the same agent through different aliases, the last one wins. Assigning the entire `default_models` table replaces earlier assignments.
 
-For Antigravity and Grok Build, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
+For Antigravity, Grok Build, and OpenCode, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
+
+OpenCode advertises enabled models for the session's working directory, using IDs such as `nori-gateway/<model>` for a gateway configured under that provider name. OpenCode reads its provider, endpoint, and default model from its native configuration, including a file selected with `OPENCODE_CONFIG`. It uses the credentials for that provider from its saved accounts, supported environment variables, or the provider configuration. [OpenCode providers](https://opencode.ai/docs/cli/providers/) · [OpenCode models](https://opencode.ai/docs/models/)
+
+When signed in with a ChatGPT plan, OpenCode 2.2.6 and 2.3.2 offer GPT chat models with a numeric version above 5.5, excluding the exact ID `gpt-5.6` and models that require pro reasoning mode. For example, `gpt-5.10` passes the version filter. API-key and gateway connections have their own catalogs. [2.2.6 provider filter](https://github.com/anomalyco/opencode/blob/v2.2.6/packages/core/src/plugin/provider/openai.ts#L283-L305) · [2.3.2 provider filter](https://github.com/anomalyco/opencode/blob/v2.3.2/packages/core/src/plugin/provider/openai.ts#L285-L307)
 
 Claude Code, Codex, and custom agents with a configured injection channel can also accept model IDs at process startup. For these agents, `/model` offers a custom ID and any curated additional choices. If the agent rejects a custom choice over ACP, Nori can save it here and restart the session to apply it. A provider may still reject an unknown model at the first prompt.
 

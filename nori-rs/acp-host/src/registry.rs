@@ -8,6 +8,7 @@
 //! - `codex` - OpenAI's Codex CLI agent
 //! - `gemini` - Google Antigravity
 //! - `grok-build` - xAI Grok Build
+//! - `opencode` - OpenCode with its configured providers
 //!
 //! ## Provider Names
 //! - `anthropic` - Anthropic
@@ -120,6 +121,8 @@ pub enum AgentKind {
     Gemini,
     /// xAI Grok Build.
     GrokBuild,
+    /// OpenCode with its native provider configuration.
+    OpenCode,
 }
 
 impl AgentKind {
@@ -130,6 +133,7 @@ impl AgentKind {
             AgentKind::Codex => "codex",
             AgentKind::Gemini => "gemini",
             AgentKind::GrokBuild => "grok-build",
+            AgentKind::OpenCode => "opencode",
         }
     }
 
@@ -140,6 +144,7 @@ impl AgentKind {
             AgentKind::Codex => "Codex",
             AgentKind::Gemini => "Antigravity",
             AgentKind::GrokBuild => "Grok Build",
+            AgentKind::OpenCode => "OpenCode",
         }
     }
 
@@ -154,7 +159,7 @@ impl AgentKind {
             AgentKind::ClaudeCode => Some(1_000_000),
             AgentKind::Codex => Some(258_000),
             AgentKind::Gemini => Some(1_000_000),
-            AgentKind::GrokBuild => None,
+            AgentKind::GrokBuild | AgentKind::OpenCode => None,
         }
     }
 
@@ -165,6 +170,7 @@ impl AgentKind {
             AgentKind::Codex => Provider::OpenAI,
             AgentKind::Gemini => Provider::Google,
             AgentKind::GrokBuild => Provider::Xai,
+            AgentKind::OpenCode => Provider::OpenCode,
         }
     }
 
@@ -175,17 +181,18 @@ impl AgentKind {
             AgentKind::Codex,
             AgentKind::Gemini,
             AgentKind::GrokBuild,
+            AgentKind::OpenCode,
         ]
     }
 
     /// The out-of-band channel this built-in agent uses to receive a forced
-    /// model id at spawn time. Antigravity and Grok negotiate models over ACP.
+    /// model id at spawn time. Agents without an injection channel negotiate models over ACP.
     pub fn model_injection(&self) -> ModelInjection {
         match self {
             AgentKind::ClaudeCode => ModelInjection::Env {
                 var: "ANTHROPIC_MODEL".to_string(),
             },
-            AgentKind::Gemini | AgentKind::GrokBuild => ModelInjection::None,
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::OpenCode => ModelInjection::None,
             AgentKind::Codex => ModelInjection::CodexConfig,
         }
     }
@@ -197,7 +204,7 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => Some(".claude/projects"),
             AgentKind::Codex => Some(".codex/sessions"),
-            AgentKind::Gemini | AgentKind::GrokBuild => None,
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::OpenCode => None,
         }
     }
 
@@ -210,6 +217,9 @@ impl AgentKind {
             AgentKind::Codex => "Run /login to authenticate, or set OPENAI_API_KEY.",
             AgentKind::Gemini => "Run /login for Antigravity instructions, or set GEMINI_API_KEY.",
             AgentKind::GrokBuild => "Run /login for Grok Build instructions, or set XAI_API_KEY.",
+            AgentKind::OpenCode => {
+                "Run `opencode auth login` in another terminal or configure a provider in OpenCode."
+            }
         }
     }
 
@@ -223,6 +233,7 @@ impl AgentKind {
                 Some(AgentKind::Gemini)
             }
             "grok-build" | "grok" => Some(AgentKind::GrokBuild),
+            "opencode" => Some(AgentKind::OpenCode),
             _ => None,
         }
     }
@@ -255,7 +266,7 @@ impl AgentKind {
                 id: "gpt-5.3-codex",
                 label: "GPT-5.3-Codex",
             }],
-            AgentKind::Gemini | AgentKind::GrokBuild => &[],
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::OpenCode => &[],
         }
     }
 }
@@ -277,6 +288,8 @@ pub enum Provider {
     Google,
     /// xAI
     Xai,
+    /// The model provider selected in OpenCode.
+    OpenCode,
 }
 
 impl Provider {
@@ -287,6 +300,7 @@ impl Provider {
             Provider::OpenAI => "openai",
             Provider::Google => "google",
             Provider::Xai => "xai",
+            Provider::OpenCode => "opencode",
         }
     }
 
@@ -297,6 +311,7 @@ impl Provider {
             Provider::OpenAI => "OpenAI",
             Provider::Google => "Google",
             Provider::Xai => "xAI",
+            Provider::OpenCode => "Configured in OpenCode",
         }
     }
 }
@@ -512,6 +527,7 @@ fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>)
         AgentKind::Codex => "codex-acp",
         AgentKind::Gemini => "agy",
         AgentKind::GrokBuild => "grok",
+        AgentKind::OpenCode => "opencode",
     };
     (which::which(binary).is_ok(), None)
 }
@@ -826,7 +842,7 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
             AgentKind::ClaudeCode => Some("@agentclientprotocol/claude-agent-acp@latest"),
             AgentKind::Codex => Some("@agentclientprotocol/codex-acp@latest"),
             AgentKind::GrokBuild => Some("@xai-official/grok@latest"),
-            AgentKind::Gemini => None,
+            AgentKind::Gemini | AgentKind::OpenCode => None,
         };
         let (command, args, install_hint) = if let Some(package) = package {
             // Grok relies on npm's postinstall to select the package's native
@@ -850,6 +866,12 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
                 manager.command()
             );
             (manager.command(), args, hint)
+        } else if agent == AgentKind::OpenCode {
+            (
+                "opencode",
+                vec!["acp".to_string()],
+                "install OpenCode and add `opencode` to PATH".to_string(),
+            )
         } else {
             (
                 "agy",
@@ -1048,6 +1070,23 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
 mod tests {
     use super::*;
     use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn opencode_uses_its_native_acp_command_and_provider_settings() {
+        reset_registry();
+        let config = get_agent_config("opencode").expect("OpenCode is built in");
+        assert_eq!(config.command, "opencode");
+        assert_eq!(config.args, ["acp"]);
+        assert!(config.env.is_empty());
+        assert_eq!(config.model_injection, ModelInjection::None);
+        assert_eq!(config.provider_slug, "opencode");
+        assert!(
+            list_available_agents().iter().any(|entry| {
+                entry.agent_name == "opencode" && entry.display_name == "OpenCode"
+            })
+        );
+    }
 
     #[test]
     #[serial]
@@ -1267,7 +1306,7 @@ mod tests {
 
     #[test]
     fn native_providers_use_the_advertised_acp_model_options() {
-        for name in ["gemini", "grok-build"] {
+        for name in ["gemini", "grok-build", "opencode"] {
             let config = get_agent_config(name).unwrap();
             assert!(!config.supports_model_injection());
         }
@@ -1490,7 +1529,7 @@ mod tests {
     fn test_list_available_agents_debug_build() {
         reset_registry();
         let agents = list_available_agents();
-        assert_eq!(agents.len(), 6);
+        assert_eq!(agents.len(), AgentKind::all().len() + 2);
 
         let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
         assert!(names.contains(&"Mock ACP"), "Should have Mock ACP");
@@ -1562,9 +1601,9 @@ mod tests {
     }
 
     #[test]
-    fn test_build_default_agents_returns_four_builtins() {
+    fn test_build_default_agents_returns_builtins() {
         let agents = build_default_agents();
-        assert_eq!(agents.len(), 4);
+        assert_eq!(agents.len(), AgentKind::all().len());
         let slugs: Vec<&str> = agents.iter().map(|a| a.slug.as_str()).collect();
         assert!(slugs.contains(&"claude-code"));
         assert!(slugs.contains(&"codex"));
@@ -1598,7 +1637,7 @@ mod tests {
     #[test]
     fn test_build_registry_with_no_custom_agents() {
         let registry = build_registry(vec![]).unwrap();
-        assert_eq!(registry.len(), 4);
+        assert_eq!(registry.len(), AgentKind::all().len());
     }
 
     #[test]
@@ -1622,7 +1661,7 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom]).unwrap();
-        assert_eq!(registry.len(), 5);
+        assert_eq!(registry.len(), AgentKind::all().len() + 1);
         let kimi = registry.iter().find(|a| a.slug == "kimi").unwrap();
         assert_eq!(kimi.name, "Kimi");
         assert!(kimi.kind.is_none());
@@ -1650,8 +1689,7 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom_claude]).unwrap();
-        // Should still be 3 agents (override, not add)
-        assert_eq!(registry.len(), 4);
+        assert_eq!(registry.len(), AgentKind::all().len());
         let claude = registry.iter().find(|a| a.slug == "claude-code").unwrap();
         assert_eq!(claude.name, "My Claude");
         assert_eq!(claude.context_window_size, Some(300_000));
