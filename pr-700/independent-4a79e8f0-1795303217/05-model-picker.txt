@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/proj · Agent approvals
+  Agent        Claude
+
+• Claude Code options: Model=Default (recommended), Effort=Default, Fast mode=Off, Ultracode=Off, Mode=Auto (/config
+to change)
+
+
+  Subconscious model for Pi
+  Key from $SYNTH_GATEWAY_TOKEN
+
+   1. GLM-5.3 Marathon
+      subconscious/glm-5.3-marathon · recommended
+   2. GLM-5.2
+      subconscious/glm-5.2
+   3. Tim-Qwen3.6-27b
+      subconscious/tim-qwen3.6-27b
+  ▏4. DeepSeek-V4-Flash Marathon                                                                                     ▕
+  ▏   subconscious/deepseek-v4-flash-marathon                                                                        ▕
+   5. DeepSeek-V4.1-Flash Marathon
+      subconscious/deepseek-v4.1-flash-marathon
+  ↑↓/j/k move  enter select  esc close
+
+
+

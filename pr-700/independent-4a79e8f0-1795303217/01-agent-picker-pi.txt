@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/proj · Agent approvals
+  Agent        Claude
+
+• Claude Code options: Model=Default (recommended), Effort=Default, Fast mode=Off, Ultracode=Off, Mode=Auto (/config
+to change)
+
+
+  Select agent
+  Creates new conversation with selected agent (history not preserved)
+
+   5. Antigravity
+      Google
+   6. Grok Build
+      xAI
+   7. OpenCode
+      Configured in OpenCode
+   8. Cursor Agent
+      Cursor
+   9. Hermes Agent
+      Nous Research
+  ▏  Pi                                                                                                              ▕
+  ▏  Earendil                                                                                                        ▕
+  ↑↓/j/k move  enter select  shift-tab rec on  esc close
+

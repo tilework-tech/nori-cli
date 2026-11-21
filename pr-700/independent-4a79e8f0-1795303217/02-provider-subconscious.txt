@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/proj · Agent approvals
+  Agent        Claude
+
+• Claude Code options: Model=Default (recommended), Effort=Default, Fast mode=Off, Ultracode=Off, Mode=Auto (/config
+to change)
+
+
+  Model provider for Pi
+  Where the agent gets its models
+
+   1. Pi settings (current)
+      Use Pi's own sign-in and models
+  ▏2. Subconscious                                                                                                   ▕
+  ▏   Token provider · key from $SUBCONSCIOUS_API_KEY                                                                ▕
+  ↑↓/j/k move  enter select  esc close
+
+
+
+
+
+
+
+
+

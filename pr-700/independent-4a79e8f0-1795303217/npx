@@ -1,0 +1,20 @@
+#!/bin/sh
+# Verification-only npx shim: when Nori launches Pi with a generated profile, copy that
+# profile, point only the copy at the loopback stand-in, and run the real npx.
+if [ -n "$PI_CODING_AGENT_DIR" ] && [ -n "$VERIFY_ENDPOINT" ] && [ -f "$PI_CODING_AGENT_DIR/models.json" ]; then
+  copy=$(mktemp -d "$HOME/verify-pi-profile-XXXXXX")
+  node -e '
+    const fs=require("fs"),[src,dst,ep,log]=process.argv.slice(1);
+    const m=JSON.parse(fs.readFileSync(src+"/models.json","utf8"));
+    const rec={generatedDir:src,providers:{}};
+    for (const [k,p] of Object.entries(m.providers)) { rec.providers[k]={baseUrl:p.baseUrl,apiKey:p.apiKey,api:p.api,models:p.models.map(x=>x.id)}; p.baseUrl=ep; }
+    fs.writeFileSync(dst+"/models.json",JSON.stringify(m),{mode:0o600});
+    for (const f of ["settings.json","auth.json"]) if (fs.existsSync(src+"/"+f)) fs.copyFileSync(src+"/"+f,dst+"/"+f);
+    rec.settings=JSON.parse(fs.readFileSync(src+"/settings.json","utf8"));
+    fs.appendFileSync(log,JSON.stringify(rec)+"\n");
+  ' "$PI_CODING_AGENT_DIR" "$copy" "$VERIFY_ENDPOINT" "$VERIFY_PROFILE_LOG"
+  export PI_CODING_AGENT_DIR="$copy"
+else
+  [ -n "$VERIFY_PROFILE_LOG" ] && echo "{\"generatedDir\":null,\"args\":\"$*\"}" >> "$VERIFY_PROFILE_LOG"
+fi
+exec /usr/local/bin/npx "$@"

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/pivx/oldtable/proj · Agent approvals
+  Agent        Pi
+
+• Pi options: Model=subconscious/DeepSeek-V4-Flash Marathon, Thinking=Thinking: off (/config to change)
+
+
+› $ for skill listing
+
+                                                                                                   ⎇ master · 0% / 5.00M

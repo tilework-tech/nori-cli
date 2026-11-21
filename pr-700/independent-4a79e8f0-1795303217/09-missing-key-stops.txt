@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/proj · Agent approvals
+  Agent        Pi
+
+■ Couldn't prepare agent: token provider requires environment variable SYNTH_GATEWAY_TOKEN
+
+• No session is active - /resume retries the picker, /new starts a fresh session.
+
+
+  Select agent
+  token provider requires environment variable SYNTH_GATEWAY_TOKEN
+
+   5. Antigravity
+      Google
+   6. Grok Build
+      xAI
+   7. OpenCode
+      Configured in OpenCode
+   8. Cursor Agent
+      Cursor
+   9. Hermes Agent
+      Nous Research
+  ▏  Pi (current)                                                                                                    ▕
+  ▏  Earendil                                                                                                        ▕
+  ↑↓/j/k move  enter select  shift-tab rec on  esc close
+
