@@ -178,6 +178,7 @@ mod tests {
         for (alias, expected, slug) in [
             ("agy", "Antigravity", "gemini"),
             ("grok", "Grok Build", "grok-build"),
+            ("cursor-agent", "Cursor Agent", "cursor"),
         ] {
             let (tx, mut rx) = unbounded_channel::<AppEvent>();
             let tx = AppEventSender::new(tx);

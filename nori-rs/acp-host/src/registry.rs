@@ -8,12 +8,14 @@
 //! - `codex` - OpenAI's Codex CLI agent
 //! - `gemini` - Google Antigravity
 //! - `grok-build` - xAI Grok Build
+//! - `cursor` - Cursor Agent
 //!
 //! ## Provider Names
 //! - `anthropic` - Anthropic
 //! - `openai` - OpenAI
 //! - `google` - Google
 //! - `xai` - xAI
+//! - `cursor` - Cursor
 
 use anyhow::Context;
 use anyhow::Result;
@@ -120,6 +122,8 @@ pub enum AgentKind {
     Gemini,
     /// xAI Grok Build.
     GrokBuild,
+    /// Cursor CLI in ACP mode.
+    Cursor,
 }
 
 impl AgentKind {
@@ -130,6 +134,7 @@ impl AgentKind {
             AgentKind::Codex => "codex",
             AgentKind::Gemini => "gemini",
             AgentKind::GrokBuild => "grok-build",
+            AgentKind::Cursor => "cursor",
         }
     }
 
@@ -140,6 +145,7 @@ impl AgentKind {
             AgentKind::Codex => "Codex",
             AgentKind::Gemini => "Antigravity",
             AgentKind::GrokBuild => "Grok Build",
+            AgentKind::Cursor => "Cursor Agent",
         }
     }
 
@@ -154,7 +160,7 @@ impl AgentKind {
             AgentKind::ClaudeCode => Some(1_000_000),
             AgentKind::Codex => Some(258_000),
             AgentKind::Gemini => Some(1_000_000),
-            AgentKind::GrokBuild => None,
+            AgentKind::GrokBuild | AgentKind::Cursor => None,
         }
     }
 
@@ -165,6 +171,7 @@ impl AgentKind {
             AgentKind::Codex => Provider::OpenAI,
             AgentKind::Gemini => Provider::Google,
             AgentKind::GrokBuild => Provider::Xai,
+            AgentKind::Cursor => Provider::Cursor,
         }
     }
 
@@ -175,6 +182,7 @@ impl AgentKind {
             AgentKind::Codex,
             AgentKind::Gemini,
             AgentKind::GrokBuild,
+            AgentKind::Cursor,
         ]
     }
 
@@ -187,6 +195,9 @@ impl AgentKind {
             },
             AgentKind::Gemini | AgentKind::GrokBuild => ModelInjection::None,
             AgentKind::Codex => ModelInjection::CodexConfig,
+            AgentKind::Cursor => ModelInjection::Arg {
+                flag: "--model".to_string(),
+            },
         }
     }
 
@@ -197,7 +208,7 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => Some(".claude/projects"),
             AgentKind::Codex => Some(".codex/sessions"),
-            AgentKind::Gemini | AgentKind::GrokBuild => None,
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::Cursor => None,
         }
     }
 
@@ -210,6 +221,9 @@ impl AgentKind {
             AgentKind::Codex => "Run /login to authenticate, or set OPENAI_API_KEY.",
             AgentKind::Gemini => "Run /login for Antigravity instructions, or set GEMINI_API_KEY.",
             AgentKind::GrokBuild => "Run /login for Grok Build instructions, or set XAI_API_KEY.",
+            AgentKind::Cursor => {
+                "Run `agent login` (or `cursor-agent login`) in another terminal, or set CURSOR_API_KEY to a user API key from your Cursor dashboard."
+            }
         }
     }
 
@@ -223,6 +237,7 @@ impl AgentKind {
                 Some(AgentKind::Gemini)
             }
             "grok-build" | "grok" => Some(AgentKind::GrokBuild),
+            "cursor" | "cursor-agent" => Some(AgentKind::Cursor),
             _ => None,
         }
     }
@@ -255,7 +270,7 @@ impl AgentKind {
                 id: "gpt-5.3-codex",
                 label: "GPT-5.3-Codex",
             }],
-            AgentKind::Gemini | AgentKind::GrokBuild => &[],
+            AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::Cursor => &[],
         }
     }
 }
@@ -277,6 +292,8 @@ pub enum Provider {
     Google,
     /// xAI
     Xai,
+    /// Cursor
+    Cursor,
 }
 
 impl Provider {
@@ -287,6 +304,7 @@ impl Provider {
             Provider::OpenAI => "openai",
             Provider::Google => "google",
             Provider::Xai => "xai",
+            Provider::Cursor => "cursor",
         }
     }
 
@@ -297,6 +315,7 @@ impl Provider {
             Provider::OpenAI => "OpenAI",
             Provider::Google => "Google",
             Provider::Xai => "xAI",
+            Provider::Cursor => "Cursor",
         }
     }
 }
@@ -506,12 +525,22 @@ impl AcpAgentInfo {
 // Installation Detection
 // =============================================================================
 
+// Prefer Cursor’s unambiguous executable if another program also installs `agent`.
+fn cursor_command() -> &'static str {
+    if which::which("cursor-agent").is_ok() {
+        "cursor-agent"
+    } else {
+        "agent"
+    }
+}
+
 fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>) {
     let binary = match agent {
         AgentKind::ClaudeCode => "claude-agent-acp",
         AgentKind::Codex => "codex-acp",
         AgentKind::Gemini => "agy",
         AgentKind::GrokBuild => "grok",
+        AgentKind::Cursor => cursor_command(),
     };
     (which::which(binary).is_ok(), None)
 }
@@ -826,7 +855,7 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
             AgentKind::ClaudeCode => Some("@agentclientprotocol/claude-agent-acp@latest"),
             AgentKind::Codex => Some("@agentclientprotocol/codex-acp@latest"),
             AgentKind::GrokBuild => Some("@xai-official/grok@latest"),
-            AgentKind::Gemini => None,
+            AgentKind::Gemini | AgentKind::Cursor => None,
         };
         let (command, args, install_hint) = if let Some(package) = package {
             // Grok relies on npm's postinstall to select the package's native
@@ -850,6 +879,12 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
                 manager.command()
             );
             (manager.command(), args, hint)
+        } else if agent == AgentKind::Cursor {
+            (
+                cursor_command(),
+                vec!["acp".to_string()],
+                "install the Cursor CLI from https://cursor.com/docs/cli/installation and add `agent` or `cursor-agent` to PATH".to_string(),
+            )
         } else {
             (
                 "agy",
@@ -1490,7 +1525,7 @@ mod tests {
     fn test_list_available_agents_debug_build() {
         reset_registry();
         let agents = list_available_agents();
-        assert_eq!(agents.len(), 6);
+        assert_eq!(agents.len(), AgentKind::all().len() + 2);
 
         let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
         assert!(names.contains(&"Mock ACP"), "Should have Mock ACP");
@@ -1562,14 +1597,15 @@ mod tests {
     }
 
     #[test]
-    fn test_build_default_agents_returns_four_builtins() {
+    fn test_build_default_agents_includes_cursor() {
         let agents = build_default_agents();
-        assert_eq!(agents.len(), 4);
+        assert_eq!(agents.len(), AgentKind::all().len());
         let slugs: Vec<&str> = agents.iter().map(|a| a.slug.as_str()).collect();
         assert!(slugs.contains(&"claude-code"));
         assert!(slugs.contains(&"codex"));
         assert!(slugs.contains(&"gemini"));
         assert!(slugs.contains(&"grok-build"));
+        assert!(slugs.contains(&"cursor"));
     }
 
     #[test]
@@ -1598,7 +1634,7 @@ mod tests {
     #[test]
     fn test_build_registry_with_no_custom_agents() {
         let registry = build_registry(vec![]).unwrap();
-        assert_eq!(registry.len(), 4);
+        assert_eq!(registry.len(), AgentKind::all().len());
     }
 
     #[test]
@@ -1622,7 +1658,7 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom]).unwrap();
-        assert_eq!(registry.len(), 5);
+        assert_eq!(registry.len(), AgentKind::all().len() + 1);
         let kimi = registry.iter().find(|a| a.slug == "kimi").unwrap();
         assert_eq!(kimi.name, "Kimi");
         assert!(kimi.kind.is_none());
@@ -1650,8 +1686,8 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom_claude]).unwrap();
-        // Should still be 3 agents (override, not add)
-        assert_eq!(registry.len(), 4);
+        // An override keeps the built-in registry size.
+        assert_eq!(registry.len(), AgentKind::all().len());
         let claude = registry.iter().find(|a| a.slug == "claude-code").unwrap();
         assert_eq!(claude.name, "My Claude");
         assert_eq!(claude.context_window_size, Some(300_000));

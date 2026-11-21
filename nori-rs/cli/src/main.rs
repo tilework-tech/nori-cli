@@ -146,7 +146,7 @@ struct ExecCommand {
     #[arg(long)]
     acp: bool,
 
-    /// Agent to run: claude-code, codex, gemini (Antigravity), grok-build, or a configured agent.
+    /// Agent to run: claude-code, codex, gemini (Antigravity), grok-build, cursor, or a configured agent.
     #[arg(long)]
     agent: Option<String>,
 

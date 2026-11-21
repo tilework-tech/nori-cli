@@ -73,7 +73,7 @@ struct NewCommand {
     /// with --host uses its own folder by default.
     #[arg(long)]
     cwd: Option<PathBuf>,
-    /// Agent to run: claude-code, codex, gemini (Antigravity), grok-build, or a configured agent.
+    /// Agent to run: claude-code, codex, gemini (Antigravity), grok-build, cursor, or a configured agent.
     #[arg(long)]
     agent: Option<String>,
     /// First prompt to send once the session starts.

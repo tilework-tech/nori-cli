@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/npm/l/nori-ai-cli)](https://github.com/tilework-tech/nori-cli/blob/main/LICENSE)
 [![npm downloads](https://img.shields.io/npm/dm/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
 
-Nori lets you use Claude Code, Codex, Antigravity, Grok Build, and your own ACP agents from one terminal.
+Nori lets you use Claude Code, Codex, Antigravity, Grok Build, Cursor Agent, and your own ACP agents from one terminal.
 
 ![Nori TUI Screenshot](https://raw.githubusercontent.com/tilework-tech/nori-cli/refs/heads/main/assets/nori-cli_2026-01-13.png)
 
@@ -35,6 +35,9 @@ Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` rele
 | Codex | `codex` | `@agentclientprotocol/codex-acp@latest` | Use `/login` for ChatGPT or set `OPENAI_API_KEY`. |
 | Antigravity | `gemini` (also `antigravity` or `agy`) | `agy acp --disable-telemetry` | Open `agy` for Google sign-in or set `GEMINI_API_KEY`. |
 | Grok Build | `grok-build` (also `grok`) | `@xai-official/grok@latest agent stdio` | Use `/login` for the Grok sign-in command or set `XAI_API_KEY`. |
+| Cursor Agent | `cursor` (also `cursor-agent`) | `cursor-agent acp` if available, otherwise `agent acp` | Use your existing `agent login` session or export a Cursor-issued user API key as `CURSOR_API_KEY`. |
+
+Install Cursor CLI on the machine that runs Nori. To use an API key with a local host, export `CURSOR_API_KEY` before starting `nori host`. Then use `nori host new --agent cursor`. With multi-session enabled, use `/delegate cursor <task>` to open a Cursor child from another agent. [Cursor CLI installation](https://cursor.com/docs/cli/installation) · [Cursor CLI authentication](https://cursor.com/docs/cli/reference/authentication)
 
 The `gemini` ID keeps existing configs and Nori history associated with the Google provider. Each agent supplies its own model choices through `/model`.
 
@@ -75,7 +78,7 @@ Want your AI agent to configure this automatically? Point it at the raw skill fi
 
 ## Features
 
-- **Multi-provider**: Use Claude Code, Codex, Antigravity, Grok Build, or your own ACP-compatible agent from the same CLI.
+- **Multi-provider**: Use Claude Code, Codex, Antigravity, Grok Build, Cursor Agent, or your own ACP-compatible agent from the same CLI.
 - **Fast native interface**: Incremental Ratatui rendering, double-buffered scrollback history, and a Rust core keep long sessions responsive.
 - **Solid ACP client support**: Nori supports ACP session listing, loading, resume, context and usage metadata.
 - **Agent Integrations**: Your agents keep their configurations, whether that's slash commands, skills, and MCP server forwarding.
