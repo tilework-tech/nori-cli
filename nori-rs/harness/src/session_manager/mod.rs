@@ -571,6 +571,52 @@ impl SessionManager {
         state.handles.get(&process).cloned()
     }
 
+    /// Change how a running session answers permission requests from now
+    /// on, and record it. Requests already waiting on a client keep waiting.
+    pub async fn set_approval_policy(
+        &self,
+        conversation_id: &ConversationId,
+        policy: AskForApproval,
+    ) -> anyhow::Result<()> {
+        self.handle(conversation_id)
+            .ok_or_else(|| anyhow::anyhow!("session is not running"))?
+            .set_approval_policy(policy)
+            .await?;
+        self.shared
+            .state()
+            .registry
+            .set_approval_policy(conversation_id, policy);
+        Ok(())
+    }
+
+    /// Stop a top-level session's agent process and start `spec`'s agent as a
+    /// new session under the same conversation ID. The caller ensures the
+    /// session has no conversation yet; its transcript starts over.
+    pub async fn replace_agent(
+        &self,
+        conversation_id: &ConversationId,
+        spec: AgentPrepareSpec,
+    ) -> anyhow::Result<ManagedSession> {
+        let record = self
+            .get(conversation_id)
+            .ok_or_else(|| anyhow::anyhow!("unknown session id"))?;
+        anyhow::ensure!(
+            record.parent.is_none(),
+            "a delegated session cannot change its agent"
+        );
+        self.close_one(conversation_id, Duration::ZERO).await?;
+        self.shared.state().registry.allow_restart(conversation_id);
+        Ok(self.start_session(
+            StartSession {
+                agent: SessionAgent::Prepare(spec),
+                start: SessionStart::New,
+                parent: None,
+                source: record.source,
+            },
+            Some(*conversation_id),
+        )?)
+    }
+
     /// Follow every session's envelopes from now on. A subscriber that falls
     /// `capacity` envelopes behind is dropped and its receiver closes; the
     /// sessions are never slowed down.

@@ -283,3 +283,9 @@ The [managed remote contract](../../../../docs/remote-control.md#delegation) def
 controller authorization and request payloads.
 
 Created and maintained by Nori.
+
+`set_approval_policy` changes a running session's approval policy and records
+it on the session. `replace_agent` stops a top-level session's process and
+starts another agent under the same conversation ID; the host only uses it
+before the session's first prompt, so the restarted transcript loses nothing.
+

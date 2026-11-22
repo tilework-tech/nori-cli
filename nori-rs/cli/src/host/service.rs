@@ -38,6 +38,8 @@ pub(super) struct HostService {
     pub stop: Notify,
     /// Per-connection state of the standard ACP face.
     pub acp: super::acp::AcpFace,
+    /// Mode and options clients chose, reapplied on resume.
+    pub settings: super::acp::config::SettingsStore,
 }
 
 #[derive(serde::Deserialize)]
@@ -178,6 +180,7 @@ impl HostService {
             .ok_or_else(|| anyhow::anyhow!("unknown session id"))?;
         let mut config = self.config_in(record.cwd).await?;
         config.active_agent = record.agent;
+        self.restore_settings(id, &mut config);
         self.manager.resume(id, Self::prepare(config)).await?;
         Ok(())
     }

@@ -39,6 +39,7 @@ pub(super) fn session_update(session: &str, event: &SessionEvent) -> Option<Valu
 
 /// Forwards one session's envelopes to one connection.
 struct Forwarder {
+    manager: nori_harness::session_manager::SessionManager,
     connection: HostConnection,
     session: String,
     /// Drop history the harness replays on resume: the client either asked
@@ -67,6 +68,25 @@ impl Forwarder {
             _ => {}
         }
         if self.skip_replays && self.replaying {
+            return None;
+        }
+        if super::config::is_adapter_mode_update(&envelope.event) {
+            return None;
+        }
+        if let Some(adapter) = super::config::adapter_options_update(&envelope.event) {
+            // Clients see the complete option list, host options included.
+            if let Ok(id) = ConversationId::from_string(&self.session)
+                && let Some(record) = self.manager.get(&id)
+            {
+                let mode = nori_harness::permission_mode::PermissionMode::from_approval_policy(
+                    record.approval_policy,
+                );
+                let options = super::config::compose(&record.agent, mode, &adapter);
+                self.connection.deliver(super::config::update(
+                    &self.session,
+                    json!({"sessionUpdate":"config_option_update","configOptions":options}),
+                ));
+            }
             return None;
         }
         if let Some(update) = session_update(&self.session, &envelope.event) {
@@ -154,6 +174,7 @@ impl HostService {
         let connection = self.acp.connection(client)?;
         let session = id.to_string();
         let mut forwarder = Forwarder {
+            manager: self.manager.clone(),
             connection: connection.clone(),
             session: session.clone(),
             skip_replays: true,
@@ -195,8 +216,16 @@ impl HostService {
                     }
                     Err(error) => return Err(AcpError::internal(error)),
                 };
-                for envelope in &subscription.replay {
-                    forwarder.deliver(envelope);
+                let mut subscription = subscription;
+                for envelope in std::mem::take(&mut subscription.replay) {
+                    forwarder.deliver(&envelope);
+                }
+                let starting = self
+                    .manager
+                    .get(&id)
+                    .is_some_and(|record| record.status == SessionStatus::Starting);
+                if starting {
+                    forwarder.until_started(&mut subscription.events).await?;
                 }
                 subscription.events
             }
@@ -231,6 +260,7 @@ impl HostService {
                     }
                 }
                 forwarder.until_started(&mut subscription.events).await?;
+                self.reapply_options(&id).await;
                 subscription.events
             }
             None => {
@@ -256,12 +286,14 @@ impl HostService {
                     }
                 }
                 forwarder.until_started(&mut subscription.events).await?;
+                self.reapply_options(&id).await;
                 subscription.events
             }
         };
         self.acp
             .attach(client, id, tokio::spawn(forwarder.run(events)));
-        Ok(json!({}))
+        let (options, modes) = self.session_configuration(&id).await?;
+        Ok(json!({"configOptions": options, "modes": modes}))
     }
 
     /// Send a transcript's history to one connection.

@@ -509,6 +509,9 @@ mod acp_client;
 #[path = "host_lifecycle/transcripts.rs"]
 mod transcripts;
 
+#[path = "host_lifecycle/modes.rs"]
+mod modes;
+
 #[test]
 fn machine_transport_authenticates_before_upgrade() {
     use std::io::Write;
