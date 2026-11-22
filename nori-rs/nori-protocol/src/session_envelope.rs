@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -10,7 +11,7 @@ use crate::SessionEvent;
 /// with no gaps, so a client following several sessions can sort events by
 /// session and detect a dropped event. A fork starts a new conversation and
 /// therefore a new sequence.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SessionEnvelope {
     /// Nori's conversation ID for the session (see `docs/glossary.md`).
     pub conversation_id: String,
@@ -22,7 +23,7 @@ pub struct SessionEnvelope {
 }
 
 /// Coarse status of a managed session, small enough to show in a list row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
     /// The agent process is being prepared or the session is being created.

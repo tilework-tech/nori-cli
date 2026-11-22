@@ -46,16 +46,19 @@ fn rfc3339(time: std::time::SystemTime) -> String {
 
 impl HostService {
     pub(super) async fn list_sessions(&self, params: &Value) -> Result<Value, AcpError> {
-        let limit = match params.pointer("/_meta/nori.dev~1pageSize") {
-            None | Some(Value::Null) => DEFAULT_PAGE,
-            Some(size) => size
-                .as_i64()
-                .filter(|size| (1..=MAX_PAGE).contains(size))
-                .ok_or_else(|| {
-                    AcpError::invalid_params(format!(
-                        "_meta.nori.dev/pageSize must be an integer from 1 to {MAX_PAGE}"
-                    ))
-                })?,
+        let page_error = || {
+            AcpError::invalid_params(format!(
+                "_meta.nori.dev/pageSize must be an integer from 1 to {MAX_PAGE}"
+            ))
+        };
+        let options: nori_protocol::ListSessionsOptions = match params.get("_meta") {
+            None | Some(Value::Null) => Default::default(),
+            Some(meta) => serde_json::from_value(meta.clone()).map_err(|_| page_error())?,
+        };
+        let limit = match options.page_size {
+            None => DEFAULT_PAGE,
+            Some(size) if (1..=MAX_PAGE).contains(&size) => size,
+            Some(_) => return Err(page_error()),
         } as usize;
         let folder = match params.get("cwd") {
             None | Some(Value::Null) => None,
@@ -88,7 +91,9 @@ impl HostService {
         if let Cursor::Live(start) = cursor {
             let live = records
                 .iter()
-                .filter(|record| in_folder(&record.cwd) && !self.is_deleted(&record.conversation_id))
+                .filter(|record| {
+                    in_folder(&record.cwd) && !self.is_deleted(&record.conversation_id)
+                })
                 .collect::<Vec<_>>();
             for record in live.iter().skip(start) {
                 if rows.len() == limit {
@@ -107,12 +112,16 @@ impl HostService {
                     "cwd": record.cwd,
                     "title": replay.as_ref().and_then(|info| info.title.clone()),
                     "updatedAt": updated.map(rfc3339),
-                    "_meta": {SESSION_META: {
-                        "agent": record.agent,
+                    "_meta": {SESSION_META: nori_protocol::ListedSession {
+                        agent: Some(record.agent.clone()),
                         // A closed or failed session runs again when loaded.
-                        "state": if super::attach::needs_restart(record.status) { "stored" } else { "live" },
-                        "status": record.status,
-                        "controller": controller,
+                        state: if super::attach::needs_restart(record.status) {
+                            nori_protocol::SessionState::Stored
+                        } else {
+                            nori_protocol::SessionState::Live
+                        },
+                        status: Some(record.status),
+                        controller,
                     }},
                 }));
             }
@@ -139,7 +148,8 @@ impl HostService {
                 transcripts::nanos(session.updated_at),
                 session.session_id.clone(),
             );
-            let deleted = nori_harness::ConversationId::from_string(&session.session_id).ok()
+            let deleted = nori_harness::ConversationId::from_string(&session.session_id)
+                .ok()
                 .is_some_and(|id| self.is_deleted(&id));
             if deleted {
                 continue;

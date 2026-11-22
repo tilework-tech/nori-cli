@@ -3959,6 +3959,7 @@ version = "0.0.0"
 dependencies = [
  "agent-client-protocol-schema",
  "pretty_assertions",
+ "schemars 1.0.4",
  "serde",
  "serde_json",
 ]

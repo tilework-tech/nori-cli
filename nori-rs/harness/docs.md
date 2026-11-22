@@ -584,6 +584,14 @@ Session end reasons are:
 - `SpawnFailed` when no session could be established; and
 - `TimedOut` when a lifecycle watchdog owns the terminal outcome.
 
+Prompts and follow-ups submitted while the agent is still starting wait in the
+runtime until it has started. If startup ends in `SpawnFailed` or `TimedOut`,
+each waiting command is answered with `runtime::AgentStartFailed` (the startup
+message plus the agent's ACP error code when it refused with one) rather than
+being dropped. Callers such as the [background host](../cli/src/host/docs.md)
+read that code, so an adapter that needs sign-in surfaces its own `-32000`
+authentication error instead of a generic "did not accept the prompt".
+
 Explicit local shutdown uses immediate ACP process-group cleanup. Cloud exit
 supplies a short child grace so `nori-handroll cloud-acp` can process stdin EOF
 as a detach before the same forced-cleanup path runs.

@@ -131,7 +131,11 @@ Path: @/nori-rs/harness/src/session_manager
   private registry metadata used for restart logging; neither `SessionRecord`
   nor managed remote list responses expose it.
   Resume validates failed status, agent identity, and a readable transcript,
-  then reserves capacity before launching the replacement.
+  then reserves capacity before launching the replacement. `reopen(id)` marks
+  a closed session whose process has exited as restartable, so the same
+  `resume` path brings it back under its ID; the background host uses this
+  when a client loads or resumes a session it earlier closed with ACP
+  `session/close`.
 - **Managed checkpoint metadata.** `checkpoint_session(id, include_private_transcript)`
   captures the named conversation's identity, parent, source, status and its
   delegation records. The caller holds the binding admission barrier.

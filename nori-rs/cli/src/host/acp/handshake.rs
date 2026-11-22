@@ -24,11 +24,13 @@ pub(in crate::host) fn initialize(result: &mut Value, instance: &str, max_sessio
         "promptCapabilities": {"image": false, "audio": false, "embeddedContext": false},
         "mcpCapabilities": {"http": false, "sse": false},
         "sessionCapabilities": {"list": {}, "resume": {}, "close": {}, "delete": {}},
-        "_meta": {"nori.dev/host": {
-            "contract": CONTRACT,
-            "instanceId": instance,
-            "extensions": ["subscribe", "control", "host", "delegation"],
-            "maxSessions": max_sessions,
+        "_meta": {"nori.dev/host": nori_protocol::HostCapabilities {
+            contract: CONTRACT,
+            instance_id: instance.to_owned(),
+            extensions: ["subscribe", "control", "host", "delegation"]
+                .map(str::to_owned)
+                .to_vec(),
+            max_sessions: i64::from(max_sessions),
         }},
     });
     result["authMethods"] = json!([]);

@@ -84,25 +84,29 @@ impl HostService {
             .map(Path::new)
             .filter(|cwd| cwd.is_absolute())
             .ok_or_else(|| AcpError::invalid_params("cwd must be an absolute path"))?;
-        let folder = session_folder(cwd).map_err(|error| AcpError::invalid_params(format!("{error:#}")))?;
+        let folder =
+            session_folder(cwd).map_err(|error| AcpError::invalid_params(format!("{error:#}")))?;
         let servers: Vec<acp::McpServer> = match params.get("mcpServers") {
             None | Some(Value::Null) => Vec::new(),
             Some(servers) => serde_json::from_value(servers.clone())
                 .map_err(|error| AcpError::invalid_params(format!("mcpServers: {error}")))?,
         };
-        let agent = match params.pointer("/_meta/nori.dev~1session/agent") {
-            None | Some(Value::Null) => None,
-            Some(Value::String(agent)) => {
-                let known = nori_harness::registry::list_available_agents()
-                    .iter()
-                    .any(|available| available.agent_name == *agent);
-                if !known {
-                    return Err(AcpError::invalid_params(format!("unknown agent {agent}")));
-                }
-                Some(agent.clone())
+        let options: nori_protocol::NewSessionOptions =
+            match params.pointer("/_meta/nori.dev~1session") {
+                None | Some(Value::Null) => Default::default(),
+                Some(options) => serde_json::from_value(options.clone()).map_err(|error| {
+                    AcpError::invalid_params(format!("_meta.nori.dev/session: {error}"))
+                })?,
+            };
+        if let Some(agent) = &options.agent {
+            let known = nori_harness::registry::list_available_agents()
+                .iter()
+                .any(|available| available.agent_name == *agent);
+            if !known {
+                return Err(AcpError::invalid_params(format!("unknown agent {agent}")));
             }
-            Some(_) => return Err(AcpError::invalid_params("agent must be a string")),
-        };
+        }
+        let agent = options.agent;
         let mut config = self.config_in(folder).await?;
         if let Some(agent) = agent {
             config.active_agent = agent;
@@ -157,10 +161,9 @@ impl HostService {
         let meta: Option<acp::Meta> = params
             .get("_meta")
             .and_then(|meta| serde_json::from_value(meta.clone()).ok());
-        let handle = self
-            .manager
-            .handle(&id)
-            .ok_or_else(|| AcpError::invalid_params("the session is not running; load or resume it"))?;
+        let handle = self.manager.handle(&id).ok_or_else(|| {
+            AcpError::invalid_params("the session is not running; load or resume it")
+        })?;
         let delivered = match self.acp.attached(client, &id) {
             Some(delivered) => delivered,
             None => {
@@ -170,12 +173,8 @@ impl HostService {
                     .get(&id)
                     .map(|record| record.cwd)
                     .ok_or_else(|| AcpError::not_found("unknown session"))?;
-                self.load_session(
-                    client,
-                    &json!({"sessionId": session, "cwd": cwd}),
-                    false,
-                )
-                .await?;
+                self.load_session(client, &json!({"sessionId": session, "cwd": cwd}), false)
+                    .await?;
                 self.acp
                     .attached(client, &id)
                     .ok_or_else(|| AcpError::internal("the connection closed"))?
@@ -234,17 +233,21 @@ impl HostService {
                 SessionEvent::Nori(NoriEvent::RequestFailed(failure))
                     if failure.request_id.as_ref() == Some(&request_id) =>
                 {
-                    break (envelope.seq, Err(AcpError {
-                        code: -32000,
-                        message: failure.message,
-                    }));
+                    break (
+                        envelope.seq,
+                        Err(AcpError {
+                            code: -32000,
+                            message: failure.message,
+                        }),
+                    );
                 }
                 SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
-                    break (envelope.seq, Err(AcpError::internal(
-                        ended
-                            .message
-                            .unwrap_or_else(|| "the session ended during the turn".to_owned()),
-                    )));
+                    break (
+                        envelope.seq,
+                        Err(AcpError::internal(ended.message.unwrap_or_else(|| {
+                            "the session ended during the turn".to_owned()
+                        }))),
+                    );
                 }
                 _ => {}
             }
@@ -300,7 +303,8 @@ impl HostService {
             }
         }
         self.mark_deleted(*id);
-        self.settings.update(id, |settings| *settings = Default::default());
+        self.settings
+            .update(id, |settings| *settings = Default::default());
         Ok(json!({}))
     }
 

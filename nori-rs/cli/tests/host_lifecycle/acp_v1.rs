@@ -120,7 +120,10 @@ async fn initialize_negotiates_version_one_and_advertises_the_host_contract() {
         nori["extensions"],
         json!(["subscribe", "control", "host", "delegation"])
     );
-    assert!(nori["maxSessions"].as_i64().is_some_and(|max| max > 0), "{nori}");
+    assert!(
+        nori["maxSessions"].as_i64().is_some_and(|max| max > 0),
+        "{nori}"
+    );
     assert_eq!(result["authMethods"], json!([]));
     assert_eq!(
         result["capabilities"]["nori_sessions"]["version"], 1,
@@ -174,10 +177,7 @@ async fn a_new_session_starts_the_preselected_agent_with_the_clients_mcp_servers
     let folder = TempDir::new().unwrap();
     let log = folder.path().join("mcp.log");
     // Only the second agent logs, so the log proves which agent started.
-    let host = host_with(
-        "",
-        &[],
-    );
+    let host = host_with("", &[]);
     success(host.run(&["host", "stop"]));
     let config = std::fs::read_to_string(host.0.path().join("config.toml")).unwrap();
     std::fs::write(
@@ -350,7 +350,10 @@ async fn watchers_cannot_prompt_close_or_delete() {
     let mut watching = watcher(&host);
 
     for (method, params) in [
-        ("session/prompt", json!({"sessionId": id, "prompt": text("hi")})),
+        (
+            "session/prompt",
+            json!({"sessionId": id, "prompt": text("hi")}),
+        ),
         ("session/close", json!({"sessionId": id})),
         ("session/delete", json!({"sessionId": id})),
     ] {
@@ -396,7 +399,11 @@ async fn a_closed_session_stays_listed_and_loads_again() {
     )
     .await
     .unwrap();
-    assert!(mentions(&acp.inbox, &id, "write a marker"), "{:?}", acp.inbox);
+    assert!(
+        mentions(&acp.inbox, &id, "write a marker"),
+        "{:?}",
+        acp.inbox
+    );
     let finished = acp
         .call(
             "session/prompt",
@@ -471,7 +478,10 @@ async fn a_prompt_waiting_on_an_agent_that_needs_sign_in_reports_why_it_failed()
     let folder = TempDir::new().unwrap();
     let mut client = tokio::task::block_in_place(|| host.client());
     let started = client
-        .request("_nori/session/new", json!({"cwd": canonical(folder.path())}))
+        .request(
+            "_nori/session/new",
+            json!({"cwd": canonical(folder.path())}),
+        )
         .await
         .unwrap();
     let id = started["session_id"].as_str().unwrap();
@@ -496,12 +506,10 @@ fn the_host_publishes_host_json_beside_the_legacy_discovery_files() {
     let folder = host.0.path().join("host");
 
     let published: Value =
-        serde_json::from_str(&std::fs::read_to_string(folder.join("host.json")).unwrap())
-            .unwrap();
+        serde_json::from_str(&std::fs::read_to_string(folder.join("host.json")).unwrap()).unwrap();
 
     let state: Value =
-        serde_json::from_str(&std::fs::read_to_string(folder.join("state.json")).unwrap())
-            .unwrap();
+        serde_json::from_str(&std::fs::read_to_string(folder.join("state.json")).unwrap()).unwrap();
     let token = std::fs::read_to_string(folder.join("token")).unwrap();
     assert_eq!(published["endpoint"], state["endpoint"]);
     assert_eq!(published["pid"], state["pid"]);

@@ -118,14 +118,31 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   admitted operation may finish after takeover, while later old-owner mutations
   are refused. Slow backend operations cannot lock out other clients' control
   or administrative requests. Role notifications preserve every connection.
-  Watcher mutations fail before reaching `ManagedAgent`; listing,
-  subscribing, taking control, starting a new session (it changes no
-  existing session, though it becomes the host's selected one), and
-  authenticated host stop remain
-  available.
+  Watcher mutations fail with `-32016` before reaching `ManagedAgent`;
+  listing, subscribing, taking control, starting a new session (`_nori/session/new`
+  or ACP `session/new`; it changes no existing session, though it becomes
+  the host's selected one), ACP `session/list`, `session/load` and
+  `session/resume`, and authenticated host stop remain available. The first
+  controller's role watch reads `controller` from registration, and the
+  initialize reply reports that role, so no `_nori/control/changed` is sent
+  for the initial role.
   Successful authenticated upgrades include `x-nori-host-instance`, a UUID
-  that identifies the running host independently of the bearer token. On a
-  managed host it matches the journal’s producing incarnation.
+  that identifies the running host independently of the bearer token. A
+  `ManagedAgent` can choose it through `instance_id` (the local host does, so
+  the same value appears in its `initialize` result and discovery file);
+  otherwise a managed host uses the journal’s producing incarnation and other
+  hosts a fresh UUID.
+- `ManagedAgent` also has per-connection hooks that let the CLI serve standard
+  ACP on `/sessions`. After a connection's first successful initialize,
+  `connection_opened` hands over a `HostConnection`: the connection's bounded
+  outbound queue (a client that cannot keep up is closed), its close token,
+  and a watch of its role. `connection_closed` follows disconnect. Requests
+  arrive through `request_from` with the client ID. Methods for which
+  `runs_concurrently` is true are spawned, and their replies go through the
+  outbound queue, so a slow agent start or a running prompt turn does not
+  block the socket. Client notifications and responses to host-originated
+  requests (such as `session/request_permission` answers) go to the async
+  `message_from`, also spawned per message.
 - [`ManagedClient`](src/remote/client.rs) authenticates the upgrade and exposes
   the optional host-instance UUID and HTTP 401/403 authentication classification,
   alongside streaming send/receive for frontends that retain notifications.

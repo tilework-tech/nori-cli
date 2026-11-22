@@ -81,7 +81,10 @@ impl HostFiles {
 
     /// Publish `host.json`, the single discovery file of the host contract,
     /// by writing a private temporary file and renaming it into place.
-    pub fn publish_discovery(&self, discovery: &serde_json::Value) -> anyhow::Result<()> {
+    pub fn publish_discovery(
+        &self,
+        discovery: &nori_protocol::HostDiscovery,
+    ) -> anyhow::Result<()> {
         let temporary = self.directory.join("host.json.tmp");
         let mut file = private_open(&temporary, true)?;
         file.set_len(0)?;

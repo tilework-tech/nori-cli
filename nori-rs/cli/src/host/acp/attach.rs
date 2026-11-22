@@ -62,7 +62,11 @@ pub(super) struct Forwarder {
 }
 
 impl Forwarder {
-    pub(super) fn new(face: &AcpFace, manager: &SessionManager, connection: HostConnection) -> Self {
+    pub(super) fn new(
+        face: &AcpFace,
+        manager: &SessionManager,
+        connection: HostConnection,
+    ) -> Self {
         Self {
             face: face.clone(),
             manager: manager.clone(),
@@ -197,9 +201,11 @@ impl Forwarder {
                     continue;
                 };
                 params["sessionId"] = json!(session);
-                let id =
-                    self.face
-                        .register_ask(self.connection.client, conversation, request_id.clone());
+                let id = self.face.register_ask(
+                    self.connection.client,
+                    conversation,
+                    request_id.clone(),
+                );
                 self.connection.deliver(json!({
                     "jsonrpc":"2.0",
                     "id":id,
