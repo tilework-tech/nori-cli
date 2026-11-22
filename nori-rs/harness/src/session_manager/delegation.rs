@@ -303,10 +303,13 @@ impl SessionManager {
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("parent configuration unavailable"))?;
             if config.agent != value.agent {
-                config.default_model = config
-                    .agent_token_providers
-                    .get(&value.agent)
-                    .map(|provider| provider.model.clone());
+                config.default_model =
+                    config
+                        .agent_token_providers
+                        .get(&value.agent)
+                        .map(|provider| {
+                            nori_acp_host::token_provider::bound_model_id(&value.agent, provider)
+                        });
             }
             config.agent.clone_from(&value.agent);
             config.conversation_id = Some(child);

@@ -632,3 +632,63 @@ async fn refresh_rejects_spawn_fixed_changes_without_destroying_the_prepared_age
     assert!(methods.iter().any(|method| method == "session/new"));
     session.handle.shutdown().await.expect("shutdown session");
 }
+
+#[tokio::test]
+#[serial]
+async fn pi_bound_to_a_token_provider_without_its_key_fails_before_launch() {
+    let temp = tempfile::tempdir().expect("create test directory");
+    let wire_log_dir = temp.path().join("wire-logs");
+    let mut spec = prepare_spec(temp.path(), wire_log_dir.clone());
+    let config = Arc::make_mut(&mut spec.config);
+    config.active_agent = "pi-acp".to_string();
+    let binding = test_connection();
+    config.token_providers = vec![binding.clone()];
+    config.agent_token_providers = [("pi".to_string(), binding)].into();
+
+    let error = prepare_agent(spec)
+        .await
+        .expect_err("a missing token-provider key must stop the launch");
+
+    let message = format!("{error:#}");
+    assert!(message.contains("NORI_TEST_PI_KEY_NEVER_SET"), "{message}");
+    assert!(
+        !wire_log_dir.exists() || recorded_client_methods(&wire_log_dir).is_empty(),
+        "no agent may be started when its credential is missing"
+    );
+    assert!(
+        !temp.path().join("token-providers").exists(),
+        "no Pi configuration may be written when its credential is missing"
+    );
+}
+
+fn test_connection() -> nori_config::token_providers::TokenProvider {
+    use nori_config::token_providers::Preset;
+    use nori_config::token_providers::Protocol;
+    use nori_config::token_providers::TokenProvider;
+    TokenProvider {
+        name: "lab".into(),
+        preset: Preset::Custom,
+        protocol: Protocol::OpenaiCompletions,
+        model: "lab-small".into(),
+        env_key: "NORI_TEST_PI_KEY_NEVER_SET".into(),
+        base_url: "http://127.0.0.1:4567/v1".into(),
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn a_token_provider_change_while_preparing_is_not_activated_on_the_old_process() {
+    let temp = tempfile::tempdir().expect("create test directory");
+    let mut prepared = prepare_agent(prepare_spec(temp.path(), temp.path().join("wire-logs")))
+        .await
+        .expect("prepare agent");
+    let mut changed = prepare_spec(temp.path(), temp.path().join("wire-logs"));
+    let binding = test_connection();
+    Arc::make_mut(&mut changed.config).agent_token_providers =
+        [("mock-model".to_string(), binding)].into();
+
+    let error = refresh_prepared_agent(&mut prepared, changed)
+        .expect_err("a binding change must not reuse the prepared process");
+    assert!(format!("{error:#}").contains("token provider"), "{error:#}");
+    prepared.shutdown().await;
+}

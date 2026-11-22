@@ -1,4 +1,6 @@
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
@@ -18,6 +20,13 @@ use tokio::process::ChildStdout;
 use super::FIXTURE;
 use super::Host;
 
+fn stage_wrapper(runtime: &Path, script: &str) -> PathBuf {
+    let path = runtime.join("fixture wrapper");
+    fs::write(&path, script).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+    path
+}
+
 /// A foreground host on stdin and stdout, as a machine bridge would run it.
 struct StdioHost {
     host: Host,
@@ -30,7 +39,25 @@ struct StdioHost {
 
 impl StdioHost {
     fn start(spec_env: Value, process_env: &[(&str, &str)], extra: &[&str]) -> Self {
-        let host = Host::new();
+        Self::start_with_launch(spec_env, process_env, extra, |_, _| {})
+    }
+
+    fn start_with_launch(
+        spec_env: Value,
+        process_env: &[(&str, &str)],
+        extra: &[&str],
+        configure: impl FnOnce(&mut Value, &std::path::Path),
+    ) -> Self {
+        Self::start_in(Host::new(), spec_env, process_env, extra, configure)
+    }
+
+    fn start_in(
+        host: Host,
+        spec_env: Value,
+        process_env: &[(&str, &str)],
+        extra: &[&str],
+        configure: impl FnOnce(&mut Value, &std::path::Path),
+    ) -> Self {
         let cwd = host.0.path().join("workspace");
         let home = host.0.path().join("home");
         fs::create_dir_all(&cwd).unwrap();
@@ -46,22 +73,23 @@ impl StdioHost {
         )
         .unwrap();
         let launch = host.0.path().join("launch.json");
-        fs::write(
-            &launch,
-            json!({
-                "projectId":"fixture-project", "runId":"run-aster", "agent":"aster", "model":"aster",
-                "cwd":cwd, "home":home, "env":spec_env,
-                "adapter":{"path":which::which("python3").unwrap(),"version":"fixture-1","args":[FIXTURE,"aster"]},
-                "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}
-            })
-            .to_string(),
-        )
-        .unwrap();
+        let mut spec = json!({
+            "projectId":"fixture-project", "runId":"run-aster", "agent":"aster", "model":"aster",
+            "cwd":cwd, "home":home, "env":spec_env,
+            "adapter":{"path":which::which("python3").unwrap(),"version":"fixture-1","args":[FIXTURE,"aster"]},
+            "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}
+        });
+        configure(&mut spec, &home);
+        fs::write(&launch, spec.to_string()).unwrap();
         let mut command =
             tokio::process::Command::from(host.command(&["host", "--stdio", "--launch"]));
         let mut child = command
             .arg(&launch)
             .args(extra)
+            .env_clear()
+            .env("NORI_HOME", host.0.path())
+            .env("HOME", &home)
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .envs(process_env.iter().copied())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -79,27 +107,35 @@ impl StdioHost {
         }
     }
 
-    /// Send one ACP request and return its response. Every line the host
-    /// writes must be a bare JSON-RPC message.
-    async fn call(&mut self, id: i64, method: &str, params: Value) -> Value {
-        let line = format!(
-            "{}\n",
-            json!({"jsonrpc":"2.0","id":id,"method":method,"params":params})
-        );
-        self.input.write_all(line.as_bytes()).await.unwrap();
+    async fn send(&mut self, message: Value) {
+        self.input
+            .write_all(format!("{message}\n").as_bytes())
+            .await
+            .unwrap();
+    }
+
+    async fn receive(&mut self, matches: impl Fn(&Value) -> bool) -> Value {
         tokio::time::timeout(Duration::from_secs(20), async {
             loop {
                 let line = self.output.next_line().await.unwrap().unwrap();
                 let message: Value = serde_json::from_str(&line).unwrap();
                 assert_eq!(message["jsonrpc"], "2.0", "{message}");
                 assert!(message.get("bindingId").is_none(), "{message}");
-                if message["id"] == id && message.get("method").is_none() {
+                if matches(&message) {
                     return message;
                 }
             }
         })
         .await
         .unwrap()
+    }
+
+    /// Send one ACP request and return its response on the bare stdio stream.
+    async fn call(&mut self, id: i64, method: &str, params: Value) -> Value {
+        self.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
+            .await;
+        self.receive(|message| message["id"] == id && message.get("method").is_none())
+            .await
     }
 
     async fn open_parent(&mut self) {
@@ -131,6 +167,296 @@ impl StdioHost {
             .unwrap();
         (status, self.host)
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stdio_admission_digest_tracks_retained_inherited_inputs_only() {
+    let mut files = Host::new();
+    let mut receipts = Vec::new();
+    for (removed, retained) in [("cedar", "ivy"), ("birch", "ivy"), ("birch", "moss")] {
+        // Keep both root paths and PATH fixed. The CLI adds a temporary helper directory to its own PATH.
+        let mut host = StdioHost::start_in(
+            files,
+            json!({"PATH":"/usr/bin:/bin"}),
+            &[("FIXTURE_REMOVED", removed), ("FIXTURE_RETAINED", retained)],
+            &["--inherit-env"],
+            |spec, home| {
+                let runtime = home.join("prepared");
+                fs::create_dir_all(&runtime).unwrap();
+                let wrapper = stage_wrapper(
+                    &runtime,
+                    r#"#!/bin/sh
+printf '%s %s' "${FIXTURE_REMOVED-unset}" "$FIXTURE_RETAINED" > child-environment
+exec "$@"
+"#,
+                );
+                spec["runtimeDir"] = json!(runtime);
+                // CoreFoundation supplies a process environment variable even after env_clear on macOS.
+                spec["envRemove"] = json!(["FIXTURE_REMOVED", "__CF_USER_TEXT_ENCODING"]);
+                spec["adapter"]["wrapper"] = json!({"path":wrapper,"version":"fixture"});
+            },
+        );
+        host.open_parent().await;
+        assert_eq!(
+            fs::read_to_string(host.cwd.join("child-environment")).unwrap(),
+            format!("unset {retained}")
+        );
+        let mut control = tokio::task::block_in_place(|| host.host.client());
+        let status = control
+            .request(
+                "_nori/session/status",
+                json!({"bindingId":"aster","generation":1}),
+            )
+            .await
+            .unwrap();
+        let digest = status["specDigest"].as_str().unwrap();
+        assert_eq!(digest.len(), 64);
+        receipts.push(digest.to_owned());
+
+        let mut spec: Value =
+            serde_json::from_slice(&fs::read(host.host.0.path().join("launch.json")).unwrap())
+                .unwrap();
+        spec["env"]["FIXTURE_RETAINED"] = json!(retained);
+        let mut retry = json!({"bindingId":"aster","generation":1,"commandId":"retry",
+            "conversationId":status["conversationId"],"spec":spec});
+        assert_eq!(
+            control
+                .request("_nori/session/ensure", retry.clone())
+                .await
+                .unwrap(),
+            status
+        );
+        retry["spec"]["env"]["FIXTURE_RETAINED"] = json!("changed");
+        assert!(
+            control
+                .request("_nori/session/ensure", retry)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("conflict")
+        );
+        let (exit, original_files) = host.finish().await;
+        assert!(exit.success());
+        files = original_files;
+    }
+    assert_eq!(receipts[0], receipts[1], "removed input changed the digest");
+    assert_ne!(receipts[1], receipts[2], "retained input was omitted");
+}
+
+#[tokio::test]
+async fn plain_env_and_wrapped_managed_launches_select_two_independent_acp_servers() {
+    let python = which::which("python3").unwrap();
+    let rust_peer = std::env::var_os("MOCK_ACP_AGENT_BIN")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_BIN_EXE_nori")).with_file_name("mock_acp_agent")
+        });
+    for (name, program, args) in [
+        ("aster", python, vec![FIXTURE, "aster"]),
+        ("mock-agent", rust_peer, Vec::new()),
+    ] {
+        for mode in ["plain", "env", "wrapped"] {
+            let mut host = StdioHost::start_with_launch(
+                json!({}),
+                &[("FIXTURE_AMBIENT", "synthetic")],
+                &["--inherit-env"],
+                |spec, home| {
+                    let alias = home.join("selected inner executable");
+                    std::os::unix::fs::symlink(&program, &alias).unwrap();
+                    let fallback = if mode == "plain" {
+                        &program
+                    } else {
+                        spec["env"]["FIXTURE_INNER"] = json!(alias);
+                        spec["envRemove"] = json!(["FIXTURE_AMBIENT"]);
+                        &home.join("unselected default")
+                    };
+                    // This synthetic server acts like an adapter that selects its inner CLI from env.
+                    let mut adapter_args = vec![
+                        "-c",
+                        r#"printf '%s' "${FIXTURE_AMBIENT-unset}" > observed-ambient
+program=$1; shift; exec "${FIXTURE_INNER:-$program}" "$@""#,
+                        "fixture-server",
+                        fallback.to_str().unwrap(),
+                    ];
+                    adapter_args.extend_from_slice(&args);
+                    spec["adapter"] =
+                        json!({"path":"/bin/sh","version":"fixture-1","args":adapter_args});
+                    if mode == "wrapped" {
+                        let runtime = home.join("prepared");
+                        fs::create_dir(&runtime).unwrap();
+                        fs::write(runtime.join("marker"), "wrapped").unwrap();
+                        let wrapper = stage_wrapper(
+                            &runtime,
+                            r#"#!/bin/sh
+test "$1" = -- || exit 1
+shift
+/bin/cat "$NORI_AGENT_RUNTIME_DIR/marker" > wrapper-invoked || exit 1
+exec "$@"
+"#,
+                        );
+                        spec["runtimeDir"] = json!(runtime);
+                        spec["adapter"]["wrapper"] =
+                            json!({"path":wrapper,"version":"fixture-1","args":["--"]});
+                    }
+                },
+            );
+            let init = host
+                .call(1, "initialize", json!({"protocolVersion":1}))
+                .await;
+            assert_eq!(init["result"]["agentInfo"]["name"], name, "{mode}");
+            // Ordinary ACP messages can open a session on the existing server only.
+            let other = json!({"path":"/bin/sh", "version":"fixture", "args":["-c","echo changed > unadmitted"]});
+            let opened = host
+                .call(
+                    2,
+                    "session/new",
+                    json!({
+                        "cwd":host.cwd,"mcpServers":[], "adapter":other, "wrapper":other
+                    }),
+                )
+                .await;
+            let sid = opened["result"]["sessionId"].as_str().unwrap();
+            assert_eq!(
+                host.prompt(3, sid, "finish").await["result"]["stopReason"],
+                "end_turn",
+                "{name} {mode}"
+            );
+            assert_eq!(
+                fs::read_to_string(host.cwd.join("observed-ambient")).unwrap(),
+                if mode == "plain" {
+                    "synthetic"
+                } else {
+                    "unset"
+                }
+            );
+            assert_eq!(host.cwd.join("wrapper-invoked").exists(), mode == "wrapped");
+            if mode == "wrapped" {
+                assert_eq!(
+                    fs::read_to_string(host.cwd.join("wrapper-invoked")).unwrap(),
+                    "wrapped"
+                );
+            }
+            assert!(!host.cwd.join("unadmitted").exists());
+            assert!(host.finish().await.0.success());
+        }
+    }
+}
+
+#[tokio::test]
+async fn wrapped_launch_preserves_child_inputs_turns_cancellation_and_cleanup() {
+    let python = which::which("python3").unwrap();
+    let mut host = StdioHost::start_with_launch(
+        json!({"SAMPLE_LABEL":"orchid","Sample_Host_Only":"explicit"}),
+        &[
+            ("SAMPLE_HOST_ONLY", "hidden"),
+            ("sample_host_only", "lowercase kept"),
+            ("Sample_Host_Only", "inherited"),
+            ("SAMPLE_INHERITED", "kept"),
+        ],
+        &["--inherit-env"],
+        |spec, home| {
+            let runtime = home.join("prepared");
+            fs::create_dir(&runtime).unwrap();
+            fs::write(runtime.join("marker"), "prepared orchid").unwrap();
+            let wrapper = stage_wrapper(
+                &runtime,
+                r#"#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+prefix, empty, separator, server, *args = sys.argv[1:]
+observed = [prefix, empty, separator, server, args, os.environ["SAMPLE_LABEL"],
+            os.getenv("SAMPLE_HOST_ONLY"), os.environ["sample_host_only"], os.environ["Sample_Host_Only"],
+            os.environ["SAMPLE_INHERITED"], os.environ["HOME"],
+            Path(os.environ["NORI_AGENT_RUNTIME_DIR"], "marker").read_text()]
+Path("child-inputs.json").write_text(json.dumps(observed))
+os.execv(server, [server, *args])
+"#,
+            );
+            spec["runtimeDir"] = json!(runtime);
+            spec["envRemove"] = json!(["SAMPLE_HOST_ONLY"]);
+            spec["adapter"]["args"] = json!([
+                FIXTURE,
+                "aster",
+                "workspace with spaces",
+                "--",
+                "*.fixture",
+                "",
+                "雪と杉"
+            ]);
+            spec["adapter"]["wrapper"] =
+                json!({"path":wrapper,"version":"fixture-1","args":["two words","","--"]});
+        },
+    );
+    host.open_parent().await;
+    let observed: Value =
+        serde_json::from_slice(&fs::read(host.cwd.join("child-inputs.json")).unwrap()).unwrap();
+    assert_eq!(
+        observed,
+        json!([
+            "two words",
+            "",
+            "--",
+            python,
+            [
+                FIXTURE,
+                "aster",
+                "workspace with spaces",
+                "--",
+                "*.fixture",
+                "",
+                "雪と杉"
+            ],
+            "orchid",
+            null,
+            "lowercase kept",
+            "explicit",
+            "kept",
+            host.home,
+            "prepared orchid"
+        ])
+    );
+
+    let delivered = host.prompt(8, "0", "inspect-argv").await;
+    assert_eq!(
+        delivered["result"]["_meta"]["argv"],
+        json!([
+            "aster",
+            "workspace with spaces",
+            "--",
+            "*.fixture",
+            "",
+            "雪と杉"
+        ])
+    );
+
+    let lease = fs::File::create(host.cwd.join("hold-lease-server")).unwrap();
+    let descendant = fs::File::create(host.cwd.join("hold-lease-server-client")).unwrap();
+    let completed = host.prompt(3, "0", "hold-lease-server").await;
+    assert_eq!(completed["result"]["stopReason"], "end_turn");
+    assert!(matches!(
+        lease.try_lock(),
+        Err(fs::TryLockError::WouldBlock)
+    ));
+    assert!(matches!(
+        descendant.try_lock(),
+        Err(fs::TryLockError::WouldBlock)
+    ));
+    host.send(json!({"jsonrpc":"2.0","id":4,"method":"session/prompt",
+        "params":{"sessionId":"0","prompt":[{"type":"text","text":"await approval"}]}}))
+        .await;
+    host.receive(|message| message["method"] == "session/request_permission")
+        .await;
+    host.send(json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"0"}}))
+        .await;
+    let cancelled = host
+        .receive(|message| message["id"] == 4 && message.get("method").is_none())
+        .await;
+    assert_eq!(cancelled["result"]["stopReason"], "cancelled");
+    assert!(host.finish().await.0.success());
+    lease.try_lock().expect("server survived the host");
+    descendant
+        .try_lock()
+        .expect("server descendant survived the host");
 }
 
 #[tokio::test]

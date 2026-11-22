@@ -10,6 +10,7 @@
 | **Client**   | An ACP client, such as Nori CLI or webchat, that mediates between a **user** and an **agent**. | Harness, peer, observer   |
 | **Agent**    | An ACP server that performs work and emits requests, responses, and session updates.           | Model, provider, backend  |
 | **Provider** | The external organization or service from which an **agent** obtains models or credentials.    | Agent, model, ACP server  |
+| **Token provider** | A **provider** endpoint that Nori configures an **agent** to call, authenticated by a key the user keeps in a named environment variable. | Agent, preset, model |
 
 ### Nori runtime boundaries
 
@@ -36,6 +37,7 @@
 - A **session manager** runs one **session harness** and one agent process per **session**.
 - A **session broker** is the agent on downstream connections and the client on its upstream connection.
 - An **agent** may call a **provider**, but provider-internal work crosses no ACP boundary unless the agent exposes it through ACP.
+- A **token provider** replaces an **agent's** own sign-in for model calls; the agent stays the ACP server and Nori stores only the key's variable name.
 
 ### Example dialogue
 

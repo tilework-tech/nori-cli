@@ -67,6 +67,12 @@ The script temporarily patches the broker to prevent it from deleting or refresh
 
 Validates the standard targets (`help`, `dev`, `test`, `doctor`) defined by the Shared Local Runner Layer spec in `@/justfile`. The test uses string-matching assertions (`assert_contains`) against command output and `just --summary` / `just --show` for structural checks. Run with `bash scripts/test_justfile.sh`.
 
+### Agent verification scripts
+
+The [host follow-up verifier](verify-host-follow-up/README.md) exercises mid-turn input with real adapters and loopback model endpoints.
+
+Run `bun scripts/verify-pi-endpoint/verify.mjs nori-rs/target/debug/nori` from the repository root to check a local Pi launch. The verifier requires Bun, a built CLI and access to the upstream packages through npm or its cache. It checks missing-key refusal, then drives a file read and terminal command through the real adapter and a synthetic Chat Completions endpoint. Managed host tests exercise provisioner-supplied fixture definitions on a local host. A deployed Sessions launch needs separate verification.
+
 ### Things to Know
 
 - Git tags are the single source of truth for version enumeration -- `list_tags()` reads the repository's `origin` remote rather than GitHub Releases, so the caller must run in a checkout with an accessible `origin`; this also preserves versions whose tag exists even if a cancelled or failed workflow never created the corresponding GitHub Release

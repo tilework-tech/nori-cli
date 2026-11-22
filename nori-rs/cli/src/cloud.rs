@@ -87,6 +87,7 @@ pub fn cloud_agent_config(
         slug: CLOUD_AGENT_SLUG.to_string(),
         distribution: nori_config::AgentDistributionToml {
             local: Some(nori_config::LocalDistribution {
+                launch: Default::default(),
                 command: handroll_bin.to_string_lossy().into_owned(),
                 args,
                 env,
@@ -188,7 +189,9 @@ mod tests {
             .resolve()
             .expect("distribution must be valid");
         match resolved {
-            nori_config::ResolvedDistribution::Local { command, args, env } => {
+            nori_config::ResolvedDistribution::Local {
+                command, args, env, ..
+            } => {
                 assert_eq!(command, "/opt/bin/nori-handroll");
                 assert_eq!(args, vec!["cloud-acp".to_string()]);
                 assert!(

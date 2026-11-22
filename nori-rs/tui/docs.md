@@ -1540,7 +1540,9 @@ are applied on top and are never rewritten.
 
 `session_title` shows the title the agent reports over ACP session-info updates
 (`Title: Fix login flakes`). It self-hides for agents that never send one, and
-the same value reaches the `title:` row of the `/status` card.
+the same value reaches the `title:` row of the `/status` card. Agents such as Pi title a session from its first prompt, which begins with
+Nori's context envelope; the presentation layer drops that envelope from the
+title and shows no title when the agent cut it off inside the envelope.
 
 Custom formats are deliberately limited to literal text and built-in
 placeholders. `{{` and `}}` emit literal braces. Unknown placeholders,

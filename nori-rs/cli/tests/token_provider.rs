@@ -18,7 +18,7 @@ provider = cfg["model_providers"][os.environ["MODEL_PROVIDER"]]
 assert provider["wire_api"] == "responses" and provider["base_url"] == "https://example.invalid/v1"
 assert cfg["model"] == "sample-model" and os.environ[provider["env_key"]] == "fixture-selected"
 assert "fixture-selected" not in os.environ["CODEX_CONFIG"]
-assert not any(os.environ.get(k) for k in ["OPENAI_API_KEY", "CODEX_API_KEY", "DEFAULT_AUTH_REQUEST"])
+assert not any(os.environ.get(k) for k in ["OPENAI_API_KEY", "CODEX_API_KEY", "DEFAULT_AUTH_REQUEST", "EXAMPLE_ROUTE_KEY"])
 open(os.environ["PROBE"], "w").write("selected")
 sys.stderr.write("adapter startup fixture-selected\n")
 sys.exit(1)

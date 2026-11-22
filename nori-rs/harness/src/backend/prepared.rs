@@ -76,6 +76,12 @@ impl PreparedAgent {
             config.agent_token_providers.get(&config.agent),
         )
         .map_err(|error| AgentPrepareFailure::new(error, Vec::new()))?;
+        nori_acp_host::token_provider::prepare_pi_profile(
+            &mut agent_config,
+            &config.nori_home,
+            &|key| std::env::var(key).ok(),
+        )
+        .map_err(|error| AgentPrepareFailure::new(error, Vec::new()))?;
         super::spawn_and_relay::inject_default_model(
             &mut agent_config,
             config.default_model.as_deref(),
@@ -224,13 +230,13 @@ impl PreparedAgent {
             "ACP wire-recording configuration changed while the agent was preparing; retry the switch"
         );
         anyhow::ensure!(
-            prepared_config.default_model == config.default_model,
-            "prepared agent default model changed while the agent was preparing; retry the switch"
-        );
-        anyhow::ensure!(
             prepared_config.agent_token_providers.get(&config.agent)
                 == config.agent_token_providers.get(&config.agent),
             "token provider changed while the agent was preparing; retry the switch"
+        );
+        anyhow::ensure!(
+            prepared_config.default_model == config.default_model,
+            "prepared agent default model changed while the agent was preparing; retry the switch"
         );
         self.config = Some(config);
         Ok(())

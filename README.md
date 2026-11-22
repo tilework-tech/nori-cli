@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/npm/l/nori-ai-cli)](https://github.com/tilework-tech/nori-cli/blob/main/LICENSE)
 [![npm downloads](https://img.shields.io/npm/dm/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
 
-Nori brings Claude Code, Codex, Antigravity, and Grok Build into one terminal. You can select OpenCode, Cursor Agent, or Hermes Agent. You can also bring your own ACP agent.
+Nori brings Claude Code, Codex, Antigravity, and Grok Build into one terminal. You can select OpenCode, Cursor Agent, Hermes Agent, or Pi. You can also bring your own ACP agent.
 
 ![Nori TUI Screenshot](https://raw.githubusercontent.com/tilework-tech/nori-cli/refs/heads/main/assets/nori-cli_2026-01-13.png)
 
@@ -27,7 +27,7 @@ Use `/agent` to switch agents, or select one at launch with `nori --agent grok-b
 
 ## Providers
 
-Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` release. Grok Build uses `npx` so its native executable is installed by the upstream npm package. The adapters use their upstream dependencies and authentication settings. For Antigravity, install Google's CLI and make `agy` available on the host's `PATH`. [Antigravity CLI installation](https://antigravity.google/cli)
+Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` release. Grok Build uses `npx` so its native executable is installed by the upstream npm package. Pi always uses `npx`, which installs the `pi-acp` adapter together with Earendil's Pi coding agent so the adapter finds `pi` on `PATH`. The adapters use their upstream dependencies and authentication settings. For Antigravity, install Google's CLI and make `agy` available on the host's `PATH`. [Antigravity CLI installation](https://antigravity.google/cli)
 
 | Agent | ID for `--agent` or `config.toml` | ACP launch | Sign in |
 | --- | --- | --- | --- |
@@ -37,6 +37,7 @@ Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` rele
 | Grok Build | `grok-build` (also `grok`) | `@xai-official/grok@latest agent stdio` | Use `/login` for the Grok sign-in command or set `XAI_API_KEY`. |
 | Cursor Agent | `cursor` (also `cursor-agent`) | `cursor-agent acp` if available, otherwise `agent acp` | Use your existing `agent login` session or export a Cursor-issued user API key as `CURSOR_API_KEY`. |
 | Hermes Agent | `hermes` (also `hermes-agent`) | `hermes acp` | Run `hermes model` in another terminal to choose a provider and configure credentials. |
+| Pi | `pi` (also `pi-acp`) | `pi-acp@latest` with `@earendil-works/pi-coding-agent@latest` | Use Pi's own settings in `~/.pi/agent` or select a [named API connection](nori-rs/config.md#pi-connections) in Nori's configuration. |
 
 Install Cursor CLI on the machine that runs Nori. If only `agent` is on `PATH`, Nori assumes it belongs to Cursor. If another program uses that name, add Cursor’s `cursor-agent` executable to `PATH` or put Cursor’s directory first. To use an API key with a local host, export `CURSOR_API_KEY` before starting `nori host`. Then use `nori host new --agent cursor`. With multi-session enabled, use `/delegate cursor <task>` to open a Cursor child from another agent. [Cursor CLI installation](https://cursor.com/docs/cli/installation) · [Cursor CLI authentication](https://cursor.com/docs/cli/reference/authentication)
 
@@ -73,7 +74,7 @@ command = "elizacp"
 args = ["acp"]
 ```
 
-Then switch to your agent with `/agent` inside Nori.
+Select the registered server in `/agent`, run `nori --agent elizacp exec "hello"`, or use `nori host new --agent elizacp` on a locally configured host. A local distribution also accepts a wrapper, child environment, and path to prepared runtime files. [Launch configuration](nori-rs/config.md#acp-server-launch)
 
 **Example agents to try:**
 

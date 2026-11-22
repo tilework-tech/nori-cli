@@ -336,6 +336,16 @@ fn load_toml(
         apply_toml_override(&mut value, path, override_value.clone());
     }
 
+    if value
+        .get("token_providers")
+        .is_some_and(toml::Value::is_table)
+    {
+        let mut document = toml::to_string(&value)?.parse::<toml_edit::DocumentMut>()?;
+        crate::legacy_pi::normalize(&mut document)?;
+        value = toml::from_str(&document.to_string())
+            .map_err(|_| anyhow::anyhow!("invalid legacy Pi token provider configuration"))?;
+    }
+
     if value.get("profile").is_some() || value.get("profiles").is_some() {
         anyhow::bail!(
             "Codex configuration profiles are no longer supported; use Nori skillsets to select dedicated agent behavior"

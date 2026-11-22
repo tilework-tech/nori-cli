@@ -178,10 +178,12 @@ impl AgentDistributionToml {
         self.validate()?;
 
         if let Some(local) = &self.local {
+            local.launch.validate(&local.env)?;
             return Ok(ResolvedDistribution::Local {
                 command: local.command.clone(),
                 args: local.args.clone(),
                 env: local.env.clone(),
+                launch: local.launch.clone(),
             });
         }
         if let Some(npx) = &self.npx {
@@ -212,10 +214,81 @@ impl AgentDistributionToml {
     }
 }
 
+/// A launcher exposes an already prepared directory to the ACP server here.
+pub const AGENT_RUNTIME_ENV: &str = "NORI_AGENT_RUNTIME_DIR";
+
+/// Compare variable names as the child process environment does on this platform.
+pub fn env_names_equal(left: &str, right: &str) -> bool {
+    #[cfg(windows)]
+    {
+        if left.is_ascii() && right.is_ascii() {
+            return left.eq_ignore_ascii_case(right);
+        }
+        // Command uses Windows' ordinal case comparison for UTF-16 names.
+        let mut environment = std::process::Command::new("");
+        environment.env(left, "").env(right, "");
+        environment.get_envs().count() == 1
+    }
+    #[cfg(not(windows))]
+    {
+        left == right
+    }
+}
+
+/// Optional process settings for a locally registered ACP server.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+pub struct LocalLaunchOptions {
+    /// Prefix argv: the wrapper executable followed by its own arguments.
+    pub wrapper: Option<Vec<String>>,
+    /// Variables to remove from the inherited child environment.
+    #[serde(default)]
+    pub env_remove: Vec<String>,
+    /// An existing, absolute directory containing files supplied by the caller.
+    pub runtime_dir: Option<PathBuf>,
+}
+
+impl LocalLaunchOptions {
+    fn validate(&self, env: &HashMap<String, String>) -> Result<(), String> {
+        if let Some(wrapper) = &self.wrapper
+            && (wrapper
+                .first()
+                .is_none_or(|program| program.trim().is_empty())
+                || wrapper.iter().any(|arg| arg.contains('\0')))
+        {
+            return Err("wrapper needs a nonempty executable and valid arguments".to_string());
+        }
+        for key in &self.env_remove {
+            if key.is_empty() || key.contains(['=', '\0']) {
+                return Err("env_remove needs nonempty environment variable names".to_string());
+            }
+            if env.keys().any(|name| env_names_equal(name, key)) {
+                return Err(format!("cannot both set and remove {key}"));
+            }
+        }
+        if let Some(dir) = &self.runtime_dir {
+            if env
+                .keys()
+                .chain(&self.env_remove)
+                .any(|key| key.eq_ignore_ascii_case(AGENT_RUNTIME_ENV))
+            {
+                return Err(format!(
+                    "runtime_dir supplies {AGENT_RUNTIME_ENV}; omit it from env and env_remove"
+                ));
+            }
+            if !dir.is_absolute() {
+                return Err("runtime_dir must be absolute".to_string());
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Local binary distribution: direct command execution.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct LocalDistribution {
+    #[serde(flatten)]
+    pub launch: LocalLaunchOptions,
     /// Path to the executable
     pub command: String,
     /// Arguments to pass to the command
@@ -242,6 +315,7 @@ pub struct PackageDistribution {
 pub enum ResolvedDistribution {
     /// Local binary: direct command execution
     Local {
+        launch: LocalLaunchOptions,
         command: String,
         args: Vec<String>,
         env: HashMap<String, String>,

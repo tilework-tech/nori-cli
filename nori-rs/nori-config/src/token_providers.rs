@@ -32,7 +32,7 @@ impl Protocol {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Preset {
     Openrouter,
@@ -53,14 +53,14 @@ impl Preset {
         }
     }
 
-    fn source(self) -> Result<&'static harness_compat::Source> {
+    pub(crate) fn source(self) -> Result<&'static harness_compat::Source> {
         harness_compat::embedded()?
             .source(self.source_id())
             .ok_or_else(|| anyhow::anyhow!("token preset missing from harness-compat"))
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct TokenProvider {
     pub name: String,
@@ -86,7 +86,8 @@ pub(crate) fn deserialize_bindings<'de, D: Deserializer<'de>>(
 }
 
 impl TokenProvider {
-    fn validate(&self) -> Result<()> {
+    /// Check connection metadata and the preset's endpoint and protocol constraints.
+    pub fn validate(&self) -> Result<()> {
         ensure!(
             !self.name.is_empty()
                 && self

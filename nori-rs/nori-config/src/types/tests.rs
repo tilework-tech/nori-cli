@@ -1477,6 +1477,7 @@ fn test_agent_distribution_resolve_npx() {
 fn test_agent_distribution_resolve_local() {
     let dist = AgentDistributionToml {
         local: Some(LocalDistribution {
+            launch: Default::default(),
             command: "/usr/bin/agent".to_string(),
             args: vec!["--acp".to_string()],
             env: HashMap::from([("KEY".to_string(), "val".to_string())]),
@@ -1485,11 +1486,50 @@ fn test_agent_distribution_resolve_local() {
     };
     let resolved = dist.resolve().unwrap();
     assert!(matches!(resolved, ResolvedDistribution::Local { .. }));
-    if let ResolvedDistribution::Local { command, args, env } = resolved {
+    if let ResolvedDistribution::Local {
+        command, args, env, ..
+    } = resolved
+    {
         assert_eq!(command, "/usr/bin/agent");
         assert_eq!(args, vec!["--acp"]);
         assert_eq!(env.get("KEY").unwrap(), "val");
     }
+}
+
+#[test]
+fn local_distribution_rejects_ambiguous_launch_inputs() {
+    for (extra, expected) in [
+        (r#"wrapper = []"#, "wrapper"),
+        (r#"wrapper = ["   ", "--flag"]"#, "wrapper"),
+        (r#"env_remove = ["A=B"]"#, "env_remove"),
+        (
+            "env = { SAMPLE = 'value' }\nenv_remove = ['SAMPLE']",
+            "set and remove",
+        ),
+        ("runtime_dir = 'relative'", "absolute"),
+        (
+            "runtime_dir = '/tmp'\nenv = { nori_agent_runtime_dir = 'other' }",
+            "runtime_dir",
+        ),
+        (
+            "runtime_dir = '/tmp'\nenv_remove = ['NORI_AGENT_RUNTIME_DIR']",
+            "runtime_dir",
+        ),
+    ] {
+        let dist: AgentDistributionToml =
+            toml::from_str(&format!("[local]\ncommand = 'fixture'\n{extra}")).unwrap();
+        let error = dist.resolve().unwrap_err();
+        assert!(error.contains(expected), "{extra}: {error}");
+    }
+}
+
+#[test]
+fn local_set_and_remove_follow_the_platforms_environment_name_rules() {
+    let dist: AgentDistributionToml = toml::from_str(
+        "[local]\ncommand='fixture'\nenv={ Sample='override' }\nenv_remove=['SAMPLE']",
+    )
+    .unwrap();
+    assert_eq!(dist.resolve().is_err(), cfg!(windows));
 }
 
 #[test]

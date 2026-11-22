@@ -247,6 +247,25 @@ fn exec_fails_closed_without_waiting_for_an_approval() -> Result<(), Box<dyn std
 }
 
 #[test]
+fn exec_reports_why_the_agent_could_not_start() -> Result<(), Box<dyn std::error::Error>> {
+    let nori_home = TempDir::new()?;
+    std::fs::write(
+        nori_home.path().join("config.toml"),
+        "[[token_providers]]\nname = 'subconscious'\npreset = 'subconscious'\nprotocol = 'openai-completions'\nbase_url = 'https://api.subconscious.dev/v1'\nenv_key = 'NORI_EXEC_TEST_SUBC_KEY_UNSET'\nmodel = 'subconscious/glm-5.2'\n\n[agent_token_providers]\npi = 'subconscious'\n",
+    )?;
+    let output = Command::cargo_bin("nori")?
+        .env("NORI_HOME", nori_home.path())
+        .env_remove("NORI_EXEC_TEST_SUBC_KEY_UNSET")
+        .args(["--agent", "pi", "exec", "hello"])
+        .output()?;
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(stderr.contains("NORI_EXEC_TEST_SUBC_KEY_UNSET"), "{stderr}");
+    Ok(())
+}
+
+#[test]
 fn exec_reports_agent_prompt_failures_on_stderr() -> Result<(), Box<dyn std::error::Error>> {
     let nori_home = TempDir::new()?;
     let output = nori_command(&nori_home)?
@@ -763,6 +782,26 @@ fn exec_standard_prompt_completes_when_permission_is_answered_through_managed_pr
     assert_eq!(
         process.receive_response(13, &mut observed)?["result"]["stopReason"],
         "end_turn"
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn exec_preserves_local_launch_inputs_for_two_stdio_servers()
+-> Result<(), Box<dyn std::error::Error>> {
+    let output = StdCommand::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/server_launch/local.py"
+        ))
+        .arg(env!("CARGO_BIN_EXE_nori"))
+        .arg(mock_agent_bin()?)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
     Ok(())
 }

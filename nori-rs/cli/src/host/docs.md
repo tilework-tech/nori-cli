@@ -136,6 +136,8 @@ host ls / stop / new --------------+                   SessionManager
   sending, and the host checks the folder exists on its machine. Without
   `--cwd` the local host starts the session in the caller's directory; a host
   named with `--host` may be another machine, so it uses its own folder.
+  The host applies the agent's token-provider binding from its own config, so
+  the key variable must be set in the host's environment, not the caller's.
 
 #### Mid-turn follow-ups
 
@@ -163,7 +165,7 @@ Send exactly the fields shown. Choose `steer` or `queue` for `intent`, supply no
 | `rejected` | The host or adapter refused this delivery, for example because a different turn already owns the session. |
 | `unknown` | Delivery could not be confirmed. Keep the message ID for reconciliation. |
 
-The local harness and the machine host use the [same steering guard](../../../harness/src/follow_up.rs). The live ACP v1 initialize result must advertise `_meta.steering.supported == true` and report an exact verified `agentInfo.name` and `agentInfo.version` pair. Verified versions are `@agentclientprotocol/claude-agent-acp` 0.102.0, 0.108.1 and 0.109.0, and `@agentclientprotocol/codex-acp` 2.7.0 and 2.8.0. The standalone CLI follows the upstream releases. A newly resolved adapter version must pass the steering checks before Nori admits it. Antigravity and Grok Build queue active-turn input for the next turn. Explicit managed launch specifications supply their own adapter path, arguments and version. An unverified version gets `unsupported_queued` until its [wire behavior is checked](../../../../scripts/verify-host-follow-up/README.md#checking-a-claude-adapter-upgrade).
+The local harness and the machine host use the [same steering guard](../../../harness/src/follow_up.rs). The live ACP v1 initialize result must advertise `_meta.steering.supported == true` and report an exact verified `agentInfo.name` and `agentInfo.version` pair. Verified versions are `@agentclientprotocol/claude-agent-acp` 0.102.0, 0.108.1 and 0.109.0, and `@agentclientprotocol/codex-acp` 2.7.0 and 2.8.0. The standalone CLI follows the upstream releases. A newly resolved adapter version must pass the steering checks before Nori admits it. Antigravity, Grok Build and Pi queue active-turn input for the next turn. Explicit managed launch specifications supply their own adapter path, arguments and version. An unverified version gets `unsupported_queued` until its [wire behavior is checked](../../../../scripts/verify-host-follow-up/README.md#checking-a-claude-adapter-upgrade).
 
 The host sends `_session/steering` with `_meta.steering.idleBehavior = "promptRequired"`. A pending permission still needs its own response. Normal turn completion and settlement of pending permission requests allow the FIFO to drain. With prompt echo enabled, `/managed` emits `_nori/session/follow_up/submitted` before writing a steer. Use its message ID to place the pending input ahead of provider output and update it from the delivery receipt. For host-started queued prompts on `/managed`, correlate `_nori/session/follow_up/started` and `_nori/session/follow_up/finished` using `message_id` and `turn_id`. The finished notification carries the result or error. Local-host clients follow the ordinary managed session envelopes.
 
@@ -264,9 +266,15 @@ own handshake.
       "projectId": "fixture-project",
       "runId": "fixture-run",
       "agent": "fixture",
-      "adapter": {"path": "/opt/fixture/1.2.3/bin/fixture-acp", "version": "1.2.3"},
+      "adapter": {
+        "path": "/opt/fixture/1.2.3/bin/fixture-acp",
+        "version": "1.2.3",
+        "args": ["--profile", "Review team"],
+        "wrapper": {"path": "/srv/fixture/bindings/sample/home/runtime/launch", "version": "1.0", "args": ["--"]}
+      },
       "cwd": "/srv/fixture/bindings/sample/work",
       "home": "/srv/fixture/bindings/sample/home",
+      "runtimeDir": "/srv/fixture/bindings/sample/home/runtime",
       "additions": {"promptEcho": false, "statusEvents": false, "recording": false, "clientMcp": false}
     }
   }
@@ -281,11 +289,17 @@ own handshake.
   regular and side ACP IDs.
 - The provisioner installs the versioned executable, protects it from
   replacement, resolves credential references and prepares binding-owned
-  paths. The host executes the absolute `adapter.path` directly with
-  `adapter.args` (optional string array, default empty). The version string
-  identifies that installation in the spec. The host performs no download
-  or binary-version probe. Keep binary selection and launch requests in
-  trusted machine code.
+  paths. The host runs the installed absolute `adapter.path` with
+  `adapter.args` (default empty). For a wrapped launch, set
+  `adapter.wrapper` to an object with an installed absolute `path`, a
+  nonblank `version`, and optional `args`. A managed outer wrapper requires
+  a prepared `runtimeDir`. The host resolves the wrapper path before launching
+  the parent or a side and rejects a target outside that directory, including
+  a symlink that points outside it. The wrapper receives its prefix arguments,
+  the adapter path, then the adapter arguments. Each array element stays one
+  argument. Version strings identify the provisioned installations. The
+  provisioner selects and installs both executables before admission. An
+  ordinary ACP client connects to an admitted session through its binding.
 - The existing session-folder validator canonicalizes the absolute `cwd`
   and `home`. Both must exist and be distinct directories. In the shared
   layout both must be strictly beneath `bindings_root/bindingId`, and the
@@ -301,8 +315,9 @@ own handshake.
   from the workspace and cannot contain or equal the binding home. The
   adapter receives this path as `NORI_AGENT_RUNTIME_DIR`. Rebuilt sides
   revalidate the canonical path pinned at admission. A confined side using
-  the private Codex home refuses a prepared runtime. The broker stages
-  the directory and its contents again at a recovery destination.
+  the private Codex home refuses a prepared runtime. The provisioner owns
+  staging and cleanup outside checkpointed worktrees. It stages the files
+  again at a recovery destination.
 - The broker supplies public labels in `credentialRefs`. The inventory
   recognizes `sessions:codex-subscription-file:v1` and
   `sessions:token-connection:<id>:v1`. A connection ID matches
@@ -310,15 +325,20 @@ own handshake.
   admission. Older opaque references stay private. The host leaves
   credential resolution and provider configuration to the provisioner.
 - Other optional fields inside `spec` are `model` (string or null), `env`
-  (string-to-string map) and `resumeArtifacts` (string array). Missing maps
+  (string-to-string map), `envRemove` (array of variable names) and
+  `resumeArtifacts` (string array). Missing maps
   and arrays default to empty. Project, run, agent,
   model, credential and resume metadata stay with the immutable spec.
   The executable receives only its arguments, working directory and child
   environment. Unknown request or spec fields are rejected.
-- The host clears inherited environment, applies `spec.env`, and sets
+- The host clears its inherited environment, applies `spec.envRemove` before
+  `spec.env`, and sets
   `HOME=home` and `NORI_HOME=home/.nori/cli`. The default `CODEX_HOME`
   is `home/.codex`.
-  Those names, `USERPROFILE`, and `NORI_AGENT_RUNTIME_DIR` are reserved case-insensitively. Adapter
+  The host reserves those names, `USERPROFILE`, and `NORI_AGENT_RUNTIME_DIR`
+  case-insensitively for both setting and removal. Admission also rejects a
+  name present in both `env` and `envRemove`. Ordinary environment names are
+  case-sensitive on Unix and case-insensitive on Windows. Adapter
   arguments and environment entries must be free of NUL characters.
   Supply variables such as `PATH` explicitly when the adapter needs them.
   Subprocesses inherit the binding environment. Host `.env` values stay
@@ -407,7 +427,7 @@ the JSON-RPC `result` has the following fields.
   "bindingId":"sample",
   "generation":1,
   "conversationId":"00000000-0000-4000-8000-000000000001",
-  "specDigest":"be38062d7d4f3978fff3a223d10370562d2ff9ea813eaf46891b7b434a6b1662",
+  "specDigest":"7c9b31a083fc52411db88c9db7d3dcba09343cf810fafee2e009218b4aa5bf72",
   "state":"spawned"
 }
 ```
@@ -507,7 +527,8 @@ NORI_HOME=/srv/fixture/nori nori -c features.multi_session=true \
 - Blank input lines are ignored. A line that is not JSON receives a JSON-RPC
   `-32700` error with a null `id` on stdout.
 - `--inherit-env` adds the host process's environment to the launch's `env`.
-  Variables in the specification win. The relay skips the host-assigned
+  The relay excludes names in `envRemove` and keeps explicit values in `env`.
+  The relay skips the host-assigned
   `HOME`, `USERPROFILE`, `CODEX_HOME`, `NORI_HOME`, and `NORI_AGENT_RUNTIME_DIR`. Entries
   that are not UTF-8 are skipped. Without the flag the adapter receives only
   `spec.env` and the host-assigned variables.

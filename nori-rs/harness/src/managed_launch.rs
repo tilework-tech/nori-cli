@@ -12,6 +12,8 @@ use anyhow::Context;
 use anyhow::ensure;
 use nori_acp_host::connection::AgentProcess;
 use nori_acp_host::connection::ChildHandle;
+use nori_acp_host::launch::ChildEnvironment;
+use nori_acp_host::launch::ServerCommand;
 use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
@@ -31,8 +33,6 @@ mod side_sandbox;
 pub use listing::HostSessionIdentity;
 pub use listing::ManagedSession;
 
-const RUNTIME_ENV: &str = "NORI_AGENT_RUNTIME_DIR";
-
 /// Variables assigned from admitted binding paths, including in stdio mode.
 pub fn reserved_launch_env(key: &str) -> bool {
     [
@@ -40,7 +40,7 @@ pub fn reserved_launch_env(key: &str) -> bool {
         "USERPROFILE",
         "CODEX_HOME",
         "NORI_HOME",
-        RUNTIME_ENV,
+        nori_config::AGENT_RUNTIME_ENV,
     ]
     .iter()
     .any(|reserved| key.eq_ignore_ascii_case(reserved))
@@ -86,6 +86,8 @@ pub struct LaunchSpec {
     pub runtime_dir: Option<PathBuf>,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub env_remove: Vec<String>,
     #[serde(default)]
     pub credential_refs: Vec<String>,
     #[serde(default)]
@@ -98,6 +100,17 @@ pub struct LaunchSpec {
 #[derive(Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PinnedAdapter {
+    pub path: PathBuf,
+    pub version: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wrapper: Option<PinnedWrapper>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct PinnedWrapper {
     pub path: PathBuf,
     pub version: String,
     #[serde(default)]
@@ -222,6 +235,19 @@ impl Layout {
     }
 }
 
+fn validate_pin(path: &Path, version: &str, args: &[String]) -> anyhow::Result<()> {
+    ensure!(!version.trim().is_empty(), "missing executable version");
+    ensure!(
+        path.is_absolute() && path.is_file(),
+        "launch path must name an installed absolute executable"
+    );
+    ensure!(
+        args.iter().all(|arg| !arg.contains('\0')),
+        "launch arguments cannot contain NUL"
+    );
+    Ok(())
+}
+
 impl LaunchSpec {
     pub(crate) fn uses_private_codex_home(&self) -> bool {
         use nori_acp_host::registry::AgentKind;
@@ -242,37 +268,51 @@ impl LaunchSpec {
         sandbox: &side_sandbox::Sandbox,
     ) -> anyhow::Result<Command> {
         ensure!(
-            [
-                &self.agent,
-                &self.project_id,
-                &self.run_id,
-                &self.adapter.version
-            ]
-            .iter()
-            .all(|s| !s.trim().is_empty()),
-            "missing launch identity or pin"
-        );
-        ensure!(
-            self.adapter.path.is_absolute() && self.adapter.path.is_file(),
-            "adapter path must name an installed absolute executable"
-        );
-        ensure!(
-            self.adapter
-                .args
+            [&self.agent, &self.project_id, &self.run_id]
                 .iter()
-                .chain(self.env.values())
-                .all(|s| !s.contains('\0')),
-            "adapter arguments and environment values cannot contain NUL"
+                .all(|s| !s.trim().is_empty()),
+            "missing launch identity"
         );
-        for key in self.env.keys() {
+        validate_pin(
+            &self.adapter.path,
+            &self.adapter.version,
+            &self.adapter.args,
+        )?;
+        let mut server = ServerCommand::new(&self.adapter.path, &self.adapter.args);
+        if let Some(wrapper) = &self.adapter.wrapper {
+            let runtime =
+                runtime_dir.context("a managed wrapper requires a prepared runtimeDir")?;
+            validate_pin(&wrapper.path, &wrapper.version, &wrapper.args)?;
+            let entry = dunce::canonicalize(&wrapper.path).context("resolving managed wrapper")?;
+            ensure!(
+                entry.starts_with(runtime),
+                "managed wrapper must resolve inside runtimeDir"
+            );
+            server = server.with_wrapper(entry, &wrapper.args);
+        }
+        ensure!(
+            self.env.values().all(|s| !s.contains('\0')),
+            "environment values cannot contain NUL"
+        );
+        for key in self.env.keys().chain(&self.env_remove) {
             ensure!(
                 !key.is_empty() && !key.contains(['=', '\0']) && !reserved_launch_env(key),
                 "invalid or reserved environment key"
             );
         }
+        for key in &self.env_remove {
+            ensure!(
+                !self
+                    .env
+                    .keys()
+                    .any(|name| nori_config::env_names_equal(name, key)),
+                "cannot both set and remove {key}"
+            );
+        }
         if side_fds.is_some() || self.workspace_read_only {
             return side_sandbox::command(
                 self,
+                &server,
                 cwd,
                 home,
                 runtime_dir,
@@ -280,19 +320,18 @@ impl LaunchSpec {
                 &sandbox.launcher,
             );
         }
-        let mut command = Command::new(&self.adapter.path);
+        let mut command = server.command(
+            ChildEnvironment::Empty,
+            &self.env,
+            &self.env_remove,
+            runtime_dir,
+        );
         command
-            .args(&self.adapter.args)
-            .env_clear()
-            .envs(&self.env)
             .env("HOME", home)
             .env("CODEX_HOME", home.join(".codex"))
             .env("NORI_HOME", home.join(".nori/cli"))
             .current_dir(cwd)
             .stderr(Stdio::null());
-        if let Some(dir) = runtime_dir {
-            command.env(RUNTIME_ENV, dir);
-        }
         #[cfg(windows)]
         command.env("USERPROFILE", home);
         Ok(command)

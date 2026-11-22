@@ -77,7 +77,7 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   requests to its ACP client.
 - A private `SessionUpdate` copy feeds the harness reducer after the matching
   raw notification; it is implementation state, not another public protocol.
-- The [registry](src/registry.rs) checks configured slugs before resolving built-in aliases. Claude Code and Codex launch through the preferred package runner with upstream `@latest` resolution. Grok Build uses npm to run the upstream package’s native install step. Antigravity runs `agy acp --disable-telemetry` and OpenCode runs `opencode acp` from the host’s `PATH`. Cursor uses `cursor-agent acp` when the packaged executable is on PATH, then falls back to the standalone command `agent acp`. Cursor reads its own saved login or the inherited `CURSOR_API_KEY` at startup. Hermes runs `hermes acp` and resolves its provider from its profile and process environment. Explicit runtime settings and custom distributions continue to control the launch. See the [provider table](../../README.md#providers) for commands and authentication.
+- The [registry](src/registry.rs) checks configured slugs before resolving built-in aliases. Claude Code and Codex launch through the preferred package runner with upstream `@latest` resolution. Grok Build uses npm to run the upstream package’s native install step. Antigravity runs `agy acp --disable-telemetry` and OpenCode runs `opencode acp` from the host’s `PATH`. Cursor uses `cursor-agent acp` when the packaged executable is on PATH, then falls back to the standalone command `agent acp`. Cursor reads its own saved login or the inherited `CURSOR_API_KEY` at startup. Hermes runs `hermes acp` and resolves its provider from its profile and process environment. Pi uses `npx` to install `pi-acp` and `@earendil-works/pi-coding-agent` together so the adapter finds `pi` on its PATH. Explicit runtime settings and custom distributions continue to control the launch. See the [provider table](../../README.md#providers) for commands and authentication.
 - Hermes v0.23.3 needs working loopback to reach its profile’s gateway during
   `session/new`. An auto-started gateway can outlive `nori host stop`. Its
   idle timeout defaults to 600 seconds (`gateway.unmanaged_idle_exit_seconds`).
@@ -181,7 +181,7 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   spawn, so the model becomes the adapter's advertised `currentValue` (which ACP
   always treats as valid), bypassing the catalog. `AgentKind::model_injection()`
   maps Claude Code to `ANTHROPIC_MODEL`, Codex to the `model` key of `CODEX_CONFIG`, and Cursor to the `--model` argument.
-  Antigravity, Grok Build, OpenCode, and Hermes Agent expose their supported models through ACP config options.
+  Antigravity, Grok Build, OpenCode, Hermes Agent, and Pi expose their supported models through ACP config options.
   Custom/BYO agents resolve their strategy from `[[agents]].model_override` in
   `nori-config`; the default is `None` (no channel → live RPC only).
   `AcpAgentConfig::inject_model` applies the resolved strategy to the spawn env
@@ -196,6 +196,14 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   the `/model` picker's "Other" section without a second source of truth.
   Selecting one routes through injection exactly like a `[default_models]` custom
   id. `OtherModel` is re-exported from `nori-harness` for that picker.
+
+- A local distribution selects an ACP server executable and arguments. The
+  resolved launch can prefix a wrapper executable and its arguments. The
+  [local connection](src/connection/acp_connection.rs) and the
+  [managed host](../harness/src/managed_launch.rs) apply their own environment
+  and working-directory rules. The [child supervisor](src/connection/child_lifecycle.rs)
+  owns the ACP pipes and process lifetime in both cases.
+  [Launch configuration](../config.md#acp-server-launch)
 
 ### Managed machine connection
 
@@ -544,6 +552,15 @@ following for the binding generation and the lifetime of every active side.
   authenticates the agent. Nori's own in-process `AuthManager` (which reads
   `nori_home`) is not consumed by the ACP path, so the login flow's
   `auth_manager.reload()` has no effect on the Codex agent.
+- Pi has no spawn-time model injection. A bound Pi launch names its starting
+  model in the generated `settings.json`. The matching entry in `models.json`
+  carries the selected wire model, protocol, endpoint and key reference.
+  Pi reads the key from the environment when the reference begins with `$`.
+  Nori writes key references into a fresh private directory for each launch
+  (directory mode `0700`, file mode `0600` on Unix). Cloned launch configurations
+  and process supervisors retain ownership through child reaping. Local preparation
+  collects abandoned directories with unlocked ownership records. Pi's `sessionDir`
+  points at the connection's persistent session history across restarts.
 - Model injection does not validate the model id: an invalid model is accepted at
   spawn and only fails at the first prompt. For env-based channels, nori's
   injected value takes precedence over the agent's own configured model (e.g.

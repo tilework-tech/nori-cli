@@ -5,11 +5,13 @@
 
 pub mod connection;
 mod error_category;
+pub mod launch;
 pub mod patch;
 pub mod recovery;
 pub mod registry;
 pub mod remote;
 mod token_launch;
+pub mod token_provider;
 
 pub use error_category::AcpErrorCategory;
 pub use error_category::AcpErrorDetails;
