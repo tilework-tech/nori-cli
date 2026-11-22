@@ -1,0 +1,564 @@
+#![allow(clippy::unwrap_used)]
+
+mod common;
+
+use std::path::PathBuf;
+
+use common::Fixture;
+use nori_acp_host::registry::AgentKind;
+use nori_providers::AuthStatus;
+use nori_providers::CredentialKind;
+use nori_providers::CredentialSource;
+use nori_providers::DetectContext;
+use nori_providers::DetectedCredential;
+use nori_providers::Platform;
+use nori_providers::StoreLocation;
+use nori_providers::detect_all;
+use pretty_assertions::assert_eq;
+
+const CLAUDE_OAUTH: &str = r#"{"claudeAiOauth":{"accessToken":"sk-ant-oat01-SECRET","refreshToken":"sk-ant-ort01-SECRET","expiresAt":1999999999000,"scopes":["user:inference"],"subscriptionType":"max"}}"#;
+
+fn cred(
+    kind: CredentialKind,
+    source: CredentialSource,
+    detail: Option<&str>,
+) -> DetectedCredential {
+    DetectedCredential {
+        kind,
+        source,
+        detail: detail.map(str::to_string),
+    }
+}
+
+fn env(name: &str) -> CredentialSource {
+    CredentialSource::Env {
+        name: name.to_string(),
+    }
+}
+
+fn file(path: PathBuf) -> CredentialSource {
+    CredentialSource::File { path }
+}
+
+fn keychain(service: &str) -> CredentialSource {
+    CredentialSource::Keychain {
+        service: service.to_string(),
+    }
+}
+
+fn outcome(f: &Fixture, agent: AgentKind) -> (AuthStatus, Vec<DetectedCredential>) {
+    let status = f.detect(agent);
+    (status.status, status.credentials)
+}
+
+#[test]
+fn claude_with_nothing_configured_is_signed_out() {
+    let f = Fixture::new();
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (AuthStatus::SignedOut, vec![])
+    );
+}
+
+#[test]
+fn claude_subscription_file_reports_plan_without_tokens() {
+    let f = Fixture::new().file(".claude/.credentials.json", CLAUDE_OAUTH);
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (
+            AuthStatus::SignedIn,
+            vec![cred(
+                CredentialKind::Subscription,
+                file(f.home().join(".claude/.credentials.json")),
+                Some("max"),
+            )]
+        )
+    );
+}
+
+#[test]
+fn claude_credentials_file_without_oauth_entry_is_ignored() {
+    let f = Fixture::new().file(".claude/.credentials.json", "{}");
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (AuthStatus::SignedOut, vec![])
+    );
+}
+
+#[test]
+fn claude_lists_sources_in_the_order_claude_code_prefers_them() {
+    let f = Fixture::new()
+        .file(".claude/.credentials.json", CLAUDE_OAUTH)
+        .env("CLAUDE_CODE_OAUTH_TOKEN", "SECRET-value")
+        .env("ANTHROPIC_API_KEY", "SECRET-value")
+        .env("ANTHROPIC_AUTH_TOKEN", "SECRET-value")
+        .env("CLAUDE_CODE_USE_BEDROCK", "1");
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (
+            AuthStatus::SignedIn,
+            vec![
+                cred(CredentialKind::Cloud, env("CLAUDE_CODE_USE_BEDROCK"), None),
+                cred(CredentialKind::Token, env("ANTHROPIC_AUTH_TOKEN"), None),
+                cred(CredentialKind::ApiKey, env("ANTHROPIC_API_KEY"), None),
+                cred(
+                    CredentialKind::Subscription,
+                    env("CLAUDE_CODE_OAUTH_TOKEN"),
+                    None
+                ),
+                cred(
+                    CredentialKind::Subscription,
+                    file(f.home().join(".claude/.credentials.json")),
+                    Some("max"),
+                ),
+            ]
+        )
+    );
+}
+
+#[test]
+fn claude_cloud_flags_count_only_when_enabled() {
+    let f = Fixture::new().env("CLAUDE_CODE_USE_VERTEX", "0");
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (AuthStatus::SignedOut, vec![])
+    );
+}
+
+#[test]
+fn claude_on_macos_finds_the_keychain_login() {
+    let f = Fixture::new()
+        .on(Platform::MacOs)
+        .keychain_item("Claude Code-credentials");
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (
+            AuthStatus::SignedIn,
+            vec![cred(
+                CredentialKind::Subscription,
+                keychain("Claude Code-credentials"),
+                None
+            )]
+        )
+    );
+}
+
+#[test]
+fn claude_keychain_is_not_consulted_on_linux() {
+    let f = Fixture::new().keychain_item("Claude Code-credentials");
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (AuthStatus::SignedOut, vec![])
+    );
+}
+
+#[test]
+fn claude_config_dir_moves_the_credentials_file_and_keychain_item() {
+    let f = Fixture::new()
+        .on(Platform::MacOs)
+        .env("CLAUDE_CONFIG_DIR", "/opt/claude-cfg")
+        .keychain_item("Claude Code-credentials")
+        // Claude Code suffixes the item with the first 8 hex digits of sha256("/opt/claude-cfg").
+        .keychain_item("Claude Code-credentials-9751abf6")
+        .file(".claude/.credentials.json", CLAUDE_OAUTH);
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (
+            AuthStatus::SignedIn,
+            vec![cred(
+                CredentialKind::Subscription,
+                keychain("Claude Code-credentials-9751abf6"),
+                None
+            )]
+        )
+    );
+}
+
+#[test]
+fn claude_config_dir_credentials_file_is_found() {
+    let f = Fixture::new().file("cfg/.credentials.json", CLAUDE_OAUTH);
+    let dir = f.home().join("cfg");
+    let f = f.env("CLAUDE_CONFIG_DIR", dir.to_str().unwrap());
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (
+            AuthStatus::SignedIn,
+            vec![cred(
+                CredentialKind::Subscription,
+                file(dir.join(".credentials.json")),
+                Some("max")
+            )]
+        )
+    );
+}
+
+#[test]
+fn claude_console_api_key_in_global_config_counts() {
+    let f = Fixture::new().file(
+        ".claude.json",
+        r#"{"primaryApiKey":"sk-ant-api03-SECRET","oauthAccount":null}"#,
+    );
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (
+            AuthStatus::SignedIn,
+            vec![cred(
+                CredentialKind::ApiKey,
+                file(f.home().join(".claude.json")),
+                None
+            )]
+        )
+    );
+}
+
+#[test]
+fn codex_chatgpt_login_is_a_subscription() {
+    let f = Fixture::new().file(
+        ".codex/auth.json",
+        r#"{"auth_mode":"chatgpt","OPENAI_API_KEY":null,"tokens":{"id_token":"SECRET","access_token":"SECRET","refresh_token":"SECRET"}}"#,
+    );
+    assert_eq!(
+        outcome(&f, AgentKind::Codex),
+        (
+            AuthStatus::SignedIn,
+            vec![cred(
+                CredentialKind::Subscription,
+                file(f.home().join(".codex/auth.json")),
+                Some("chatgpt")
+            )]
+        )
+    );
+}
+
+#[test]
+fn codex_home_override_and_stored_api_key() {
+    let f = Fixture::new().file(
+        "alt-codex/auth.json",
+        r#"{"auth_mode":"apikey","OPENAI_API_KEY":"sk-SECRET"}"#,
+    );
+    let dir = f.home().join("alt-codex");
+    let f = f.env("CODEX_HOME", dir.to_str().unwrap());
+    assert_eq!(
+        outcome(&f, AgentKind::Codex),
+        (
+            AuthStatus::SignedIn,
+            vec![cred(
+                CredentialKind::ApiKey,
+                file(dir.join("auth.json")),
+                None
+            )]
+        )
+    );
+}
+
+#[test]
+fn codex_env_keys_come_before_its_auth_file() {
+    let f = Fixture::new()
+        .env("CODEX_API_KEY", "SECRET-value")
+        .env("OPENAI_API_KEY", "SECRET-value")
+        .file(".codex/auth.json", r#"{"auth_mode":"chatgpt"}"#);
+    assert_eq!(
+        outcome(&f, AgentKind::Codex),
+        (
+            AuthStatus::SignedIn,
+            vec![
+                cred(CredentialKind::ApiKey, env("CODEX_API_KEY"), None),
+                cred(CredentialKind::ApiKey, env("OPENAI_API_KEY"), None),
+                cred(
+                    CredentialKind::Subscription,
+                    file(f.home().join(".codex/auth.json")),
+                    Some("chatgpt")
+                ),
+            ]
+        )
+    );
+}
+
+#[test]
+fn codex_keyring_login_is_unknown_on_linux() {
+    let f = Fixture::new().file(
+        ".codex/config.toml",
+        "cli_auth_credentials_store = \"keyring\"\n",
+    );
+    assert_eq!(outcome(&f, AgentKind::Codex), (AuthStatus::Unknown, vec![]));
+}
+
+#[test]
+fn codex_keyring_login_is_found_on_macos() {
+    let f = Fixture::new()
+        .on(Platform::MacOs)
+        .keychain_item("Codex Auth")
+        .file(
+            ".codex/config.toml",
+            "cli_auth_credentials_store = \"auto\"\n",
+        );
+    assert_eq!(
+        outcome(&f, AgentKind::Codex),
+        (
+            AuthStatus::SignedIn,
+            vec![cred(CredentialKind::Login, keychain("Codex Auth"), None)]
+        )
+    );
+}
+
+#[test]
+fn codex_with_file_store_and_no_auth_is_signed_out() {
+    let f = Fixture::new()
+        .on(Platform::MacOs)
+        .keychain_item("Codex Auth");
+    assert_eq!(
+        outcome(&f, AgentKind::Codex),
+        (AuthStatus::SignedOut, vec![])
+    );
+}
+
+#[test]
+fn key_saved_through_nori_is_reported_after_ambient_env() {
+    let f = Fixture::new()
+        .save_key(AgentKind::ClaudeCode, "sk-ant-api03-SECRET")
+        .env("ANTHROPIC_API_KEY", "SECRET-value");
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (
+            AuthStatus::SignedIn,
+            vec![
+                cred(CredentialKind::ApiKey, env("ANTHROPIC_API_KEY"), None),
+                cred(
+                    CredentialKind::ApiKey,
+                    CredentialSource::NoriSaved {
+                        env: "ANTHROPIC_API_KEY".to_string(),
+                        store: StoreLocation::Keyring,
+                    },
+                    None
+                ),
+            ]
+        )
+    );
+}
+
+#[test]
+fn saved_claude_key_outranks_the_subscription_login() {
+    let f = Fixture::new()
+        .file(".claude/.credentials.json", CLAUDE_OAUTH)
+        .save_key(AgentKind::ClaudeCode, "sk-ant-api03-SECRET");
+    assert_eq!(
+        outcome(&f, AgentKind::ClaudeCode),
+        (
+            AuthStatus::SignedIn,
+            vec![
+                cred(
+                    CredentialKind::ApiKey,
+                    CredentialSource::NoriSaved {
+                        env: "ANTHROPIC_API_KEY".to_string(),
+                        store: StoreLocation::Keyring,
+                    },
+                    None
+                ),
+                cred(
+                    CredentialKind::Subscription,
+                    file(f.home().join(".claude/.credentials.json")),
+                    Some("max")
+                ),
+            ]
+        )
+    );
+}
+
+#[test]
+fn saved_key_alone_signs_an_opaque_agent_in() {
+    let f = Fixture::new().save_key(AgentKind::Cursor, "SECRET-cursor");
+    assert_eq!(
+        outcome(&f, AgentKind::Cursor),
+        (
+            AuthStatus::SignedIn,
+            vec![cred(
+                CredentialKind::ApiKey,
+                CredentialSource::NoriSaved {
+                    env: "CURSOR_API_KEY".to_string(),
+                    store: StoreLocation::Keyring,
+                },
+                None
+            )]
+        )
+    );
+}
+
+#[test]
+fn malformed_credential_files_are_ignored() {
+    let f = Fixture::new()
+        .file(".claude/.credentials.json", "{not json SECRET")
+        .file(".claude.json", "[]")
+        .file(".codex/auth.json", "SECRET")
+        .file(".local/share/opencode/auth.json", "\"SECRET\"");
+    assert_eq!(
+        [AgentKind::ClaudeCode, AgentKind::Codex, AgentKind::OpenCode]
+            .map(|agent| outcome(&f, agent)),
+        [
+            (AuthStatus::SignedOut, vec![]),
+            (AuthStatus::SignedOut, vec![]),
+            (AuthStatus::Unknown, vec![]),
+        ]
+    );
+}
+
+#[test]
+fn empty_environment_variables_do_not_count() {
+    let f = Fixture::new()
+        .env("ANTHROPIC_API_KEY", "")
+        .env("OPENAI_API_KEY", " ");
+    assert_eq!(
+        [AgentKind::ClaudeCode, AgentKind::Codex].map(|agent| outcome(&f, agent)),
+        [
+            (AuthStatus::SignedOut, vec![]),
+            (AuthStatus::SignedOut, vec![])
+        ]
+    );
+}
+
+#[test]
+fn opencode_reports_each_signed_in_provider() {
+    let f = Fixture::new().file(
+        ".local/share/opencode/auth.json",
+        r#"{"openai":{"type":"api","key":"sk-SECRET"},"anthropic":{"type":"oauth","refresh":"SECRET","access":"SECRET","expires":1}}"#,
+    );
+    let path = f.home().join(".local/share/opencode/auth.json");
+    assert_eq!(
+        outcome(&f, AgentKind::OpenCode),
+        (
+            AuthStatus::SignedIn,
+            vec![
+                cred(
+                    CredentialKind::Subscription,
+                    file(path.clone()),
+                    Some("anthropic")
+                ),
+                cred(CredentialKind::ApiKey, file(path), Some("openai")),
+            ]
+        )
+    );
+}
+
+#[test]
+fn opencode_follows_xdg_data_home() {
+    let f = Fixture::new().file(
+        "data/opencode/auth.json",
+        r#"{"openai":{"type":"api","key":"x"}}"#,
+    );
+    let data = f.home().join("data");
+    let f = f.env("XDG_DATA_HOME", data.to_str().unwrap());
+    assert_eq!(
+        outcome(&f, AgentKind::OpenCode),
+        (
+            AuthStatus::SignedIn,
+            vec![cred(
+                CredentialKind::ApiKey,
+                file(data.join("opencode/auth.json")),
+                Some("openai")
+            )]
+        )
+    );
+}
+
+#[test]
+fn pi_reports_each_signed_in_provider() {
+    let f = Fixture::new().file(
+        ".pi/agent/auth.json",
+        r#"{"anthropic":{"type":"oauth","access":"SECRET"},"openai":{"type":"api_key","key":"SECRET"}}"#,
+    );
+    let path = f.home().join(".pi/agent/auth.json");
+    assert_eq!(
+        outcome(&f, AgentKind::Pi),
+        (
+            AuthStatus::SignedIn,
+            vec![
+                cred(
+                    CredentialKind::Subscription,
+                    file(path.clone()),
+                    Some("anthropic")
+                ),
+                cred(CredentialKind::ApiKey, file(path), Some("openai")),
+            ]
+        )
+    );
+}
+
+#[test]
+fn agents_with_their_own_opaque_login_are_unknown_without_env() {
+    let f = Fixture::new();
+    let statuses: Vec<_> = [
+        AgentKind::Gemini,
+        AgentKind::GrokBuild,
+        AgentKind::OpenCode,
+        AgentKind::Cursor,
+        AgentKind::Hermes,
+        AgentKind::Pi,
+    ]
+    .into_iter()
+    .map(|agent| outcome(&f, agent))
+    .collect();
+    assert_eq!(statuses, vec![(AuthStatus::Unknown, vec![]); 6]);
+}
+
+#[test]
+fn env_keys_sign_in_the_other_agents() {
+    let f = Fixture::new()
+        .env("GEMINI_API_KEY", "SECRET-value")
+        .env("XAI_API_KEY", "SECRET-value")
+        .env("CURSOR_API_KEY", "SECRET-value");
+    assert_eq!(
+        [AgentKind::Gemini, AgentKind::GrokBuild, AgentKind::Cursor]
+            .map(|agent| outcome(&f, agent)),
+        [
+            (
+                AuthStatus::SignedIn,
+                vec![cred(CredentialKind::ApiKey, env("GEMINI_API_KEY"), None)]
+            ),
+            (
+                AuthStatus::SignedIn,
+                vec![cred(CredentialKind::ApiKey, env("XAI_API_KEY"), None)]
+            ),
+            (
+                AuthStatus::SignedIn,
+                vec![cred(CredentialKind::ApiKey, env("CURSOR_API_KEY"), None)]
+            ),
+        ]
+    );
+}
+
+#[test]
+fn antigravity_cloud_routing() {
+    let f = Fixture::new()
+        .env("GOOGLE_GENAI_USE_VERTEXAI", "true")
+        .env("AGY_ADC_AUTH", "true");
+    assert_eq!(
+        outcome(&f, AgentKind::Gemini),
+        (
+            AuthStatus::SignedIn,
+            vec![
+                cred(
+                    CredentialKind::Cloud,
+                    env("GOOGLE_GENAI_USE_VERTEXAI"),
+                    None
+                ),
+                cred(CredentialKind::Cloud, env("AGY_ADC_AUTH"), None),
+            ]
+        )
+    );
+}
+
+#[test]
+fn report_covers_every_built_in_agent() {
+    let f = Fixture::new();
+    let home = f.home();
+    let env = |_: &str| None;
+    let report = detect_all(&DetectContext {
+        home: &home,
+        env: &env,
+        platform: f.platform,
+        keychain: &f.keychain,
+        saved: &f.saved,
+    });
+    let slugs: Vec<_> = report.agents.iter().map(|a| a.agent.as_str()).collect();
+    let expected: Vec<_> = AgentKind::all().iter().map(AgentKind::slug).collect();
+    assert_eq!(slugs, expected);
+}

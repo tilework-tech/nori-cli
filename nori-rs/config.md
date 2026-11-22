@@ -5,8 +5,8 @@ Nori reads one TOML file at `$NORI_HOME/config.toml` (default
 at startup. The resolution architecture and the full set of runtime-policy types
 live in [`nori-config/docs.md`](nori-config/docs.md); this file documents the
 agent, adapter launch, and model configuration surface, which is the most commonly
-hand-edited part of the file, plus tool call display and running several sessions
-in one TUI.
+hand-edited part of the file, plus saved API keys, tool call display, and running
+several sessions in one TUI.
 
 ## Choosing an agent
 
@@ -145,6 +145,17 @@ protocol, model and key reference determine the private Pi profile. The model
 ID on ACP is `lab-pi/demo-model`. Remove the `pi` binding to return to Pi's
 native settings. Each launch owns its generated profile until the child exits. The next local launch removes abandoned profiles. Pi session history remains in the connection’s existing sessions directory. Nori also reads earlier Pi provider tables, preserving their
 selected route, endpoint and key variable.
+
+## Saved API keys
+
+`nori providers set-key <agent>` saves an API key for a built-in agent outside
+`config.toml`. `NORI_CREDENTIALS_STORE` selects where it goes: `auto` (default;
+OS keychain, falling back to a file when the keychain fails), `keyring`, or
+`file`. Nori writes two owner-only files in `$NORI_HOME`: `saved-keys.json`
+records which agents have a saved key and where, without secrets, and
+`saved-keys.secret.json` holds keys stored in the file. At launch the key is
+passed as the agent's API-key variable unless that variable is already set or the
+agent is bound to a named token provider. [Details](providers/docs.md)
 
 ## Custom agents: `[[agents]]`
 

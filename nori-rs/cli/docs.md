@@ -10,7 +10,7 @@ The `nori-cli` crate is the main binary that provides the `nori` command. It ser
 
 This crate is the primary entry point that ties together the core crates:
 
-- **Always included:** `nori-tui`, `nori-harness`, `nori-config`, `codex-sandbox`
+- **Always included:** `nori-tui`, `nori-harness`, `nori-config`, `codex-sandbox`, `nori-providers`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 - **Uses** `codex-sandbox` (`@/nori-rs/sandbox/`) for the `nori sandbox` debug subcommand's seatbelt/landlock/windows spawn helpers
 - Owns the background [host lifecycle](src/host/docs.md), composing the
@@ -87,6 +87,12 @@ See [the command and wire contract](../../docs/remote-control.md#11-background-h
 - Auth, broker REST, session acquisition/release, and tunnel transport all live inside `nori-handroll cloud-acp`. Quitting the TUI is a detach: the graceful stdin-EOF shutdown contract in `@/nori-rs/acp-host/src/connection/acp_connection.rs` lets the child detach cleanly, and the broker session keeps running for later reattach -- only ACP `session/close` releases it
 - ACP capabilities select supported operations and the resume strategy: handroll can advertise `sessionCapabilities.{list,resume,close}` and `loadSession`, serve recorded history through `session/load`, and release via `session/close`. They do not identify the deployment because handroll is a synthetic agent facade. The explicit `cloud_mode` launch fact instead governs cloud identity, command scope, picker behavior, and detach/reattach wording. The one-active-session contract (close before claiming another) remains agent-side. See `@/nori-rs/harness/docs.md` (resume strategy and failure handling) and `@/nori-rs/tui/docs.md` (cloud-mode presentation and lifecycle)
 - TUI flags such as `--agent` and approval-bypass options can still be passed after `cloud` (only `--agent` is overridden)
+
+**ProvidersCommand** ([`providers.rs`](src/providers.rs)): Reports per-agent sign-in status and manages API keys saved through Nori, backed by [`nori-providers`](../providers/docs.md). It runs on a blocking task because detection and keyring access are synchronous.
+- `nori providers` prints an `AGENT  STATUS  CREDENTIAL  SOURCE` table showing the credential each built-in agent will use, or the agent's sign-in hint when none is found; `--json` prints the full report, including every credential in precedence order.
+- `nori providers set-key <agent> [--json]` reads the key from stdin (never argv, so it stays out of shell history and process listings) and saves it in the OS keyring or `$NORI_HOME/saved-keys.secret.json`, per `NORI_CREDENTIALS_STORE`. Agents without an API-key variable are refused. Agent aliases such as `claude` or `agy` are accepted.
+- `nori providers remove-key <agent>` deletes the saved key.
+- The command prints only variable names, file paths, and keychain service names, never key values.
 
 **Debug Sandbox** (`debug_sandbox.rs`): Implementation of the sandbox testing commands.
 

@@ -25,6 +25,7 @@ use std::path::PathBuf;
 use supports_color::Stream;
 
 mod host;
+mod providers;
 mod stdin_prompt;
 #[cfg(not(windows))]
 mod wsl_paths;
@@ -74,6 +75,9 @@ enum Subcommand {
 
     /// Manage skillsets. An alias for `npx nori-skillsets` or `bunx nori-skillsets`.
     Skillsets(SkillsetsCommand),
+
+    /// Show which agents are signed in and manage API keys saved for them.
+    Providers(providers::ProvidersCommand),
 
     /// Execpolicy tooling.
     #[clap(hide = true)]
@@ -546,6 +550,9 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         }
         Some(Subcommand::Exec(cmd)) => {
             run_exec(cmd, interactive, root_config_overrides).await?;
+        }
+        Some(Subcommand::Providers(cmd)) => {
+            tokio::task::spawn_blocking(move || providers::run(cmd)).await??;
         }
         Some(Subcommand::Completions(cmd)) => {
             clap_complete::generate(

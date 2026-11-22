@@ -57,6 +57,7 @@
 - The **session manager** runs inside a client process; the **session broker** is a separate service.
 - **Transport**, **client connection**, and **session** mean channel, relationship, and conversation respectively.
 - A **session broker** has no single ACP role; its role depends on the connection boundary.
+- The `nori providers` command reports each **agent's** sign-in and manages API keys saved for an **agent**; despite its name, its rows are agents, not **providers** or **token providers**.
 
 ## Turns and Ownership
 

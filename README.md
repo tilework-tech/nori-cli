@@ -43,6 +43,8 @@ Install Cursor CLI on the machine that runs Nori. If only `agent` is on `PATH`, 
 
 OpenCode is also built in. Install OpenCode 2 on the host's `PATH` and use `nori --agent opencode` or `nori host new --agent opencode`. Try `/delegate opencode Summarize the README` from another agent. All three launch `opencode acp`. OpenCode reads its own provider configuration and credentials. To connect an account, run `opencode auth login` in a terminal. [Model selection and ChatGPT-plan restrictions](nori-rs/config.md#default-models-default_models) · [OpenCode ACP guide](https://opencode.ai/docs/cli/acp/)
 
+Run `nori providers` to see which agents are signed in and which credential each will use (`--json` for the full report). To give Nori an API key for an agent, pipe it in with `nori providers set-key codex` (or `claude-code`, `gemini`, `grok-build`, `cursor`); remove it with `nori providers remove-key codex`. Nori keeps the key in the OS keychain, or in a private file under `$NORI_HOME` when no keychain is available, and passes it as the agent's API-key variable at launch. A variable already set in your environment wins over a saved key. For Claude Code, a saved `ANTHROPIC_API_KEY` takes precedence over a Claude subscription login. [Saved API keys](nori-rs/config.md#saved-api-keys)
+
 The `gemini` ID keeps existing configs and Nori history associated with the Google provider. Each agent supplies its own model choices through `/model`.
 
 ### Hermes Agent
