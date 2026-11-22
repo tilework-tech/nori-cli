@@ -2615,7 +2615,7 @@
     "ListedSessionMeta": {
       "description": "`_meta` on a `session/list` row.",
       "properties": {
-        "nori.dev/agent": {
+        "nori/agent": {
           "description": "The slug of the agent the session runs, when known.",
           "type": [
             "string",
@@ -3856,7 +3856,7 @@
     "NewSessionMeta": {
       "description": "`_meta` a client may put on `session/new`.",
       "properties": {
-        "nori.dev/agent": {
+        "nori/agent": {
           "description": "Start this agent instead of the folder's default, so the right\nadapter starts first.",
           "type": [
             "string",
@@ -7951,6 +7951,6 @@
       "$ref": "#/$defs/Delegation"
     }
   ],
-  "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori.dev/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
+  "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
   "title": "NoriHostWire"
 }

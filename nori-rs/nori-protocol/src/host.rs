@@ -1,5 +1,5 @@
 //! Nori's additions to standard ACP v1 on `nori host`'s `/sessions`: the
-//! host's discovery file, its `nori.dev/agent` `_meta` key, and the
+//! host's discovery file, its `nori/agent` `_meta` key, and the
 //! `_nori/*` extension methods, plus
 //! [`host_wire_schema`], which publishes them with the ACP v1 types the host
 //! uses.
@@ -22,7 +22,7 @@ use crate::acp::v1 as acp;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ListedSessionMeta {
     /// The slug of the agent the session runs, when known.
-    #[serde(rename = "nori.dev/agent", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "nori/agent", skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
 }
 
@@ -31,7 +31,7 @@ pub struct ListedSessionMeta {
 pub struct NewSessionMeta {
     /// Start this agent instead of the folder's default, so the right
     /// adapter starts first.
-    #[serde(rename = "nori.dev/agent")]
+    #[serde(rename = "nori/agent")]
     pub agent: Option<String>,
 }
 
@@ -172,7 +172,7 @@ pub fn host_wire_schema() -> Value {
     sorted(json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "NoriHostWire",
-        "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori.dev/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
+        "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
         "anyOf": roots,
         "$defs": definitions,
     }))

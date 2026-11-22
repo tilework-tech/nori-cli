@@ -184,7 +184,7 @@ previews use it directly.
 `text()` is the oldest open request, or `None` when nothing is open.
 
 [`host.rs`](src/host.rs) holds the wire types of `nori host`'s standard ACP
-face that ACP itself does not define: the host's `nori.dev/agent` `_meta`
+face that ACP itself does not define: the host's `nori/agent` `_meta`
 key (`ListedSessionMeta` on list rows, `NewSessionMeta` on `session/new`), the `host.json`
 discovery file (`HostDiscovery`), and the params and results of the `_nori/*`
 extension (control, subscribe, host stop, delegation). The

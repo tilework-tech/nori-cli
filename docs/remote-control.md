@@ -726,7 +726,7 @@ unchanged and stays as legacy until durable sessions get their own design.
 - no Nori `_meta` key. The contract version is in `host.json`; a client
   without it derives the version from `agentInfo.version`.
 
-The host's only new `_meta` key is `nori.dev/agent` (on `session/new` params
+The host's only new `_meta` key is `nori/agent` (registry prefix `nori/<camelCase>`, clifford 2026-11-22) (on `session/new` params
 and `session/list` rows); see the extension registry
 (`docs/acp-extensions.md` in the workspace monorepo).
 The `_nori/*` methods are unchanged, including `_nori/session/follow_up`
@@ -747,7 +747,7 @@ do not write it.
 
 | Method | Who may call | Behavior |
 | --- | --- | --- |
-| `session/new` | Any initialized client | `cwd` must be an absolute, existing folder (`-32602` otherwise). The folder's configuration applies. `mcpServers` (stdio and HTTP) are added to the session's MCP servers, and are kept when the client later changes the agent or the session restarts; SSE fails with `-32602`. Optional `_meta["nori.dev/agent"]` starts that agent instead of the folder's default (an unknown agent fails with `-32602`); otherwise clients switch with the `agent` config option. `[host] default_mode` (`ask`, `agent`, `approve-all`), when set, replaces the folder's approval policy. The response waits until the agent has started and carries `sessionId`, `configOptions` and `modes`; the connection is attached. Capacity fails with `-32017`. An agent that refuses to start fails with its own ACP error, so an adapter needing sign-in returns `-32000` `Authentication required`; the session is then left out of `session/list`. |
+| `session/new` | Any initialized client | `cwd` must be an absolute, existing folder (`-32602` otherwise). The folder's configuration applies. `mcpServers` (stdio and HTTP) are added to the session's MCP servers, and are kept when the client later changes the agent or the session restarts; SSE fails with `-32602`. Optional `_meta["nori/agent"]` starts that agent instead of the folder's default (an unknown agent fails with `-32602`); otherwise clients switch with the `agent` config option. `[host] default_mode` (`ask`, `agent`, `approve-all`), when set, replaces the folder's approval policy. The response waits until the agent has started and carries `sessionId`, `configOptions` and `modes`; the connection is attached. Capacity fails with `-32017`. An agent that refuses to start fails with its own ACP error, so an adapter needing sign-in returns `-32000` `Authentication required`; the session is then left out of `session/list`. |
 | `session/prompt` | Controller | Runs one turn and answers with the agent's `PromptResponse` (`stopReason`). The connection receives the turn's updates before the response. A prompt while a turn runs fails with `-32015`; it is never queued. A connection that is not attached to the session is attached (as by `session/resume`) first. |
 | `session/cancel` | Controller (notification) | Cancels the session's turn; the prompt answers with `stopReason: "cancelled"`. Ignored from watchers. |
 | `session/close` | Controller | Stops the session's agent and frees its slot. It stays in `session/list` as `stored` (status `closed`), and `session/load` or `session/resume` restarts it under its ID. |
@@ -775,7 +775,7 @@ sign-in, not `ACP agent did not accept the prompt`.
 ### Schema and TypeScript types
 
 `nori-rs/nori-protocol/schema/host-wire.schema.json` (JSON Schema 2020-12)
-covers the ACP v1 messages above, the `nori.dev/agent`
+covers the ACP v1 messages above, the `nori/agent`
 `_meta` object, the `host.json` file, and the `_nori/*` extension (control, subscribe with its
 `SessionEnvelope`, host stop, delegation). `nori-protocol/typescript/host-wire.ts`
 is generated from it by a pinned `json-schema-to-typescript`. Regenerate both
@@ -808,7 +808,7 @@ ID, continuing the same transcript file.
 
 | Method | Who may call | Behavior |
 | --- | --- | --- |
-| `session/list` | Any initialized client | Live sessions first, then stored sessions, most recently written first. Optional `cwd` (absolute) keeps the sessions working in that folder. Optional `cursor` takes a previous `nextCursor`, which is opaque and absent on the last page. Pages hold 50 rows. Each row is a standard ACP `SessionInfo` (`sessionId`, `cwd`, `title`, `updatedAt` in RFC 3339). Its `_meta` carries `nori.dev/agent` (the agent slug, when known). A closed, failed or stored session restarts when loaded or resumed; whether a row is live is not reported yet (pending a decision on reusing the broker's `nori.dev/session` row object). A bad cursor or relative `cwd` fails with `-32602`. Unreadable transcripts, and transcripts whose metadata names another session, are left out. |
+| `session/list` | Any initialized client | Live sessions first, then stored sessions, most recently written first. Optional `cwd` (absolute) keeps the sessions working in that folder. Optional `cursor` takes a previous `nextCursor`, which is opaque and absent on the last page. Pages hold 50 rows. Each row is a standard ACP `SessionInfo` (`sessionId`, `cwd`, `title`, `updatedAt` in RFC 3339). Its `_meta` carries `nori/agent` (the agent slug, when known). A closed, failed or stored session restarts when loaded or resumed; whether a row is live is not reported yet (pending a decision on reusing the broker's `nori.dev/session` row object). A bad cursor or relative `cwd` fails with `-32602`. Unreadable transcripts, and transcripts whose metadata names another session, are left out. |
 | `session/load` | Any initialized client | Attaches the connection to the session. Its history arrives as `session/update` notifications **before** the response, then live updates follow. A live session replays from the manager journal (sequence 1 onward) with no gap before live delivery. If the journal has evicted the session's start, the transcript is replayed instead and live delivery starts at the journal's latest event, so updates in that interval can be missed. A stored session replays its transcript, then restarts on a new agent process in its recorded folder with its recorded agent; the response waits until the session has started. A failed live session restarts the same way. |
 | `session/resume` | Any initialized client | Like `session/load` without history: only updates after the response arrive. History the harness replays to the restarted agent is not forwarded. |
 

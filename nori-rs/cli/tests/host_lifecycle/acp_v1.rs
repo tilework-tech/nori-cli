@@ -566,7 +566,7 @@ async fn list_rows_say_which_agent_runs_a_session() {
             json!({
                 "cwd": canonical(folder.path()),
                 "mcpServers": [],
-                "_meta": {"nori.dev/agent": "second-mock"},
+                "_meta": {"nori/agent": "second-mock"},
             }),
         )
         .await
@@ -581,11 +581,11 @@ async fn list_rows_say_which_agent_runs_a_session() {
 
     assert_eq!(
         listed(&listing, &live).unwrap()["_meta"],
-        json!({"nori.dev/agent": "second-mock"})
+        json!({"nori/agent": "second-mock"})
     );
     assert_eq!(
         listed(&listing, &closed).unwrap()["_meta"],
-        json!({"nori.dev/agent": "mock-model"})
+        json!({"nori/agent": "mock-model"})
     );
 }
 
@@ -601,7 +601,7 @@ async fn a_new_session_refuses_an_unknown_agent() {
             json!({
                 "cwd": canonical(folder.path()),
                 "mcpServers": [],
-                "_meta": {"nori.dev/agent": "no-such-agent"},
+                "_meta": {"nori/agent": "no-such-agent"},
             }),
         )
         .await
