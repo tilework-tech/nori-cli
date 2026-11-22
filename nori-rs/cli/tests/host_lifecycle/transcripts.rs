@@ -74,6 +74,38 @@ fn row<'a>(listing: &'a Value, id: &str) -> &'a Value {
         .unwrap_or_else(|| panic!("{id} is not listed: {listing}"))
 }
 
+/// The sessions the host is running, from the legacy list.
+async fn running(acp: &mut Acp) -> HashSet<String> {
+    acp.call("_nori/session/list", json!({})).await.unwrap()["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["session_id"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+/// Copy a recorded transcript under `count` new session IDs, as if earlier
+/// runs had recorded them.
+fn clone_transcripts(host: &Host, id: &str, count: usize) -> Vec<String> {
+    let sessions = std::fs::read_dir(host.0.path().join("transcripts/by-project"))
+        .unwrap()
+        .map(|project| project.unwrap().path().join("sessions"))
+        .find(|sessions| sessions.join(format!("{id}.jsonl")).exists())
+        .unwrap();
+    let recorded = std::fs::read_to_string(sessions.join(format!("{id}.jsonl"))).unwrap();
+    (0..count)
+        .map(|_| {
+            let clone = uuid::Uuid::new_v4().to_string();
+            std::fs::write(
+                sessions.join(format!("{clone}.jsonl")),
+                recorded.replace(id, &clone),
+            )
+            .unwrap();
+            clone
+        })
+        .collect()
+}
+
 fn listed_ids(listing: &Value) -> Vec<String> {
     listing["sessions"]
         .as_array()
@@ -97,22 +129,12 @@ async fn session_list_shows_live_sessions_and_sessions_recorded_by_an_earlier_ho
     let stored_row = row(&listing, &stored);
     assert_eq!(stored_row["cwd"], canonical(stored_folder.path()));
     assert_eq!(stored_row["title"], "write a marker");
-    assert_eq!(
-        stored_row["_meta"]["nori.dev/session"]["state"], "stored",
-        "{listing}"
-    );
-    assert_eq!(
-        stored_row["_meta"]["nori.dev/session"]["agent"],
-        "mock-model"
-    );
     let updated = stored_row["updatedAt"].as_str().unwrap();
     assert!(
         chrono::DateTime::parse_from_rfc3339(updated).is_ok(),
         "updatedAt is an RFC 3339 time: {updated}"
     );
-    let live_row = row(&listing, &live);
-    assert_eq!(live_row["cwd"], canonical(live_folder.path()));
-    assert_eq!(live_row["_meta"]["nori.dev/session"]["state"], "live");
+    assert_eq!(row(&listing, &live)["cwd"], canonical(live_folder.path()));
     assert_eq!(listing.get("nextCursor"), None, "{listing}");
 }
 
@@ -140,32 +162,26 @@ async fn session_list_keeps_only_sessions_in_the_requested_folder() {
 #[tokio::test(flavor = "multi_thread")]
 async fn session_list_pages_through_every_session_with_its_cursor() {
     let host = Host::writing_files();
-    let folders = [(); 3].map(|()| TempDir::new().unwrap());
-    let mut ids = folders
-        .iter()
-        .map(|folder| host.recorded_session(folder.path(), "write a marker"))
+    let folder = TempDir::new().unwrap();
+    let recorded = host.recorded_session(folder.path(), "write a marker");
+    let mut ids = clone_transcripts(&host, &recorded, 51)
+        .into_iter()
         .collect::<HashSet<_>>();
+    ids.insert(recorded);
     host.restart();
     let live_folder = TempDir::new().unwrap();
     ids.insert(host.recorded_session(live_folder.path(), "write a marker"));
     let mut acp = host.acp();
-    let page_size = json!({"nori.dev/pageSize": 3});
 
-    let first = acp
-        .call("session/list", json!({"_meta": page_size}))
-        .await
-        .unwrap();
+    let first = acp.call("session/list", json!({})).await.unwrap();
     let cursor = first["nextCursor"].as_str().unwrap().to_owned();
     let second = acp
-        .call(
-            "session/list",
-            json!({"cursor": cursor, "_meta": page_size}),
-        )
+        .call("session/list", json!({"cursor": cursor}))
         .await
         .unwrap();
 
-    assert_eq!(listed_ids(&first).len(), 3, "{first}");
-    assert_eq!(listed_ids(&second).len(), 1, "{second}");
+    assert_eq!(listed_ids(&first).len(), 50);
+    assert_eq!(listed_ids(&second).len(), 3, "{second}");
     assert_eq!(second.get("nextCursor"), None, "{second}");
     let listed = listed_ids(&first)
         .into_iter()
@@ -201,11 +217,7 @@ async fn loading_a_stored_session_replays_its_history_before_answering_then_stre
         "history is replayed before the response: {:?}",
         acp.inbox
     );
-    let listing = acp.call("session/list", json!({})).await.unwrap();
-    assert_eq!(
-        row(&listing, &id)["_meta"]["nori.dev/session"]["state"],
-        "live"
-    );
+    assert!(running(&mut acp).await.contains(&id));
 
     acp.inbox.clear();
     acp.prompt_alias(&id, "write again").await;
@@ -309,10 +321,9 @@ async fn loading_in_another_folder_or_an_unknown_session_is_refused() {
     assert_eq!(moved_resume.code, -32602, "{moved_resume:?}");
     assert_eq!(unknown.code, -32002, "{unknown:?}");
     assert_eq!(unknown_load.code, -32002, "{unknown_load:?}");
-    let listing = acp.call("session/list", json!({})).await.unwrap();
-    assert_eq!(
-        row(&listing, &id)["_meta"]["nori.dev/session"]["state"],
-        "stored"
+    assert!(
+        !running(&mut acp).await.contains(&id),
+        "nothing restarted it"
     );
 }
 

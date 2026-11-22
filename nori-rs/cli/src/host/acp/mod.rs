@@ -126,13 +126,6 @@ impl AcpFace {
             None => forwarder.abort(),
         }
     }
-
-    /// Whether any connection currently holds the controller role.
-    fn controller_connected(&self) -> bool {
-        self.lock()
-            .values()
-            .any(|connection| connection.handle.is_controller())
-    }
 }
 
 impl HostService {
