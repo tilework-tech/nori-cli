@@ -24,9 +24,27 @@ use crate::ConversationId;
 
 #[cfg(target_os = "linux")]
 mod codex_home;
+mod listing;
 #[cfg(target_os = "linux")]
 mod namespace_exit;
 mod side_sandbox;
+pub use listing::HostSessionIdentity;
+pub use listing::ManagedSession;
+
+const RUNTIME_ENV: &str = "NORI_AGENT_RUNTIME_DIR";
+
+/// Variables assigned from admitted binding paths, including in stdio mode.
+pub fn reserved_launch_env(key: &str) -> bool {
+    [
+        "HOME",
+        "USERPROFILE",
+        "CODEX_HOME",
+        "NORI_HOME",
+        RUNTIME_ENV,
+    ]
+    .iter()
+    .any(|reserved| key.eq_ignore_ascii_case(reserved))
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -47,6 +65,9 @@ impl EnsureLaunch {
             ))
         );
         validate_binding_id(&self.binding_id).map_err(LaunchRefusal::InvalidParams)?;
+        self.spec
+            .validate_credential_refs()
+            .map_err(LaunchRefusal::InvalidParams)?;
         Ok(())
     }
 }
@@ -61,6 +82,8 @@ pub struct LaunchSpec {
     pub adapter: PinnedAdapter,
     pub cwd: PathBuf,
     pub home: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_dir: Option<PathBuf>,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
     #[serde(default)]
@@ -153,12 +176,21 @@ enum Layout {
 }
 
 impl Layout {
-    fn validate(&self, binding: &str, cwd: &Path, home: &Path) -> anyhow::Result<()> {
-        match self {
-            Self::Dedicated(roots) => ensure!(
-                binding == roots.binding_id && cwd == roots.cwd && home == roots.home,
-                "binding does not match dedicated roots"
-            ),
+    fn validate(
+        &self,
+        binding: &str,
+        cwd: &Path,
+        home: &Path,
+        runtime_dir: Option<&Path>,
+    ) -> anyhow::Result<Option<PathBuf>> {
+        let scope = match self {
+            Self::Dedicated(roots) => {
+                ensure!(
+                    binding == roots.binding_id && cwd == roots.cwd && home == roots.home,
+                    "binding does not match dedicated roots"
+                );
+                home.to_owned()
+            }
             Self::Shared(root) => {
                 let scope = root.join(binding);
                 ensure!(
@@ -171,9 +203,22 @@ impl Layout {
                         .all(|p| p.starts_with(&scope) && *p != scope),
                     "cwd and home must be inside the binding root"
                 );
+                scope
             }
+        };
+        validate_roots(cwd, home)?;
+        let runtime = runtime_dir.map(session_folder).transpose()?;
+        if let Some(dir) = &runtime {
+            ensure!(
+                dir.starts_with(&scope)
+                    && *dir != scope
+                    && !home.starts_with(dir)
+                    && !dir.starts_with(cwd)
+                    && !cwd.starts_with(dir),
+                "runtimeDir must be a binding-owned directory separate from the workspace"
+            );
         }
-        validate_roots(cwd, home)
+        Ok(runtime)
     }
 }
 
@@ -185,13 +230,14 @@ impl LaunchSpec {
     }
 
     pub(crate) fn has_subscription_file(&self) -> bool {
-        self.credential_refs == ["sessions:codex-subscription-file:v1"]
+        self.credential_refs == [listing::SUBSCRIPTION_LABEL]
     }
 
     fn command(
         &self,
         cwd: &Path,
         home: &Path,
+        runtime_dir: Option<&Path>,
         side_fds: Option<[std::fs::File; 2]>,
         sandbox: &side_sandbox::Sandbox,
     ) -> anyhow::Result<Command> {
@@ -220,16 +266,19 @@ impl LaunchSpec {
         );
         for key in self.env.keys() {
             ensure!(
-                !key.is_empty()
-                    && !key.contains(['=', '\0'])
-                    && !["HOME", "USERPROFILE", "CODEX_HOME", "NORI_HOME"]
-                        .iter()
-                        .any(|reserved| key.eq_ignore_ascii_case(reserved)),
+                !key.is_empty() && !key.contains(['=', '\0']) && !reserved_launch_env(key),
                 "invalid or reserved environment key"
             );
         }
         if side_fds.is_some() || self.workspace_read_only {
-            return side_sandbox::command(self, cwd, home, side_fds, &sandbox.launcher);
+            return side_sandbox::command(
+                self,
+                cwd,
+                home,
+                runtime_dir,
+                side_fds,
+                &sandbox.launcher,
+            );
         }
         let mut command = Command::new(&self.adapter.path);
         command
@@ -241,6 +290,9 @@ impl LaunchSpec {
             .env("NORI_HOME", home.join(".nori/cli"))
             .current_dir(cwd)
             .stderr(Stdio::null());
+        if let Some(dir) = runtime_dir {
+            command.env(RUNTIME_ENV, dir);
+        }
         #[cfg(windows)]
         command.env("USERPROFILE", home);
         Ok(command)
@@ -276,6 +328,7 @@ struct Launch {
     spec: Arc<LaunchSpec>,
     cwd: PathBuf,
     home: PathBuf,
+    runtime_dir: Option<PathBuf>,
     pipes: Option<(ChildStdin, ChildStdout)>,
     sides: HashMap<String, Arc<SideProcess>>,
     releasing: bool,
@@ -401,6 +454,7 @@ enum PreparedLaunch {
         digest: String,
         cwd: PathBuf,
         home: PathBuf,
+        runtime_dir: Option<PathBuf>,
     },
 }
 
@@ -511,12 +565,18 @@ impl ManagedLaunches {
         );
         let cwd = session_folder(&request.spec.cwd).map_err(LaunchRefusal::InvalidParams)?;
         let home = session_folder(&request.spec.home).map_err(LaunchRefusal::InvalidParams)?;
-        self.layout
-            .validate(&request.binding_id, &cwd, &home)
+        let runtime_dir = self
+            .layout
+            .validate(
+                &request.binding_id,
+                &cwd,
+                &home,
+                request.spec.runtime_dir.as_deref(),
+            )
             .map_err(LaunchRefusal::InvalidParams)?;
         let command = request
             .spec
-            .command(&cwd, &home, None, &self.sandbox)
+            .command(&cwd, &home, runtime_dir.as_deref(), None, &self.sandbox)
             .map_err(LaunchRefusal::InvalidParams)?;
         let live: usize = launches.values_mut().map(Launch::live_slots).sum();
         ensure!(live < self.limit, LaunchRefusal::AtCapacity);
@@ -525,6 +585,7 @@ impl ManagedLaunches {
             digest,
             cwd,
             home,
+            runtime_dir,
         })
     }
 
@@ -534,14 +595,15 @@ impl ManagedLaunches {
             .lock()
             .map_err(|_| anyhow::anyhow!("launch registry poisoned"))?;
         let launches = guard.as_mut().context("host is stopping")?;
-        let (command, digest, cwd, home) = match self.prepare(launches, &request)? {
+        let (command, digest, cwd, home, runtime_dir) = match self.prepare(launches, &request)? {
             PreparedLaunch::Existing(receipt) => return Ok(receipt),
             PreparedLaunch::Spawn {
                 command,
                 digest,
                 cwd,
                 home,
-            } => (*command, digest, cwd, home),
+                runtime_dir,
+            } => (*command, digest, cwd, home, runtime_dir),
         };
         let EnsureLaunch {
             binding_id,
@@ -566,6 +628,7 @@ impl ManagedLaunches {
                 process,
                 cwd,
                 home,
+                runtime_dir,
                 spec: Arc::new(spec),
                 pipes,
                 sides: HashMap::new(),
@@ -656,10 +719,16 @@ impl ManagedLaunches {
             "side ID already in use"
         );
         ensure!(live < self.limit, LaunchRefusal::AtCapacity);
-        self.layout.validate(binding, &launch.cwd, &launch.home)?;
+        let runtime_dir = self.layout.validate(
+            binding,
+            &launch.cwd,
+            &launch.home,
+            launch.spec.runtime_dir.as_deref(),
+        )?;
         ensure!(
             session_folder(&launch.cwd)? == launch.cwd
-                && session_folder(&launch.home)? == launch.home,
+                && session_folder(&launch.home)? == launch.home
+                && runtime_dir == launch.runtime_dir,
             "pinned launch roots changed"
         );
         #[cfg(target_os = "linux")]
@@ -680,9 +749,13 @@ impl ManagedLaunches {
             None
         };
         let confined = side_fds.is_some();
-        let command = launch
-            .spec
-            .command(&launch.cwd, &launch.home, side_fds, &self.sandbox)?;
+        let command = launch.spec.command(
+            &launch.cwd,
+            &launch.home,
+            runtime_dir.as_deref(),
+            side_fds,
+            &self.sandbox,
+        )?;
         let child = AgentProcess::spawn(command).context("side adapter launch failed")?;
         let supervisor = Arc::new(child.handle);
         let outer_exit = supervisor.wait_for_exit();
