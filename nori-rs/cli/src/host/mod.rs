@@ -448,14 +448,32 @@ async fn serve(
         stop: tokio::sync::Notify::new(),
         acp: acp::AcpFace::default(),
         settings,
+        instance: uuid::Uuid::new_v4().to_string(),
+        deleted: Default::default(),
     });
     let server =
-        RemoteAcpServer::bind_host(format!("127.0.0.1:{port}").parse()?, host.clone(), token)
+        RemoteAcpServer::bind_host(format!("127.0.0.1:{port}").parse()?, host.clone(), token.clone())
             .await?;
+    let endpoint = format!("ws://{}/sessions", server.local_addr());
+    let pid = i64::from(std::process::id());
     files.publish(&HostState {
-        endpoint: format!("ws://{}/sessions", server.local_addr()),
-        pid: i64::from(std::process::id()),
+        endpoint: endpoint.clone(),
+        pid,
     })?;
+    if host.launches.is_none() {
+        files.publish_discovery(&serde_json::json!({
+            "endpoint": endpoint,
+            "token": token,
+            "pid": pid,
+            "instanceId": host.instance,
+            "version": env!("CARGO_PKG_VERSION"),
+            "contract": {"acp": 1, "nori": acp::handshake::CONTRACT},
+            "startedBy": std::env::var("NORI_HOST_STARTED_BY")
+                .ok()
+                .filter(|started_by| !started_by.trim().is_empty())
+                .unwrap_or_else(|| "nori-cli".to_owned()),
+        }))?;
+    }
     #[cfg(unix)]
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     #[cfg(unix)]
@@ -472,6 +490,11 @@ async fn serve(
     }
     let report = host.manager.shutdown(Duration::ZERO).await;
     std::fs::remove_file(files.directory.join("state.json"))?;
+    match std::fs::remove_file(files.directory.join("host.json")) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
     anyhow::ensure!(
         report.timed_out.is_empty() && report.failed.is_empty(),
         "some sessions did not stop cleanly: {report:?}"

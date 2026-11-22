@@ -91,8 +91,18 @@ pub trait ManagedAgent: Send + Sync + 'static {
     }
 
     /// A notification, or a response to one of the host's own requests,
-    /// from an initialized connection.
-    fn message_from(&self, _client: i64, _message: Value) {}
+    /// from an initialized connection. Runs concurrently with the
+    /// connection's other messages.
+    fn message_from(&self, _client: i64, _message: Value) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
+    /// The host instance ID to announce on upgrades, when the host chose
+    /// one itself. Otherwise a recovery journal's incarnation or a fresh ID
+    /// is used.
+    fn instance_id(&self) -> Option<String> {
+        None
+    }
 
     fn recovery(&self) -> Option<crate::recovery::SharedRecovery> {
         None

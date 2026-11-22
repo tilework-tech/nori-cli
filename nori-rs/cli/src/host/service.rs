@@ -40,6 +40,10 @@ pub(super) struct HostService {
     pub acp: super::acp::AcpFace,
     /// Mode and options clients chose, reapplied on resume.
     pub settings: super::acp::config::SettingsStore,
+    /// The host instance ID clients see on upgrades and in `initialize`.
+    pub instance: String,
+    /// Sessions a client deleted during this host's lifetime.
+    pub deleted: std::sync::Mutex<std::collections::HashSet<ConversationId>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -201,6 +205,16 @@ impl ManagedAgent for HostService {
         self.launches.is_none() && super::acp::runs_concurrently(method)
     }
 
+    fn instance_id(&self) -> Option<String> {
+        self.launches.is_none().then(|| self.instance.clone())
+    }
+
+    async fn message_from(&self, client: i64, message: Value) {
+        if self.launches.is_none() {
+            self.acp_message(client, message).await;
+        }
+    }
+
     async fn request_from(&self, client: i64, request: Value) -> ManagedReply {
         let method = request["method"].as_str().unwrap_or_default();
         if self.launches.is_none() && super::acp::handles(method) {
@@ -294,6 +308,13 @@ impl ManagedAgent for HostService {
             {
                 sessions["session_cwd"] = json!(true);
                 sessions["follow_up"] = json!(1);
+            }
+            if initialize && let Some(result) = reply.response.get_mut("result") {
+                super::acp::handshake::initialize(
+                    result,
+                    &self.instance,
+                    self.config.max_sessions,
+                );
             }
             return reply;
         }

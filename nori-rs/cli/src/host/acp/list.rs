@@ -13,8 +13,9 @@ use super::AcpError;
 use crate::host::service::HostService;
 use crate::host::transcripts;
 
-/// Sessions per page.
-const PAGE: usize = 50;
+const DEFAULT_PAGE: i64 = 50;
+const MAX_PAGE: i64 = 200;
+pub(super) const SESSION_META: &str = "nori.dev/session";
 
 /// Where the next page starts. Cursors are opaque to clients.
 enum Cursor {
@@ -45,6 +46,17 @@ fn rfc3339(time: std::time::SystemTime) -> String {
 
 impl HostService {
     pub(super) async fn list_sessions(&self, params: &Value) -> Result<Value, AcpError> {
+        let limit = match params.pointer("/_meta/nori.dev~1pageSize") {
+            None | Some(Value::Null) => DEFAULT_PAGE,
+            Some(size) => size
+                .as_i64()
+                .filter(|size| (1..=MAX_PAGE).contains(size))
+                .ok_or_else(|| {
+                    AcpError::invalid_params(format!(
+                        "_meta.nori.dev/pageSize must be an integer from 1 to {MAX_PAGE}"
+                    ))
+                })?,
+        } as usize;
         let folder = match params.get("cwd") {
             None | Some(Value::Null) => None,
             Some(Value::String(cwd)) if Path::new(cwd).is_absolute() => {
@@ -64,6 +76,7 @@ impl HostService {
                 .as_ref()
                 .is_none_or(|folder| canonical(cwd) == *folder)
         };
+        let controller = self.acp.controller_connected();
         let records = self.manager.list();
         let running = records
             .iter()
@@ -75,10 +88,10 @@ impl HostService {
         if let Cursor::Live(start) = cursor {
             let live = records
                 .iter()
-                .filter(|record| in_folder(&record.cwd))
+                .filter(|record| in_folder(&record.cwd) && !self.is_deleted(&record.conversation_id))
                 .collect::<Vec<_>>();
             for record in live.iter().skip(start) {
-                if rows.len() == PAGE {
+                if rows.len() == limit {
                     return Ok(json!({
                         "sessions": rows,
                         "nextCursor": format!("live:{}", start + rows.len()),
@@ -94,6 +107,13 @@ impl HostService {
                     "cwd": record.cwd,
                     "title": replay.as_ref().and_then(|info| info.title.clone()),
                     "updatedAt": updated.map(rfc3339),
+                    "_meta": {SESSION_META: {
+                        "agent": record.agent,
+                        // A closed or failed session runs again when loaded.
+                        "state": if super::attach::needs_restart(record.status) { "stored" } else { "live" },
+                        "status": record.status,
+                        "controller": controller,
+                    }},
                 }));
             }
             live_end = Some(start.max(live.len()));
@@ -107,7 +127,7 @@ impl HostService {
             .into_iter();
         let mut last = None;
         for session in stored.by_ref() {
-            if rows.len() == PAGE {
+            if rows.len() == limit {
                 let next = match (&last, live_end) {
                     (Some((nanos, id)), _) => format!("stored:{nanos}:{id}"),
                     (None, Some(end)) => format!("live:{end}"),
@@ -119,6 +139,11 @@ impl HostService {
                 transcripts::nanos(session.updated_at),
                 session.session_id.clone(),
             );
+            let deleted = nori_harness::ConversationId::from_string(&session.session_id).ok()
+                .is_some_and(|id| self.is_deleted(&id));
+            if deleted {
+                continue;
+            }
             let Some(row) = transcripts::stored_row(&session).await else {
                 continue;
             };

@@ -79,6 +79,18 @@ impl HostFiles {
         Ok(())
     }
 
+    /// Publish `host.json`, the single discovery file of the host contract,
+    /// by writing a private temporary file and renaming it into place.
+    pub fn publish_discovery(&self, discovery: &serde_json::Value) -> anyhow::Result<()> {
+        let temporary = self.directory.join("host.json.tmp");
+        let mut file = private_open(&temporary, true)?;
+        file.set_len(0)?;
+        file.write_all(&serde_json::to_vec_pretty(discovery)?)?;
+        file.sync_all()?;
+        std::fs::rename(&temporary, self.directory.join("host.json"))?;
+        Ok(())
+    }
+
     pub fn new_token(&self) -> anyhow::Result<String> {
         let token = format!(
             "{}{}",

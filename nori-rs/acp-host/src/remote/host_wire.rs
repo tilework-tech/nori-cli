@@ -186,7 +186,8 @@ async fn serve<M: ManagedAgent>(
                                         && id_valid
                                         && (request.get("result").is_some() || request.get("error").is_some())))
                             {
-                                state.host.message_from(client, request);
+                                let host = state.host.clone();
+                                tokio::spawn(async move { host.message_from(client, request).await });
                                 continue;
                             }
                             let valid = request["jsonrpc"] == "2.0"
@@ -207,6 +208,9 @@ async fn serve<M: ManagedAgent>(
                                 let mut reply = state.host.request_from(client, request).await;
                                 if reply.response.get("error").is_none() {
                                     reply.response["result"]["control"] = state.control.lock().await.register(client, &changes, observe);
+                                    // The client learns its first role from this reply,
+                                    // not from a change notification.
+                                    roles.borrow_and_update();
                                     if !initialized {
                                         state.host.connection_opened(super::managed::HostConnection {
                                             client,
