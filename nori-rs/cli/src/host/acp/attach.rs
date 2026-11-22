@@ -24,14 +24,8 @@ use crate::host::transcripts;
 /// manager drops it.
 const ATTACHED_QUEUE: i32 = 1024;
 
-pub(super) const SEQ_META: &str = "nori.dev/seq";
-
 /// The outward `session/update` for a session event, if it is one.
-pub(super) fn session_update(
-    session: &str,
-    event: &SessionEvent,
-    seq: Option<i64>,
-) -> Option<Value> {
+pub(super) fn session_update(session: &str, event: &SessionEvent) -> Option<Value> {
     let SessionEvent::Acp(AcpEvent::Notification(acp::AgentNotification::SessionNotification(
         notification,
     ))) = event
@@ -40,9 +34,6 @@ pub(super) fn session_update(
     };
     let mut params = serde_json::to_value(notification).ok()?;
     params["sessionId"] = json!(session);
-    if let Some(seq) = seq {
-        params["_meta"][SEQ_META] = json!(seq);
-    }
     Some(json!({"jsonrpc":"2.0","method":"session/update","params":params}))
 }
 
@@ -78,7 +69,7 @@ impl Forwarder {
         if self.skip_replays && self.replaying {
             return None;
         }
-        if let Some(update) = session_update(&self.session, &envelope.event, Some(envelope.seq)) {
+        if let Some(update) = session_update(&self.session, &envelope.event) {
             self.connection.deliver(update);
         }
         None
@@ -281,7 +272,7 @@ impl HostService {
         transcript: &nori_harness::transcript::Transcript,
     ) {
         for event in nori_harness::backend::transcript_to_replay_session_events(transcript) {
-            if let Some(update) = session_update(session, &event, None) {
+            if let Some(update) = session_update(session, &event) {
                 connection.deliver(update);
             }
         }

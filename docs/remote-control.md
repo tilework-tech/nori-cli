@@ -722,9 +722,7 @@ session. `mcpServers` is accepted and ignored for sessions that are already
 configured.
 
 Attached connections receive `session/update` notifications whose
-`sessionId` is the conversation ID. Each one that comes from the journal
-carries its per-session sequence number as `_meta["nori.dev/seq"]`;
-transcript-replayed history carries none. Several connections can attach to
+`sessionId` is the conversation ID. Several connections can attach to
 one session, and each sees every update. Attachment ends when the connection
 closes. A connection that falls more than 1024 events behind a session is
 closed; reconnect and load again.
