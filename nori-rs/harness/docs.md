@@ -455,7 +455,7 @@ The [follow-up operation](../cli/src/host/docs.md#mid-turn-follow-ups) uses the 
 
 The background [`HostService`](../cli/src/host/service.rs) composes this
 adapter with manager lifecycle operations for new, close, cancel, and resume,
-and serves stored sessions from `TranscriptLoader::list_stored_sessions` and
+and finds stored sessions through `TranscriptLoader::list_stored_sessions` and
 `find_stored_session`, which scan `transcripts/by-project/*/sessions/*.jsonl`
 reading only each file's metadata line and modification time.
 `SessionManager::resume_stored` starts a session the manager has not run from

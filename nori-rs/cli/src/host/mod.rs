@@ -1,5 +1,6 @@
 //! Background session host commands and local discovery.
 
+mod acp;
 mod recovery_control;
 mod recovery_history;
 mod service;
@@ -444,6 +445,7 @@ async fn serve(
         config: Arc::new(config),
         overrides,
         stop: tokio::sync::Notify::new(),
+        acp: acp::AcpFace::default(),
     });
     let server =
         RemoteAcpServer::bind_host(format!("127.0.0.1:{port}").parse()?, host.clone(), token)

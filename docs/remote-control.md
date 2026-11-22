@@ -329,7 +329,7 @@ prompts; the WebSocket extension controls sessions already owned by the TUI.
 
 | Method | Params | Result |
 | --- | --- | --- |
-| `_nori/session/list` | `{}`; the background host also takes `transcript_limit` and `transcript_cursor` | `selected_session_id`, `sessions`, `replay_cursors`; the background host adds [stored sessions](#stored-sessions) as `transcripts` and `transcripts_next_cursor` |
+| `_nori/session/list` | `{}` | `selected_session_id`, `sessions`, `replay_cursors` |
 | `_nori/session/subscribe` | Optional `session_id`, optional `cursors` map | `{ "subscribed": true }`, then envelope notifications |
 | `_nori/session/prompt` | Optional `session_id`, ACP `prompt` content blocks, optional `meta` | `session_id`, admitted harness `request_id` |
 | `_nori/session/respond` | Optional `session_id`, permission `request_id`, ACP permission `response` | `session_id`, `answered: true` |
@@ -590,7 +590,7 @@ per-session folders. Clients send `cwd` only when it is advertised.
 | `_nori/control/status` | Return this connection's role and whether a controller is connected. |
 | `_nori/control/take` | Transfer control to the caller without closing another connection. |
 | `_nori/session/new` | Start a session; any authenticated initialized client may call it, since it changes no existing session; the new session becomes the host's selected session. Optional `cwd` (absolute; canonicalized, and refused when relative, missing, or not a directory) loads the host's configuration in that folder with the host's command-line overrides, so the folder's own project trust and approval settings apply; without it the host's start configuration is used. Optional `agent` selects the agent; optional `prompt` is sent as the first prompt after the session starts, without delaying the reply. Replies `{session_id, cwd}`. Resume reloads configuration from the record's cwd the same way. |
-| `_nori/session/close`, `_nori/session/cancel`, `_nori/session/resume` | Apply the operation to the required `session_id`; resume retains the Nori conversation ID. Resume also accepts the ID of a [stored session](#stored-sessions) and restarts it from its transcript. |
+| `_nori/session/close`, `_nori/session/cancel`, `_nori/session/resume` | Apply the operation to the required `session_id`; resume retains the Nori conversation ID. Resume also accepts the ID of a [stored session](#12-standard-acp-v1-on-the-background-host) and restarts it from its transcript. On the background host, `_nori/session/list` and `_nori/session/resume` are aliases kept for `nori attach` and `nori host ls`; new clients use `session/list` and `session/resume`. |
 | `_nori/host/stop` | Request host shutdown; any authenticated initialized client may call it. |
 
 `_nori/control/changed` notifications carry the new `role` to terminals affected
@@ -603,31 +603,6 @@ sessions, stop the host, and take control; other session mutations, including pr
 `-32016` and a read-only error. When the controller disconnects, existing
 watchers are not automatically promoted. They may take control explicitly, or
 a new interactive initializer may claim the empty slot.
-
-### Stored sessions
-
-The manager knows only sessions started since the host began, and its replay
-journal holds at most 4096 envelopes across all of them. The host also serves
-the sessions recorded on disk under
-`$NORI_HOME/transcripts/by-project/*/sessions/*.jsonl` by earlier hosts and
-local runs. A session is stored when it has a transcript and the host is not
-running it; resuming it moves it from `transcripts` to `sessions`.
-
-| Method | Stored-session behavior |
-| --- | --- |
-| `_nori/session/list` | Adds `transcripts` and `transcripts_next_cursor` to the reply. `transcripts` holds at most `transcript_limit` (optional param, 1 to 200, default 50) stored sessions, most recently written first: `session_id`, `cwd`, `agent` (or `null`), `title` (first line of the first prompt, at most 200 characters, or `null`), `started_at`, and `updated_at` (RFC 3339, the transcript file's modification time). Pass `transcripts_next_cursor` back as `transcript_cursor` for the next page; it is `null` on the last page. Treat the cursor as opaque. An invalid limit or cursor fails with `-32602`. |
-| `_nori/session/resume` | For an ID the host is not running, finds the transcript, reloads configuration in its recorded folder, selects its recorded agent, and starts it under the same ID, continuing the same transcript file. The harness chooses native `session/load`, live `session/resume`, or transcript replay as for any resume. An ID with no transcript fails with `unknown session id`. |
-| `_nori/session/subscribe` | For an explicit `session_id` the host is not running, replays the transcript: `replay_started` (source `transcript`), the recorded events, then `replay_finished`, numbered from `seq` 1. A cursor for that ID skips events at or before it. No live events follow. These sequence numbers belong to the transcript view only: after resuming the session, subscribe again without a cursor, because the live journal numbers the resumed session from 1. |
-
-Sessions the host is running keep the journal behavior above, including when
-the journal has evicted their oldest envelopes. Listing reads only file names
-and times for the whole folder, then opens just the transcripts on the page;
-unreadable transcripts, and files whose metadata names a different session, are
-left out. A transcript rewritten between page requests moves ahead of the
-cursor and is not returned again in that walk. The host cannot tell whether
-another process, such as a local `nori` run, is still writing a transcript;
-resuming one that is would split that session, so resume only sessions that
-have ended. `nori host ls` and `nori attach` show only running sessions.
 
 ### Attached frontend and recovery
 
@@ -716,3 +691,41 @@ in the terminal. A confirmed identity change reports that the host restarted
 and its sessions were lost; authentication failures report that the host may
 have restarted. The rendered history and unsent draft remain visible. Detach
 with Ctrl+D and rerun `nori attach` to connect afresh.
+
+## 12. Standard ACP v1 on the background host
+
+The normative contract for `nori host` is
+`docs/specs/nori-native/host-contract.md` in the workspace monorepo. This
+section records what the CLI implements. Standard ACP v1 methods share the
+authenticated `/sessions` socket with the `_nori/*` extension. A connection
+can work with any number of sessions. Managed mode (`[host] managed = true`)
+does not serve these methods.
+
+### Sessions on the host
+
+A session is **live** when the host's manager runs or ran it during this host
+process (any status). It is **stored** when it has a transcript under
+`$NORI_HOME/transcripts/by-project/*/sessions/*.jsonl` and the host is not
+running it. Loading or resuming a stored session makes it live under the same
+ID, continuing the same transcript file.
+
+| Method | Who may call | Behavior |
+| --- | --- | --- |
+| `session/list` | Any initialized client | Live sessions first, then stored sessions, most recently written first. Optional `cwd` (absolute) keeps the sessions working in that folder. Optional `cursor` takes a previous `nextCursor`, which is opaque and absent on the last page. The page holds 50 rows, or `_meta["nori.dev/pageSize"]` (1 to 200). Each row is an ACP `SessionInfo` (`sessionId`, `cwd`, `title`, `updatedAt` in RFC 3339) with `_meta["nori.dev/session"]` = `{agent, state: "live"\|"stored", status, controller}`. `status` is the manager status of a live session and `null` for a stored one. `controller` says whether a controlling client is connected. A bad cursor, page size, or relative `cwd` fails with `-32602`. Unreadable transcripts, and transcripts whose metadata names another session, are left out. |
+| `session/load` | Any initialized client | Attaches the connection to the session. Its history arrives as `session/update` notifications **before** the response, then live updates follow. A live session replays from the manager journal (sequence 1 onward) with no gap before live delivery. If the journal has evicted the session's start, the transcript is replayed instead and live delivery starts at the journal's latest event, so updates in that interval can be missed. A stored session replays its transcript, then restarts on a new agent process in its recorded folder with its recorded agent; the response waits until the session has started. A failed live session restarts the same way. |
+| `session/resume` | Any initialized client | Like `session/load` without history: only updates after the response arrive. History the harness replays to the restarted agent is not forwarded. |
+
+`sessionId` is the Nori conversation ID. A `sessionId` that is neither live
+nor stored fails with `-32002`. `cwd` must be absolute and name the session's
+own folder; a different folder fails with `-32602` rather than moving the
+session. `mcpServers` is accepted and ignored for sessions that are already
+configured.
+
+Attached connections receive `session/update` notifications whose
+`sessionId` is the conversation ID. Each one that comes from the journal
+carries its per-session sequence number as `_meta["nori.dev/seq"]`;
+transcript-replayed history carries none. Several connections can attach to
+one session, and each sees every update. Attachment ends when the connection
+closes. A connection that falls more than 1024 events behind a session is
+closed; reconnect and load again.
+

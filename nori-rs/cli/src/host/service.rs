@@ -36,6 +36,8 @@ pub(super) struct HostService {
     /// The host's command-line settings, reapplied to each session folder.
     pub overrides: NoriConfigOverrides,
     pub stop: Notify,
+    /// Per-connection state of the standard ACP face.
+    pub acp: super::acp::AcpFace,
 }
 
 #[derive(serde::Deserialize)]
@@ -140,9 +142,13 @@ impl HostService {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("session_id is required"))?;
         let id = ConversationId::from_string(id)?;
-        let Some(record) = self.manager.get(&id) else {
-            if method == "_nori/session/resume" {
-                return self.resume_stored(&id).await;
+        let Some(_) = self.manager.get(&id) else {
+            if method == "_nori/session/resume"
+                && let Some(transcript) =
+                    super::transcripts::load_stored(&self.config.nori_home, &id).await?
+            {
+                self.resume_stored(&id, transcript).await?;
+                return Ok(json!({"session_id": id.to_string()}));
             }
             anyhow::bail!("unknown session id");
         };
@@ -155,11 +161,7 @@ impl HostService {
                     .cancel()
                     .await?
             }
-            "_nori/session/resume" => {
-                let mut config = self.config_in(record.cwd).await?;
-                config.active_agent = record.agent;
-                self.manager.resume(&id, Self::prepare(config)).await?;
-            }
+            "_nori/session/resume" => self.resume_failed(&id).await?,
             _ => anyhow::bail!("unknown host operation"),
         }
         Ok(json!({"session_id":id.to_string()}))
@@ -167,72 +169,47 @@ impl HostService {
 }
 
 impl HostService {
-    /// Serve `_nori/session/list` with the stored sessions this host is not
-    /// running, and `_nori/session/subscribe` for a stored session. `None`
-    /// leaves the request to the manager.
-    async fn stored_sessions(&self, method: &str, request: &Value) -> Option<ManagedReply> {
-        let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
-        let error = |code: i32, message: String| ManagedReply {
-            delivery_guard: None,
-            response: json!({"jsonrpc":"2.0","id":request["id"],"error":{"code":code,"message":message}}),
-            subscription: None,
-        };
-        match method {
-            "_nori/session/list" => {
-                let mut reply = self.managed.request(request.clone()).await;
-                let Some(result) = reply.response.get_mut("result") else {
-                    return Some(reply);
-                };
-                let running = self
-                    .manager
-                    .list()
-                    .into_iter()
-                    .map(|record| record.conversation_id.to_string())
-                    .collect();
-                match super::transcripts::list(&self.config.nori_home, &running, &params).await {
-                    Ok((transcripts, next)) => {
-                        result["transcripts"] = json!(transcripts);
-                        result["transcripts_next_cursor"] = json!(next);
-                        Some(reply)
-                    }
-                    Err(failure) => {
-                        let code = if failure
-                            .downcast_ref::<super::transcripts::InvalidListParams>()
-                            .is_some()
-                        {
-                            -32602
-                        } else {
-                            -32000
-                        };
-                        Some(error(code, failure.to_string()))
-                    }
-                }
-            }
-            "_nori/session/subscribe" => {
-                let id = ConversationId::from_string(params.get("session_id")?.as_str()?).ok()?;
-                if self.manager.get(&id).is_some() {
-                    return None;
-                }
-                let cursors = serde_json::from_value(
-                    params.get("cursors").cloned().unwrap_or_else(|| json!({})),
-                )
-                .ok()?;
-                match super::transcripts::subscribe(&self.config.nori_home, &id, &cursors).await {
-                    Ok(Some(subscription)) => Some(ManagedReply {
-                        delivery_guard: None,
-                        response: json!({"jsonrpc":"2.0","id":request["id"],"result":{"subscribed":true}}),
-                        subscription: Some(subscription),
-                    }),
-                    Ok(None) => None,
-                    Err(failure) => Some(error(-32000, failure.to_string())),
-                }
-            }
-            _ => None,
-        }
+    /// Restart a failed session on a new agent process under its own ID, in
+    /// its folder and with its agent.
+    pub(super) async fn resume_failed(&self, id: &ConversationId) -> anyhow::Result<()> {
+        let record = self
+            .manager
+            .get(id)
+            .ok_or_else(|| anyhow::anyhow!("unknown session id"))?;
+        let mut config = self.config_in(record.cwd).await?;
+        config.active_agent = record.agent;
+        self.manager.resume(id, Self::prepare(config)).await?;
+        Ok(())
     }
 }
 
 impl ManagedAgent for HostService {
+    fn connection_opened(&self, connection: nori_harness::remote_agent::HostConnection) {
+        if self.launches.is_none() {
+            self.acp.opened(connection);
+        }
+    }
+
+    fn connection_closed(&self, client: i64) {
+        self.acp.closed(client);
+    }
+
+    fn runs_concurrently(&self, method: &str) -> bool {
+        self.launches.is_none() && super::acp::runs_concurrently(method)
+    }
+
+    async fn request_from(&self, client: i64, request: Value) -> ManagedReply {
+        let method = request["method"].as_str().unwrap_or_default();
+        if self.launches.is_none() && super::acp::handles(method) {
+            return ManagedReply {
+                delivery_guard: None,
+                response: self.acp_request(client, &request).await,
+                subscription: None,
+            };
+        }
+        self.request(request).await
+    }
+
     fn recovery(&self) -> Option<nori_harness::remote_agent::recovery::SharedRecovery> {
         self.recovery.as_ref().map(|r| r.shared.clone())
     }
@@ -295,11 +272,6 @@ impl ManagedAgent for HostService {
 
     async fn request(&self, request: Value) -> ManagedReply {
         let method = request["method"].as_str().unwrap_or_default();
-        if self.launches.is_none()
-            && let Some(reply) = self.stored_sessions(method, &request).await
-        {
-            return reply;
-        }
         if self.launches.is_none()
             && !matches!(
                 method,

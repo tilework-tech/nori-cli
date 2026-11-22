@@ -27,6 +27,7 @@ pub use hosted_agent::LoadedSession;
 pub use server::RemoteAcpServer;
 pub use server::parse_bind_addr;
 
+pub use managed::HostConnection;
 pub use managed::ManagedAgent;
 pub use managed::ManagedReply;
 pub use managed::ManagedSubscription;

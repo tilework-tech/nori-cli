@@ -1,13 +1,14 @@
-//! Sessions recorded by an earlier host are listed, replayed, and resumed
-//! from their transcripts on disk.
+//! Standard ACP `session/list`, `session/load`, and `session/resume` on the
+//! host: live sessions and sessions an earlier host recorded on disk.
 
+use super::acp_client::Acp;
+use super::acp_client::is_update_mentioning;
+use super::acp_client::mentions;
 use super::*;
-use nori_harness::remote_agent::ManagedClient;
+use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
 use std::collections::HashSet;
-
-const LIST: &str = "_nori/session/list";
 
 impl Host {
     /// Stop the running host and start a new one over the same `NORI_HOME`,
@@ -34,98 +35,294 @@ impl Host {
         let marker = folder.join("marker.txt");
         wait_for_file(&marker);
         std::fs::remove_file(&marker).unwrap();
-        id.trim().to_owned()
+        let id = id.trim().to_owned();
+        self.wait_until_ready(&id);
+        id
+    }
+
+    /// Wait until the session's turn has finished, so its transcript holds
+    /// the whole turn.
+    fn wait_until_ready(&self, id: &str) {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            let listed = success(self.run(&["host", "ls"]));
+            let ready = listed
+                .lines()
+                .any(|line| line.starts_with(id) && line.contains("ready"));
+            if ready {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "{id} never became ready: {listed}"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    fn acp(&self) -> Acp {
+        Acp::new(tokio::task::block_in_place(|| self.client()))
     }
 }
 
-fn client(host: &Host) -> ManagedClient {
-    tokio::task::block_in_place(|| host.client())
+fn row<'a>(listing: &'a Value, id: &str) -> &'a Value {
+    listing["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["sessionId"] == id)
+        .unwrap_or_else(|| panic!("{id} is not listed: {listing}"))
+}
+
+fn listed_ids(listing: &Value) -> Vec<String> {
+    listing["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["sessionId"].as_str().unwrap().to_owned())
+        .collect()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn sessions_of_a_previous_host_are_listed_from_their_transcripts() {
+async fn session_list_shows_live_sessions_and_sessions_recorded_by_an_earlier_host() {
     let host = Host::writing_files();
-    let folder = TempDir::new().unwrap();
-    let id = host.recorded_session(folder.path(), "write a marker");
+    let stored_folder = TempDir::new().unwrap();
+    let stored = host.recorded_session(stored_folder.path(), "write a marker");
     host.restart();
+    let live_folder = TempDir::new().unwrap();
+    let live = host.recorded_session(live_folder.path(), "write a live marker");
 
-    let listing = client(&host).request(LIST, json!({})).await.unwrap();
+    let listing = host.acp().call("session/list", json!({})).await.unwrap();
 
-    assert_eq!(listing["sessions"], json!([]), "{listing}");
-    let stored = &listing["transcripts"][0];
-    assert_eq!(stored["session_id"], id, "{listing}");
-    assert_eq!(stored["cwd"], canonical(folder.path()));
-    assert_eq!(stored["agent"], "mock-model");
-    assert_eq!(stored["title"], "write a marker");
-    let updated = stored["updated_at"].as_str().unwrap();
+    let stored_row = row(&listing, &stored);
+    assert_eq!(stored_row["cwd"], canonical(stored_folder.path()));
+    assert_eq!(stored_row["title"], "write a marker");
+    assert_eq!(
+        stored_row["_meta"]["nori.dev/session"]["state"], "stored",
+        "{listing}"
+    );
+    assert_eq!(
+        stored_row["_meta"]["nori.dev/session"]["agent"],
+        "mock-model"
+    );
+    let updated = stored_row["updatedAt"].as_str().unwrap();
     assert!(
         chrono::DateTime::parse_from_rfc3339(updated).is_ok(),
-        "updated_at is an RFC 3339 time: {updated}"
+        "updatedAt is an RFC 3339 time: {updated}"
     );
-    assert_eq!(listing["transcripts_next_cursor"], Value::Null);
+    let live_row = row(&listing, &live);
+    assert_eq!(live_row["cwd"], canonical(live_folder.path()));
+    assert_eq!(live_row["_meta"]["nori.dev/session"]["state"], "live");
+    assert_eq!(listing.get("nextCursor"), None, "{listing}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn stored_sessions_are_listed_in_pages() {
+async fn session_list_keeps_only_sessions_in_the_requested_folder() {
+    let host = Host::writing_files();
+    let wanted = TempDir::new().unwrap();
+    let other = TempDir::new().unwrap();
+    let kept = host.recorded_session(wanted.path(), "write a marker");
+    host.recorded_session(other.path(), "write a marker");
+    host.restart();
+    let live = host.recorded_session(wanted.path(), "write a marker");
+    host.recorded_session(other.path(), "write a marker");
+
+    let listing = host
+        .acp()
+        .call("session/list", json!({"cwd": canonical(wanted.path())}))
+        .await
+        .unwrap();
+
+    let listed = listed_ids(&listing).into_iter().collect::<HashSet<_>>();
+    assert_eq!(listed, HashSet::from([kept, live]));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn session_list_pages_through_every_session_with_its_cursor() {
     let host = Host::writing_files();
     let folders = [(); 3].map(|()| TempDir::new().unwrap());
-    let ids = folders
+    let mut ids = folders
         .iter()
         .map(|folder| host.recorded_session(folder.path(), "write a marker"))
         .collect::<HashSet<_>>();
     host.restart();
-    let mut client = client(&host);
+    let live_folder = TempDir::new().unwrap();
+    ids.insert(host.recorded_session(live_folder.path(), "write a marker"));
+    let mut acp = host.acp();
+    let page_size = json!({"nori.dev/pageSize": 3});
 
-    let first = client
-        .request(LIST, json!({"transcript_limit": 2}))
+    let first = acp
+        .call("session/list", json!({"_meta": page_size}))
         .await
         .unwrap();
-    let cursor = first["transcripts_next_cursor"].as_str().unwrap();
-    let second = client
-        .request(
-            LIST,
-            json!({"transcript_limit": 2, "transcript_cursor": cursor}),
+    let cursor = first["nextCursor"].as_str().unwrap().to_owned();
+    let second = acp
+        .call(
+            "session/list",
+            json!({"cursor": cursor, "_meta": page_size}),
         )
         .await
         .unwrap();
 
-    let page = |listing: &Value| listing["transcripts"].as_array().unwrap().clone();
-    assert_eq!(page(&first).len(), 2, "{first}");
-    assert_eq!(page(&second).len(), 1, "{second}");
-    assert_eq!(second["transcripts_next_cursor"], Value::Null);
-    let listed = page(&first)
-        .iter()
-        .chain(page(&second).iter())
-        .map(|stored| stored["session_id"].as_str().unwrap().to_owned())
+    assert_eq!(listed_ids(&first).len(), 3, "{first}");
+    assert_eq!(listed_ids(&second).len(), 1, "{second}");
+    assert_eq!(second.get("nextCursor"), None, "{second}");
+    let listed = listed_ids(&first)
+        .into_iter()
+        .chain(listed_ids(&second))
         .collect::<HashSet<_>>();
     assert_eq!(listed, ids);
-    let time = |stored: &Value| {
-        chrono::DateTime::parse_from_rfc3339(stored["updated_at"].as_str().unwrap()).unwrap()
-    };
-    assert!(
-        page(&first)
-            .iter()
-            .all(|newer| time(newer) >= time(&page(&second)[0])),
-        "pages are newest first: {first} {second}"
-    );
 
-    let refused = client
-        .request(LIST, json!({"transcript_cursor": "not a cursor"}))
+    let refused = acp
+        .call("session/list", json!({"cursor": "not a cursor"}))
         .await
         .unwrap_err();
-    assert!(
-        refused.to_string().starts_with("host error -32602:"),
-        "{refused}"
-    );
+    assert_eq!(refused.code, -32602, "{refused:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_stored_session_resumes_under_its_id_in_its_folder() {
+async fn loading_a_stored_session_replays_its_history_before_answering_then_streams_live() {
     let host = Host::writing_files();
     let folder = TempDir::new().unwrap();
     let id = host.recorded_session(folder.path(), "write a marker");
     host.restart();
-    let mut client = client(&host);
+    let mut acp = host.acp();
+
+    let loaded = acp
+        .call(
+            "session/load",
+            json!({"sessionId": id, "cwd": canonical(folder.path()), "mcpServers": []}),
+        )
+        .await;
+
+    assert!(loaded.is_ok(), "{loaded:?}");
+    assert!(
+        mentions(&acp.inbox, &id, "write a marker"),
+        "history is replayed before the response: {:?}",
+        acp.inbox
+    );
+    let listing = acp.call("session/list", json!({})).await.unwrap();
+    assert_eq!(
+        row(&listing, &id)["_meta"]["nori.dev/session"]["state"],
+        "live"
+    );
+
+    acp.inbox.clear();
+    acp.prompt_alias(&id, "write again").await;
+    acp.until(is_update_mentioning(&id, "write again")).await;
+    tokio::task::block_in_place(|| wait_for_file(&folder.path().join("marker.txt")));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_watcher_loading_a_live_session_sees_its_history_and_its_next_turn() {
+    let host = Host::writing_files();
+    let folder = TempDir::new().unwrap();
+    let id = host.recorded_session(folder.path(), "write a marker");
+    let mut controller = host.acp();
+    let mut watcher = Acp::new(tokio::task::block_in_place(|| host.observer()));
+
+    watcher
+        .call(
+            "session/load",
+            json!({"sessionId": id, "cwd": canonical(folder.path()), "mcpServers": []}),
+        )
+        .await
+        .unwrap();
+    assert!(
+        mentions(&watcher.inbox, &id, "write a marker"),
+        "{:?}",
+        watcher.inbox
+    );
+
+    controller.prompt_alias(&id, "a second request").await;
+    watcher
+        .until(is_update_mentioning(&id, "a second request"))
+        .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn resuming_a_stored_session_attaches_without_replaying_its_history() {
+    let host = Host::writing_files();
+    let folder = TempDir::new().unwrap();
+    let id = host.recorded_session(folder.path(), "write a marker");
+    host.restart();
+    let mut acp = host.acp();
+
+    acp.call(
+        "session/resume",
+        json!({"sessionId": id, "cwd": canonical(folder.path())}),
+    )
+    .await
+    .unwrap();
+    acp.prompt_alias(&id, "write again").await;
+    acp.until(is_update_mentioning(&id, "write again")).await;
+    tokio::task::block_in_place(|| wait_for_file(&folder.path().join("marker.txt")));
+    acp.collect_for(Duration::from_millis(500)).await;
+
+    assert!(
+        !mentions(&acp.log, &id, "write a marker"),
+        "resume does not replay history: {:?}",
+        acp.log
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn loading_in_another_folder_or_an_unknown_session_is_refused() {
+    let host = Host::writing_files();
+    let folder = TempDir::new().unwrap();
+    let elsewhere = TempDir::new().unwrap();
+    let id = host.recorded_session(folder.path(), "write a marker");
+    host.restart();
+    let mut acp = host.acp();
+
+    let moved = acp
+        .call(
+            "session/load",
+            json!({"sessionId": id, "cwd": canonical(elsewhere.path()), "mcpServers": []}),
+        )
+        .await
+        .unwrap_err();
+    let unknown = acp
+        .call(
+            "session/resume",
+            json!({"sessionId": uuid::Uuid::new_v4().to_string(), "cwd": canonical(folder.path())}),
+        )
+        .await
+        .unwrap_err();
+
+    let unknown_load = acp
+        .call(
+            "session/load",
+            json!({"sessionId": uuid::Uuid::new_v4().to_string(), "cwd": canonical(folder.path()), "mcpServers": []}),
+        )
+        .await
+        .unwrap_err();
+    let moved_resume = acp
+        .call(
+            "session/resume",
+            json!({"sessionId": id, "cwd": canonical(elsewhere.path())}),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(moved.code, -32602, "{moved:?}");
+    assert_eq!(moved_resume.code, -32602, "{moved_resume:?}");
+    assert_eq!(unknown.code, -32002, "{unknown:?}");
+    assert_eq!(unknown_load.code, -32002, "{unknown_load:?}");
+    let listing = acp.call("session/list", json!({})).await.unwrap();
+    assert_eq!(
+        row(&listing, &id)["_meta"]["nori.dev/session"]["state"],
+        "stored"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_legacy_resume_alias_still_resumes_a_stored_session() {
+    let host = Host::writing_files();
+    let folder = TempDir::new().unwrap();
+    let id = host.recorded_session(folder.path(), "write a marker");
+    host.restart();
+    let mut client = tokio::task::block_in_place(|| host.client());
 
     let resumed = client
         .request("_nori/session/resume", json!({"session_id": id}))
@@ -133,105 +330,19 @@ async fn a_stored_session_resumes_under_its_id_in_its_folder() {
         .unwrap();
     assert_eq!(resumed["session_id"], id);
 
-    let listing = client.request(LIST, json!({})).await.unwrap();
-    assert_eq!(listing["sessions"][0]["session_id"], id, "{listing}");
-    assert_eq!(listing["sessions"][0]["cwd"], canonical(folder.path()));
-    assert_eq!(
-        listing["transcripts"],
-        json!([]),
-        "a running session is listed once: {listing}"
-    );
+    let listing = client
+        .request("_nori/session/list", json!({}))
+        .await
+        .unwrap();
+    let resumed = listing["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["session_id"] == id)
+        .unwrap_or_else(|| panic!("{listing}"));
+    assert_eq!(resumed["cwd"], canonical(folder.path()));
     send_prompt(&mut client, &id, "write again").await;
     tokio::task::block_in_place(|| wait_for_file(&folder.path().join("marker.txt")));
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn resuming_an_unknown_session_fails() {
-    let host = Host::writing_files();
-    let mut client = client(&host);
-
-    let refused = client
-        .request(
-            "_nori/session/resume",
-            json!({"session_id": uuid::Uuid::new_v4().to_string()}),
-        )
-        .await
-        .unwrap_err();
-
-    assert!(
-        refused.to_string().contains("unknown session id"),
-        "{refused}"
-    );
-    let listing = client.request(LIST, json!({})).await.unwrap();
-    assert_eq!(listing["sessions"], json!([]));
-}
-
-/// Collect `_nori/session/event` envelopes until the transcript replay ends.
-async fn replayed(client: &mut ManagedClient) -> Vec<Value> {
-    let mut envelopes = Vec::new();
-    tokio::time::timeout(Duration::from_secs(30), async {
-        loop {
-            let frame = client.recv().await.unwrap();
-            if frame["method"] != "_nori/session/event" {
-                continue;
-            }
-            let envelope = frame["params"].clone();
-            let finished = envelope.to_string().contains("replay_finished");
-            envelopes.push(envelope);
-            if finished {
-                return;
-            }
-        }
-    })
-    .await
-    .unwrap_or_else(|_| panic!("the replay never finished: {envelopes:?}"));
-    envelopes
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn subscribing_to_a_stored_session_replays_its_transcript() {
-    let host = Host::writing_files();
-    let folder = TempDir::new().unwrap();
-    let id = host.recorded_session(folder.path(), "write a marker");
-    host.restart();
-    let mut client = client(&host);
-
-    client
-        .request("_nori/session/subscribe", json!({"session_id": id}))
-        .await
-        .unwrap();
-    let envelopes = replayed(&mut client).await;
-
-    assert!(
-        envelopes
-            .iter()
-            .all(|envelope| envelope["conversation_id"] == id),
-        "{envelopes:?}"
-    );
-    let seqs = envelopes
-        .iter()
-        .map(|envelope| envelope["seq"].as_i64().unwrap())
-        .collect::<Vec<_>>();
-    assert_eq!(seqs, (1..=seqs.len() as i64).collect::<Vec<_>>());
-    assert!(
-        envelopes
-            .iter()
-            .any(|envelope| envelope.to_string().contains("write a marker")),
-        "the replay carries the recorded prompt: {envelopes:?}"
-    );
-
-    // A cursor skips what the client already has.
-    let last = *seqs.last().unwrap();
-    client
-        .request(
-            "_nori/session/subscribe",
-            json!({"session_id": id, "cursors": {&id: last - 1}}),
-        )
-        .await
-        .unwrap();
-    let rest = replayed(&mut client).await;
-    assert_eq!(rest.len(), 1, "{rest:?}");
-    assert_eq!(rest[0]["seq"], last);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -240,6 +351,19 @@ async fn a_damaged_transcript_is_left_out_of_the_listing() {
     let folder = TempDir::new().unwrap();
     let id = host.recorded_session(folder.path(), "write a marker");
     host.restart();
+    let recorded = std::fs::read_dir(host.0.path().join("transcripts/by-project"))
+        .unwrap()
+        .any(|project| {
+            project
+                .unwrap()
+                .path()
+                .join(format!("sessions/{id}.jsonl"))
+                .exists()
+        });
+    assert!(
+        recorded,
+        "transcripts live where the damaged one is written"
+    );
     let damaged = host
         .0
         .path()
@@ -251,13 +375,7 @@ async fn a_damaged_transcript_is_left_out_of_the_listing() {
     )
     .unwrap();
 
-    let listing = client(&host).request(LIST, json!({})).await.unwrap();
+    let listing = host.acp().call("session/list", json!({})).await.unwrap();
 
-    let listed = listing["transcripts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|stored| stored["session_id"].clone())
-        .collect::<Vec<_>>();
-    assert_eq!(listed, vec![json!(id)]);
+    assert_eq!(listed_ids(&listing), vec![id]);
 }
