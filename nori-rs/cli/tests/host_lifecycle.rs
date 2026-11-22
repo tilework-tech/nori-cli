@@ -497,6 +497,9 @@ async fn a_delegated_child_works_in_its_parents_folder() {
 #[path = "host_lifecycle/managed.rs"]
 mod managed;
 
+#[path = "host_lifecycle/transcripts.rs"]
+mod transcripts;
+
 #[test]
 fn machine_transport_authenticates_before_upgrade() {
     use std::io::Write;

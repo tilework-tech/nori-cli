@@ -107,6 +107,17 @@ host ls / stop / new --------------+                   SessionManager
   exact ID wins; several matches fail with the candidates (ID, agent, title)
   listed; no match fails with a pointer to `nori host ls | cat` (full IDs) and
   to `nori attach` without an ID. The host itself only knows full IDs.
+- [Stored sessions](transcripts.rs) are transcripts on disk that the host is
+  not running. [HostService](service.rs) adds a page of them to
+  `_nori/session/list` (`transcripts`, `transcripts_next_cursor`; keyset
+  cursor over file modification time and ID, so new transcripts do not shift
+  later pages), replays one on `_nori/session/subscribe` with an explicit ID
+  the manager does not know, and on `_nori/session/resume` starts one under
+  its own ID in its recorded folder with its recorded agent through
+  `SessionManager::resume_stored`. A stored-session subscription has no live
+  events; its channel stays open until the client replaces it, because a
+  closed event stream ends the connection. Wire details:
+  [remote-control.md](../../../../docs/remote-control.md#stored-sessions).
 - Lifecycle requests prepare agents using the host's configuration.
   `_nori/session/new` takes optional `cwd`, `agent`, and `prompt` strings and
   replies `{session_id, cwd}`. A `cwd` must be absolute; [HostService](service.rs)

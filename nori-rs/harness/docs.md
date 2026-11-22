@@ -454,7 +454,13 @@ pending permission: the continuing session can be controlled after reconnect.
 The [follow-up operation](../cli/src/host/docs.md#mid-turn-follow-ups) uses the same harness session driver for direct input and background-host controllers. It checks the expected turn, retains a receipt keyed by message ID and routes an explicit queue or guarded fallback through the existing prompt FIFO. A successful injection leaves the original prompt responsible for completion, usage and cancellation.
 
 The background [`HostService`](../cli/src/host/service.rs) composes this
-adapter with manager lifecycle operations for new, close, cancel, and resume.
+adapter with manager lifecycle operations for new, close, cancel, and resume,
+and serves stored sessions from `TranscriptLoader::list_stored_sessions` and
+`find_stored_session`, which scan `transcripts/by-project/*/sessions/*.jsonl`
+reading only each file's metadata line and modification time.
+`SessionManager::resume_stored` starts a session the manager has not run from
+its transcript under the transcript's own ID, so the recorder continues the
+same file; the journal numbers it from 1.
 It owns the manager independently of every attached terminal. Transport
 authentication and controller/watcher admission live below this layer in
 [`acp-host`](../acp-host/src/remote/host_control.rs); the harness remains the

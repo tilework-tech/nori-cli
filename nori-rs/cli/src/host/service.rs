@@ -48,7 +48,7 @@ struct LaunchScope {
 impl HostService {
     /// The host's configuration as it applies in `folder`, so the folder's
     /// own project trust and settings hold for its sessions.
-    async fn config_in(&self, folder: PathBuf) -> anyhow::Result<NoriConfig> {
+    pub(super) async fn config_in(&self, folder: PathBuf) -> anyhow::Result<NoriConfig> {
         let overrides = NoriConfigOverrides {
             cwd: Some(folder),
             ..self.overrides.clone()
@@ -59,7 +59,7 @@ impl HostService {
             .context("could not load configuration for the session folder")
     }
 
-    fn prepare(config: NoriConfig) -> AgentPrepareSpec {
+    pub(super) fn prepare(config: NoriConfig) -> AgentPrepareSpec {
         AgentPrepareSpec {
             config: Arc::new(config),
             cli_version: env!("CARGO_PKG_VERSION").into(),
@@ -140,10 +140,12 @@ impl HostService {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("session_id is required"))?;
         let id = ConversationId::from_string(id)?;
-        let record = self
-            .manager
-            .get(&id)
-            .ok_or_else(|| anyhow::anyhow!("unknown session id"))?;
+        let Some(record) = self.manager.get(&id) else {
+            if method == "_nori/session/resume" {
+                return self.resume_stored(&id).await;
+            }
+            anyhow::bail!("unknown session id");
+        };
         match method {
             "_nori/session/close" => self.manager.close(&id, Duration::ZERO).await?,
             "_nori/session/cancel" => {
@@ -161,6 +163,72 @@ impl HostService {
             _ => anyhow::bail!("unknown host operation"),
         }
         Ok(json!({"session_id":id.to_string()}))
+    }
+}
+
+impl HostService {
+    /// Serve `_nori/session/list` with the stored sessions this host is not
+    /// running, and `_nori/session/subscribe` for a stored session. `None`
+    /// leaves the request to the manager.
+    async fn stored_sessions(&self, method: &str, request: &Value) -> Option<ManagedReply> {
+        let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
+        let error = |code: i32, message: String| ManagedReply {
+            delivery_guard: None,
+            response: json!({"jsonrpc":"2.0","id":request["id"],"error":{"code":code,"message":message}}),
+            subscription: None,
+        };
+        match method {
+            "_nori/session/list" => {
+                let mut reply = self.managed.request(request.clone()).await;
+                let Some(result) = reply.response.get_mut("result") else {
+                    return Some(reply);
+                };
+                let running = self
+                    .manager
+                    .list()
+                    .into_iter()
+                    .map(|record| record.conversation_id.to_string())
+                    .collect();
+                match super::transcripts::list(&self.config.nori_home, &running, &params).await {
+                    Ok((transcripts, next)) => {
+                        result["transcripts"] = json!(transcripts);
+                        result["transcripts_next_cursor"] = json!(next);
+                        Some(reply)
+                    }
+                    Err(failure) => {
+                        let code = if failure
+                            .downcast_ref::<super::transcripts::InvalidListParams>()
+                            .is_some()
+                        {
+                            -32602
+                        } else {
+                            -32000
+                        };
+                        Some(error(code, failure.to_string()))
+                    }
+                }
+            }
+            "_nori/session/subscribe" => {
+                let id = ConversationId::from_string(params.get("session_id")?.as_str()?).ok()?;
+                if self.manager.get(&id).is_some() {
+                    return None;
+                }
+                let cursors = serde_json::from_value(
+                    params.get("cursors").cloned().unwrap_or_else(|| json!({})),
+                )
+                .ok()?;
+                match super::transcripts::subscribe(&self.config.nori_home, &id, &cursors).await {
+                    Ok(Some(subscription)) => Some(ManagedReply {
+                        delivery_guard: None,
+                        response: json!({"jsonrpc":"2.0","id":request["id"],"result":{"subscribed":true}}),
+                        subscription: Some(subscription),
+                    }),
+                    Ok(None) => None,
+                    Err(failure) => Some(error(-32000, failure.to_string())),
+                }
+            }
+            _ => None,
+        }
     }
 }
 
@@ -227,6 +295,11 @@ impl ManagedAgent for HostService {
 
     async fn request(&self, request: Value) -> ManagedReply {
         let method = request["method"].as_str().unwrap_or_default();
+        if self.launches.is_none()
+            && let Some(reply) = self.stored_sessions(method, &request).await
+        {
+            return reply;
+        }
         if self.launches.is_none()
             && !matches!(
                 method,

@@ -7,6 +7,7 @@ mod session_lookup;
 mod state;
 mod stdio;
 mod table;
+mod transcripts;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
