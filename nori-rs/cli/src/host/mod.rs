@@ -450,6 +450,7 @@ async fn serve(
         settings,
         instance: uuid::Uuid::new_v4().to_string(),
         deleted: Default::default(),
+        restarts: tokio::sync::Mutex::new(()),
     });
     let server = RemoteAcpServer::bind_host(
         format!("127.0.0.1:{port}").parse()?,

@@ -342,6 +342,45 @@ async fn a_pending_permission_request_is_asked_again_after_reconnecting() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn loading_a_session_does_not_ask_about_permissions_already_answered() {
+    let host = host_with("", &[("MOCK_AGENT_REQUEST_PERMISSION", "1")]);
+    let folder = TempDir::new().unwrap();
+    let mut first = controller(&host);
+    let (id, _) = new_session(&mut first, folder.path()).await;
+    first
+        .send(json!({"jsonrpc":"2.0","id":"turn","method":"session/prompt","params":{"sessionId":id,"prompt":text("run the command")}}))
+        .await;
+    let request = first.until(is_permission_request).await;
+    first
+        .send(json!({"jsonrpc":"2.0","id":request["id"],"result":{"outcome":{"outcome":"selected","optionId":"allow"}}}))
+        .await;
+    first.until(|frame| frame["id"] == "turn").await;
+    drop(first);
+
+    let mut second = controller(&host);
+    second.call("_nori/control/take", json!({})).await.unwrap();
+    second
+        .call(
+            "session/load",
+            json!({"sessionId": id, "cwd": canonical(folder.path()), "mcpServers": []}),
+        )
+        .await
+        .unwrap();
+    second.collect_for(Duration::from_millis(500)).await;
+
+    assert!(
+        mentions(&second.log, &id, "Permission granted"),
+        "the history is replayed: {:?}",
+        second.log
+    );
+    assert!(
+        !second.log.iter().any(is_permission_request),
+        "an answered request is not asked again: {:?}",
+        second.log
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn watchers_cannot_prompt_close_or_delete() {
     let host = host_with("", &[]);
     let folder = TempDir::new().unwrap();

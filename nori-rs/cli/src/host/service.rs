@@ -44,6 +44,9 @@ pub(super) struct HostService {
     pub instance: String,
     /// Sessions a client deleted during this host's lifetime.
     pub deleted: std::sync::Mutex<std::collections::HashSet<ConversationId>>,
+    /// Serializes restarting, replacing and deleting sessions, so two
+    /// clients cannot start one session twice or revive a deleted one.
+    pub restarts: tokio::sync::Mutex<()>,
 }
 
 #[derive(serde::Deserialize)]
@@ -148,6 +151,9 @@ impl HostService {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("session_id is required"))?;
         let id = ConversationId::from_string(id)?;
+        if self.is_deleted(&id) {
+            anyhow::bail!("unknown session id");
+        }
         let Some(_) = self.manager.get(&id) else {
             if method == "_nori/session/resume"
                 && let Some(transcript) =
@@ -203,6 +209,10 @@ impl ManagedAgent for HostService {
 
     fn runs_concurrently(&self, method: &str) -> bool {
         self.launches.is_none() && super::acp::runs_concurrently(method)
+    }
+
+    fn accepts_client_messages(&self) -> bool {
+        self.launches.is_none()
     }
 
     fn instance_id(&self) -> Option<String> {

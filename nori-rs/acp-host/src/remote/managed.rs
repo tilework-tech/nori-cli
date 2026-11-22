@@ -90,6 +90,13 @@ pub trait ManagedAgent: Send + Sync + 'static {
         false
     }
 
+    /// Whether this host takes client notifications and responses through
+    /// [`message_from`](Self::message_from). Otherwise frames without a
+    /// request ID are refused as invalid requests.
+    fn accepts_client_messages(&self) -> bool {
+        false
+    }
+
     /// A notification, or a response to one of the host's own requests,
     /// from an initialized connection. Runs concurrently with the
     /// connection's other messages.

@@ -752,10 +752,12 @@ do not write it.
 The connection that controls the host receives `session/request_permission`
 requests for every session it is attached to, with `sessionId` set to the
 conversation ID and a host-chosen string ID. Watchers never receive them.
-A controller that attaches later, or takes control with
-`_nori/control/take`, is asked about requests still open. The first answer
-from any client (including the legacy `_nori/session/respond`) wins; later
-answers are ignored. An error response counts as `cancelled`. Under the
+Requests in replayed history are not asked: a controller that attaches
+later, or takes control with `_nori/control/take`, is asked only about
+requests the session still waits on. Only the current controller's answer is
+used; the first answer (including one through the legacy
+`_nori/session/respond`) wins and later ones are ignored. An error response
+counts as `cancelled`. Under the
 `approve-all` mode the host answers itself and no client is asked.
 
 ### Errors from the agent
@@ -851,8 +853,10 @@ An adapter's own `config_option_update` reaches clients as the complete list,
 host options included. Its own `current_mode_update` is not forwarded.
 Watchers get `-32016` from both methods.
 
-The mode and every adapter option a client sets are kept in
-`$NORI_HOME/host/session-settings.json`. When a failed or stored session
+The mode, every adapter option a client sets, and the `mcpServers` a
+session was created with are kept in `$NORI_HOME/host/session-settings.json`
+(mode `0600`). Restarting, changing the agent of, and deleting a session are
+serialized, so two clients loading one stored session start it once. When a failed or stored session
 restarts, its mode becomes the starting approval policy, its `model` value
 becomes the adapter's starting model, and the other options are set again
 once the adapter has started. Changing the agent clears the remembered

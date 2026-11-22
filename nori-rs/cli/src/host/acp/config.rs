@@ -34,6 +34,9 @@ pub(super) struct SessionSettings {
     /// Adapter option values by option ID, including the model.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub options: BTreeMap<String, String>,
+    /// The ACP `mcpServers` the client started the session with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_servers: Option<Value>,
 }
 
 /// Session settings kept in `$NORI_HOME/host/session-settings.json`, so they
@@ -64,16 +67,37 @@ impl SettingsStore {
     }
 
     pub(super) fn update(&self, id: &ConversationId, change: impl FnOnce(&mut SessionSettings)) {
-        let snapshot = {
-            let mut sessions = self.lock();
-            change(sessions.entry(id.to_string()).or_default());
-            serde_json::to_vec_pretty(&*sessions)
-        };
-        let written = snapshot.map_err(std::io::Error::other).and_then(|bytes| {
-            let temporary = self.path.with_extension("json.tmp");
-            std::fs::write(&temporary, bytes)?;
-            std::fs::rename(&temporary, &self.path)
-        });
+        let mut sessions = self.lock();
+        change(sessions.entry(id.to_string()).or_default());
+        self.save(&sessions);
+    }
+
+    pub(super) fn remove(&self, id: &ConversationId) {
+        let mut sessions = self.lock();
+        if sessions.remove(&id.to_string()).is_some() {
+            self.save(&sessions);
+        }
+    }
+
+    /// Write the file while the caller holds the lock, so concurrent
+    /// changes are saved in order. The file is private to the user.
+    fn save(&self, sessions: &HashMap<String, SessionSettings>) {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let written = serde_json::to_vec_pretty(sessions)
+            .map_err(std::io::Error::other)
+            .and_then(|bytes| {
+                let temporary = self.path.with_extension("json.tmp");
+                let mut file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .mode(0o600)
+                    .open(&temporary)?;
+                file.write_all(&bytes)?;
+                file.sync_all()?;
+                std::fs::rename(&temporary, &self.path)
+            });
         if let Err(error) = written {
             tracing::warn!(%error, "could not save session settings");
         }
@@ -313,13 +337,15 @@ impl HostService {
         let mut config = self.config_in(record.cwd).await?;
         config.active_agent = agent.to_owned();
         config.approval_policy = mode.approval_policy();
-        self.settings
-            .update(id, |settings| settings.options.clear());
+        self.restore_mcp_servers(id, &mut config);
+        let _restart = self.restarts.lock().await;
         // Attached connections keep following the conversation ID, so they
         // see the new agent's updates without attaching again.
         self.manager
             .replace_agent(id, Self::prepare(config))
             .await?;
+        self.settings
+            .update(id, |settings| settings.options.clear());
         Ok(())
     }
 
@@ -347,6 +373,7 @@ impl HostService {
         id: &ConversationId,
         config: &mut nori_config::NoriConfig,
     ) {
+        self.restore_mcp_servers(id, config);
         let settings = self.settings.get(id);
         if let Some(mode) = settings.mode.as_deref().and_then(PermissionMode::from_id) {
             config.approval_policy = mode.approval_policy();
@@ -358,6 +385,24 @@ impl HostService {
                 .default_model_override_keys
                 .retain(|key| key != &slug);
             config.default_model_override_keys.insert(0, slug);
+        }
+    }
+
+    /// Give a restarted session the MCP servers its client started it with.
+    fn restore_mcp_servers(&self, id: &ConversationId, config: &mut nori_config::NoriConfig) {
+        let Some(servers) = self.settings.get(id).mcp_servers else {
+            return;
+        };
+        let servers: Vec<acp::McpServer> = serde_json::from_value(servers).unwrap_or_default();
+        for server in &servers {
+            match super::session::mcp_server(server) {
+                Ok((name, server)) => {
+                    config.mcp_servers.insert(name, server);
+                }
+                Err(error) => {
+                    tracing::warn!(message = error.message, "could not restore an MCP server");
+                }
+            }
         }
     }
 

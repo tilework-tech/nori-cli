@@ -137,7 +137,7 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
 
 /// Outbound messages one connection may have queued before it counts as
 /// too slow and is closed.
-const OUTBOUND_CAPACITY: usize = 4096;
+const OUTBOUND_CAPACITY: usize = 16384;
 
 async fn serve<M: ManagedAgent>(
     socket: WebSocket,
@@ -180,6 +180,7 @@ async fn serve<M: ManagedAgent>(
                             // Notifications and answers to the host's own
                             // requests carry no reply.
                             if initialized
+                                && state.host.accepts_client_messages()
                                 && request["jsonrpc"] == "2.0"
                                 && ((request["method"].is_string() && request.get("id").is_none())
                                     || (request.get("method").is_none()

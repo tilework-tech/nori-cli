@@ -59,6 +59,9 @@ pub(super) struct Forwarder {
     /// Permission requests waiting on a client, by session.
     open: HashMap<String, Vec<(acp::RequestId, acp::RequestPermissionRequest)>>,
     asked: HashSet<(String, acp::RequestId)>,
+    /// False while history is being sent: requests in history may already
+    /// be answered, and the ones still open are asked once attached.
+    asking: bool,
 }
 
 impl Forwarder {
@@ -78,6 +81,7 @@ impl Forwarder {
             delivered: watch::channel(0).0,
             open: HashMap::new(),
             asked: HashSet::new(),
+            asking: false,
         }
     }
 
@@ -186,7 +190,7 @@ impl Forwarder {
     /// Send the controller every open permission request it has not been
     /// asked on this connection.
     fn ask(&mut self) {
-        if !self.connection.is_controller() {
+        if !self.asking || !self.connection.is_controller() {
             return;
         }
         for (session, requests) in &self.open {
@@ -219,10 +223,17 @@ impl Forwarder {
     /// Learn the permission requests a session is already waiting on, so a
     /// client attaching after they were sent is still asked.
     fn seed_open_requests(&mut self, id: &ConversationId) {
+        self.asking = true;
         let Some(record) = self.manager.get(id) else {
             return;
         };
+        // History may hold requests answered since; keep only those the
+        // session still waits on.
+        if let Some(open) = self.open.get_mut(&id.to_string()) {
+            open.retain(|(request_id, _)| record.pending_requests.contains(request_id));
+        }
         if record.pending_requests.is_empty() {
+            self.ask();
             return;
         }
         let cursors = HashMap::from([(id.to_string(), 0)]);
@@ -275,8 +286,13 @@ impl Forwarder {
                     if changed.is_err() {
                         break;
                     }
-                    // A client that took control is asked what is still open.
-                    self.ask();
+                    if self.connection.is_controller() {
+                        // A client that took control is asked what is still open.
+                        self.ask();
+                    } else {
+                        // Ask again if this client takes control back.
+                        self.asked.clear();
+                    }
                 }
             }
         }
@@ -341,6 +357,16 @@ impl HostService {
         replay: bool,
     ) -> Result<Value, AcpError> {
         let LoadParams { id, cwd } = parse(params)?;
+        let restarting = self
+            .manager
+            .get(&id)
+            .is_none_or(|record| needs_restart(record.status));
+        // Hold the lock through the restart; the state is read again below.
+        let _restart = if restarting {
+            Some(self.restarts.lock().await)
+        } else {
+            None
+        };
         if self.is_deleted(&id) {
             return Err(AcpError::not_found("unknown session"));
         }
@@ -370,7 +396,7 @@ impl HostService {
                                 nori_harness::transcript::load_transcript_from_path(path)
                                     .await
                                     .map_err(AcpError::internal)?;
-                            replay_transcript(&connection, &session, &transcript);
+                            replay_transcript(&connection, &session, &transcript).await?;
                         }
                         self.manager
                             .subscribe_from(
@@ -400,7 +426,7 @@ impl HostService {
                     let transcript = nori_harness::transcript::load_transcript_from_path(path)
                         .await
                         .map_err(AcpError::internal)?;
-                    replay_transcript(&connection, &session, &transcript);
+                    replay_transcript(&connection, &session, &transcript).await?;
                 }
                 let latest = self
                     .manager
@@ -433,7 +459,7 @@ impl HostService {
                     .ok_or_else(|| AcpError::not_found("unknown session"))?;
                 same_folder(&cwd, &transcript.meta.cwd)?;
                 if replay {
-                    replay_transcript(&connection, &session, &transcript);
+                    replay_transcript(&connection, &session, &transcript).await?;
                 }
                 self.resume_stored(&id, transcript).await?;
                 let mut subscription = self
@@ -486,6 +512,7 @@ impl HostService {
             }
         }
         forwarder.until_started(&mut subscription.events).await?;
+        forwarder.seed_open_requests(id);
         let delivered = forwarder.delivered();
         self.acp.attach(
             client,
@@ -497,15 +524,21 @@ impl HostService {
     }
 }
 
-/// Send a transcript's history to one connection.
-fn replay_transcript(
+/// Send a transcript's history to one connection, waiting for room rather
+/// than treating a long history as a client that fell behind.
+async fn replay_transcript(
     connection: &HostConnection,
     session: &str,
     transcript: &nori_harness::transcript::Transcript,
-) {
+) -> Result<(), AcpError> {
     for event in nori_harness::backend::transcript_to_replay_session_events(transcript) {
         if let Some(update) = session_update(session, &event) {
-            connection.deliver(update);
+            connection
+                .outbound
+                .send(update)
+                .await
+                .map_err(|_| AcpError::internal("the connection closed"))?;
         }
     }
+    Ok(())
 }

@@ -26,7 +26,7 @@ use super::attach::ATTACHED_QUEUE;
 use crate::host::service::HostService;
 
 /// An ACP `mcpServers` entry as the agent configuration it becomes.
-fn mcp_server(server: &acp::McpServer) -> Result<(String, McpServerConfig), AcpError> {
+pub(super) fn mcp_server(server: &acp::McpServer) -> Result<(String, McpServerConfig), AcpError> {
     let (name, raw) = match server {
         acp::McpServer::Stdio(server) => (
             server.name.clone(),
@@ -62,7 +62,7 @@ fn mcp_server(server: &acp::McpServer) -> Result<(String, McpServerConfig), AcpE
 }
 
 impl HostService {
-    pub(super) fn is_deleted(&self, id: &ConversationId) -> bool {
+    pub(in crate::host) fn is_deleted(&self, id: &ConversationId) -> bool {
         self.deleted
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -141,8 +141,19 @@ impl HostService {
         let id = session.conversation_id;
         if let Err(error) = self.attach_new(client, &id).await {
             // A session that never started is not the client's to see.
-            self.mark_deleted(id);
+            let ended = self
+                .manager
+                .get(&id)
+                .is_none_or(|record| super::attach::needs_restart(record.status));
+            if ended {
+                self.mark_deleted(id);
+            }
             return Err(error);
+        }
+        if !servers.is_empty() {
+            let servers = serde_json::to_value(&servers).map_err(AcpError::internal)?;
+            self.settings
+                .update(&id, |settings| settings.mcp_servers = Some(servers));
         }
         self.managed.set_selected_session(Some(id));
         let (options, modes) = self.session_configuration(&id).await?;
@@ -275,6 +286,7 @@ impl HostService {
     /// `session/delete`: close the session if it runs, remove its transcript
     /// under `$NORI_HOME`, and leave it out of `session/list`.
     pub(super) async fn delete_session(&self, id: &ConversationId) -> Result<Value, AcpError> {
+        let _restart = self.restarts.lock().await;
         if self.is_deleted(id) {
             return Err(AcpError::not_found("unknown session"));
         }
@@ -285,41 +297,53 @@ impl HostService {
             }
             None => {
                 let loader = nori_harness::TranscriptLoader::new(self.config.nori_home.clone());
-                loader
+                let stored = loader
                     .find_stored_session(&id.to_string())
                     .await
                     .map_err(AcpError::internal)?
-                    .map(|stored| stored.path)
+                    .ok_or_else(|| AcpError::not_found("unknown session"))?;
+                Some(stored.path)
             }
         };
-        let Some(path) = path else {
-            return Err(AcpError::not_found("unknown session"));
-        };
-        if path.starts_with(&self.config.nori_home) {
-            match std::fs::remove_file(&path) {
-                Ok(()) => {}
+        if let Some(path) = path {
+            // Only transcripts the host keeps under $NORI_HOME are removed.
+            let transcripts = self
+                .config
+                .nori_home
+                .join("transcripts")
+                .canonicalize()
+                .map_err(AcpError::internal)?;
+            match path.canonicalize() {
+                Ok(path) if path.starts_with(&transcripts) => {
+                    std::fs::remove_file(&path).map_err(AcpError::internal)?;
+                }
+                Ok(path) => {
+                    return Err(AcpError::internal(format!(
+                        "{} is not a transcript this host keeps",
+                        path.display()
+                    )));
+                }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(AcpError::internal(error)),
             }
         }
         self.mark_deleted(*id);
-        self.settings
-            .update(id, |settings| *settings = Default::default());
+        self.settings.remove(id);
         Ok(json!({}))
     }
 
     /// A client's answer to `session/request_permission`. The first answer
     /// to a request wins; later ones are ignored.
     pub(super) async fn answer_permission(&self, client: i64, id: &str, message: &Value) {
-        let Some(ask) = self.acp.take_ask(client, id) else {
-            return;
-        };
         let Ok(connection) = self.acp.connection(client) else {
             return;
         };
         if !connection.is_controller() {
             return;
         }
+        let Some(ask) = self.acp.take_ask(client, id) else {
+            return;
+        };
         let response = message
             .get("result")
             .cloned()
