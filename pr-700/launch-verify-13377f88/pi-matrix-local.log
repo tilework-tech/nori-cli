@@ -1,0 +1,14 @@
+Installed servers {"pi-acp": "0.0.35", "@earendil-works/pi-coding-agent": "1.6.0"}
+local plain: end_turn, read + terminal, 3 calls; inputs SHA-256 d38449c621dba917803cf58b636d97bd436111bccc238352cbbf35ea98091208
+host plain: end_turn, read + terminal, 3 calls; inputs SHA-256 d38449c621dba917803cf58b636d97bd436111bccc238352cbbf35ea98091208
+managed plain: end_turn, read + terminal, 3 calls; inputs SHA-256 d38449c621dba917803cf58b636d97bd436111bccc238352cbbf35ea98091208
+local env: end_turn, read + terminal, 3 calls; inputs SHA-256 92228bc2091324e76c12d047da5f1352ae760e2dd1b87f0f14c062b0db8db1a0
+host env: end_turn, read + terminal, 3 calls; inputs SHA-256 92228bc2091324e76c12d047da5f1352ae760e2dd1b87f0f14c062b0db8db1a0
+managed env: end_turn, read + terminal, 3 calls; inputs SHA-256 92228bc2091324e76c12d047da5f1352ae760e2dd1b87f0f14c062b0db8db1a0
+local wrapped: end_turn, read + terminal, 3 calls; inputs SHA-256 9dedd9efcdc84db66c96f7a95f879e836aec6654876f5dcecffb45c20dee99c4
+host wrapped: end_turn, read + terminal, 3 calls; inputs SHA-256 9dedd9efcdc84db66c96f7a95f879e836aec6654876f5dcecffb45c20dee99c4
+managed wrapped: tracked edits and untracked files preserved before staging, during turn and after cleanup
+managed wrapped: end_turn, read + terminal, 3 calls; inputs SHA-256 9dedd9efcdc84db66c96f7a95f879e836aec6654876f5dcecffb45c20dee99c4
+local inner: end_turn, read + terminal, 3 calls; inputs SHA-256 f953d4fb9d65bcc31cbc9f0f6dd8f0c2f8cf0c9735c5dfd5384beeff15a4e2d4
+host inner: end_turn, read + terminal, 3 calls; inputs SHA-256 f953d4fb9d65bcc31cbc9f0f6dd8f0c2f8cf0c9735c5dfd5384beeff15a4e2d4
+managed inner: end_turn, read + terminal, 3 calls; inputs SHA-256 f953d4fb9d65bcc31cbc9f0f6dd8f0c2f8cf0c9735c5dfd5384beeff15a4e2d4

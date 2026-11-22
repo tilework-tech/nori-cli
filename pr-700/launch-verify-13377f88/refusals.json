@@ -1,0 +1,83 @@
+[
+ {
+  "case": "inside-runtime",
+  "expected": "admitted",
+  "exit": 0,
+  "stdoutEmpty": false,
+  "spawned": true,
+  "pass": true,
+  "reason": ""
+ },
+ {
+  "case": "outside-runtime",
+  "expected": "refused before spawn",
+  "exit": 1,
+  "stdoutEmpty": true,
+  "spawned": false,
+  "pass": true,
+  "reason": "    host error -32602: managed wrapper must resolve inside runtimeDir"
+ },
+ {
+  "case": "missing-runtimeDir",
+  "expected": "refused before spawn",
+  "exit": 1,
+  "stdoutEmpty": true,
+  "spawned": false,
+  "pass": true,
+  "reason": "    host error -32602: a managed wrapper requires a prepared runtimeDir"
+ },
+ {
+  "case": "symlink-inside-to-outside",
+  "expected": "refused before spawn",
+  "exit": 1,
+  "stdoutEmpty": true,
+  "spawned": false,
+  "pass": true,
+  "reason": "    host error -32602: managed wrapper must resolve inside runtimeDir"
+ },
+ {
+  "case": "symlink-outside-to-inside",
+  "expected": "admitted",
+  "exit": 0,
+  "stdoutEmpty": false,
+  "spawned": true,
+  "pass": true,
+  "reason": ""
+ },
+ {
+  "case": "dotdot-escape",
+  "expected": "refused before spawn",
+  "exit": 1,
+  "stdoutEmpty": true,
+  "spawned": false,
+  "pass": true,
+  "reason": "    host error -32602: managed wrapper must resolve inside runtimeDir"
+ },
+ {
+  "case": "system-path-/bin/sh",
+  "expected": "refused before spawn",
+  "exit": 1,
+  "stdoutEmpty": true,
+  "spawned": false,
+  "pass": true,
+  "reason": "    host error -32602: managed wrapper must resolve inside runtimeDir"
+ },
+ {
+  "case": "blank-version",
+  "expected": "refused before spawn",
+  "exit": 1,
+  "stdoutEmpty": true,
+  "spawned": false,
+  "pass": true,
+  "reason": "    host error -32602: missing executable version"
+ },
+ {
+  "case": "wrapper-is-runtimeDir",
+  "expected": "refused before spawn",
+  "exit": 1,
+  "stdoutEmpty": true,
+  "spawned": false,
+  "pass": true,
+  "reason": "    host error -32602: launch path must name an installed absolute executable"
+ }
+]

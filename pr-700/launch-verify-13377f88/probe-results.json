@@ -1,0 +1,1852 @@
+[
+ {
+  "check": "exec-alpha-plain: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "exec-alpha-plain: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '--agent', 'probe-alpha', 'exec', '--acp', '-C', '<tmp>/exec-alpha-plain/work space'], ['python3', '<checkout>/.local/probe/bin/alph"
+ },
+ {
+  "check": "exec-alpha-plain: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "exec-alpha-plain: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/exec-alpha-plain/work space"
+ },
+ {
+  "check": "exec-alpha-plain: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-plain: plain keeps PROBE_DROP and has no runtime dir",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-plain: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-plain: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-plain: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "exec-alpha-plain: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "exec-alpha-env: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "exec-alpha-env: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '--agent', 'probe-alpha', 'exec', '--acp', '-C', '<tmp>/exec-alpha-env/work space'], ['python3', '<checkout>/.local/probe/bin/alpha "
+ },
+ {
+  "check": "exec-alpha-env: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "exec-alpha-env: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/exec-alpha-env/work space"
+ },
+ {
+  "check": "exec-alpha-env: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-env: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-env: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-env: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/exec-alpha-env/home/prepared rt"
+ },
+ {
+  "check": "exec-alpha-env: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-env: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-env: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "exec-alpha-env: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "exec-alpha-env: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-wrapped: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "exec-alpha-wrapped: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '--agent', 'probe-alpha', 'exec', '--acp', '-C', '<tmp>/exec-alpha-wrapped/work space'], ['python3', '<checkout>/.local/probe/bin/al"
+ },
+ {
+  "check": "exec-alpha-wrapped: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "exec-alpha-wrapped: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/exec-alpha-wrapped/work space"
+ },
+ {
+  "check": "exec-alpha-wrapped: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-wrapped: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-wrapped: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-wrapped: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/exec-alpha-wrapped/home/prepared rt"
+ },
+ {
+  "check": "exec-alpha-wrapped: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-wrapped: wrapper argv = prefix + server + literal args",
+  "pass": true,
+  "detail": "['--tag', 'w 1', '--', '<checkout>/.local/probe/bin/alpha acp.py', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "exec-alpha-wrapped: wrapper exec'd into the server (same pid)",
+  "pass": true,
+  "detail": "(50937, 50937)"
+ },
+ {
+  "check": "exec-alpha-wrapped: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "exec-alpha-wrapped: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "exec-alpha-wrapped: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-plain: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "exec-beta-plain: mock agent self-report",
+  "pass": true,
+  "detail": "ENV:PROBE_CHILD_BETA=<unset>"
+ },
+ {
+  "check": "exec-beta-plain: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '--agent', 'probe-beta', 'exec', '--acp', '-C', '<tmp>/exec-beta-plain/work space'], ['<checkout>/nori-rs/target/debug/mock_acp_agen"
+ },
+ {
+  "check": "exec-beta-plain: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "exec-beta-plain: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/exec-beta-plain/work space"
+ },
+ {
+  "check": "exec-beta-plain: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-plain: plain keeps PROBE_DROP and has no runtime dir",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-plain: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-plain: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-plain: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "exec-beta-plain: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "exec-beta-env: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "exec-beta-env: mock agent self-report",
+  "pass": true,
+  "detail": "ENV:PROBE_CHILD_BETA=synthetic-beta-exec"
+ },
+ {
+  "check": "exec-beta-env: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '--agent', 'probe-beta', 'exec', '--acp', '-C', '<tmp>/exec-beta-env/work space'], ['<checkout>/nori-rs/target/debug/mock_acp_agent'"
+ },
+ {
+  "check": "exec-beta-env: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "exec-beta-env: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/exec-beta-env/work space"
+ },
+ {
+  "check": "exec-beta-env: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-env: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-env: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-env: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/exec-beta-env/home/prepared rt"
+ },
+ {
+  "check": "exec-beta-env: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-env: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-env: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "exec-beta-env: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "exec-beta-env: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-wrapped: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "exec-beta-wrapped: mock agent self-report",
+  "pass": true,
+  "detail": "ENV:PROBE_CHILD_BETA=synthetic-beta-exec"
+ },
+ {
+  "check": "exec-beta-wrapped: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '--agent', 'probe-beta', 'exec', '--acp', '-C', '<tmp>/exec-beta-wrapped/work space'], ['<checkout>/nori-rs/target/debug/mock_acp_ag"
+ },
+ {
+  "check": "exec-beta-wrapped: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "exec-beta-wrapped: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/exec-beta-wrapped/work space"
+ },
+ {
+  "check": "exec-beta-wrapped: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-wrapped: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-wrapped: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-wrapped: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/exec-beta-wrapped/home/prepared rt"
+ },
+ {
+  "check": "exec-beta-wrapped: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-beta-wrapped: wrapper argv = prefix + server + literal args",
+  "pass": true,
+  "detail": "['--tag', 'w 1', '--', '<checkout>/nori-rs/target/debug/mock_acp_agent', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "exec-beta-wrapped: wrapper exec'd into the server (same pid)",
+  "pass": true,
+  "detail": "(51015, 51015)"
+ },
+ {
+  "check": "exec-beta-wrapped: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "exec-beta-wrapped: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "exec-beta-wrapped: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: ACP exchange -> cancelled",
+  "pass": true,
+  "detail": "cancelled"
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '--agent', 'probe-alpha', 'exec', '--acp', '-C', '<tmp>/exec-alpha-wrapped-cancel/work space'], ['python3', '<checkout>/.local/probe"
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/exec-alpha-wrapped-cancel/work space"
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/exec-alpha-wrapped-cancel/home/prepared rt"
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: wrapper argv = prefix + server + literal args",
+  "pass": true,
+  "detail": "['--tag', 'w 1', '--', '<checkout>/.local/probe/bin/alpha acp.py', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: wrapper exec'd into the server (same pid)",
+  "pass": true,
+  "detail": "(51036, 51036)"
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "exec-alpha-wrapped-cancel: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-plain/alpha: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '0'], ['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '"
+ },
+ {
+  "check": "host-pair-plain/alpha: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "host-pair-plain/alpha: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/host-pair-plain/work space"
+ },
+ {
+  "check": "host-pair-plain/alpha: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-plain/alpha: plain keeps PROBE_DROP and has no runtime dir",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-plain/alpha: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-plain/alpha: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-plain/beta: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '0'], ['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '"
+ },
+ {
+  "check": "host-pair-plain/beta: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "host-pair-plain/beta: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/host-pair-plain/work space"
+ },
+ {
+  "check": "host-pair-plain/beta: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-plain/beta: plain keeps PROBE_DROP and has no runtime dir",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-plain/beta: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-plain/beta: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-plain: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(3, [])"
+ },
+ {
+  "check": "host-pair-plain: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "host-pair-env/alpha: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '0'], ['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '"
+ },
+ {
+  "check": "host-pair-env/alpha: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "host-pair-env/alpha: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/host-pair-env/work space"
+ },
+ {
+  "check": "host-pair-env/alpha: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-env/alpha: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-env/alpha: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-env/alpha: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/host-pair-env/home/prepared rt"
+ },
+ {
+  "check": "host-pair-env/alpha: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-env/alpha: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-env/beta: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '0'], ['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '"
+ },
+ {
+  "check": "host-pair-env/beta: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "host-pair-env/beta: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/host-pair-env/work space"
+ },
+ {
+  "check": "host-pair-env/beta: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-env/beta: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-env/beta: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-env/beta: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/host-pair-env/home/prepared rt"
+ },
+ {
+  "check": "host-pair-env/beta: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-env/beta: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-env: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(2, [])"
+ },
+ {
+  "check": "host-pair-env: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "host-pair-env: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-wrapped/alpha: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '0'], ['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '"
+ },
+ {
+  "check": "host-pair-wrapped/alpha: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "host-pair-wrapped/alpha: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/host-pair-wrapped/work space"
+ },
+ {
+  "check": "host-pair-wrapped/alpha: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-wrapped/alpha: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-wrapped/alpha: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-wrapped/alpha: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/host-pair-wrapped/home/prepared rt"
+ },
+ {
+  "check": "host-pair-wrapped/alpha: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-wrapped/alpha: wrapper argv = prefix + server + literal args",
+  "pass": true,
+  "detail": "['--tag', 'w 1', '--', '<checkout>/.local/probe/bin/alpha acp.py', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "host-pair-wrapped/alpha: wrapper exec'd into the server (same pid)",
+  "pass": true,
+  "detail": "(51199, 51199)"
+ },
+ {
+  "check": "host-pair-wrapped/beta: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '0'], ['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--port', '"
+ },
+ {
+  "check": "host-pair-wrapped/beta: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "host-pair-wrapped/beta: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/host-pair-wrapped/work space"
+ },
+ {
+  "check": "host-pair-wrapped/beta: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-wrapped/beta: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-wrapped/beta: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-wrapped/beta: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/host-pair-wrapped/home/prepared rt"
+ },
+ {
+  "check": "host-pair-wrapped/beta: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "host-pair-wrapped/beta: wrapper argv = prefix + server + literal args",
+  "pass": true,
+  "detail": "['--tag', 'w 1', '--', '<checkout>/nori-rs/target/debug/mock_acp_agent', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "host-pair-wrapped/beta: wrapper exec'd into the server (same pid)",
+  "pass": true,
+  "detail": "(51208, 51208)"
+ },
+ {
+  "check": "host-pair-wrapped: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(4, [])"
+ },
+ {
+  "check": "host-pair-wrapped: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "host-pair-wrapped: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-plain: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "stdio-alpha-plain: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-plain/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.worktrees/ve"
+ },
+ {
+  "check": "stdio-alpha-plain: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-plain: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-plain/work space"
+ },
+ {
+  "check": "stdio-alpha-plain: HOME is the binding home",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-plain/home"
+ },
+ {
+  "check": "stdio-alpha-plain: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-plain: plain keeps PROBE_DROP and has no runtime dir",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-plain: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-plain: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-plain: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "stdio-alpha-plain: host exits 0 on stdin EOF",
+  "pass": true,
+  "detail": "0"
+ },
+ {
+  "check": "stdio-alpha-plain: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "stdio-alpha-env: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "stdio-alpha-env: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-env/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.worktrees/veri"
+ },
+ {
+  "check": "stdio-alpha-env: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-env: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-env/work space"
+ },
+ {
+  "check": "stdio-alpha-env: HOME is the binding home",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-env/home"
+ },
+ {
+  "check": "stdio-alpha-env: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-env: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-env: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-env: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-env/home/prepared rt"
+ },
+ {
+  "check": "stdio-alpha-env: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-env: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-env: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "stdio-alpha-env: host exits 0 on stdin EOF",
+  "pass": true,
+  "detail": "0"
+ },
+ {
+  "check": "stdio-alpha-env: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "stdio-alpha-env: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "stdio-alpha-wrapped: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.worktrees/"
+ },
+ {
+  "check": "stdio-alpha-wrapped: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-wrapped: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped/work space"
+ },
+ {
+  "check": "stdio-alpha-wrapped: HOME is the binding home",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped/home"
+ },
+ {
+  "check": "stdio-alpha-wrapped: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped/home/prepared rt"
+ },
+ {
+  "check": "stdio-alpha-wrapped: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped: wrapper argv = prefix + server + literal args",
+  "pass": true,
+  "detail": "['--tag', 'w 1', '--', '<checkout>/.local/probe/bin/alpha acp.py', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-wrapped: wrapper exec'd into the server (same pid)",
+  "pass": true,
+  "detail": "(51328, 51328)"
+ },
+ {
+  "check": "stdio-alpha-wrapped: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "stdio-alpha-wrapped: host exits 0 on stdin EOF",
+  "pass": true,
+  "detail": "0"
+ },
+ {
+  "check": "stdio-alpha-wrapped: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "stdio-alpha-wrapped: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-plain: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "stdio-beta-plain: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-beta-plain/launch.json'], ['/home/sprite/org/workspace/cli/.worktrees/verify-launch-"
+ },
+ {
+  "check": "stdio-beta-plain: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-beta-plain: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/stdio-beta-plain/work space"
+ },
+ {
+  "check": "stdio-beta-plain: HOME is the binding home",
+  "pass": true,
+  "detail": "<tmp>/stdio-beta-plain/home"
+ },
+ {
+  "check": "stdio-beta-plain: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-plain: plain keeps PROBE_DROP and has no runtime dir",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-plain: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-plain: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-plain: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "stdio-beta-plain: host exits 0 on stdin EOF",
+  "pass": true,
+  "detail": "0"
+ },
+ {
+  "check": "stdio-beta-plain: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "stdio-beta-env: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "stdio-beta-env: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-beta-env/launch.json'], ['/home/sprite/org/workspace/cli/.worktrees/verify-launch-d3"
+ },
+ {
+  "check": "stdio-beta-env: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-beta-env: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/stdio-beta-env/work space"
+ },
+ {
+  "check": "stdio-beta-env: HOME is the binding home",
+  "pass": true,
+  "detail": "<tmp>/stdio-beta-env/home"
+ },
+ {
+  "check": "stdio-beta-env: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-env: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-env: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-env: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/stdio-beta-env/home/prepared rt"
+ },
+ {
+  "check": "stdio-beta-env: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-env: no wrapper ran",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-env: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "stdio-beta-env: host exits 0 on stdin EOF",
+  "pass": true,
+  "detail": "0"
+ },
+ {
+  "check": "stdio-beta-env: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "stdio-beta-env: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-wrapped: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "stdio-beta-wrapped: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-beta-wrapped/launch.json'], ['/home/sprite/org/workspace/cli/.worktrees/verify-launc"
+ },
+ {
+  "check": "stdio-beta-wrapped: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-beta-wrapped: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/stdio-beta-wrapped/work space"
+ },
+ {
+  "check": "stdio-beta-wrapped: HOME is the binding home",
+  "pass": true,
+  "detail": "<tmp>/stdio-beta-wrapped/home"
+ },
+ {
+  "check": "stdio-beta-wrapped: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-wrapped: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-wrapped: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-wrapped: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/stdio-beta-wrapped/home/prepared rt"
+ },
+ {
+  "check": "stdio-beta-wrapped: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-beta-wrapped: wrapper argv = prefix + server + literal args",
+  "pass": true,
+  "detail": "['--tag', 'w 1', '--', '<checkout>/nori-rs/target/debug/mock_acp_agent', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-beta-wrapped: wrapper exec'd into the server (same pid)",
+  "pass": true,
+  "detail": "(51393, 51393)"
+ },
+ {
+  "check": "stdio-beta-wrapped: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "stdio-beta-wrapped: host exits 0 on stdin EOF",
+  "pass": true,
+  "detail": "0"
+ },
+ {
+  "check": "stdio-beta-wrapped: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "stdio-beta-wrapped: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.wor"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/work space"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: HOME is the binding home",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/home"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/home/prepared rt"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: wrapper argv = prefix + server + literal args",
+  "pass": true,
+  "detail": "['--tag', 'w 1', '--', '<checkout>/.local/probe/bin/alpha acp.py', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: wrapper exec'd into the server (same pid)",
+  "pass": true,
+  "detail": "(51417, 51417)"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(1, [])"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: host exits 0 on stdin EOF",
+  "pass": true,
+  "detail": "0"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.wor"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/work space"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: HOME is the binding home",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/home"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/home/prepared rt"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: wrapper argv = prefix + server + literal args",
+  "pass": true,
+  "detail": "['--tag', 'w 1', '--', '<checkout>/.local/probe/bin/alpha acp.py', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: wrapper exec'd into the server (same pid)",
+  "pass": true,
+  "detail": "(51438, 51438)"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(2, [])"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: host exits 0 on stdin EOF",
+  "pass": true,
+  "detail": "0"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.wor"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/work space"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: HOME is the binding home",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/home"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/home/prepared rt"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: wrapper argv = prefix + server + literal args",
+  "pass": true,
+  "detail": "['--tag', 'w 1', '--', '<checkout>/.local/probe/bin/alpha acp.py', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: wrapper exec'd into the server (same pid)",
+  "pass": true,
+  "detail": "(51459, 51459)"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(3, [])"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: host exits 0 on stdin EOF",
+  "pass": true,
+  "detail": "0"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: one server process observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.wor"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: server argv is literal registration",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: cwd is the workspace",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/work space"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: HOME is the binding home",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/home"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: inherited PROBE_KEEP reaches child",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: env_remove drops PROBE_DROP",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: child-only value set",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: runtime dir passed",
+  "pass": true,
+  "detail": "<tmp>/stdio-alpha-wrapped-digest/home/prepared rt"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: no sibling server's child-only value",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: wrapper argv = prefix + server + literal args",
+  "pass": true,
+  "detail": "['--tag', 'w 1', '--', '<checkout>/.local/probe/bin/alpha acp.py', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: wrapper exec'd into the server (same pid)",
+  "pass": true,
+  "detail": "(51479, 51479)"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: nori process env unchanged (no child-only names)",
+  "pass": true,
+  "detail": "(4, [])"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: host exits 0 on stdin EOF",
+  "pass": true,
+  "detail": "0"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "stdio-alpha-wrapped-digest: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-plain: managed host started",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-plain/alpha: ensure admitted",
+  "pass": true,
+  "detail": "None"
+ },
+ {
+  "check": "shared-plain/alpha: identical re-ensure returns same receipt",
+  "pass": true,
+  "detail": "({'bindingId': 'alpha', 'generation': 1, 'conversationId': '00000000-0000-4000-8000-000000000001', 'specDigest': 'c66a04d0ff5b0f903d2d98e3dfd4af02f208b5f4ecf178036850622364e11764', 'state': 'spawned'}, {'jsonrpc': '2.0', 'id': 11, 'result': {'bindingId': 'alpha', 'generation': 1, 'conversationId': '"
+ },
+ {
+  "check": "shared-plain/alpha: changed spec conflicts",
+  "pass": true,
+  "detail": "{'jsonrpc': '2.0', 'id': 12, 'error': {'code': -32000, 'message': 'managed launch conflict'}}"
+ },
+ {
+  "check": "shared-plain/beta: ensure admitted",
+  "pass": true,
+  "detail": "None"
+ },
+ {
+  "check": "shared-plain/beta: identical re-ensure returns same receipt",
+  "pass": true,
+  "detail": "({'bindingId': 'beta', 'generation': 1, 'conversationId': '00000000-0000-4000-8000-000000000002', 'specDigest': '17d6f851461171623a49d25d7d040ce80e72fcfac2ca891111038cd587e7e29b', 'state': 'spawned'}, {'jsonrpc': '2.0', 'id': 14, 'result': {'bindingId': 'beta', 'generation': 1, 'conversationId': '00"
+ },
+ {
+  "check": "shared-plain/beta: changed spec conflicts",
+  "pass": true,
+  "detail": "{'jsonrpc': '2.0', 'id': 15, 'error': {'code': -32000, 'message': 'managed launch conflict'}}"
+ },
+ {
+  "check": "shared-plain/alpha: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "shared-plain/beta: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "shared-plain/alpha: server observed",
+  "pass": true,
+  "detail": "[['python3', '<checkout>/.local/probe/bin/alpha acp.py', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME'], ['sleep', '600']]"
+ },
+ {
+  "check": "shared-plain/alpha: server argv literal",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "shared-plain/alpha: sibling isolation (own value only)",
+  "pass": true,
+  "detail": "['PROBE_CASE', 'PROBE_KEEP', 'PROBE_OUT']"
+ },
+ {
+  "check": "shared-plain/alpha: host env not inherited (PROBE_HOST_ONLY absent)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-plain/alpha: HOME/cwd are binding paths",
+  "pass": true,
+  "detail": "('<tmp>/shared-plain/nori/hosted-sessions/alpha/home', '<tmp>/shared-plain/nori/hosted-sessions/alpha/work space')"
+ },
+ {
+  "check": "shared-plain/beta: server observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/mock_acp_agent', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']]"
+ },
+ {
+  "check": "shared-plain/beta: server argv literal",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "shared-plain/beta: sibling isolation (own value only)",
+  "pass": true,
+  "detail": "['PROBE_CASE', 'PROBE_KEEP', 'PROBE_OUT']"
+ },
+ {
+  "check": "shared-plain/beta: host env not inherited (PROBE_HOST_ONLY absent)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-plain/beta: HOME/cwd are binding paths",
+  "pass": true,
+  "detail": "('<tmp>/shared-plain/nori/hosted-sessions/beta/home', '<tmp>/shared-plain/nori/hosted-sessions/beta/work space')"
+ },
+ {
+  "check": "shared-plain: host process env has no child-only names",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-plain: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "shared-env: managed host started",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-env/alpha: ensure admitted",
+  "pass": true,
+  "detail": "None"
+ },
+ {
+  "check": "shared-env/alpha: identical re-ensure returns same receipt",
+  "pass": true,
+  "detail": "({'bindingId': 'alpha', 'generation': 1, 'conversationId': '00000000-0000-4000-8000-000000000001', 'specDigest': '53c0494433b954a5cba216cc13cacea330ef1dd2a99f84f0a35c44769555959e', 'state': 'spawned'}, {'jsonrpc': '2.0', 'id': 11, 'result': {'bindingId': 'alpha', 'generation': 1, 'conversationId': '"
+ },
+ {
+  "check": "shared-env/alpha: changed spec conflicts",
+  "pass": true,
+  "detail": "{'jsonrpc': '2.0', 'id': 12, 'error': {'code': -32000, 'message': 'managed launch conflict'}}"
+ },
+ {
+  "check": "shared-env/beta: ensure admitted",
+  "pass": true,
+  "detail": "None"
+ },
+ {
+  "check": "shared-env/beta: identical re-ensure returns same receipt",
+  "pass": true,
+  "detail": "({'bindingId': 'beta', 'generation': 1, 'conversationId': '00000000-0000-4000-8000-000000000002', 'specDigest': 'c5d32ffda7686b00135a2a43497b50b786401d00788c26096134ab0a1545da5d', 'state': 'spawned'}, {'jsonrpc': '2.0', 'id': 14, 'result': {'bindingId': 'beta', 'generation': 1, 'conversationId': '00"
+ },
+ {
+  "check": "shared-env/beta: changed spec conflicts",
+  "pass": true,
+  "detail": "{'jsonrpc': '2.0', 'id': 15, 'error': {'code': -32000, 'message': 'managed launch conflict'}}"
+ },
+ {
+  "check": "shared-env/alpha: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "shared-env/beta: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "shared-env/alpha: server observed",
+  "pass": true,
+  "detail": "[['python3', '<checkout>/.local/probe/bin/alpha acp.py', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME'], ['sleep', '600']]"
+ },
+ {
+  "check": "shared-env/alpha: server argv literal",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "shared-env/alpha: sibling isolation (own value only)",
+  "pass": true,
+  "detail": "['PROBE_CASE', 'PROBE_CHILD_ALPHA', 'PROBE_KEEP', 'PROBE_OUT']"
+ },
+ {
+  "check": "shared-env/alpha: host env not inherited (PROBE_HOST_ONLY absent)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-env/alpha: HOME/cwd are binding paths",
+  "pass": true,
+  "detail": "('<tmp>/shared-env/nori/hosted-sessions/alpha/home', '<tmp>/shared-env/nori/hosted-sessions/alpha/work space')"
+ },
+ {
+  "check": "shared-env/alpha: runtime dir passed",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-env/beta: server observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/mock_acp_agent', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']]"
+ },
+ {
+  "check": "shared-env/beta: server argv literal",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "shared-env/beta: sibling isolation (own value only)",
+  "pass": true,
+  "detail": "['PROBE_CASE', 'PROBE_CHILD_BETA', 'PROBE_KEEP', 'PROBE_OUT']"
+ },
+ {
+  "check": "shared-env/beta: host env not inherited (PROBE_HOST_ONLY absent)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-env/beta: HOME/cwd are binding paths",
+  "pass": true,
+  "detail": "('<tmp>/shared-env/nori/hosted-sessions/beta/home', '<tmp>/shared-env/nori/hosted-sessions/beta/work space')"
+ },
+ {
+  "check": "shared-env/beta: runtime dir passed",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-env: host process env has no child-only names",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-env: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "shared-env: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-wrapped: managed host started",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-wrapped/alpha: ensure admitted",
+  "pass": true,
+  "detail": "None"
+ },
+ {
+  "check": "shared-wrapped/alpha: identical re-ensure returns same receipt",
+  "pass": true,
+  "detail": "({'bindingId': 'alpha', 'generation': 1, 'conversationId': '00000000-0000-4000-8000-000000000001', 'specDigest': '8d52a564f44c66307ee172bb418480bce1e022141867ba3bb58ef5f8a65aae2f', 'state': 'spawned'}, {'jsonrpc': '2.0', 'id': 11, 'result': {'bindingId': 'alpha', 'generation': 1, 'conversationId': '"
+ },
+ {
+  "check": "shared-wrapped/alpha: changed spec conflicts",
+  "pass": true,
+  "detail": "{'jsonrpc': '2.0', 'id': 12, 'error': {'code': -32000, 'message': 'managed launch conflict'}}"
+ },
+ {
+  "check": "shared-wrapped/beta: ensure admitted",
+  "pass": true,
+  "detail": "None"
+ },
+ {
+  "check": "shared-wrapped/beta: identical re-ensure returns same receipt",
+  "pass": true,
+  "detail": "({'bindingId': 'beta', 'generation': 1, 'conversationId': '00000000-0000-4000-8000-000000000002', 'specDigest': 'f2f92025757864edd5a0e2d51478de507bd891c82c788d56f8aba3a7a9534f20', 'state': 'spawned'}, {'jsonrpc': '2.0', 'id': 14, 'result': {'bindingId': 'beta', 'generation': 1, 'conversationId': '00"
+ },
+ {
+  "check": "shared-wrapped/beta: changed spec conflicts",
+  "pass": true,
+  "detail": "{'jsonrpc': '2.0', 'id': 15, 'error': {'code': -32000, 'message': 'managed launch conflict'}}"
+ },
+ {
+  "check": "shared-wrapped/alpha: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "shared-wrapped/beta: ACP exchange -> end_turn",
+  "pass": true,
+  "detail": "end_turn"
+ },
+ {
+  "check": "shared-wrapped/alpha: server observed",
+  "pass": true,
+  "detail": "[['python3', '<checkout>/.local/probe/bin/alpha acp.py', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME'], ['python3', '-c', 'import json,os,sys; json.dump({\"pid\":os.getppid(),\"argv\":sys.argv[1:]},open(os.environ[\"PROBE_OUT\"]+\"/wrapper-%d.json\"%"
+ },
+ {
+  "check": "shared-wrapped/alpha: server argv literal",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "shared-wrapped/alpha: sibling isolation (own value only)",
+  "pass": true,
+  "detail": "['PROBE_CASE', 'PROBE_CHILD_ALPHA', 'PROBE_KEEP', 'PROBE_OUT']"
+ },
+ {
+  "check": "shared-wrapped/alpha: host env not inherited (PROBE_HOST_ONLY absent)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-wrapped/alpha: HOME/cwd are binding paths",
+  "pass": true,
+  "detail": "('<tmp>/shared-wrapped/nori/hosted-sessions/alpha/home', '<tmp>/shared-wrapped/nori/hosted-sessions/alpha/work space')"
+ },
+ {
+  "check": "shared-wrapped/alpha: runtime dir passed",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-wrapped/beta: server observed",
+  "pass": true,
+  "detail": "[['<checkout>/nori-rs/target/debug/mock_acp_agent', '--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']]"
+ },
+ {
+  "check": "shared-wrapped/beta: server argv literal",
+  "pass": true,
+  "detail": "['--flag', '', '--', '*', '\u00e9 \u00fc', 'two words', '$HOME']"
+ },
+ {
+  "check": "shared-wrapped/beta: sibling isolation (own value only)",
+  "pass": true,
+  "detail": "['PROBE_CASE', 'PROBE_CHILD_BETA', 'PROBE_KEEP', 'PROBE_OUT']"
+ },
+ {
+  "check": "shared-wrapped/beta: host env not inherited (PROBE_HOST_ONLY absent)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-wrapped/beta: HOME/cwd are binding paths",
+  "pass": true,
+  "detail": "('<tmp>/shared-wrapped/nori/hosted-sessions/beta/home', '<tmp>/shared-wrapped/nori/hosted-sessions/beta/work space')"
+ },
+ {
+  "check": "shared-wrapped/beta: runtime dir passed",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-wrapped: host process env has no child-only names",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "shared-wrapped: server, wrapper and descendants gone after close",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "shared-wrapped: user-named runtime dir kept",
+  "pass": true,
+  "detail": ""
+ }
+]
