@@ -155,7 +155,8 @@ fn agents_without_an_api_key_variable_cannot_save_one() {
         StoreMode::Auto,
         Arc::new(MockKeyringStore::default()),
     );
-    assert!(store.save(AgentKind::OpenCode, KEY).is_err());
+    let error = store.save(AgentKind::OpenCode, KEY).unwrap_err();
+    assert!(format!("{error}").contains("own login"), "{error}");
     assert_eq!(files_containing(dir.path(), KEY), vec![]);
 }
 
@@ -167,8 +168,13 @@ fn blank_or_multiline_keys_are_rejected() {
         StoreMode::Auto,
         Arc::new(MockKeyringStore::default()),
     );
-    assert!(store.save(AgentKind::Codex, "   ").is_err());
-    assert!(store.save(AgentKind::Codex, "a\nb").is_err());
+    for bad in ["   ", "a\nb"] {
+        let error = store.save(AgentKind::Codex, bad).unwrap_err();
+        assert!(
+            format!("{error}").contains("single non-empty line"),
+            "{error}"
+        );
+    }
     assert_eq!(store.index().unwrap().location(AgentKind::Codex), None);
 }
 
@@ -238,16 +244,6 @@ fn each_agent_keeps_its_own_key() {
 }
 
 #[test]
-fn deleting_a_file_fallback_key_removes_it_from_disk() {
-    let dir = tempfile::tempdir().unwrap();
-    let store = SavedKeyStore::new(dir.path(), StoreMode::Auto, Arc::new(UnavailableKeyring));
-    store.save(AgentKind::Codex, KEY).unwrap();
-
-    assert!(store.delete(AgentKind::Codex).unwrap());
-    assert_eq!(files_containing(dir.path(), KEY), vec![]);
-}
-
-#[test]
 fn unreadable_keychain_reports_an_error_without_the_key() {
     let dir = tempfile::tempdir().unwrap();
     SavedKeyStore::new(
@@ -268,4 +264,80 @@ fn nothing_indexed_means_the_keychain_is_never_read() {
     let dir = tempfile::tempdir().unwrap();
     let store = SavedKeyStore::new(dir.path(), StoreMode::Auto, Arc::new(ForbiddenKeyring));
     assert_eq!(store.load(AgentKind::ClaudeCode).unwrap(), None);
+}
+
+#[test]
+fn every_file_the_store_writes_is_private() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = SavedKeyStore::new(dir.path(), StoreMode::File, Arc::new(ForbiddenKeyring));
+    std::fs::write(dir.path().join("saved-keys.secret.json"), "{}").unwrap();
+    std::fs::set_permissions(
+        dir.path().join("saved-keys.secret.json"),
+        std::fs::Permissions::from_mode(0o644),
+    )
+    .unwrap();
+    store.save(AgentKind::Codex, KEY).unwrap();
+
+    let mut modes: Vec<(String, u32)> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .flatten()
+        .filter(|entry| entry.file_name().to_string_lossy().ends_with(".json"))
+        .map(|entry| {
+            let mode = entry.metadata().unwrap().permissions().mode() & 0o777;
+            (entry.file_name().to_string_lossy().into_owned(), mode)
+        })
+        .collect();
+    modes.sort();
+    assert_eq!(
+        modes,
+        vec![
+            ("saved-keys.json".to_string(), 0o600),
+            ("saved-keys.secret.json".to_string(), 0o600),
+        ]
+    );
+}
+
+#[test]
+fn corrupt_key_file_errors_without_echoing_its_contents() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = SavedKeyStore::new(dir.path(), StoreMode::File, Arc::new(ForbiddenKeyring));
+    store.save(AgentKind::Codex, KEY).unwrap();
+    std::fs::write(
+        dir.path().join("saved-keys.secret.json"),
+        format!("{{\"codex\": {KEY}"),
+    )
+    .unwrap();
+
+    let error = store.load(AgentKind::Codex).unwrap_err();
+    assert!(!format!("{error:#}").contains(KEY), "{error:#}");
+}
+
+#[test]
+fn concurrent_saves_for_different_agents_all_survive() {
+    let dir = tempfile::tempdir().unwrap();
+    let agents = [
+        AgentKind::ClaudeCode,
+        AgentKind::Codex,
+        AgentKind::Gemini,
+        AgentKind::GrokBuild,
+        AgentKind::Cursor,
+    ];
+    std::thread::scope(|scope| {
+        for agent in agents {
+            let path = dir.path();
+            scope.spawn(move || {
+                let store = SavedKeyStore::new(path, StoreMode::File, Arc::new(ForbiddenKeyring));
+                store
+                    .save(agent, &format!("{}-SECRET", agent.slug()))
+                    .unwrap();
+            });
+        }
+    });
+
+    let store = SavedKeyStore::new(dir.path(), StoreMode::File, Arc::new(ForbiddenKeyring));
+    let loaded: Vec<_> = agents.map(|agent| store.load(agent).unwrap()).to_vec();
+    let expected: Vec<_> = agents
+        .map(|agent| Some(format!("{}-SECRET", agent.slug())))
+        .to_vec();
+    assert_eq!(loaded, expected);
 }

@@ -154,7 +154,7 @@ OS keychain, falling back to a file when the keychain fails), `keyring`, or
 `file`. Nori writes two owner-only files in `$NORI_HOME`: `saved-keys.json`
 records which agents have a saved key and where, without secrets, and
 `saved-keys.secret.json` holds keys stored in the file. At launch the key is
-passed as the agent's API-key variable unless that variable is already set or the
+passed as the agent's API-key variable unless one of the agent's credential variables is already set or the
 agent is bound to a named token provider. [Details](providers/docs.md)
 
 ## Custom agents: `[[agents]]`
