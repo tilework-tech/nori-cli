@@ -1,4 +1,6 @@
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
@@ -17,6 +19,13 @@ use tokio::process::ChildStdout;
 
 use super::FIXTURE;
 use super::Host;
+
+fn stage_wrapper(runtime: &Path, script: &str) -> PathBuf {
+    let path = runtime.join("fixture wrapper");
+    fs::write(&path, script).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+    path
+}
 
 /// A foreground host on stdin and stdout, as a machine bridge would run it.
 struct StdioHost {
@@ -171,11 +180,20 @@ async fn stdio_admission_digest_tracks_retained_inherited_inputs_only() {
             json!({"PATH":"/usr/bin:/bin"}),
             &[("FIXTURE_REMOVED", removed), ("FIXTURE_RETAINED", retained)],
             &["--inherit-env"],
-            |spec, _| {
-                spec["envRemove"] = json!(["FIXTURE_REMOVED"]);
-                spec["adapter"]["wrapper"] = json!({"path":"/bin/sh","version":"fixture","args":["-c",
-                r#"printf '%s %s' "${FIXTURE_REMOVED-unset}" "$FIXTURE_RETAINED" > child-environment; exec "$@""#,
-                "fixture-wrapper"]});
+            |spec, home| {
+                let runtime = home.join("prepared");
+                fs::create_dir_all(&runtime).unwrap();
+                let wrapper = stage_wrapper(
+                    &runtime,
+                    r#"#!/bin/sh
+printf '%s %s' "${FIXTURE_REMOVED-unset}" "$FIXTURE_RETAINED" > child-environment
+exec "$@"
+"#,
+                );
+                spec["runtimeDir"] = json!(runtime);
+                // CoreFoundation supplies a process environment variable even after env_clear on macOS.
+                spec["envRemove"] = json!(["FIXTURE_REMOVED", "__CF_USER_TEXT_ENCODING"]);
+                spec["adapter"]["wrapper"] = json!({"path":wrapper,"version":"fixture"});
             },
         );
         host.open_parent().await;
@@ -267,9 +285,18 @@ program=$1; shift; exec "${FIXTURE_INNER:-$program}" "$@""#,
                         let runtime = home.join("prepared");
                         fs::create_dir(&runtime).unwrap();
                         fs::write(runtime.join("marker"), "wrapped").unwrap();
+                        let wrapper = stage_wrapper(
+                            &runtime,
+                            r#"#!/bin/sh
+test "$1" = -- || exit 1
+shift
+/bin/cat "$NORI_AGENT_RUNTIME_DIR/marker" > wrapper-invoked || exit 1
+exec "$@"
+"#,
+                        );
                         spec["runtimeDir"] = json!(runtime);
-                        spec["adapter"]["wrapper"] = json!({"path":"/bin/sh","version":"fixture-1",
-                        "args":["-c",r#"test "$1" = -- || exit 1; shift; /bin/cat "$NORI_AGENT_RUNTIME_DIR/marker" > wrapper-invoked || exit 1; exec "$@""#, "fixture-wrapper", "--"]});
+                        spec["adapter"]["wrapper"] =
+                            json!({"path":wrapper,"version":"fixture-1","args":["--"]});
                     }
                 },
             );
@@ -331,10 +358,10 @@ async fn wrapped_launch_preserves_child_inputs_turns_cancellation_and_cleanup() 
             let runtime = home.join("prepared");
             fs::create_dir(&runtime).unwrap();
             fs::write(runtime.join("marker"), "prepared orchid").unwrap();
-            let wrapper = runtime.join("launcher.py");
-            fs::write(
-                &wrapper,
-                r#"import json, os, sys
+            let wrapper = stage_wrapper(
+                &runtime,
+                r#"#!/usr/bin/env python3
+import json, os, sys
 from pathlib import Path
 prefix, empty, separator, server, *args = sys.argv[1:]
 observed = [prefix, empty, separator, server, args, os.environ["SAMPLE_LABEL"],
@@ -344,8 +371,7 @@ observed = [prefix, empty, separator, server, args, os.environ["SAMPLE_LABEL"],
 Path("child-inputs.json").write_text(json.dumps(observed))
 os.execv(server, [server, *args])
 "#,
-            )
-            .unwrap();
+            );
             spec["runtimeDir"] = json!(runtime);
             spec["envRemove"] = json!(["SAMPLE_HOST_ONLY"]);
             spec["adapter"]["args"] = json!([
@@ -358,7 +384,7 @@ os.execv(server, [server, *args])
                 "雪と杉"
             ]);
             spec["adapter"]["wrapper"] =
-                json!({"path":python,"version":"fixture-1","args":[wrapper,"two words","","--"]});
+                json!({"path":wrapper,"version":"fixture-1","args":["two words","","--"]});
         },
     );
     host.open_parent().await;

@@ -6,13 +6,14 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 
 HERE = Path(__file__).resolve().parent
 PINNED = {"pi-acp": "0.0.35", "@earendil-works/pi-coding-agent": "1.6.0"}
 ARGS = []  # Upstream pi-acp starts its stdio server without arguments.
-PREFIX = ["--record", ".accept/wrapper.json", "--"]
+PREFIX = ["--record", "../staging/.accept/wrapper.json", "--"]
 PROMPT = "Read notes.txt, count its lines in a terminal, and report both."
 ANSWER = "Read token=orchid-42; ran synthetic terminal: 3."
 ACTIVE = "synthetic-accept-value"
@@ -45,15 +46,41 @@ def prereqs(bindir):
     return versions
 
 
-async def exchange(proc, cwd):
+def git(cwd, *args):
+    return subprocess.check_output(
+        ["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", *args],
+        cwd=cwd, env={"PATH": os.environ["PATH"], "GIT_CONFIG_GLOBAL": os.devnull,
+                      "GIT_CONFIG_NOSYSTEM": "1"},
+    )
+
+
+def prepare_dirty_worktree(cwd):
+    repo = cwd.parent / "source"
+    repo.mkdir()
+    git(repo, "init", "--quiet", "--template=")
+    (repo / "notes.txt").write_text("original synthetic note\n")
+    git(repo, "add", "notes.txt")
+    git(repo, "commit", "--quiet", "-m", "Add fixture note")
+    git(repo, "worktree", "add", "--quiet", "--detach", str(cwd), "HEAD")
+    (cwd / "draft.txt").write_text("pre-existing untracked draft\n")
+
+
+def worktree_snapshot(cwd):
+    return (git(cwd, "status", "--porcelain=v1", "--untracked-files=all", "-z"),
+            git(cwd, "diff", "--binary", "HEAD"), (cwd / "draft.txt").read_bytes())
+
+
+async def exchange(proc, cwd, dirty_snapshot=None):
     """Speak bare ACP to either the local facade or the host's managed bridge."""
     updates = []
+    checked_during_turn = False
 
     async def send(frame):
         proc.stdin.write((json.dumps({"jsonrpc": "2.0", **frame}) + "\n").encode())
         await proc.stdin.drain()
 
     async def call(rid, method, params):
+        nonlocal checked_during_turn
         await send({"id": rid, "method": method, "params": params})
         while True:
             line = await proc.stdout.readline()
@@ -65,7 +92,11 @@ async def exchange(proc, cwd):
                     raise RuntimeError(f"{method} failed (code {frame['error']['code']})")
                 return frame["result"]
             if frame.get("method") == "session/update":
-                updates.append(frame["params"]["update"])
+                update = frame["params"]["update"]
+                updates.append(update)
+                if dirty_snapshot is not None and update.get("sessionUpdate") == "tool_call" and not checked_during_turn:
+                    assert worktree_snapshot(cwd) == dirty_snapshot, "worktree changed during the ACP turn"
+                    checked_during_turn = True
             elif frame.get("method") == "session/request_permission":
                 options = frame["params"]["options"]
                 allow = next(option for option in options if option["kind"] == "allow_once")
@@ -81,6 +112,7 @@ async def exchange(proc, cwd):
     text = "".join(update.get("content", {}).get("text", "") for update in updates
                    if update.get("sessionUpdate") == "agent_message_chunk")
     assert ANSWER in text, "missing read + terminal result"
+    assert dirty_snapshot is None or checked_during_turn, "no live tool call observed"
 
 
 async def local_host_turn(binary, cwd, config, env):
@@ -129,12 +161,18 @@ def exited(identity, group=False):
 
 async def case(root, entry, mode, binary, bindir, base_url, endpoint_log):
     working = root / f"{entry}-{mode}"
-    home, cwd, nori_dir = working / "home", working / "workspace", working / "nori"
-    for path in [home, cwd, nori_dir]:
-        path.mkdir(parents=True, mode=0o700)
+    cwd, staging = working / "workspace", working / "staging"
+    cwd.mkdir(parents=True, mode=0o700)
+    verify_staging = entry == "managed" and mode == "wrapped"
+    if verify_staging:
+        prepare_dirty_worktree(cwd)
     (cwd / "notes.txt").write_text("token=orchid-42\nsecond synthetic line\nthird synthetic line\n")
-    evidence = cwd / ".accept"
-    evidence.mkdir(mode=0o700)
+    dirty_snapshot = worktree_snapshot(cwd) if verify_staging else None
+    if verify_staging:
+        assert dirty_snapshot[0] == b" M notes.txt\x00?? draft.txt\x00"
+    home, nori_dir, evidence = staging / "home", staging / "nori", staging / ".accept"
+    for path in [home, nori_dir, evidence]:
+        path.mkdir(parents=True, mode=0o700)
     capture, wrap_capture = evidence / "children.jsonl", evidence / "wrapper.json"
     runtime = home / "prepared runtime" if mode != "plain" else None
     profile = runtime if runtime else home / ".pi" / "agent"
@@ -148,13 +186,13 @@ async def case(root, entry, mode, binary, bindir, base_url, endpoint_log):
         "apiKey": NATIVE_KEY if mode == "plain" else "$ACCEPT_LOOPBACK_KEY",
         "models": [{"id": "lab-small", "name": "Lab Small"}]}}})
     adapter, pi = bindir / "pi-acp", bindir / "pi"
-    registered = working / "registered pi"
+    registered = staging / "registered pi"
     override = runtime / "selected pi" if mode == "inner" else None
     for shim, record in [(registered, "pi.json"), (override, "inner.json")]:
         if shim is None:
             continue
         shim.write_text(f"""#!/bin/sh
-python3 -c 'import json,sys;json.dump(sys.argv[1:],open(".accept/{record}","w"))' "$@" || exit 68
+python3 -c 'import json,sys;json.dump(sys.argv[1:],open("../staging/.accept/{record}","w"))' "$@" || exit 68
 exec "$FIXTURE_PI" "$@"
 """)
         shim.chmod(0o700)
@@ -167,13 +205,13 @@ exec "$FIXTURE_PI" "$@"
     selected = {} if mode == "plain" else {"NORI_ACCEPT_VALUE": ACTIVE, "ACCEPT_LOOPBACK_KEY": KEY}
     if override:
         selected["PI_ACP_PI_COMMAND"] = str(override)
-    wrapper = working / "run wrapper"
     if runtime:
         selected["PI_CODING_AGENT_DIR"] = str(runtime)
     launch_env = {"PI_ACP_PI_COMMAND": str(registered), **selected}
     if mode == "wrapped":
+        wrapper = (runtime if entry == "managed" else staging) / "run wrapper"
         wrapper.write_text("""#!/bin/sh
-[ "$1" = "--record" ] && [ "$2" = ".accept/wrapper.json" ] && [ "$3" = "--" ] || exit 67
+[ "$1" = "--record" ] && [ "$2" = "../staging/.accept/wrapper.json" ] && [ "$3" = "--" ] || exit 67
 python3 - "$@" <<'PYWRAPPER' || exit 66
 import hashlib, json, os, sys
 def fingerprint(key):
@@ -214,11 +252,11 @@ exec "$@"
             spec["runtimeDir"] = str(runtime)
         if mode == "wrapped":
             pin["wrapper"] = {"path": str(wrapper), "args": PREFIX, "version": "fixture-1"}
-        private_json(working / "launch.json", spec)
+        private_json(staging / "launch.json", spec)
         (nori_dir / "config.toml").write_text(
             f'[host]\nmanaged=true\n[host.dedicated_roots]\nbinding_id="lab"\n'
             f'home={json.dumps(str(home))}\ncwd={json.dumps(str(cwd))}\n')
-        args = ["-c", "features.multi_session=true", "host", "--stdio", "--inherit-env", "--launch", str(working / "launch.json")]
+        args = ["-c", "features.multi_session=true", "host", "--stdio", "--inherit-env", "--launch", str(staging / "launch.json")]
 
     start = len(records(endpoint_log))
     if entry == "host":
@@ -228,7 +266,7 @@ exec "$@"
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL, limit=2**20)
         try:
-            await asyncio.wait_for(exchange(proc, cwd), 90)
+            await asyncio.wait_for(exchange(proc, cwd, dirty_snapshot), 90)
         finally:
             proc.stdin.close()
             try:
@@ -291,6 +329,10 @@ exec "$@"
         content = path.read_bytes()
         assert all(value.encode() not in content for value in (KEY, NATIVE_KEY, ACTIVE, AMBIENT)), \
             "unhashed synthetic credential or test value in a log"
+    if verify_staging:
+        shutil.rmtree(staging)
+        assert worktree_snapshot(cwd) == dirty_snapshot, "worktree changed after runtime cleanup"
+        print("managed wrapped: tracked edits and untracked files preserved before staging, during turn and after cleanup", flush=True)
     checksum = digest(json.dumps(summary, sort_keys=True))
     print(f"{entry} {mode}: end_turn, read + terminal, {len(chats)} calls; inputs SHA-256 {checksum}", flush=True)
     return checksum

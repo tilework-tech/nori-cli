@@ -2,6 +2,9 @@
 #![allow(clippy::unwrap_used)]
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use nori_harness::managed_launch::ManagedLaunches;
@@ -9,6 +12,13 @@ use serde_json::json;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
+
+fn write_wrapper(runtime: &Path, body: &str) -> PathBuf {
+    let wrapper = runtime.join("launch agent");
+    fs::write(&wrapper, format!("#!/bin/sh\n{body}\n")).unwrap();
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+    wrapper
+}
 
 #[tokio::test]
 async fn handoff_uses_the_admitted_process_and_leaves_initialize_to_the_client() {
@@ -83,7 +93,10 @@ async fn read_only_launch_pins_environment_and_isolates_scratch() {
     let binding = root.path().join("sample");
     let home = binding.join("home");
     let cwd = home.join("work");
+    let runtime = home.join("prepared");
     fs::create_dir_all(&cwd).unwrap();
+    fs::create_dir(&runtime).unwrap();
+    let wrapper = write_wrapper(&runtime, r#"export WRAPPER_INPUT="$1"; shift; exec "$@""#);
     fs::write(cwd.join("input"), "original").unwrap();
     let launches = ManagedLaunches::from_config(
         &nori_config::HostConfig {
@@ -99,10 +112,9 @@ async fn read_only_launch_pins_environment_and_isolates_scratch() {
     let request = serde_json::from_value(json!({
         "commandId":"start", "conversationId":uuid::Uuid::new_v4(), "bindingId":"sample", "generation":2,
         "spec":{"agent":"fixture","projectId":"project","runId":"run","cwd":cwd,"home":home,
-            "env":{"COLOR":"red","TMPDIR":cwd},
+            "env":{"COLOR":"red","TMPDIR":cwd},"runtimeDir":runtime,
             "adapter":{"path":"/bin/sh","version":"fixture-v1",
-                "wrapper":{"path":"/bin/sh","version":"fixture-1","args":["-c",
-                    r#"export WRAPPER_INPUT="$1"; shift; exec "$@""#, "fixture-wrapper", "two words"]},
+                "wrapper":{"path":wrapper,"version":"fixture-1","args":["two words"]},
                 "args":["-c",r#"
                 read -r input || exit 0
                 test "$WRAPPER_INPUT" = "two words" && test "$COLOR" = red && test "$CODEX_HOME" = "$HOME/.codex" || exit 1
@@ -625,8 +637,11 @@ async fn wrapped_codex_parent_cannot_use_the_private_subscription_side_launch() 
     let binding = root.path().join("sample");
     let cwd = binding.join("workspace");
     let home = binding.join("home");
+    let runtime = home.join("prepared");
     fs::create_dir_all(&cwd).unwrap();
     fs::create_dir_all(home.join(".codex")).unwrap();
+    fs::create_dir(&runtime).unwrap();
+    let wrapper = write_wrapper(&runtime, r#"exec "$@""#);
     let launches = ManagedLaunches::from_config(
         &nori_config::HostConfig {
             managed: true,
@@ -642,15 +657,20 @@ async fn wrapped_codex_parent_cannot_use_the_private_subscription_side_launch() 
         "bindingId":"sample","generation":1,"conversationId":uuid::Uuid::new_v4(),"commandId":"start",
         "spec":{"agent":"codex","projectId":"sample","runId":"sample","cwd":cwd,"home":home,
             "credentialRefs":["sessions:codex-subscription-file:v1"],
+            "runtimeDir":runtime,
             "adapter":{"path":"/bin/cat","version":"2.7.0",
-                "wrapper":{"path":"/bin/sh","version":"1","args":["-c","exec \"$@\"","wrapper"]}},
+                "wrapper":{"path":wrapper,"version":"1"}},
             "additions":{"clientMcp":false,"recording":false,"statusEvents":false,"promptEcho":false}}
     })).unwrap()).unwrap();
     let error = launches
         .spawn_side("sample", 1, "side")
         .err()
         .expect("refuse the side");
-    assert!(error.to_string().contains("wrapper"), "{error}");
+    let reason = error.to_string();
+    assert!(
+        reason.contains("prepared runtimes") || reason.contains("wrapper"),
+        "{reason}"
+    );
     launches.shutdown().await.unwrap();
 }
 
@@ -801,13 +821,16 @@ async fn subscription_sides_follow_the_admitted_files_atomic_replacement() {
 }
 
 #[tokio::test]
-async fn rebuilt_side_refuses_a_redirected_prepared_directory() {
+async fn rebuilt_side_refuses_a_redirected_wrapper_or_prepared_directory() {
     let root = tempfile::tempdir().unwrap();
     let home = root.path().join("sample/home");
     let cwd = root.path().join("sample/work");
     let runtime = home.join("prepared");
     fs::create_dir_all(&runtime).unwrap();
     fs::create_dir(&cwd).unwrap();
+    let wrapper = write_wrapper(&runtime, r#"exec "$@""#);
+    let entry = runtime.join("entry");
+    std::os::unix::fs::symlink(&wrapper, &entry).unwrap();
     let launches = ManagedLaunches::from_config(
         &nori_config::HostConfig {
             managed: true,
@@ -821,10 +844,22 @@ async fn rebuilt_side_refuses_a_redirected_prepared_directory() {
     let request = serde_json::from_value(json!({
         "commandId":"start","conversationId":uuid::Uuid::new_v4(),"bindingId":"sample","generation":1,
         "spec":{"agent":"fixture","projectId":"project","runId":"run","cwd":cwd,"home":home,
-            "runtimeDir":runtime,"adapter":{"path":"/bin/sh","version":"fixture","args":["-c","read -r line"]},
+            "runtimeDir":runtime,"adapter":{"path":"/bin/sh","version":"fixture","args":["-c","read -r line"],
+            "wrapper":{"path":entry,"version":"fixture"}},
             "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
     })).unwrap();
     launches.ensure(request).unwrap();
+    let outside = home.join("ordinary file");
+    fs::write(&outside, "synthetic input").unwrap();
+    fs::remove_file(&entry).unwrap();
+    std::os::unix::fs::symlink(&outside, &entry).unwrap();
+    let refusal = launches
+        .spawn_side("sample", 1, "changed-entry")
+        .err()
+        .expect("side launch with a redirected wrapper");
+    assert!(refusal.to_string().contains("wrapper"), "{refusal}");
+    fs::remove_file(&entry).unwrap();
+    std::os::unix::fs::symlink(&wrapper, &entry).unwrap();
     let moved = home.join("elsewhere");
     fs::rename(&runtime, &moved).unwrap();
     std::os::unix::fs::symlink(moved, runtime).unwrap();

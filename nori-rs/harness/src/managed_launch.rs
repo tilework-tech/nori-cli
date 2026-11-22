@@ -280,8 +280,15 @@ impl LaunchSpec {
         )?;
         let mut server = ServerCommand::new(&self.adapter.path, &self.adapter.args);
         if let Some(wrapper) = &self.adapter.wrapper {
+            let runtime =
+                runtime_dir.context("a managed wrapper requires a prepared runtimeDir")?;
             validate_pin(&wrapper.path, &wrapper.version, &wrapper.args)?;
-            server = server.with_wrapper(&wrapper.path, &wrapper.args);
+            let entry = dunce::canonicalize(&wrapper.path).context("resolving managed wrapper")?;
+            ensure!(
+                entry.starts_with(runtime),
+                "managed wrapper must resolve inside runtimeDir"
+            );
+            server = server.with_wrapper(entry, &wrapper.args);
         }
         ensure!(
             self.env.values().all(|s| !s.contains('\0')),

@@ -166,7 +166,9 @@ independently when the server runs without them.
 
 Picker selections, `nori exec`, local host sessions and delegated launches
 use the registered agent slug. On a managed host the machine supplies the
-pinned definition and prepares runtime files for that binding.
+pinned definition and stages any outer wrapper inside that binding’s prepared
+runtime directory. An adapter that supports selecting its own inner executable
+through an environment variable reads that setting from its child environment.
 [Managed launch admission](cli/src/host/docs.md#managed-launch-control-v1)
 
 ### `model_override`

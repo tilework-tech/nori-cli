@@ -270,10 +270,11 @@ own handshake.
         "path": "/opt/fixture/1.2.3/bin/fixture-acp",
         "version": "1.2.3",
         "args": ["--profile", "Review team"],
-        "wrapper": {"path": "/opt/fixture/bin/runtime-wrapper", "version": "1.0", "args": ["--"]}
+        "wrapper": {"path": "/srv/fixture/bindings/sample/home/runtime/launch", "version": "1.0", "args": ["--"]}
       },
       "cwd": "/srv/fixture/bindings/sample/work",
       "home": "/srv/fixture/bindings/sample/home",
+      "runtimeDir": "/srv/fixture/bindings/sample/home/runtime",
       "additions": {"promptEcho": false, "statusEvents": false, "recording": false, "clientMcp": false}
     }
   }
@@ -291,7 +292,10 @@ own handshake.
   paths. The host runs the installed absolute `adapter.path` with
   `adapter.args` (default empty). For a wrapped launch, set
   `adapter.wrapper` to an object with an installed absolute `path`, a
-  `version`, and optional `args`. The wrapper receives its prefix arguments,
+  nonblank `version`, and optional `args`. A managed outer wrapper requires
+  a prepared `runtimeDir`. The host resolves the wrapper path before launching
+  the parent or a side and rejects a target outside that directory, including
+  a symlink that points outside it. The wrapper receives its prefix arguments,
   the adapter path, then the adapter arguments. Each array element stays one
   argument. Version strings identify the provisioned installations. The
   provisioner selects and installs both executables before admission. An
@@ -311,8 +315,9 @@ own handshake.
   from the workspace and cannot contain or equal the binding home. The
   adapter receives this path as `NORI_AGENT_RUNTIME_DIR`. Rebuilt sides
   revalidate the canonical path pinned at admission. A confined side using
-  the private Codex home refuses a prepared runtime. The broker stages
-  the directory and its contents again at a recovery destination.
+  the private Codex home refuses a prepared runtime. The provisioner owns
+  staging and cleanup outside checkpointed worktrees. It stages the files
+  again at a recovery destination.
 - The broker supplies public labels in `credentialRefs`. The inventory
   recognizes `sessions:codex-subscription-file:v1` and
   `sessions:token-connection:<id>:v1`. A connection ID matches
@@ -422,7 +427,7 @@ the JSON-RPC `result` has the following fields.
   "bindingId":"sample",
   "generation":1,
   "conversationId":"00000000-0000-4000-8000-000000000001",
-  "specDigest":"be38062d7d4f3978fff3a223d10370562d2ff9ea813eaf46891b7b434a6b1662",
+  "specDigest":"7c9b31a083fc52411db88c9db7d3dcba09343cf810fafee2e009218b4aa5bf72",
   "state":"spawned"
 }
 ```

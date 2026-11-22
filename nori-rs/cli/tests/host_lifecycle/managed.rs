@@ -284,20 +284,42 @@ async fn managed_wrapper_requires_its_own_pin_and_is_part_of_the_binding_identit
     let host = start(1, true);
     let mut control = client(&host);
     let mut launch = request(&host, "wrapped");
+    let home = Path::new(launch["spec"]["home"].as_str().unwrap());
+    let runtime = home.join("prepared");
+    let sibling = home.join("prepared-other");
+    fs::create_dir_all(&runtime).unwrap();
+    fs::create_dir_all(&sibling).unwrap();
+    let wrapper = runtime.join("entry");
+    fs::copy("/bin/sh", &wrapper).unwrap();
+    let outside = sibling.join("entry");
+    fs::copy("/bin/sh", &outside).unwrap();
+    std::os::unix::fs::symlink(&outside, runtime.join("redirect")).unwrap();
+    std::os::unix::fs::symlink(&sibling, runtime.join("redirect-dir")).unwrap();
+
+    let pinned =
+        json!({"path":wrapper, "version":"1", "args":["-c", "exec \"$@\"", "fixture wrapper"]});
+    launch["spec"]["adapter"]["wrapper"] = pinned.clone();
+    assert_eq!(refusal_code(&mut control, launch.clone()).await, -32602);
+
+    launch["spec"]["runtimeDir"] = json!(runtime);
     for invalid in [
         json!({"path":"relative", "version":"1"}),
-        json!({"path":host.0.path().join("missing"), "version":"1"}),
-        json!({"path":"/bin/sh"}),
-        json!({"path":"/bin/sh", "version":"  "}),
-        json!({"path":"/bin/sh", "version":"1", "args":["bad\0arg"]}),
-        json!({"path":"/bin/sh", "version":"1", "wrapper":{"path":"/bin/sh","version":"1"}}),
+        json!({"path":runtime.join("missing"), "version":"1"}),
+        json!({"path":outside, "version":"1"}),
+        json!({"path":runtime.join("../prepared-other/entry"), "version":"1"}),
+        json!({"path":runtime.join("redirect"), "version":"1"}),
+        json!({"path":runtime.join("redirect-dir/entry"), "version":"1"}),
+        json!({"path":wrapper}),
+        json!({"path":wrapper, "version":"  "}),
+        json!({"path":wrapper, "version":"1", "args":["bad\0arg"]}),
+        json!({"path":wrapper, "version":"1", "wrapper":{"path":wrapper,"version":"1"}}),
     ] {
         launch["spec"]["adapter"]["wrapper"] = invalid;
         assert_eq!(refusal_code(&mut control, launch.clone()).await, -32602);
     }
-    launch["spec"]["adapter"]["wrapper"] = json!({
-        "path":"/bin/sh", "version":"1", "args":["-c", "exec \"$@\"", "fixture wrapper"]
-    });
+    std::os::unix::fs::symlink("entry", runtime.join("current")).unwrap();
+    launch["spec"]["adapter"]["wrapper"] = pinned;
+    launch["spec"]["adapter"]["wrapper"]["path"] = json!(runtime.join("current"));
     let receipt = control.request(ENSURE, launch.clone()).await.unwrap();
     assert_eq!(
         control.request(ENSURE, launch.clone()).await.unwrap(),
