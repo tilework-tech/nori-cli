@@ -1,13 +1,12 @@
-//! Pi launches as a built-in and can be bound to a token provider such as
-//! Subconscious without the key ever reaching a file.
+//! Built-in Pi accepts native sign-in and named API connections.
 use nori_acp_host::registry::get_agent_config;
 use nori_acp_host::registry::get_agent_launch_config;
 use nori_acp_host::registry::list_available_agents;
 use nori_acp_host::token_provider::bound_model_id;
-use nori_acp_host::token_provider::compatible_presets;
 use nori_acp_host::token_provider::prepare_pi_profile;
-use nori_acp_host::token_provider::preset;
-use nori_acp_host::token_provider::supports_pi_connection;
+use nori_config::token_providers::Preset;
+use nori_config::token_providers::Protocol;
+use nori_config::token_providers::TokenProvider;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use std::path::Path;
@@ -43,18 +42,15 @@ fn pi_is_a_built_in_that_runs_the_upstream_adapter_with_pi_on_path() {
     }
 }
 
-#[test]
-fn only_pi_offers_subconscious_in_this_cli() {
-    let ids = |agent: &str| {
-        compatible_presets(agent)
-            .iter()
-            .map(|preset| preset.id)
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(ids("pi"), ["subconscious"]);
-    assert_eq!(ids("pi-acp"), ["subconscious"]);
-    assert!(ids("claude-code").is_empty());
-    assert!(ids("codex").is_empty());
+fn connection(variable: &str) -> TokenProvider {
+    TokenProvider {
+        name: "lab".into(),
+        preset: Preset::Custom,
+        protocol: Protocol::OpenaiCompletions,
+        base_url: "http://127.0.0.1:4567/v1".into(),
+        env_key: variable.into(),
+        model: "lab-small".into(),
+    }
 }
 
 #[test]
@@ -71,15 +67,12 @@ fn an_unbound_pi_keeps_its_own_configuration() {
 }
 
 #[test]
-fn a_subconscious_binding_points_pi_at_a_private_directory_that_names_the_key_variable() {
-    let variable = "NORI_TEST_SUBC_KEY_PRESENT";
-    let secret = "subc-synthetic-key-0001";
+fn a_named_connection_writes_only_the_selected_model_and_a_key_reference() {
+    let variable = "SYNTHETIC_API_KEY";
+    let secret = "synthetic-0001";
     let nori_home = tempfile::tempdir().unwrap();
-    let binding =
-        preset("subconscious")
-            .unwrap()
-            .connection("lab", variable, "subconscious/glm-5.2");
-    assert_eq!(bound_model_id("pi", &binding), "lab/subconscious/glm-5.2");
+    let binding = connection(variable);
+    assert_eq!(bound_model_id("pi", &binding), "lab/lab-small");
     let mut config = get_agent_launch_config("pi-acp", Some(&binding)).unwrap();
     prepare_pi_profile(&mut config, nori_home.path(), &|name| {
         (name == variable).then(|| secret.to_owned())
@@ -90,21 +83,20 @@ fn a_subconscious_binding_points_pi_at_a_private_directory_that_names_the_key_va
     assert!(agent_dir.starts_with(nori_home.path()));
     let models = read_json(&agent_dir.join("models.json"));
     let provider = &models["providers"]["lab"];
-    assert_eq!(provider["baseUrl"], "https://api.subconscious.dev/v1");
+    assert_eq!(provider["baseUrl"], binding.base_url);
     assert_eq!(provider["api"], "openai-completions");
     assert_eq!(provider["apiKey"], format!("${variable}"));
-    assert_eq!(provider["headers"]["x-subconscious-client"], "pi");
+    assert!(provider.get("headers").is_none());
     let model_ids: Vec<&str> = provider["models"]
         .as_array()
         .unwrap()
         .iter()
         .map(|model| model["id"].as_str().unwrap())
         .collect();
-    assert!(model_ids.contains(&"subconscious/glm-5.3-marathon"));
-    assert!(model_ids.contains(&"subconscious/glm-5.2"));
+    assert_eq!(model_ids, ["lab-small"]);
     let settings = read_json(&agent_dir.join("settings.json"));
     assert_eq!(settings["defaultProvider"], "lab");
-    assert_eq!(settings["defaultModel"], "subconscious/glm-5.2");
+    assert_eq!(settings["defaultModel"], "lab-small");
 
     assert!(config.env.values().all(|value| !value.contains(secret)));
     let mut pending = vec![nori_home.path().to_path_buf()];
@@ -131,8 +123,7 @@ fn a_subconscious_binding_points_pi_at_a_private_directory_that_names_the_key_va
 fn a_missing_credential_stops_the_launch_and_names_the_variable() {
     let variable = "NORI_TEST_SUBC_KEY_ABSENT";
     let home = tempfile::tempdir().unwrap();
-    let preset = preset("subconscious").unwrap();
-    let binding = preset.connection("another-name", variable, preset.default_model);
+    let binding = connection(variable);
     let mut config = get_agent_launch_config("pi", Some(&binding)).unwrap();
     let error = prepare_pi_profile(&mut config, home.path(), &|_| None).unwrap_err();
     assert!(error.to_string().contains(variable));
@@ -141,54 +132,104 @@ fn a_missing_credential_stops_the_launch_and_names_the_variable() {
 }
 
 #[test]
-fn named_connections_must_match_the_contract_endpoint_and_pi_catalog() {
-    let preset = preset("subconscious").unwrap();
-    let mut binding = preset.connection("team_gateway", "SUBC_KEY", preset.default_model);
-    assert!(supports_pi_connection(&binding));
-    binding.model = "other-model".into();
-    assert!(!supports_pi_connection(&binding));
-    binding.model = preset.default_model.into();
-    binding.base_url = "https://example.invalid/v1".into();
-    assert!(!supports_pi_connection(&binding));
-}
-
-#[test]
-fn provider_ids_must_be_safe_directory_names() {
-    let preset = preset("subconscious").unwrap();
-    let binding = preset.connection("../outside", "SUBC_KEY", preset.default_model);
-    assert!(!supports_pi_connection(&binding));
-}
-
-#[test]
-fn migrated_custom_endpoint_reaches_pi_only_with_its_explicit_protocol_and_catalog_model() {
-    use nori_config::token_providers::Preset;
-    use nori_config::token_providers::Protocol;
-    let variable = "SYNTHETIC_PROXY_KEY";
-    let preset = preset("subconscious").unwrap();
-    let mut binding = preset.connection("team", variable, preset.default_model);
-    binding.preset = Preset::Custom;
-    binding.base_url = "http://127.0.0.1:4567/v1".into();
+fn profile_uses_the_protocol_resolved_for_the_saved_connection() {
+    let mut binding = connection("SYNTHETIC_PROXY_KEY");
+    binding.protocol = Protocol::OpenaiResponses;
     let mut config = get_agent_launch_config("pi", Some(&binding)).unwrap();
     let home = tempfile::tempdir().unwrap();
-    prepare_pi_profile(&mut config, home.path(), &|name| {
-        (name == variable).then(|| "synthetic".into())
+    prepare_pi_profile(&mut config, home.path(), &|_| Some("synthetic".into())).unwrap();
+    let dir = Path::new(&config.env["PI_CODING_AGENT_DIR"]);
+    assert_eq!(
+        read_json(&dir.join("models.json"))["providers"]["lab"]["api"],
+        "openai-responses"
+    );
+}
+
+#[test]
+fn concurrent_profiles_keep_legacy_history_and_clean_up_independently() {
+    let home = tempfile::tempdir().unwrap();
+    let history = home.path().join("token-providers/lab-pi-acp/sessions");
+    std::fs::create_dir_all(&history).unwrap();
+    std::fs::write(history.join("existing.jsonl"), "synthetic-history").unwrap();
+    let prepare = || {
+        let mut config = get_agent_launch_config("pi", Some(&connection("LAB_KEY"))).unwrap();
+        prepare_pi_profile(&mut config, home.path(), &|_| Some("test".into())).unwrap();
+        let path = std::path::PathBuf::from(&config.env["PI_CODING_AGENT_DIR"]);
+        assert_eq!(config.launch.runtime_dir.as_deref(), Some(path.as_path()));
+        (config, path)
+    };
+    let (first, first_path) = prepare();
+    let (second, second_path) = prepare();
+    assert_ne!(first_path, second_path);
+    assert_eq!(
+        read_json(&first_path.join("settings.json"))["sessionDir"],
+        serde_json::json!(history)
+    );
+    let summary_launch = first.clone();
+    drop(first);
+    assert!(first_path.exists());
+    drop(summary_launch);
+    assert!(!first_path.exists());
+    assert!(second_path.join("models.json").is_file());
+    drop(second);
+    assert!(!second_path.exists());
+    assert_eq!(
+        std::fs::read_to_string(history.join("existing.jsonl")).unwrap(),
+        "synthetic-history"
+    );
+}
+
+#[test]
+fn a_crashed_launch_is_swept_when_an_unbound_agent_starts() {
+    use std::process::Command;
+    let helper = "NORI_TEST_ABANDON_PROFILE";
+    if let Some(home) = std::env::var_os(helper) {
+        let home = Path::new(&home);
+        let mut config = get_agent_launch_config("pi", Some(&connection("LAB_KEY"))).unwrap();
+        prepare_pi_profile(&mut config, home, &|_| Some("test".into())).unwrap();
+        std::fs::write(home.join("path"), &config.env["PI_CODING_AGENT_DIR"]).unwrap();
+        std::process::exit(0);
+    }
+    let home = tempfile::tempdir().unwrap();
+    let status = Command::new(std::env::current_exe().unwrap())
+        .env(helper, home.path())
+        .args([
+            "--exact",
+            "a_crashed_launch_is_swept_when_an_unbound_agent_starts",
+        ])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let old = std::path::PathBuf::from(std::fs::read_to_string(home.path().join("path")).unwrap());
+    assert!(old.join("settings.json").is_file());
+    let unrelated = old
+        .parent()
+        .unwrap()
+        .join("369510de-670d-49e4-a0fa-bf50c2689e9c");
+    std::fs::create_dir(&unrelated).unwrap();
+    std::fs::write(unrelated.with_extension("lease"), "caller-owned").unwrap();
+    let mut config = get_agent_config("pi").unwrap();
+    prepare_pi_profile(&mut config, home.path(), &|_| {
+        panic!("native Pi needs no binding")
     })
     .unwrap();
-    let profile = Path::new(&config.env["PI_CODING_AGENT_DIR"]);
-    let models = read_json(&profile.join("models.json"));
-    let team = &models["providers"]["team"];
-    assert_eq!(team["baseUrl"], binding.base_url);
-    assert_eq!(team["apiKey"], "$SYNTHETIC_PROXY_KEY");
-    assert_eq!(team["api"], "openai-completions");
-    assert_eq!(team["headers"]["x-subconscious-client"], "pi");
-    assert_eq!(
-        team["models"][0]["compat"]["sendSessionAffinityHeaders"],
-        true
-    );
+    assert!(!old.exists());
+    assert!(unrelated.is_dir());
+}
 
-    binding.protocol = Protocol::OpenaiResponses;
-    assert!(get_agent_launch_config("pi", Some(&binding)).is_err());
-    binding.protocol = Protocol::OpenaiCompletions;
-    binding.model = "subconscious/private-native-model".into();
-    assert!(get_agent_launch_config("pi", Some(&binding)).is_err());
+#[test]
+fn messages_profiles_keep_a_gateway_prefix_without_duplicating_the_api_version() {
+    let mut binding = connection("TEST_MESSAGES_KEY");
+    binding.protocol = Protocol::AnthropicMessages;
+    binding.base_url = "http://127.0.0.1:4567/example/v1/".into();
+    let mut config = get_agent_launch_config("pi", Some(&binding)).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    prepare_pi_profile(&mut config, home.path(), &|_| Some("fixture".into())).unwrap();
+    let dir = Path::new(&config.env["PI_CODING_AGENT_DIR"]);
+    let profile = read_json(&dir.join("models.json"));
+    assert_eq!(
+        profile["providers"]["lab"]["baseUrl"],
+        "http://127.0.0.1:4567/example"
+    );
+    assert_eq!(profile["providers"]["lab"]["api"], "anthropic-messages");
 }

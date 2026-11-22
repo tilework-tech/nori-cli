@@ -14,45 +14,6 @@ use crate::harness_compat::Pairing;
 use crate::harness_compat::Status;
 use crate::harness_compat::{self};
 
-pub const SUBCONSCIOUS_DEFAULT_MODEL: &str = "subconscious/glm-5.3-marathon";
-
-/// A model a preset serves.
-#[derive(Debug, PartialEq, Eq)]
-pub struct PresetModel {
-    /// Provider model id, sent verbatim on the wire.
-    pub id: &'static str,
-    pub name: &'static str,
-    pub context_window: i64,
-    pub max_output_tokens: i64,
-}
-
-const SUBCONSCIOUS_CONTEXT_WINDOW: i64 = 5_000_000;
-const SUBCONSCIOUS_MAX_OUTPUT_TOKENS: i64 = 65_536;
-
-const fn subconscious_model(id: &'static str, name: &'static str) -> PresetModel {
-    PresetModel {
-        id,
-        name,
-        context_window: SUBCONSCIOUS_CONTEXT_WINDOW,
-        max_output_tokens: SUBCONSCIOUS_MAX_OUTPUT_TOKENS,
-    }
-}
-
-/// Wire model catalog shared by Pi launch, picker, and configuration migration.
-pub const SUBCONSCIOUS_MODELS: &[PresetModel] = &[
-    subconscious_model(SUBCONSCIOUS_DEFAULT_MODEL, "GLM-5.3 Marathon"),
-    subconscious_model("subconscious/glm-5.2", "GLM-5.2"),
-    subconscious_model("subconscious/tim-qwen3.6-27b", "Tim-Qwen3.6-27b"),
-    subconscious_model(
-        "subconscious/deepseek-v4-flash-marathon",
-        "DeepSeek-V4-Flash Marathon",
-    ),
-    subconscious_model(
-        "subconscious/deepseek-v4.1-flash-marathon",
-        "DeepSeek-V4.1-Flash Marathon",
-    ),
-];
-
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Protocol {

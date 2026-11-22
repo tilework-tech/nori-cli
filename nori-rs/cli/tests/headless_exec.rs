@@ -785,3 +785,23 @@ fn exec_standard_prompt_completes_when_permission_is_answered_through_managed_pr
     );
     Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+fn exec_preserves_local_launch_inputs_for_two_stdio_servers()
+-> Result<(), Box<dyn std::error::Error>> {
+    let output = StdCommand::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/server_launch/local.py"
+        ))
+        .arg(env!("CARGO_BIN_EXE_nori"))
+        .arg(mock_agent_bin()?)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}

@@ -1197,33 +1197,6 @@ mod tests {
     }
 
     #[test]
-    fn token_provider_steps_use_the_shared_picker() {
-        let mut pane = test_bottom_pane();
-        pane.show_selection_view(
-            crate::nori::token_provider_picker::token_provider_picker_params("pi", "Pi", None, &[]),
-        );
-        assert_snapshot!(
-            "token_provider_picker",
-            render_snapshot(&pane, Rect::new(0, 0, 100, 10))
-        );
-
-        let mut pane = test_bottom_pane();
-        pane.show_selection_view(
-            crate::nori::token_provider_picker::token_provider_model_picker_params(
-                "pi",
-                "Pi",
-                "subconscious",
-                "SUBCONSCIOUS_API_KEY",
-                Some("subconscious/glm-5.2"),
-            ),
-        );
-        assert_snapshot!(
-            "token_provider_model_picker",
-            render_snapshot(&pane, Rect::new(0, 0, 100, 16))
-        );
-    }
-
-    #[test]
     fn footer_segments_shared_picker_stays_open_after_a_toggle() {
         let (mut pane, mut rx) = test_bottom_pane_with_events();
         pane.show_selection_view(crate::nori::config_picker::footer_segments_picker_params(

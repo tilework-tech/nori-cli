@@ -128,7 +128,7 @@ Upstream Codex separates a named provider from its selected model and accepts
 an environment reference for the provider's key. Pi composes a model from
 its provider ID, protocol and endpoint, and its auth resolver checks stored
 credentials before configuration keys. Nori keeps a single explicit
-environment reference. Pi's Subconscious adapter creates a private Pi profile per connection, so the user's stored credentials cannot override the chosen key. [Pi adapter](../acp-host/src/token_provider.rs)
+environment reference. An unbound Pi uses its native settings. The [configuration reference](../config.md#pi-connections) covers named connections and earlier Pi entries.
 [Codex configuration](https://github.com/openai/codex/blob/704ffed1c58ac349c129e459c50c71979dfac6b4/codex-rs/config/src/config_toml.rs#L175-L188) · [Codex credential resolution](https://github.com/openai/codex/blob/704ffed1c58ac349c129e459c50c71979dfac6b4/codex-rs/model-provider-info/src/lib.rs#L524-L542) · [Pi provider composition and auth](https://github.com/earendil-works/pi/blob/780bf31fcaeb252fa9b68df3964c735eae75bde3/packages/coding-agent/src/core/provider-composer.ts#L462-L478)
 
 ### Things to Know

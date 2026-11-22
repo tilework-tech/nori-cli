@@ -37,7 +37,7 @@ Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` rele
 | Grok Build | `grok-build` (also `grok`) | `@xai-official/grok@latest agent stdio` | Use `/login` for the Grok sign-in command or set `XAI_API_KEY`. |
 | Cursor Agent | `cursor` (also `cursor-agent`) | `cursor-agent acp` if available, otherwise `agent acp` | Use your existing `agent login` session or export a Cursor-issued user API key as `CURSOR_API_KEY`. |
 | Hermes Agent | `hermes` (also `hermes-agent`) | `hermes acp` | Run `hermes model` in another terminal to choose a provider and configure credentials. |
-| Pi | `pi` (also `pi-acp`) | `pi-acp@latest` with `@earendil-works/pi-coding-agent@latest` | Use Pi's own settings in `~/.pi/agent`, or choose a token provider such as Subconscious in `/agent`. |
+| Pi | `pi` (also `pi-acp`) | `pi-acp@latest` with `@earendil-works/pi-coding-agent@latest` | Use Pi's own settings in `~/.pi/agent` or select a [named API connection](nori-rs/config.md#pi-connections) in Nori's configuration. |
 
 Install Cursor CLI on the machine that runs Nori. If only `agent` is on `PATH`, Nori assumes it belongs to Cursor. If another program uses that name, add Cursor’s `cursor-agent` executable to `PATH` or put Cursor’s directory first. To use an API key with a local host, export `CURSOR_API_KEY` before starting `nori host`. Then use `nori host new --agent cursor`. With multi-session enabled, use `/delegate cursor <task>` to open a Cursor child from another agent. [Cursor CLI installation](https://cursor.com/docs/cli/installation) · [Cursor CLI authentication](https://cursor.com/docs/cli/reference/authentication)
 
@@ -50,8 +50,6 @@ The `gemini` ID keeps existing configs and Nori history associated with the Goog
 Install Hermes and its ACP extra on the machine running Nori. Make `hermes` available on that machine’s `PATH` and run `hermes acp --check`. [Nous Research’s ACP installation guide for v0.23.3](https://github.com/NousResearch/hermes-agent/blob/v0.23.3/website/docs/user-guide/features/acp.md#installation)
 
 Start it with `nori --agent hermes` or create a session on a running host with `nori host new --agent hermes`. With `features.multi_session = true` in your Nori configuration, enter `/delegate hermes Read README.md and summarize the setup steps` from another agent’s conversation. Approve the child when prompted. Its result returns to the parent conversation.
-
-For Pi, use `/agent` to choose **Pi settings**, select a saved Subconscious connection, or configure one with the name of your key variable and a catalog model. Nori then prepares Pi and lists its sessions for this folder; choose **Start a new session**, or a previous Pi session to resume it. The provider row shows the key variable the next step will use. [Named API token providers](nori-rs/config.md#named-api-token-providers)
 
 ## Bring Your Own Agent
 
@@ -76,7 +74,7 @@ command = "elizacp"
 args = ["acp"]
 ```
 
-Then switch to your agent with `/agent` inside Nori.
+Select the registered server in `/agent`, run `nori --agent elizacp exec "hello"`, or use `nori host new --agent elizacp` on a locally configured host. A local distribution also accepts a wrapper, child environment, and path to prepared runtime files. [Launch configuration](nori-rs/config.md#acp-server-launch)
 
 **Example agents to try:**
 

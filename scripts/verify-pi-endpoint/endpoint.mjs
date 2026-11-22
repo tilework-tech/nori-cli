@@ -1,9 +1,10 @@
-// A loopback stand-in for Subconscious's OpenAI Chat Completions API.
+// A loopback stand-in for an OpenAI-compatible Chat Completions API.
 // Each turn reads notes.txt, runs one shell command, then answers with what
 // both tools returned. Every request is appended to the log as JSON.
+import { createHash } from "node:crypto";
 import { appendFileSync } from "node:fs";
 
-const MODELS = ["subconscious/glm-5.3-marathon", "subconscious/glm-5.2"];
+const MODELS = ["lab-small"];
 
 function chunk(model, delta, finish = null) {
   return "data: " + JSON.stringify({
@@ -30,7 +31,7 @@ export function startEndpoint(logPath, port = 0) {
       const body = request.method === "POST" ? await request.json() : null;
       appendFileSync(logPath, JSON.stringify({
         method: request.method, path: url.pathname,
-        authorization: request.headers.get("authorization"),
+        authorizationFingerprint: createHash("sha256").update(request.headers.get("authorization") ?? "").digest("hex"),
         client: request.headers.get("x-subconscious-client"),
         model: body?.model, messages: body?.messages?.length ?? 0,
       }) + "\n");

@@ -54,7 +54,7 @@ impl LoginHandler {
                     Some(AgentKind::Hermes) => config.auth_hint,
                     Some(AgentKind::Codex) => return AgentLoginSupport::OAuthBrowser,
                     Some(AgentKind::Cursor) => config.auth_hint,
-                    Some(AgentKind::Pi) => "Run npx --yes @earendil-works/pi-coding-agent@latest in another terminal and use /login, or choose a token provider with /agent.".to_owned(),
+                    Some(AgentKind::Pi) => "Run npx --yes @earendil-works/pi-coding-agent@latest in another terminal and use /login, or configure a named API connection.".to_owned(),
                     None if !config.auth_hint.is_empty() => config.auth_hint,
                     None => format!("Use the authentication method for {}.", config.display_name),
                 };

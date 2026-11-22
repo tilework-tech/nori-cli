@@ -6,12 +6,10 @@ use std::sync::Arc;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::ensure;
-use nori_config::token_providers::Preset;
 use nori_config::token_providers::TokenProvider;
 use serde_json::json;
-use tokio::process::Command;
 
-const CHILD_KEY: &str = "NORI_PROVIDER_API_KEY";
+pub(crate) const CHILD_KEY: &str = "NORI_PROVIDER_API_KEY";
 
 pub(crate) fn credential(
     binding: &TokenProvider,
@@ -32,43 +30,37 @@ pub(crate) fn credential(
     Ok(Arc::from(key))
 }
 
-pub(crate) fn apply_binding(
-    cmd: &mut Command,
-    kind: Option<crate::registry::AgentKind>,
+/// Prepare the adapter's native config with a key *reference*. The process
+/// supervisor resolves the actual credential when it launches the child.
+pub(crate) fn configure_codex(
+    config: &mut crate::registry::AcpAgentConfig,
     binding: &TokenProvider,
-) -> Result<Arc<str>> {
-    let key = credential(binding, &|key| std::env::var(key).ok())?;
-    if kind == Some(crate::registry::AgentKind::Pi) {
-        cmd.env(&binding.env_key, key.as_ref());
-        return Ok(key);
-    }
-    ensure!(
-        kind == Some(crate::registry::AgentKind::Codex),
-        "no named token provider launch adapter"
-    );
-    let mut provider = json!({
+) {
+    let provider = json!({
         "name": binding.name,
         "base_url": binding.base_url,
         "wire_api": "responses",
         "env_key": CHILD_KEY,
         "requires_openai_auth": false,
     });
-    if binding.preset == Preset::Subconscious {
-        provider["http_headers"] = json!({"x-subconscious-client": "codex"});
-    }
-    let config = json!({
+    let settings = json!({
         "features": {"goals": false},
         "model": binding.model,
         "model_provider": "nori_binding",
         "model_providers": {"nori_binding": provider},
     });
-    cmd.env_remove("DEFAULT_AUTH_REQUEST")
-        .env_remove("OPENAI_API_KEY")
-        .env_remove("CODEX_API_KEY")
-        .env("MODEL_PROVIDER", "nori_binding")
-        .env("CODEX_CONFIG", config.to_string())
-        .env(CHILD_KEY, key.as_ref());
-    Ok(key)
+    config.launch.env_remove.extend([
+        "DEFAULT_AUTH_REQUEST".to_owned(),
+        "OPENAI_API_KEY".to_owned(),
+        "CODEX_API_KEY".to_owned(),
+        binding.env_key.clone(),
+    ]);
+    config
+        .env
+        .insert("MODEL_PROVIDER".into(), "nori_binding".into());
+    config
+        .env
+        .insert("CODEX_CONFIG".into(), settings.to_string());
 }
 
 pub(crate) fn redact<'a>(text: &'a str, key: Option<&str>) -> Cow<'a, str> {

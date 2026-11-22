@@ -69,7 +69,9 @@ Validates the standard targets (`help`, `dev`, `test`, `doctor`) defined by the 
 
 ### Agent verification scripts
 
-The `verify-*` directories hold Bun clients that drive a built `nori` binary against real ACP adapters with synthetic credentials and loopback model endpoints, so agent and provider integrations can be checked without real keys or model traffic. Each directory has its own README with the command and what it asserts. `verify-host-follow-up` covers mid-turn follow-ups across host transports; `verify-pi-subconscious` covers Pi launched through a Subconscious token provider via `nori exec`, including refusal before launch when the key variable is unset.
+The [host follow-up verifier](verify-host-follow-up/README.md) exercises mid-turn input with real adapters and loopback model endpoints.
+
+Run `bun scripts/verify-pi-endpoint/verify.mjs nori-rs/target/debug/nori` from the repository root to check a local Pi launch. The verifier requires Bun, a built CLI and access to the upstream packages through npm or its cache. It checks missing-key refusal, then drives a file read and terminal command through the real adapter and a synthetic Chat Completions endpoint. Managed host tests exercise provisioner-supplied fixture definitions on a local host. A deployed Sessions launch needs separate verification.
 
 ### Things to Know
 

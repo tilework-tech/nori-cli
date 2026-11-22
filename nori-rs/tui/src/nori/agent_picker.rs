@@ -51,23 +51,11 @@ pub fn agent_picker_params_with_subtitle(
             let agent_name = agent.agent_name.clone();
             let display_name = agent.display_name.clone();
 
-            // Start preparing the selected agent as soon as the picker closes,
-            // after asking for a model provider when the agent offers several.
-            let choose_provider =
-                !nori_harness::token_provider::compatible_presets(&agent_name).is_empty();
+            // Start preparing the selected agent as soon as the picker closes.
             let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                let agent_name = agent_name.clone();
-                let display_name = display_name.clone();
-                tx.send(if choose_provider {
-                    AppEvent::OpenTokenProviderPicker {
-                        agent_name,
-                        display_name,
-                    }
-                } else {
-                    AppEvent::PrepareAgentCandidate {
-                        agent_name,
-                        display_name,
-                    }
+                tx.send(AppEvent::PrepareAgentCandidate {
+                    agent_name: agent_name.clone(),
+                    display_name: display_name.clone(),
                 });
             })];
 
@@ -207,23 +195,6 @@ mod tests {
                 matches!(rx.try_recv(), Ok(AppEvent::PrepareAgentCandidate { agent_name, .. }) if agent_name == slug)
             );
         }
-    }
-
-    #[test]
-    fn picking_pi_asks_which_model_provider_it_should_use() {
-        let (tx, mut rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx);
-        let params = agent_picker_params("mock-model", tx.clone(), false);
-        let pi = params
-            .items
-            .iter()
-            .find(|item| item.name == "Pi")
-            .expect("Pi row");
-        (pi.actions[0])(&tx);
-        assert!(matches!(
-            rx.try_recv(),
-            Ok(AppEvent::OpenTokenProviderPicker { agent_name, .. }) if agent_name == "pi"
-        ));
     }
 
     #[test]

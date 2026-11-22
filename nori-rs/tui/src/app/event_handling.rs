@@ -1244,31 +1244,6 @@ impl App {
             } => {
                 self.begin_agent_candidate(agent_name, display_name);
             }
-            AppEvent::OpenTokenProviderPicker {
-                agent_name,
-                display_name,
-            } => self.open_token_provider_picker(&agent_name, &display_name),
-            AppEvent::OpenTokenProviderKeyInput {
-                agent_name,
-                display_name,
-                preset_id,
-            } => self.open_token_provider_key_input(agent_name, display_name, preset_id),
-            AppEvent::OpenTokenProviderModelPicker {
-                agent_name,
-                display_name,
-                preset_id,
-                api_key_env,
-            } => self.open_token_provider_model_picker(
-                &agent_name,
-                &display_name,
-                &preset_id,
-                &api_key_env,
-            ),
-            AppEvent::ChooseTokenProvider {
-                agent_name,
-                display_name,
-                choice,
-            } => self.choose_token_provider(agent_name, display_name, choice),
             AppEvent::CancelAgentCandidate => {
                 self.discard_candidate();
                 self.chat_widget

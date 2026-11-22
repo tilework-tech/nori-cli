@@ -253,7 +253,6 @@ mod session_overview;
 mod session_resume;
 mod session_setup;
 mod session_view;
-mod token_provider_choice;
 #[cfg(test)]
 pub(crate) use session_view::route_session_history_event;
 

@@ -30,6 +30,10 @@ pub(super) const SIDE_ENV: [&str; 8] = [
 
 pub(super) fn validate_launch(spec: &LaunchSpec) -> anyhow::Result<()> {
     ensure!(
+        spec.adapter.wrapper.is_none(),
+        "a private Codex side requires the pinned adapter without a wrapper"
+    );
+    ensure!(
         spec.credential_refs.is_empty() || spec.has_subscription_file(),
         "unsupported Codex side-session credential references: expected one binding subscription file"
     );

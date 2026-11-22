@@ -100,9 +100,12 @@ async fn read_only_launch_pins_environment_and_isolates_scratch() {
         "commandId":"start", "conversationId":uuid::Uuid::new_v4(), "bindingId":"sample", "generation":2,
         "spec":{"agent":"fixture","projectId":"project","runId":"run","cwd":cwd,"home":home,
             "env":{"COLOR":"red","TMPDIR":cwd},
-            "adapter":{"path":"/bin/sh","version":"fixture-v1","args":["-c",r#"
+            "adapter":{"path":"/bin/sh","version":"fixture-v1",
+                "wrapper":{"path":"/bin/sh","version":"fixture-1","args":["-c",
+                    r#"export WRAPPER_INPUT="$1"; shift; exec "$@""#, "fixture-wrapper", "two words"]},
+                "args":["-c",r#"
                 read -r input || exit 0
-                test "$COLOR" = red && test "$CODEX_HOME" = "$HOME/.codex" || exit 1
+                test "$WRAPPER_INPUT" = "two words" && test "$COLOR" = red && test "$CODEX_HOME" = "$HOME/.codex" || exit 1
                 if touch "$PWD/creation" || chmod 000 "$PWD/input" || touch "$HOME/state"; then exit 2; fi
                 test ! -e "$TMPDIR/marker" && touch "$TMPDIR/marker" && echo private
             "#]},
@@ -613,6 +616,42 @@ async fn codex_refuses_unverified_credential_scopes_before_spawning() {
         launches.shutdown().await.unwrap();
         fs::remove_file(provider.join(file)).unwrap();
     }
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn wrapped_codex_parent_cannot_use_the_private_subscription_side_launch() {
+    let root = tempfile::tempdir().unwrap();
+    let binding = root.path().join("sample");
+    let cwd = binding.join("workspace");
+    let home = binding.join("home");
+    fs::create_dir_all(&cwd).unwrap();
+    fs::create_dir_all(home.join(".codex")).unwrap();
+    let launches = ManagedLaunches::from_config(
+        &nori_config::HostConfig {
+            managed: true,
+            side_sessions: true,
+            side_confinement: nori_config::SideConfinement::Required,
+            bindings_root: Some(root.path().into()),
+            ..Default::default()
+        },
+        root.path(),
+    )
+    .unwrap();
+    launches.ensure(serde_json::from_value(json!({
+        "bindingId":"sample","generation":1,"conversationId":uuid::Uuid::new_v4(),"commandId":"start",
+        "spec":{"agent":"codex","projectId":"sample","runId":"sample","cwd":cwd,"home":home,
+            "credentialRefs":["sessions:codex-subscription-file:v1"],
+            "adapter":{"path":"/bin/cat","version":"2.7.0",
+                "wrapper":{"path":"/bin/sh","version":"1","args":["-c","exec \"$@\"","wrapper"]}},
+            "additions":{"clientMcp":false,"recording":false,"statusEvents":false,"promptEcho":false}}
+    })).unwrap()).unwrap();
+    let error = launches
+        .spawn_side("sample", 1, "side")
+        .err()
+        .expect("refuse the side");
+    assert!(error.to_string().contains("wrapper"), "{error}");
+    launches.shutdown().await.unwrap();
 }
 
 #[cfg(target_os = "linux")]

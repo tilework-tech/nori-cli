@@ -12,9 +12,9 @@ use toml_edit::Item;
 use crate::AgentConfigToml;
 use crate::token_providers::Preset;
 use crate::token_providers::Protocol;
-use crate::token_providers::SUBCONSCIOUS_DEFAULT_MODEL;
-use crate::token_providers::SUBCONSCIOUS_MODELS;
 use crate::token_providers::TokenProvider;
+
+const LEGACY_DEFAULT_MODEL: &str = "subconscious/glm-5.3-marathon";
 
 #[derive(Deserialize)]
 struct LegacyConfig {
@@ -42,7 +42,14 @@ fn is_pi(slug: &str) -> bool {
 /// A legacy picker saved `<connection>/<wire model>`. Handwritten entries also
 /// accepted the wire model itself; it may start with the connection's name.
 fn wire_model<'a>(model: &'a str, connection: &str) -> Option<&'a str> {
-    if SUBCONSCIOUS_MODELS.iter().any(|entry| entry.id == model) {
+    if matches!(
+        model,
+        LEGACY_DEFAULT_MODEL
+            | "subconscious/glm-5.2"
+            | "subconscious/tim-qwen3.6-27b"
+            | "subconscious/deepseek-v4-flash-marathon"
+            | "subconscious/deepseek-v4.1-flash-marathon"
+    ) {
         Some(model)
     } else {
         model.strip_prefix(connection)?.strip_prefix('/')
@@ -123,7 +130,7 @@ pub(crate) fn normalize(document: &mut DocumentMut) -> Result<()> {
             protocol: Protocol::OpenaiCompletions,
             base_url: base_url.to_owned(),
             env_key: provider.api_key_env.clone(),
-            model: model.unwrap_or(SUBCONSCIOUS_DEFAULT_MODEL).to_owned(),
+            model: model.unwrap_or(LEGACY_DEFAULT_MODEL).to_owned(),
         };
         connection.validate()?;
         entries.push(

@@ -1,5 +1,4 @@
-//! Choosing Pi with the Subconscious token provider through `/agent`, and
-//! refusing to start Pi when the chosen provider's key is missing.
+//! Exercise Pi through the ordinary agent picker and saved connection configuration.
 #![cfg(target_os = "linux")]
 
 use std::os::unix::fs::PermissionsExt;
@@ -34,102 +33,22 @@ fn fake_npx(bin: &Path, marker: &Path) {
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
 }
 
-fn select_row(session: &mut TuiSession, downs: usize) {
-    for _ in 0..downs {
-        session.send_key(Key::Down).unwrap();
-    }
-    session.send_key(Key::Enter).unwrap();
-}
-
-fn open_pi_provider_picker(session: &mut TuiSession) {
+#[test]
+fn picking_pi_prepares_its_native_server_and_completes_a_turn() {
+    let bin = tempfile::tempdir().unwrap();
+    let marker = bin.path().join("npx-calls");
+    fake_npx(bin.path(), &marker);
+    let config = SessionConfig::new()
+        .with_extra_path(bin.path().to_owned())
+        .with_agent_env("MOCK_AGENT_ECHO_ENV", "EXAMPLE_NATIVE_SETTING")
+        .with_agent_env("EXAMPLE_NATIVE_SETTING", "synthetic-native-pi");
+    let mut session = TuiSession::spawn_with_config(40, 120, config).unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
     session.submit_input("/agent").unwrap();
     session.wait_for_text("Select agent", TIMEOUT).unwrap();
-    session.send_str("\x1b[F").unwrap(); // End
+    session.send_str("\x1b[F").unwrap();
     session.wait_for_text("▏  Pi", TIMEOUT).unwrap();
     session.send_key(Key::Enter).unwrap();
-    session
-        .wait_for_text("Model provider for Pi", TIMEOUT)
-        .unwrap();
-}
-
-#[test]
-fn picking_pi_with_subconscious_launches_pi_with_its_own_provider_directory() {
-    let bin = tempfile::tempdir().unwrap();
-    let marker = bin.path().join("npx-calls");
-    fake_npx(bin.path(), &marker);
-    let config = SessionConfig::new()
-        .with_extra_path(bin.path().to_owned())
-        .with_agent_env("SUBCONSCIOUS_API_KEY", "subc-synthetic-key-0003")
-        .with_agent_env("MOCK_AGENT_ECHO_ENV", "PI_CODING_AGENT_DIR");
-    let mut session = TuiSession::spawn_with_config(40, 120, config).unwrap();
-    session.wait_for_text("›", TIMEOUT).unwrap();
-    let home = session.nori_home_path().unwrap();
-
-    open_pi_provider_picker(&mut session);
-    select_row(&mut session, 1);
-    session.wait_for_text("Subconscious key", TIMEOUT).unwrap();
-    session.send_key(Key::Enter).unwrap();
-    session
-        .wait_for_text("Subconscious model for Pi", TIMEOUT)
-        .unwrap();
-    select_row(&mut session, 1);
-    session
-        .wait_for_text("Start a new session", TIMEOUT)
-        .unwrap();
-    session.send_key(Key::Enter).unwrap();
-    session
-        .wait_for(
-            |screen| screen.contains("Started new conversation with agent: Pi"),
-            TIMEOUT,
-        )
-        .unwrap();
-    session.submit_input("show the provider directory").unwrap();
-    session
-        .wait_for(
-            |screen| screen.contains("token-providers/subconscious-pi-acp"),
-            TIMEOUT,
-        )
-        .unwrap_or_else(|_| panic!("{}", session.screen_contents()));
-
-    let calls = std::fs::read_to_string(&marker).unwrap();
-    assert!(calls.contains("pi-acp"), "{calls}");
-    let saved = std::fs::read_to_string(home.join("config.toml")).unwrap();
-    assert!(saved.contains("SUBCONSCIOUS_API_KEY"), "{saved}");
-    assert!(!saved.contains("subc-synthetic-key-0003"), "{saved}");
-    let settings =
-        std::fs::read_to_string(home.join("token-providers/subconscious-pi-acp/settings.json"))
-            .unwrap();
-    assert!(settings.contains("subconscious/glm-5.2"), "{settings}");
-}
-
-#[test]
-fn choosing_a_saved_pi_connection_preserves_its_name_and_native_model() {
-    let bin = tempfile::tempdir().unwrap();
-    let marker = bin.path().join("npx-calls");
-    fake_npx(bin.path(), &marker);
-    let config = SessionConfig::new()
-        .with_extra_path(bin.path().to_owned())
-        .with_agent_env("SYNTHETIC_PI_KEY", "example-pi-key")
-        .with_extra_config_toml(
-            r#"
-[default_models]
-pi = "native/example"
-
-[[token_providers]]
-name = "lab"
-preset = "subconscious"
-protocol = "openai-responses"
-base_url = "https://api.subconscious.dev/v1"
-env_key = "SYNTHETIC_PI_KEY"
-model = "subconscious/glm-5.2"
-"#,
-        );
-    let mut session = TuiSession::spawn_with_config(40, 120, config).unwrap();
-    session.wait_for_text("›", TIMEOUT).unwrap();
-    let home = session.nori_home_path().unwrap();
-    open_pi_provider_picker(&mut session);
-    session.wait_for_text("lab (saved)", TIMEOUT).unwrap();
-    select_row(&mut session, 1);
     session
         .wait_for_text("Start a new session", TIMEOUT)
         .unwrap();
@@ -137,16 +56,11 @@ model = "subconscious/glm-5.2"
     session
         .wait_for_text("Started new conversation with agent: Pi", TIMEOUT)
         .unwrap();
-    let settings: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(home.join("token-providers/lab-pi-acp/settings.json")).unwrap(),
-    )
-    .unwrap();
-    assert_eq!(settings["defaultProvider"], "lab");
-    assert_eq!(settings["defaultModel"], "subconscious/glm-5.2");
-    let saved = std::fs::read_to_string(home.join("config.toml")).unwrap();
-    assert!(saved.contains("native/example"));
-    assert!(saved.contains("openai-responses"));
-    assert_eq!(saved.matches("[[token_providers]]").count(), 1);
+    session.submit_input("read the synthetic setting").unwrap();
+    session
+        .wait_for_text("synthetic-native-pi", TIMEOUT)
+        .unwrap();
+    assert!(std::fs::read_to_string(marker).unwrap().contains("pi-acp"));
 }
 
 #[test]

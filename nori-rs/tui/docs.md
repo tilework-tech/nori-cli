@@ -789,8 +789,6 @@ supersession, or application exit tears down only the candidate and leaves the
 current session promptable. Prompt submission always targets the current
 widget; there is no pending switch-on-next-prompt state.
 
-Selecting built-in Pi in the [agent picker](src/nori/agent_picker.rs) opens the [model provider picker](src/nori/token_provider_picker/). The user can resume Pi's native settings, choose a compatible saved connection by name, or configure a Subconscious connection. Setup takes an environment variable name and a catalog model. The key input clears invalid or unset input without displaying it. The [choice handler](src/app/token_provider_choice.rs) persists the selected binding and starts the normal candidate switch. Clearing the binding restores the native model preference. Other agents keep their own selections.
-
 Candidate activation classifies hidden candidate events in
 [`App`](src/app/event_handling.rs) before they reach the candidate widget. An
 ACP error or pre-start `RequestFailed` is logged and captured rather than

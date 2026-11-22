@@ -17,7 +17,6 @@ use futures::AsyncBufReadExt;
 use futures::AsyncWriteExt;
 use futures::StreamExt;
 use futures::io::BufReader;
-use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -466,10 +465,30 @@ impl AcpConnection {
         );
 
         // --- Spawn the agent subprocess ---
-        let mut cmd = Command::new(&config.command);
-        cmd.args(&config.args)
-            .envs(&config.env)
-            .env_remove("CODEX_HOME")
+        let mut server = crate::launch::ServerCommand::new(&config.command, &config.args);
+        if let Some((program, args)) = config
+            .launch
+            .wrapper
+            .as_deref()
+            .and_then(|argv| argv.split_first())
+        {
+            server = server.with_wrapper(program, args);
+        }
+        let runtime_dir = config.launch.runtime_dir.as_deref();
+        if let Some(dir) = runtime_dir {
+            anyhow::ensure!(
+                dir.is_dir(),
+                "prepared runtime_dir is not a directory: {}",
+                dir.display()
+            );
+        }
+        let mut cmd = server.command(
+            crate::launch::ChildEnvironment::Inherit,
+            &config.env,
+            &config.launch.env_remove,
+            runtime_dir,
+        );
+        cmd.env_remove("CODEX_HOME")
             .current_dir(cwd)
             .stderr(Stdio::piped());
 
@@ -477,7 +496,11 @@ impl AcpConnection {
             .token_provider
             .as_ref()
             .map(|binding| {
-                crate::token_launch::apply_binding(&mut cmd, config.builtin_kind, binding)
+                let key = crate::token_launch::credential(&binding.connection, &|key| {
+                    std::env::var(key).ok()
+                })?;
+                cmd.env(&binding.child_key, key.as_ref());
+                anyhow::Ok(key)
             })
             .transpose()?;
 
@@ -486,7 +509,7 @@ impl AcpConnection {
             stdout,
             stderr,
             handle: child_handle,
-        } = AgentProcess::spawn(cmd)
+        } = AgentProcess::spawn_with_resource(cmd, config.owned_runtime.clone())
             .with_context(|| format!("Failed to spawn ACP agent: {}", config.command))?;
         let stderr = stderr.context("Failed to take stderr")?;
         let pid = child_handle.pid;
@@ -574,9 +597,22 @@ impl AcpConnection {
             },
         );
 
+        let (bad_stdout, invalid_first_frame) = oneshot::channel();
+        let mut wrapper_startup = config.launch.wrapper.as_ref().map(|_| bad_stdout);
         let incoming_logger = wire_logger;
         let incoming_lines = Box::pin(BufReader::new(stdout.compat()).lines().map(
             move |line_result| {
+                if let Some(signal) = wrapper_startup.take()
+                    && let Ok(line) = &line_result
+                    && !serde_json::from_str::<serde_json::Value>(line)
+                        .is_ok_and(|frame| frame["jsonrpc"] == "2.0")
+                {
+                    let _ = signal.send(());
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "invalid ACP JSON-RPC startup frame",
+                    ));
+                }
                 let line_result = line_result.map(|line| match &credential {
                     Some(key) => crate::token_launch::redact_error(line, key),
                     None => line,
@@ -602,6 +638,8 @@ impl AcpConnection {
         };
         let init = establish_connection(transport, cwd, event_tx, event_rx, initialize_event_tx);
         let init_result = tokio::select! {
+            biased;
+            Ok(()) = invalid_first_frame => anyhow::bail!("wrapped ACP server wrote invalid ACP JSON-RPC to stdout during initialization; send wrapper diagnostics to stderr"),
             result = init => result,
             () = child_died => Err(anyhow::anyhow!("agent exited before initialization finished")),
         };

@@ -87,6 +87,17 @@ async fn concurrent_ensure_uses_one_slot_and_preserves_the_pinned_process() {
     );
     let first = first.unwrap();
     assert_eq!(retry.unwrap(), first);
+    let mut repeated = launch.clone();
+    repeated["spec"]["envRemove"] = json!([]);
+    assert_eq!(a.request(ENSURE, repeated.clone()).await.unwrap(), first);
+    repeated["spec"]["envRemove"] = json!(["SAMPLE_REMOVED"]);
+    assert!(
+        a.request(ENSURE, repeated)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("conflict")
+    );
     assert_eq!(first["conversationId"], launch["conversationId"]);
     assert_eq!(first["state"], "spawned");
     let cwd = Path::new(launch["spec"]["cwd"].as_str().unwrap());
@@ -168,6 +179,64 @@ async fn prepared_runtimes_and_public_labels_follow_their_binding() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn removing_an_environment_key_in_one_binding_preserves_its_siblings_value() {
+    let host = start(2, true);
+    let mut control = client(&host);
+    let state: Value =
+        serde_json::from_slice(&fs::read(host.0.path().join("host/state.json")).unwrap()).unwrap();
+    let endpoint = state["endpoint"]
+        .as_str()
+        .unwrap()
+        .replace("/sessions", "/managed");
+    let token = fs::read_to_string(host.0.path().join("host/token")).unwrap();
+    let mut machine = ManagedClient::connect(&endpoint, token.trim())
+        .await
+        .unwrap();
+    for (binding, set, removed) in [
+        ("parent", "PARENT_MARK", "SIBLING_MARK"),
+        ("sibling", "SIBLING_MARK", "PARENT_MARK"),
+    ] {
+        let mut launch = request(&host, binding);
+        launch["spec"]["env"][set] = json!(binding);
+        launch["spec"]["envRemove"] = json!([removed]);
+        // Capture once at startup, and again when the host delivers ACP initialize.
+        let observer = r#"observe() { printf '%s %s' "${PARENT_MARK-unset}" "${SIBLING_MARK-unset}"; }
+observe > startup.tmp && /bin/mv startup.tmp startup
+IFS= read -r request || exit 1
+printf '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{},"_meta":{"observed":"%s"}}}\n' "$(observe)"
+IFS= read -r request
+"#;
+        launch["spec"]["adapter"]["path"] = json!("/bin/sh");
+        launch["spec"]["adapter"]["args"] = json!(["-c", observer]);
+        control.request(ENSURE, launch.clone()).await.unwrap();
+        let observed = Path::new(launch["spec"]["cwd"].as_str().unwrap()).join("startup");
+        wait_for_file(&observed);
+        assert_eq!(
+            fs::read_to_string(observed).unwrap(),
+            if binding == "parent" {
+                "parent unset"
+            } else {
+                "unset sibling"
+            }
+        );
+    }
+    for (binding, expected) in [("sibling", "unset sibling"), ("parent", "parent unset")] {
+        machine
+            .send(json!({"bindingId":binding,"generation":1,"message":{
+                "jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}
+            }}))
+            .await
+            .unwrap();
+        let frame = tokio::time::timeout(Duration::from_secs(5), machine.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(frame["bindingId"], binding);
+        assert_eq!(frame["message"]["result"]["_meta"]["observed"], expected);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn invalid_runtime_or_token_label_refuses_the_launch_before_spawn() {
     let host = start(1, true);
     let mut client = client(&host);
@@ -211,6 +280,41 @@ async fn invalid_runtime_or_token_label_refuses_the_launch_before_spawn() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn managed_wrapper_requires_its_own_pin_and_is_part_of_the_binding_identity() {
+    let host = start(1, true);
+    let mut control = client(&host);
+    let mut launch = request(&host, "wrapped");
+    for invalid in [
+        json!({"path":"relative", "version":"1"}),
+        json!({"path":host.0.path().join("missing"), "version":"1"}),
+        json!({"path":"/bin/sh"}),
+        json!({"path":"/bin/sh", "version":"  "}),
+        json!({"path":"/bin/sh", "version":"1", "args":["bad\0arg"]}),
+        json!({"path":"/bin/sh", "version":"1", "wrapper":{"path":"/bin/sh","version":"1"}}),
+    ] {
+        launch["spec"]["adapter"]["wrapper"] = invalid;
+        assert_eq!(refusal_code(&mut control, launch.clone()).await, -32602);
+    }
+    launch["spec"]["adapter"]["wrapper"] = json!({
+        "path":"/bin/sh", "version":"1", "args":["-c", "exec \"$@\"", "fixture wrapper"]
+    });
+    let receipt = control.request(ENSURE, launch.clone()).await.unwrap();
+    assert_eq!(
+        control.request(ENSURE, launch.clone()).await.unwrap(),
+        receipt
+    );
+    launch["spec"]["adapter"]["wrapper"]["version"] = json!("2");
+    assert!(
+        control
+            .request(ENSURE, launch)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("conflict")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn full_host_refuses_new_binding_with_capacity_code() {
     let host = start(1, true);
     let mut client = client(&host);
@@ -238,12 +342,18 @@ async fn invalid_ensure_returns_invalid_params_even_on_a_full_host() {
         .request(ENSURE, request(&host, "alpha"))
         .await
         .unwrap();
-    let invalid = request(&host, "beta");
+    let mut invalid = request(&host, "beta");
+    invalid["spec"]["envRemove"] = json!([]);
     for (path, value) in [
         ("/spec/cwd", json!("relative")),
         ("/spec/cwd", Value::Null),
         ("/spec/adapter/args", json!(["arg\0value"])),
         ("/spec/env", json!({"LABEL":"env\0value"})),
+        ("/spec/envRemove", json!([""])),
+        ("/spec/envRemove", json!(["bad=name"])),
+        ("/spec/envRemove", json!(["bad\0name"])),
+        ("/spec/envRemove", json!(["home"])),
+        ("/spec/envRemove", json!(["LABEL"])),
     ] {
         let mut invalid = invalid.clone();
         *invalid.pointer_mut(path).unwrap() = value;

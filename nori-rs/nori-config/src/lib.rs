@@ -30,6 +30,7 @@ pub use loader::find_nori_home;
 pub use policy::AskForApproval;
 pub use policy::SandboxPolicy;
 pub use policy::WritableRoot;
+pub use types::AGENT_RUNTIME_ENV;
 pub use types::AcpProxyConfig;
 pub use types::AcpProxyConfigToml;
 pub use types::AgentConfigToml;
@@ -57,6 +58,7 @@ pub use types::HotkeyBinding;
 pub use types::HotkeyConfig;
 pub use types::HotkeyConfigToml;
 pub use types::LocalDistribution;
+pub use types::LocalLaunchOptions;
 pub use types::ModelOverrideToml;
 pub use types::NoriConfig;
 pub use types::NoriConfigOverrides;
@@ -73,6 +75,7 @@ pub use types::TerminalNotifications;
 pub use types::ToolOutput;
 pub use types::TuiConfig;
 pub use types::VimEnterBehavior;
+pub use types::env_names_equal;
 pub use types::resolve_hook_paths;
 
 #[cfg(test)]

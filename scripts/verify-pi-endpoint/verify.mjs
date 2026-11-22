@@ -1,9 +1,10 @@
 // Run with Bun from the repository root:
-//   bun scripts/verify-pi-subconscious/verify.mjs nori-rs/target/debug/nori
+//   bun scripts/verify-pi-endpoint/verify.mjs nori-rs/target/debug/nori
 // Drives the real pi-acp adapter and Pi coding agent (installed by npx) through
-// `nori exec`, against a loopback Subconscious endpoint with a synthetic key.
+// `nori exec`, against a loopback OpenAI-compatible endpoint with a synthetic key.
 import assert from "node:assert/strict";
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { startEndpoint } from "./endpoint.mjs";
@@ -13,11 +14,8 @@ const home = await mkdtemp(join(tmpdir(), "nori-pi-check-"));
 const noriHome = join(home, ".nori/cli");
 const project = join(home, "synthetic-project");
 const log = join(home, "endpoint.jsonl");
-const key = "subc-synthetic-key-7f3a";
+const key = "synthetic-key-7f3a";
 const endpoint = startEndpoint(log);
-const bin = join(home, "bin");
-const realNpx = Bun.which("npx");
-assert.ok(realNpx, "verification needs npx on PATH");
 const baseUrl = `http://127.0.0.1:${endpoint.port}/v1`;
 
 const requests = async () =>
@@ -37,9 +35,6 @@ async function exec(env) {
 }
 
 try {
-  await mkdir(bin);
-  await copyFile(join(import.meta.dirname, "loopback-npx.mjs"), join(bin, "npx"));
-  await chmod(join(bin, "npx"), 0o700);
   await mkdir(noriHome, { recursive: true });
   await mkdir(project);
   await writeFile(join(project, "notes.txt"), "token=orchid-42\nsecond synthetic line\nthird synthetic line\n");
@@ -47,21 +42,19 @@ try {
     `agent = "pi"`,
     ``,
     `[[token_providers]]`,
-    `name = "subconscious"`,
-    `preset = "subconscious"`,
+    `name = "lab"`,
+    `preset = "custom"`,
     `protocol = "openai-completions"`,
-    `model = "subconscious/glm-5.2"`,
-    `env_key = "SUBCONSCIOUS_API_KEY"`,
-    `base_url = "https://api.subconscious.dev/v1"`,
+    `model = "lab-small"`,
+    `env_key = "SYNTHETIC_MODEL_KEY"`,
+    `base_url = "${baseUrl}"`,
     ``,
     `[agent_token_providers]`,
-    `pi = "subconscious"`,
+    `pi = "lab"`,
     ``,
   ].join("\n"));
   const env = {
-    HOME: home, PATH: `${bin}:${process.env.PATH}`, NORI_HOME: noriHome, NORI_NO_ANALYTICS: "1",
-    NORI_PI_TEST_NPX: realNpx,
-    NORI_PI_TEST_ENDPOINT: baseUrl,
+    HOME: home, PATH: process.env.PATH, NORI_HOME: noriHome, NORI_NO_ANALYTICS: "1",
     PI_SKIP_VERSION_CHECK: "1", PI_TELEMETRY: "0", TERM: "dumb",
     npm_config_cache: process.env.npm_config_cache ?? join(process.env.HOME, ".npm"),
     ...(process.env.npm_config_offline ? { npm_config_offline: process.env.npm_config_offline } : {}),
@@ -69,11 +62,17 @@ try {
 
   const missing = await exec(env);
   assert.notEqual(missing.code, 0, "Pi must not start without its key");
-  assert.match(missing.stdout + missing.stderr, /SUBCONSCIOUS_API_KEY/);
+  assert.match(missing.stdout + missing.stderr, /SYNTHETIC_MODEL_KEY/);
   assert.equal((await requests()).length, 0, "no model traffic without a key");
-  console.log("missing key: refused before launch, naming SUBCONSCIOUS_API_KEY");
+  console.log("missing key: refused before launch, naming SYNTHETIC_MODEL_KEY");
 
-  const run = await exec({ ...env, SUBCONSCIOUS_API_KEY: key });
+  const absentBinary = await exec({ ...env, PATH: join(home, "no-programs"), SYNTHETIC_MODEL_KEY: key });
+  assert.notEqual(absentBinary.code, 0);
+  assert.match(absentBinary.stderr, /npx/);
+  assert.deepEqual(await readdir(join(noriHome, ".pi-launches")), [".lock"]);
+  assert.equal((await requests()).length, 0);
+
+  const run = await exec({ ...env, SYNTHETIC_MODEL_KEY: key });
   console.log(run.stdout);
   if (run.code !== 0) console.error(run.stderr);
   assert.equal(run.code, 0, "nori exec with Pi should succeed");
@@ -81,14 +80,16 @@ try {
   const chats = (await requests()).filter(request => request.path.endsWith("/chat/completions"));
   assert.ok(chats.length >= 3, `expected three model turns, saw ${chats.length}`);
   for (const chat of chats) {
-    assert.equal(chat.authorization, `Bearer ${key}`);
-    assert.equal(chat.client, "pi");
-    assert.equal(chat.model, "subconscious/glm-5.2");
+    assert.equal(chat.authorizationFingerprint, createHash("sha256").update(`Bearer ${key}`).digest("hex"));
+    assert.equal(chat.client, null);
+    assert.equal(chat.model, "lab-small");
   }
   const config = await readFile(join(noriHome, "config.toml"), "utf8");
-  const models = await readFile(join(noriHome, "token-providers/subconscious-pi-acp/models.json"), "utf8");
-  assert.ok(!config.includes(key) && !models.includes(key), "the key must not be written to disk");
-  console.log(`pi + subconscious: ${chats.length} model turns, file read and terminal command reported`);
+  assert.ok(!config.includes(key), "the named connection must store only a key reference");
+  assert.deepEqual(await readdir(join(noriHome, ".pi-launches")), [".lock"]);
+  const history = await readdir(join(noriHome, "token-providers/lab-pi-acp/sessions"), { recursive: true });
+  assert.ok(history.some(file => file.endsWith(".jsonl")), "Pi session history survives profile cleanup");
+  console.log(`Pi + custom loopback: ${chats.length} model turns, file read and terminal command reported`);
 } finally {
   endpoint.stop(true);
   await rm(home, { recursive: true, force: true });

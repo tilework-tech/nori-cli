@@ -83,41 +83,31 @@ Subconscious uses Completions for Pi and OpenCode, Responses for Codex, and
 Messages for Claude Code. Use the published gateway base URL for a named
 preset or the account-scoped Workers AI URL for Cloudflare.
 
-A launch requires an eligible pairing, a concrete wire protocol and a named
-connection adapter. Built-in Codex supplies the Responses adapter. Built-in Pi supports Subconscious over Chat Completions. A custom command shadowing either built-in cannot use its adapter. An excluded pairing
-or a missing adapter stops the bound launch. Broker-managed Sessions supply
-a separate launch specification. [Compatibility contract](nori-config/docs.md#api-token-provider-resolution)
+A bound launch requires an eligible pairing, a concrete wire protocol and an
+adapter for the selected executable. A custom command that shadows a built-in
+keeps its own launch definition. Broker-managed Sessions supply an admitted
+launch specification. [Compatibility contract](nori-config/docs.md#api-token-provider-resolution)
 
-### Pi with Subconscious
+### Pi connections
 
-Nori also reads the earlier Pi picker format, such as
-`[token_providers.subconscious]` with `api_key_env`. The next provider
-selection saves those entries as named connections. The selected Pi
-catalog model moves from `[default_models]` into the connection. Other
-agents' models and Pi's native model preferences stay in place.
-If an earlier entry used a custom endpoint, Nori keeps that URL and
-labels the connection `custom`. Pi can use this endpoint with an explicit
-`openai-completions` protocol and a model from the Subconscious catalog.
-The connection keeps its own key variable, Pi client header and session affinity settings.
-
-In `/agent`, choose **Pi**, then select a saved Subconscious connection or configure one by choosing **Subconscious**. For a new connection, enter the name of an environment variable holding the key and choose a catalog model. The equivalent configuration for a named connection is:
+Selecting `pi` uses Pi's native profile by default. To use a named connection,
+set `pi = "lab-pi"` under `[agent_token_providers]` and define the connection.
 
 ```toml
-[agent_token_providers]
-pi = "lab-pi"
-
 [[token_providers]]
 name = "lab-pi"
-preset = "subconscious"
+preset = "custom"
 protocol = "openai-completions"
-base_url = "https://api.subconscious.dev/v1"
+base_url = "https://gateway.example.invalid/v1"
 env_key = "LAB_PI_KEY"
-model = "subconscious/glm-5.2"
+model = "demo-model"
 ```
 
-Set `LAB_PI_KEY` in the environment that launches Nori, including the local host when using `nori host new --agent pi`. The connection supplies the model sent on the wire. Pi advertises it over ACP as `lab-pi/subconscious/glm-5.2`.
-
-Nori writes Pi's `models.json` and `settings.json` under `$NORI_HOME/token-providers/lab-pi-pi-acp/` and passes that directory to the child through `PI_CODING_AGENT_DIR`. The model file refers to the environment variable as `$LAB_PI_KEY`. Choose **Pi settings** to clear the binding and resume Pi's own profile and saved native model preference.
+Make the key available to the process starting Nori. The selected endpoint,
+protocol, model and key reference determine the private Pi profile. The model
+ID on ACP is `lab-pi/demo-model`. Remove the `pi` binding to return to Pi's
+native settings. Each launch owns its generated profile until the child exits. The next local launch removes abandoned profiles. Pi session history remains in the connection’s existing sessions directory. Nori also reads earlier Pi provider tables, preserving their
+selected route, endpoint and key variable.
 
 ## Custom agents: `[[agents]]`
 
@@ -130,19 +120,54 @@ slug = "my-agent"            # machine id used as a slug / cmdline value
 context_window_size = 200000 # optional token budget override
 auth_hint = "run: my-agent login"  # optional message shown on auth failure
 transcript_base_dir = ".my-agent"  # optional transcript dir, relative to home
+model_override = { env = "MY_AGENT_MODEL" }   # optional, or { arg = "--model" }
 
 # Exactly one distribution variant must be set.
 [agents.distribution.local]
 command = "/usr/bin/my-agent"
 args = ["acp"]
 env = { MY_AGENT_REGION = "lab" }   # extra env for the spawned subprocess
-
-# Optional: how to force a chosen model on this agent at spawn.
-model_override = { env = "MY_AGENT_MODEL" }   # or { arg = "--model" }
 ```
 
-Distribution variants (choose one): `local` (`command`/`args`/`env`), or one of
-the package runners `npx`, `bunx`, `pipx`, `uvx` (each takes `package`/`args`).
+Choose one distribution. Use `local` for an installed executable or a package
+runner (`npx`, `bunx`, `pipx`, `uvx`) with `package` and `args`.
+
+### ACP server launch
+
+In a local distribution, `command` and `args` select the ACP server. Add
+`env` for settings the child should receive. Use `env_remove` to drop inherited
+variables for this launch. A name can appear in only one of these fields.
+A server that delegates to a second executable can read its path from an environment variable the server
+supports. To run a wrapper first, supply its executable and each prefix
+argument in a `wrapper` array.
+
+```toml
+[[agents]]
+name = "Review"
+slug = "review"
+
+[agents.distribution.local]
+command = "/opt/example/bin/example-acp"
+args = ["--profile", "Review team"]
+wrapper = ["/opt/example/bin/runtime-wrapper", "--"]
+runtime_dir = "/opt/example/prepared/review"
+env = { EXAMPLE_ENGINE = "/opt/example/bin/engine" }
+env_remove = ["EXAMPLE_PROFILE"]
+```
+
+The wrapper receives `--`, the server path, `--profile`, and `Review team` as
+four separate arguments. Nori performs no shell expansion. The wrapper must
+pass ACP stdin and stdout through to the server and direct diagnostics to
+stderr. When using `runtime_dir`, supply an existing absolute directory. The
+child receives its path in `NORI_AGENT_RUNTIME_DIR` and keeps the session
+workspace as its working directory. When supplying this path, leave
+`NORI_AGENT_RUNTIME_DIR` out of both environment fields. Omit the wrapper, runtime or environment
+independently when the server runs without them.
+
+Picker selections, `nori exec`, local host sessions and delegated launches
+use the registered agent slug. On a managed host the machine supplies the
+pinned definition and prepares runtime files for that binding.
+[Managed launch admission](cli/src/host/docs.md#managed-launch-control-v1)
 
 ### `model_override`
 

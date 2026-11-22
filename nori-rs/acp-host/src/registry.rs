@@ -267,7 +267,7 @@ impl AgentKind {
                 "Run `agent login` (or `cursor-agent login`) in another terminal, or set CURSOR_API_KEY to a user API key from your Cursor dashboard."
             }
             AgentKind::Pi => {
-                "Choose a token provider for Pi with /agent, or run /login for Pi's own sign-in."
+                "Use Pi's /login for native sign-in, or configure a named API connection."
             }
         }
     }
@@ -669,8 +669,12 @@ impl Default for AcpProviderInfo {
 /// Configuration for an ACP agent subprocess
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcpAgentConfig {
+    /// Retains generated launch inputs across cloned configs and their children.
+    pub owned_runtime: Option<std::sync::Arc<crate::launch::OwnedRuntime>>,
+    /// Child process options for a locally registered server.
+    pub launch: nori_config::LocalLaunchOptions,
     /// Explicit API route containing only a credential reference.
-    pub token_provider: Option<nori_config::token_providers::TokenProvider>,
+    pub token_provider: Option<crate::token_provider::BoundConnection>,
     /// Agent identifier (placeholder for custom agents)
     pub agent: AgentKind,
     /// Built-in provider using its default launch configuration. Custom commands have no built-in identity.
@@ -850,25 +854,32 @@ pub fn get_agent_launch_config(
     agent_name: &str,
     binding: Option<&nori_config::token_providers::TokenProvider>,
 ) -> Result<AcpAgentConfig> {
-    let config = agent_command(agent_name, binding.is_none())?;
+    let mut config = agent_command(agent_name, binding.is_none())?;
     let Some(binding) = binding else {
         return Ok(config);
     };
     use nori_config::token_providers::Protocol;
-    match config.builtin_kind {
-        Some(AgentKind::Codex) => anyhow::ensure!(
-            binding.protocol == Protocol::OpenaiResponses,
-            "Codex requires openai-responses"
-        ),
-        Some(AgentKind::Pi) => anyhow::ensure!(
-            crate::token_provider::supports_pi_connection(binding),
-            "Pi requires a compatible Subconscious connection"
-        ),
+    binding.validate()?;
+    let mut binding = binding.clone();
+    binding.protocol = binding.protocol_for(&config.provider_slug)?;
+    let child_key = match config.builtin_kind {
+        Some(AgentKind::Codex) => {
+            anyhow::ensure!(
+                binding.protocol == Protocol::OpenaiResponses,
+                "Codex requires openai-responses"
+            );
+            crate::token_launch::configure_codex(&mut config, &binding);
+            crate::token_launch::CHILD_KEY.to_owned()
+        }
+        Some(AgentKind::Pi) => binding.env_key.clone(),
         _ => anyhow::bail!("this agent has no named token provider launch adapter"),
-    }
+    };
     Ok(AcpAgentConfig {
         auth_hint: format!("Check the credential referenced by {}.", binding.env_key),
-        token_provider: Some(binding.clone()),
+        token_provider: Some(crate::token_provider::BoundConnection {
+            connection: binding,
+            child_key,
+        }),
         ..config
     })
 }
@@ -889,29 +900,52 @@ fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentCo
         && let Some(ref dist) = registered.distribution
     {
         // Custom distribution: use the resolved distribution directly
-        let (command, args, env) = match dist {
-            ResolvedDistribution::Local { command, args, env } => {
-                (command.clone(), args.clone(), env.clone())
-            }
+        let (command, args, env, launch) = match dist {
+            ResolvedDistribution::Local {
+                command,
+                args,
+                env,
+                launch,
+            } => (command.clone(), args.clone(), env.clone(), launch.clone()),
             ResolvedDistribution::Npx { package, args } => {
                 let mut full_args = vec![package.clone()];
                 full_args.extend(args.iter().cloned());
-                ("npx".to_string(), full_args, HashMap::new())
+                (
+                    "npx".to_string(),
+                    full_args,
+                    HashMap::new(),
+                    Default::default(),
+                )
             }
             ResolvedDistribution::Bunx { package, args } => {
                 let mut full_args = vec![package.clone()];
                 full_args.extend(args.iter().cloned());
-                ("bunx".to_string(), full_args, HashMap::new())
+                (
+                    "bunx".to_string(),
+                    full_args,
+                    HashMap::new(),
+                    Default::default(),
+                )
             }
             ResolvedDistribution::Pipx { package, args } => {
                 let mut full_args = vec!["run".to_string(), package.clone()];
                 full_args.extend(args.iter().cloned());
-                ("pipx".to_string(), full_args, HashMap::new())
+                (
+                    "pipx".to_string(),
+                    full_args,
+                    HashMap::new(),
+                    Default::default(),
+                )
             }
             ResolvedDistribution::Uvx { package, args } => {
                 let mut full_args = vec![package.clone()];
                 full_args.extend(args.iter().cloned());
-                ("uvx".to_string(), full_args, HashMap::new())
+                (
+                    "uvx".to_string(),
+                    full_args,
+                    HashMap::new(),
+                    Default::default(),
+                )
             }
         };
 
@@ -934,6 +968,8 @@ fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentCo
         };
 
         return Ok(AcpAgentConfig {
+            owned_runtime: None,
+            launch,
             token_provider: None,
             agent: registered.kind.unwrap_or(AgentKind::ClaudeCode),
             builtin_kind: None,
@@ -1034,6 +1070,8 @@ fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentCo
         }
 
         return Ok(AcpAgentConfig {
+            owned_runtime: None,
+            launch: Default::default(),
             token_provider: None,
             agent,
             builtin_kind: Some(agent),
@@ -1130,6 +1168,8 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
             };
 
             Some(AcpAgentConfig {
+                owned_runtime: None,
+                launch: Default::default(),
                 token_provider: None,
                 agent: AgentKind::ClaudeCode, // Dummy
                 builtin_kind: None,
@@ -1183,6 +1223,8 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
             };
 
             Some(AcpAgentConfig {
+                owned_runtime: None,
+                launch: Default::default(),
                 token_provider: None,
                 agent: AgentKind::ClaudeCode, // Dummy
                 builtin_kind: None,
@@ -1498,6 +1540,7 @@ mod tests {
             slug: "custom-env".to_string(),
             distribution: AgentDistributionToml {
                 local: Some(LocalDistribution {
+                    launch: Default::default(),
                     command: "/usr/bin/agent".to_string(),
                     args: vec!["acp".to_string()],
                     env: std::collections::HashMap::new(),
@@ -1538,6 +1581,7 @@ mod tests {
             slug: "custom-arg".to_string(),
             distribution: AgentDistributionToml {
                 local: Some(LocalDistribution {
+                    launch: Default::default(),
                     command: "/usr/bin/agent".to_string(),
                     args: vec!["acp".to_string()],
                     env: std::collections::HashMap::new(),
@@ -1577,6 +1621,7 @@ mod tests {
             slug: "custom-none".to_string(),
             distribution: AgentDistributionToml {
                 local: Some(LocalDistribution {
+                    launch: Default::default(),
                     command: "/usr/bin/agent".to_string(),
                     args: vec!["acp".to_string()],
                     env: std::collections::HashMap::from([("K".to_string(), "v".to_string())]),
@@ -1841,6 +1886,7 @@ mod tests {
             slug: "claude-code".to_string(),
             distribution: AgentDistributionToml {
                 local: Some(LocalDistribution {
+                    launch: Default::default(),
                     command: "/my/claude".to_string(),
                     args: vec![],
                     env: std::collections::HashMap::new(),
@@ -1943,6 +1989,7 @@ mod tests {
             slug: "local-test".to_string(),
             distribution: AgentDistributionToml {
                 local: Some(LocalDistribution {
+                    launch: Default::default(),
                     command: "/usr/bin/my-agent".to_string(),
                     args: vec!["--mode".to_string(), "acp".to_string()],
                     env: std::collections::HashMap::from([("KEY".to_string(), "val".to_string())]),

@@ -214,7 +214,7 @@ exists are cancelled. A raw ACP setup error precedes
 `SessionEnded(SpawnFailed)` and is not mirrored as
 `NoriEvent::RequestFailed`.
 
-[Preparation](src/backend/prepared.rs) uses the named connection resolved for the requested agent. A bound Pi launch prepares its private profile and uses an ACP model ID consisting of the connection name followed by the wire model ID. A missing key or unsupported route fails preparation before the candidate starts. The TUI, `nori exec`, and locally configured host use this path. Broker-managed launches supply their own launch specification. [Pi launch adapter](../acp-host/src/token_provider.rs)
+[Preparation](src/backend/prepared.rs) uses the named connection resolved for the requested agent. A missing key or unsupported route fails preparation before the candidate starts. The TUI, `nori exec`, local host sessions and delegated children use this path. A delegated child resolves its own registered agent. Managed sessions start from a [binding-specific launch specification](src/managed_launch.rs). Both routes compose argv before the [process supervisor](../acp-host/src/connection/child_lifecycle.rs) takes ownership of the child and its ACP pipes.
 
 The resolved model preference (`AcpBackendConfig.default_model`) is
 applied at both process and session boundaries. During preparation,

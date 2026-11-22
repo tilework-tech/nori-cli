@@ -1,85 +1,23 @@
-//! Local Pi launch metadata for the Subconscious preset. Nori config owns
-//! connection validation and the shared harness compatibility contract.
+//! Translate a named API connection into the private profile read by Pi.
+use std::io::Write;
 use std::path::Path;
 
-use anyhow::Context;
 use anyhow::Result;
-use nori_config::token_providers::Preset;
-use nori_config::token_providers::Protocol;
 use nori_config::token_providers::TokenProvider;
 use serde_json::json;
 
 use crate::registry::AcpAgentConfig;
 use crate::registry::AgentKind;
 
-pub use nori_config::token_providers::PresetModel;
+use crate::launch::OwnedRuntime;
+use crate::launch::private_dir;
+use crate::launch::private_file;
 
-/// A known token provider.
-#[derive(Debug, PartialEq, Eq)]
-pub struct TokenProviderPreset {
-    /// Broker preset id, also the default provider id in config.
-    pub id: &'static str,
-    pub name: &'static str,
-    pub base_url: &'static str,
-    /// Environment variable suggested for the key.
-    pub api_key_env: &'static str,
-    pub default_model: &'static str,
-    pub models: &'static [PresetModel],
-}
-
-static SUBCONSCIOUS: TokenProviderPreset = TokenProviderPreset {
-    id: "subconscious",
-    name: "Subconscious",
-    base_url: "https://api.subconscious.dev/v1",
-    api_key_env: "SUBCONSCIOUS_API_KEY",
-    default_model: nori_config::token_providers::SUBCONSCIOUS_DEFAULT_MODEL,
-    models: nori_config::token_providers::SUBCONSCIOUS_MODELS,
-};
-
-/// Look up a preset by id.
-pub fn preset(id: &str) -> Option<&'static TokenProviderPreset> {
-    (SUBCONSCIOUS.id == id).then_some(&SUBCONSCIOUS)
-}
-
-/// Whether this connection can use the local Pi adapter and its known model catalog.
-pub fn supports_pi_connection(binding: &TokenProvider) -> bool {
-    matches!(binding.preset, Preset::Subconscious | Preset::Custom)
-        && binding.validate().is_ok()
-        && binding.protocol_for("pi").ok() == Some(Protocol::OpenaiCompletions)
-        && SUBCONSCIOUS
-            .models
-            .iter()
-            .any(|model| model.id == binding.model)
-}
-
-/// Presets offered when the actual registered executable is the built-in Pi agent.
-pub fn compatible_presets(agent_name: &str) -> Vec<&'static TokenProviderPreset> {
-    if crate::registry::get_agent_config(agent_name)
-        .is_ok_and(|config| config.builtin_kind == Some(AgentKind::Pi))
-        && supports_pi_connection(&SUBCONSCIOUS.connection(
-            SUBCONSCIOUS.id,
-            SUBCONSCIOUS.api_key_env,
-            SUBCONSCIOUS.default_model,
-        ))
-    {
-        vec![&SUBCONSCIOUS]
-    } else {
-        Vec::new()
-    }
-}
-
-impl TokenProviderPreset {
-    /// Construct an editable named connection with the preset's endpoint and wire model.
-    pub fn connection(&self, name: &str, env_key: &str, model: &str) -> TokenProvider {
-        TokenProvider {
-            name: name.to_owned(),
-            preset: Preset::Subconscious,
-            protocol: Protocol::OpenaiCompletions,
-            base_url: self.base_url.to_owned(),
-            env_key: env_key.to_owned(),
-            model: model.to_owned(),
-        }
-    }
+/// Metadata for applying a credential reference to a single server process.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundConnection {
+    pub connection: TokenProvider,
+    pub child_key: String,
 }
 
 /// Return the ACP model identity that corresponds to the connection's wire model.
@@ -98,101 +36,71 @@ pub fn prepare_pi_profile(
     nori_home: &Path,
     lookup: &dyn Fn(&str) -> Option<String>,
 ) -> Result<()> {
-    let Some(binding) = config.token_provider.as_ref() else {
+    let root = nori_home.join(".pi-launches");
+    let Some(binding) = config
+        .token_provider
+        .as_ref()
+        .filter(|_| config.builtin_kind == Some(AgentKind::Pi))
+    else {
+        if let Err(error) = OwnedRuntime::sweep_existing(&root) {
+            tracing::warn!("could not collect abandoned ACP runtime directories: {error}");
+        }
         return Ok(());
     };
-    if config.builtin_kind != Some(AgentKind::Pi) {
-        return Ok(());
-    }
-    anyhow::ensure!(
-        supports_pi_connection(binding),
-        "Pi requires a compatible Subconscious connection and catalog model"
-    );
+    let binding = &binding.connection;
     crate::token_launch::credential(binding, lookup)?;
-    let models: Vec<_> = SUBCONSCIOUS
-        .models
-        .iter()
-        .map(|model| {
-            json!({
-                "id": model.id,
-                "name": model.name,
-                "contextWindow": model.context_window,
-                "maxTokens": model.max_output_tokens,
-                "compat": {
-                    "sendSessionAffinityHeaders": true,
-                    "sessionAffinityFormat": "openai-nosession"
-                }
-            })
-        })
-        .collect();
+    // The Messages SDK appends /v1/messages itself.
+    let base_url = if binding.protocol == nori_config::token_providers::Protocol::AnthropicMessages
+    {
+        binding
+            .base_url
+            .trim_end_matches('/')
+            .strip_suffix("/v1")
+            .unwrap_or(&binding.base_url)
+    } else {
+        &binding.base_url
+    };
     let models_json = json!({
         "providers": {
             binding.name.as_str(): {
-                "baseUrl": binding.base_url,
-                "api": Protocol::OpenaiCompletions.as_str(),
+                "baseUrl": base_url,
+                "authHeader": binding.bearer_messages(),
+                "api": binding.protocol.as_str(),
                 "apiKey": format!("${}", binding.env_key),
-                "headers": {"x-subconscious-client": "pi"},
-                "models": models,
+                "models": [{"id": binding.model, "name": binding.model}],
             }
         }
     });
+    let home = std::path::absolute(nori_home)?;
+    std::fs::create_dir_all(&home)?;
+    let runtime = OwnedRuntime::create(&home.join(".pi-launches"))?;
+    let root = home.join("token-providers");
+    let binding_dir = root.join(format!("{}-pi-acp", binding.name));
+    let history = binding_dir.join("sessions");
+    for dir in [&root, &binding_dir, &history] {
+        private_dir(dir)?;
+    }
     let settings_json = json!({
         "defaultProvider": binding.name,
         "defaultModel": binding.model,
         "quietStartup": true,
+        "sessionDir": history,
     });
 
-    let root = nori_home.join("token-providers");
-    let directory = root.join(format!("{}-pi-acp", binding.name));
-    std::fs::create_dir_all(&directory)
-        .with_context(|| format!("failed to create {}", directory.display()))?;
-    restrict(&root, 0o700)?;
-    restrict(&directory, 0o700)?;
-    write_private(
-        &directory.join("models.json"),
-        &serde_json::to_string_pretty(&models_json)?,
-    )?;
-    write_private(
-        &directory.join("settings.json"),
-        &serde_json::to_string_pretty(&settings_json)?,
-    )?;
+    for (name, value) in [
+        ("models.json", models_json),
+        ("settings.json", settings_json),
+    ] {
+        private_file()
+            .create_new(true)
+            .open(runtime.path().join(name))?
+            .write_all(&serde_json::to_vec_pretty(&value)?)?;
+    }
     config.env.insert(
         "PI_CODING_AGENT_DIR".to_string(),
-        directory.to_string_lossy().into_owned(),
+        runtime.path().to_string_lossy().into_owned(),
     );
-    Ok(())
-}
-
-/// Write through a private temporary file and rename it into place, so a Pi
-/// starting at the same moment never reads a partial file.
-fn write_private(path: &Path, contents: &str) -> Result<()> {
-    use std::io::Write as _;
-    let temporary = path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(&temporary)
-        .with_context(|| format!("failed to write {}", temporary.display()))?;
-    file.write_all(contents.as_bytes())
-        .with_context(|| format!("failed to write {}", temporary.display()))?;
-    restrict(&temporary, 0o600)?;
-    std::fs::rename(&temporary, path)
-        .with_context(|| format!("failed to replace {}", path.display()))
-}
-
-#[cfg(unix)]
-fn restrict(path: &Path, mode: u32) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
-        .with_context(|| format!("failed to restrict {}", path.display()))
-}
-
-#[cfg(not(unix))]
-fn restrict(_path: &Path, _mode: u32) -> Result<()> {
+    config.launch.runtime_dir = Some(runtime.path().to_owned());
+    config.owned_runtime = Some(std::sync::Arc::new(runtime));
     Ok(())
 }

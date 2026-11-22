@@ -266,7 +266,12 @@ own handshake.
       "projectId": "fixture-project",
       "runId": "fixture-run",
       "agent": "fixture",
-      "adapter": {"path": "/opt/fixture/1.2.3/bin/fixture-acp", "version": "1.2.3"},
+      "adapter": {
+        "path": "/opt/fixture/1.2.3/bin/fixture-acp",
+        "version": "1.2.3",
+        "args": ["--profile", "Review team"],
+        "wrapper": {"path": "/opt/fixture/bin/runtime-wrapper", "version": "1.0", "args": ["--"]}
+      },
       "cwd": "/srv/fixture/bindings/sample/work",
       "home": "/srv/fixture/bindings/sample/home",
       "additions": {"promptEcho": false, "statusEvents": false, "recording": false, "clientMcp": false}
@@ -283,11 +288,14 @@ own handshake.
   regular and side ACP IDs.
 - The provisioner installs the versioned executable, protects it from
   replacement, resolves credential references and prepares binding-owned
-  paths. The host executes the absolute `adapter.path` directly with
-  `adapter.args` (optional string array, default empty). The version string
-  identifies that installation in the spec. The host performs no download
-  or binary-version probe. Keep binary selection and launch requests in
-  trusted machine code.
+  paths. The host runs the installed absolute `adapter.path` with
+  `adapter.args` (default empty). For a wrapped launch, set
+  `adapter.wrapper` to an object with an installed absolute `path`, a
+  `version`, and optional `args`. The wrapper receives its prefix arguments,
+  the adapter path, then the adapter arguments. Each array element stays one
+  argument. Version strings identify the provisioned installations. The
+  provisioner selects and installs both executables before admission. An
+  ordinary ACP client connects to an admitted session through its binding.
 - The existing session-folder validator canonicalizes the absolute `cwd`
   and `home`. Both must exist and be distinct directories. In the shared
   layout both must be strictly beneath `bindings_root/bindingId`, and the
@@ -312,15 +320,20 @@ own handshake.
   admission. Older opaque references stay private. The host leaves
   credential resolution and provider configuration to the provisioner.
 - Other optional fields inside `spec` are `model` (string or null), `env`
-  (string-to-string map) and `resumeArtifacts` (string array). Missing maps
+  (string-to-string map), `envRemove` (array of variable names) and
+  `resumeArtifacts` (string array). Missing maps
   and arrays default to empty. Project, run, agent,
   model, credential and resume metadata stay with the immutable spec.
   The executable receives only its arguments, working directory and child
   environment. Unknown request or spec fields are rejected.
-- The host clears inherited environment, applies `spec.env`, and sets
+- The host clears its inherited environment, applies `spec.envRemove` before
+  `spec.env`, and sets
   `HOME=home` and `NORI_HOME=home/.nori/cli`. The default `CODEX_HOME`
   is `home/.codex`.
-  Those names, `USERPROFILE`, and `NORI_AGENT_RUNTIME_DIR` are reserved case-insensitively. Adapter
+  The host reserves those names, `USERPROFILE`, and `NORI_AGENT_RUNTIME_DIR`
+  case-insensitively for both setting and removal. Admission also rejects a
+  name present in both `env` and `envRemove`. Ordinary environment names are
+  case-sensitive on Unix and case-insensitive on Windows. Adapter
   arguments and environment entries must be free of NUL characters.
   Supply variables such as `PATH` explicitly when the adapter needs them.
   Subprocesses inherit the binding environment. Host `.env` values stay
@@ -509,7 +522,8 @@ NORI_HOME=/srv/fixture/nori nori -c features.multi_session=true \
 - Blank input lines are ignored. A line that is not JSON receives a JSON-RPC
   `-32700` error with a null `id` on stdout.
 - `--inherit-env` adds the host process's environment to the launch's `env`.
-  Variables in the specification win. The relay skips the host-assigned
+  The relay excludes names in `envRemove` and keeps explicit values in `env`.
+  The relay skips the host-assigned
   `HOME`, `USERPROFILE`, `CODEX_HOME`, `NORI_HOME`, and `NORI_AGENT_RUNTIME_DIR`. Entries
   that are not UTF-8 are skipped. Without the flag the adapter receives only
   `spec.env` and the host-assigned variables.

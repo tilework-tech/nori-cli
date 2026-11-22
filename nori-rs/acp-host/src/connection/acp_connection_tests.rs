@@ -828,6 +828,8 @@ fn script_agent_config(dir: &std::path::Path, body: &str) -> crate::registry::Ac
             .expect("chmod script agent");
     }
     crate::registry::AcpAgentConfig {
+        owned_runtime: None,
+        launch: Default::default(),
         token_provider: None,
         agent: crate::registry::AgentKind::ClaudeCode, // placeholder, like custom agents
         builtin_kind: None,
