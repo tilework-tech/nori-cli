@@ -33,13 +33,13 @@ nori providers [set-key|remove-key]      PreparedAgent::prepare
 
 **Detection** ([`detect.rs`](src/detect.rs)). `detect_all` / `detect_agent(AgentKind, &DetectContext)` produce an `AgentAuthStatus` per agent: a `status` (`signed_in`, `signed_out`, `unknown`), the `credentials` found in the agent's own precedence order (the first entry is the one the agent will use), the saved-key variable if any, and the registry's auth hint. Each credential has a `kind` (`subscription`, `api_key`, `cloud`, `token`, `login`), a tagged `source` (`env`, `file`, `keychain`, `nori_saved`), and an optional non-secret `detail` such as a plan name, Codex `auth_mode`, or a provider id.
 
-`DetectContext` injects every input: home directory, environment lookup, `Platform`, a `KeychainProbe`, and the `SavedKeyIndex`. Tests point it at fixture homes and fake keychains.
+Environment credentials come from one per-agent table (`env_credentials` in [`lib.rs`](src/lib.rs)) that detection and launch share; the saved key is always listed after them. `DetectContext` injects every input: home directory, environment lookup, `Platform`, a `KeychainProbe`, and the `SavedKeyIndex`. Tests point it at fixture homes and fake keychains.
 
 | Agent | Sources checked, in precedence order |
 | --- | --- |
-| Claude Code | `CLAUDE_CODE_USE_BEDROCK` / `_VERTEX` / `_FOUNDRY` (cloud), `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, saved key, `CLAUDE_CODE_OAUTH_TOKEN`, macOS keychain `Claude Code-credentials`, `.credentials.json` `claudeAiOauth` (plan from `subscriptionType`), `.claude.json` `primaryApiKey` |
-| Codex | `CODEX_API_KEY`, `OPENAI_API_KEY`, saved key, `$CODEX_HOME/auth.json` (kind from `auth_mode`), macOS keychain `Codex Auth` when `config.toml` sets `cli_auth_credentials_store` to `keyring` or `auto` |
-| Antigravity (`gemini` slug) | `GOOGLE_GENAI_USE_VERTEXAI`, `AGY_ADC_AUTH` (cloud), `GEMINI_API_KEY`, saved key, `GOOGLE_API_KEY` |
+| Claude Code | `CLAUDE_CODE_USE_BEDROCK` / `_VERTEX` / `_FOUNDRY` (cloud), `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, saved key, macOS keychain `Claude Code-credentials`, `.credentials.json` `claudeAiOauth` (plan from `subscriptionType`), `.claude.json` `primaryApiKey` |
+| Codex | `CODEX_API_KEY`, `OPENAI_API_KEY`, saved key, `~/.codex/auth.json` (kind from `auth_mode`; `CODEX_HOME` is ignored because Nori launches Codex without it), macOS keychain `Codex Auth` when `config.toml` sets `cli_auth_credentials_store` to `keyring` or `auto` |
+| Antigravity (`gemini` slug) | `GOOGLE_GENAI_USE_VERTEXAI`, `AGY_ADC_AUTH` (cloud), `GEMINI_API_KEY`, `GOOGLE_API_KEY`, saved key |
 | Grok Build, Cursor | `XAI_API_KEY` / `CURSOR_API_KEY`, then saved key |
 | OpenCode, Pi | Per-provider entries in their `auth.json` (`$XDG_DATA_HOME` or `~/.local/share/opencode/`, `~/.pi/agent/`) |
 | Hermes | Nothing; always `unknown` |
@@ -52,13 +52,15 @@ nori providers [set-key|remove-key]      PreparedAgent::prepare
 | `keyring` | OS keyring only; failure is an error |
 | `file` | File only |
 
-Two files live in `$NORI_HOME`: `saved-keys.json`, a non-secret index of agent slug to location (`keyring` or `file`), and `saved-keys.secret.json`, holding file-stored keys. Both are written atomically (temp file, fsync, rename) with mode 0600.
+Two files live in `$NORI_HOME`: `saved-keys.json`, a non-secret index of agent slug to location (`keyring` or `file`), and `saved-keys.secret.json`, holding file-stored keys. Both are written atomically (a unique 0600 temp file, fsync, rename). Saves and deletes hold an exclusive lock on `saved-keys.lock` so concurrent processes (the app and the CLI) do not lose entries.
 
 **Launch** ([`launch.rs`](src/launch.rs)). `apply_saved_key` inserts the saved key into `AcpAgentConfig.env` and returns the variable it set. `inject_saved_key` wraps it with the system keyring and `$NORI_HOME`, and turns any error (bad `NORI_CREDENTIALS_STORE`, unreadable keyring or file) into a warning that names the agent but not the value; the agent still launches.
 
 ### Things to Know
 
-- A saved key is skipped when the variable is set to a non-blank value in the ambient environment, already present in the agent config's `env`, listed in `launch.env_remove`, or when the agent is bound to a named token provider. Environment therefore always wins over a saved key.
+- A saved key is skipped when any credential variable the agent honours (its row in `env_credentials`, such as `CLAUDE_CODE_OAUTH_TOKEN` or `GOOGLE_API_KEY`) is set in the ambient environment or the agent config's `env`, when the variable is listed in `launch.env_remove`, or when the agent is bound to a named token provider. An explicit environment credential therefore always wins over a saved key.
+- The harness bounds the keyring lookup with a timeout, so a keychain that prompts (macOS asks again after the `nori` binary changes) or hangs delays a launch by at most a few seconds before it proceeds without the key.
+- Saved keys are not added to the ACP wire log's redaction list (only named token-provider credentials are), the same as ambient API keys.
 - For Claude Code, `ANTHROPIC_API_KEY` outranks a subscription login, so a saved key takes precedence over a Claude.ai sign-in. Detection lists the saved key above the subscription sources accordingly.
 - Detection and launch read only the index unless it records a keyring entry; with nothing saved they never touch the keychain, which avoids macOS keychain prompts on every launch.
 - The macOS keychain is only probed for existence (`security find-generic-password` without `-g`), never read. When `CLAUDE_CONFIG_DIR` is set, the Claude service name gets a suffix of the first 8 hex characters of the SHA-256 of that path, and `.credentials.json` and `.claude.json` are read from that directory.

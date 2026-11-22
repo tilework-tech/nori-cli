@@ -59,26 +59,24 @@ fn report(home: &Path) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-// macOS also probes the real login keychain, so exact Claude results are Linux-only.
-#[cfg(target_os = "linux")]
 #[test]
-fn providers_json_reports_a_claude_subscription_file() {
+fn providers_json_reports_a_codex_chatgpt_login() {
     let dir = tempfile::tempdir().unwrap();
-    let creds = dir.path().join(".claude/.credentials.json");
-    std::fs::create_dir_all(creds.parent().unwrap()).unwrap();
+    let auth = dir.path().join(".codex/auth.json");
+    std::fs::create_dir_all(auth.parent().unwrap()).unwrap();
     std::fs::write(
-        &creds,
-        format!(r#"{{"claudeAiOauth":{{"accessToken":"{SECRET}","subscriptionType":"pro"}}}}"#),
+        &auth,
+        format!(r#"{{"auth_mode":"chatgpt","tokens":{{"access_token":"{SECRET}"}}}}"#),
     )
     .unwrap();
 
-    let claude = agent(&report(dir.path()), "claude-code");
+    let codex = agent(&report(dir.path()), "codex");
 
     assert_eq!(
-        (&claude["status"], &claude["credentials"]),
+        (&codex["status"], &codex["credentials"]),
         (
             &json!("signed_in"),
-            &json!([{"kind": "subscription", "source": {"type": "file", "path": creds}, "detail": "pro"}])
+            &json!([{"kind": "subscription", "source": {"type": "file", "path": auth}, "detail": "chatgpt"}])
         )
     );
 }
@@ -131,9 +129,24 @@ fn set_key_refuses_agents_without_an_api_key_variable() {
         Some(&format!("{SECRET}\n")),
     );
     assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("own login"),
+        "{output:?}"
+    );
     assert_eq!(
         agent(&report(dir.path()), "opencode")["credentials"],
         json!([])
+    );
+}
+
+#[test]
+fn set_key_rejects_unknown_agents() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = nori(dir.path(), &["providers", "set-key", "nope"], Some(SECRET));
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("not a built-in agent"),
+        "{output:?}"
     );
 }
 
@@ -145,7 +158,7 @@ fn saved_key_reaches_the_launched_agent() {
     std::fs::write(
         &runner,
         format!(
-            "#!/bin/sh\n[ \"$OPENAI_API_KEY\" = \"{SECRET}\" ] && echo saved > \"$HOME/probe\"\nexit 1\n"
+            "#!/bin/sh\nif [ \"$OPENAI_API_KEY\" = \"{SECRET}\" ]; then echo saved; else echo launched-without-key; fi > \"$HOME/probe\"\nexit 1\n"
         ),
     )
     .unwrap();

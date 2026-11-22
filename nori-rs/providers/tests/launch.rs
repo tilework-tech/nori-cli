@@ -2,7 +2,6 @@
 
 mod common;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use codex_keyring_store::tests::MockKeyringStore;
@@ -100,7 +99,49 @@ fn nothing_saved_leaves_the_environment_unchanged() {
         Arc::new(MockKeyringStore::default()),
     );
     let mut config = get_agent_config("codex").unwrap();
-    let before: HashMap<_, _> = config.env.clone();
+    let before = config.env.clone();
+
+    let applied = apply_saved_key(&mut config, &store, &|_| None).unwrap();
+
+    assert_eq!((applied, config.env), (None, before));
+}
+
+#[test]
+fn explicit_oauth_token_in_the_environment_wins_over_the_saved_key() {
+    let (_dir, store) = store_with(AgentKind::ClaudeCode, "sk-saved");
+    let mut config = get_agent_config("claude-code").unwrap();
+    let before = config.env.clone();
+
+    let applied = apply_saved_key(&mut config, &store, &|key| {
+        (key == "CLAUDE_CODE_OAUTH_TOKEN").then(|| "oauth".into())
+    })
+    .unwrap();
+
+    assert_eq!((applied, config.env), (None, before));
+}
+
+#[test]
+fn blank_ambient_variable_does_not_block_the_saved_key() {
+    let (_dir, store) = store_with(AgentKind::Cursor, "saved");
+    let mut config = get_agent_config("cursor").unwrap();
+
+    let applied = apply_saved_key(&mut config, &store, &|key| {
+        (key == "CURSOR_API_KEY").then(|| " ".into())
+    })
+    .unwrap();
+
+    assert_eq!(
+        (applied, config.env.get("CURSOR_API_KEY").cloned()),
+        (Some("CURSOR_API_KEY"), Some("saved".to_string()))
+    );
+}
+
+#[test]
+fn variable_the_launch_removes_is_not_reintroduced() {
+    let (_dir, store) = store_with(AgentKind::GrokBuild, "saved");
+    let mut config = get_agent_config("grok-build").unwrap();
+    config.launch.env_remove.push("XAI_API_KEY".into());
+    let before = config.env.clone();
 
     let applied = apply_saved_key(&mut config, &store, &|_| None).unwrap();
 

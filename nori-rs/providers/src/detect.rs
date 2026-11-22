@@ -136,30 +136,26 @@ pub fn detect_agent(agent: AgentKind, ctx: &DetectContext<'_>) -> AgentAuthStatu
     };
     // Agents that keep a sign-in Nori cannot inspect report `Unknown` rather
     // than `SignedOut` when nothing visible turns up.
+    for credential in crate::env_credentials(agent) {
+        if credential.is_set(ctx.env) {
+            found.push(
+                credential.kind,
+                CredentialSource::Env {
+                    name: credential.name.to_string(),
+                },
+                None,
+            );
+        }
+    }
+    found.saved();
+    // Agents that keep a sign-in Nori cannot inspect report `Unknown` rather
+    // than `SignedOut` when nothing visible turns up.
     let opaque = match agent {
         AgentKind::ClaudeCode => {
             claude(&mut found);
             false
         }
         AgentKind::Codex => codex(&mut found),
-        AgentKind::Gemini => {
-            found.env_flag("GOOGLE_GENAI_USE_VERTEXAI", CredentialKind::Cloud);
-            found.env_flag("AGY_ADC_AUTH", CredentialKind::Cloud);
-            found.api_key_env("GEMINI_API_KEY");
-            found.saved();
-            found.api_key_env("GOOGLE_API_KEY");
-            true
-        }
-        AgentKind::GrokBuild => {
-            found.api_key_env("XAI_API_KEY");
-            found.saved();
-            true
-        }
-        AgentKind::Cursor => {
-            found.api_key_env("CURSOR_API_KEY");
-            found.saved();
-            true
-        }
         AgentKind::OpenCode => {
             let data = found
                 .env_path("XDG_DATA_HOME")
@@ -171,7 +167,7 @@ pub fn detect_agent(agent: AgentKind, ctx: &DetectContext<'_>) -> AgentAuthStatu
             found.provider_map(ctx.home.join(".pi/agent/auth.json"));
             true
         }
-        AgentKind::Hermes => true,
+        AgentKind::Gemini | AgentKind::GrokBuild | AgentKind::Cursor | AgentKind::Hermes => true,
     };
     let status = match (found.credentials.is_empty(), opaque) {
         (false, _) => AuthStatus::SignedIn,
@@ -188,22 +184,10 @@ pub fn detect_agent(agent: AgentKind, ctx: &DetectContext<'_>) -> AgentAuthStatu
     }
 }
 
-/// Claude Code, in its documented precedence order: cloud routing, bearer
-/// token, API key, OAuth token, then its own `/login` credentials.
+/// Claude Code's own `/login` credentials, after the environment.
 fn claude(found: &mut Found<'_, '_>) {
     let ctx = found.ctx;
     let custom_dir = found.env_path("CLAUDE_CONFIG_DIR");
-    for flag in [
-        "CLAUDE_CODE_USE_BEDROCK",
-        "CLAUDE_CODE_USE_VERTEX",
-        "CLAUDE_CODE_USE_FOUNDRY",
-    ] {
-        found.env_flag(flag, CredentialKind::Cloud);
-    }
-    found.env_var("ANTHROPIC_AUTH_TOKEN", CredentialKind::Token);
-    found.api_key_env("ANTHROPIC_API_KEY");
-    found.saved();
-    found.env_var("CLAUDE_CODE_OAUTH_TOKEN", CredentialKind::Subscription);
     if ctx.platform == Platform::MacOs {
         let service = match &custom_dir {
             Some(dir) => {
@@ -252,17 +236,13 @@ fn claude(found: &mut Found<'_, '_>) {
     }
 }
 
-/// Codex: API key variables, then `auth.json` or the keychain item its
-/// `cli_auth_credentials_store` setting selects. Returns whether a keychain
-/// login might exist that Nori cannot see.
+/// Codex's `auth.json` or the keychain item its `cli_auth_credentials_store`
+/// setting selects. Nori launches Codex without `CODEX_HOME`, so only
+/// `~/.codex` counts. Returns whether a keychain login might exist that Nori
+/// cannot see.
 fn codex(found: &mut Found<'_, '_>) -> bool {
     let ctx = found.ctx;
-    let codex_home = found
-        .env_path("CODEX_HOME")
-        .unwrap_or_else(|| ctx.home.join(".codex"));
-    found.api_key_env("CODEX_API_KEY");
-    found.api_key_env("OPENAI_API_KEY");
-    found.saved();
+    let codex_home = ctx.home.join(".codex");
     let auth_path = codex_home.join("auth.json");
     if let Some(auth) = read_json(&auth_path).filter(Value::is_object) {
         let mode = auth.get("auth_mode").and_then(Value::as_str);
@@ -320,43 +300,10 @@ impl Found<'_, '_> {
         });
     }
 
-    fn value(&self, name: &str) -> Option<String> {
-        (self.ctx.env)(name).filter(|value| !value.trim().is_empty())
-    }
-
     fn env_path(&self, name: &str) -> Option<PathBuf> {
-        self.value(name).map(PathBuf::from)
-    }
-
-    fn env_var(&mut self, name: &str, kind: CredentialKind) {
-        if self.value(name).is_some() {
-            self.push(
-                kind,
-                CredentialSource::Env {
-                    name: name.to_string(),
-                },
-                None,
-            );
-        }
-    }
-
-    fn api_key_env(&mut self, name: &str) {
-        self.env_var(name, CredentialKind::ApiKey);
-    }
-
-    fn env_flag(&mut self, name: &str, kind: CredentialKind) {
-        let enabled = self.value(name).is_some_and(|value| {
-            matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true")
-        });
-        if enabled {
-            self.push(
-                kind,
-                CredentialSource::Env {
-                    name: name.to_string(),
-                },
-                None,
-            );
-        }
+        (self.ctx.env)(name)
+            .filter(|value| !value.trim().is_empty())
+            .map(PathBuf::from)
     }
 
     fn saved(&mut self) {

@@ -20,6 +20,7 @@ pub const STORE_MODE_ENV: &str = "NORI_CREDENTIALS_STORE";
 const KEYRING_SERVICE: &str = "Nori Provider Keys";
 const INDEX_FILE: &str = "saved-keys.json";
 const SECRETS_FILE: &str = "saved-keys.secret.json";
+const LOCK_FILE: &str = "saved-keys.lock";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StoreMode {
@@ -88,7 +89,9 @@ impl SavedKeyStore {
             anyhow::bail!("the API key for {name} must be a single non-empty line");
         }
         let slug = agent.slug();
-        let previous = self.index()?.location(agent);
+        let _lock = self.lock()?;
+        let mut index = self.index()?;
+        let previous = index.location(agent);
         let keyring_result = match self.mode {
             StoreMode::File => None,
             StoreMode::Keyring | StoreMode::Auto => {
@@ -126,7 +129,6 @@ impl SavedKeyStore {
                 }
             }
         }
-        let mut index = self.index()?;
         index.0.insert(slug.to_string(), location);
         self.write_json(INDEX_FILE, &index)?;
         Ok(location)
@@ -153,29 +155,27 @@ impl SavedKeyStore {
 
     pub fn delete(&self, agent: AgentKind) -> anyhow::Result<bool> {
         let slug = agent.slug();
+        let _lock = self.lock()?;
         let mut index = self.index()?;
-        let Some(location) = index.0.remove(slug) else {
-            return Ok(false);
-        };
-        match location {
-            StoreLocation::Keyring => {
-                self.keyring
-                    .delete(KEYRING_SERVICE, slug)
-                    .map_err(|error| {
-                        anyhow::anyhow!(
-                            "could not remove the saved API key for {} from the keychain: {error}",
-                            agent.display_name()
-                        )
-                    })?;
-            }
-            StoreLocation::File => {
-                let mut secrets: BTreeMap<String, String> = self.read_json(SECRETS_FILE)?;
-                secrets.remove(slug);
-                self.write_json(SECRETS_FILE, &secrets)?;
-            }
+        let location = index.0.remove(slug);
+        if location == Some(StoreLocation::Keyring) {
+            self.keyring
+                .delete(KEYRING_SERVICE, slug)
+                .map_err(|error| {
+                    anyhow::anyhow!(
+                        "could not remove the saved API key for {} from the keychain: {error}",
+                        agent.display_name()
+                    )
+                })?;
         }
-        self.write_json(INDEX_FILE, &index)?;
-        Ok(true)
+        let mut secrets: BTreeMap<String, String> = self.read_json(SECRETS_FILE)?;
+        if secrets.remove(slug).is_some() {
+            self.write_json(SECRETS_FILE, &secrets)?;
+        }
+        if location.is_some() {
+            self.write_json(INDEX_FILE, &index)?;
+        }
+        Ok(location.is_some())
     }
 
     pub fn index(&self) -> anyhow::Result<SavedKeyIndex> {
@@ -196,30 +196,31 @@ impl SavedKeyStore {
         }
     }
 
-    /// Replace `file` atomically with owner-only permissions.
-    fn write_json<T: Serialize>(&self, file: &str, value: &T) -> anyhow::Result<()> {
+    /// Serialize changes across processes; released when the handle drops.
+    fn lock(&self) -> anyhow::Result<std::fs::File> {
         std::fs::create_dir_all(&self.nori_home)
             .with_context(|| format!("creating {}", self.nori_home.display()))?;
+        let path = self.nori_home.join(LOCK_FILE);
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+            .with_context(|| format!("opening {}", path.display()))?;
+        file.lock()
+            .with_context(|| format!("locking {}", path.display()))?;
+        Ok(file)
+    }
+
+    /// Replace `file` atomically through an owner-only temporary file.
+    fn write_json<T: Serialize>(&self, file: &str, value: &T) -> anyhow::Result<()> {
         let path = self.nori_home.join(file);
-        let tmp = self.nori_home.join(format!(".{file}.tmp"));
-        let mut options = std::fs::OpenOptions::new();
-        options.write(true).create(true).truncate(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let mut handle = options
-            .open(&tmp)
-            .with_context(|| format!("writing {}", tmp.display()))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            handle.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-        }
-        handle.write_all(&serde_json::to_vec_pretty(value)?)?;
-        handle.sync_all()?;
-        std::fs::rename(&tmp, &path).with_context(|| format!("writing {}", path.display()))?;
+        let mut tmp = tempfile::NamedTempFile::new_in(&self.nori_home)
+            .with_context(|| format!("writing {}", path.display()))?;
+        tmp.write_all(&serde_json::to_vec_pretty(value)?)?;
+        tmp.as_file().sync_all()?;
+        tmp.persist(&path)
+            .with_context(|| format!("writing {}", path.display()))?;
         Ok(())
     }
 }

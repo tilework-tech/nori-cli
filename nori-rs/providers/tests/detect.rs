@@ -52,15 +52,6 @@ fn outcome(f: &Fixture, agent: AgentKind) -> (AuthStatus, Vec<DetectedCredential
 }
 
 #[test]
-fn claude_with_nothing_configured_is_signed_out() {
-    let f = Fixture::new();
-    assert_eq!(
-        outcome(&f, AgentKind::ClaudeCode),
-        (AuthStatus::SignedOut, vec![])
-    );
-}
-
-#[test]
 fn claude_subscription_file_reports_plan_without_tokens() {
     let f = Fixture::new().file(".claude/.credentials.json", CLAUDE_OAUTH);
     assert_eq!(
@@ -73,15 +64,6 @@ fn claude_subscription_file_reports_plan_without_tokens() {
                 Some("max"),
             )]
         )
-    );
-}
-
-#[test]
-fn claude_credentials_file_without_oauth_entry_is_ignored() {
-    let f = Fixture::new().file(".claude/.credentials.json", "{}");
-    assert_eq!(
-        outcome(&f, AgentKind::ClaudeCode),
-        (AuthStatus::SignedOut, vec![])
     );
 }
 
@@ -113,15 +95,6 @@ fn claude_lists_sources_in_the_order_claude_code_prefers_them() {
                 ),
             ]
         )
-    );
-}
-
-#[test]
-fn claude_cloud_flags_count_only_when_enabled() {
-    let f = Fixture::new().env("CLAUDE_CODE_USE_VERTEX", "0");
-    assert_eq!(
-        outcome(&f, AgentKind::ClaudeCode),
-        (AuthStatus::SignedOut, vec![])
     );
 }
 
@@ -231,23 +204,32 @@ fn codex_chatgpt_login_is_a_subscription() {
 }
 
 #[test]
-fn codex_home_override_and_stored_api_key() {
+fn codex_auth_file_with_an_api_key_is_an_api_key() {
     let f = Fixture::new().file(
-        "alt-codex/auth.json",
+        ".codex/auth.json",
         r#"{"auth_mode":"apikey","OPENAI_API_KEY":"sk-SECRET"}"#,
     );
-    let dir = f.home().join("alt-codex");
-    let f = f.env("CODEX_HOME", dir.to_str().unwrap());
     assert_eq!(
         outcome(&f, AgentKind::Codex),
         (
             AuthStatus::SignedIn,
             vec![cred(
                 CredentialKind::ApiKey,
-                file(dir.join("auth.json")),
+                file(f.home().join(".codex/auth.json")),
                 None
             )]
         )
+    );
+}
+
+#[test]
+fn codex_home_is_ignored_because_nori_launches_codex_without_it() {
+    let f = Fixture::new().file("alt-codex/auth.json", r#"{"auth_mode":"chatgpt"}"#);
+    let dir = f.home().join("alt-codex");
+    let f = f.env("CODEX_HOME", dir.to_str().unwrap());
+    assert_eq!(
+        outcome(&f, AgentKind::Codex),
+        (AuthStatus::SignedOut, vec![])
     );
 }
 
@@ -256,7 +238,10 @@ fn codex_env_keys_come_before_its_auth_file() {
     let f = Fixture::new()
         .env("CODEX_API_KEY", "SECRET-value")
         .env("OPENAI_API_KEY", "SECRET-value")
-        .file(".codex/auth.json", r#"{"auth_mode":"chatgpt"}"#);
+        .file(
+            ".codex/auth.json",
+            r#"{"auth_mode":"chatgpt","tokens":{"access_token":"SECRET"}}"#,
+        );
     assert_eq!(
         outcome(&f, AgentKind::Codex),
         (
@@ -302,7 +287,7 @@ fn codex_keyring_login_is_found_on_macos() {
 }
 
 #[test]
-fn codex_with_file_store_and_no_auth_is_signed_out() {
+fn codex_default_store_ignores_a_keychain_item_on_macos() {
     let f = Fixture::new()
         .on(Platform::MacOs)
         .keychain_item("Codex Auth");
@@ -384,12 +369,42 @@ fn saved_key_alone_signs_an_opaque_agent_in() {
 }
 
 #[test]
+fn values_that_do_not_count_as_credentials() {
+    let f = Fixture::new()
+        .env("ANTHROPIC_API_KEY", "")
+        .env("CLAUDE_CODE_USE_VERTEX", "0")
+        .env("OPENAI_API_KEY", " ")
+        .env("GOOGLE_GENAI_USE_VERTEXAI", "false")
+        .env("XAI_API_KEY", "")
+        .file(
+            ".claude/.credentials.json",
+            r#"{"note":"no claudeAiOauth entry"}"#,
+        );
+    assert_eq!(
+        [
+            AgentKind::ClaudeCode,
+            AgentKind::Codex,
+            AgentKind::Gemini,
+            AgentKind::GrokBuild
+        ]
+        .map(|agent| (agent.slug(), outcome(&f, agent))),
+        [
+            ("claude-code", (AuthStatus::SignedOut, vec![])),
+            ("codex", (AuthStatus::SignedOut, vec![])),
+            ("gemini", (AuthStatus::Unknown, vec![])),
+            ("grok-build", (AuthStatus::Unknown, vec![])),
+        ]
+    );
+}
+
+#[test]
 fn malformed_credential_files_are_ignored() {
     let f = Fixture::new()
         .file(".claude/.credentials.json", "{not json SECRET")
         .file(".claude.json", "[]")
         .file(".codex/auth.json", "SECRET")
-        .file(".local/share/opencode/auth.json", "\"SECRET\"");
+        .file(".local/share/opencode/auth.json", "\"SECRET\"")
+        .file(".pi/agent/auth.json", "[\"SECRET\"]");
     assert_eq!(
         [AgentKind::ClaudeCode, AgentKind::Codex, AgentKind::OpenCode]
             .map(|agent| outcome(&f, agent)),
@@ -397,20 +412,6 @@ fn malformed_credential_files_are_ignored() {
             (AuthStatus::SignedOut, vec![]),
             (AuthStatus::SignedOut, vec![]),
             (AuthStatus::Unknown, vec![]),
-        ]
-    );
-}
-
-#[test]
-fn empty_environment_variables_do_not_count() {
-    let f = Fixture::new()
-        .env("ANTHROPIC_API_KEY", "")
-        .env("OPENAI_API_KEY", " ");
-    assert_eq!(
-        [AgentKind::ClaudeCode, AgentKind::Codex].map(|agent| outcome(&f, agent)),
-        [
-            (AuthStatus::SignedOut, vec![]),
-            (AuthStatus::SignedOut, vec![])
         ]
     );
 }
@@ -442,7 +443,7 @@ fn opencode_reports_each_signed_in_provider() {
 fn opencode_follows_xdg_data_home() {
     let f = Fixture::new().file(
         "data/opencode/auth.json",
-        r#"{"openai":{"type":"api","key":"x"}}"#,
+        r#"{"openai":{"type":"api","key":"SECRET"}}"#,
     );
     let data = f.home().join("data");
     let f = f.env("XDG_DATA_HOME", data.to_str().unwrap());
@@ -485,18 +486,40 @@ fn pi_reports_each_signed_in_provider() {
 #[test]
 fn agents_with_their_own_opaque_login_are_unknown_without_env() {
     let f = Fixture::new();
-    let statuses: Vec<_> = [
-        AgentKind::Gemini,
-        AgentKind::GrokBuild,
-        AgentKind::OpenCode,
-        AgentKind::Cursor,
-        AgentKind::Hermes,
-        AgentKind::Pi,
-    ]
-    .into_iter()
-    .map(|agent| outcome(&f, agent))
-    .collect();
-    assert_eq!(statuses, vec![(AuthStatus::Unknown, vec![]); 6]);
+    let opaque: Vec<_> = AgentKind::all()
+        .iter()
+        .filter(|agent| !matches!(agent, AgentKind::ClaudeCode | AgentKind::Codex))
+        .map(|agent| (agent.slug(), outcome(&f, *agent)))
+        .collect();
+    let expected: Vec<_> = opaque
+        .iter()
+        .map(|(slug, _)| (*slug, (AuthStatus::Unknown, vec![])))
+        .collect();
+    assert_eq!(opaque, expected);
+}
+
+#[test]
+fn saved_key_is_listed_after_every_environment_credential() {
+    let f = Fixture::new()
+        .save_key(AgentKind::Gemini, "SECRET-saved")
+        .env("GOOGLE_API_KEY", "SECRET-value");
+    assert_eq!(
+        outcome(&f, AgentKind::Gemini),
+        (
+            AuthStatus::SignedIn,
+            vec![
+                cred(CredentialKind::ApiKey, env("GOOGLE_API_KEY"), None),
+                cred(
+                    CredentialKind::ApiKey,
+                    CredentialSource::NoriSaved {
+                        env: "GEMINI_API_KEY".to_string(),
+                        store: StoreLocation::Keyring,
+                    },
+                    None
+                ),
+            ]
+        )
+    );
 }
 
 #[test]
@@ -526,7 +549,7 @@ fn env_keys_sign_in_the_other_agents() {
 }
 
 #[test]
-fn antigravity_cloud_routing() {
+fn antigravity_cloud_routing_flags_sign_in() {
     let f = Fixture::new()
         .env("GOOGLE_GENAI_USE_VERTEXAI", "true")
         .env("AGY_ADC_AUTH", "true");
