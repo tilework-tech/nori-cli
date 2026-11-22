@@ -83,6 +83,15 @@ impl PreparedAgent {
             &mut agent_config,
             config.default_model.as_deref(),
         );
+        let nori_home = config.nori_home.clone();
+        let agent_config = tokio::task::spawn_blocking(move || {
+            nori_providers::inject_saved_key(&mut agent_config, &nori_home, &|key| {
+                std::env::var(key).ok()
+            });
+            agent_config
+        })
+        .await
+        .map_err(|error| AgentPrepareFailure::new(error.into(), Vec::new()))?;
         let (initialize_event_tx, mut initialize_event_rx) = mpsc::channel(1);
         let connection_result = AcpConnection::spawn_with_initialize_event_sender(
             &agent_config,

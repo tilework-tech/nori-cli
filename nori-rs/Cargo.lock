@@ -3815,6 +3815,7 @@ dependencies = [
  "codex-arg0",
  "codex-common",
  "codex-execpolicy",
+ "codex-keyring-store",
  "codex-process-hardening",
  "codex-sandbox",
  "codex-stdio-to-uds",
@@ -3829,6 +3830,7 @@ dependencies = [
  "nori-harness",
  "nori-installed",
  "nori-protocol",
+ "nori-providers",
  "nori-tui",
  "nori-tui-components",
  "owo-colors",
@@ -3891,6 +3893,7 @@ dependencies = [
  "nori-acp-host",
  "nori-config",
  "nori-protocol",
+ "nori-providers",
  "notify-rust",
  "oauth2",
  "pretty_assertions",
@@ -3949,6 +3952,24 @@ dependencies = [
  "schemars 1.0.4",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "nori-providers"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "codex-keyring-store",
+ "keyring",
+ "nori-acp-host",
+ "nori-config",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "toml",
+ "tracing",
 ]
 
 [[package]]
