@@ -3,7 +3,7 @@ name = "nori-providers"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Per-agent sign-in detection and saved API keys for built-in ACP agents"
+description = "Sign-in detection for built-in ACP agents and API keys saved per model provider"
 
 [lib]
 doctest = false

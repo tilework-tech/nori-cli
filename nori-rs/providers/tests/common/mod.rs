@@ -11,12 +11,14 @@ use codex_keyring_store::KeyringStore;
 use codex_keyring_store::tests::MockKeyringStore;
 use nori_acp_host::registry::AgentKind;
 use nori_providers::AgentAuthStatus;
+use nori_providers::Credential;
+use nori_providers::CredentialStore;
 use nori_providers::DetectContext;
 use nori_providers::KeychainProbe;
 use nori_providers::Platform;
-use nori_providers::SavedKeyIndex;
-use nori_providers::SavedKeyStore;
-use nori_providers::StoreMode;
+use nori_providers::Provider;
+use nori_providers::SavedIndex;
+use nori_providers::StoreBackend;
 use nori_providers::detect_agent;
 
 /// A keychain that only knows the listed services.
@@ -70,7 +72,7 @@ pub struct Fixture {
     pub env: HashMap<String, String>,
     pub platform: Platform,
     pub keychain: FakeKeychain,
-    pub saved: SavedKeyIndex,
+    pub saved: SavedIndex,
 }
 
 impl Fixture {
@@ -80,7 +82,7 @@ impl Fixture {
             env: HashMap::new(),
             platform: Platform::Linux,
             keychain: FakeKeychain::default(),
-            saved: SavedKeyIndex::default(),
+            saved: SavedIndex::default(),
         }
     }
 
@@ -114,13 +116,11 @@ impl Fixture {
         self
     }
 
-    pub fn save_key(mut self, agent: AgentKind, key: &str) -> Self {
-        let store = SavedKeyStore::new(
-            &self.nori_home(),
-            StoreMode::Auto,
-            Arc::new(MockKeyringStore::default()),
-        );
-        store.save(agent, key).unwrap();
+    pub fn save_key(mut self, provider: Provider, key: &str) -> Self {
+        let store = file_store(&self.nori_home());
+        store
+            .set(provider, Credential::api_key(key).unwrap())
+            .unwrap();
         self.saved = store.index().unwrap();
         self
     }
@@ -145,4 +145,18 @@ impl Fixture {
 pub fn write(path: &Path, contents: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, contents).unwrap();
+}
+
+/// The default file-backed store, with a keyring that panics if touched.
+pub fn file_store(nori_home: &Path) -> CredentialStore {
+    CredentialStore::new(nori_home, StoreBackend::File, Arc::new(ForbiddenKeyring))
+}
+
+/// A keyring-backed store over an in-memory keyring.
+pub fn keyring_store(nori_home: &Path) -> CredentialStore {
+    CredentialStore::new(
+        nori_home,
+        StoreBackend::Keyring,
+        Arc::new(MockKeyringStore::default()),
+    )
 }

@@ -148,14 +148,36 @@ selected route, endpoint and key variable.
 
 ## Saved API keys
 
-`nori providers set-key <agent>` saves an API key for a built-in agent outside
-`config.toml`. `NORI_CREDENTIALS_STORE` selects where it goes: `auto` (default;
-OS keychain, falling back to a file when the keychain fails), `keyring`, or
-`file`. Nori writes two owner-only files in `$NORI_HOME`: `saved-keys.json`
-records which agents have a saved key and where, without secrets, and
-`saved-keys.secret.json` holds keys stored in the file. At launch the key is
-passed as the agent's API-key variable unless one of the agent's credential variables is already set or the
-agent is bound to a named token provider. [Details](providers/docs.md)
+`nori providers set-key <provider>` saves an API key for a model provider
+(`anthropic`, `openai`, `google`, `xai`, or `cursor`) outside `config.toml`.
+One saved key reaches every built-in agent that talks to that provider, in the
+agent's own variable: for example, a saved `openai` key reaches Codex, OpenCode,
+and Pi as `OPENAI_API_KEY`, and a saved `google` key reaches Antigravity and Pi
+as `GEMINI_API_KEY` but OpenCode as `GOOGLE_GENERATIVE_AI_API_KEY`. Hermes takes
+none. Passing an agent name instead of a provider is an error that names the
+provider to use. `nori providers remove-key <provider>` forgets it.
+
+`NORI_CREDENTIALS_STORE` selects where saved credentials live, with no fallback
+between the two:
+
+- `file` (default, also unset): the owner-only file `$NORI_HOME/credentials.json`.
+- `keyring`: one OS keyring item (service `Nori Credentials`) holding the same
+  JSON document; no file is written. Every launch then reads the keyring, which
+  may prompt on macOS.
+
+At launch a provider's key is skipped when any credential variable the agent
+honours for that provider is already set (in the environment or the agent's
+config `env`), when the provider's base-URL variable (`ANTHROPIC_BASE_URL`,
+`OPENAI_BASE_URL`, `GOOGLE_GEMINI_BASE_URL`) is set non-blank there, so a real
+key is never sent to a gateway or proxy, or when the agent's variable is in
+`launch.env_remove`; agents bound to a named token provider receive no saved
+keys. To keep one agent off a saved key, add its variable to that agent's
+`launch.env_remove`. Saving an `anthropic` key makes Claude Code bill the API
+account instead of a Claude.ai plan; add `ANTHROPIC_API_KEY` to Claude Code's
+`launch.env_remove` to keep it on the plan. Broker-managed sessions never use saved
+keys. Keys saved per agent by earlier development builds (`saved-keys.json`)
+are rejected with instructions to delete them and save again.
+[Details](providers/docs.md)
 
 ## Custom agents: `[[agents]]`
 

@@ -15,12 +15,16 @@ use serde_json::json;
 const SECRET: &str = "sk-fixture-SECRET";
 
 fn nori(home: &Path, args: &[&str], stdin: Option<&str>) -> Output {
+    nori_with_env(home, &[], args, stdin)
+}
+
+fn nori_with_env(home: &Path, env: &[(&str, &str)], args: &[&str], stdin: Option<&str>) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_nori"))
         .env_clear()
+        .envs(env.iter().copied())
         .env("PATH", format!("{}:/usr/bin:/bin", home.display()))
         .env("HOME", home)
         .env("NORI_HOME", home.join("nori"))
-        .env("NORI_CREDENTIALS_STORE", "file")
         .env("NORI_MANAGED_BY_NPM", "1")
         .args(args)
         .stdin(Stdio::piped())
@@ -76,7 +80,14 @@ fn providers_json_reports_a_codex_chatgpt_login() {
         (&codex["status"], &codex["credentials"]),
         (
             &json!("signed_in"),
-            &json!([{"kind": "subscription", "source": {"type": "file", "path": auth}, "detail": "chatgpt"}])
+            &json!([{
+                "kind": "subscription",
+                "source": {"type": "file", "path": auth},
+                "provider": "openai",
+                "detail": "chatgpt",
+                "read_only": true,
+                "disconnect": "sign out in Codex to disconnect"
+            }])
         )
     );
 }
@@ -98,21 +109,46 @@ fn providers_table_names_each_agent_and_its_status() {
 }
 
 #[test]
-fn saved_key_is_reported_and_can_be_removed() {
+fn one_saved_openai_key_is_reported_for_every_openai_agent_and_can_be_removed() {
     let dir = tempfile::tempdir().unwrap();
 
     let saved = nori(
         dir.path(),
-        &["providers", "set-key", "codex"],
+        &["providers", "set-key", "openai", "--json"],
         Some(&format!("{SECRET}\n")),
     );
     assert!(saved.status.success(), "{saved:?}");
     assert_eq!(
-        agent(&report(dir.path()), "codex")["credentials"],
-        json!([{"kind": "api_key", "source": {"type": "nori_saved", "env": "OPENAI_API_KEY", "store": "file"}}])
+        serde_json::from_slice::<Value>(&saved.stdout).unwrap(),
+        json!({
+            "provider": "openai",
+            "type": "api_key",
+            "store": "file",
+            "agents": [
+                {"agent": "codex", "env": "OPENAI_API_KEY"},
+                {"agent": "opencode", "env": "OPENAI_API_KEY"},
+                {"agent": "pi", "env": "OPENAI_API_KEY"},
+            ]
+        })
+    );
+    let saved_credential = json!({
+        "kind": "api_key",
+        "source": {"type": "nori_saved", "provider": "openai", "env": "OPENAI_API_KEY", "store": "file"},
+        "provider": "openai",
+        "read_only": false,
+        "disconnect": "run `nori providers remove-key openai` to disconnect"
+    });
+    let after_save = report(dir.path());
+    assert_eq!(
+        ["codex", "opencode", "pi"].map(|slug| agent(&after_save, slug)["credentials"].clone()),
+        [
+            json!([saved_credential]),
+            json!([saved_credential]),
+            json!([saved_credential])
+        ]
     );
 
-    let removed = nori(dir.path(), &["providers", "remove-key", "codex"], None);
+    let removed = nori(dir.path(), &["providers", "remove-key", "openai"], None);
     assert!(removed.status.success(), "{removed:?}");
     assert_eq!(
         agent(&report(dir.path()), "codex")["credentials"],
@@ -121,33 +157,37 @@ fn saved_key_is_reported_and_can_be_removed() {
 }
 
 #[test]
-fn set_key_refuses_agents_without_an_api_key_variable() {
+fn env_credentials_are_read_only_in_the_table() {
     let dir = tempfile::tempdir().unwrap();
-    let output = nori(
-        dir.path(),
-        &["providers", "set-key", "opencode"],
-        Some(&format!("{SECRET}\n")),
-    );
-    assert!(!output.status.success());
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("own login"),
-        "{output:?}"
-    );
-    assert_eq!(
-        agent(&report(dir.path()), "opencode")["credentials"],
-        json!([])
-    );
+    let output = nori_with_env(dir.path(), &[("XAI_API_KEY", SECRET)], &["providers"], None);
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{output:?}");
+    let row = text
+        .lines()
+        .find(|line| line.starts_with("grok-build"))
+        .unwrap();
+    assert!(row.contains("unset XAI_API_KEY to disconnect"), "{row}");
 }
 
 #[test]
-fn set_key_rejects_unknown_agents() {
+fn set_key_takes_a_provider_and_points_agent_names_at_theirs() {
     let dir = tempfile::tempdir().unwrap();
+    let output = nori(
+        dir.path(),
+        &["providers", "set-key", "codex"],
+        Some(&format!("{SECRET}\n")),
+    );
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("openai"), "{output:?}");
+
     let output = nori(dir.path(), &["providers", "set-key", "nope"], Some(SECRET));
     assert!(!output.status.success());
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("not a built-in agent"),
+        String::from_utf8_lossy(&output.stderr).contains("not a provider"),
         "{output:?}"
     );
+    assert!(!dir.path().join("nori/credentials.json").exists());
 }
 
 #[test]
@@ -164,7 +204,7 @@ fn saved_key_reaches_the_launched_agent() {
     .unwrap();
     std::fs::set_permissions(&runner, std::fs::Permissions::from_mode(0o755)).unwrap();
     assert!(
-        nori(home, &["providers", "set-key", "codex"], Some(SECRET))
+        nori(home, &["providers", "set-key", "openai"], Some(SECRET))
             .status
             .success()
     );
@@ -175,4 +215,32 @@ fn saved_key_reaches_the_launched_agent() {
         std::fs::read_to_string(home.join("probe")).ok(),
         Some("saved\n".to_string())
     );
+}
+
+#[test]
+fn unreadable_store_is_reported_without_hiding_detection() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("nori")).unwrap();
+    std::fs::write(
+        dir.path().join("nori/saved-keys.json"),
+        r#"{"codex":"file"}"#,
+    )
+    .unwrap();
+
+    let output = nori_with_env(
+        dir.path(),
+        &[("OPENAI_API_KEY", SECRET)],
+        &["providers", "--json"],
+        None,
+    );
+
+    assert!(output.status.success(), "{output:?}");
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(
+        report["store_error"]
+            .as_str()
+            .is_some_and(|error| error.contains("saved-keys.json")),
+        "{report}"
+    );
+    assert_eq!(agent(&report, "codex")["status"], "signed_in");
 }

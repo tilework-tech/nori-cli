@@ -7,15 +7,15 @@ use std::sync::Arc;
 use anyhow::Context;
 use clap::Parser;
 use codex_keyring_store::DefaultKeyringStore;
-use nori_harness::registry::AgentKind;
 use nori_providers::AuthStatus;
+use nori_providers::Credential;
 use nori_providers::CredentialKind;
 use nori_providers::CredentialSource;
+use nori_providers::CredentialStore;
 use nori_providers::DetectContext;
 use nori_providers::Platform;
-use nori_providers::SavedKeyStore;
-use nori_providers::StoreLocation;
-use nori_providers::StoreMode;
+use nori_providers::Provider;
+use nori_providers::StoreBackend;
 use nori_providers::SystemKeychain;
 use serde_json::json;
 
@@ -30,88 +30,106 @@ pub(crate) struct ProvidersCommand {
 
 #[derive(Debug, clap::Subcommand)]
 enum ProvidersAction {
-    /// Save an API key for an agent, read from stdin, in the OS keychain (or a
-    /// private file when no keychain is available). Nori passes it to the agent
-    /// at launch unless the variable is already set.
+    /// Save an API key for a model provider, read from stdin. Every agent that
+    /// talks to the provider receives it at launch, in its own variable, unless
+    /// that agent already has a credential for the provider in its environment.
     SetKey {
-        /// Agent: claude-code, codex, gemini (Antigravity), grok-build, or cursor.
-        agent: String,
-        /// Print `{"agent", "env", "store"}`.
+        /// Provider: anthropic, openai, google, xai, or cursor.
+        provider: String,
+        /// Print `{"provider", "type", "store", "agents"}`.
         #[arg(long)]
         json: bool,
     },
-    /// Forget the API key saved for an agent.
+    /// Forget the key saved for a provider.
     RemoveKey {
-        /// Agent whose saved key to remove.
-        agent: String,
+        /// Provider whose saved key to remove.
+        provider: String,
     },
 }
 
 pub(crate) fn run(command: ProvidersCommand) -> anyhow::Result<()> {
     let env = |key: &str| std::env::var(key).ok();
     let nori_home = nori_config::find_nori_home()?;
-    let store = SavedKeyStore::new(
+    let store = CredentialStore::new(
         &nori_home,
-        StoreMode::from_env(&env)?,
+        StoreBackend::from_env(&env)?,
         Arc::new(DefaultKeyringStore),
     );
-    let parse_agent = |slug: &str| {
-        AgentKind::from_slug(slug)
-            .with_context(|| format!("{slug:?} is not a built-in agent; see `nori providers`"))
-    };
     match command.action {
         None => {
             let home = dirs::home_dir().context("could not find the home directory")?;
-            let saved = store.index()?;
-            let report = nori_providers::detect_all(&DetectContext {
+            // A broken store must not hide what detection can still see.
+            let (saved, store_error) = match store.index() {
+                Ok(saved) => (saved, None),
+                Err(error) => (
+                    nori_providers::SavedIndex::default(),
+                    Some(format!("{error:#}")),
+                ),
+            };
+            let mut report = nori_providers::detect_all(&DetectContext {
                 home: &home,
                 env: &env,
                 platform: Platform::current(),
                 keychain: &SystemKeychain,
                 saved: &saved,
             });
+            report.store = store.backend();
+            report.store_error = store_error;
             if command.json {
                 println!("{}", serde_json::to_string_pretty(&report)?);
             } else {
                 print_table(&report);
             }
         }
-        Some(ProvidersAction::SetKey { agent, json }) => {
-            let agent = parse_agent(&agent)?;
+        Some(ProvidersAction::SetKey { provider, json }) => {
+            let provider = Provider::parse(&provider)?;
             let mut stdin = std::io::stdin();
             if stdin.is_terminal() {
                 eprintln!(
-                    "Paste the API key for {} and press Enter, then Ctrl-D:",
-                    agent.display_name()
+                    "Paste the {} API key and press Enter, then Ctrl-D:",
+                    provider.display_name()
                 );
             }
             let mut key = String::new();
             stdin.read_to_string(&mut key)?;
-            let location = store.save(agent, &key)?;
-            let env = nori_providers::saved_key_env(agent).unwrap_or_default();
-            let store = match location {
-                StoreLocation::Keyring => "keyring",
-                StoreLocation::File => "file",
-            };
+            let credential = Credential::api_key(&key)?;
+            let record_type = credential.type_name();
+            store.set(provider, credential)?;
+            let routes: Vec<_> = provider
+                .agent_routes()
+                .into_iter()
+                .map(|(agent, env)| (agent.slug(), env))
+                .collect();
+            let store_name = store.backend().as_str();
             if json {
+                let agents: Vec<_> = routes
+                    .iter()
+                    .map(|(agent, env)| json!({"agent": agent, "env": env}))
+                    .collect();
                 println!(
                     "{}",
-                    json!({"agent": agent.slug(), "env": env, "store": store})
+                    json!({"provider": provider.id(), "type": record_type, "store": store_name, "agents": agents})
                 );
             } else {
+                let agents: Vec<_> = routes
+                    .iter()
+                    .map(|(agent, env)| format!("{agent} (${env})"))
+                    .collect();
                 println!(
-                    "Saved the {} API key ({store}). Nori passes it as {env} unless a credential variable for the agent is already set.",
-                    agent.display_name()
+                    "Saved the {} API key ({store_name}). Nori passes it to {} unless the agent already has a credential for {} in its environment.",
+                    provider.display_name(),
+                    agents.join(", "),
+                    provider.id()
                 );
             }
         }
-        Some(ProvidersAction::RemoveKey { agent }) => {
-            let agent = parse_agent(&agent)?;
-            let name = agent.display_name();
-            if store.delete(agent)? {
-                println!("Removed the saved {name} API key.");
+        Some(ProvidersAction::RemoveKey { provider }) => {
+            let provider = Provider::parse(&provider)?;
+            let name = provider.display_name();
+            if store.remove(provider)? {
+                println!("Removed the saved {name} credential.");
             } else {
-                println!("No saved {name} API key.");
+                println!("No saved {name} credential.");
             }
         }
     }
@@ -137,9 +155,15 @@ fn print_table(report: &nori_providers::ProvidersReport) {
                         CredentialKind::Token => "token",
                         CredentialKind::Login => "login",
                     };
-                    let kind = match &credential.detail {
-                        Some(detail) => format!("{kind} ({detail})"),
-                        None => kind.to_string(),
+                    let label = [credential.provider.as_deref(), credential.detail.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let kind = if label.is_empty() {
+                        kind.to_string()
+                    } else {
+                        format!("{kind} ({label})")
                     };
                     let source = match &credential.source {
                         CredentialSource::Env { name } => format!("${name}"),
@@ -147,10 +171,14 @@ fn print_table(report: &nori_providers::ProvidersReport) {
                         CredentialSource::Keychain { service } => {
                             format!("keychain: {service}")
                         }
-                        CredentialSource::NoriSaved { env, store } => match store {
-                            StoreLocation::Keyring => format!("saved in keychain as ${env}"),
-                            StoreLocation::File => format!("saved in file as ${env}"),
-                        },
+                        CredentialSource::NoriSaved { env, .. } => {
+                            format!("saved through Nori, as ${env}")
+                        }
+                    };
+                    let source = if credential.read_only {
+                        format!("{source}; read-only: {}", credential.disconnect)
+                    } else {
+                        source
                     };
                     (kind, source)
                 }
@@ -185,5 +213,26 @@ fn print_table(report: &nori_providers::ProvidersReport) {
             w1 = widths[1],
             w2 = widths[2]
         );
+    }
+    for agent in &report.agents {
+        for notice in &agent.notices {
+            println!("note: {}", notice.message);
+        }
+    }
+    let saved: Vec<_> = report
+        .providers
+        .iter()
+        .filter(|provider| provider.saved.is_some())
+        .map(|provider| provider.id.id())
+        .collect();
+    if !saved.is_empty() {
+        println!(
+            "saved keys ({}): {}",
+            report.store.as_str(),
+            saved.join(", ")
+        );
+    }
+    if let Some(error) = &report.store_error {
+        eprintln!("warning: saved keys are unavailable: {error}");
     }
 }
