@@ -41,10 +41,15 @@ fn the_checked_in_host_wire_schema_matches_the_protocol_types() {
     );
 }
 
-/// Needs Node.js and npm; machines without them skip the comparison.
+/// Needs Node.js and npm; machines without them skip the comparison, except
+/// in CI.
 #[test]
 fn the_checked_in_host_wire_typescript_matches_the_schema() {
     if which::which("npm").is_err() || which::which("node").is_err() {
+        assert!(
+            std::env::var_os("CI").is_none(),
+            "CI must check the TypeScript types; install node and npm"
+        );
         eprintln!("skipping: the TypeScript check needs node and npm on PATH");
         return;
     }
