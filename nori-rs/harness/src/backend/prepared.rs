@@ -89,7 +89,7 @@ impl PreparedAgent {
         let nori_home = config.nori_home.clone();
         let mut with_saved_key = agent_config.clone();
         let lookup = tokio::task::spawn_blocking(move || {
-            nori_providers::inject_saved_key(&mut with_saved_key, &nori_home, &|key| {
+            nori_providers::inject_saved_keys(&mut with_saved_key, &nori_home, &|key| {
                 std::env::var(key).ok()
             });
             with_saved_key
@@ -100,7 +100,7 @@ impl PreparedAgent {
                     joined.map_err(|error| AgentPrepareFailure::new(error.into(), Vec::new()))?;
             }
             Err(_) => tracing::warn!(
-                "launching {} without its saved API key: the keychain did not answer within {SAVED_KEY_TIMEOUT:?}",
+                "launching {} without saved API keys: the keyring did not answer within {SAVED_KEY_TIMEOUT:?}",
                 agent_config.display_name
             ),
         }

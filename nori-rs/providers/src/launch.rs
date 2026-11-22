@@ -5,61 +5,85 @@ use codex_keyring_store::DefaultKeyringStore;
 use nori_acp_host::registry::AcpAgentConfig;
 use tracing::warn;
 
-use crate::saved::SavedKeyStore;
-use crate::saved::StoreMode;
-use crate::saved_key_env;
+use crate::store::CredentialStore;
+use crate::store::StoreBackend;
 
-/// Put the saved API key for `config`'s built-in agent into its launch
-/// environment. Returns the variable set, if any. Any credential variable the
-/// agent honours, whether in the ambient environment or the agent's own
-/// config, wins over a saved key, and agents bound to a named token provider
-/// or told to drop the variable are left alone.
-pub fn apply_saved_key(
+/// Put the saved API key of each provider `config`'s built-in agent talks to
+/// into its launch environment, in that agent's variable for the provider.
+/// Returns the variables set. A provider is skipped when any credential
+/// variable the agent honours for it is set (in the ambient environment or the
+/// agent's own config), when the provider's base-URL variable points it at
+/// another endpoint, or when its variable is in `launch.env_remove`; agents bound
+/// to a named token provider are left alone entirely.
+pub fn apply_saved_keys(
     config: &mut AcpAgentConfig,
-    store: &SavedKeyStore,
+    store: &CredentialStore,
     env: &dyn Fn(&str) -> Option<String>,
-) -> anyhow::Result<Option<&'static str>> {
-    let Some((agent, var)) = target(config) else {
-        return Ok(None);
+) -> anyhow::Result<Vec<&'static str>> {
+    let Some(agent) = config.builtin_kind else {
+        return Ok(Vec::new());
     };
-    let configured = |name: &str| config.env.get(name).cloned().or_else(|| env(name));
-    let explicit = crate::env_credentials(agent)
-        .iter()
-        .any(|credential| credential.is_set(&configured));
-    let removed = config.launch.env_remove.iter().any(|name| name == var);
-    if config.token_provider.is_some() || explicit || removed {
-        return Ok(None);
+    let routes = crate::key_routes(agent);
+    if routes.is_empty() || config.token_provider.is_some() {
+        return Ok(Vec::new());
     }
-    let Some(key) = store.load(agent)? else {
-        return Ok(None);
-    };
-    config.env.insert(var.to_string(), key);
-    Ok(Some(var))
+    let configured = |name: &str| config.env.get(name).cloned().or_else(|| env(name));
+    let wanted: Vec<_> = routes
+        .iter()
+        .filter(|route| {
+            let explicit = crate::env_credentials(agent).iter().any(|credential| {
+                credential.provider == route.provider && credential.is_set(&configured)
+            });
+            let removed = config
+                .launch
+                .env_remove
+                .iter()
+                .any(|name| name == route.env);
+            let redirected = route
+                .provider
+                .base_url_env()
+                .is_some_and(|name| configured(name).is_some_and(|value| !value.trim().is_empty()));
+            !explicit && !redirected && !removed
+        })
+        .collect();
+    if wanted.is_empty() {
+        return Ok(Vec::new());
+    }
+    let saved = store.all()?;
+    let mut applied = Vec::new();
+    for route in wanted {
+        if let Some(credential) = saved.get(&route.provider) {
+            config
+                .env
+                .insert(route.env.to_string(), credential.key().to_string());
+            applied.push(route.env);
+        }
+    }
+    Ok(applied)
 }
 
-/// [`apply_saved_key`] against the system keychain and `$NORI_HOME`, logging
-/// (without the value) instead of failing the launch when the store is unreadable.
-pub fn inject_saved_key(
+/// [`apply_saved_keys`] against the store `NORI_CREDENTIALS_STORE` selects
+/// under `nori_home`, logging (without values) instead of failing the launch
+/// when the store is unreadable.
+pub fn inject_saved_keys(
     config: &mut AcpAgentConfig,
     nori_home: &Path,
     env: &dyn Fn(&str) -> Option<String>,
 ) {
-    if target(config).is_none() {
+    if config
+        .builtin_kind
+        .is_none_or(|agent| crate::key_routes(agent).is_empty())
+    {
         return;
     }
-    let result = StoreMode::from_env(env).and_then(|mode| {
-        let store = SavedKeyStore::new(nori_home, mode, Arc::new(DefaultKeyringStore));
-        apply_saved_key(config, &store, env)
+    let result = StoreBackend::from_env(env).and_then(|backend| {
+        let store = CredentialStore::new(nori_home, backend, Arc::new(DefaultKeyringStore));
+        apply_saved_keys(config, &store, env)
     });
     if let Err(error) = result {
         warn!(
-            "launching {} without its saved API key: {error:#}",
+            "launching {} without saved API keys: {error:#}",
             config.display_name
         );
     }
-}
-
-fn target(config: &AcpAgentConfig) -> Option<(nori_acp_host::registry::AgentKind, &'static str)> {
-    let agent = config.builtin_kind?;
-    Some((agent, saved_key_env(agent)?))
 }
