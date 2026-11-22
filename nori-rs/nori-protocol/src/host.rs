@@ -1,7 +1,8 @@
 //! Nori's additions to standard ACP v1 on `nori host`'s `/sessions`: the
-//! host's discovery file and the `_nori/*` extension methods, plus
+//! host's discovery file, its two `_meta` keys (`nori.dev/agent`,
+//! `nori.dev/live`), and the `_nori/*` extension methods, plus
 //! [`host_wire_schema`], which publishes them with the ACP v1 types the host
-//! uses. The host adds no Nori `_meta` keys to ACP messages.
+//! uses.
 
 use std::collections::BTreeMap;
 
@@ -16,6 +17,27 @@ use serde_json::json;
 use crate::Delegation;
 use crate::SessionEnvelope;
 use crate::acp::v1 as acp;
+
+/// `_meta` on a `session/list` row: the host's two approved keys.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ListedSessionMeta {
+    /// The slug of the agent the session runs, when known.
+    #[serde(rename = "nori.dev/agent", skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    /// Whether the session runs on the host now. A session that is not live
+    /// restarts when loaded or resumed.
+    #[serde(rename = "nori.dev/live")]
+    pub live: bool,
+}
+
+/// `_meta` a client may put on `session/new`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct NewSessionMeta {
+    /// Start this agent instead of the folder's default, so the right
+    /// adapter starts first.
+    #[serde(rename = "nori.dev/agent")]
+    pub agent: Option<String>,
+}
 
 /// `$NORI_HOME/host/host.json`, the host's discovery file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -135,7 +157,9 @@ pub fn host_wire_schema() -> Value {
         generator.subschema_for::<acp::SessionNotification>(),
         generator.subschema_for::<acp::RequestPermissionRequest>(),
         generator.subschema_for::<acp::RequestPermissionResponse>(),
-        // Nori's discovery file.
+        // Nori's `_meta` keys and discovery file.
+        generator.subschema_for::<ListedSessionMeta>(),
+        generator.subschema_for::<NewSessionMeta>(),
         generator.subschema_for::<HostDiscovery>(),
         // The `_nori/*` extension.
         generator.subschema_for::<ControlStatus>(),
@@ -152,7 +176,7 @@ pub fn host_wire_schema() -> Value {
     sorted(json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "NoriHostWire",
-        "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
+        "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori.dev/agent` and `nori.dev/live` _meta keys, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
         "anyOf": roots,
         "$defs": definitions,
     }))

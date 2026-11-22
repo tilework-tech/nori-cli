@@ -137,7 +137,8 @@ host ls / stop / new --------------+                   SessionManager
 - [Session lifecycle](acp/session.rs): `session/new` loads the configuration
   of the requested folder as `_nori/session/new` does, adds the client's
   stdio and HTTP `mcpServers` (remembered in the session settings so an agent
-  change or restart keeps them), applies `[host] default_mode` when set, then
+  change or restart keeps them), starts the agent named in
+  `_meta["nori.dev/agent"]` if any, applies `[host] default_mode` when set, then
   attaches the connection from the session's first event and answers once
   the agent has started. A session whose agent never starts is hidden (marked
   deleted) and the agent's own error code is returned, carried up from
@@ -163,8 +164,9 @@ host ls / stop / new --------------+                   SessionManager
   [stored sessions](transcripts.rs) (transcripts the host is not running,
   read through `TranscriptLoader::list_stored_sessions`); its cursor is
   `live:<index>` or a keyset over file modification time and ID, so new
-  transcripts do not shift later pages. Rows are plain ACP `SessionInfo`;
-  loading a closed, failed or done record restarts it. Deleted IDs are
+  transcripts do not shift later pages. Rows are ACP `SessionInfo` with
+  `_meta` `nori.dev/agent` and `nori.dev/live` (`nori_protocol::ListedSessionMeta`);
+  a closed, failed or done record is not live, and loading it restarts it. Deleted IDs are
   skipped. [Attaching](acp/attach.rs) forwards
   one connection's attached sessions' journal events as `session/update`
   notifications under the conversation ID. Stored sessions restart through

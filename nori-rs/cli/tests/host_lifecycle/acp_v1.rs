@@ -554,3 +554,58 @@ fn the_host_publishes_host_json_beside_the_legacy_discovery_files() {
         .mode();
     assert_eq!(mode & 0o777, 0o600);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn list_rows_say_which_agent_runs_a_session_and_whether_it_is_live() {
+    let host = host_with("", &[]);
+    let folder = TempDir::new().unwrap();
+    let mut acp = controller(&host);
+    let created = acp
+        .call(
+            "session/new",
+            json!({
+                "cwd": canonical(folder.path()),
+                "mcpServers": [],
+                "_meta": {"nori.dev/agent": "second-mock"},
+            }),
+        )
+        .await
+        .unwrap();
+    let live = created["sessionId"].as_str().unwrap().to_owned();
+    let (closed, _) = new_session(&mut acp, folder.path()).await;
+    acp.call("session/close", json!({"sessionId": closed}))
+        .await
+        .unwrap();
+
+    let listing = acp.call("session/list", json!({})).await.unwrap();
+
+    assert_eq!(
+        listed(&listing, &live).unwrap()["_meta"],
+        json!({"nori.dev/agent": "second-mock", "nori.dev/live": true})
+    );
+    assert_eq!(
+        listed(&listing, &closed).unwrap()["_meta"],
+        json!({"nori.dev/agent": "mock-model", "nori.dev/live": false})
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_new_session_refuses_an_unknown_agent() {
+    let host = host_with("", &[]);
+    let folder = TempDir::new().unwrap();
+    let mut acp = controller(&host);
+
+    let refused = acp
+        .call(
+            "session/new",
+            json!({
+                "cwd": canonical(folder.path()),
+                "mcpServers": [],
+                "_meta": {"nori.dev/agent": "no-such-agent"},
+            }),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(refused.code, -32602, "{refused:?}");
+}

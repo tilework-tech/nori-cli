@@ -2612,6 +2612,26 @@
       "x-method": "session/list",
       "x-side": "agent"
     },
+    "ListedSessionMeta": {
+      "description": "`_meta` on a `session/list` row: the host's two approved keys.",
+      "properties": {
+        "nori.dev/agent": {
+          "description": "The slug of the agent the session runs, when known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nori.dev/live": {
+          "description": "Whether the session runs on the host now. A session that is not live\nrestarts when loaded or resumed.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "nori.dev/live"
+      ],
+      "type": "object"
+    },
     "LlmProtocol": {
       "anyOf": [
         {
@@ -3834,6 +3854,19 @@
           "minimum": 0,
           "type": [
             "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "NewSessionMeta": {
+      "description": "`_meta` a client may put on `session/new`.",
+      "properties": {
+        "nori.dev/agent": {
+          "description": "Start this agent instead of the folder's default, so the right\nadapter starts first.",
+          "type": [
+            "string",
             "null"
           ]
         }
@@ -7889,6 +7922,12 @@
       "$ref": "#/$defs/RequestPermissionResponse"
     },
     {
+      "$ref": "#/$defs/ListedSessionMeta"
+    },
+    {
+      "$ref": "#/$defs/NewSessionMeta"
+    },
+    {
       "$ref": "#/$defs/HostDiscovery"
     },
     {
@@ -7919,6 +7958,6 @@
       "$ref": "#/$defs/Delegation"
     }
   ],
-  "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
+  "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori.dev/agent` and `nori.dev/live` _meta keys, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
   "title": "NoriHostWire"
 }

@@ -91,7 +91,23 @@ impl HostService {
             Some(servers) => serde_json::from_value(servers.clone())
                 .map_err(|error| AcpError::invalid_params(format!("mcpServers: {error}")))?,
         };
+        let meta: nori_protocol::NewSessionMeta = match params.get("_meta") {
+            None | Some(Value::Null) => Default::default(),
+            Some(meta) => serde_json::from_value(meta.clone())
+                .map_err(|error| AcpError::invalid_params(format!("_meta: {error}")))?,
+        };
+        if let Some(agent) = &meta.agent {
+            let known = nori_harness::registry::list_available_agents()
+                .iter()
+                .any(|available| available.agent_name == *agent);
+            if !known {
+                return Err(AcpError::invalid_params(format!("unknown agent {agent}")));
+            }
+        }
         let mut config = self.config_in(folder).await?;
+        if let Some(agent) = meta.agent {
+            config.active_agent = agent;
+        }
         for server in &servers {
             let (name, server) = mcp_server(server)?;
             config.mcp_servers.insert(name, server);
