@@ -33,6 +33,43 @@ fn nori_command(nori_home: &TempDir) -> Result<Command, Box<dyn std::error::Erro
     Ok(command)
 }
 
+#[cfg(unix)]
+#[test]
+fn exec_launches_hermes_and_cursor_by_cli_alias() -> Result<(), Box<dyn std::error::Error>> {
+    use std::os::unix::fs::PermissionsExt;
+
+    for (alias, executable) in [("hermes-agent", "hermes"), ("cursor-agent", "cursor-agent")] {
+        let home = TempDir::new()?;
+        let runner = home.path().join(executable);
+        std::fs::write(
+            &runner,
+            r#"#!/bin/sh
+[ "$#" = 1 ] && [ "$1" = acp ] || exit 64
+export MOCK_AGENT_ECHO_PROMPT=1
+exec "$ALIAS_FIXTURE_BIN"
+"#,
+        )?;
+        std::fs::set_permissions(&runner, std::fs::Permissions::from_mode(0o755))?;
+        let output = Command::cargo_bin("nori")?
+            .env_clear()
+            .current_dir(home.path())
+            .env("PATH", home.path())
+            .env("HOME", home.path())
+            .env("NORI_HOME", home.path())
+            .env("NORI_MANAGED_BY_NPM", "1")
+            .env("ALIAS_FIXTURE_BIN", mock_agent_bin()?)
+            .args(["--agent", alias, "exec", "alias launch fixture"])
+            .output()?;
+        assert!(
+            output.status.success(),
+            "{alias}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8(output.stdout)?, "alias launch fixture\n");
+    }
+    Ok(())
+}
+
 #[test]
 fn exec_prints_only_the_final_agent_response() -> Result<(), Box<dyn std::error::Error>> {
     let nori_home = TempDir::new()?;

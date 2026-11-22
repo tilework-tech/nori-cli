@@ -753,6 +753,8 @@ jobs:
 
           echo "" >> CHANGELOG_RELEASE.md
           echo "" >> CHANGELOG_RELEASE.md
+          cat nori-rs/nori-config/data/harness-compat-release-note.md >> CHANGELOG_RELEASE.md
+          echo "" >> CHANGELOG_RELEASE.md
           echo "## Installation" >> CHANGELOG_RELEASE.md
           echo "" >> CHANGELOG_RELEASE.md
           echo '```bash' >> CHANGELOG_RELEASE.md
