@@ -9,10 +9,10 @@ use tokio::sync::mpsc;
 
 use super::AcpBackendConfig;
 use super::enhance_agent_error;
-use super::get_agent_config;
 use super::remote_control_ext;
 use crate::connection::ConnectionEvent;
 use crate::connection::acp_connection::AcpConnection;
+use crate::registry::get_agent_launch_config;
 
 /// A prepared connection owns no remote session that needs the active-session
 /// detach grace. Allow a brief EOF cleanup, then reap it promptly.
@@ -33,6 +33,7 @@ pub enum SessionCatalog {
 /// dropping it kills the unused subprocess through [`AcpConnection`]'s drop
 /// backstop.
 pub struct PreparedAgent {
+    agent_config: crate::registry::AcpAgentConfig,
     connection: Option<AcpConnection>,
     event_rx: Option<mpsc::Receiver<ConnectionEvent>>,
     config: Option<AcpBackendConfig>,
@@ -70,8 +71,11 @@ impl PreparedAgent {
     pub(crate) async fn prepare(
         config: AcpBackendConfig,
     ) -> std::result::Result<Self, AgentPrepareFailure> {
-        let mut agent_config = get_agent_config(&config.agent)
-            .map_err(|error| AgentPrepareFailure::new(error, Vec::new()))?;
+        let mut agent_config = get_agent_launch_config(
+            &config.agent,
+            config.agent_token_providers.get(&config.agent),
+        )
+        .map_err(|error| AgentPrepareFailure::new(error, Vec::new()))?;
         super::spawn_and_relay::inject_default_model(
             &mut agent_config,
             config.default_model.as_deref(),
@@ -157,6 +161,7 @@ impl PreparedAgent {
         };
 
         Ok(Self {
+            agent_config,
             connection: Some(connection),
             event_rx: Some(event_rx),
             config: Some(config),
@@ -222,6 +227,11 @@ impl PreparedAgent {
             prepared_config.default_model == config.default_model,
             "prepared agent default model changed while the agent was preparing; retry the switch"
         );
+        anyhow::ensure!(
+            prepared_config.agent_token_providers.get(&config.agent)
+                == config.agent_token_providers.get(&config.agent),
+            "token provider changed while the agent was preparing; retry the switch"
+        );
         self.config = Some(config);
         Ok(())
     }
@@ -241,6 +251,7 @@ impl PreparedAgent {
     )]
     pub(super) fn into_parts(mut self) -> PreparedAgentParts {
         PreparedAgentParts {
+            agent_config: self.agent_config,
             connection: self
                 .connection
                 .take()
@@ -276,6 +287,7 @@ impl AgentPrepareFailure {
 }
 
 pub(super) struct PreparedAgentParts {
+    pub(super) agent_config: crate::registry::AcpAgentConfig,
     pub(super) connection: AcpConnection,
     pub(super) event_rx: mpsc::Receiver<ConnectionEvent>,
     pub(super) config: AcpBackendConfig,

@@ -869,7 +869,13 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
         .cloned()
         .or(saved_model);
 
+    let token_provider = config.agent_token_providers.get(&agent).cloned();
+    let default_model = token_provider
+        .as_ref()
+        .map(|binding| binding.model.clone())
+        .or(default_model);
     AcpBackendConfig {
+        agent_token_providers: Arc::new(config.agent_token_providers.clone()),
         agent,
         multi_session: config.multi_session,
         delegation_context: None,

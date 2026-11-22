@@ -85,6 +85,28 @@ forced through the agent subprocess at spawn. The built-in Claude Code and Codex
 `config.toml` schema, including these tables and the `[[agents]]` fields, is
 described in [`config.md`](../config.md).
 
+### API token provider resolution
+
+The loader joins each canonical agent slug to its named API connection and
+validates the protocol before the harness selects a command. The resolved
+binding carries the effective protocol, endpoint, model and credential
+variable name. This lets frontends load configuration without access to a
+key. Codex's launch adapter reads the key for the child process.
+[Resolver](src/token_providers.rs) · [Launch adapter](../acp-host/src/token_launch.rs) · [Configuration example](../config.md#named-api-token-providers)
+
+The gateway compatibility rules come from the Sessions broker. Its custom
+preset declares one wire protocol; known gateways can dispatch different
+protocols through the same connection. Subscription-backed ChatGPT is a
+separate credential class. [Broker catalog and resolver](https://github.com/tilework-tech/nori-sessions/blob/b9ad780d6c25f214d0b4a6697d51ae602975162e/broker/server/src/core-services/agents/token-providers.ts#L250-L330)
+
+Upstream Codex separates a named provider from its selected model and accepts
+an environment reference for the provider's key. Pi composes a model from
+its provider ID, protocol and endpoint, and its auth resolver checks stored
+credentials before configuration keys. Nori keeps a single explicit
+environment reference. A Pi adapter consuming this contract needs a private
+Pi configuration scope where a stored account cannot supersede that key.
+[Codex configuration](https://github.com/openai/codex/blob/704ffed1c58ac349c129e459c50c71979dfac6b4/codex-rs/config/src/config_toml.rs#L175-L188) · [Codex credential resolution](https://github.com/openai/codex/blob/704ffed1c58ac349c129e459c50c71979dfac6b4/codex-rs/model-provider-info/src/lib.rs#L524-L542) · [Pi provider composition and auth](https://github.com/earendil-works/pi/blob/780bf31fcaeb252fa9b68df3964c735eae75bde3/packages/coding-agent/src/core/provider-composer.ts#L462-L478)
+
 ### Things to Know
 
 - These policy types are configuration semantics, not ACP session events; they

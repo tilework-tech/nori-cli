@@ -473,6 +473,12 @@ impl AcpConnection {
             .current_dir(cwd)
             .stderr(Stdio::piped());
 
+        let credential = config
+            .token_provider
+            .as_ref()
+            .map(|binding| crate::token_launch::apply_codex_binding(&mut cmd, binding))
+            .transpose()?;
+
         let AgentProcess {
             stdin,
             stdout,
@@ -485,7 +491,12 @@ impl AcpConnection {
         debug!("ACP agent spawned (pid: Some({pid}))");
 
         let wire_logger = if proxy_config.enabled {
-            Some(WireLogger::new(&proxy_config, config, pid)?)
+            Some(WireLogger::new(
+                &proxy_config,
+                config,
+                pid,
+                credential.clone(),
+            )?)
         } else {
             None
         };
@@ -498,6 +509,7 @@ impl AcpConnection {
         >::new()));
         let stderr_task = tokio::spawn({
             let stderr_tail = std::sync::Arc::clone(&stderr_tail);
+            let credential = credential.clone();
             async move {
                 let mut stderr = BufReader::new(stderr.compat());
                 let mut line = String::new();
@@ -505,7 +517,8 @@ impl AcpConnection {
                     if n == 0 {
                         break;
                     }
-                    let trimmed = line.trim();
+                    let safe = crate::token_launch::redact(line.trim(), credential.as_deref());
+                    let trimmed = safe.as_ref();
                     warn!("ACP agent stderr: {trimmed}");
                     if let Ok(mut tail) = stderr_tail.lock() {
                         if tail.len() >= STDERR_TAIL_LINES {
@@ -562,6 +575,10 @@ impl AcpConnection {
         let incoming_logger = wire_logger;
         let incoming_lines = Box::pin(BufReader::new(stdout.compat()).lines().map(
             move |line_result| {
+                let line_result = line_result.map(|line| match &credential {
+                    Some(key) => crate::token_launch::redact_error(line, key),
+                    None => line,
+                });
                 if let Ok(line) = &line_result
                     && let Some(logger) = &incoming_logger
                 {
@@ -623,7 +640,7 @@ impl AcpConnection {
             Some(crate::registry::AgentKind::Gemini) => {
                 Some(("gemini-api-key", &["GEMINI_API_KEY"][..]))
             }
-            Some(crate::registry::AgentKind::Codex) => {
+            Some(crate::registry::AgentKind::Codex) if config.token_provider.is_none() => {
                 Some(("api-key", &["CODEX_API_KEY", "OPENAI_API_KEY"][..]))
             }
             _ => None,

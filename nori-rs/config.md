@@ -35,6 +35,54 @@ For Antigravity and Grok Build, choose a model advertised in `/model`. Nori requ
 
 Claude Code, Codex, and custom agents with a configured injection channel can also accept model IDs at process startup. For these agents, `/model` offers a custom ID and any curated additional choices. If the agent rejects a custom choice over ACP, Nori can save it here and restart the session to apply it. A provider may still reject an unknown model at the first prompt.
 
+## Named API token providers
+
+To run built-in Codex against a Responses endpoint, define a connection in
+`$NORI_HOME/config.toml` and select it for the canonical agent slug:
+
+```toml
+[agent_token_providers]
+codex = "lab"
+
+[[token_providers]]
+name = "lab"
+preset = "custom"
+protocol = "openai-responses"
+base_url = "https://gateway.example.invalid/v1"
+env_key = "LAB_MODEL_KEY"
+model = "lab/model-a"
+```
+
+Replace the example endpoint and model with the values supplied by your gateway.
+Make the API key available as `LAB_MODEL_KEY` in the environment that starts
+Nori (for `nori host`, the host process). Save only its variable name in
+`env_key`. Give each connection a unique name. A base URL accepts HTTP(S)
+and excludes credentials, query parameters and fragments.
+
+Run `nori --agent codex`, `nori --agent codex exec "hello"`, or
+`nori host new --agent codex` with a locally configured host. A binding's
+`model` supplies the exact API model ID and takes precedence over
+`[default_models]` for that agent. A missing or blank key stops launch,
+including when native credentials are available. Remove the agent's binding
+to resume its usual model and authentication settings. ChatGPT subscriptions
+use Codex's native sign-in. Codex ACP can also generate a thread title using
+its own auxiliary model on the selected connection.
+
+**Protocol compatibility.** The resolver understands `openai-completions`,
+`openai-responses`, and `anthropic-messages`. A `custom` endpoint exposes
+exactly its declared protocol. `openrouter`, `fireworks`, and `subconscious`
+can select a compatible protocol on the same connection, keeping its endpoint,
+model and key reference. `cloudflare` accepts only `openai-completions`.
+Subconscious uses Completions for Pi and OpenCode, Responses for Codex, and
+Messages for Claude Code. Use the published gateway base URL for a named
+preset or the account-scoped Workers AI URL for Cloudflare.
+
+Built-in Codex is the available launch adapter for named connections.
+A binding on a custom command that shadows Codex fails before that command
+starts. The shared compatibility rules also cover `pi`, `opencode`, and
+`claude-code`; each requires its own adapter to launch. Broker-managed Sessions
+supply a separate launch specification.
+
 ## Custom agents: `[[agents]]`
 
 Each `[[agents]]` block defines an additional ACP agent (bring-your-own).
@@ -51,7 +99,7 @@ transcript_base_dir = ".my-agent"  # optional transcript dir, relative to home
 [agents.distribution.local]
 command = "/usr/bin/my-agent"
 args = ["acp"]
-env = { MY_AGENT_KEY = "value" }   # extra env for the spawned subprocess
+env = { MY_AGENT_REGION = "lab" }   # extra env for the spawned subprocess
 
 # Optional: how to force a chosen model on this agent at spawn.
 model_override = { env = "MY_AGENT_MODEL" }   # or { arg = "--model" }

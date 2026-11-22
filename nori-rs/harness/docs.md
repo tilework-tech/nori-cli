@@ -73,8 +73,8 @@ still apply, and the TUI observes remote-driven activity on its own stream.
 
 A frontend constructs `AgentPrepareSpec` with one resolved `Arc<NoriConfig>`,
 the CLI version, and optional product/conversation context. `prepare_agent`
-resolves the persisted default model and injects it through the agent's
-spawn-time channel before spawning the ACP subprocess. It then completes
+uses the bound API provider's model when present and otherwise resolves the
+agent's default model. It injects the result through the agent's spawn-time channel before spawning the ACP subprocess. It then completes
 `initialize`, reads the connection's capabilities, and normally calls
 `session/list` when advertised. When a version-1
 `_meta.nori.remoteControl.activeSessionId` marker is paired with `loadSession`,
@@ -108,7 +108,7 @@ A frontend that keeps a prepared connection behind a picker may call
 `refresh_prepared_agent(&mut agent, spec)` immediately before activation. This
 replaces session-time policy and context from the latest resolved config while
 preserving the initialized transport. The prepared agent identity, working
-directory, ACP proxy/wire-recording configuration, and default model are
+directory, ACP proxy/wire-recording configuration, named API binding, and default model are
 preparation-fixed inputs; if any changed, refresh fails and the caller must
 discard the connection and prepare again. This lets mutable settings change
 during a picker without silently applying them to the wrong process or

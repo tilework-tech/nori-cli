@@ -8,6 +8,7 @@ mod edits;
 mod git_root;
 mod loader;
 mod policy;
+pub mod token_providers;
 mod types;
 
 pub use config_types::EnvironmentVariablePattern;

@@ -354,6 +354,17 @@ pub struct NoriConfigToml {
     #[serde(default)]
     pub default_models: HashMap<String, String>,
 
+    #[serde(
+        default,
+        deserialize_with = "crate::token_providers::deserialize_entries"
+    )]
+    pub token_providers: Vec<crate::token_providers::TokenProvider>,
+    #[serde(
+        default,
+        deserialize_with = "crate::token_providers::deserialize_bindings"
+    )]
+    pub agent_token_providers: HashMap<String, String>,
+
     /// Custom agent definitions
     #[serde(default)]
     pub agents: Vec<AgentConfigToml>,
@@ -2424,6 +2435,12 @@ pub struct NoriConfig {
     /// Default model overrides per agent (e.g., "claude-code" -> "haiku")
     pub default_models: HashMap<String, String>,
 
+    /// Named API connections available to a provider picker.
+    pub token_providers: Vec<crate::token_providers::TokenProvider>,
+
+    /// Validated API routes by canonical agent slug. Credentials are resolved at spawn.
+    pub agent_token_providers: HashMap<String, crate::token_providers::TokenProvider>,
+
     /// Agent keys explicitly set with `-c default_models.<agent>`, latest first.
     pub default_model_override_keys: Vec<String>,
 
@@ -2500,6 +2517,8 @@ impl Default for NoriConfig {
             async_pre_agent_response_hooks: Vec::new(),
             async_post_agent_response_hooks: Vec::new(),
             default_models: HashMap::new(),
+            agent_token_providers: HashMap::new(),
+            token_providers: Vec::new(),
             default_model_override_keys: Vec::new(),
             agents: Vec::new(),
             cloud_broker_url: None,
