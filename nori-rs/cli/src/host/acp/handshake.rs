@@ -9,10 +9,10 @@ const PROTOCOL_VERSION: i64 = 1;
 /// The `nori host` contract major version.
 pub(in crate::host) const CONTRACT: i64 = 1;
 
-/// Add the standard ACP fields and `_meta["nori.dev/host"]` to an
-/// `initialize` result that already carries the managed-session keys, which
-/// stay for one transition release.
-pub(in crate::host) fn initialize(result: &mut Value, instance: &str, max_sessions: i32) {
+/// Add the standard ACP fields to an `initialize` result that already
+/// carries the managed-session keys, which the attach terminal still reads.
+/// The contract version is in `host.json`, not in the handshake.
+pub(in crate::host) fn initialize(result: &mut Value) {
     // ACP v1 negotiation: a host that supports only version 1 answers 1,
     // and a client that cannot speak it disconnects.
     result["protocolVersion"] = json!(PROTOCOL_VERSION);
@@ -24,14 +24,6 @@ pub(in crate::host) fn initialize(result: &mut Value, instance: &str, max_sessio
         "promptCapabilities": {"image": false, "audio": false, "embeddedContext": false},
         "mcpCapabilities": {"http": false, "sse": false},
         "sessionCapabilities": {"list": {}, "resume": {}, "close": {}, "delete": {}},
-        "_meta": {"nori.dev/host": nori_protocol::HostCapabilities {
-            contract: CONTRACT,
-            instance_id: instance.to_owned(),
-            extensions: ["subscribe", "control", "host", "delegation"]
-                .map(str::to_owned)
-                .to_vec(),
-            max_sessions: i64::from(max_sessions),
-        }},
     });
     result["authMethods"] = json!([]);
 }

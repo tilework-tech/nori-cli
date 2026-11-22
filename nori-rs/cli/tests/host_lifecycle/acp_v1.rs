@@ -92,7 +92,6 @@ fn listed<'a>(listing: &'a Value, id: &str) -> Option<&'a Value> {
 async fn initialize_negotiates_version_one_and_advertises_the_host_contract() {
     let host = host_with("", &[]);
     let mut client = connect(&host);
-    let instance = client.host_instance().unwrap().to_string();
 
     let result = client
         .request(
@@ -113,16 +112,10 @@ async fn initialize_negotiates_version_one_and_advertises_the_host_contract() {
             "{capability} is advertised: {capabilities}"
         );
     }
-    let nori = &capabilities["_meta"]["nori.dev/host"];
-    assert_eq!(nori["contract"], 1);
-    assert_eq!(nori["instanceId"], instance);
     assert_eq!(
-        nori["extensions"],
-        json!(["subscribe", "control", "host", "delegation"])
-    );
-    assert!(
-        nori["maxSessions"].as_i64().is_some_and(|max| max > 0),
-        "{nori}"
+        capabilities.get("_meta"),
+        None,
+        "the handshake carries no Nori _meta: {capabilities}"
     );
     assert_eq!(result["authMethods"], json!([]));
     assert_eq!(
@@ -166,14 +159,11 @@ async fn a_new_session_runs_a_turn_in_its_folder() {
         .call("session/list", json!({"cwd": canonical(folder.path())}))
         .await
         .unwrap();
-    assert_eq!(
-        listed(&listing, &id).unwrap()["_meta"]["nori.dev/session"]["state"],
-        "live"
-    );
+    assert!(listed(&listing, &id).is_some(), "{listing}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_new_session_starts_the_preselected_agent_with_the_clients_mcp_servers() {
+async fn the_clients_mcp_servers_reach_the_agent_it_switches_to() {
     let folder = TempDir::new().unwrap();
     let log = folder.path().join("mcp.log");
     // Only the second agent logs, so the log proves which agent started.
@@ -197,13 +187,20 @@ async fn a_new_session_starts_the_preselected_agent_with_the_clients_mcp_servers
             json!({
                 "cwd": canonical(folder.path()),
                 "mcpServers": [{"name": "probe", "command": "/bin/true", "args": [], "env": []}],
-                "_meta": {"nori.dev/session": {"agent": "second-mock"}},
             }),
         )
         .await
         .unwrap();
+    let id = created["sessionId"].as_str().unwrap().to_owned();
+    let switched = acp
+        .call(
+            "session/set_config_option",
+            json!({"sessionId": id, "configId": "agent", "value": "second-mock"}),
+        )
+        .await
+        .unwrap();
 
-    let agent = created["configOptions"]
+    let agent = switched["configOptions"]
         .as_array()
         .unwrap()
         .iter()
@@ -399,11 +396,6 @@ async fn watchers_cannot_prompt_close_or_delete() {
         let refused = watching.call(method, params).await.unwrap_err();
         assert_eq!(refused.code, -32016, "{method}: {refused:?}");
     }
-    let listing = acp.call("session/list", json!({})).await.unwrap();
-    assert_eq!(
-        listed(&listing, &id).unwrap()["_meta"]["nori.dev/session"]["state"],
-        "live"
-    );
     let frames = acp.collect_for(Duration::from_millis(300)).await;
     assert!(!mentions(&frames, &id, "\"hi\""), "{frames:?}");
 }
@@ -426,11 +418,7 @@ async fn a_closed_session_stays_listed_and_loads_again() {
         .await
         .unwrap();
     let listing = acp.call("session/list", json!({})).await.unwrap();
-    assert_eq!(
-        listed(&listing, &id).unwrap()["_meta"]["nori.dev/session"]["state"],
-        "stored",
-        "{listing}"
-    );
+    assert!(listed(&listing, &id).is_some(), "{listing}");
     acp.inbox.clear();
     acp.call(
         "session/load",

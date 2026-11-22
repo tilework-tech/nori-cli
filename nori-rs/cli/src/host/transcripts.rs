@@ -81,12 +81,6 @@ pub(super) async fn stored_row(stored: &StoredSession) -> Option<Value> {
         "cwd": metadata.cwd,
         "title": title,
         "updatedAt": updated_at,
-        "_meta": {"nori.dev/session": nori_protocol::ListedSession {
-            agent: metadata.agent,
-            state: nori_protocol::SessionState::Stored,
-            status: None,
-            controller: false,
-        }},
     }))
 }
 

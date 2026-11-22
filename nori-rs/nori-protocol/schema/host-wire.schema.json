@@ -2152,39 +2152,6 @@
       ],
       "type": "string"
     },
-    "HostCapabilities": {
-      "description": "`agentCapabilities._meta[\"nori.dev/host\"]` in the `initialize` result.",
-      "properties": {
-        "contract": {
-          "description": "Major version of the host contract. A client treats a different\nmajor as incompatible.",
-          "format": "int64",
-          "type": "integer"
-        },
-        "extensions": {
-          "description": "The `_nori/*` families this host serves.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "instanceId": {
-          "description": "This host process's ID; also the `x-nori-host-instance` header.",
-          "type": "string"
-        },
-        "maxSessions": {
-          "description": "How many sessions may run at once.",
-          "format": "int64",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "contract",
-        "instanceId",
-        "extensions",
-        "maxSessions"
-      ],
-      "type": "object"
-    },
     "HostContractVersions": {
       "properties": {
         "acp": {
@@ -2580,20 +2547,6 @@
       "x-method": "providers/list",
       "x-side": "agent"
     },
-    "ListSessionsOptions": {
-      "description": "`_meta` a client may put on `session/list`.",
-      "properties": {
-        "nori.dev/pageSize": {
-          "description": "Rows per page, 1 to 200; 50 when absent.",
-          "format": "int64",
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "type": "object"
-    },
     "ListSessionsRequest": {
       "description": "Request parameters for listing existing sessions.\n\nOnly available if the Agent supports the `sessionCapabilities.list` capability.",
       "properties": {
@@ -2658,41 +2611,6 @@
       "type": "object",
       "x-method": "session/list",
       "x-side": "agent"
-    },
-    "ListedSession": {
-      "description": "`_meta[\"nori.dev/session\"]` on a `session/list` row.",
-      "properties": {
-        "agent": {
-          "description": "The agent slug, when known.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "controller": {
-          "description": "Whether a controlling client is connected to the host.",
-          "type": "boolean"
-        },
-        "state": {
-          "$ref": "#/$defs/SessionState"
-        },
-        "status": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SessionStatus"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "The manager status of a session this host ran; `null` otherwise."
-        }
-      },
-      "required": [
-        "state",
-        "controller"
-      ],
-      "type": "object"
     },
     "LlmProtocol": {
       "anyOf": [
@@ -3916,19 +3834,6 @@
           "minimum": 0,
           "type": [
             "integer",
-            "null"
-          ]
-        }
-      },
-      "type": "object"
-    },
-    "NewSessionOptions": {
-      "description": "`_meta[\"nori.dev/session\"]` a client may put on `session/new`.",
-      "properties": {
-        "agent": {
-          "description": "Start this agent instead of the folder's default, so the right\nadapter starts first.",
-          "type": [
-            "string",
             "null"
           ]
         }
@@ -6474,61 +6379,6 @@
       ],
       "type": "object"
     },
-    "SessionState": {
-      "description": "Whether a listed session runs on the host.",
-      "oneOf": [
-        {
-          "const": "live",
-          "description": "The host is running it.",
-          "type": "string"
-        },
-        {
-          "const": "stored",
-          "description": "It has a transcript and does not run; loading or resuming restarts it.",
-          "type": "string"
-        }
-      ]
-    },
-    "SessionStatus": {
-      "description": "Coarse status of a managed session, small enough to show in a list row.",
-      "oneOf": [
-        {
-          "const": "starting",
-          "description": "The agent process is being prepared or the session is being created.",
-          "type": "string"
-        },
-        {
-          "const": "working",
-          "description": "A turn, load, or cancellation is in progress.",
-          "type": "string"
-        },
-        {
-          "const": "waiting_on_you",
-          "description": "The agent is waiting on the user, for example for a permission choice.",
-          "type": "string"
-        },
-        {
-          "const": "ready",
-          "description": "The session is idle and accepts a prompt.",
-          "type": "string"
-        },
-        {
-          "const": "failed",
-          "description": "The session ended without being asked to, for example because its\nagent process died. It can be resumed from its transcript.",
-          "type": "string"
-        },
-        {
-          "const": "closed",
-          "description": "The session was shut down, closed, or superseded by a fork.",
-          "type": "string"
-        },
-        {
-          "const": "done",
-          "description": "A delegated child that finished its task; its history stays readable.",
-          "type": "string"
-        }
-      ]
-    },
     "SessionUpdate": {
       "description": "Different types of updates that can be sent during session processing.\n\nThese updates provide real-time feedback about the agent's progress.\n\nSee protocol docs: [Agent Reports Output](https://agentclientprotocol.com/protocol/prompt-turn#3-agent-reports-output)",
       "discriminator": {
@@ -8039,19 +7889,7 @@
       "$ref": "#/$defs/RequestPermissionResponse"
     },
     {
-      "$ref": "#/$defs/HostCapabilities"
-    },
-    {
       "$ref": "#/$defs/HostDiscovery"
-    },
-    {
-      "$ref": "#/$defs/ListedSession"
-    },
-    {
-      "$ref": "#/$defs/NewSessionOptions"
-    },
-    {
-      "$ref": "#/$defs/ListSessionsOptions"
     },
     {
       "$ref": "#/$defs/ControlStatus"
@@ -8081,6 +7919,6 @@
       "$ref": "#/$defs/Delegation"
     }
   ],
-  "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves and Nori's `_meta` objects and `_nori/*` extension. Generated from nori-protocol; do not edit.",
+  "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
   "title": "NoriHostWire"
 }

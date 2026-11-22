@@ -1,7 +1,7 @@
 //! Nori's additions to standard ACP v1 on `nori host`'s `/sessions`: the
-//! `_meta` objects the host and its clients exchange, the host's discovery
-//! file, and the `_nori/*` extension methods, plus [`host_wire_schema`],
-//! which publishes them with the ACP v1 types the host uses.
+//! host's discovery file and the `_nori/*` extension methods, plus
+//! [`host_wire_schema`], which publishes them with the ACP v1 types the host
+//! uses. The host adds no Nori `_meta` keys to ACP messages.
 
 use std::collections::BTreeMap;
 
@@ -15,23 +15,7 @@ use serde_json::json;
 
 use crate::Delegation;
 use crate::SessionEnvelope;
-use crate::SessionStatus;
 use crate::acp::v1 as acp;
-
-/// `agentCapabilities._meta["nori.dev/host"]` in the `initialize` result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct HostCapabilities {
-    /// Major version of the host contract. A client treats a different
-    /// major as incompatible.
-    pub contract: i64,
-    /// This host process's ID; also the `x-nori-host-instance` header.
-    pub instance_id: String,
-    /// The `_nori/*` families this host serves.
-    pub extensions: Vec<String>,
-    /// How many sessions may run at once.
-    pub max_sessions: i64,
-}
 
 /// `$NORI_HOME/host/host.json`, the host's discovery file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -54,44 +38,6 @@ pub struct HostDiscovery {
 pub struct HostContractVersions {
     pub acp: i64,
     pub nori: i64,
-}
-
-/// Whether a listed session runs on the host.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum SessionState {
-    /// The host is running it.
-    Live,
-    /// It has a transcript and does not run; loading or resuming restarts it.
-    Stored,
-}
-
-/// `_meta["nori.dev/session"]` on a `session/list` row.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct ListedSession {
-    /// The agent slug, when known.
-    pub agent: Option<String>,
-    pub state: SessionState,
-    /// The manager status of a session this host ran; `null` otherwise.
-    pub status: Option<SessionStatus>,
-    /// Whether a controlling client is connected to the host.
-    pub controller: bool,
-}
-
-/// `_meta["nori.dev/session"]` a client may put on `session/new`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct NewSessionOptions {
-    /// Start this agent instead of the folder's default, so the right
-    /// adapter starts first.
-    pub agent: Option<String>,
-}
-
-/// `_meta` a client may put on `session/list`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct ListSessionsOptions {
-    /// Rows per page, 1 to 200; 50 when absent.
-    #[serde(rename = "nori.dev/pageSize")]
-    pub page_size: Option<i64>,
 }
 
 /// A connection's role on the host.
@@ -189,12 +135,8 @@ pub fn host_wire_schema() -> Value {
         generator.subschema_for::<acp::SessionNotification>(),
         generator.subschema_for::<acp::RequestPermissionRequest>(),
         generator.subschema_for::<acp::RequestPermissionResponse>(),
-        // Nori's `_meta` objects and discovery file.
-        generator.subschema_for::<HostCapabilities>(),
+        // Nori's discovery file.
         generator.subschema_for::<HostDiscovery>(),
-        generator.subschema_for::<ListedSession>(),
-        generator.subschema_for::<NewSessionOptions>(),
-        generator.subschema_for::<ListSessionsOptions>(),
         // The `_nori/*` extension.
         generator.subschema_for::<ControlStatus>(),
         generator.subschema_for::<ControlChanged>(),
@@ -210,7 +152,7 @@ pub fn host_wire_schema() -> Value {
     sorted(json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "NoriHostWire",
-        "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves and Nori's `_meta` objects and `_nori/*` extension. Generated from nori-protocol; do not edit.",
+        "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
         "anyOf": roots,
         "$defs": definitions,
     }))

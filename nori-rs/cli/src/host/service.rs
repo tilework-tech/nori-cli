@@ -320,7 +320,7 @@ impl ManagedAgent for HostService {
                 sessions["follow_up"] = json!(1);
             }
             if initialize && let Some(result) = reply.response.get_mut("result") {
-                super::acp::handshake::initialize(result, &self.instance, self.config.max_sessions);
+                super::acp::handshake::initialize(result);
             }
             return reply;
         }

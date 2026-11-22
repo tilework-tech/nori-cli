@@ -722,15 +722,13 @@ unchanged and stays as legacy until durable sessions get their own design.
   `sessionCapabilities` with `list`, `resume`, `close` and `delete`, and the
   ACP baseline for prompts and MCP servers (no image, audio, embedded context,
   HTTP or SSE promises, because those depend on each session's adapter);
-- `agentCapabilities._meta["nori.dev/host"]` =
-  `{contract: 1, instanceId, extensions: ["subscribe", "control", "host", "delegation"], maxSessions}`.
-  `instanceId` equals the `x-nori-host-instance` upgrade header;
-- `authMethods: []` (see deferred items below).
+- `authMethods: []` (see deferred items below);
+- no Nori `_meta` key. The contract version is in `host.json`; a client
+  without it derives the version from `agentInfo.version`.
 
-The managed-session keys (`capabilities.nori_sessions`, `server_info`,
-`control`) stay in the same result for one transition release.
-`_meta["nori.dev/host"].observe = true` in the params works like
-`observe: true`.
+The existing keys (`capabilities.nori_sessions`, `server_info`, `control`)
+stay in the same result because `nori attach` reads them. `params.observe =
+true` keeps a client from taking control, as before.
 
 After binding, the host writes `$NORI_HOME/host/host.json` (mode `0600`,
 written to a temporary file and renamed) beside the existing `state.json`
@@ -743,7 +741,7 @@ do not write it.
 
 | Method | Who may call | Behavior |
 | --- | --- | --- |
-| `session/new` | Any initialized client | `cwd` must be an absolute, existing folder (`-32602` otherwise). The folder's configuration applies. `mcpServers` (stdio and HTTP) are added to the session's MCP servers; SSE fails with `-32602`. `_meta["nori.dev/session"].agent` starts that agent instead of the folder's default (an unknown agent fails with `-32602`). `[host] default_mode` (`ask`, `agent`, `approve-all`), when set, replaces the folder's approval policy. The response waits until the agent has started and carries `sessionId`, `configOptions` and `modes`; the connection is attached. Capacity fails with `-32017`. An agent that refuses to start fails with its own ACP error, so an adapter needing sign-in returns `-32000` `Authentication required`; the session is then left out of `session/list`. |
+| `session/new` | Any initialized client | `cwd` must be an absolute, existing folder (`-32602` otherwise). The folder's configuration applies. `mcpServers` (stdio and HTTP) are added to the session's MCP servers, and are kept when the client later changes the agent or the session restarts; SSE fails with `-32602`. The session starts on the folder's default agent; clients pick another with the `agent` config option (preselecting one is open in the contract, C13). `[host] default_mode` (`ask`, `agent`, `approve-all`), when set, replaces the folder's approval policy. The response waits until the agent has started and carries `sessionId`, `configOptions` and `modes`; the connection is attached. Capacity fails with `-32017`. An agent that refuses to start fails with its own ACP error, so an adapter needing sign-in returns `-32000` `Authentication required`; the session is then left out of `session/list`. |
 | `session/prompt` | Controller | Runs one turn and answers with the agent's `PromptResponse` (`stopReason`). The connection receives the turn's updates before the response. A prompt while a turn runs fails with `-32015`; it is never queued. A connection that is not attached to the session is attached (as by `session/resume`) first. |
 | `session/cancel` | Controller (notification) | Cancels the session's turn; the prompt answers with `stopReason: "cancelled"`. Ignored from watchers. |
 | `session/close` | Controller | Stops the session's agent and frees its slot. It stays in `session/list` as `stored` (status `closed`), and `session/load` or `session/resume` restarts it under its ID. |
@@ -771,9 +769,7 @@ sign-in, not `ACP agent did not accept the prompt`.
 ### Schema and TypeScript types
 
 `nori-rs/nori-protocol/schema/host-wire.schema.json` (JSON Schema 2020-12)
-covers the ACP v1 messages above, Nori's `_meta` objects (`nori.dev/host`,
-`nori.dev/session` on list rows and `session/new`, `nori.dev/pageSize`), the
-`host.json` file, and the `_nori/*` extension (control, subscribe with its
+covers the ACP v1 messages above, the `host.json` file, and the `_nori/*` extension (control, subscribe with its
 `SessionEnvelope`, host stop, delegation). `nori-protocol/typescript/host-wire.ts`
 is generated from it by a pinned `json-schema-to-typescript`. Regenerate both
 with `scripts/generate-host-wire-types.sh`; `cargo test -p nori-cli --test

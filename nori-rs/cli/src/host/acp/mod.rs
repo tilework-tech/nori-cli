@@ -222,14 +222,6 @@ impl AcpFace {
         }
     }
 
-    /// Whether any connection currently holds the controller role.
-    fn controller_connected(&self) -> bool {
-        self.lock()
-            .connections
-            .values()
-            .any(|connection| connection.handle.is_controller())
-    }
-
     /// Record a permission request sent to `client`, returning the JSON-RPC
     /// ID to send it under.
     fn register_ask(

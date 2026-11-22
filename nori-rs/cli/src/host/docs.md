@@ -130,14 +130,14 @@ host ls / stop / new --------------+                   SessionManager
   [The handshake](acp/handshake.rs) adds `protocolVersion: 1`, `agentInfo`,
   ACP `agentCapabilities` (load, list, resume, close, delete; only the
   baseline prompt and MCP capabilities, because the rest depend on each
-  session's adapter) with `_meta["nori.dev/host"]`, and empty `authMethods`
-  to the `initialize` reply, which still carries the managed-session keys for
-  a transition release. The host picks its instance ID at startup and
-  announces the same value on upgrades, in `initialize`, and in `host.json`.
+  session's adapter) and empty `authMethods` to the `initialize` reply, with
+  no Nori `_meta`; the reply still carries the managed-session keys `nori
+  attach` reads. The host picks its instance ID at startup and announces the
+  same value on upgrades and in `host.json`.
 - [Session lifecycle](acp/session.rs): `session/new` loads the configuration
   of the requested folder as `_nori/session/new` does, adds the client's
-  stdio and HTTP `mcpServers`, applies an agent named in
-  `_meta["nori.dev/session"]` and `[host] default_mode` when set, then
+  stdio and HTTP `mcpServers` (remembered in the session settings so an agent
+  change or restart keeps them), applies `[host] default_mode` when set, then
   attaches the connection from the session's first event and answers once
   the agent has started. A session whose agent never starts is hidden (marked
   deleted) and the agent's own error code is returned, carried up from
@@ -156,17 +156,16 @@ host ls / stop / new --------------+                   SessionManager
   forwarder tracks open `session/request_permission` requests per session,
   sends them under host-chosen JSON-RPC IDs, and re-asks what is still open
   when the connection attaches later or its role watch turns to controller.
-  An answer is routed through the managed respond path, so the first answer
-  from any client, including `_nori/session/respond`, wins; an error answer
-  counts as `cancelled`.
+  Only the current controller's answer is used, routed through the managed
+  respond path, so the first answer (including `_nori/session/respond`) wins;
+  an error answer counts as `cancelled`.
 - [Listing](acp/list.rs) merges manager records with
   [stored sessions](transcripts.rs) (transcripts the host is not running,
   read through `TranscriptLoader::list_stored_sessions`); its cursor is
   `live:<index>` or a keyset over file modification time and ID, so new
-  transcripts do not shift later pages. A manager record that is closed,
-  failed or done is listed with state `stored`, because loading it restarts
-  it; rows use the `nori_protocol` host types (`ListedSession`). Deleted IDs
-  are skipped. [Attaching](acp/attach.rs) forwards
+  transcripts do not shift later pages. Rows are plain ACP `SessionInfo`;
+  loading a closed, failed or done record restarts it. Deleted IDs are
+  skipped. [Attaching](acp/attach.rs) forwards
   one connection's attached sessions' journal events as `session/update`
   notifications under the conversation ID. Stored sessions restart through
   `SessionManager::resume_stored`; closed live records are first made
