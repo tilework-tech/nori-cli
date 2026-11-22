@@ -165,8 +165,8 @@ host ls / stop / new --------------+                   SessionManager
   read through `TranscriptLoader::list_stored_sessions`); its cursor is
   `live:<index>` or a keyset over file modification time and ID, so new
   transcripts do not shift later pages. Rows are ACP `SessionInfo` with
-  `_meta` `nori.dev/agent` and `nori.dev/live` (`nori_protocol::ListedSessionMeta`);
-  a closed, failed or done record is not live, and loading it restarts it. Deleted IDs are
+  `_meta` `nori.dev/agent` (`nori_protocol::ListedSessionMeta`); loading a
+  closed, failed or done record restarts it. Deleted IDs are
   skipped. [Attaching](acp/attach.rs) forwards
   one connection's attached sessions' journal events as `session/update`
   notifications under the conversation ID. Stored sessions restart through

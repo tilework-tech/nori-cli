@@ -98,7 +98,6 @@ impl HostService {
                     "updatedAt": updated.map(rfc3339),
                     "_meta": nori_protocol::ListedSessionMeta {
                         agent: Some(record.agent.clone()),
-                        live: !super::attach::needs_restart(record.status),
                     },
                 }));
             }

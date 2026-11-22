@@ -2613,7 +2613,7 @@
       "x-side": "agent"
     },
     "ListedSessionMeta": {
-      "description": "`_meta` on a `session/list` row: the host's two approved keys.",
+      "description": "`_meta` on a `session/list` row.",
       "properties": {
         "nori.dev/agent": {
           "description": "The slug of the agent the session runs, when known.",
@@ -2621,15 +2621,8 @@
             "string",
             "null"
           ]
-        },
-        "nori.dev/live": {
-          "description": "Whether the session runs on the host now. A session that is not live\nrestarts when loaded or resumed.",
-          "type": "boolean"
         }
       },
-      "required": [
-        "nori.dev/live"
-      ],
       "type": "object"
     },
     "LlmProtocol": {
@@ -7958,6 +7951,6 @@
       "$ref": "#/$defs/Delegation"
     }
   ],
-  "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori.dev/agent` and `nori.dev/live` _meta keys, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
+  "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori.dev/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
   "title": "NoriHostWire"
 }
