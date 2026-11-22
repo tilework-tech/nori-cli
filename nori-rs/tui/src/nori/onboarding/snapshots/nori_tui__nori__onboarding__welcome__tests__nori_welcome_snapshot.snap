@@ -13,7 +13,8 @@ expression: output
   Welcome to Nori, your AI coding assistant
 
   Choose your provider with /agent:
-  Claude Code, Codex, Antigravity, Grok Build, or OpenCode.
+  Claude Code, Codex, Antigravity, Grok Build, OpenCode, or
+Cursor Agent.
 
 
   Press Enter to continue

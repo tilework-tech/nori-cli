@@ -52,6 +52,7 @@ impl LoginHandler {
                     Some(AgentKind::ClaudeCode) => "Run claude in another terminal and use /login, or set ANTHROPIC_API_KEY.".to_owned(),
                     Some(AgentKind::OpenCode) => config.auth_hint,
                     Some(AgentKind::Codex) => return AgentLoginSupport::OAuthBrowser,
+                    Some(AgentKind::Cursor) => config.auth_hint,
                     None if !config.auth_hint.is_empty() => config.auth_hint,
                     None => format!("Use the authentication method for {}.", config.display_name),
                 };

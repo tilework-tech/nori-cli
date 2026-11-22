@@ -22,10 +22,10 @@ Path: @/nori-rs/exec
 
 ### Core Implementation
 
-- `run_plaintext` passes `AgentPrepareSpec` and the already-chosen
-  `SessionStart::New` to `prepare_and_launch_session`, submits one text prompt,
-  collects text chunks until the correlated prompt response, and shuts down the
-  session. When supplied, its reporter emits `nori_agent_session_started` with
+- [`run_plaintext`](src/lib.rs) prepares the agent, activates a new session and
+  submits one prompt. If startup fails before the harness accepts the prompt,
+  the CLI reports the startup diagnostic on stderr. On success it collects text
+  chunks until the matching prompt response and shuts down the session. When supplied, its reporter emits `nori_agent_session_started` with
   `session_mode = exec` after that prompt receives a downstream wire request ID,
   then performs a bounded final flush without changing the plaintext outcome.
 - Unattended permission requests are rejected immediately using a schema-provided reject option, with cancellation as the safe fallback.
@@ -74,17 +74,15 @@ Path: @/nori-rs/exec
 - Analytics is optional at this crate boundary. The binary selects the mode and
   constructs the reporter; embedders that pass `None` retain identical session
   behavior without capture.
-- Plaintext and flag-off ACP choose `SessionStart::New` before activation and use
-  `prepare_and_launch_session`; managed ACP uses the manager's equivalent
-  preparation and launch path. Preparation and activation retain one
-  downstream subprocess even though the API keeps those lifecycle phases
-  distinct.
+- Plaintext awaits `prepare_agent` before activating the connection with
+  `launch_session`. The flag-off ACP facade uses `prepare_and_launch_session`,
+  and managed ACP uses the manager’s preparation and launch path. Each path
+  retains the same downstream subprocess across preparation and activation.
 - The combined harness path returns its handle immediately and keeps
   preparation inside the runtime's connect lifecycle: commands queue until the
   backend is ready, shutdown can win the race, the runtime emits a warning
   event after eight seconds, and an unresponsive connection is aborted after
   another thirty.
-  `nori-exec` must not await `prepare_agent` outside that bounded lifecycle.
 - Caller-provided MCP servers and additional directories are rejected in the first version because Nori cannot merge those inputs into an already resolved client configuration safely.
 - Standard ACP methods are a facade projection. Managed subscribers explicitly
   opt into the complete manager stream rather than receiving only that

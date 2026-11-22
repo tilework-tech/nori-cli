@@ -223,6 +223,66 @@ fn exec_reports_agent_prompt_failures_on_stderr() -> Result<(), Box<dyn std::err
     Ok(())
 }
 
+#[cfg(unix)]
+mod cursor_startup {
+    use super::*;
+
+    fn exec(home: &TempDir) -> StdCommand {
+        let mut cmd = StdCommand::new(assert_cmd::cargo::cargo_bin("nori"));
+        cmd.env_clear()
+            .env("HOME", home.path())
+            .env("NORI_HOME", home.path())
+            .env("PATH", home.path())
+            .current_dir(home.path())
+            .args(["exec", "--agent", "cursor", "Describe the sample."]);
+        cmd
+    }
+
+    #[test]
+    fn missing_cursor_executable_explains_installation() {
+        let home = TempDir::new().unwrap();
+        let output = exec(&home).output().unwrap();
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(!output.status.success() && output.stdout.is_empty());
+        assert!(
+            stderr.contains("https://cursor.com/docs/cli/installation"),
+            "{stderr}"
+        );
+        assert!(stderr.contains("PATH"), "{stderr}");
+        assert!(!stderr.contains("install it with: install"), "{stderr}");
+    }
+
+    #[test]
+    fn session_creation_auth_failure_uses_the_selected_agents_hint() {
+        let custom = r#"[[agents]]
+name = "Example"
+slug = "cursor"
+auth_hint = "Use the example sign-in command."
+[agents.distribution.local]
+command = "cursor-agent"
+"#;
+        for (config, hints) in [
+            ("", &["agent login", "CURSOR_API_KEY"][..]),
+            (custom, &["Use the example sign-in command."][..]),
+        ] {
+            let home = TempDir::new().unwrap();
+            std::fs::write(home.path().join("config.toml"), config).unwrap();
+            std::os::unix::fs::symlink(
+                std::fs::canonicalize(mock_agent_bin().unwrap()).unwrap(),
+                home.path().join("cursor-agent"),
+            )
+            .unwrap();
+            let output = exec(&home)
+                .env("MOCK_AGENT_NEW_SESSION_REQUIRE_AUTH", "1")
+                .output()
+                .unwrap();
+            let stderr = String::from_utf8(output.stderr).unwrap();
+            assert!(!output.status.success() && output.stdout.is_empty());
+            assert!(hints.iter().all(|hint| stderr.contains(hint)), "{stderr}");
+        }
+    }
+}
+
 struct AcpProcess {
     child: Child,
     stdin: ChildStdin,

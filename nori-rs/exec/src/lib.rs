@@ -29,6 +29,7 @@ use nori_harness::runtime::prepare_and_launch_session;
 use nori_installed::AnalyticsReporter;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
+use nori_protocol::SessionEndReason;
 use nori_protocol::SessionEvent;
 use nori_protocol::acp::v1 as acp;
 use tokio::sync::Mutex;
@@ -65,10 +66,31 @@ pub async fn run_plaintext(
     if let Some(reporter) = analytics.as_ref() {
         launched.handle = reporter.attach(launched.handle);
     }
-    let request_id = launched
+    let request_id = match launched
         .handle
         .prompt(vec![acp::ContentBlock::Text(acp::TextContent::new(prompt))])
-        .await?;
+        .await
+    {
+        Ok(id) => id,
+        Err(error) => {
+            // A failed launch drops queued prompts after publishing its startup diagnostic.
+            while let Some(event) = launched.events.recv().await {
+                match event {
+                    SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
+                        if ended.reason == SessionEndReason::SpawnFailed
+                            && let Some(message) = ended.message
+                        {
+                            anyhow::bail!(message);
+                        }
+                        break;
+                    }
+                    SessionEvent::Nori(NoriEvent::SessionStarted(_)) => break,
+                    _ => {}
+                }
+            }
+            return Err(error);
+        }
+    };
     let result = collect_prompt(
         &launched.handle,
         &mut launched.events,

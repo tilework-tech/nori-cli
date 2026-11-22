@@ -1873,6 +1873,9 @@ fn mock_agent() -> impl ConnectTo<Client> {
                             "Mock model-specific new_session failure for testing",
                         ));
                     }
+                    if std::env::var_os("MOCK_AGENT_NEW_SESSION_REQUIRE_AUTH").is_some() {
+                        return responder.respond_with_error(acp::Error::auth_required());
+                    }
                     if std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_JSON").is_ok() {
                         eprintln!("Mock agent: simulating structured new_session failure");
                         return responder.respond_with_error(
