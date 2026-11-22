@@ -762,7 +762,7 @@
  {
   "check": "stdio-alpha-plain: one server process observed",
   "pass": true,
-  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-plain/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.worktrees/ve"
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-plain/launch.json'], ['python3', '<path>"
  },
  {
   "check": "stdio-alpha-plain: server argv is literal registration",
@@ -822,7 +822,7 @@
  {
   "check": "stdio-alpha-env: one server process observed",
   "pass": true,
-  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-env/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.worktrees/veri"
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-env/launch.json'], ['python3', '<path>"
  },
  {
   "check": "stdio-alpha-env: server argv is literal registration",
@@ -897,7 +897,7 @@
  {
   "check": "stdio-alpha-wrapped: one server process observed",
   "pass": true,
-  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.worktrees/"
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped/launch.json'], ['python3', '<path>"
  },
  {
   "check": "stdio-alpha-wrapped: server argv is literal registration",
@@ -977,7 +977,7 @@
  {
   "check": "stdio-beta-plain: one server process observed",
   "pass": true,
-  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-beta-plain/launch.json'], ['/home/sprite/org/workspace/cli/.worktrees/verify-launch-"
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-beta-plain/launch.json'], ['<path>"
  },
  {
   "check": "stdio-beta-plain: server argv is literal registration",
@@ -1037,7 +1037,7 @@
  {
   "check": "stdio-beta-env: one server process observed",
   "pass": true,
-  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-beta-env/launch.json'], ['/home/sprite/org/workspace/cli/.worktrees/verify-launch-d3"
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-beta-env/launch.json'], ['<path>"
  },
  {
   "check": "stdio-beta-env: server argv is literal registration",
@@ -1112,7 +1112,7 @@
  {
   "check": "stdio-beta-wrapped: one server process observed",
   "pass": true,
-  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-beta-wrapped/launch.json'], ['/home/sprite/org/workspace/cli/.worktrees/verify-launc"
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-beta-wrapped/launch.json'], ['<path>"
  },
  {
   "check": "stdio-beta-wrapped: server argv is literal registration",
@@ -1192,7 +1192,7 @@
  {
   "check": "stdio-alpha-wrapped-digest: one server process observed",
   "pass": true,
-  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.wor"
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '<path>"
  },
  {
   "check": "stdio-alpha-wrapped-digest: server argv is literal registration",
@@ -1272,7 +1272,7 @@
  {
   "check": "stdio-alpha-wrapped-digest: one server process observed",
   "pass": true,
-  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.wor"
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '<path>"
  },
  {
   "check": "stdio-alpha-wrapped-digest: server argv is literal registration",
@@ -1352,7 +1352,7 @@
  {
   "check": "stdio-alpha-wrapped-digest: one server process observed",
   "pass": true,
-  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.wor"
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '<path>"
  },
  {
   "check": "stdio-alpha-wrapped-digest: server argv is literal registration",
@@ -1432,7 +1432,7 @@
  {
   "check": "stdio-alpha-wrapped-digest: one server process observed",
   "pass": true,
-  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '/home/sprite/org/workspace/cli/.wor"
+  "detail": "[['<checkout>/nori-rs/target/debug/nori', '-c', 'features.multi_session=true', 'host', '--stdio', '--inherit-env', '--launch', '<tmp>/stdio-alpha-wrapped-digest/launch.json'], ['python3', '<path>"
  },
  {
   "check": "stdio-alpha-wrapped-digest: server argv is literal registration",
