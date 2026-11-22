@@ -4,7 +4,7 @@ on:
     branches: ['verify/h-stack-698-macos']
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: diagnose-launch-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
@@ -29,10 +29,6 @@ jobs:
           - runner: blacksmith-6vcpu-macos-15
             target: aarch64-apple-darwin
             name: macOS host verification
-          - runner: blacksmith-4vcpu-ubuntu-2404
-            target: x86_64-unknown-linux-gnu
-            name: Linux host verification
-
     steps:
       - uses: actions/checkout@v6
         with:
@@ -127,84 +123,15 @@ jobs:
             sccache-${{ matrix.runner }}-${{ matrix.target }}-
 
       # CI checks
-      - name: cargo fmt
-        run: cargo +nightly fmt -- --check
-      # - name: cargo check
-      #   run: cargo check --profile ci-test --target ${{ matrix.target }}
-      # - name: cargo clippy
-      #   run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings # needs all features to avoid unused import/var/etc errors
-      - name: cargo build
+      - name: Record admitted names in the isolated test and compare the replay
         run: |
-          mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
-          cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
-          cargo build -p nori-cli --profile ci-test --target ${{ matrix.target }}
-      - name: Complete host_lifecycle
-        run: cargo test --profile ci-test --target ${{ matrix.target }} -p nori-cli --test host_lifecycle
-      - name: Complete managed_recovery
-        if: success() || failure()
-        run: cargo test --profile ci-test --target ${{ matrix.target }} -p nori-cli --test managed_recovery
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-      - name: Exercise real Pi through exec and local and managed hosts
-        working-directory: .
-        run: |
-          npm install --prefix "$RUNNER_TEMP/pi-proof" pi-acp@0.0.35 @earendil-works/pi-coding-agent@1.6.0
-          binary="$PWD/nori-rs/target/${{ matrix.target }}/ci-test/nori"
-          bun scripts/verify-pi-endpoint/verify.mjs "$binary"
-          python3 scripts/verify-pi-endpoint/launch_matrix.py "$binary" "$RUNNER_TEMP/pi-proof/node_modules/.bin"
-      - name: cargo test nori
-        if: success() || failure()
-        env:
-          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
-        run: |
-          cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-harness
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp-host
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
-      - name: cargo clippy
-        if: success() || failure()
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
-
-      # Save cargo home cache (only when key wasn't hit)
-      - name: Save cargo home cache
-        if: always() && !cancelled() && steps.cache_cargo_home_restore.outputs.cache-hit != 'true'
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-home-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ steps.lockhash.outputs.toolchain_hash }}
-
-      # Save sccache cache (fallback for when GHA backend isn't available)
-      - name: Save sccache cache (fallback)
-        if: always() && !cancelled() && env.USE_SCCACHE == 'true' && env.SCCACHE_GHA_ENABLED != 'true'
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.sccache/
-          key: sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ github.run_id }}
-
-      - name: sccache stats
-        if: always() && env.USE_SCCACHE == 'true'
-        continue-on-error: true
-        run: sccache --show-stats || true
-
-      - name: sccache summary
-        if: always() && env.USE_SCCACHE == 'true'
-        shell: bash
-        run: |
-          {
-            echo "### sccache stats — ${{ matrix.target }}";
-            echo;
-            echo '```';
-            sccache --show-stats || true;
-            echo '```';
-          } >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PYTEST'
+          from pathlib import Path
+          source = Path("cli/src/host/stdio.rs")
+          body = source.read_text().replace("        control\n            .request(", '        std::fs::write(spec.cwd.join("effective-names"), spec.env.keys().cloned().collect::<Vec<_>>().join(","))?;\n        control\n            .request(', 1)
+          source.write_text(body)
+          test = Path("cli/tests/standard_acp/stdio.rs")
+          body = test.read_text().replace('let mut retry = json!', 'eprintln!("Retained synthetic-process input names: {}", fs::read_to_string(host.cwd.join("effective-names")).unwrap());\n        let mut retry = json!', 1)
+          test.write_text(body)
+          PYTEST
+          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-cli --test host_lifecycle stdio_admission_digest -- --nocapture
