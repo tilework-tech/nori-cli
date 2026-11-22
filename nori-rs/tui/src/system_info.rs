@@ -248,80 +248,22 @@ fn parse_nori_version(output: &str) -> Option<String> {
     }
 }
 
-/// Parse the stdout of `nori-skillsets list-active` into a list of skillset names.
+/// Names of the skillsets layered into the session's skillset project (the
+/// session worktree, else the home directory), via skillsets v2 `status`.
 ///
-/// Expects one skillset name per line. Trims whitespace and skips blank lines.
-fn parse_active_skillsets(output: &str) -> Vec<String> {
-    output
-        .lines()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(String::from)
-        .collect()
-}
-
-/// Get active skillsets by running `nori-skillsets list-active`.
-///
-/// Falls back to reading `.nori-config.json` if `list-active` is not supported
-/// (older versions of nori-skillsets). Returns an empty vec if no skillsets are
-/// active or nori-skillsets is not installed.
+/// Returns an empty list when the skillsets v2 CLI is missing or fails; the
+/// footer is informational and the picker reports those errors.
 fn get_active_skillsets(dir: Option<&std::path::Path>) -> Vec<String> {
-    let mut cmd = Command::new("nori-skillsets");
-    cmd.arg("list-active");
-    if let Some(d) = dir {
-        cmd.current_dir(d);
-    }
-    match cmd.output() {
-        Ok(output) if output.status.success() => String::from_utf8(output.stdout)
-            .ok()
-            .map(|s| parse_active_skillsets(&s))
-            .unwrap_or_default(),
-        Ok(output) => {
-            // Non-zero exit. Distinguish "no active skillsets" (known command,
-            // no results) from "unknown subcommand" (old nori-skillsets version).
-            // When the subcommand is unknown, the CLI framework writes to stderr.
-            let has_stderr = output.stderr.iter().any(|&b| !b.is_ascii_whitespace());
-            if has_stderr {
-                // Likely an old version that doesn't support list-active.
-                // Fall back to reading .nori-config.json directly.
-                dir.map(std::path::Path::to_path_buf)
-                    .or_else(|| env::current_dir().ok())
-                    .and_then(|cwd| read_active_skillset(&cwd))
-                    .into_iter()
-                    .collect()
-            } else {
-                // Known command, just no active skillsets.
-                Vec::new()
-            }
-        }
-        // nori-skillsets not installed at all.
-        Err(_) => Vec::new(),
-    }
-}
-
-/// Read the active skillset from `.nori-config.json` by walking parent directories.
-///
-/// This is the legacy fallback for older versions of nori-skillsets that don't
-/// support the `list-active` subcommand.
-pub(crate) fn read_active_skillset(cwd: &std::path::Path) -> Option<String> {
-    let mut current_dir = cwd.to_path_buf();
-
-    loop {
-        let config_path = current_dir.join(".nori-config.json");
-        if config_path.exists()
-            && let Ok(contents) = std::fs::read_to_string(&config_path)
-            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents)
-            && let Some(skillset) = json.get("activeSkillset").and_then(|value| value.as_str())
-        {
-            return Some(skillset.to_string());
-        }
-
-        if !current_dir.pop() {
-            break;
-        }
-    }
-
-    None
+    let Some(project) = dir
+        .map(std::path::Path::to_path_buf)
+        .or_else(|| env::current_dir().ok())
+        .and_then(|cwd| crate::nori::skillset_picker::current_skillset_project(&cwd))
+    else {
+        return Vec::new();
+    };
+    nori_skillsets::SkillsetsCli::resolve()
+        .and_then(|cli| cli.layered(project.path()))
+        .unwrap_or_default()
 }
 
 /// Detect untracked files (files not yet added to git and not ignored).
@@ -943,41 +885,6 @@ Filesystem     1024-blocks      Used Available Capacity Mounted on
         use std::path::Path;
         let path = Path::new("/tmp");
         assert_eq!(extract_worktree_name(path), None);
-    }
-
-    #[test]
-    fn test_parse_active_skillsets_multiple_lines() {
-        let output = "amol\nrust-dev\n";
-        let result = parse_active_skillsets(output);
-        assert_eq!(result, vec!["amol", "rust-dev"]);
-    }
-
-    #[test]
-    fn test_parse_active_skillsets_single_line() {
-        let output = "amol\n";
-        let result = parse_active_skillsets(output);
-        assert_eq!(result, vec!["amol"]);
-    }
-
-    #[test]
-    fn test_parse_active_skillsets_empty() {
-        let output = "";
-        let result = parse_active_skillsets(output);
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn test_parse_active_skillsets_trims_whitespace() {
-        let output = "  amol  \n  rust-dev  \n";
-        let result = parse_active_skillsets(output);
-        assert_eq!(result, vec!["amol", "rust-dev"]);
-    }
-
-    #[test]
-    fn test_parse_active_skillsets_skips_blank_lines() {
-        let output = "amol\n\n\nrust-dev\n";
-        let result = parse_active_skillsets(output);
-        assert_eq!(result, vec!["amol", "rust-dev"]);
     }
 
     #[test]

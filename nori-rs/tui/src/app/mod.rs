@@ -152,9 +152,10 @@ pub(crate) struct App {
     /// Guard to prevent showing the worktree cleanup warning more than once per session.
     worktree_warning_shown: bool,
 
-    /// True when the initial agent spawn was deferred (waiting for a skillset
-    /// switch). Cleared on the first successful skillset switch or picker
-    /// dismissal. Guards against re-spawning the agent on later switches.
+    /// True when the initial agent spawn was deferred (waiting for the
+    /// per-session skillset picker). Cleared on the first skillset layer or
+    /// unlayer result or picker dismissal. Guards against re-spawning the
+    /// agent on later changes.
     deferred_spawn_pending: bool,
     /// Cancel sender for an in-progress MCP OAuth login flow.
     mcp_oauth_cancel_tx: Option<tokio::sync::oneshot::Sender<()>>,
@@ -403,7 +404,7 @@ impl App {
         }
 
         // If skillset_per_session is enabled, show the skillset picker. The
-        // agent preparation was deferred so that `nori-skillsets switch` can
+        // agent preparation was deferred so that `nori-skillsets layer` can
         // write `.claude/CLAUDE.md` before the agent reads it. Applying or
         // dismissing the picker starts preparation without activating a
         // session.
@@ -584,7 +585,7 @@ impl App {
             // scheduled explicitly via `request_system_info_refresh` at
             // startup, and subsequent refreshes are driven by user actions
             // (message submit, task completion, tool-call cwd changes,
-            // skillset install/switch). No periodic polling.
+            // skillset layer/unlayer). No periodic polling.
             while let Ok(request) = system_info_rx.recv() {
                 let agent_kind = request
                     .model

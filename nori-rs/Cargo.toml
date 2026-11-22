@@ -33,6 +33,7 @@ members = [
     "installed",
     "mock-acp-agent",
     "nori-protocol",
+    "skillsets",
     "tui-pty-e2e",
 ]
 resolver = "2"
@@ -69,6 +70,7 @@ codex-process-hardening = { path = "process-hardening" }
 codex-rmcp-client = { path = "rmcp-client" }
 codex-stdio-to-uds = { path = "stdio-to-uds" }
 nori-protocol = { path = "nori-protocol" }
+nori-skillsets = { path = "skillsets" }
 nori-tui = { path = "tui" }
 nori-tui-components = { path = "tui-components" }
 codex-utils-cache = { path = "utils/cache" }
@@ -161,6 +163,7 @@ rmcp = { version = "3.10.0", default-features = false }
 schemars = "0.8.22"
 seccompiler = "0.5.0"
 sentry = "0.34.0"
+semver = "1"
 serde = "1"
 serde_json = "1"
 serde_with = "3.16"

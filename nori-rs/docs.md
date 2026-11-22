@@ -68,6 +68,9 @@ used in production.
   `nori_agent_session_started` reporter. Frontends attach it to a harness
   handle so one logical session is counted only after its first prompt reaches
   ACP; identity and organization expansion remain server-owned.
+- `skillsets/` is a blocking client for the skillsets v2 CLI (list, layer,
+  unlayer) used by the TUI's skillset picker and footer; see
+  [its docs](skillsets/docs.md).
 - `sandbox/` and the platform crates implement local sandbox debug execution;
   agent tool execution itself occurs in the external ACP agent.
 

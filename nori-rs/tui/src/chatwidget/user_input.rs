@@ -105,7 +105,7 @@ impl ChatWidget {
             return;
         }
 
-        // Special-case: "/switch-skillset <name>" directly switches to the named skillset
+        // Special-case: "/switch-skillset <name>" layers the named skillset
         // without showing the picker menu
         if let Some(skillset_name) = text.strip_prefix("/switch-skillset ").map(str::trim)
             && !skillset_name.is_empty()

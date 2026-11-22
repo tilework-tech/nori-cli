@@ -68,14 +68,10 @@ impl App {
     }
 
     /// Resolve a deferred agent spawn and refresh system info after a skillset
-    /// install or switch completes. Both `SkillsetInstallResult` and
-    /// `SkillsetSwitchResult` route here: a per-session startup that lands on a
-    /// non-worktree cwd installs (rather than switches), so the deferred spawn
-    /// must resolve on either result or the agent never starts.
-    fn on_skillset_applied(&mut self, success: bool) {
-        if !success {
-            return;
-        }
+    /// layer or unlayer finishes. A deferred per-session spawn starts even when
+    /// the change failed, so a broken skillset never leaves the session without
+    /// an agent.
+    fn on_skillset_applied(&mut self) {
         if self.take_deferred_spawn() {
             // The chosen skillset has written its workspace state, so activate
             // the session now instead of waiting for the first prompt.
@@ -1366,38 +1362,25 @@ impl App {
             } => {
                 self.persist_vim_mode_setting(value, from_settings).await;
             }
-            AppEvent::SkillsetListResult {
-                names,
-                error,
-                install_dir,
-            } => {
-                self.chat_widget
-                    .on_skillset_list_result(names, error, install_dir);
+            AppEvent::SkillsetListResult { project, result } => {
+                self.chat_widget.on_skillset_list_result(project, result);
             }
-            AppEvent::InstallSkillset { name } => {
-                self.chat_widget.on_install_skillset_request(&name);
-            }
-            AppEvent::SwitchSkillset { name, install_dir } => {
-                self.chat_widget
-                    .on_switch_skillset_request(&name, &install_dir);
-            }
-            AppEvent::SkillsetInstallResult {
+            AppEvent::ChangeSkillset {
                 name,
-                success,
-                message,
+                project,
+                layer,
             } => {
                 self.chat_widget
-                    .on_skillset_install_result(&name, success, &message);
-                self.on_skillset_applied(success);
+                    .on_change_skillset_request(name, project, layer);
             }
-            AppEvent::SkillsetSwitchResult {
+            AppEvent::SkillsetChangeResult {
                 name,
-                success,
-                message,
+                layer,
+                result,
             } => {
                 self.chat_widget
-                    .on_skillset_switch_result(&name, success, &message);
-                self.on_skillset_applied(success);
+                    .on_skillset_change_result(&name, layer, result);
+                self.on_skillset_applied();
             }
             AppEvent::SkillsetPickerDismissed => {
                 // The skillset picker was dismissed without selection. If the
