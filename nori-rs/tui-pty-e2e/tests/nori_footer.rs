@@ -90,11 +90,17 @@ fn test_footer_full_startup_with_all_info() {
     // Create a temp directory for our mock nori-skillsets binary
     let mock_bin_dir = tempfile::tempdir().expect("Failed to create temp dir for mock binary");
 
-    // Create a mock nori-skillsets executable that handles --version and list-active
+    // Create a mock skillsets v2 executable that handles --version and
+    // `-n status --json`.
     let mock_nori = mock_bin_dir.path().join("nori-skillsets");
     std::fs::write(
         &mock_nori,
-        "#!/bin/sh\ncase \"$1\" in\n  list-active) echo 'test-skillset';;\n  *) echo 'nori-skillsets 0.9.99';;\nesac\n",
+        r#"#!/bin/sh
+case "$2" in
+  status) echo '{"ok":true,"data":{"compiled":true,"layers":[{"name":"test-skillset","version":"1.0.0","mode":"published"}],"agents":["claude"],"entries":[],"counts":{}}}';;
+  *) echo 'nori-skillsets 0.9.99';;
+esac
+"#,
     )
     .expect("Failed to write mock nori-skillsets");
     std::fs::set_permissions(&mock_nori, std::fs::Permissions::from_mode(0o755))

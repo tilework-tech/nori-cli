@@ -468,23 +468,60 @@ fn picker_choice_supersedes_an_alias_override_in_the_next_session() {
         .unwrap();
 }
 
+/// A skillsets v2 mock on PATH whose `status` points at a real Git repository
+/// publishing `skillsets/default@1.0.0`. `layer_ok` picks whether `layer`
+/// succeeds or fails with a v2 error envelope.
 #[cfg(target_os = "linux")]
-#[test]
-fn skillset_per_session_activates_after_selection() {
-    // With per-session skillsets the session must auto-activate once a skillset
-    // is applied (after `.claude/CLAUDE.md` is written), not wait for a prompt.
+fn skillsets_v2_mock(layer_ok: bool) -> (tempfile::TempDir, tempfile::TempDir) {
     use std::os::unix::fs::PermissionsExt;
 
+    let repo = tempfile::tempdir().expect("Failed to create skillsets repo");
+    for args in [
+        vec!["init", "--quiet"],
+        vec!["commit", "--quiet", "--allow-empty", "-m", "init"],
+        vec!["tag", "skillsets/default@1.0.0"],
+    ] {
+        let status = std::process::Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+            .args(["-c", "commit.gpgSign=false", "-c", "tag.gpgSign=false"])
+            .arg("-C")
+            .arg(repo.path())
+            .args(&args)
+            .status()
+            .expect("run git");
+        assert!(status.success(), "git {args:?} failed");
+    }
+    let layer = if layer_ok {
+        r#"echo '{"ok":true,"data":{"layers":["default"],"agents":["claude"],"written":[],"unchanged":[],"removed":[],"kept":[],"refusals":[],"notes":[]}}'"#
+    } else {
+        r#"echo '{"ok":false,"error":{"code":"SOURCE_INVALID","message":"mock layer failure"}}'; exit 1"#
+    };
     let bin_dir = tempfile::tempdir().expect("Failed to create mock nori-skillsets dir");
     let script = bin_dir.path().join("nori-skillsets");
     std::fs::write(
         &script,
-        "#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in install|switch) exit 0 ;; esac; done\necho default\nexit 0\n",
+        format!(
+            r#"#!/bin/sh
+case "$2" in
+  status) echo '{{"ok":true,"data":{{"compiled":true,"layers":[],"repository":"{repo}","agents":["claude"],"entries":[],"counts":{{}}}}}}' ;;
+  layer) {layer} ;;
+  *) echo "error: unknown command '$2'" >&2; exit 1 ;;
+esac
+"#,
+            repo = repo.path().display()
+        ),
     )
     .expect("Failed to write mock nori-skillsets");
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
         .expect("Failed to make mock nori-skillsets executable");
+    (repo, bin_dir)
+}
 
+/// Start with per-session skillsets, pick the published skillset from the
+/// startup picker, and wait for the session to activate.
+#[cfg(target_os = "linux")]
+fn pick_startup_skillset_then_expect_activation(layer_ok: bool) {
+    let (_repo, bin_dir) = skillsets_v2_mock(layer_ok);
     let config = SessionConfig::default()
         .with_extra_config_toml("[tui]\nskillset_per_session = true\n")
         .with_extra_path(bin_dir.path().to_path_buf());
@@ -494,8 +531,8 @@ fn skillset_per_session_activates_after_selection() {
         .wait_for_text("Select skillset", TIMEOUT)
         .expect("per-session skillset picker should appear at startup");
     session
-        .wait_for_text("default", TIMEOUT)
-        .expect("mocked skillset should be listed");
+        .wait_for_text("v1.0.0", TIMEOUT)
+        .expect("the published release should be listed");
     // Row 0 is "No Skillset"; move to the real skillset row and apply it.
     session
         .send_key(Key::Down)
@@ -504,5 +541,20 @@ fn skillset_per_session_activates_after_selection() {
 
     session
         .wait_for_text("Mock Default Model", TIMEOUT)
-        .expect("session should auto-activate after the skillset is applied");
+        .expect("session should auto-activate after the skillset change finishes");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn skillset_per_session_activates_after_selection() {
+    // With per-session skillsets the session must auto-activate once a skillset
+    // is layered (after `.claude/CLAUDE.md` is written), not wait for a prompt.
+    pick_startup_skillset_then_expect_activation(true);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn skillset_per_session_activates_even_when_layering_fails() {
+    // A broken skillset must not leave the session without an agent.
+    pick_startup_skillset_then_expect_activation(false);
 }

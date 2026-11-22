@@ -1,0 +1,13 @@
+---
+source: tui/src/nori/skillset_picker/tests.rs
+expression: "render(params, 80)"
+---
+  Select skillset
+  Layering skillsets in /tmp/worktree
+
+› 1. No Skillset     Start without a skillset
+  2. team (layered)  v1.2.0 · select to unlayer
+  3. rust-dev        v0.3.0
+  4. web-frontend    v2.0.0-rc.1
+
+  ↑/k ↓/j navigate, / search, enter confirm, esc go back

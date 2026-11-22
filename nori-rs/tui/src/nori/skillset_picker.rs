@@ -1,178 +1,136 @@
-//! Skillset picker component for switching between available skillsets.
+//! Skillset picker for skillsets v2.
 //!
-//! This module provides functionality for:
-//! - Checking if the nori-skillsets CLI is available
-//! - Listing available skillsets
-//! - Building a picker UI for skillset selection
-//! - Installing selected skillsets
+//! Lists the skillsets layered into, or published for, the session's skillset
+//! project and toggles one per selection: a layered skillset is unlayered, any
+//! other is layered on top of the stack. The skillsets v2 calls themselves
+//! live in the `nori-skillsets` crate.
 
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Duration;
+
+use nori_skillsets::LayerChange;
+use nori_skillsets::SkillsetList;
+use nori_skillsets::SkillsetsCli;
+use nori_skillsets::SkillsetsError;
 
 use crate::app_event::AppEvent;
 use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
 
-/// The command name for the nori-skillsets CLI.
-const NORI_SKILLSETS_CMD: &str = "nori-skillsets";
+/// Where the session's skillsets are layered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SkillsetProject {
+    /// The session's own `.worktrees/<name>` worktree, so the compiled files
+    /// stay isolated to this session.
+    Worktree(PathBuf),
+    /// The home directory: skillsets v2's machine-wide scope, used when the
+    /// session has no worktree so the repo root is never compiled into.
+    Home(PathBuf),
+}
 
-/// Resolve the `--install-dir` to pass to `nori-skillsets switch`/`install`
-/// for the current session.
-///
-/// Per-session skillsets isolate their managed files (`.nori-managed` markers
-/// and manifests) inside the session's git worktree, so we only pass a custom
-/// install dir when `cwd` is a worktree; otherwise we return `None` and let the
-/// switch target the user's home install.
-///
-/// `skillset_per_session` must NOT force a non-worktree `cwd` (e.g. the repo
-/// root, when auto-worktree is off or was blocked) to be used as the install
-/// dir: that scatters managed state into the project tree and orphans it.
+impl SkillsetProject {
+    pub fn path(&self) -> &Path {
+        match self {
+            SkillsetProject::Worktree(path) | SkillsetProject::Home(path) => path,
+        }
+    }
+}
+
+/// Resolve the skillset project for a session running in `cwd`.
 ///
 /// Worktree detection is path-based (`extract_worktree_name`): it recognizes
-/// the `.worktrees/<name>` layout that auto-worktree creates, which is the
-/// supported per-session mechanism. A hand-made `git worktree` outside
-/// `.worktrees/` is not recognized and falls back to the home install.
-pub fn session_skillset_install_dir(cwd: &Path) -> Option<PathBuf> {
-    crate::system_info::extract_worktree_name(cwd)
-        .is_some()
-        .then(|| cwd.to_path_buf())
+/// the `.worktrees/<name>` layout that auto-worktree creates. Anything else,
+/// including the repo root, falls back to the home directory.
+pub fn session_skillset_project(cwd: &Path, home: Option<PathBuf>) -> Option<SkillsetProject> {
+    if crate::system_info::extract_worktree_name(cwd).is_some() {
+        return Some(SkillsetProject::Worktree(cwd.to_path_buf()));
+    }
+    home.map(SkillsetProject::Home)
 }
 
-/// Check if nori-skillsets command is available in PATH.
+/// Skillset project for `cwd` using the current user's home directory.
+pub fn current_skillset_project(cwd: &Path) -> Option<SkillsetProject> {
+    session_skillset_project(cwd, dirs::home_dir())
+}
+
+/// Check whether the skillsets v2 CLI can be launched.
 pub fn is_nori_skillsets_available() -> bool {
-    which::which(NORI_SKILLSETS_CMD).is_ok()
+    SkillsetsCli::resolve().is_ok()
 }
 
-/// List available skillsets by running `nori-skillsets list`.
-///
-/// Returns:
-/// - `Ok(names)` with skillset names on success (exit code 0)
-/// - `Err(message)` with stdout/stderr on failure (non-zero exit)
-pub async fn list_skillsets() -> Result<Vec<String>, String> {
-    let output = tokio::process::Command::new(NORI_SKILLSETS_CMD)
-        .args(build_list_args())
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run {NORI_SKILLSETS_CMD}: {e}"))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let names: Vec<String> = stdout
-            .lines()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(String::from)
-            .collect();
-        Ok(names)
-    } else {
-        // Combine stdout and stderr for error message
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let message = if !stderr.is_empty() {
-            stderr.to_string()
-        } else if !stdout.is_empty() {
-            stdout.to_string()
-        } else {
-            format!(
-                "{NORI_SKILLSETS_CMD} list failed with exit code {}",
-                output.status.code().unwrap_or(-1)
-            )
-        };
-        Err(message)
-    }
+/// Message shown when the skillsets v2 CLI cannot be found.
+pub fn not_installed_message() -> String {
+    SkillsetsError::NotInstalled.to_string()
 }
 
-/// Install a skillset by running `nori-skillsets install <name>`.
-///
-/// Returns:
-/// - `Ok(message)` with filtered stdout on success (last section for long output)
-/// - `Err(message)` with error output on failure
-pub async fn install_skillset(name: &str) -> Result<String, String> {
-    let args = build_install_args(name);
-    let output = tokio::process::Command::new(NORI_SKILLSETS_CMD)
-        .args(&args)
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run {NORI_SKILLSETS_CMD} install: {e}"))?;
+/// Longest wait for a listing, which may query a remote repository.
+const LIST_TIMEOUT: Duration = Duration::from_secs(60);
+/// Longest wait for a layer or unlayer, which may fetch a release.
+const CHANGE_TIMEOUT: Duration = Duration::from_secs(180);
 
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(filter_install_output(&stdout, name))
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let message = if !stderr.is_empty() {
-            stderr.trim().to_string()
-        } else if !stdout.is_empty() {
-            stdout.trim().to_string()
-        } else {
-            format!(
-                "Failed to install skillset '{name}' (exit code {})",
-                output.status.code().unwrap_or(-1)
-            )
-        };
-        Err(message)
-    }
+/// List skillsets for `project` on a blocking thread.
+pub async fn list_skillsets(project: PathBuf) -> Result<SkillsetList, String> {
+    run_blocking(LIST_TIMEOUT, move |cli| cli.list(&project)).await
 }
 
-/// Switch to a skillset by running `nori-skillsets switch <name> --install-dir <dir>`.
-///
-/// Returns:
-/// - `Ok(message)` with filtered stdout on success
-/// - `Err(message)` with error output on failure
-pub async fn switch_skillset(name: &str, install_dir: &std::path::Path) -> Result<String, String> {
-    let args = build_switch_args(name, install_dir);
-    let output = tokio::process::Command::new(NORI_SKILLSETS_CMD)
-        .args(&args)
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run {NORI_SKILLSETS_CMD} switch: {e}"))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(filter_install_output(&stdout, name))
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let message = if !stderr.is_empty() {
-            stderr.trim().to_string()
-        } else if !stdout.is_empty() {
-            stdout.trim().to_string()
+/// Layer or unlayer `name` in `project` on a blocking thread.
+pub async fn change_skillset(
+    project: PathBuf,
+    name: String,
+    layer: bool,
+) -> Result<LayerChange, String> {
+    run_blocking(CHANGE_TIMEOUT, move |cli| {
+        if layer {
+            cli.layer(&project, &name)
         } else {
-            format!(
-                "Failed to switch to skillset '{name}' (exit code {})",
-                output.status.code().unwrap_or(-1)
-            )
-        };
-        Err(message)
+            cli.unlayer(&project, &name)
+        }
+    })
+    .await
+}
+
+/// Run a skillsets call on a blocking thread, giving up after `timeout` so a
+/// stuck child process can never stall the session (the per-session startup
+/// waits on these results before starting the agent).
+async fn run_blocking<T: Send + 'static>(
+    timeout: Duration,
+    call: impl FnOnce(&SkillsetsCli) -> Result<T, SkillsetsError> + Send + 'static,
+) -> Result<T, String> {
+    let task = tokio::task::spawn_blocking(move || call(&SkillsetsCli::resolve()?));
+    tokio::time::timeout(timeout, task)
+        .await
+        .map_err(|_| format!("skillsets CLI did not finish within {}s", timeout.as_secs()))?
+        .map_err(|error| format!("skillsets task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+/// Message for a listing that found nothing to show.
+pub fn empty_list_message(list: &SkillsetList) -> String {
+    match &list.repository {
+        Some(repository) => format!("No skillsets are published in {repository}."),
+        None => "No skillsets repository is configured. Set one with \
+                 `nori-skillsets config set repository --value <git-url-or-checkout>`."
+            .to_string(),
     }
 }
 
 /// Create selection view parameters for the skillset picker.
 ///
-/// # Arguments
-/// * `skillset_names` - List of available skillset names
-/// * `install_dir` - When `Some`, sends `SwitchSkillset` with the given directory;
-///   when `None`, sends `InstallSkillset` for backward compatibility.
-/// * `on_dismiss` - Optional callback fired when the picker is dismissed without
-///   selection (e.g. via Escape or Ctrl-C).
-/// * `show_no_skillset` - When `true`, prepends a "No Skillset" option that
-///   dismisses the picker without installing anything.
-/// * `auto_worktree_off` - Per-session is on but auto-worktree is disabled.
-///   When `install_dir` is `Some`, the subtitle warns that skillset files will
-///   be added to the current directory; when `None`, it warns that the skillset
-///   installs globally because there is no session worktree to isolate into.
+/// * `show_no_skillset` - prepend a "No Skillset" row (per-session startup)
+///   that dismisses the picker without changing anything.
+/// * `auto_worktree_off` - per-session is on but auto-worktree is disabled, so
+///   the subtitle warns where the files will land.
 pub fn skillset_picker_params(
-    skillset_names: Vec<String>,
-    install_dir: Option<PathBuf>,
+    list: SkillsetList,
+    project: SkillsetProject,
     on_dismiss: Option<SelectionAction>,
     show_no_skillset: bool,
     auto_worktree_off: bool,
 ) -> SelectionViewParams {
     let mut items: Vec<SelectionItem> = Vec::new();
 
-    // Prepend "No Skillset" option when in per-session mode
     if show_no_skillset {
         let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
             tx.send(AppEvent::SkillsetPickerDismissed);
@@ -186,43 +144,51 @@ pub fn skillset_picker_params(
         });
     }
 
-    items.extend(skillset_names.into_iter().map(|name| {
-        let name_for_action = name.clone();
-        let install_dir = install_dir.clone();
-
-        // Create action that sends the appropriate skillset event
+    items.extend(list.skillsets.into_iter().map(|entry| {
+        let name = entry.name.clone();
+        let project_path = project.path().to_path_buf();
+        let layer = !entry.layered;
         let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-            if let Some(dir) = install_dir.clone() {
-                tx.send(AppEvent::SwitchSkillset {
-                    name: name_for_action.clone(),
-                    install_dir: dir,
-                });
-            } else {
-                tx.send(AppEvent::InstallSkillset {
-                    name: name_for_action.clone(),
-                });
-            }
+            tx.send(AppEvent::ChangeSkillset {
+                name: name.clone(),
+                project: project_path.clone(),
+                layer,
+            });
         })];
-
+        let version = entry.version.map(|version| format!("v{version}"));
+        let (display_name, description) = if entry.layered {
+            let description = match version {
+                Some(version) => format!("{version} · select to unlayer"),
+                None => "select to unlayer".to_string(),
+            };
+            (format!("{} (layered)", entry.name), Some(description))
+        } else {
+            (entry.name.clone(), version)
+        };
         SelectionItem {
-            search_value: Some(name.clone()),
-            name,
-            description: None,
-            is_current: false,
+            search_value: Some(entry.name),
+            name: display_name,
+            description,
             actions,
             dismiss_on_select: true,
             ..Default::default()
         }
     }));
 
-    let subtitle = match (&install_dir, auto_worktree_off) {
-        (Some(dir), true) => format!("Warning: skillset files will be added to {}", dir.display()),
-        (Some(dir), false) => format!("Switching skillset in {}", dir.display()),
-        // Per-session is on but there is no session worktree to isolate into
-        // (auto-worktree is off), so the skillset installs globally. Say so
-        // rather than silently doing a home install.
-        (None, true) => "No session worktree - installing to your global skillset".to_string(),
-        (None, false) => "Install a skillset to customize Nori's capabilities".to_string(),
+    let subtitle = match (&project, auto_worktree_off) {
+        (SkillsetProject::Worktree(dir), true) => {
+            format!("Warning: skillset files will be added to {}", dir.display())
+        }
+        (SkillsetProject::Worktree(dir), false) => {
+            format!("Layering skillsets in {}", dir.display())
+        }
+        (SkillsetProject::Home(dir), true) => format!(
+            "No session worktree - layering machine-wide into {}",
+            dir.display()
+        ),
+        (SkillsetProject::Home(dir), false) => {
+            format!("Layering skillsets machine-wide into {}", dir.display())
+        }
     };
 
     SelectionViewParams {
@@ -238,488 +204,5 @@ pub fn skillset_picker_params(
     .picker()
 }
 
-/// Filter install output to extract the meaningful message.
-///
-/// If stdout has more than 3 lines, splits on double newlines and takes the
-/// first non-empty trimmed line from the last section. Otherwise, takes the
-/// first non-empty trimmed line. Falls back to a default message.
-fn filter_install_output(stdout: &str, name: &str) -> String {
-    let line_count = stdout.lines().count();
-
-    let section = if line_count > 3 {
-        // For long output, take the section after the last "\n\n"
-        if let Some(pos) = stdout.rfind("\n\n") {
-            &stdout[pos..]
-        } else {
-            stdout
-        }
-    } else {
-        stdout
-    };
-
-    section
-        .lines()
-        .map(str::trim)
-        .find(|s| !s.is_empty())
-        .map(String::from)
-        .unwrap_or_else(|| format!("Skillset '{name}' installed successfully"))
-}
-
-/// Build the argument list for the `nori-skillsets switch` command.
-///
-/// Extracted for testability.
-fn build_switch_args(name: &str, install_dir: &std::path::Path) -> Vec<String> {
-    vec![
-        "--non-interactive".to_string(),
-        "switch".to_string(),
-        name.to_string(),
-        "--install-dir".to_string(),
-        install_dir.to_string_lossy().to_string(),
-    ]
-}
-
-/// Build the argument list for the `nori-skillsets list` command.
-///
-/// `list` is spawned via `Command::output()`, which pipes stdout but inherits
-/// the terminal's TTY stdin. Passing `--non-interactive` (before the
-/// subcommand, for correct parsing) stops nori-skillsets from rendering a
-/// blocking update prompt into the captured stdout and hanging the TUI.
-///
-/// Extracted for testability.
-fn build_list_args() -> Vec<String> {
-    vec!["--non-interactive".to_string(), "list".to_string()]
-}
-
-/// Build the argument list for the `nori-skillsets install` command.
-///
-/// Extracted for testability.
-fn build_install_args(name: &str) -> Vec<String> {
-    vec![
-        "--non-interactive".to_string(),
-        "install".to_string(),
-        name.to_string(),
-    ]
-}
-
-/// Message shown when nori-skillsets is not installed.
-pub fn not_installed_message() -> String {
-    "nori-skillsets is not installed. Install it with: `npm i -g nori-skillsets`".to_string()
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app_event::AppEvent;
-    use crate::app_event_sender::AppEventSender;
-    use pretty_assertions::assert_eq;
-    use tokio::sync::mpsc::unbounded_channel;
-
-    #[test]
-    fn install_dir_is_worktree_path_when_under_dot_worktrees() {
-        let cwd = PathBuf::from("/home/user/project/.worktrees/swift-oak");
-        assert_eq!(session_skillset_install_dir(&cwd), Some(cwd.clone()));
-    }
-
-    #[test]
-    fn install_dir_is_none_at_repo_root() {
-        // Regression: a per-session skillset switch must not use a non-worktree
-        // cwd (e.g. the repo root, when auto-worktree is off or blocked) as the
-        // install dir, which would scatter managed state into the project tree.
-        let cwd = PathBuf::from("/home/user/project");
-        assert_eq!(session_skillset_install_dir(&cwd), None);
-    }
-
-    #[test]
-    fn test_skillset_picker_params_creates_items() {
-        let names = vec![
-            "rust-dev".to_string(),
-            "python-ml".to_string(),
-            "web-frontend".to_string(),
-        ];
-
-        let params = skillset_picker_params(names, None, None, false, false);
-
-        assert!(params.title.is_some());
-        assert!(params.title.unwrap().contains("skillset"));
-        assert_eq!(params.items.len(), 3);
-        assert_eq!(params.items[0].name, "rust-dev");
-        assert_eq!(params.items[1].name, "python-ml");
-        assert_eq!(params.items[2].name, "web-frontend");
-    }
-
-    #[test]
-    fn test_skillset_picker_params_empty_list() {
-        let names: Vec<String> = vec![];
-        let params = skillset_picker_params(names, None, None, false, false);
-
-        assert!(params.items.is_empty());
-    }
-
-    #[test]
-    fn test_skillset_picker_items_dismiss_on_select() {
-        let names = vec!["test".to_string()];
-        let params = skillset_picker_params(names, None, None, false, false);
-
-        assert!(params.items[0].dismiss_on_select);
-    }
-
-    #[test]
-    fn test_skillset_picker_action_sends_install_event() {
-        let names = vec!["my-skillset".to_string()];
-        let params = skillset_picker_params(names, None, None, false, false);
-
-        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-
-        // Execute the action
-        assert!(!params.items[0].actions.is_empty());
-        (params.items[0].actions[0])(&tx);
-
-        // Check that the correct event was sent
-        let event = rx.try_recv().expect("Should have received an event");
-        match event {
-            AppEvent::InstallSkillset { name } => {
-                assert_eq!(name, "my-skillset");
-            }
-            _ => panic!("Expected InstallSkillset event"),
-        }
-    }
-
-    #[test]
-    fn test_skillset_picker_with_install_dir_sends_switch_event() {
-        let names = vec!["my-skillset".to_string()];
-        let dir = PathBuf::from("/tmp/worktree");
-        let params = skillset_picker_params(names, Some(dir), None, false, false);
-
-        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-
-        // Execute the action
-        assert!(!params.items[0].actions.is_empty());
-        (params.items[0].actions[0])(&tx);
-
-        // Check that the correct event was sent
-        let event = rx.try_recv().expect("Should have received an event");
-        match event {
-            AppEvent::SwitchSkillset { name, install_dir } => {
-                assert_eq!(name, "my-skillset");
-                assert_eq!(install_dir, PathBuf::from("/tmp/worktree"));
-            }
-            _ => panic!("Expected SwitchSkillset event, got {event:?}"),
-        }
-    }
-
-    #[test]
-    fn test_skillset_picker_items_have_search_value() {
-        // Each item must have search_value set so the searchable picker can
-        // filter items when the user types. Without search_value, typing
-        // any character causes all items to be filtered out.
-        let names = vec![
-            "rust-dev".to_string(),
-            "python-ml".to_string(),
-            "web-frontend".to_string(),
-        ];
-        let params = skillset_picker_params(names, None, None, false, false);
-
-        for item in &params.items {
-            assert_eq!(
-                item.search_value.as_deref(),
-                Some(item.name.as_str()),
-                "item '{}' must have search_value set to its name for filtering to work",
-                item.name
-            );
-        }
-    }
-
-    #[test]
-    fn test_skillset_picker_dismiss_sends_event() {
-        // When skillset_per_session is enabled and the user dismisses the
-        // skillset picker (Escape/Ctrl-C), a SkillsetPickerDismissed event
-        // should be sent so the deferred agent can spawn.
-        use crate::bottom_pane::BottomPaneView;
-        use crate::bottom_pane::ListSelectionView;
-
-        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-
-        let names = vec!["my-skillset".to_string()];
-        let on_dismiss: crate::bottom_pane::SelectionAction = Box::new(move |tx| {
-            tx.send(AppEvent::SkillsetPickerDismissed);
-        });
-        let params = skillset_picker_params(
-            names,
-            Some(PathBuf::from("/tmp/test")),
-            Some(on_dismiss),
-            false,
-            false,
-        );
-
-        let mut view = ListSelectionView::new(params, tx);
-
-        // Dismiss the picker
-        view.on_ctrl_c();
-
-        // Verify the SkillsetPickerDismissed event was sent
-        let event = rx.try_recv().expect("Should have received an event");
-        assert!(
-            matches!(event, AppEvent::SkillsetPickerDismissed),
-            "Expected SkillsetPickerDismissed event, got {event:?}"
-        );
-    }
-
-    #[test]
-    fn test_switch_skillset_command_includes_non_interactive() {
-        // The switch command must include --non-interactive since the TUI
-        // captures stdout/stderr and provides no stdin. Without it, the
-        // CLI prompts for confirmation and hangs forever.
-        // --non-interactive must precede the subcommand for correct parsing.
-        assert_eq!(
-            build_switch_args("my-skillset", std::path::Path::new("/tmp/worktree")),
-            vec![
-                "--non-interactive",
-                "switch",
-                "my-skillset",
-                "--install-dir",
-                "/tmp/worktree",
-            ]
-        );
-    }
-
-    #[test]
-    fn test_list_skillset_command_includes_non_interactive() {
-        // `list` is spawned via tokio's Command::output(), which pipes stdout
-        // but inherits the terminal's TTY stdin. Without --non-interactive,
-        // nori-skillsets detects interactive mode and renders a blocking update
-        // prompt into the captured stdout, hanging the TUI forever.
-        // --non-interactive must precede the subcommand for correct parsing.
-        assert_eq!(build_list_args(), vec!["--non-interactive", "list"]);
-    }
-
-    #[test]
-    fn test_install_skillset_command_includes_non_interactive() {
-        // Same as switch: install must not prompt interactively.
-        // --non-interactive must precede the subcommand for correct parsing.
-        assert_eq!(
-            build_install_args("my-skillset"),
-            vec!["--non-interactive", "install", "my-skillset"]
-        );
-    }
-
-    #[test]
-    fn test_not_installed_message() {
-        let msg = not_installed_message();
-        assert!(msg.contains("npm i -g nori-skillsets"));
-    }
-
-    #[test]
-    fn test_filter_short_output_three_lines() {
-        let stdout = "Line one\nLine two\nLine three\n";
-        let result = filter_install_output(stdout, "test");
-        assert_eq!(result, "Line one");
-    }
-
-    #[test]
-    fn test_filter_long_output_takes_last_section() {
-        let stdout = "Setting up Nori...\nDoing stuff\nMore stuff\nEven more\n\nSkillset \"test\" is now active.\nRestart Claude Code to apply.\n";
-        let result = filter_install_output(stdout, "test");
-        assert_eq!(result, "Skillset \"test\" is now active.");
-    }
-
-    #[test]
-    fn test_filter_long_output_no_double_newline_falls_back() {
-        let stdout = "Line one\nLine two\nLine three\nLine four\n";
-        let result = filter_install_output(stdout, "test");
-        assert_eq!(result, "Line one");
-    }
-
-    #[test]
-    fn test_filter_empty_output_returns_default() {
-        let stdout = "";
-        let result = filter_install_output(stdout, "my-skillset");
-        assert_eq!(result, "Skillset 'my-skillset' installed successfully");
-    }
-
-    #[test]
-    fn test_filter_real_world_example() {
-        let stdout = r#"Setting up Nori for first time use...
-
-Warning: ⚠️  Nori managed installation detected in ancestor directory!
-
-Claude Code loads CLAUDE.md files from all parent directories.
-Having multiple Nori managed installations can cause duplicate or conflicting configurations.
-
-Existing Nori managed installations found at:
-  • /home/clifford/Documents/source/nori/registrar
-  • /home/clifford/Documents/source/nori
-
-Please remove the conflicting managed installation before continuing.
-
-✓ Nori initialized successfully
-Error: You do not have access to organization "dev".
-
-Cannot download "dev/test-onboard" from https://dev.noriskillsets.dev.
-
-Your available organizations: org-alpha, org-beta
-Warning: Skillset "dev/test-onboard" not found in registry. Using locally installed version.
-Switched to "dev/test-onboard" profile for Claude Code
-Restart Claude Code to load the new profile configuration
-
-Skillset "dev/test-onboard" is now active.
-Restart Claude Code to apply the new skillset."#;
-        let result = filter_install_output(stdout, "dev/test-onboard");
-        assert_eq!(result, r#"Skillset "dev/test-onboard" is now active."#);
-    }
-
-    #[test]
-    fn test_filter_long_output_last_section_has_empty_first_line() {
-        let stdout = "Line 1\nLine 2\nLine 3\nLine 4\n\n\nActual message here.\n";
-        let result = filter_install_output(stdout, "test");
-        assert_eq!(result, "Actual message here.");
-    }
-
-    #[test]
-    fn test_parse_skillset_names() {
-        // Test the parsing logic used in list_skillsets
-        let stdout = "rust-dev\npython-ml\n  web-frontend  \n\njava-backend\n";
-        let names: Vec<String> = stdout
-            .lines()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(String::from)
-            .collect();
-
-        assert_eq!(names.len(), 4);
-        assert_eq!(names[0], "rust-dev");
-        assert_eq!(names[1], "python-ml");
-        assert_eq!(names[2], "web-frontend");
-        assert_eq!(names[3], "java-backend");
-    }
-
-    #[test]
-    fn test_skillset_picker_with_no_skillset_option() {
-        // When show_no_skillset is true, the first item should be "No Skillset"
-        // and selecting it should send SkillsetPickerDismissed (same as dismiss).
-        let names = vec!["rust-dev".to_string(), "python-ml".to_string()];
-        let dir = PathBuf::from("/tmp/worktree");
-        let on_dismiss: SelectionAction = Box::new(|tx| {
-            tx.send(AppEvent::SkillsetPickerDismissed);
-        });
-        let params = skillset_picker_params(
-            names,
-            Some(dir),
-            Some(on_dismiss),
-            true,  // show_no_skillset
-            false, // auto_worktree_off
-        );
-
-        // "No Skillset" should be the first item, followed by the real skillsets
-        assert_eq!(params.items.len(), 3);
-        assert_eq!(params.items[0].name, "No Skillset");
-        assert_eq!(params.items[1].name, "rust-dev");
-        assert_eq!(params.items[2].name, "python-ml");
-
-        // Selecting "No Skillset" should send SkillsetPickerDismissed
-        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-        (params.items[0].actions[0])(&tx);
-        let event = rx.try_recv().expect("Should have received an event");
-        assert!(
-            matches!(event, AppEvent::SkillsetPickerDismissed),
-            "Expected SkillsetPickerDismissed event, got {event:?}"
-        );
-    }
-
-    #[test]
-    fn test_skillset_picker_without_no_skillset_option() {
-        // When show_no_skillset is false, no "No Skillset" item should appear.
-        let names = vec!["rust-dev".to_string(), "python-ml".to_string()];
-        let params = skillset_picker_params(
-            names, None, None, false, // show_no_skillset
-            false, // auto_worktree_off
-        );
-
-        assert_eq!(params.items.len(), 2);
-        assert_eq!(params.items[0].name, "rust-dev");
-        assert_eq!(params.items[1].name, "python-ml");
-    }
-
-    #[test]
-    fn test_skillset_picker_no_skillset_dismisses_on_select() {
-        // The "No Skillset" item should dismiss the picker when selected.
-        let names = vec!["test".to_string()];
-        let on_dismiss: SelectionAction = Box::new(|tx| {
-            tx.send(AppEvent::SkillsetPickerDismissed);
-        });
-        let params = skillset_picker_params(
-            names,
-            Some(PathBuf::from("/tmp/test")),
-            Some(on_dismiss),
-            true,  // show_no_skillset
-            false, // auto_worktree_off
-        );
-
-        assert!(params.items[0].dismiss_on_select);
-    }
-
-    #[test]
-    fn test_skillset_picker_worktree_warning_subtitle() {
-        // When auto_worktree_off is true and install_dir is Some, the subtitle
-        // should warn that skillset files will be added to the directory.
-        let names = vec!["rust-dev".to_string()];
-        let dir = PathBuf::from("/home/user/myproject");
-        let params = skillset_picker_params(
-            names,
-            Some(dir),
-            None,
-            false, // show_no_skillset
-            true,  // auto_worktree_off
-        );
-
-        let subtitle = params.subtitle.expect("should have subtitle");
-        assert!(
-            subtitle.contains("/home/user/myproject"),
-            "Subtitle should mention the directory: {subtitle}"
-        );
-        assert!(
-            subtitle.to_lowercase().contains("warning") || subtitle.contains("will be added"),
-            "Subtitle should contain a warning about files being added: {subtitle}"
-        );
-    }
-
-    #[test]
-    fn test_skillset_picker_no_worktree_warning_when_worktrees_on() {
-        // When auto_worktree_off is false, the subtitle should be the normal one.
-        let names = vec!["rust-dev".to_string()];
-        let dir = PathBuf::from("/home/user/myproject");
-        let params = skillset_picker_params(
-            names,
-            Some(dir),
-            None,
-            false, // show_no_skillset
-            false, // auto_worktree_off
-        );
-
-        let subtitle = params.subtitle.expect("should have subtitle");
-        assert!(
-            !subtitle.to_lowercase().contains("warning"),
-            "Subtitle should not contain a warning when worktrees are on: {subtitle}"
-        );
-    }
-
-    #[test]
-    fn test_skillset_picker_global_install_subtitle_when_no_worktree() {
-        // Per-session on but no worktree (install_dir None, auto_worktree_off):
-        // the subtitle must say the install is global, not silently generic.
-        let names = vec!["rust-dev".to_string()];
-        let params = skillset_picker_params(
-            names, None, None, true, // show_no_skillset (per-session)
-            true, // auto_worktree_off
-        );
-
-        let subtitle = params.subtitle.expect("should have subtitle");
-        assert!(
-            subtitle.to_lowercase().contains("global"),
-            "Subtitle should say the install is global: {subtitle}"
-        );
-    }
-}
+mod tests;
