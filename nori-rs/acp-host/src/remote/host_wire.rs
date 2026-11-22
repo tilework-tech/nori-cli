@@ -203,8 +203,7 @@ async fn serve<M: ManagedAgent>(
                                 break;
                             }
                             let reply = if request["method"] == "initialize" {
-                                let observe = request["params"]["observe"] == true
-                                    || request["params"]["_meta"]["nori.dev/host"]["observe"] == true;
+                                let observe = request["params"]["observe"] == true;
                                 let mut reply = state.host.request_from(client, request).await;
                                 if reply.response.get("error").is_none() {
                                     reply.response["result"]["control"] = state.control.lock().await.register(client, &changes, observe);
