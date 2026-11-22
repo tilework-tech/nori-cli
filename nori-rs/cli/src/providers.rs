@@ -100,7 +100,7 @@ pub(crate) fn run(command: ProvidersCommand) -> anyhow::Result<()> {
                 );
             } else {
                 println!(
-                    "Saved the {} API key ({store}); Nori passes it as {env} when {env} is not already set.",
+                    "Saved the {} API key ({store}). Nori passes it as {env} unless a credential variable for the agent is already set.",
                     agent.display_name()
                 );
             }
