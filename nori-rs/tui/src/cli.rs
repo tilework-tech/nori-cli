@@ -49,7 +49,7 @@ pub struct Cli {
     #[clap(skip)]
     pub cloud_onboard: bool,
 
-    /// Agent to run: claude-code, codex, gemini (Antigravity), grok-build, or a configured agent.
+    /// Agent to run: claude-code, codex, gemini (Antigravity), grok-build, opencode, or a configured agent.
     #[arg(long, short = 'a')]
     pub agent: Option<String>,
 

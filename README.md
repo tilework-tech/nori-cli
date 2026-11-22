@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/npm/l/nori-ai-cli)](https://github.com/tilework-tech/nori-cli/blob/main/LICENSE)
 [![npm downloads](https://img.shields.io/npm/dm/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
 
-Nori lets you use Claude Code, Codex, Antigravity, Grok Build, and your own ACP agents from one terminal.
+Nori brings Claude Code, Codex, Antigravity, and Grok Build into one terminal. You can also select OpenCode or bring your own ACP agent.
 
 ![Nori TUI Screenshot](https://raw.githubusercontent.com/tilework-tech/nori-cli/refs/heads/main/assets/nori-cli_2026-01-13.png)
 
@@ -35,6 +35,8 @@ Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` rele
 | Codex | `codex` | `@agentclientprotocol/codex-acp@latest` | Use `/login` for ChatGPT or set `OPENAI_API_KEY`. |
 | Antigravity | `gemini` (also `antigravity` or `agy`) | `agy acp --disable-telemetry` | Open `agy` for Google sign-in or set `GEMINI_API_KEY`. |
 | Grok Build | `grok-build` (also `grok`) | `@xai-official/grok@latest agent stdio` | Use `/login` for the Grok sign-in command or set `XAI_API_KEY`. |
+
+OpenCode is also built in. Install OpenCode 2 on the host's `PATH` and use `nori --agent opencode` or `nori host new --agent opencode`. With `[features] multi_session = true`, try `/delegate opencode Summarize the README` from another agent. All three launch `opencode acp`. OpenCode reads its own provider configuration and credentials. To connect an account, run `opencode auth login` in a terminal. [Model selection and ChatGPT-plan restrictions](nori-rs/config.md#default-models-default_models) · [OpenCode ACP guide](https://opencode.ai/docs/cli/acp/)
 
 The `gemini` ID keeps existing configs and Nori history associated with the Google provider. Each agent supplies its own model choices through `/model`.
 
@@ -75,7 +77,7 @@ Want your AI agent to configure this automatically? Point it at the raw skill fi
 
 ## Features
 
-- **Multi-provider**: Use Claude Code, Codex, Antigravity, Grok Build, or your own ACP-compatible agent from the same CLI.
+- **Multi-provider**: Switch between built-in and custom ACP agents from the same CLI.
 - **Fast native interface**: Incremental Ratatui rendering, double-buffered scrollback history, and a Rust core keep long sessions responsive.
 - **Solid ACP client support**: Nori supports ACP session listing, loading, resume, context and usage metadata.
 - **Agent Integrations**: Your agents keep their configurations, whether that's slash commands, skills, and MCP server forwarding.

@@ -48,7 +48,7 @@ fn same_kind_child_starts_and_returns_without_approval_or_exiting_terminal() {
     assert!(
         !session
             .screen_contents()
-            .contains("start a mock-model-alt session")
+            .contains("start a session with mock-model-alt")
     );
     session.submit_input("/sessions").unwrap();
     session
@@ -99,7 +99,7 @@ fn different_kind_child_needs_start_and_its_permission_stays_in_child() {
         .submit_input("/delegate mock-model-alt mock:request-permission:write-child-file")
         .unwrap();
     session
-        .wait_for_text("start a mock-model-alt session", TIMEOUT)
+        .wait_for_text("start a session with mock-model-alt", TIMEOUT)
         .unwrap();
     assert!(
         !session
@@ -155,7 +155,7 @@ fn declining_different_kind_does_not_start_child() {
         .submit_input("/delegate mock-model-alt inspect parser without starting a child")
         .unwrap();
     session
-        .wait_for_text("start a mock-model-alt session", TIMEOUT)
+        .wait_for_text("start a session with mock-model-alt", TIMEOUT)
         .unwrap();
     session.wait_out_answer_grace();
     session.send_key(Key::Char('2')).unwrap();
@@ -168,7 +168,8 @@ fn declining_different_kind_does_not_start_child() {
     session
         .wait_for(
             |screen| {
-                !screen.contains("Working") && !screen.contains("start a mock-model-alt session")
+                !screen.contains("Working")
+                    && !screen.contains("start a session with mock-model-alt")
             },
             TIMEOUT,
         )
@@ -190,7 +191,7 @@ fn delegation_is_unavailable_without_multi_session() {
     assert!(
         !session
             .screen_contents()
-            .contains("start a mock-model-alt session")
+            .contains("start a session with mock-model-alt")
     );
 }
 
@@ -201,7 +202,7 @@ fn delegation_reads_clearly_from_request_to_result() {
         .submit_input("/delegate mock-model-alt mock:request-permission:write-child-file")
         .unwrap();
     session
-        .wait_for_text("start a mock-model-alt session", TIMEOUT)
+        .wait_for_text("start a session with mock-model-alt", TIMEOUT)
         .unwrap();
     session.settle(Duration::from_millis(200));
     insta::assert_snapshot!(
@@ -300,7 +301,7 @@ fn start_waiting_child(session: &mut TuiSession) {
         .submit_input("/delegate mock-model-alt mock:request-permission:write-child-file")
         .unwrap();
     session
-        .wait_for_text("start a mock-model-alt session", TIMEOUT)
+        .wait_for_text("start a session with mock-model-alt", TIMEOUT)
         .unwrap();
     session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();
@@ -470,7 +471,7 @@ fn the_session_list_keeps_names_with_a_shared_prefix_apart_at_80_columns() {
         )
         .unwrap();
     session
-        .wait_for_text("start a mock-model-alt session", TIMEOUT)
+        .wait_for_text("start a session with mock-model-alt", TIMEOUT)
         .unwrap();
     session.wait_out_answer_grace();
     session.send_key(Key::Char('1')).unwrap();

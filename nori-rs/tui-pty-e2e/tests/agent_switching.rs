@@ -823,21 +823,25 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
         )
         .expect("Agent picker should appear with title");
 
-    // Get screen contents to verify all agents are present
-    let screen = session.screen_contents();
-
-    for provider in [
+    for (index, provider) in [
         "Mock ACP",
         "Mock ACP Alt",
         "Claude Code",
         "Codex",
         "Antigravity",
         "Grok Build",
-    ] {
-        assert!(
-            screen.contains(provider),
-            "Missing {provider} in the agent picker:\n{screen}"
-        );
+        "OpenCode",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if index > 0 {
+            session.send_key(Key::Down).unwrap();
+        }
+        let selected = format!("▏{}. {provider}", index + 1);
+        session
+            .wait_for_text(&selected, TIMEOUT)
+            .unwrap_or_else(|_| panic!("Missing picker selection {selected}"));
     }
 }
 
