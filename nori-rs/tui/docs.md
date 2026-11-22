@@ -221,7 +221,10 @@ The application event loop matches `SessionEvent::Acp` and
   UI lifecycle. For prompt errors, the correlated `NoriEvent::RequestFailed`
   drives completion, loop disposition, and user-visible display; the matching
   raw ACP error remains observable but is not rendered or completed a second
-  time. Failures unrelated to the active prompt do not complete it. Other typed
+  time. The widget commits any buffered answer text to history before the error
+  cell. This preserves setup instructions streamed immediately before a failure,
+  such as Hermes’s first-run `hermes model` command.
+  Failures unrelated to the active prompt do not complete it. Other typed
   operations complete through their
   `HarnessHandle` return values while their raw responses remain observable on
   the stream. When an unpaired ACP error reaches the active widget,

@@ -67,7 +67,7 @@ impl WidgetRef for &NoriWelcomeWidget {
         // First-launch specific message
         lines.push(Line::from("  Choose your provider with /agent:".dim()));
         lines.push(Line::from(
-            "  Claude Code, Codex, Antigravity, Grok Build, OpenCode, or Cursor Agent.".dim(),
+            "  Claude Code, Codex, Antigravity, Grok Build, OpenCode, Cursor Agent, or Hermes Agent.".dim(),
         ));
 
         lines.push(Line::from(""));

@@ -1,6 +1,6 @@
 ---
 source: tui/src/nori/onboarding/welcome.rs
-assertion_line: 219
+assertion_line: 213
 expression: output
 ---
   _   _  ___  ____  ___
@@ -13,8 +13,8 @@ expression: output
   Welcome to Nori, your AI coding assistant
 
   Choose your provider with /agent:
-  Claude Code, Codex, Antigravity, Grok Build, OpenCode, or
-Cursor Agent.
+  Claude Code, Codex, Antigravity, Grok Build, OpenCode,
+Cursor Agent, or Hermes Agent.
 
 
   Press Enter to continue

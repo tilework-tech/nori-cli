@@ -832,6 +832,7 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
         "Grok Build",
         "OpenCode",
         "Cursor Agent",
+        "Hermes Agent",
     ]
     .into_iter()
     .enumerate()
@@ -844,6 +845,13 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
             .wait_for_text(&selected, TIMEOUT)
             .unwrap_or_else(|_| panic!("Missing picker selection {selected}"));
     }
+
+    session.send_str("\x1b[H").unwrap(); // Home
+    session.wait_for_text("▏1. Mock ACP", TIMEOUT).unwrap();
+    session.send_str("\x1b[F").unwrap(); // End
+    session
+        .wait_for_text("▏9. Hermes Agent", TIMEOUT)
+        .expect("Scrolling to the end should reveal Hermes Agent");
 }
 
 // ============================================================================

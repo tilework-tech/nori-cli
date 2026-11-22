@@ -11,6 +11,7 @@ expression: normalize_for_input_snapshot(contents)
   Welcome to Nori, your AI coding assistant
 
   Choose your provider with /agent:
-  Claude Code, Codex, Antigravity, Grok Build, OpenCode, or Cursor Agent.
+  Claude Code, Codex, Antigravity, Grok Build, OpenCode, Cursor Agent, or Hermes
+Agent.
 
   Press Enter to continue

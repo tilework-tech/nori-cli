@@ -1597,6 +1597,38 @@ fn raw_fatal_prompt_error_completes_and_disarms_the_loop() {
 }
 
 #[test]
+fn failed_prompt_keeps_the_streamed_setup_instruction_before_the_error() {
+    use nori_protocol::NoriEvent;
+    use nori_protocol::SessionEvent;
+
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let request_id = nori_protocol::acp::v1::RequestId::Str("first-prompt".into());
+    for event in [
+        SessionEvent::Nori(NoriEvent::SessionPhaseChanged(
+            nori_protocol::SessionPhase::Prompting {
+                request_id: request_id.clone(),
+            },
+        )),
+        replay_text_chunk(
+            crate::presentation::MessageStream::Answer,
+            "setup",
+            "Run `hermes model` to choose a provider.",
+        ),
+        SessionEvent::Nori(NoriEvent::RequestFailed(nori_protocol::RequestFailure {
+            request_id: Some(request_id),
+            message: "ACP prompt failed: Internal error".into(),
+            kind: nori_protocol::RequestFailureKind::Fatal,
+        })),
+    ] {
+        chat.handle_session_event(chat.session_generation, event);
+    }
+
+    let history = history_text(&mut rx);
+    assert!(history.contains("hermes model"), "{history}");
+    insta::assert_snapshot!("streamed_setup_before_prompt_error", history);
+}
+
+#[test]
 fn delayed_raw_errors_from_multiple_failed_prompts_are_not_rendered() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     let generation = chat.session_generation;

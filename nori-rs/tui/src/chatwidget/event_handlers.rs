@@ -582,11 +582,11 @@ impl ChatWidget {
 
     /// Finalize any active tool as failed and stop/clear running UI state.
     pub(super) fn finalize_turn(&mut self) {
+        self.flush_answer_stream_with_separator();
         self.finalize_active_cell_as_failed();
         self.pending_client_tool_cells.clear();
         self.bottom_pane.set_task_running(false);
         self.completed_client_tool_calls.clear();
-        self.stream_controller = None;
     }
 
     pub(super) fn on_error(&mut self, message: String) {
