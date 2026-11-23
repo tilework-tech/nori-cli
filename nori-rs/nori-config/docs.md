@@ -71,8 +71,11 @@ re-formats a project written as an inline table so an added field stays tidy.
 The TUI's directory-trust onboarding step uses both edits.
 
 `[features]` holds opt-in behavior flags, resolved to plain booleans on
-`NoriConfig`. `FeaturesToml` does not deny unknown keys, so a retired flag such
-as `multi_session` (several sessions per TUI is now always on) left in a
+`NoriConfig`. `skillsets_v2` (default `false`, experimental) switches the TUI's
+skillset picker and footer from the v1 `nori-skillsets` commands to the
+skillsets v2 client in [@/nori-rs/skillsets](../skillsets/docs.md); it is read
+once at startup. `FeaturesToml` does not deny unknown keys, so a retired flag
+such as `multi_session` (several sessions per TUI is now always on) left in a
 user's `config.toml` is silently ignored rather than failing the load. `[tui]
 max_sessions` resolves to `NoriConfig.max_sessions`, defaulting to
 `DEFAULT_MAX_SESSIONS` (eight) and clamped to at least one; the TUI passes it

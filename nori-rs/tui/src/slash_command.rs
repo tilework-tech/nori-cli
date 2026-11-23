@@ -93,7 +93,7 @@ impl SlashCommand {
             SlashCommand::ApiKey => {
                 "choose whether the agent uses its own login or a saved API key"
             }
-            SlashCommand::SwitchSkillset => "layer or unlayer skillsets",
+            SlashCommand::SwitchSkillset => "switch between available skillsets",
             SlashCommand::Fork => "rewind conversation to a previous message",
             SlashCommand::Browser => "open a Chrome browser the agent can control via CDP",
         }

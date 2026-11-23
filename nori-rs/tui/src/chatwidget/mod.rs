@@ -73,6 +73,7 @@ mod queue_list;
 mod queue_recall;
 mod session_close;
 mod session_config_mode;
+mod skillsets_v2;
 mod user_input;
 use crate::nori::session_header::CloudSessionInfo;
 use crate::streaming::controller::StreamController;

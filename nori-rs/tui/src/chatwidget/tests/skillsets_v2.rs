@@ -1,5 +1,5 @@
 use super::*;
-use crate::nori::skillset_picker::SkillsetProject;
+use crate::nori::skillset_picker_v2::SkillsetProject;
 use nori_skillsets::SkillsetList;
 
 fn drain(rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>) -> Vec<AppEvent> {
@@ -14,7 +14,7 @@ fn project() -> SkillsetProject {
 async fn failed_listing_releases_a_deferred_session_start() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
-    chat.on_skillset_list_result(project(), Err("not the skillsets v2 CLI".to_string()));
+    chat.on_skillset_v2_list_result(project(), Err("not the skillsets v2 CLI".to_string()));
 
     let events = drain(&mut rx);
     assert!(
@@ -29,7 +29,7 @@ async fn failed_listing_releases_a_deferred_session_start() {
 async fn empty_listing_releases_a_deferred_session_start() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
-    chat.on_skillset_list_result(
+    chat.on_skillset_v2_list_result(
         project(),
         Ok(SkillsetList {
             project: PathBuf::from("/home/user"),
@@ -89,7 +89,7 @@ async fn failed_unlayer_reports_the_cli_error() {
 async fn unreadable_releases_are_reported_alongside_layered_skillsets() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
-    chat.on_skillset_list_result(
+    chat.on_skillset_v2_list_result(
         project(),
         Ok(SkillsetList {
             project: PathBuf::from("/home/user"),

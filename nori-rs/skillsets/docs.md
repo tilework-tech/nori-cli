@@ -6,19 +6,19 @@ Path: @/nori-rs/skillsets
 
 - Blocking Rust client for the skillsets v2 CLI (`nori-skillsets` 0.2.x, source in the sibling `skillsets-v2` repo). It exposes the only skillset operations Nori supports for v2: list, layer, and unlayer.
 - Every call shells out to the v2 CLI in JSON mode and decodes its `{"ok": true, "data": ...}` / `{"ok": false, "error": {code, message}}` envelope into typed results or a `SkillsetsError`.
-- Exists because the TUI previously called v1 verbs (`list`, `install`, `switch --install-dir`, `list-active`) that v2 does not have.
+- Exists because the TUI's default skillset flow calls v1 verbs (`list`, `install`, `switch --install-dir`, `list-active`) that v2 does not have. The TUI uses this crate only when `[features] skillsets_v2` is on (off by default, experimental).
 
 ### How it fits into the larger codebase
 
 ```text
-nori-tui  skillset picker / footer / /switch-skillset
+nori-tui  skillset picker / footer / /switch-skillset   ([features] skillsets_v2 only)
    |  (tokio::spawn_blocking)
    v
 nori-skillsets::SkillsetsCli  --->  nori-skillsets (v2 CLI)  -n <verb> ... --project <dir> --json
                               --->  git ls-remote (published release tags)
 ```
 
-- The only consumer today is [nori-tui](../tui/docs.md): the picker in [skillset_picker.rs](../tui/src/nori/skillset_picker.rs) and the footer's active-skillset list in [system_info.rs](../tui/src/system_info.rs). Calls are blocking, so the TUI runs them on a blocking thread.
+- The only consumer today is [nori-tui](../tui/docs.md), and only with `[features] skillsets_v2` (`NoriConfig.skillsets_v2`): the flow in [chatwidget/skillsets_v2.rs](../tui/src/chatwidget/skillsets_v2.rs), the picker in [skillset_picker_v2.rs](../tui/src/nori/skillset_picker_v2.rs), and the footer's active-skillset list in [system_info.rs](../tui/src/system_info.rs). With the flag off the TUI uses the v1 picker in [skillset_picker.rs](../tui/src/nori/skillset_picker.rs) and never calls this crate. Calls are blocking, so the TUI runs them on a blocking thread.
 - It is deliberately not wired into the background host ([cli/src/host](../cli/src/host/docs.md)) yet. The public result types derive `serde::Serialize` with camelCase fields so the host can later expose them to ACP clients unchanged.
 - It is independent of the `nori skillsets ...` passthrough in [cli/src/main.rs](../cli/src/main.rs), which resolves the CLI differently (see [cli docs](../cli/docs.md)).
 - The caller chooses the `project` directory every call targets; this crate has no notion of sessions or worktrees.
@@ -28,7 +28,7 @@ nori-skillsets::SkillsetsCli  --->  nori-skillsets (v2 CLI)  -n <verb> ... --pro
 - `SkillsetsCli::resolve()` picks how to launch the CLI: the `NORI_SKILLSETS_COMMAND` env var, split with shell rules so a launcher can supply a runner plus arguments (for example a bundled `bun x nori-skillsets@0.2.0`), else `nori-skillsets` found on `PATH`. `resolve_from` takes both inputs explicitly for tests.
 - Every invocation is `<program> <prefix args> -n <verb> <args> --json` with stdin null. v2 requires the non-interactive `-n` flag before the subcommand.
 - Every child process (the v2 CLI and git) runs with `GIT_TERMINAL_PROMPT=0` and, unless the user already set `GIT_SSH_COMMAND`, `GIT_SSH_COMMAND="ssh -o BatchMode=yes"`. The TUI owns the terminal, so a credential or SSH prompt would otherwise hang or corrupt it.
-- `layered(project)` returns layer names in stack order from `status --project`. It never touches the network; the TUI footer uses it.
+- `layered(project)` returns layer names in stack order from `status --project`. It never touches the network; the TUI footer uses it when the v2 flag is on.
 - `layer(project, name)` / `unlayer(project, name)` run the matching v2 verb and return a `LayerChange`: the resulting stack plus human-readable notes, which fold in v2's refusals (paths it would not overwrite) and kept files.
 - `list(project)` builds a `SkillsetList`: layered skillsets first in stack order, then the remaining published skillsets by name, each with a version (the layered version, or the latest published one). If published releases cannot be read, `list` still succeeds with only the layered entries and sets `SkillsetList.warning` to the reason.
 

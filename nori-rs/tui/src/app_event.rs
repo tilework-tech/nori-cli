@@ -503,15 +503,61 @@ pub(crate) enum AppEvent {
         total: i32,
     },
 
-    /// Result of listing skillsets via the skillsets v2 CLI.
+    /// Result of listing available skillsets via nori-skillsets CLI.
     SkillsetListResult {
+        /// List of skillset names on success (exit code 0), None if command not found.
+        names: Option<Vec<String>>,
+        /// Error message if command failed (non-zero exit) or not found.
+        error: Option<String>,
+        /// When in a worktree, the directory to install skillsets into.
+        install_dir: Option<PathBuf>,
+    },
+
+    /// Request to install a skillset by name.
+    InstallSkillset {
+        /// The name of the skillset to install.
+        name: String,
+    },
+
+    /// Request to switch to a skillset in a specific directory.
+    SwitchSkillset {
+        /// The name of the skillset to switch to.
+        name: String,
+        /// The directory to install the skillset into.
+        install_dir: PathBuf,
+    },
+
+    /// Result of installing a skillset.
+    SkillsetInstallResult {
+        /// The name of the skillset that was installed.
+        name: String,
+        /// Whether the installation succeeded (exit code 0).
+        success: bool,
+        /// Filtered install output on success, or error message on failure.
+        message: String,
+    },
+
+    /// Result of switching a skillset.
+    SkillsetSwitchResult {
+        /// The name of the skillset that was switched to.
+        name: String,
+        /// Whether the switch succeeded.
+        success: bool,
+        /// Filtered output on success, or error message on failure.
+        message: String,
+    },
+
+    /// Result of listing skillsets via the skillsets v2 CLI
+    /// (`[features] skillsets_v2`).
+    SkillsetV2ListResult {
         /// The project the listing describes and changes will target.
-        project: crate::nori::skillset_picker::SkillsetProject,
+        project: crate::nori::skillset_picker_v2::SkillsetProject,
         /// The listing, or a message explaining why it failed.
         result: Result<nori_skillsets::SkillsetList, String>,
     },
 
-    /// Request to layer (`layer == true`) or unlayer a skillset in `project`.
+    /// Request to layer (`layer == true`) or unlayer a skillset in `project`
+    /// via skillsets v2.
     ChangeSkillset {
         name: String,
         project: PathBuf,

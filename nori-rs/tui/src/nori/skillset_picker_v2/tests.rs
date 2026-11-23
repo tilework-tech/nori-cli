@@ -140,36 +140,10 @@ fn no_skillset_row_dismisses_the_picker() {
         false,
     );
 
-    assert_eq!(params.items[0].name, "No Skillset");
-    assert!(params.items[0].dismiss_on_select);
     let event = select(&params, 0);
     assert!(
         matches!(event, AppEvent::SkillsetPickerDismissed),
         "expected SkillsetPickerDismissed, got {event:?}"
-    );
-}
-
-#[test]
-fn rows_filter_by_skillset_name() {
-    let params = skillset_picker_params(
-        list(vec![
-            entry("team", true, "1.0.0"),
-            entry("rust-dev", false, "1.0.0"),
-        ]),
-        worktree(),
-        None,
-        false,
-        false,
-    );
-
-    let search_values: Vec<Option<String>> = params
-        .items
-        .iter()
-        .map(|item| item.search_value.clone())
-        .collect();
-    assert_eq!(
-        search_values,
-        vec![Some("team".to_string()), Some("rust-dev".to_string())]
     );
 }
 

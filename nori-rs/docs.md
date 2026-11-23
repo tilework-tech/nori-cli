@@ -71,8 +71,9 @@ used in production.
   handle so one logical session is counted only after its first prompt reaches
   ACP; identity and organization expansion remain server-owned.
 - `skillsets/` is a blocking client for the skillsets v2 CLI (list, layer,
-  unlayer) used by the TUI's skillset picker and footer; see
-  [its docs](skillsets/docs.md).
+  unlayer). The TUI's skillset picker and footer use it only with the
+  experimental, off-by-default `[features] skillsets_v2`; otherwise they use
+  the v1 `nori-skillsets` commands. See [its docs](skillsets/docs.md).
 - `sandbox/` and the platform crates implement local sandbox debug execution;
   agent tool execution itself occurs in the external ACP agent.
 

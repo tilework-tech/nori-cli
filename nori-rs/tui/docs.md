@@ -492,59 +492,6 @@ types.
   model is injected at spawn. If the agent has no injection channel, the original
   error is surfaced instead.
 
-#### Skillset picker
-
-`/switch-skillset` (and the per-session startup picker) targets skillsets v2
-through the [`nori-skillsets`](../skillsets/docs.md) crate. Nori supports only
-three v2 operations: list, layer, and unlayer. The module
-[`skillset_picker.rs`](src/nori/skillset_picker.rs) builds the picker and runs
-the blocking client calls on a blocking thread; the flow lives in
-[`pickers.rs`](src/chatwidget/pickers.rs) and
-[`event_handling.rs`](src/app/event_handling.rs).
-
-```text
-/switch-skillset ──> SkillsetListResult{project, result} ──> picker
-                                                              │ select row
-                                                              v
-          ChangeSkillset{name, project, layer} ──> SkillsetChangeResult{name, layer, result}
-                                                              │
-                                     history cell + notes, system-info refresh,
-                                     release deferred per-session spawn
-```
-
-- **Skillset project.** `SkillsetProject` is the session's own
-  `.worktrees/<name>` worktree (detected by path), else the home directory,
-  which is v2's machine-wide scope. The repo root is never used, so a session
-  without a worktree does not compile skillset files into the shared checkout.
-  The picker subtitle states which applies and warns when per-session is on
-  with auto-worktree off.
-- **Toggle semantics.** Rows list layered skillsets first, in stack order,
-  labelled `(layered)`; selecting one unlayers it. Any other row layers that
-  skillset on top of the stack, showing its latest published version.
-  `/switch-skillset <name>` skips the picker and always layers.
-- **Results.** A successful change writes a history cell naming the resulting
-  layer stack, plus a warning cell per note v2 returned (refused or kept
-  paths). A failure is an error message.
-- **Degraded listing.** When the listing carries a `warning` (published
-  releases unreadable), a history warning "Showing layered skillsets only;
-  published releases could not be read: ..." precedes the picker.
-- **Timeouts.** Calls run on a blocking thread under a timeout (listing 60s,
-  layer/unlayer 180s). A timeout is reported as an ordinary failure, so a
-  stuck child never stalls per-session startup.
-- **Nothing to pick.** A CLI that cannot be resolved, no home directory, a
-  failed listing, and an empty listing each report a message and send
-  `SkillsetPickerDismissed`. The resolve failure shows the actual
-  `SkillsetsCli::resolve()` error (not installed, or an invalid
-  `NORI_SKILLSETS_COMMAND`).
-  An empty listing distinguishes "no repository configured" (with the
-  `nori-skillsets config set repository` hint) from "nothing published".
-- **Deferred spawn.** Every `SkillsetChangeResult`, success or failure
-  (including a timeout), releases a deferred per-session agent spawn, so a
-  broken skillset never leaves the session without an agent; later changes do
-  not respawn.
-- A v1 `nori-skillsets` on `PATH` (same binary name) surfaces as a "not the
-  skillsets v2 CLI" error at the listing.
-
 #### The `/browser` profile picker
 
 On Unix, `/browser` (in `@/nori-rs/tui/src/chatwidget/key_handling.rs`) reuses a
@@ -784,12 +731,10 @@ Primary preparation is owned as a generation, task abort handle, current
 intent, retained fork context, and optional pending activation. Ordinary local
 startup records New up front so activation follows preparation automatically.
 When per-session skillsets are enabled the agent spawn is deferred until a
-skillset is chosen: a layer or unlayer result (success or failure) writes or
-leaves the workspace state (`.claude/CLAUDE.md`) and then records New, while
-dismissing the picker records New without a skillset — both preserving the
-ordering that the skillset is written before `session/new`. An unresolvable CLI, a
-failed listing, and an empty listing all dismiss the picker flow, so per-session
-startup never stalls without an agent (see Skillset picker below). `/new` and a first genuine user prompt record New
+skillset is chosen: applying a skillset writes its workspace state
+(`.claude/CLAUDE.md`) and then records New, while dismissing the picker records
+New without a skillset — both preserving the ordering that the skillset is
+written before `session/new`. `/new` and a first genuine user prompt record New
 as well; `/resume` changes the intent to open the prepared catalog and then
 records the selected Resume. Esc-Esc backtrack and transcript fork also queue
 deferred New while preserving their selected history summary as initial context. If preparation is in flight, these decisions wait
@@ -797,6 +742,24 @@ for it instead of cancelling it; if preparation is complete, they consume the
 stored connection. Thus `initialize`, optional `session/list`, and the chosen
 `session/new`, `session/load`, or `session/resume` use one child process. This
 orchestration lives in [`event_handling.rs`](src/app/event_handling.rs).
+
+**Skillsets v2 (feature-gated).** By default `/switch-skillset` uses the v1
+flow in [`skillset_picker.rs`](src/nori/skillset_picker.rs) (`nori-skillsets
+list`, `install`, `switch --install-dir`). With `[features] skillsets_v2`
+(`NoriConfig.skillsets_v2`, read at startup) the entry points
+`handle_switch_skillset_command(_with_name)` in
+[`pickers.rs`](src/chatwidget/pickers.rs) delegate instead to
+[`chatwidget/skillsets_v2.rs`](src/chatwidget/skillsets_v2.rs), which drives
+the toggle picker in [`skillset_picker_v2.rs`](src/nori/skillset_picker_v2.rs)
+through the [`nori-skillsets`](../skillsets/docs.md) crate: a layered row
+unlayers, any other row layers on top. The skillset project is the session's
+worktree, else `$HOME`, so the repo root is never compiled into. The flow uses
+its own `AppEvent`s (`SkillsetV2ListResult`, `ChangeSkillset`,
+`SkillsetChangeResult`). Two behaviors differ from v1 for the deferred
+per-session spawn: a v2 change result always resolves the spawn, even on
+failure (v1 install/switch results resolve it only on success), and a missing
+CLI, a failed listing, or an empty listing sends `SkillsetPickerDismissed`, so
+the agent still starts without a skillset.
 
 Every primary activation calls
 [`take_refreshed_prepared_agent`](src/app/session_setup.rs) before consuming the
@@ -1561,8 +1524,8 @@ usage reaches it through
 The values behind those segments come from `SystemInfo`
 (`@/nori-rs/tui/src/system_info.rs`), collected on a single worker thread that
 refreshes only when asked: at startup, on message submit, turn completion,
-tool-call cwd change, and skillset layer/unlayer. A full collection spawns Node
-for the skillset version, runs skillsets v2 `status` for the layered skillset
+tool-call cwd change, and skillset apply. A full collection spawns Node for the
+skillset version, runs `nori-skillsets list-active` for the active skillset
 names, and walks the filesystem for transcripts and worktrees, which
 is too slow to hold the first frame, so `SystemInfo::seed` runs a cheap subset —
 the git branch and worktree identity, three short `git` invocations — and
@@ -1574,13 +1537,21 @@ instead, so E2E snapshots stay deterministic.
 
 `SystemInfo.active_skillsets` is the single source for "which skillsets are
 active" in both the `skillset` footer segment and `/status`.
-`get_active_skillsets` reads the layer stack of the session's skillset project
-(the same project the picker targets) through
-[`nori-skillsets`](../skillsets/docs.md)'s `layered`, which never touches the
-network. A missing or non-v2 CLI, or any error, yields an empty list: the footer
-is informational and the picker is where those errors surface. There is no
-`.nori-config.json` fallback. The seed leaves the list empty, so it stays empty until the
+`nori-skillsets list-active` reports every skillset installed for any agent in
+the session directory or its parents, one name per line. When an older
+`nori-skillsets` rejects the subcommand (non-zero exit with stderr output),
+`get_active_skillsets` falls back to `read_active_skillset`, which walks parent
+directories for a `.nori-config.json` `activeSkillset` key; current
+`nori-skillsets` no longer writes that key per folder, which is why nothing
+else reads it. The seed leaves the list empty, so it stays empty until the
 first background refresh lands.
+
+With `[features] skillsets_v2` on, collection reads the list from
+`get_active_skillsets_v2` instead: skillsets v2 `status --json` for the session's
+skillset project via `nori_skillsets::SkillsetsCli::layered`, with no
+`.nori-config.json` fallback and an empty list when the CLI is missing or fails.
+The flag reaches the worker through `SystemInfoRefreshRequest.skillsets_v2` and
+`SystemInfo::seed(dir, skillsets_v2)`.
 
 #### Session-info verbosity
 
@@ -1606,7 +1577,7 @@ prompt marker: system context on one row and agent identity on the next. The
 system row is the location (directory, or the cloud session id and title) and
 the approval mode. It deliberately carries no skillset: the welcome card is
 rendered to lines once and written into terminal scrollback before the
-background skillset refresh finishes, so a skillset there could never be
+background `list-active` refresh finishes, so a skillset there could never be
 kept current. The
 agent row reads provider, then the agent's model, then its thought level, then
 its remaining options in exactly the order the agent advertised them; boolean

@@ -120,7 +120,7 @@ The `skillsets` subcommand is an alias that delegates to the `nori-skillsets` pa
 - If not in PATH, falls back to `npx nori-skillsets` or `bunx nori-skillsets` based on `detect_preferred_package_manager()`
 - Passes through all arguments, stdout, stderr, and exit code
 
-This passthrough is version-agnostic and is not the path the TUI uses. It ignores `NORI_SKILLSETS_COMMAND`, and its `npx`/`bunx` fallback resolves the npm package, which today is skillsets v1 (0.33.x); skillsets v2 is installed only with `curl -fsSL https://cli.noriskillsets.dev/install.sh | sh`. The TUI picker and footer go through [@/nori-rs/skillsets](../skillsets/docs.md), which requires v2.
+This passthrough is version-agnostic and is not the path the TUI uses. It ignores `NORI_SKILLSETS_COMMAND`, and its `npx`/`bunx` fallback resolves the npm package, which today is skillsets v1 (0.33.x); skillsets v2 is installed only with `curl -fsSL https://cli.noriskillsets.dev/install.sh | sh`. By default the TUI picker and footer call the v1 commands directly; with `[features] skillsets_v2` they go through [@/nori-rs/skillsets](../skillsets/docs.md), which requires v2.
 
 **Shell Completions:**
 
