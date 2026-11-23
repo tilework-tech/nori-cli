@@ -45,6 +45,7 @@ fn execute(
         raw_output: output
             .map(|(stdout, code)| serde_json::json!({ "stdout": stdout, "exit_code": code })),
         owner_request_id: None,
+        details: Default::default(),
     }
 }
 
@@ -60,6 +61,7 @@ fn acp(call_id: &str, kind: ToolKind, title: &str, invocation: Invocation) -> To
         raw_input: None,
         raw_output: None,
         owner_request_id: None,
+        details: Default::default(),
     }
 }
 
@@ -336,6 +338,7 @@ fn edit_is_one_line_with_counts() {
         raw_input: None,
         raw_output: None,
         owner_request_id: None,
+        details: Default::default(),
     });
     assert_snapshot!(compact(&cell));
     let rendered = text(&cell.display_lines(120), 120);

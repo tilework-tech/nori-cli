@@ -20,6 +20,7 @@ fn acp_tool_snapshot(
         raw_input: None,
         raw_output: None,
         owner_request_id: None,
+        details: Default::default(),
     }
 }
 

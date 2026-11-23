@@ -32,6 +32,7 @@ fn request(id: &str) -> ApprovalRequest {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         }),
         options: vec![
             acp::PermissionOption::new(

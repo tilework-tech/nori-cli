@@ -10,6 +10,9 @@ pub use nori_protocol::CommandAvailability;
 pub use nori_protocol::ThreadGoal;
 
 pub mod session_runtime;
+mod tool_details;
+
+pub use tool_details::ToolDetails;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", rename_all = "snake_case")]
@@ -251,6 +254,9 @@ pub struct ToolSnapshot {
     /// and request-local rendering.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_request_id: Option<String>,
+    /// Line ranges and hit counts the server reported for a read or search.
+    #[serde(default, skip_serializing_if = "ToolDetails::is_empty")]
+    pub details: ToolDetails,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -434,6 +440,9 @@ impl ClientEventNormalizer {
                     acp::ToolCall::new(update.tool_call_id.clone(), String::new())
                 });
                 entry.update(update.fields.clone());
+                if let Some(meta) = &update.meta {
+                    tool_details::merge_meta(&mut entry.meta, meta);
+                }
 
                 let phase = update
                     .fields
@@ -645,6 +654,7 @@ fn tool_snapshot_from_tool_call(tool_call: &acp::ToolCall, phase: ToolPhase) -> 
         raw_input: tool_call.raw_input.clone(),
         raw_output: tool_call.raw_output.clone(),
         owner_request_id: None,
+        details: tool_details::details_from_tool_call(tool_call),
     }
 }
 
@@ -1400,6 +1410,7 @@ mod tests {
                 })),
                 raw_output: None,
                 owner_request_id: None,
+                details: Default::default(),
             })
         );
         assert_eq!(approval.options.len(), 2);

@@ -4,7 +4,7 @@ expression: full(&group)
 ---
 --- 120 ---
 • Explored 1 read · 3 searches · 1 failed
-  • Read main.rs
+  • Read src/main.rs
   • Search TODO in src
   • Ran grep -rn missing_symbol src/
   • Ran rg -n 'fn render' src/ | sort -t: -k1,1 | uniq -c | sort -rn | head -20
@@ -12,7 +12,7 @@ expression: full(&group)
             4 src/exec_cell/render.rs
 --- 80 ---
 • Explored 1 read · 3 searches · 1 failed
-  • Read main.rs
+  • Read src/main.rs
   • Search TODO in src
   • Ran grep -rn missing_symbol src/
   • Ran rg -n 'fn render' src/ | sort -t: -k1,1 | uniq -c | sort -rn | head -20

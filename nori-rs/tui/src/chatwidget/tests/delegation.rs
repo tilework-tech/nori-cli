@@ -187,6 +187,7 @@ fn a_delegation_prompt_revealed_by_a_closed_request_waits_out_its_own_grace() {
                 raw_input: None,
                 raw_output: None,
                 owner_request_id: None,
+                details: Default::default(),
             }),
             options: vec![nori_protocol::acp::v1::PermissionOption::new(
                 nori_protocol::acp::v1::PermissionOptionId::new("reject-once"),

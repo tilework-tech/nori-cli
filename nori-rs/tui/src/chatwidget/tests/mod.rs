@@ -157,6 +157,7 @@ mod agent_status;
 mod api_key;
 mod context;
 mod delegation;
+mod explore_details;
 mod part10;
 mod part8;
 mod queue_list;

@@ -5,6 +5,7 @@ use std::time::Instant;
 use ratatui::prelude::*;
 use ratatui::style::Stylize;
 use textwrap::WordSplitter;
+use unicode_width::UnicodeWidthStr;
 
 use crate::client_event_format::format_artifacts;
 use crate::client_event_format::format_edit_tool_header;
@@ -257,19 +258,18 @@ impl ClientToolCell {
     }
 
     fn explore_step_label(&self, step: &ToolSnapshot, max_width: usize) -> Line<'static> {
-        let path =
-            |p: &std::path::Path| relativize_paths_in_text(&p.display().to_string(), &self.cwd);
-        let spans: Vec<Span<'static>> = match (&step.kind, &step.invocation) {
+        let path = |p: &std::path::Path| display_path(p, &self.cwd);
+        let mut spans: Vec<Span<'static>> = match (&step.kind, &step.invocation) {
             (ToolKind::Execute, Some(Invocation::Command { command })) => {
                 compact_command(command, max_width)
             }
-            (ToolKind::Read, Some(Invocation::Read { path })) => {
-                vec!["Read".cyan(), " ".into(), read_display_name(path).into()]
+            (ToolKind::Read, Some(Invocation::Read { path: file })) => {
+                vec!["Read".cyan(), " ".into(), path(file).into()]
             }
             (_, Some(Invocation::Search { query, path: dir })) => {
                 let mut spans = vec!["Search".cyan(), " ".into()];
                 spans.extend(query.clone().map(Span::from));
-                if let Some(dir) = dir {
+                if let Some(dir) = dir.as_deref().filter(|dir| *dir != self.cwd) {
                     spans.push(" in ".dim());
                     spans.push(path(dir).into());
                 }
@@ -290,6 +290,14 @@ impl ClientToolCell {
                 }
             }
         };
+        // Details are dropped whole rather than cut, so a count never shows
+        // as a misleading partial number.
+        if let Some(summary) = step.details.summary() {
+            let detail = format!(" · {summary}");
+            if Line::from(spans.clone()).width() + detail.width() <= max_width {
+                spans.push(detail.dim());
+            }
+        }
         crate::bottom_pane::truncate_line(&Line::from(spans), max_width)
     }
 
@@ -664,10 +672,14 @@ impl HistoryCell for ClientToolCell {
 }
 
 /// Display name for a Read path: the file name when there is one.
-fn read_display_name(path: &std::path::Path) -> String {
-    path.file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| path.display().to_string())
+/// A path relative to the session working directory, or unchanged when it
+/// lies outside it.
+fn display_path(path: &std::path::Path, cwd: &std::path::Path) -> String {
+    match path.strip_prefix(cwd) {
+        Ok(rel) if rel.as_os_str().is_empty() => ".".to_string(),
+        Ok(rel) => rel.display().to_string(),
+        Err(_) => path.display().to_string(),
+    }
 }
 
 fn is_active_phase(phase: &crate::presentation::ToolPhase) -> bool {
@@ -678,6 +690,10 @@ fn is_active_phase(phase: &crate::presentation::ToolPhase) -> bool {
             | crate::presentation::ToolPhase::InProgress
     )
 }
+
+#[cfg(test)]
+#[path = "client_tool_cell_explore_tests.rs"]
+mod explore_tests;
 
 #[cfg(test)]
 mod tests {
@@ -742,6 +758,7 @@ mod tests {
             raw_input: Some(serde_json::json!({"command": command})),
             raw_output,
             owner_request_id: None,
+            details: Default::default(),
         }
     }
 
@@ -823,6 +840,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -889,6 +907,7 @@ mod tests {
             raw_input: None,
             raw_output: Some(serde_json::json!({"exit_code": 0, "stdout": ""})),
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.transcript_lines(80));
@@ -915,6 +934,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -944,6 +964,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -977,6 +998,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -1008,6 +1030,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -1042,6 +1065,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -1076,6 +1100,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -1114,6 +1139,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, cwd, false);
         let lines = render_lines(&cell.display_lines(80));
@@ -1151,6 +1177,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, cwd, false);
         let lines = render_lines(&cell.display_lines(80));
@@ -1213,6 +1240,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -1254,6 +1282,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let mut cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
         cell.mark_exploring();
@@ -1298,6 +1327,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let snap2 = ToolSnapshot {
             call_id: "call-r2".into(),
@@ -1312,6 +1342,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
 
         let mut cell = ClientToolCell::new(snap1, PathBuf::from("/tmp/cwd"), false);
@@ -1343,6 +1374,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
 
         let mut cell = ClientToolCell::new(snap, PathBuf::from("/tmp/cwd"), false);
@@ -1372,6 +1404,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let mut cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
         cell.mark_exploring();
@@ -1430,6 +1463,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let mut cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
         cell.mark_exploring();
@@ -1470,6 +1504,7 @@ mod tests {
             raw_input: None,
             raw_output,
             owner_request_id: None,
+            details: Default::default(),
         }
     }
 
@@ -1526,6 +1561,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -1656,6 +1692,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = cell.display_lines(80);
@@ -1685,6 +1722,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -1719,6 +1757,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let raw_lines = cell.display_lines(80);
@@ -1768,6 +1807,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let raw_lines = cell.display_lines(80);
@@ -1813,6 +1853,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -1917,6 +1958,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, dir.path().to_path_buf(), false);
         std::fs::remove_file(&file_path).expect("remove file before render");
@@ -1953,6 +1995,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -2010,6 +2053,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -2060,6 +2104,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/"), false);
         let lines = render_lines(&cell.transcript_lines(80));
@@ -2105,6 +2150,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/"), false);
         let lines = render_lines(&cell.transcript_lines(80));
@@ -2150,6 +2196,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -2182,6 +2229,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/cwd"), false);
         let lines = render_lines(&cell.display_lines(80));
@@ -2212,6 +2260,7 @@ mod tests {
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
+            details: Default::default(),
         };
         let mut cell = ClientToolCell::new(snap, PathBuf::from("/tmp/cwd"), false);
         cell.mark_exploring();
