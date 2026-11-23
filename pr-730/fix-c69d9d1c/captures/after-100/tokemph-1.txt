@@ -1,0 +1,24 @@
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/pr730-fixtures/proj · Agent approvals
+  Agent        Synth
+
+
+› tokemph
+
+
+• I should check the synthetic loader.toml file before changing the default. (1s • esc to interrupt)
+
+
+› ? for shortcuts
+
+                                                                                              ⎇ main

@@ -1,0 +1,24 @@
+  Agent        Synth
+
+
+› tokemph
+
+
+• Tokemph scenario answered.
+
+
+› twohead
+
+
+• Twohead scenario answered.
+
+
+› gemini
+
+
+• Inspecting the synthetic loader (1s • esc to interrupt)
+
+
+› / for slash command menu
+
+                                                                                              ⎇ main

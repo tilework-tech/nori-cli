@@ -1,0 +1,24 @@
+  Agent        Synth
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› emoji
+
+
+• Emoji scenario answered.
+
+
+› long
+
+
+• Long scenario answered.
+
+
+› @ for file mentions
+
+                                                      ⎇ main

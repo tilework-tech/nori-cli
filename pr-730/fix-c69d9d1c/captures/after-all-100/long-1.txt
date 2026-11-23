@@ -1,0 +1,24 @@
+
+
+› multi
+
+
+• Explored 1 read
+  • Read fixtures/profile.toml
+
+─ Worked for 4s ────────────────────────────────────────────────────────────────────────────────────
+
+• Intermediate note from the agent.
+
+• Multi scenario answered.
+
+
+› long
+
+
+• Comparing the synthetic loader defaults against the fixture profile so ... (1s • esc to interrupt)
+
+
+› @ for file mentions
+
+                                                                                              ⎇ main

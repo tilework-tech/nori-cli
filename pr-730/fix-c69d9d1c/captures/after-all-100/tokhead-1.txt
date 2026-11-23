@@ -1,0 +1,24 @@
+• Multi scenario answered.
+
+
+› long
+
+
+• Long scenario answered.
+
+
+› inline
+
+
+• Inline scenario answered.
+
+
+› tokhead
+
+
+• Reading the synthetic loader (1s • esc to interrupt)
+
+
+› @ for file mentions
+
+                                                                                              ⎇ main

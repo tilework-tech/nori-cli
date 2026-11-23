@@ -1,0 +1,24 @@
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/pr730-fixtures/proj · Agent approvals
+  Agent        Synth
+
+
+› plain
+
+
+• Plain scenario answered.
+
+
+› @ for file mentions
+
+                                                                                              ⎇ main

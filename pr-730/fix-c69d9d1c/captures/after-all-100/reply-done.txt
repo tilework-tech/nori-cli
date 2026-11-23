@@ -1,0 +1,24 @@
+• Long scenario answered.
+
+
+› inline
+
+
+• Inline scenario answered.
+
+
+› tokhead
+
+
+• Tokhead scenario answered.
+
+
+› reply
+
+
+• Ordinary synthetic reply.
+
+
+› @ for file mentions
+
+                                                                                              ⎇ main

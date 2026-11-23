@@ -1,0 +1,24 @@
+› plain
+
+
+• Plain scenario answered.
+
+
+› bold
+
+
+• Bold scenario answered.
+
+
+› multi
+
+
+• Explored 1 read
+  • Read fixtures/profile.toml
+
+• The profile names look stable; next the alias table. (4s • esc to interrupt)
+
+
+› @ for file mentions
+
+                                                                                              ⎇ main

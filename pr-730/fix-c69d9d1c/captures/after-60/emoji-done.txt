@@ -1,0 +1,24 @@
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/…/pr730-fixtures/proj · Agent
+approvals
+  Agent        Synth
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› emoji
+
+
+• Emoji scenario answered.
+
+
+› @ for file mentions
+
+                                                      ⎇ main
