@@ -1,0 +1,12 @@
+Medium (/config to change)
+
+
+
+› change the default
+
+
+• 設定ローダーを読んでから既定値... (21s • esc to interrupt)
+
+
+› ? for shortcuts
+
