@@ -1,0 +1,28 @@
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/inventory-local-QdA9/inventory · Agent approvals
+  Agent        Atlas
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Atlas session updated:
+  nori/turnId=<string>, nori/turnState=<string>
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+⚠ Received update with no active local request
+
+• Cancel requested (1s)
+
+
+› Keep the sample inventory draft!
+
