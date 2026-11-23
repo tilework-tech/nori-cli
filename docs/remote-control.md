@@ -569,11 +569,18 @@ without Node.js).
 | `host` | `_nori/host/stop` |
 | `delegation` | `_nori/session/delegate`, `_nori/session/delegation/resolve` |
 
-`_nori/session/list`, `new`, `prompt`, `respond`, `cancel`, `close`,
-`resume` and `follow_up` remain as aliases for one release, because
-`nori attach`, `nori host ls`, `nori host new` and the attach ID lookup still
-use them; Phase B moves those clients onto ACP. `_nori/agents/list` and
-`_nori/session/set_approval_policy` were never released and do not exist.
+`_nori/session/list`, `new`, `prompt`, `respond`, `cancel`, `close` and
+`resume` are deprecated aliases, kept for one more release.
+`_nori/session/follow_up` is not an alias: it stays (contract C11). `nori
+attach` sends `session/close`, the `session/cancel` notification and
+`session/resume` (with the row's folder; an older host that does not report
+the folder gets `_nori/session/resume`). It still uses `_nori/session/list`,
+`new`, `prompt` and `respond`, and `nori host ls`, `nori host new` and the
+attach ID lookup still use `list` and `new`, because the standard methods
+lack what they need (row status, family and delegation fields, replay
+cursors, prompt admission without waiting for the turn, a first prompt from
+an observer). `_nori/agents/list` and `_nori/session/set_approval_policy`
+were never released and do not exist.
 
 ### Sessions on the host
 

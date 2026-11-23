@@ -166,6 +166,44 @@ impl Runtime {
         }
     }
 
+    /// Send a JSON-RPC notification, which has no reply.
+    pub fn notify(&mut self, method: &str, params: Value) {
+        if self.state.stopped.is_some() {
+            return;
+        }
+        if self
+            .requests
+            .send(json!({"jsonrpc":"2.0", "method":method, "params":params}))
+            .is_err()
+        {
+            self.state
+                .show_notice("Host connection worker stopped. Detach and try again.");
+        }
+    }
+
+    /// `session/resume` for `id` in its folder; a host too old to report
+    /// the folder gets its own resume request instead.
+    pub fn resume(&mut self, id: &str) {
+        let cwd = self
+            .state
+            .sessions
+            .iter()
+            .find(|row| row.session_id == id)
+            .and_then(|row| row.cwd.clone());
+        match cwd {
+            Some(cwd) => self.send(
+                "session/resume",
+                json!({"sessionId": id, "cwd": cwd, "mcpServers": []}),
+                Pending::Mutation { draft: None },
+            ),
+            None => self.send(
+                "_nori/session/resume",
+                json!({"session_id": id}),
+                Pending::Mutation { draft: None },
+            ),
+        }
+    }
+
     pub fn refresh_list(&mut self) {
         if self.state.connected
             && !self
@@ -274,6 +312,13 @@ impl Runtime {
                 return Ok(());
             }
             _ => {}
+        }
+        // Requests from the host (a session this connection resumed asks
+        // for permission) share the id space with replies; only replies
+        // settle a pending command. Permission choices come from the
+        // subscription.
+        if message.get("method").is_some() {
+            return Ok(());
         }
         let Some(id) = message["id"].as_i64() else {
             return Ok(());

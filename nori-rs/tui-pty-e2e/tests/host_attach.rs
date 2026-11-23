@@ -995,3 +995,39 @@ fn attached_enter_delivers_to_the_original_turn_then_tab_drains_once() {
     let mut client = host.create_session();
     steering::exercise(&mut client);
 }
+
+#[test]
+fn cancel_in_an_attached_terminal_ends_the_running_turn() {
+    let host = Host::new();
+    host.start();
+    let mut client = host.create_session();
+    client.submit_input("mock:stream-until-cancel").unwrap();
+    let working = |host: &Host| {
+        host.list()
+            .lines()
+            .nth(1)
+            .is_some_and(|row| row.contains("working"))
+    };
+    let deadline = Instant::now() + TIMEOUT;
+    while !working(&host) {
+        assert!(Instant::now() < deadline, "the turn never started");
+        client.settle(Duration::from_millis(50));
+    }
+
+    client.submit_input("/cancel").unwrap();
+
+    let deadline = Instant::now() + TIMEOUT;
+    while working(&host) {
+        assert!(
+            Instant::now() < deadline,
+            "the turn kept running: {}",
+            host.list()
+        );
+        client.settle(Duration::from_millis(50));
+    }
+    assert!(
+        host.list().lines().nth(1).is_some_and(|row| row.contains("ready")),
+        "the session is ready for the next prompt: {}",
+        host.list()
+    );
+}
