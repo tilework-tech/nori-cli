@@ -1024,7 +1024,10 @@ fn cancel_in_an_attached_terminal_ends_the_running_turn() {
         client.settle(Duration::from_millis(50));
     }
     assert!(
-        host.list().lines().nth(1).is_some_and(|row| row.contains("ready")),
+        host.list()
+            .lines()
+            .nth(1)
+            .is_some_and(|row| row.contains("ready")),
         "the session is ready for the next prompt: {}",
         host.list()
     );
