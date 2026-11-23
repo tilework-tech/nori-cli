@@ -54,19 +54,33 @@ the inline view for the TUI's tool call cells; the transcript overlay always
 shows the full view. It resolves from, in order: a `-c tui.tool_output=...`
 command-line override, the active project's `tool_output`, `[tui]
 tool_output`, then `Full`. Because `-c` overrides are merged into the parsed
-`[tui]` table before resolution, the loader checks the raw overrides for
-`tui.tool_output`, or a `tui` table that contains `tool_output`, to know
-whether the `[tui]` value came from the command line and must beat the project
-value; a `tui` table without that key leaves the project value in charge. The
-result is exposed as `NoriConfig::tool_output_from_command_line`, which lets
-callers tell a one-off override apart from a saved setting.
+`[tui]` table before resolution, the loader cannot tell a command-line `[tui]`
+value from a file value by looking at the merged table. A shared helper in
+[loader.rs](src/loader.rs) scans the raw overrides, newest first, for either
+`tui.<key>` or a whole `tui` table, and stops at the first match: a dotted
+override counts, and a `tui` table counts only if it contains the key. A later
+`tui` table replaces the whole table, so it decides even when it lacks the key,
+which leaves the project value in charge. The helper serves every `[tui]` key
+that a project can override. For `tool_output`, the result is also exposed as
+`NoriConfig::tool_output_from_command_line`, which lets callers tell a one-off
+override apart from a saved setting.
+
+`NoriConfig::tool_output_max_lines` (`Option<i32>`) is the optional inline line
+cap for tool output. It resolves in the same order as `tool_output`: a
+command-line `tui.tool_output_max_lines`, the active project's value, `[tui]
+tool_output_max_lines`, then `None`. Only a positive value survives
+resolution; `0` or a negative value at the winning level becomes `None`, so a
+project or `-c` override can lift a global cap. The TUI applies the cap; see
+[@/nori-rs/tui](../tui/docs.md).
 
 `[projects."<path>"]` entries deserialize to `ProjectConfig`, which holds
-`trust_level` and `tool_output`. The active project is the entry for the exact
+`trust_level`, `tool_output`, and `tool_output_max_lines`. The active project
+is the entry for the exact
 cwd, otherwise the entry for the primary git root (found through the git common
 dir, so linked worktrees share the main repository's entry). `NoriConfigEdits`
-writes both fields under the same canonicalized project key through
-`set_project_trust_level` and `set_project_tool_output`; the shared helper also
+writes `trust_level` and `tool_output` under the same canonicalized project key through
+`set_project_trust_level` and `set_project_tool_output`; there is no edit for
+`tool_output_max_lines`, which users set by hand. The shared helper also
 re-formats a project written as an inline table so an added field stays tidy.
 The TUI's directory-trust onboarding step uses both edits.
 

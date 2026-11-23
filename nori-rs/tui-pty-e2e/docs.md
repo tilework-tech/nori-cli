@@ -165,6 +165,10 @@ question saves the chosen value only for that project (and applies in its
 subdirectories), that Esc saves nothing and keeps inheriting the global
 setting, that a one-off `-c` override still shows the question without being
 saved, and that an unrelated `-c tui={...}` table keeps the project's choice.
+Line cap scenarios set a global `[tui] tool_output_max_lines` and a smaller
+project value, then check that the project cap keeps the head and tail of the
+output with a `┄ N lines hidden` row, and that `-c
+tui.tool_output_max_lines=0` lifts the project cap.
 
 [Queue recall scenarios](tests/queue_recall.rs) press Tab to queue a follow-up
 during a running turn, then Up+Enter (focus the queue list, edit the selection)

@@ -1334,7 +1334,8 @@ impl ChatWidget {
             self.config.cwd.clone(),
             self.config.animations,
         )
-        .with_tool_output(self.config.tool_output);
+        .with_tool_output(self.config.tool_output)
+        .with_output_max_lines(self.config.tool_output_max_lines);
         if is_new_exploring {
             cell.mark_exploring();
         }
