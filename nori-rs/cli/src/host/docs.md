@@ -121,7 +121,13 @@ host ls / stop / new --------------+                   SessionManager
   one session's journal events to one connection as `session/update`
   notifications under the conversation ID. Stored sessions restart through
   `SessionManager::resume_stored`. `_nori/session/resume` keeps accepting
-  stored IDs as an alias. Wire details:
+  stored IDs as an alias. [Session configuration](acp/config.rs) composes the
+  host-owned `agent` and `mode` options around the adapter's options, maps
+  modes onto the harness approval policy through
+  `nori_harness::permission_mode`, and keeps clients' choices in
+  `host/session-settings.json` so a restarted session gets them back. A
+  changed agent restarts the session's process through
+  `SessionManager::replace_agent`. Wire details:
   [remote-control.md §12](../../../../docs/remote-control.md#12-standard-acp-v1-on-the-background-host).
 - Lifecycle requests prepare agents using the host's configuration.
   `_nori/session/new` takes optional `cwd`, `agent`, and `prompt` strings and

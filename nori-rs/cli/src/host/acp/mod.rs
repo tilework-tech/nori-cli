@@ -8,6 +8,7 @@
 //! `docs/remote-control.md` §12.
 
 mod attach;
+pub(super) mod config;
 mod list;
 
 use std::collections::HashMap;
@@ -25,13 +26,23 @@ use super::service::HostService;
 /// ACP methods this face answers. Every other method keeps its existing
 /// managed-host meaning.
 pub(super) fn handles(method: &str) -> bool {
-    matches!(method, "session/list" | "session/load" | "session/resume")
+    matches!(
+        method,
+        "session/list"
+            | "session/load"
+            | "session/resume"
+            | "session/set_mode"
+            | "session/set_config_option"
+    )
 }
 
 /// Methods whose response may wait on an agent, so the socket must keep
 /// serving the connection's other messages meanwhile.
 pub(super) fn runs_concurrently(method: &str) -> bool {
-    matches!(method, "session/load" | "session/resume")
+    matches!(
+        method,
+        "session/load" | "session/resume" | "session/set_config_option"
+    )
 }
 
 /// A JSON-RPC error for the client.
@@ -126,28 +137,79 @@ impl AcpFace {
             None => forwarder.abort(),
         }
     }
+
+    /// Send a host-originated message to every connection attached to
+    /// `session`.
+    fn broadcast(&self, session: &ConversationId, message: Value) {
+        for connection in self.lock().values() {
+            if connection.attached.contains_key(session) {
+                connection.handle.deliver(message.clone());
+            }
+        }
+    }
 }
 
 impl HostService {
     pub(super) async fn acp_request(&self, client: i64, request: &Value) -> Value {
         let method = request["method"].as_str().unwrap_or_default();
         let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
-        let result = match method {
+        match self.dispatch_acp(client, method, &params).await {
+            Ok(result) => json!({"jsonrpc":"2.0","id":request["id"],"result":result}),
+            Err(error) => error_response(request, error),
+        }
+    }
+
+    async fn dispatch_acp(
+        &self,
+        client: i64,
+        method: &str,
+        params: &Value,
+    ) -> Result<Value, AcpError> {
+        let params = params.clone();
+        match method {
             "session/list" => self.list_sessions(&params).await,
             "session/load" => self.load_session(client, &params, true).await,
             "session/resume" => self.load_session(client, &params, false).await,
+            "session/set_mode" => {
+                let id = session_id(&params)?;
+                let mode = params["modeId"]
+                    .as_str()
+                    .ok_or_else(|| AcpError::invalid_params("modeId is required"))?;
+                self.set_mode(&id, mode).await.map(|()| json!({}))
+            }
+            "session/set_config_option" => {
+                let id = session_id(&params)?;
+                let (Some(config_id), Some(value)) =
+                    (params["configId"].as_str(), params["value"].as_str())
+                else {
+                    return Err(AcpError::invalid_params(
+                        "configId and a string value are required",
+                    ));
+                };
+                self.set_config_option(&id, config_id, value)
+                    .await
+                    .map(|options| json!({"configOptions": options}))
+            }
             _ => Err(AcpError {
                 code: -32601,
                 message: "method not found".into(),
             }),
-        };
-        match result {
-            Ok(result) => json!({"jsonrpc":"2.0","id":request["id"],"result":result}),
-            Err(error) => json!({
-                "jsonrpc":"2.0",
-                "id":request["id"],
-                "error":{"code":error.code,"message":error.message},
-            }),
         }
     }
+}
+
+fn error_response(request: &Value, error: AcpError) -> Value {
+    json!({
+        "jsonrpc":"2.0",
+        "id":request["id"],
+        "error":{"code":error.code,"message":error.message},
+    })
+}
+
+/// The live session a request names.
+fn session_id(params: &Value) -> Result<ConversationId, AcpError> {
+    params["sessionId"]
+        .as_str()
+        .and_then(|id| ConversationId::from_string(id).ok())
+        .ok_or_else(|| AcpError::not_found("unknown session"))
 }

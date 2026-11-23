@@ -437,6 +437,7 @@ async fn serve(
     } else {
         None
     };
+    let settings = acp::config::SettingsStore::open(&config.nori_home);
     let host = Arc::new(HostService {
         recovery,
         launches,
@@ -446,6 +447,7 @@ async fn serve(
         overrides,
         stop: tokio::sync::Notify::new(),
         acp: acp::AcpFace::default(),
+        settings,
     });
     let server =
         RemoteAcpServer::bind_host(format!("127.0.0.1:{port}").parse()?, host.clone(), token)

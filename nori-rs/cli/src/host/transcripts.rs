@@ -114,6 +114,7 @@ impl HostService {
             // resume by transcript replay instead of `session/load`.
             None => transcript.meta.acp_session_id = None,
         }
+        self.restore_settings(id, &mut config);
         Ok(self
             .manager
             .resume_stored(*id, transcript, Self::prepare(config))?)

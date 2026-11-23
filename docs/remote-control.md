@@ -727,3 +727,42 @@ one session, and each sees every update. Attachment ends when the connection
 closes. A connection that falls more than 1024 events behind a session is
 closed; reconnect and load again.
 
+### Session configuration
+
+`session/load` and `session/resume` return the session's `configOptions` and
+`modes`. Every session's `configOptions` contain, in this order:
+
+| ID | Category | Values |
+| --- | --- | --- |
+| `agent` | `_nori_agent` | Every agent the host can start (built-in and `[[agents]]`). Each value's `description` is `Installed` when its adapter command resolves on the host, else says the adapter is not installed and how to install it. |
+| the adapter's options | as the adapter reports them | Passed through, including its `model` select. Adapter options with ID `agent` or `mode`, or with category `mode`, are left out: the host owns those. |
+| `mode` | `mode` | `ask`, `agent`, `approve-all` |
+
+Permission modes are also the ACP session modes (`currentModeId`,
+`availableModes`) and stay in sync with the `mode` option:
+
+| Mode | Label | `approval_policy` | Behavior today |
+| --- | --- | --- | --- |
+| `ask` | Ask | `untrusted` | As `agent`: Nori only sees the permission requests an adapter sends. Mapping onto the adapter's strictest mode is planned (contract Phase C). |
+| `agent` | Agent | `on-request` | Permission requests go to clients. |
+| `approve-all` | Approve all | `never` | Nori answers every permission request with its first allow option. |
+
+A session's mode starts from the `approval_policy` its folder's configuration
+sets (`on-failure` reads as `agent`).
+
+| Method | Who may call | Behavior |
+| --- | --- | --- |
+| `session/set_mode` | Controller | Sets the mode. Attached connections receive `current_mode_update` and a `config_option_update` with the complete list. An unknown mode fails with `-32602` and changes nothing. |
+| `session/set_config_option` | Controller | `mode` acts as `session/set_mode`. `agent` replaces the adapter process under the same session ID while the session has had no prompt; afterwards, or for an unknown agent, it fails with `-32602`. Any other ID goes to the adapter; a refused value fails with `-32602`. Replies `{configOptions}` with the complete list, and attached connections receive the same list as `config_option_update`. |
+
+An adapter's own `config_option_update` reaches clients as the complete list,
+host options included. Its own `current_mode_update` is not forwarded.
+Watchers get `-32016` from both methods.
+
+The mode and every adapter option a client sets are kept in
+`$NORI_HOME/host/session-settings.json`. When a failed or stored session
+restarts, its mode becomes the starting approval policy, its `model` value
+becomes the adapter's starting model, and the other options are set again
+once the adapter has started. Changing the agent clears the remembered
+adapter options.
+
