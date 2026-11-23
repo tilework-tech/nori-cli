@@ -25,8 +25,11 @@ pub struct ToolDetails {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct LineSpan {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total: Option<i64>,
 }
 
@@ -35,8 +38,11 @@ pub struct LineSpan {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct HitCount {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub matches: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub files: Option<i64>,
+    #[serde(default)]
     pub more: bool,
 }
 
@@ -100,12 +106,28 @@ fn plural(count: i64, one: &'static str, many: &'static str) -> &'static str {
 }
 
 pub(super) fn details_from_tool_call(tool_call: &acp::ToolCall) -> ToolDetails {
-    let report = claude_report(tool_call);
+    // The Claude adapter's report: `_meta.claudeCode` with `toolName` and the
+    // Claude Code `toolResponse`.
+    let report = tool_call
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get("claudeCode"))
+        .and_then(|claude| {
+            let name = claude.get("toolName")?.as_str()?;
+            Some((name, claude.get("toolResponse")?))
+        });
+    let reported_lines = || {
+        count(tool_call.raw_output.as_ref()?.get("lines")).map(|total| LineSpan {
+            start: None,
+            end: None,
+            total: Some(total),
+        })
+    };
     match tool_call.kind {
         acp::ToolKind::Read => ToolDetails {
             lines: observed_read(report)
-                .or_else(|| requested_read(tool_call))
-                .or_else(|| raw_output_line_count(tool_call)),
+                .or_else(reported_lines)
+                .or_else(|| requested_read(tool_call)),
             hits: None,
         },
         acp::ToolKind::Search => ToolDetails {
@@ -142,21 +164,18 @@ pub(super) fn merge_meta(target: &mut Option<acp::Meta>, update: &acp::Meta) {
     }
 }
 
-/// The Claude adapter's tool report: `_meta.claudeCode` with `toolName` and
-/// the Claude Code `toolResponse`.
-fn claude_report(tool_call: &acp::ToolCall) -> Option<(&str, &Value)> {
-    let claude = tool_call.meta.as_ref()?.get("claudeCode")?;
-    let name = claude.get("toolName")?.as_str()?;
-    let response = claude.get("toolResponse")?;
-    Some((name, response))
-}
-
 fn count(value: Option<&Value>) -> Option<i64> {
     value?.as_i64().filter(|count| *count >= 0)
 }
 
 fn line_number(value: Option<&Value>) -> Option<i64> {
     value?.as_i64().filter(|line| *line >= 1)
+}
+
+/// The last line of `count` lines starting at `start`, or `None` when the
+/// numbers are too large to be real.
+fn last_line(start: i64, count: i64) -> Option<i64> {
+    start.checked_add(count)?.checked_sub(1)
 }
 
 fn observed_read(report: Option<(&str, &Value)>) -> Option<LineSpan> {
@@ -168,7 +187,10 @@ fn observed_read(report: Option<(&str, &Value)>) -> Option<LineSpan> {
     let start = line_number(file.get("startLine"));
     let returned = count(file.get("numLines"));
     let (start, end) = match (start, returned) {
-        (Some(start), Some(returned)) if returned > 0 => (Some(start), Some(start + returned - 1)),
+        (Some(start), Some(returned)) if returned > 0 => match last_line(start, returned) {
+            Some(end) => (Some(start), Some(end)),
+            None => return None,
+        },
         _ => (None, None),
     };
     (start.is_some() || total.is_some()).then_some(LineSpan { start, end, total })
@@ -185,7 +207,7 @@ fn requested_read(tool_call: &acp::ToolCall) -> Option<LineSpan> {
     ) {
         (_, _, Some(start), Some(end)) if end >= start => (start, Some(end)),
         (_, _, Some(start), _) => (start, None),
-        (Some(offset), Some(limit), None, _) => (offset, Some(offset + limit - 1)),
+        (Some(offset), Some(limit), None, _) => (offset, Some(last_line(offset, limit)?)),
         (None, Some(limit), None, _) => (1, Some(limit)),
         (Some(offset), None, None, _) => (offset, None),
         (None, None, None, _) => {
@@ -201,15 +223,6 @@ fn requested_read(tool_call: &acp::ToolCall) -> Option<LineSpan> {
             total: None,
         }),
     }
-}
-
-fn raw_output_line_count(tool_call: &acp::ToolCall) -> Option<LineSpan> {
-    let total = count(tool_call.raw_output.as_ref()?.get("lines"))?;
-    Some(LineSpan {
-        start: None,
-        end: None,
-        total: Some(total),
-    })
 }
 
 fn claude_search_hits(report: Option<(&str, &Value)>) -> Option<HitCount> {

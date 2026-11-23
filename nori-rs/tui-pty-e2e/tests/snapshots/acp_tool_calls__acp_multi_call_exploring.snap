@@ -7,15 +7,15 @@ expression: normalize_for_input_snapshot(contents)
 • Test message 1Test message 2
 
 • Exploring 2 reads
-  • Read file1.rs
-  • Read file2.rs
+  • Read src/file1.rs
+  • Read src/file2.rs
 
 ────────────────────────────────────────────────────────────────────────────────
 
 • Reading multiple files...
 
 • Explored 1 read
-  • Read file3.rs
+  • Read src/file3.rs · 75 lines
 
 ────────────────────────────────────────────────────────────────────────────────
 

@@ -645,7 +645,8 @@ The summary comes from the snapshot's typed `ToolDetails`
 ([`tool_details.rs`](src/presentation/tool_details.rs)), never from output
 text or file IO, so servers that send no structured fields get the bare row.
 When the row plus summary would exceed the compact width the summary is
-dropped whole, so a count is never shown cut mid-number. Snapshot routing, the
+dropped whole, so a count is never shown cut mid-number, and a read path too
+long for a compact row falls back to its file name. Snapshot routing, the
 pending/completed bookkeeping, and exploring-group lifetime are described in
 [EXEC_CELL_LIFECYCLE.md](src/chatwidget/EXEC_CELL_LIFECYCLE.md).
 

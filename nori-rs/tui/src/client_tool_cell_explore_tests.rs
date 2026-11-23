@@ -47,7 +47,7 @@ fn start(
 
 fn located(update: acp::SessionUpdate, path: &str, line: Option<u32>) -> acp::SessionUpdate {
     let acp::SessionUpdate::ToolCall(call) = update else {
-        return update;
+        panic!("located() takes a tool call start");
     };
     acp::SessionUpdate::ToolCall(call.locations(vec![acp::ToolCallLocation::new(path).line(line)]))
 }
@@ -121,7 +121,7 @@ fn step_row(updates: &[acp::SessionUpdate]) -> String {
     rendered
         .lines()
         .nth(1)
-        .unwrap_or_default()
+        .unwrap_or_else(|| panic!("no step row in:\n{rendered}"))
         .trim()
         .to_string()
 }
@@ -326,17 +326,86 @@ fn read_line_count_from_raw_output_is_shown() {
     assert_eq!(row, "• Read src/lib.rs · 42 lines");
 }
 
+/// A location at line 1 says nothing about the range, so it must not hide the
+/// line count the server reported.
 #[test]
 fn read_line_count_from_raw_output_is_shown_for_a_read_from_the_first_line() {
     let row = step_row(&[
         located(
-            start("r", acp::ToolKind::Read, "Read", Some(json!({ "path": abs("src/lib.rs") }))),
+            start(
+                "r",
+                acp::ToolKind::Read,
+                "Read",
+                Some(json!({ "path": abs("src/lib.rs") })),
+            ),
             &abs("src/lib.rs"),
             Some(1),
         ),
         completed("r", Some(json!({ "success": true, "lines": 42 }))),
     ]);
     assert_eq!(row, "• Read src/lib.rs · 42 lines");
+}
+
+#[test]
+fn reported_line_count_wins_over_the_requested_range() {
+    let row = step_row(&[
+        read_start("r", "src/lib.rs", json!({ "offset": 40, "limit": 81 })),
+        completed("r", Some(json!({ "success": true, "lines": 3 }))),
+    ]);
+    assert_eq!(row, "• Read src/lib.rs · 3 lines");
+}
+
+#[test]
+fn out_of_range_line_numbers_are_ignored() {
+    let observed = step_row(&[
+        read_start("r", "src/main.rs", json!({})),
+        completed("r", None),
+        meta_update(
+            "r",
+            claude_response(
+                "Read",
+                json!({ "type": "text", "file": { "startLine": i64::MAX, "numLines": 2 } }),
+            ),
+        ),
+    ]);
+    assert_eq!(observed, "• Read src/main.rs");
+
+    let requested = step_row(&[
+        read_start(
+            "r",
+            "src/main.rs",
+            json!({ "offset": i64::MAX, "limit": 5 }),
+        ),
+        completed("r", None),
+    ]);
+    assert_eq!(requested, "• Read src/main.rs");
+}
+
+#[test]
+fn compact_row_keeps_the_file_name_when_the_path_is_too_long() {
+    let cell = cell_from(&[
+        read_start(
+            "r",
+            "crates/storage/src/backends/sqlite/migrations/session_store.rs",
+            json!({}),
+        ),
+        completed("r", None),
+        meta_update(
+            "r",
+            claude_response(
+                "Read",
+                json!({ "type": "text", "file": { "startLine": 1, "numLines": 88, "totalLines": 88 } }),
+            ),
+        ),
+    ]);
+    let rendered = text(&cell.display_lines(48), 48);
+    let row = rendered
+        .lines()
+        .nth(1)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    assert_eq!(row, "└ Read session_store.rs · 88 lines");
 }
 
 #[test]
@@ -494,13 +563,10 @@ fn search_in_content_mode_counts_files() {
 
 #[test]
 fn running_search_shows_no_counts_yet() {
-    let rendered = text(
-        &cell_from(&[grep_start("s", "TODO", &abs("src"))]).transcript_lines(120),
-        120,
-    );
+    let updates = [grep_start("s", "TODO", &abs("src"))];
+    let rendered = text(&cell_from(&updates).transcript_lines(120), 120);
     assert!(rendered.contains("Exploring"), "{rendered}");
-    assert!(rendered.contains("Search TODO in src"), "{rendered}");
-    assert!(!rendered.contains(" · no matches"), "{rendered}");
+    assert_eq!(step_row(&updates), "• Search TODO in src");
 }
 
 #[test]

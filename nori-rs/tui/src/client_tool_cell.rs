@@ -264,7 +264,16 @@ impl ClientToolCell {
                 compact_command(command, max_width)
             }
             (ToolKind::Read, Some(Invocation::Read { path: file })) => {
-                vec!["Read".cyan(), " ".into(), path(file).into()]
+                // "Read " plus the path; a path too long for the row gives way
+                // to the file name, which says more than a cut-off folder.
+                let shown = path(file);
+                let shown = match file.file_name() {
+                    Some(name) if 5 + shown.width() > max_width => {
+                        name.to_string_lossy().to_string()
+                    }
+                    Some(_) | None => shown,
+                };
+                vec!["Read".cyan(), " ".into(), shown.into()]
             }
             (_, Some(Invocation::Search { query, path: dir })) => {
                 let mut spans = vec!["Search".cyan(), " ".into()];
@@ -294,7 +303,7 @@ impl ClientToolCell {
         // as a misleading partial number.
         if let Some(summary) = step.details.summary() {
             let detail = format!(" · {summary}");
-            if Line::from(spans.clone()).width() + detail.width() <= max_width {
+            if spans.iter().map(Span::width).sum::<usize>() + detail.width() <= max_width {
                 spans.push(detail.dim());
             }
         }
