@@ -220,8 +220,13 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
   failed session with Ctrl+R while retaining its conversation identity.
 - Detach closes only the client. Session close, cancellation, and resume are
   explicit host commands, and a role handoff never closes the old controller.
-  `/close` sends ACP `session/close`, `/cancel` the `session/cancel`
-  notification, and `/resume` and Ctrl+R `session/resume` with the row's
+  For agent-started work, Ctrl+C preserves the draft and uses the same
+  controller-only request as `/cancel`, `_nori/session/cancel_observed`.
+  The host checks the observation ID against the active turn. Attach shows
+  delivery or confirmation failures and leaves any retry to the controller.
+  For a host-admitted prompt, `/cancel` sends the standard `session/cancel`
+  notification. `/close` sends ACP `session/close`, and `/resume` and Ctrl+R
+  send `session/resume` with the row's
   folder (`_nori/session/resume` for an older host whose rows carry no
   folder). A resumed session is attached to this connection, so the host
   also sends it plain `session/update` notifications and
