@@ -9,7 +9,7 @@ Path: @/nori-rs/keyring-store
 
 ### How it fits into the larger codebase
 
-- [`nori-providers`](../providers/docs.md) stores the saved-credential document under service `Nori Credentials` (account `credentials`) when `NORI_CREDENTIALS_STORE=keyring` is set; its default file backend does not use the keyring. The CLI ([`providers.rs`](../cli/src/providers.rs)) and harness reach it through that crate.
+- [`nori-providers`](../providers/docs.md) stores the saved-credential document under service `Nori Credentials` (account `credentials`) when `NORI_CREDENTIALS_STORE=keyring` is set; its default file backend does not use the keyring. The CLI ([`auth.rs`](../cli/src/auth.rs)), the TUI's `/api-key`, and harness reach it through that crate.
 - `@/nori-rs/rmcp-client/` (`src/oauth.rs`) stores MCP OAuth tokens.
 - `@/nori-rs/core/` (`src/auth/storage.rs`) stores inherited Codex auth.
 - Callers take an `Arc<dyn KeyringStore>` and pass `DefaultKeyringStore` in production.

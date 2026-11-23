@@ -299,6 +299,7 @@ impl NoriConfig {
             )?,
             token_providers: toml.token_providers,
             default_models: toml.default_models,
+            auth: toml.auth,
             default_model_override_keys,
             agents: toml.agents,
             acp_adapters: toml.acp_adapters,

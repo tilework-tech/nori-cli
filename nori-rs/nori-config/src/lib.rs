@@ -3,6 +3,7 @@
 //! Provides a minimal, standalone configuration system for ACP-only mode.
 //! Configuration is loaded from `~/.nori/cli/config.toml`.
 
+mod auth;
 mod config_types;
 mod edits;
 mod git_root;
@@ -13,6 +14,7 @@ mod policy;
 pub mod token_providers;
 mod types;
 
+pub use auth::AgentAuthPreference;
 pub use config_types::EnvironmentVariablePattern;
 pub use config_types::McpServerConfig;
 pub use config_types::McpServerTransportConfig;

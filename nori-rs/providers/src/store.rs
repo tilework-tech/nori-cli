@@ -289,7 +289,7 @@ impl CredentialStore {
                 "{} holds API keys saved per agent by an earlier development build, which this \
                  version no longer reads. Delete saved-keys.json, saved-keys.secret.json, and \
                  saved-keys.lock from {} (and any \"Nori Provider Keys\" keychain items), then \
-                 save each key again with `nori providers set-key <provider>`",
+                 save each key again with `nori auth set-key <provider>`",
                 legacy.display(),
                 self.nori_home.display()
             );

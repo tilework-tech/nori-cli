@@ -1010,6 +1010,21 @@ impl App {
             AppEvent::SkipNextWorldWritableScan => {
                 self.skip_world_writable_scan_once = true;
             }
+            AppEvent::OpenApiKeyPreference(preference) => {
+                self.chat_widget.open_api_key_picker(preference);
+            }
+            AppEvent::OpenApiKeyBillingConfirmation(preference) => {
+                self.chat_widget
+                    .open_api_key_billing_confirmation(preference);
+            }
+            AppEvent::PersistApiKeyPreference {
+                agent,
+                prefer_api_key,
+                api_billing_confirmed,
+            } => {
+                self.persist_api_key_preference(agent, prefer_api_key, api_billing_confirmed)
+                    .await;
+            }
             AppEvent::UpdateFullAccessWarningAcknowledged(ack) => {
                 self.chat_widget.set_full_access_warning_acknowledged(ack);
             }

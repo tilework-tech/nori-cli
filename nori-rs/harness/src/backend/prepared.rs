@@ -85,24 +85,27 @@ impl PreparedAgent {
             &mut agent_config,
             config.default_model.as_deref(),
         );
-        // A keychain that prompts or hangs must not hold up the launch.
-        let nori_home = config.nori_home.clone();
-        let mut with_saved_key = agent_config.clone();
-        let lookup = tokio::task::spawn_blocking(move || {
-            nori_providers::inject_saved_keys(&mut with_saved_key, &nori_home, &|key| {
-                std::env::var(key).ok()
+        // Saved keys reach only agents the user set to prefer them. A keychain
+        // that prompts or hangs must not hold up the launch.
+        if config.prefer_api_key {
+            let nori_home = config.nori_home.clone();
+            let mut with_saved_key = agent_config.clone();
+            let lookup = tokio::task::spawn_blocking(move || {
+                nori_providers::inject_saved_keys(&mut with_saved_key, &nori_home, true, &|key| {
+                    std::env::var(key).ok()
+                });
+                with_saved_key
             });
-            with_saved_key
-        });
-        match tokio::time::timeout(SAVED_KEY_TIMEOUT, lookup).await {
-            Ok(joined) => {
-                agent_config =
-                    joined.map_err(|error| AgentPrepareFailure::new(error.into(), Vec::new()))?;
+            match tokio::time::timeout(SAVED_KEY_TIMEOUT, lookup).await {
+                Ok(joined) => {
+                    agent_config = joined
+                        .map_err(|error| AgentPrepareFailure::new(error.into(), Vec::new()))?;
+                }
+                Err(_) => tracing::warn!(
+                    "launching {} without saved API keys: the keyring did not answer within {SAVED_KEY_TIMEOUT:?}",
+                    agent_config.display_name
+                ),
             }
-            Err(_) => tracing::warn!(
-                "launching {} without saved API keys: the keyring did not answer within {SAVED_KEY_TIMEOUT:?}",
-                agent_config.display_name
-            ),
         }
         let (initialize_event_tx, mut initialize_event_rx) = mpsc::channel(1);
         let connection_result = AcpConnection::spawn_with_initialize_event_sender(

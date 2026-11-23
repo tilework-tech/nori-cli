@@ -73,6 +73,7 @@ pub struct Fixture {
     pub platform: Platform,
     pub keychain: FakeKeychain,
     pub saved: SavedIndex,
+    pub prefers_api_key: Vec<AgentKind>,
 }
 
 impl Fixture {
@@ -83,6 +84,7 @@ impl Fixture {
             platform: Platform::Linux,
             keychain: FakeKeychain::default(),
             saved: SavedIndex::default(),
+            prefers_api_key: Vec::new(),
         }
     }
 
@@ -125,6 +127,16 @@ impl Fixture {
         self
     }
 
+    /// Set `agents` to use saved API keys ahead of their own login.
+    pub fn prefer_api_key(mut self, agents: &[AgentKind]) -> Self {
+        self.prefers_api_key.extend(agents.iter().copied());
+        self
+    }
+
+    pub fn prefers(&self) -> impl Fn(AgentKind) -> bool + '_ {
+        |agent| self.prefers_api_key.contains(&agent)
+    }
+
     pub fn detect(&self, agent: AgentKind) -> AgentAuthStatus {
         let home = self.home();
         let env = |key: &str| self.env.get(key).cloned();
@@ -134,6 +146,7 @@ impl Fixture {
             platform: self.platform,
             keychain: &self.keychain,
             saved: &self.saved,
+            prefer_api_key: &self.prefers(),
         };
         let status = detect_agent(agent, &ctx);
         let json = serde_json::to_string(&status).unwrap();

@@ -10,7 +10,9 @@ use crate::store::StoreBackend;
 
 /// Put the saved API key of each provider `config`'s built-in agent talks to
 /// into its launch environment, in that agent's variable for the provider.
-/// Returns the variables set. A provider is skipped when any credential
+/// Returns the variables set. Nothing is set unless the user chose
+/// `prefer_api_key` for the agent, so by default the agent keeps its own
+/// login (such as a subscription). A provider is skipped when any credential
 /// variable the agent honours for it is set (in the ambient environment or the
 /// agent's own config), when the provider's base-URL variable points it at
 /// another endpoint, or when its variable is in `launch.env_remove`; agents bound
@@ -18,9 +20,10 @@ use crate::store::StoreBackend;
 pub fn apply_saved_keys(
     config: &mut AcpAgentConfig,
     store: &CredentialStore,
+    prefer_api_key: bool,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> anyhow::Result<Vec<&'static str>> {
-    let Some(agent) = config.builtin_kind else {
+    let Some(agent) = config.builtin_kind.filter(|_| prefer_api_key) else {
         return Ok(Vec::new());
     };
     let routes = crate::key_routes(agent);
@@ -68,17 +71,19 @@ pub fn apply_saved_keys(
 pub fn inject_saved_keys(
     config: &mut AcpAgentConfig,
     nori_home: &Path,
+    prefer_api_key: bool,
     env: &dyn Fn(&str) -> Option<String>,
 ) {
-    if config
-        .builtin_kind
-        .is_none_or(|agent| crate::key_routes(agent).is_empty())
+    if !prefer_api_key
+        || config
+            .builtin_kind
+            .is_none_or(|agent| crate::key_routes(agent).is_empty())
     {
         return;
     }
     let result = StoreBackend::from_env(env).and_then(|backend| {
         let store = CredentialStore::new(nori_home, backend, Arc::new(DefaultKeyringStore));
-        apply_saved_keys(config, &store, env)
+        apply_saved_keys(config, &store, prefer_api_key, env)
     });
     if let Err(error) = result {
         warn!(
