@@ -669,10 +669,12 @@ host of its own:
   other client, and they outlive it. At stdin EOF the process still copies the
   replies to the requests it already forwarded, then disconnects and exits 0
   (a request from the host after EOF, which it can no longer answer, ends that
-  wait). SIGINT or SIGTERM disconnects it and exits non-zero. When the host
-  closes the connection (it stopped, or closed a client that fell too far
-  behind) the process notes it on stderr and exits 0. `_nori/host/stop` stops
-  the shared host. A client whose `initialize` sets `observe: true` joins as a
+  wait). Replies are correlated by `id` and may arrive in a different order
+  from the requests; only `initialize` is always answered first. SIGINT or
+  SIGTERM disconnects it and exits non-zero. When the host closes the
+  connection (it stopped, or closed a client that fell too far behind) the
+  process notes it on stderr and exits 0. `_nori/host/stop` stops the shared
+  host. A client whose `initialize` sets `observe: true` joins as a
   watcher. Any other client never takes control from another client: when the
   running host answers as a watcher, or cannot be reached (including a stale
   `host.json`), the process closes that connection and falls back to a host of

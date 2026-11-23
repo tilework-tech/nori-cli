@@ -620,7 +620,9 @@ needs `--launch`.
   a short timeout with `control.role: "controller"`. The process then copies
   stdin lines to `/acp` as text frames and the host's frames to stdout. The
   client shares the host's sessions with every other client and they outlive
-  it: stdin EOF closes only this connection and exits 0; SIGINT or SIGTERM
+  it: stdin EOF closes only this connection and exits 0, after copying the
+  replies to requests already forwarded (correlated by `id`, possibly out of
+  request order; only `initialize` is always first); SIGINT or SIGTERM
   closes it and exits non-zero. A watcher reply or an unreachable host closes
   that connection, and the already-read `initialize` line is replayed to a
   private host instead. A stdio client never takes control from another.
