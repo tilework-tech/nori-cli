@@ -244,7 +244,9 @@ serves at once over its WebSocket endpoints, `/acp` and its alias `/sessions`,
 counting `nori attach` terminals, `nori host --stdio` clients that joined the
 host, and remote ACP clients alike. One more connection gets HTTP 503 with a
 message naming the limit; a missing or wrong bearer token gets 401 first.
-Values below 1 stop the host from starting. A managed host (`[host] managed =
+Values below 1 count as 1. A full host still reports itself running to
+`nori host`, and `nori host stop` stops it with SIGTERM when its connection
+is refused. A managed host (`[host] managed =
 true`) is not limited. Sessions are bounded separately by `[tui]
 max_sessions`. See [the ACP remote transport](../docs/remote-control.md#3-acp-remote-transport).
 

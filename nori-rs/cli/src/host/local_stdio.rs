@@ -50,12 +50,21 @@ pub(crate) async fn serve(
     );
     let mut lines = RemoteAcpServer::stdin_lines();
     // A running host applies its own configuration, so a client that brings
-    // configuration needs a host of its own.
-    let shares = overrides.agent.is_none()
-        && overrides.raw_overrides.is_empty()
-        && overrides.additional_writable_roots.is_empty()
-        && overrides.approval_policy.is_none()
-        && overrides.sandbox_mode.is_none();
+    // configuration needs a host of its own. The folder is not configuration
+    // here: each session names its own, and its configuration applies there.
+    let NoriConfigOverrides {
+        agent,
+        sandbox_mode,
+        approval_policy,
+        cwd: _,
+        additional_writable_roots,
+        raw_overrides,
+    } = &overrides;
+    let shares = agent.is_none()
+        && sandbox_mode.is_none()
+        && approval_policy.is_none()
+        && additional_writable_roots.is_empty()
+        && raw_overrides.is_empty();
     let first = if shares {
         match super::join::relay(&config.nori_home, &mut lines).await? {
             super::join::Joined::Relayed => return Ok(()),

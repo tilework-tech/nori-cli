@@ -67,7 +67,6 @@ fn refusal(
     }
 }
 
-/// The next response on `socket`, skipping notifications and requests.
 /// Send a WebSocket upgrade request over plain HTTP and read the whole
 /// response, for refusals whose body must be read in full.
 async fn raw_upgrade(url: &str, token: Option<&str>) -> (u16, String) {
@@ -119,6 +118,7 @@ async fn raw_upgrade(url: &str, token: Option<&str>) -> (u16, String) {
     (status, body.to_owned())
 }
 
+/// The next response on `socket`, skipping notifications and requests.
 async fn next_reply(socket: &mut Socket) -> Value {
     loop {
         let frame = tokio::time::timeout(Duration::from_secs(30), socket.next())
@@ -295,9 +295,9 @@ async fn clients_beyond_the_limit_are_refused_with_a_clear_error() {
     let (unauthenticated, _) = raw_upgrade(&url, None).await;
     drop(first);
     let deadline = Instant::now() + Duration::from_secs(10);
-    let admitted = loop {
+    loop {
         match upgrade(&url, Some(&token)).await {
-            Ok(_) => break true,
+            Ok(_) => break,
             Err(tungstenite::Error::Http(response))
                 if response.status() == 503 && Instant::now() < deadline =>
             {
@@ -305,7 +305,7 @@ async fn clients_beyond_the_limit_are_refused_with_a_clear_error() {
             }
             Err(error) => panic!("the freed slot was not reused: {error}"),
         }
-    };
+    }
 
     assert_eq!(status, 503);
     assert!(
@@ -313,7 +313,25 @@ async fn clients_beyond_the_limit_are_refused_with_a_clear_error() {
         "{message}"
     );
     assert_eq!(unauthenticated, 401, "authentication is checked first");
-    assert!(admitted, "a freed slot admits the next client");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_full_host_still_reports_itself_running_and_can_be_stopped() {
+    let host = host_with("[host]\nmax_clients = 1", &[]);
+    let _only = upgrade(&at_path(&host, "/acp"), Some(&token(&host)))
+        .await
+        .unwrap();
+
+    let started = tokio::task::block_in_place(|| host.run(&["host", "--port", "0"]));
+    let stopped = tokio::task::block_in_place(|| host.run(&["host", "stop"]));
+
+    assert!(started.status.success(), "{started:?}");
+    assert!(
+        String::from_utf8_lossy(&started.stdout).contains("already running"),
+        "{started:?}"
+    );
+    assert!(stopped.status.success(), "{stopped:?}");
+    assert!(!host.0.path().join("host/host.json").exists());
 }
 
 /// Text of the message chunks for `session` among `frames`, leaving out

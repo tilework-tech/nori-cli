@@ -4,6 +4,7 @@
 #![cfg(unix)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
@@ -383,6 +384,78 @@ async fn a_stdio_client_joins_the_homes_running_host_and_its_sessions_outlive_it
         "the session outlives the stdio client: {after_close}"
     );
     assert_eq!(after, discovery, "the background host keeps running");
+    let stopped = nori(home.path())
+        .args(["host", "stop"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(stopped.status.success(), "{stopped:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn requests_piped_before_stdin_closes_are_all_answered_by_the_joined_host() {
+    let home = home();
+    let _background = BackgroundHost(home.path());
+    start_background_host(home.path());
+    let folder = TempDir::new().unwrap();
+    let mut host = StdioHost::host(home.path(), &[]);
+
+    for (id, method, params) in [
+        (1, "initialize", json!({"protocolVersion": 1})),
+        (
+            2,
+            "session/new",
+            json!({"cwd": canonical(folder.path()), "mcpServers": []}),
+        ),
+        (3, "session/list", json!({})),
+    ] {
+        host.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
+            .await;
+    }
+    let (status, lines) = host.close().await;
+    let answered: Vec<Value> = lines
+        .iter()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .filter(|frame| frame.get("method").is_none())
+        .map(|frame| frame["id"].clone())
+        .collect();
+
+    assert!(status.success(), "{status}");
+    assert_eq!(answered, vec![json!(1), json!(2), json!(3)], "{lines:#?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_stale_discovery_file_leaves_the_stdio_client_a_host_of_its_own() {
+    let home = home();
+    let directory = home.path().join("host");
+    std::fs::create_dir(&directory).unwrap();
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let unused = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = format!("ws://{}/acp", unused.local_addr().unwrap());
+    drop(unused);
+    let discovery = directory.join("host.json");
+    std::fs::write(
+        &discovery,
+        json!({"endpoint": endpoint, "token": "stale", "pid": 1, "instanceId": "stale",
+               "version": "0", "contract": {"acp": 1, "nori": 1}, "startedBy": "test"})
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::set_permissions(&discovery, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let folder = TempDir::new().unwrap();
+
+    let mut host = StdioHost::host(home.path(), &[]);
+    let initialized = host.initialize(json!({"protocolVersion": 1})).await;
+    let session = host.new_session(folder.path()).await;
+    let stop = host.turn(&session, "hello").await;
+    let (status, _) = host.close().await;
+
+    assert_eq!(
+        initialized["control"]["role"], "controller",
+        "{initialized}"
+    );
+    assert_eq!(stop, "end_turn");
+    assert!(status.success(), "{status}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -328,8 +328,11 @@ permission checks.
 `/sessions` and the [scoped ACP transport](../nori-rs/acp-host/docs.md#managed-machine-connection) on `/managed` instead, with no `/acp` and no client limit. A valid `Authorization: Bearer <token>` header is required before the
 WebSocket upgrade, including on loopback; a missing or wrong token returns
 HTTP 401. Past `[host] max_clients` (default 16) concurrent connections the
-upgrade returns HTTP 503 with the limit in the body. The host is the only
-listener Nori serves.
+upgrade returns HTTP 503 with the limit in the body (values below 1 count as
+1). Every client counts, including `nori attach`, joined stdio clients and the
+short connections of `nori host ls`/`new`/`stop`; a full host still answers
+`nori host` with "already running", and `nori host stop` falls back to SIGTERM
+on the locked host's PID. The host is the only listener Nori serves.
 
 Successful authenticated upgrades include `x-nori-host-instance`, a UUID
 generated for that router lifetime independently of the bearer token. It stays
@@ -612,12 +615,18 @@ host of its own:
   `initialize` that the running host answers with `control.role:
   "controller"`, the process relays the client to that host over `/acp` with
   the discovery token. The client then shares the host's sessions with every
-  other client, and they outlive it: stdin EOF only disconnects this client
-  and exits 0. SIGINT or SIGTERM disconnects it and exits non-zero.
-  `_nori/host/stop` stops the shared host. A stdio client never takes control
-  from another client: when the running host answers as a watcher, or cannot
-  be reached, the process closes that connection and falls back to a host of
-  its own, replaying the same `initialize` to it.
+  other client, and they outlive it. At stdin EOF the process still copies the
+  replies to the requests it already forwarded, then disconnects and exits 0
+  (a request from the host after EOF, which it can no longer answer, ends that
+  wait). SIGINT or SIGTERM disconnects it and exits non-zero. When the host
+  closes the connection (it stopped, or closed a client that fell too far
+  behind) the process notes it on stderr and exits 0. `_nori/host/stop` stops
+  the shared host. A client whose `initialize` sets `observe: true` joins as a
+  watcher. Any other client never takes control from another client: when the
+  running host answers as a watcher, or cannot be reached (including a stale
+  `host.json`), the process closes that connection and falls back to a host of
+  its own, replaying the same `initialize` to it. A joined client runs its
+  agents with the running host's environment, not the caller's.
 - **Own host.** Otherwise the process runs a headless local host for this one
   client. It takes no host lock and writes no `host.json`, `state.json` or
   `token`, so it runs beside a detached `nori host` of the same `NORI_HOME`.

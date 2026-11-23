@@ -127,7 +127,11 @@ remote ACP client (via TLS front) -+                       agent processes
   `_nori/*` extension. [Startup](mod.rs) publishes `ws://127.0.0.1:<port>/acp`
   in `host.json` and `state.json`; a managed host publishes `/sessions`
   instead. The listener is bound with `bind_host_with_limit` and
-  `[host] max_clients`, so one client past the limit gets HTTP 503. A
+  `[host] max_clients` (at least 1), so one client past the limit gets HTTP
+  503. A full host still answers `nori host` with "already running"
+  ([start](start.rs) checks the host lock when its probe is refused), and
+  `nori host stop` sends SIGTERM to the locked host's PID when its connection
+  is refused. A
   client's disconnect never ends sessions; it reconnects with a new
   `initialize` and `session/load` or `session/resume`.
   Managed mode (`[host] managed = true`) does not serve these methods and

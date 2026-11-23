@@ -57,27 +57,6 @@ impl<M> Clone for HostState<M> {
     }
 }
 
-/// One client's place under the host's client limit, given back when the
-/// connection ends or its upgrade fails.
-struct ClientSlot(Arc<AtomicI64>);
-
-impl ClientSlot {
-    fn claim(clients: &Arc<AtomicI64>, limit: i64) -> Option<Self> {
-        clients
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < limit).then_some(count + 1)
-            })
-            .ok()
-            .map(|_| Self(clients.clone()))
-    }
-}
-
-impl Drop for ClientSlot {
-    fn drop(&mut self) {
-        self.0.fetch_sub(1, Ordering::AcqRel);
-    }
-}
-
 pub(super) fn router<M: ManagedAgent>(
     host: Arc<M>,
     token: String,
@@ -141,7 +120,8 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
     let slot = if STANDARD || state.host.standard_acp_enabled() {
         None
     } else {
-        let Some(slot) = ClientSlot::claim(&state.clients, state.max_clients) else {
+        let Some(slot) = super::client_limit::ClientSlot::claim(&state.clients, state.max_clients)
+        else {
             let limit = state.max_clients;
             return (
                 StatusCode::SERVICE_UNAVAILABLE,

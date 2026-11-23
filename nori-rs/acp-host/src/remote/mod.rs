@@ -1,13 +1,14 @@
 //! Optional remote ACP transport: the WebSocket profile of the upstream
 //! [Streamable HTTP & WebSocket Transport RFD].
 //!
-//! Hosts expose authenticated `/sessions` connections with one controller
-//! and any number of watchers. See `docs/remote-control.md`.
+//! Hosts expose authenticated `/acp` connections (with `/sessions` as an
+//! alias), with one controller and any number of watchers. See `docs/remote-control.md`.
 //!
 //! [Streamable HTTP & WebSocket Transport RFD]:
 //!     https://agentclientprotocol.com/rfds/streamable-http-websocket-transport
 
 mod client;
+mod client_limit;
 mod host_control;
 mod host_wire;
 mod managed;

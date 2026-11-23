@@ -53,6 +53,9 @@ pub(super) async fn relay(
         }
     };
     let request: Option<Value> = serde_json::from_slice(&first).ok();
+    let observing = request
+        .as_ref()
+        .is_some_and(|request| request["params"]["observe"] == true);
     let Some(id) = request
         .filter(|request| request["method"] == "initialize")
         .and_then(|request| request.get("id").cloned())
@@ -63,7 +66,9 @@ pub(super) async fn relay(
         return Ok(Joined::Declined(Some(first)));
     };
     let reply: Value = serde_json::from_str(&reply)?;
-    if reply["result"]["control"]["role"] != "controller" {
+    // A client that asked to watch watches the shared host; any other
+    // client needs control, which it never takes from another client.
+    if reply["result"]["control"]["role"] != "controller" && !observing {
         client.close().await;
         return Ok(Joined::Declined(Some(first)));
     }
@@ -101,7 +106,8 @@ async fn initialize(
 }
 
 /// Copy lines to the host and the host's messages to stdout until either
-/// side leaves. Leaving disconnects only this client; the host and its
+/// side leaves. Once stdin closes, the replies to requests already sent are
+/// still copied. Leaving disconnects only this client; the host and its
 /// sessions keep running.
 async fn forward(
     mut client: ManagedClient,
@@ -112,17 +118,34 @@ async fn forward(
     stdout.write_all(format!("{reply}\n").as_bytes()).await?;
     stdout.flush().await?;
     #[cfg(unix)]
+    let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+    #[cfg(unix)]
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    // Requests sent to the host and not yet answered.
+    let mut pending = std::collections::HashSet::new();
+    let mut input_open = true;
     loop {
+        if !input_open && pending.is_empty() {
+            client.close().await;
+            return Ok(());
+        }
         #[cfg(unix)]
-        let terminated = terminate.recv();
+        let signalled = async {
+            tokio::select! {
+                _ = interrupt.recv() => "interrupted",
+                _ = terminate.recv() => "terminated",
+            }
+        };
         #[cfg(not(unix))]
-        let terminated = std::future::pending::<Option<()>>();
+        let signalled = async {
+            let _ = tokio::signal::ctrl_c().await;
+            "interrupted"
+        };
         tokio::select! {
-            line = lines.recv() => {
+            line = lines.recv(), if input_open => {
                 let Some(line) = line.transpose()? else {
-                    client.close().await;
-                    return Ok(());
+                    input_open = false;
+                    continue;
                 };
                 if line.trim_ascii().is_empty() {
                     continue;
@@ -131,22 +154,35 @@ async fn forward(
                 // parse error, as it does any other line that is not JSON.
                 let text = String::from_utf8(line)
                     .unwrap_or_else(|_| char::REPLACEMENT_CHARACTER.to_string());
+                if let Ok(request) = serde_json::from_str::<Value>(&text)
+                    && request["method"].is_string()
+                    && let Some(id) = request.get("id")
+                {
+                    pending.insert(id.to_string());
+                }
                 client.send_text(text).await?;
             }
             message = client.recv_text() => {
                 let Some(message) = message? else {
+                    eprintln!("nori: the host closed this client's connection");
                     return Ok(());
                 };
+                if let Ok(frame) = serde_json::from_str::<Value>(&message) {
+                    match (frame.get("method"), frame.get("id")) {
+                        (None, Some(id)) => {
+                            pending.remove(&id.to_string());
+                        }
+                        // A request this client can no longer answer.
+                        (Some(_), Some(_)) if !input_open => pending.clear(),
+                        _ => {}
+                    }
+                }
                 stdout.write_all(format!("{message}\n").as_bytes()).await?;
                 stdout.flush().await?;
             }
-            _ = tokio::signal::ctrl_c() => {
+            signal = signalled => {
                 client.close().await;
-                anyhow::bail!("interrupted");
-            }
-            _ = terminated => {
-                client.close().await;
-                anyhow::bail!("terminated");
+                anyhow::bail!("{signal}");
             }
         }
     }
