@@ -1,4 +1,4 @@
-/// With `[features] multi_session`, `/new` in cloud mode starts a second cloud
+/// `/new` in cloud mode starts a second cloud
 /// session beside the first, and both are listed as Nori Cloud sessions.
 #[test]
 #[cfg(target_os = "linux")]

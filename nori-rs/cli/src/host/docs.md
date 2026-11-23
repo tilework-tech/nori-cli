@@ -30,8 +30,7 @@ Path: @/nori-rs/cli/src/host
   absolute. Startup keeps those command-line overrides alongside the resolved
   configuration so the host can reapply them in another folder.
   Administrative list, stop, and new only need host discovery, so they
-  remain available if the configuration file becomes invalid. Attach requires
-  `multi_session` and invokes the dedicated
+  remain available if the configuration file becomes invalid. Attach invokes the dedicated
   [terminal frontend](../../../tui/src/attach/docs.md), bypassing the
   local process-owning TUI application.
 - In local mode, [HostService](service.rs) implements `ManagedAgent`, delegates envelope
@@ -677,8 +676,7 @@ cwd = "/srv/fixture/home/org/workspace"
 ```
 
 ```sh
-NORI_HOME=/srv/fixture/nori nori -c features.multi_session=true \
-  host --stdio --launch /srv/fixture/launch.json
+NORI_HOME=/srv/fixture/nori nori host --stdio --launch /srv/fixture/launch.json
 ```
 
 - The host runs in the foreground on an ephemeral loopback port. The

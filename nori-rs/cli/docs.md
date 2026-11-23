@@ -50,8 +50,7 @@ PostHog identity or organization membership itself.
 
 **Host and attach:** `nori host` starts a detached Unix process owning an empty
 session manager; `host ls` prints its sessions tree-ordered (the shared two-row session-list layout on a terminal, a plain one-row-per-session table when piped; see [host docs](src/host/docs.md)) `host new [--cwd DIR] [--agent AGENT] [--prompt TEXT] [--json]` starts a session in a folder (default: the caller's directory) and prints its ID, and `host stop` shuts it down. Each host session loads configuration for its own folder, so that folder's project trust applies.
-The host outlives both attached terminals and its final session. `nori attach`
-requires `multi_session`, discovers the local host and token, then opens the
+The host outlives both attached terminals and its final session. `nori attach` discovers the local host and token, then opens the
 session list or a supplied conversation ID. Explicit `--host` and
 `--token-file` must be supplied together. Startup and attach resolve ordinary
 Nori configuration without entering the local process-owning TUI `App`.

@@ -39,9 +39,9 @@ Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` rele
 | Hermes Agent | `hermes` (also `hermes-agent`) | `hermes acp` | Run `hermes model` in another terminal to choose a provider and configure credentials. |
 | Pi | `pi` (also `pi-acp`) | `pi-acp@latest` with `@earendil-works/pi-coding-agent@latest` | Use Pi's own settings in `~/.pi/agent` or select a [named API connection](nori-rs/config.md#pi-connections) in Nori's configuration. |
 
-Install Cursor CLI on the machine that runs Nori. If only `agent` is on `PATH`, Nori assumes it belongs to Cursor. If another program uses that name, add Cursor’s `cursor-agent` executable to `PATH` or put Cursor’s directory first. To use an API key with a local host, export `CURSOR_API_KEY` before starting `nori host`. Then use `nori host new --agent cursor`. With multi-session enabled, use `/delegate cursor <task>` to open a Cursor child from another agent. [Cursor CLI installation](https://cursor.com/docs/cli/installation) · [Cursor CLI authentication](https://cursor.com/docs/cli/reference/authentication)
+Install Cursor CLI on the machine that runs Nori. If only `agent` is on `PATH`, Nori assumes it belongs to Cursor. If another program uses that name, add Cursor’s `cursor-agent` executable to `PATH` or put Cursor’s directory first. To use an API key with a local host, export `CURSOR_API_KEY` before starting `nori host`. Then use `nori host new --agent cursor`. Use `/delegate cursor <task>` to open a Cursor child from another agent. [Cursor CLI installation](https://cursor.com/docs/cli/installation) · [Cursor CLI authentication](https://cursor.com/docs/cli/reference/authentication)
 
-OpenCode is also built in. Install OpenCode 2 on the host's `PATH` and use `nori --agent opencode` or `nori host new --agent opencode`. With `[features] multi_session = true`, try `/delegate opencode Summarize the README` from another agent. All three launch `opencode acp`. OpenCode reads its own provider configuration and credentials. To connect an account, run `opencode auth login` in a terminal. [Model selection and ChatGPT-plan restrictions](nori-rs/config.md#default-models-default_models) · [OpenCode ACP guide](https://opencode.ai/docs/cli/acp/)
+OpenCode is also built in. Install OpenCode 2 on the host's `PATH` and use `nori --agent opencode` or `nori host new --agent opencode`. Try `/delegate opencode Summarize the README` from another agent. All three launch `opencode acp`. OpenCode reads its own provider configuration and credentials. To connect an account, run `opencode auth login` in a terminal. [Model selection and ChatGPT-plan restrictions](nori-rs/config.md#default-models-default_models) · [OpenCode ACP guide](https://opencode.ai/docs/cli/acp/)
 
 The `gemini` ID keeps existing configs and Nori history associated with the Google provider. Each agent supplies its own model choices through `/model`.
 
@@ -49,7 +49,7 @@ The `gemini` ID keeps existing configs and Nori history associated with the Goog
 
 Install Hermes and its ACP extra on the machine running Nori. Make `hermes` available on that machine’s `PATH` and run `hermes acp --check`. [Nous Research’s ACP installation guide for v0.23.3](https://github.com/NousResearch/hermes-agent/blob/v0.23.3/website/docs/user-guide/features/acp.md#installation)
 
-Start it with `nori --agent hermes` or create a session on a running host with `nori host new --agent hermes`. With `features.multi_session = true` in your Nori configuration, enter `/delegate hermes Read README.md and summarize the setup steps` from another agent’s conversation. Approve the child when prompted. Its result returns to the parent conversation.
+Start it with `nori --agent hermes` or create a session on a running host with `nori host new --agent hermes`. Enter `/delegate hermes Read README.md and summarize the setup steps` from another agent’s conversation. Approve the child when prompted. Its result returns to the parent conversation.
 
 ## Bring Your Own Agent
 

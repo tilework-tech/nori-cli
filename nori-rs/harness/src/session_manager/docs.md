@@ -189,9 +189,11 @@ approval, parent/child links, result delivery, and descendant lifetime. Both ter
 tool on the existing authenticated
 [`nori-client` HTTP MCP server](../backend/nori_client_mcp.rs) enter this same
 manager path. The tool takes an agent and task; its authority comes from the
-calling session, not a caller-supplied parent ID. Delegation requires the
-parent's resolved `multi_session` flag. Direct single-session launch behavior
-is unchanged.
+calling session, not a caller-supplied parent ID. Every session the manager
+launches gets a delegation context, so delegation is always available there;
+a session launched directly through `launch_session` outside the manager has
+none, and its `delegate` tool answers "delegation is available only in
+sessions the session manager runs".
 
 ```text
 parent agent -- HTTP MCP delegate --+

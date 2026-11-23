@@ -10,5 +10,5 @@ pub use nori_acp_host::remote::ManagedReply;
 pub use nori_acp_host::remote::ManagedSubscription;
 pub use nori_acp_host::remote::RemoteAcpServer;
 
-/// Responder label on answers that a remote-control client sends.
+/// Responder label on answers that a remote host client sends.
 pub const REMOTE_CONTROL_RESPONDER: &str = "remote_control";
