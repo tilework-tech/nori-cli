@@ -2,6 +2,7 @@
 
 mod acp;
 mod local_stdio;
+mod oneshot;
 mod recovery_control;
 mod recovery_history;
 mod service;
@@ -33,6 +34,8 @@ use serde::Deserialize;
 use serde_json::json;
 
 pub(crate) use self::local_stdio::serve as serve_stdio;
+pub(crate) use self::oneshot::Request as OneShot;
+pub(crate) use self::oneshot::run as run_one_shot;
 use self::service::HostService;
 use self::state::HostFiles;
 use self::state::HostState;

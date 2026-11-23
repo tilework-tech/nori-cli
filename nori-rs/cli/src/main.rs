@@ -22,7 +22,6 @@ use nori_tui::update_action::UpdateAction;
 use owo_colors::OwoColorize;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Arc;
 use supports_color::Stream;
 
 mod host;
@@ -415,13 +414,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 dangerously_bypass_approvals_and_sandbox: false,
                 config_overrides: CliConfigOverrides::default(),
             };
-            run_exec(
-                cmd,
-                interactive,
-                root_config_overrides,
-                env!("CARGO_PKG_VERSION").to_string(),
-            )
-            .await?;
+            run_exec(cmd, interactive, root_config_overrides).await?;
         }
         None => {
             prepend_config_flags(
@@ -552,13 +545,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             handle_app_exit(exit_info)?;
         }
         Some(Subcommand::Exec(cmd)) => {
-            run_exec(
-                cmd,
-                interactive,
-                root_config_overrides,
-                env!("CARGO_PKG_VERSION").to_string(),
-            )
-            .await?;
+            run_exec(cmd, interactive, root_config_overrides).await?;
         }
         Some(Subcommand::Completions(cmd)) => {
             clap_complete::generate(
@@ -606,7 +593,6 @@ async fn run_exec(
     cmd: ExecCommand,
     interactive: TuiCli,
     root_config_overrides: CliConfigOverrides,
-    cli_version: String,
 ) -> anyhow::Result<()> {
     let ExecCommand {
         prompt,
@@ -640,8 +626,12 @@ async fn run_exec(
     let cwd = cwd
         .or(interactive.cwd)
         .map(|path| path.canonicalize().unwrap_or(path));
+    let agent = agent.or(interactive.agent);
+    // A running host applies its own configuration, so a run that changes
+    // configuration needs a host of its own.
+    let own_host = !raw_overrides.is_empty() || !interactive.add_dir.is_empty();
     let overrides = NoriConfigOverrides {
-        agent: agent.or(interactive.agent),
+        agent: agent.clone(),
         sandbox_mode,
         approval_policy,
         cwd,
@@ -653,18 +643,24 @@ async fn run_exec(
         let config = nori_config::NoriConfig::load_with_overrides(overrides.clone())?;
         return host::serve_stdio((config, overrides)).await;
     }
-    let config = nori_config::NoriConfig::load_with_overrides(overrides)?;
-    nori_harness::initialize_registry(config.agents.clone())
-        .map_err(|error| anyhow::anyhow!("failed to initialize agent registry: {error}"))?;
-    let analytics = AnalyticsReporter::new(SessionMode::Exec, config.nori_home.clone());
-    let config = Arc::new(config);
-
     // `--acp` has returned above, so stdin is free to carry the prompt.
     let (prompt, _) = stdin_prompt::resolve_prompt(prompt, stdin)?;
     let Some(prompt) = prompt else {
         anyhow::bail!("a prompt argument or piped stdin is required");
     };
-    let outcome = nori_exec::run_plaintext(config, cli_version, prompt, Some(analytics)).await?;
+    let config = nori_config::NoriConfig::load_with_overrides(overrides.clone())?;
+    let analytics = AnalyticsReporter::new(SessionMode::Exec, config.nori_home.clone());
+    let outcome = host::run_one_shot(
+        (config, overrides),
+        host::OneShot {
+            prompt,
+            agent,
+            bypass,
+            own_host,
+            analytics: Some(analytics),
+        },
+    )
+    .await?;
     {
         let mut stdout = std::io::stdout().lock();
         stdout.write_all(outcome.output.as_bytes())?;

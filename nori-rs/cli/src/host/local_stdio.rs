@@ -1,5 +1,6 @@
 //! A local host served to one client on this process's stdin and stdout.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use nori_config::NoriConfig;
@@ -8,10 +9,25 @@ use nori_harness::remote_agent::RemoteAcpServer;
 use nori_harness::session_manager::SessionManager;
 use nori_harness::session_manager::SessionManagerConfig;
 
+use super::service::HostService;
+
 /// Why the host stopped before stdin closed.
 enum Stop {
     Requested,
     Signal(&'static str),
+}
+
+/// A local host held by this process alone.
+pub(super) fn local_host(
+    config: NoriConfig,
+    overrides: NoriConfigOverrides,
+) -> anyhow::Result<Arc<HostService>> {
+    nori_harness::initialize_registry(config.agents.clone())?;
+    let manager = SessionManager::new(SessionManagerConfig {
+        max_sessions: config.max_sessions,
+        ..Default::default()
+    });
+    Ok(super::host_service(config, overrides, manager, None, None))
 }
 
 /// Serve a local host whose one client speaks ACP on stdin and stdout. It
@@ -24,12 +40,7 @@ pub(crate) async fn serve(
         !config.host.managed,
         "this home sets [host] managed = true; a managed host serves stdio only with `nori host --stdio --launch FILE`"
     );
-    nori_harness::initialize_registry(config.agents.clone())?;
-    let manager = SessionManager::new(SessionManagerConfig {
-        max_sessions: config.max_sessions,
-        ..Default::default()
-    });
-    let host = super::host_service(config, overrides, manager, None, None);
+    let host = local_host(config, overrides)?;
     #[cfg(unix)]
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     let stop = async {

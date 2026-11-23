@@ -24,11 +24,11 @@ coarse `SessionStatus` for each session and each session family.
 ### How it fits into the larger codebase
 
 ```text
-nori-exec       nori-tui       remote ACP client
-        \           |               |  WebSocket /acp
-         \          |               v
-          \         |     RemoteAcpServer (nori-acp-host::remote)
-           v        v               |  HostedAgent trait
+                nori-tui       remote ACP client
+                    |               |  WebSocket /acp
+                    |               v
+                    |     RemoteAcpServer (nori-acp-host::remote)
+                    v               |  HostedAgent trait
               nori-harness  <-------+  (remote_agent.rs implements it)
                /       \
               v         v
@@ -43,22 +43,19 @@ changing ACP semantics, and adds the small Nori-owned event branch. Stateful
 ACP reduction remains private because it supports harness behavior; widget and
 display projection remains private to the TUI.
 
-`nori-exec` is the production headless consumer. It uses the same typed handle
-and event stream to implement both a finite plaintext projection and a bounded
-ACP agent facade. The facade preserves ACP request/response semantics where the
-shell caller participates, rather than serializing the private reducer or
-inventing a second public event vocabulary.
-
 `nori-tui` starts every session through one app-owned `SessionManager`. The
 manager calls the same launch internals as `launch_session`, so a managed
 session behaves exactly like a directly launched one. With the runtime
 `multi_session` flag, the remote `/sessions` endpoint also uses that manager,
 and the background host (including its stdio form, `nori exec --acp`) owns
-its own manager. Plaintext exec and the public
+its own manager. One-shot `nori exec "prompt"` is an ACP client of that host
+(a running one or an in-process one, see
+[the host client](../cli/src/host/docs.md#one-shot-exec)), so it no longer
+drives a `HarnessHandle` directly. The public
 `launch_session`/`prepare_and_launch_session` entry points retain their direct
 per-session runtime paths.
 
-The remote ACP transport (`@/docs/remote-control.md`) is the other
+The remote ACP transport (`@/docs/remote-control.md`) is the
 headless consumer. `nori-acp-host` owns the WebSocket server and defines the
 `HostedAgent` trait; [`remote_agent.rs`](src/remote_agent.rs) implements that
 trait over `HarnessHandle`, while
@@ -215,7 +212,7 @@ exists are cancelled. A raw ACP setup error precedes
 `SessionEnded(SpawnFailed)` and is not mirrored as
 `NoriEvent::RequestFailed`.
 
-[Preparation](src/backend/prepared.rs) uses the named connection resolved for the requested agent. A missing key or unsupported route fails preparation before the candidate starts. The TUI, `nori exec`, local host sessions and delegated children use this path. A delegated child resolves its own registered agent. Managed sessions start from a [binding-specific launch specification](src/managed_launch.rs). Both routes compose argv before the [process supervisor](../acp-host/src/connection/child_lifecycle.rs) takes ownership of the child and its ACP pipes.
+[Preparation](src/backend/prepared.rs) uses the named connection resolved for the requested agent. A missing key or unsupported route fails preparation before the candidate starts. The TUI, local host sessions (including those of `nori exec`) and delegated children use this path. A delegated child resolves its own registered agent. Managed sessions start from a [binding-specific launch specification](src/managed_launch.rs). Both routes compose argv before the [process supervisor](../acp-host/src/connection/child_lifecycle.rs) takes ownership of the child and its ACP pipes.
 
 The resolved model preference (`AcpBackendConfig.default_model`) is
 applied at both process and session boundaries. During preparation,

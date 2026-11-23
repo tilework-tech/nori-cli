@@ -85,6 +85,12 @@ impl AnalyticsReporter {
         handle.with_first_prompt_started_callback(move || reporter.capture_session_started())
     }
 
+    /// Report a session whose first prompt reached its agent, for a client
+    /// that does not hold the session's handle.
+    pub fn session_started(&self) {
+        self.capture_session_started();
+    }
+
     pub fn flush(&self) {
         let receivers = self
             .inner

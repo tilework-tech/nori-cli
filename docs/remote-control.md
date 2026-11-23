@@ -741,7 +741,7 @@ do not write it.
 
 | Method | Who may call | Behavior |
 | --- | --- | --- |
-| `session/new` | Any initialized client | `cwd` must be an absolute, existing folder (`-32602` otherwise). The folder's configuration applies. `mcpServers` (stdio and HTTP) are added to the session's MCP servers, and are kept when the client later changes the agent or the session restarts; SSE fails with `-32602`. Optional `_meta["nori/agent"]` starts that agent instead of the folder's default (an unknown agent fails with `-32602`); otherwise clients switch with the `agent` config option. `[host] default_mode` (`ask`, `agent`, `approve-all`), when set, replaces the folder's approval policy. The response waits until the agent has started and carries `sessionId`, `configOptions` and `modes`; the connection is attached. Capacity fails with `-32017`. An agent that refuses to start fails with its own ACP error, so an adapter needing sign-in returns `-32000` `Authentication required`; the session is then left out of `session/list`. |
+| `session/new` | Any initialized client | `cwd` must be an absolute, existing folder (`-32602` otherwise). The folder's configuration applies. `mcpServers` (stdio and HTTP) are added to the session's MCP servers, and are kept when the client later changes the agent or the session restarts; SSE fails with `-32602`. Optional `_meta["nori/agent"]` starts that agent instead of the folder's default; agent aliases are accepted (an unknown agent fails with `-32602`); otherwise clients switch with the `agent` config option. `[host] default_mode` (`ask`, `agent`, `approve-all`), when set, replaces the folder's approval policy. The response waits until the agent has started and carries `sessionId`, `configOptions` and `modes`; the connection is attached. Capacity fails with `-32017`. An agent that refuses to start fails with its own ACP error code and Nori's explanation as the message, so an adapter needing sign-in returns `-32000` `Authentication required for <agent>.` with the sign-in hint; the session is then left out of `session/list`. |
 | `session/prompt` | Controller | Runs one turn and answers with the agent's `PromptResponse` (`stopReason`). The connection receives the turn's updates before the response. A prompt while a turn runs fails with `-32015`; it is never queued. A connection that is not attached to the session is attached (as by `session/resume`) first. |
 | `session/cancel` | Controller (notification) | Cancels the session's turn; the prompt answers with `stopReason: "cancelled"`. Ignored from watchers. |
 | `session/close` | Controller | Stops the session's agent and frees its slot. It stays in `session/list` as `stored` (status `closed`), and `session/load` or `session/resume` restarts it under its ID. |
@@ -843,6 +843,19 @@ managed hosts still need `--launch`.
 - A `_nori/session/subscribe` subscription that falls behind ends with
   `_nori/session/subscription_ended` `{"reason":"replay_required"}` instead of
   a closed connection (section 10).
+
+### One-shot exec as a client
+
+`nori exec "prompt"` and `nori -p` use only this face. When the home's host
+holds its lock, `host.json` advertises `contract {acp: 1, nori: 1}`, and
+`initialize` (without `observe`) returns `control.role: "controller"`, the
+prompt runs on that host over `/sessions` with the discovery token; exec never
+takes control from another client. Otherwise, and always with `-c` or
+`--add-dir`, it runs an in-process host with the same face over in-memory
+lines. Each run sends `session/new` (`mcpServers: []`, `_meta["nori/agent"]`
+for `--agent`), `session/set_mode` (`approve-all` with the bypass flag, else
+`agent`), `session/prompt`, and `session/close`; every permission request is
+rejected.
 
 ### Session configuration
 

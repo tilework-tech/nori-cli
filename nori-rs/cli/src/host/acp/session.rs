@@ -96,6 +96,10 @@ impl HostService {
             Some(meta) => serde_json::from_value(meta.clone())
                 .map_err(|error| AcpError::invalid_params(format!("_meta: {error}")))?,
         };
+        // An agent may be named by one of its aliases.
+        let meta = nori_protocol::NewSessionMeta {
+            agent: meta.agent.as_deref().map(nori_harness::resolve_agent_slug),
+        };
         if let Some(agent) = &meta.agent {
             let known = nori_harness::registry::list_available_agents()
                 .iter()

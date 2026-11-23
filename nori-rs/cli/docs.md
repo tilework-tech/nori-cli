@@ -10,7 +10,7 @@ The `nori-cli` crate is the main binary that provides the `nori` command. It ser
 
 This crate is the primary entry point that ties together the core crates:
 
-- **Always included:** `nori-tui`, `nori-exec`, `nori-harness`, `nori-config`, `codex-sandbox`
+- **Always included:** `nori-tui`, `nori-harness`, `nori-config`, `codex-sandbox`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 - **Uses** `codex-sandbox` (`@/nori-rs/sandbox/`) for the `nori sandbox` debug subcommand's seatbelt/landlock/windows spawn helpers
 - Owns the background [host lifecycle](src/host/docs.md), composing the
@@ -24,8 +24,8 @@ This crate is the primary entry point that ties together the core crates:
 ### Core Implementation
 
 [`main.rs`](src/main.rs) constructs an `AnalyticsReporter` only for agent-bearing
-TUI, cloud, plaintext, and ACP-facade routes, then passes it into the owning
-frontend. Help, version, configuration-only, sandbox, and other sessionless
+TUI, cloud, and plaintext exec routes, then passes it into the owning
+frontend (for plaintext exec, the host's one-shot client). Help, version, configuration-only, sandbox, and other sessionless
 commands do not create a reportable session. The reporter receives the resolved
 Nori home for durable opt-out state. Authenticated Firebase credentials come
 from the shared user-level `~/.nori-config.json`; the CLI does not derive
@@ -64,10 +64,10 @@ stdin and stdout until stdin closes; see [managed launch on stdio](src/host/docs
 See [the command and wire contract](../../docs/remote-control.md#11-background-host-and-attached-terminals).
 
 **ExecCommand**: Provides two terminal-independent execution surfaces:
-- `nori exec [PROMPT]` runs one prompt through the selected ACP agent and writes only the complete assistant text to stdout. The prompt may come from the positional argument, from piped stdin, or from both (see **Prompt Sources**). Diagnostics and failures remain on stderr so the answer can be piped or redirected directly.
+- `nori exec [PROMPT]` runs one prompt through the selected ACP agent and writes only the complete assistant text to stdout. The prompt may come from the positional argument, from piped stdin, or from both (see **Prompt Sources**). Diagnostics and failures remain on stderr so the answer can be piped or redirected directly. It is an ACP v1 client of `nori host`: `run_exec` resolves the prompt and configuration, then calls the host's [one-shot client](src/host/docs.md#one-shot-exec), which uses the home's running host when it can and an in-process host otherwise. A run with `-c` overrides or `--add-dir` always gets its own host, because a running host applies its own configuration.
 - `nori exec --acp` is an alias for `nori host --stdio`: a headless local host serving the host's standard ACP face (any number of sessions, plus `_nori/*`) to one client on stdin and stdout, with no lock or discovery files. Dispatch loads configuration with the exec overrides and calls the host's `serve_stdio`; see [Local host on stdio](src/host/docs.md#local-host-on-stdio).
-- `nori -p` / `--print` is a top-level boolean flag rather than a subcommand, matching the flag other agent CLIs use to select non-interactive output. It synthesizes an `ExecCommand` from the already-parsed interactive flags and routes into the same plaintext path, so it is an alias in behavior and not a second implementation. It cannot reach the headless host; that stays behind the explicit `exec --acp`.
-- Both modes use the same resolved configuration and `nori-harness` runtime as the TUI. `--agent`, `--cwd`, and raw `-c` overrides remain available without initializing Ratatui.
+- `nori -p` / `--print` is a top-level boolean flag rather than a subcommand, matching the flag other agent CLIs use to select non-interactive output. It synthesizes an `ExecCommand` from the already-parsed interactive flags and routes into the same plaintext path, so it is an alias in behavior and not a second implementation. It cannot serve ACP on stdio; that stays behind the explicit `exec --acp`.
+- Both modes use the same resolved configuration and `nori-harness` session manager (through the host) as the TUI. `--agent`, `--cwd`, and raw `-c` overrides remain available without initializing Ratatui.
 - The explicit `--dangerously-bypass-approvals-and-sandbox` flag is the only unattended auto-approval path and applies only to permission boundaries visible through ACP.
 
 **Prompt Sources** (`stdin_prompt.rs`): A prompt can arrive as a positional argument, on piped stdin, or as both. Resolution is shared by the interactive and non-interactive entry points so the two never drift:

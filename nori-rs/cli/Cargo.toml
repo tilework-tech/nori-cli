@@ -21,7 +21,6 @@ clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
 nori-harness = { workspace = true }
 nori-installed = { workspace = true }
-nori-exec = { workspace = true }
 nori-config = { workspace = true }
 codex-arg0 = { workspace = true }
 codex-common = { workspace = true, features = ["cli"] }

@@ -8,7 +8,6 @@ members = [
     "common",
     "core",
     "execpolicy",
-    "exec",
     "keyring-store",
     "file-search",
     "linux-sandbox",
@@ -80,7 +79,6 @@ codex-windows-sandbox = { path = "windows-sandbox-rs" }
 core_test_support = { path = "core/tests/common" }
 mcp-types = { path = "mcp-types" }
 nori-harness = { path = "harness" }
-nori-exec = { path = "exec" }
 nori-installed = { path = "installed" }
 
 # External
