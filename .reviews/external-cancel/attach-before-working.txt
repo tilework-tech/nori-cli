@@ -1,0 +1,18 @@
+ Nori host  CONTROLLING
+ atlas · new session · atlas-workspace · Agent working · ctrl+c cancel
+
+ Checking the sample inventory.
+
+
+
+
+
+
+
+
+
+
+
+› Keep the sample inventory draft
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg

@@ -1,0 +1,3 @@
+Adapter: working with 0 cancels
+Controller: session/cancel
+Adapter: idle with 0 cancels

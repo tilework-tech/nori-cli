@@ -1,0 +1,22 @@
+Synthetic attached PTY, loopback WebSocket relay, real host, and stdio ACP adapter
+Test: delayed_cancel_for_amber_does_not_interrupt_blue
+Amber is the first observed turn. Blue is the second.
+
+host → attach  observed ee6ddd57-7c8e-4c16-a00e-a58818764431 working
+adapter → host → attach  working with 0 cancels
+attach → relay  {"id":7,"jsonrpc":"2.0","method":"_nori/session/cancel_observed","params":{"observedTurnId":"ee6ddd57-7c8e-4c16-a00e-a58818764431","sessionId":"0e9b1734-f37f-4e9a-a87b-bd6c128f5a06"}}
+host → attach  observed ee6ddd57-7c8e-4c16-a00e-a58818764431 idle
+adapter → host → attach  idle with 0 cancels
+host → attach  observed 5f91d26a-51b4-4708-ac55-a017c0a8b826 working
+adapter → host → attach  working with 0 cancels
+relay → host (released)  {"id":7,"jsonrpc":"2.0","method":"_nori/session/cancel_observed","params":{"observedTurnId":"ee6ddd57-7c8e-4c16-a00e-a58818764431","sessionId":"0e9b1734-f37f-4e9a-a87b-bd6c128f5a06"}}
+host → attach  {"error":{"code":-32000,"message":"The observed turn is no longer active"},"id":7,"jsonrpc":"2.0"}
+adapter → host → attach  working with 0 cancels
+attach → relay  {"id":8,"jsonrpc":"2.0","method":"_nori/session/cancel_observed","params":{"observedTurnId":"5f91d26a-51b4-4708-ac55-a017c0a8b826","sessionId":"0e9b1734-f37f-4e9a-a87b-bd6c128f5a06"}}
+host → attach  {"id":8,"jsonrpc":"2.0","result":{"sessionId":"0e9b1734-f37f-4e9a-a87b-bd6c128f5a06"}}
+host → attach  observed 5f91d26a-51b4-4708-ac55-a017c0a8b826 cancel_requested
+adapter → host → attach  Received cancel 1
+host → attach  observed 5f91d26a-51b4-4708-ac55-a017c0a8b826 idle
+adapter → host → attach  idle with 1 cancels
+
+Result: PASS
