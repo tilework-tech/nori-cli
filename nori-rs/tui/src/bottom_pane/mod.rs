@@ -808,6 +808,10 @@ impl BottomPane {
         self.is_task_running
     }
 
+    pub(crate) fn can_interrupt_with_escape(&self, key: KeyEvent) -> bool {
+        self.view_stack.is_empty() && !self.composer.should_handle_vim_escape_during_task(key)
+    }
+
     pub(crate) fn has_active_overlay_or_popup(&self) -> bool {
         !self.view_stack.is_empty() || self.composer.popup_active()
     }

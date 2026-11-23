@@ -385,8 +385,14 @@ where
                                         && id_valid
                                         && (request.get("result").is_some() || request.get("error").is_some())))
                             {
-                                let host = state.host.clone();
-                                tokio::spawn(async move { host.message_from(client, request).await });
+                                if request["method"] == "session/cancel" {
+                                    // Admit the session-scoped notification before reading the next
+                                    // frame. A later prompt or control handoff may change its target.
+                                    state.host.message_from(client, request).await;
+                                } else {
+                                    let host = state.host.clone();
+                                    tokio::spawn(async move { host.message_from(client, request).await });
+                                }
                                 continue;
                             }
                             let valid = request["jsonrpc"] == "2.0"

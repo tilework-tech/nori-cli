@@ -51,6 +51,7 @@ mod editor;
 mod effective_cwd_tracker;
 mod exec_cell;
 mod exec_command;
+mod external_cancel;
 mod file_search;
 mod follow_up;
 mod frames;

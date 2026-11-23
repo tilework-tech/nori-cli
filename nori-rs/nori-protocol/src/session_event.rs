@@ -43,6 +43,7 @@ pub enum AcpEvent {
 pub enum NoriEvent {
     SessionStarted(SessionStarted),
     SessionPhaseChanged(SessionPhase),
+    ExternalTurnChanged(ExternalTurn),
     SessionEnded(SessionEnded),
     QueueChanged(QueueSnapshot),
     ReplayStarted(ReplayStarted),
@@ -85,6 +86,29 @@ pub enum SessionPhase {
     Loading { request_id: RequestId },
     Prompting { request_id: RequestId },
     Cancelling { request_id: RequestId },
+}
+
+/// Observed activity for which the harness has no outstanding prompt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ExternalTurn {
+    /// Harness-local observation identity, distinct from ACP request IDs.
+    pub id: String,
+    pub state: ExternalTurnState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalTurnState {
+    Working,
+    CancelRequested,
+    /// The peer has not reported a terminal boundary since the request.
+    Unconfirmed,
+    /// The peer reported idle without confirming cancellation.
+    Idle,
+    /// A different turn took over the session.
+    Superseded,
+    /// The peer reported a cancelled stop reason for the same identified turn.
+    Cancelled,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

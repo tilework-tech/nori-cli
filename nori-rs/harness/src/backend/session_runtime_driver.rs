@@ -14,6 +14,7 @@ use super::session_reducer::reduce;
 
 pub(crate) struct SessionDriver {
     runtime: SessionRuntime,
+    pub(super) external: super::external_turn::ExternalActivity,
     normalizer: ClientEventNormalizer,
     pub(super) active_prompt_session: Option<acp::SessionId>,
     pub(super) last_normal_turn: Option<(acp::SessionId, acp::RequestId)>,
@@ -28,6 +29,11 @@ pub(crate) struct CompletedTurn {
 pub(crate) enum SessionRuntimeInput {
     Reducer(InboundEvent),
     PublicAcp(Box<nori_protocol::AcpEvent>),
+    Cancel {
+        target: CancelTarget,
+        response_tx: oneshot::Sender<Result<()>>,
+    },
+    ExternalCancelTimeout(String),
     FollowUp {
         submission: crate::follow_up::Submission,
         response_tx: oneshot::Sender<Result<crate::FollowUpReceipt>>,
@@ -78,6 +84,7 @@ impl SessionDriver {
     pub(crate) fn new() -> Self {
         Self {
             runtime: SessionRuntime::new(),
+            external: Default::default(),
             normalizer: ClientEventNormalizer::default(),
             active_prompt_session: None,
             last_normal_turn: None,
@@ -113,6 +120,22 @@ impl SessionDriver {
             side_effects: out.side_effects,
             completed_turn,
         }
+    }
+
+    pub(super) fn observe_live_acp(
+        &mut self,
+        session: &acp::SessionId,
+        event: &nori_protocol::AcpEvent,
+    ) -> Vec<nori_protocol::ExternalTurn> {
+        if self.runtime.phase == SessionPhase::Idle
+            && let nori_protocol::AcpEvent::Notification(
+                acp::AgentNotification::SessionNotification(notification),
+            ) = event
+            && notification.session_id == *session
+        {
+            return self.external.observe(session, &notification.update);
+        }
+        Vec::new()
     }
 
     pub(crate) fn active_request_id(&self) -> Option<String> {
@@ -222,13 +245,40 @@ impl Default for SessionDriver {
     }
 }
 
-const CANCEL_WARNING_SECS: u64 = 3;
+pub(super) const CANCEL_WARNING_SECS: u64 = 3;
 const CANCEL_FORCE_SECS: u64 = 10;
 
 impl AcpBackend {
     pub(super) async fn apply_runtime_input(&self, input: SessionRuntimeInput) {
         match input {
+            SessionRuntimeInput::Cancel {
+                target,
+                response_tx,
+            } => {
+                let _ = response_tx.send(self.cancel_turn(target).await);
+            }
+            SessionRuntimeInput::ExternalCancelTimeout(id) => {
+                let change = self
+                    .session_driver
+                    .lock()
+                    .await
+                    .external
+                    .set_state(&id, nori_protocol::ExternalTurnState::Unconfirmed);
+                if let Some(change) = change {
+                    self.publish_external_turn(change).await;
+                }
+            }
             SessionRuntimeInput::PublicAcp(event) => {
+                let changes = {
+                    let session = self.session_id.read().await;
+                    self.session_driver
+                        .lock()
+                        .await
+                        .observe_live_acp(&session, &event)
+                };
+                for change in changes {
+                    self.publish_external_turn(change).await;
+                }
                 let _ = self
                     .backend_event_tx
                     .send(BackendEvent::Public(SessionEvent::Acp(*event)))
@@ -264,7 +314,7 @@ impl AcpBackend {
 
     pub(super) async fn apply_session_event(&self, event: InboundEvent) {
         let event_kind = session_reducer::inbound_event_kind(&event);
-        let actions = {
+        let (actions, superseded) = {
             let mut driver = self.session_driver.lock().await;
             let phase_before = driver.phase_label();
             let active_before = driver.active_request_id();
@@ -302,8 +352,18 @@ impl AcpBackend {
                 side_effects = actions.side_effects.len(),
                 "Applied reducer event in serialized session runtime"
             );
-            actions
+            let superseded = if driver.runtime.phase != SessionPhase::Idle {
+                driver
+                    .external
+                    .finish(nori_protocol::ExternalTurnState::Superseded)
+            } else {
+                None
+            };
+            (actions, superseded)
         };
+        if let Some(change) = superseded {
+            self.publish_external_turn(change).await;
+        }
         let is_prompt_terminal = actions.completed_turn.is_some();
         if is_prompt_terminal {
             if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {

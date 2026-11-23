@@ -119,11 +119,12 @@ impl AcpBackend {
     /// is created via `session/new`, normalized replay entries are derived from
     /// the transcript, and a summary is stored in `pending_compact_summary` so
     /// it gets prepended to the first prompt.
-    pub async fn resume_session(
+    pub(crate) async fn resume_session(
         prepared: super::prepared::PreparedAgent,
         acp_session_id: Option<&str>,
         transcript: Option<&crate::transcript::Transcript>,
         backend_event_tx: mpsc::Sender<BackendEvent>,
+        cancel_admission: CancelAdmission,
     ) -> Result<Self> {
         let super::prepared::PreparedAgentParts {
             agent_config,
@@ -180,7 +181,7 @@ impl AcpBackend {
             deferred_replay_client_events,
             deferred_replay_batches,
             event_rx,
-            session_driver_state,
+            mut session_driver_state,
         ) = if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
             debug!("Agent supports session/load — using server-side resume");
 
@@ -588,6 +589,13 @@ impl AcpBackend {
                 thread_goal::ThreadGoalState::from_replay_events(&replay_events_for_goal_state);
         }
 
+        // Load and transcript history is kept separately in deferred_replay_batches.
+        for event in &deferred_setup_session_events {
+            if let SessionEvent::Acp(event) = event {
+                let _ = session_driver_state.observe_live_acp(&session_id, event);
+            }
+        }
+        let startup_turn = session_driver_state.external.current(&session_id).cloned();
         forward_setup_session_events(&backend_event_tx, deferred_setup_session_events).await?;
 
         let capabilities_update =
@@ -596,6 +604,7 @@ impl AcpBackend {
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let session_driver = Arc::new(Mutex::new(session_driver_state));
         let (session_event_tx, mut session_event_rx) = mpsc::channel(128);
+        cancel_admission.activate(&session_event_tx);
         let (prompt_result_tx, prompt_result_rx) = mpsc::channel(128);
         let use_native_notifications =
             config.os_notifications == crate::config::OsNotifications::Enabled;
@@ -837,6 +846,9 @@ impl AcpBackend {
                         nori_protocol::NoriEvent::ReplayFinished,
                     )))
                     .await;
+            }
+            if let Some(turn) = startup_turn {
+                relay_backend.publish_external_turn(turn).await;
             }
             if let Some(update) = resume_goal_notice {
                 let _ = relay_backend
