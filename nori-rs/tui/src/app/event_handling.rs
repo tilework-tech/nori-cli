@@ -289,52 +289,6 @@ impl App {
             AppEvent::SessionClosed { generation } => {
                 return self.on_session_closed(tui, generation);
             }
-            AppEvent::RemoteControlRequested(request) => {
-                let tailnet = match request {
-                    crate::remote_control::RemoteControlRequest::EnableLocal
-                    | crate::remote_control::RemoteControlRequest::EnableTailnet
-                    | crate::remote_control::RemoteControlRequest::Status => {
-                        crate::remote_control::detect_tailnet_ipv4().await
-                    }
-                    crate::remote_control::RemoteControlRequest::EnableExplicit(_)
-                    | crate::remote_control::RemoteControlRequest::Disable => {
-                        Err("Tailscale was not queried.".to_string())
-                    }
-                };
-                let outcome = self
-                    .remote_control
-                    .execute_request_with_detection(request, tailnet)
-                    .await;
-                match outcome {
-                    crate::remote_control::RemoteControlOutcome::Report(report) => {
-                        self.chat_widget.add_boxed_history(Box::new(
-                            crate::history_cell::new_remote_control_event(report.lines()),
-                        ));
-                    }
-                    crate::remote_control::RemoteControlOutcome::ConfirmationRequired(addr) => {
-                        self.chat_widget.open_remote_control_confirmation(addr);
-                    }
-                    crate::remote_control::RemoteControlOutcome::Error(message) => {
-                        self.chat_widget.add_error_message(message);
-                    }
-                }
-            }
-            AppEvent::ConfirmRemoteControlExplicit(addr) => {
-                let outcome = self.remote_control.confirm_explicit(addr).await;
-                match outcome {
-                    crate::remote_control::RemoteControlOutcome::Report(report) => {
-                        self.chat_widget.add_boxed_history(Box::new(
-                            crate::history_cell::new_remote_control_event(report.lines()),
-                        ));
-                    }
-                    crate::remote_control::RemoteControlOutcome::Error(message) => {
-                        self.chat_widget.add_error_message(message);
-                    }
-                    crate::remote_control::RemoteControlOutcome::ConfirmationRequired(_) => {
-                        unreachable!("a confirmed address cannot request confirmation again")
-                    }
-                }
-            }
             AppEvent::AgentPrepared {
                 generation,
                 agent,
@@ -362,9 +316,6 @@ impl App {
 
                     match agent {
                         Ok(agent) => {
-                            let automatic_resume = super::session_setup::automatic_resume_event(
-                                agent.automatic_session_id(),
-                            );
                             let sessions = match agent.catalog() {
                                 nori_harness::runtime::SessionCatalog::Unsupported => Vec::new(),
                                 nori_harness::runtime::SessionCatalog::Listed(sessions) => {
@@ -381,12 +332,8 @@ impl App {
                                 display_name,
                                 agent: Box::new(agent),
                             });
-                            if let Some(event) = automatic_resume {
-                                self.app_event_tx.send(event);
-                            } else {
-                                self.chat_widget
-                                    .show_acp_resume_session_picker(sessions, true);
-                            }
+                            self.chat_widget
+                                .show_acp_resume_session_picker(sessions, true);
                         }
                         Err(error) => {
                             self.candidate_agent = None;
@@ -419,9 +366,6 @@ impl App {
 
                 match agent {
                     Ok(agent) => {
-                        let automatic_resume = super::session_setup::automatic_resume_event(
-                            agent.automatic_session_id(),
-                        );
                         // Seed the deferred widget with the prepared agent
                         // capabilities so capability-gated behavior (e.g. the
                         // detach wording on quit) is right before any session
@@ -467,42 +411,37 @@ impl App {
                         };
                         self.prepared_agent = Some(agent);
                         self.prepared_agent_initial_context = prepared_initial_context;
-                        if let Some(event) = automatic_resume {
-                            self.pending_session_activation = None;
-                            self.app_event_tx.send(event);
-                        } else {
-                            if let Some(activation) = self.pending_session_activation.take() {
-                                match activation {
-                                    PendingSessionActivation::New => {
-                                        self.app_event_tx.send(AppEvent::NewSession)
-                                    }
-                                    PendingSessionActivation::Resume {
-                                        acp_session_id,
-                                        title,
-                                        transcript,
-                                    } => self.app_event_tx.send(AppEvent::ActivatePreparedResume {
-                                        acp_session_id,
-                                        title,
-                                        transcript: transcript.map(|transcript| *transcript),
-                                    }),
+                        if let Some(activation) = self.pending_session_activation.take() {
+                            match activation {
+                                PendingSessionActivation::New => {
+                                    self.app_event_tx.send(AppEvent::NewSession)
                                 }
-                                tui.frame_requester().schedule_frame();
-                                return Ok(true);
+                                PendingSessionActivation::Resume {
+                                    acp_session_id,
+                                    title,
+                                    transcript,
+                                } => self.app_event_tx.send(AppEvent::ActivatePreparedResume {
+                                    acp_session_id,
+                                    title,
+                                    transcript: transcript.map(|transcript| *transcript),
+                                }),
                             }
-                            match prepare_intent {
-                                crate::app_event::AgentPrepareIntent::Idle => {}
-                                crate::app_event::AgentPrepareIntent::Onboarding => {
-                                    if let Some(event) = sessions
-                                        .and_then(super::session_setup::onboarding_resume_event)
-                                    {
-                                        self.app_event_tx.send(event);
-                                    } else {
-                                        self.app_event_tx.send(AppEvent::NewSession);
-                                    }
+                            tui.frame_requester().schedule_frame();
+                            return Ok(true);
+                        }
+                        match prepare_intent {
+                            crate::app_event::AgentPrepareIntent::Idle => {}
+                            crate::app_event::AgentPrepareIntent::Onboarding => {
+                                if let Some(event) =
+                                    sessions.and_then(super::session_setup::onboarding_resume_event)
+                                {
+                                    self.app_event_tx.send(event);
+                                } else {
+                                    self.app_event_tx.send(AppEvent::NewSession);
                                 }
-                                crate::app_event::AgentPrepareIntent::Picker {
-                                    fallback_to_spawn,
-                                } => match sessions {
+                            }
+                            crate::app_event::AgentPrepareIntent::Picker { fallback_to_spawn } => {
+                                match sessions {
                                     Some(sessions) => self
                                         .chat_widget
                                         .show_acp_resume_session_picker(sessions, false),
@@ -512,18 +451,18 @@ impl App {
                                     None => self
                                         .chat_widget
                                         .show_acp_resume_session_picker(Vec::new(), false),
-                                },
-                                crate::app_event::AgentPrepareIntent::ResumePicker => {
-                                    if can_resume_catalog && let Some(sessions) = sessions {
-                                        self.chat_widget
-                                            .show_acp_resume_session_picker(sessions, false);
-                                    } else {
-                                        self.chat_widget.open_local_resume_session_picker();
-                                    }
                                 }
-                                crate::app_event::AgentPrepareIntent::Candidate { .. } => {
-                                    unreachable!("candidate handled above")
+                            }
+                            crate::app_event::AgentPrepareIntent::ResumePicker => {
+                                if can_resume_catalog && let Some(sessions) = sessions {
+                                    self.chat_widget
+                                        .show_acp_resume_session_picker(sessions, false);
+                                } else {
+                                    self.chat_widget.open_local_resume_session_picker();
                                 }
+                            }
+                            crate::app_event::AgentPrepareIntent::Candidate { .. } => {
+                                unreachable!("candidate handled above")
                             }
                         }
                     }
@@ -741,12 +680,12 @@ impl App {
                         if widget.session_generation() == generation
                 );
                 if candidate_matches {
-                    let started = match &event {
+                    let started = matches!(
+                        &event,
                         nori_protocol::SessionEvent::Nori(
-                            nori_protocol::NoriEvent::SessionStarted(started),
-                        ) => Some(started.clone()),
-                        _ => None,
-                    };
+                            nori_protocol::NoriEvent::SessionStarted(_)
+                        )
+                    );
                     let ended_message = if let Some(CandidateAgent::Activating {
                         widget,
                         activation_error,
@@ -768,7 +707,7 @@ impl App {
                         None
                     };
 
-                    if let Some(started) = started {
+                    if started {
                         let Some(CandidateAgent::Activating {
                             agent_name,
                             display_name,
@@ -789,19 +728,6 @@ impl App {
                         self.config.active_agent = agent_name.clone();
                         self.config.agent = agent_name;
                         self.configure_new_chat_widget();
-                        if let Some(handle) = self.chat_widget.harness_handle()
-                            && let Err(error) = self
-                                .remote_control
-                                .remember_started(
-                                    generation,
-                                    handle,
-                                    self.config.nori_home.clone(),
-                                    started,
-                                )
-                                .await
-                        {
-                            tracing::warn!(%error, "failed to attach committed candidate to remote ACP host");
-                        }
                         self.chat_widget
                             .submit_launch_input(initial_prompt, initial_images);
                         self.cancel_primary_agent_preparation();
@@ -832,39 +758,6 @@ impl App {
                         self.chat_widget.add_error_message(message);
                     }
                 } else {
-                    if let nori_protocol::SessionEvent::Nori(
-                        nori_protocol::NoriEvent::SessionStarted(started),
-                    ) = &event
-                    {
-                        let handle = if self.chat_widget.session_generation() == generation {
-                            self.chat_widget.harness_handle()
-                        } else {
-                            self.session_deck
-                                .parked_mut(generation)
-                                .and_then(|parked| parked.widget.harness_handle())
-                        };
-                        if let Some(handle) = handle
-                            && let Err(error) = self
-                                .remote_control
-                                .remember_started(
-                                    generation,
-                                    handle,
-                                    self.config.nori_home.clone(),
-                                    started.clone(),
-                                )
-                                .await
-                        {
-                            tracing::warn!(%error, "failed to attach session to remote ACP host");
-                        }
-                    }
-                    if matches!(
-                        &event,
-                        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
-                            _
-                        ))
-                    ) {
-                        self.remote_control.forget_session(generation);
-                    }
                     let Some(event) = self.route_parked_session_event(generation, event) else {
                         tui.frame_requester().schedule_frame();
                         return Ok(true);

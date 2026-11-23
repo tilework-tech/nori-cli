@@ -325,11 +325,6 @@ impl ChatWidget {
                 self.add_status_output();
             }
             SlashCommand::Context => self.add_context_output(),
-            SlashCommand::RemoteControl => {
-                self.app_event_tx.send(AppEvent::RemoteControlRequested(
-                    crate::remote_control::RemoteControlRequest::EnableLocal,
-                ));
-            }
             SlashCommand::Memory => {
                 self.add_memory_output();
             }

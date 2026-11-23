@@ -46,7 +46,6 @@ pub enum SlashCommand {
     Mention,
     Status,
     Context,
-    RemoteControl,
     Memory,
     FirstPrompt,
     Mcp,
@@ -79,7 +78,6 @@ impl SlashCommand {
             SlashCommand::Mention => "mention a file",
             SlashCommand::Status => "show current session configuration and context window usage",
             SlashCommand::Context => "visualize context usage and inspect local instructions",
-            SlashCommand::RemoteControl => "manage remote ACP access to this running session",
             SlashCommand::Memory => "show the contents of all active instruction files",
             SlashCommand::FirstPrompt => "show the first prompt from this session",
             SlashCommand::Model => "choose what model and reasoning effort to use",
@@ -132,7 +130,6 @@ impl SlashCommand {
             | SlashCommand::Mention
             | SlashCommand::Status
             | SlashCommand::Context
-            | SlashCommand::RemoteControl
             | SlashCommand::Memory
             | SlashCommand::FirstPrompt
             | SlashCommand::Goal
@@ -169,7 +166,6 @@ impl SlashCommand {
             | SlashCommand::Mention
             | SlashCommand::Status
             | SlashCommand::Context
-            | SlashCommand::RemoteControl
             | SlashCommand::Memory
             | SlashCommand::FirstPrompt
             | SlashCommand::Mcp

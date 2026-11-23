@@ -325,10 +325,6 @@ impl ChatWidget {
         });
     }
 
-    pub(crate) fn harness_handle(&self) -> Option<HarnessHandle> {
-        self.harness_handle.clone()
-    }
-
     pub(crate) fn submit_harness_action(&self, action: crate::app_event::HarnessAction) {
         let Some(handle) = self.harness_handle.clone() else {
             if matches!(action, crate::app_event::HarnessAction::Shutdown { .. }) {

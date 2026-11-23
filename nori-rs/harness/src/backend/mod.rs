@@ -31,7 +31,6 @@ use crate::transcript::TranscriptRecorder;
 use crate::undo::GhostSnapshotStack;
 
 mod follow_up;
-mod remote_control_ext;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PromptAdmission {

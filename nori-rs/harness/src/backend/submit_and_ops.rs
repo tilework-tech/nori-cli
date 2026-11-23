@@ -19,15 +19,6 @@ impl AcpBackend {
             .map_err(|_| anyhow::anyhow!("session runtime closed"))
     }
 
-    pub(crate) async fn cancel_request(&self, request_id: acp::RequestId) -> Result<()> {
-        self.session_event_tx
-            .send(session_runtime_driver::SessionRuntimeInput::Reducer(
-                session_reducer::InboundEvent::CancelSubmitFor { request_id },
-            ))
-            .await
-            .map_err(|_| anyhow::anyhow!("session runtime closed"))
-    }
-
     pub(crate) async fn shutdown(&self, child_grace: std::time::Duration) -> Result<()> {
         self.teardown(true, Some(child_grace)).await;
         let _ = self

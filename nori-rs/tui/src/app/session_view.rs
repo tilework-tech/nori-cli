@@ -76,11 +76,8 @@ impl App {
             }
             None => {
                 self.session_deck.replace(previous, next);
-                self.remote_control.forget_session(previous);
             }
         }
-        self.remote_control
-            .select_session(next, self.chat_widget.managed_conversation_id());
     }
 
     /// Bring session `target` on screen. Its widget becomes active right away,
@@ -112,8 +109,6 @@ impl App {
         }
         self.backtrack = crate::app_backtrack::BacktrackState::default();
         self.chat_widget.set_foreground(true);
-        self.remote_control
-            .select_session(target, self.chat_widget.managed_conversation_id());
         let agent = self.chat_widget.config_ref().active_agent.clone();
         self.config.agent = agent.clone();
         self.config.active_agent = agent;

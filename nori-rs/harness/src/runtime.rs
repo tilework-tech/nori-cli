@@ -110,10 +110,6 @@ enum HarnessCommand {
         event_id: String,
         response_tx: oneshot::Sender<anyhow::Result<Option<String>>>,
     },
-    CancelRequest {
-        request_id: acp::v1::RequestId,
-        response_tx: oneshot::Sender<anyhow::Result<()>>,
-    },
     AddHistory {
         text: String,
         response_tx: oneshot::Sender<anyhow::Result<()>>,
@@ -548,17 +544,6 @@ impl HarnessHandle {
     pub async fn reclaim_queued_prompt(&self, event_id: String) -> anyhow::Result<Option<String>> {
         self.request(|response_tx| HarnessCommand::ReclaimQueuedPrompt {
             event_id,
-            response_tx,
-        })
-        .await
-    }
-
-    pub(crate) async fn cancel_request(
-        &self,
-        request_id: acp::v1::RequestId,
-    ) -> anyhow::Result<()> {
-        self.request(|response_tx| HarnessCommand::CancelRequest {
-            request_id,
             response_tx,
         })
         .await
@@ -1044,15 +1029,6 @@ pub(crate) fn launch_session_from(
                     }
                 }
             };
-            let start = agent
-                .automatic_session_id()
-                .map(|session_id| {
-                    SessionStart::Resume(SessionResume {
-                        acp_session_id: Some(session_id.to_string()),
-                        transcript: None,
-                    })
-                })
-                .unwrap_or(start);
             let failure_label = match &start {
                 SessionStart::New => "Failed to start ACP session",
                 SessionStart::Resume(_) => "Failed to resume ACP session",
@@ -1265,13 +1241,6 @@ pub(crate) fn launch_session_from(
                     } => {
                         let _ = response_tx
                             .send(backend_for_agent.reclaim_queued_prompt(event_id).await);
-                    }
-                    HarnessCommand::CancelRequest {
-                        request_id,
-                        response_tx,
-                    } => {
-                        let _ =
-                            response_tx.send(backend_for_agent.cancel_request(request_id).await);
                     }
                     HarnessCommand::AddHistory { text, response_tx } => {
                         let _ = response_tx.send(backend_for_agent.add_history(text).await);
