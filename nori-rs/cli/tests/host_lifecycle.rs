@@ -210,6 +210,23 @@ fn starting_beside_a_host_of_another_contract_fails_and_leaves_it_running() {
 }
 
 #[test]
+fn starting_beside_a_host_whose_contract_cannot_be_read_fails() {
+    let host = Host::new();
+    success(host.run(&["host", "--port", "0"]));
+    let path = host.0.path().join("host/host.json");
+    let mut published: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    published["contract"] = serde_json::json!({"acp": 1, "nori": 1});
+    std::fs::write(&path, published.to_string()).unwrap();
+
+    let refused = failure(host.run(&["host", "--port", "0"]));
+
+    assert!(refused.contains(nori_protocol::HOST_CONTRACT), "{refused}");
+    assert!(refused.contains("NORI_HOME"), "{refused}");
+    success(host.run(&["host", "ls"]));
+}
+
+#[test]
 fn starting_beside_a_host_of_a_compatible_contract_reuses_it() {
     let host = Host::new();
     success(host.run(&["host", "--port", "0"]));

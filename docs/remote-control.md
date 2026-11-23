@@ -533,8 +533,8 @@ builds) and is informational only.
 A host with contract H serves a client built for contract C when H satisfies
 the semver caret requirement `^C` (`nori_protocol::host_serves_contract`):
 for `1.x` and above, the same major and H no older than C; for `0.y`, the
-same minor and H's patch no older than C's. Build metadata is ignored and an
-unparsable version is incompatible. A host of contract `1.N.x` therefore
+same minor and H's patch no older than C's. Build metadata is ignored; a
+pre-release or unparsable version is incompatible. A host of contract `1.N.x` therefore
 serves clients built for `1.0.0` through `1.N.x`.
 
 #### Choosing a host (for clients)
@@ -558,8 +558,9 @@ writes no discovery files and runs beside the home's host (see
 [Stdio transport](#stdio-transport)).
 
 `nori host` itself follows this rule: with a host already running in its
-home, it reports "already running" when that host serves its contract, and
-otherwise exits non-zero with the running host's PID, version, and contract,
+home, it reports "already running" when that host serves its contract (or
+publishes no `host.json`, as a managed host does), and otherwise, including
+when `host.json` cannot be read, exits non-zero with the running host's PID, version, and contract,
 its own contract, and the way out (`nori host stop`, or
 `NORI_HOME=<dir> nori host`).
 

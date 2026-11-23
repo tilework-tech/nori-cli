@@ -14,21 +14,28 @@ use super::state::HostFiles;
 pub(super) async fn start(files: &HostFiles) -> anyhow::Result<()> {
     match connect(files).await {
         Ok((_, host)) => {
-            if let Some(discovery) = files.read_discovery()
-                && !nori_protocol::host_serves_contract(
-                    &discovery.contract,
-                    nori_protocol::HOST_CONTRACT,
-                )
-            {
-                anyhow::bail!(
-                    "the running host (pid {}, nori {}, contract {}) does not serve this nori's contract {}; \
-                     stop it with `nori host stop`, or run this nori's host beside it in another home: \
-                     NORI_HOME=<dir> nori host",
-                    host.pid,
-                    discovery.version,
-                    discovery.contract,
-                    nori_protocol::HOST_CONTRACT,
-                );
+            // A host that publishes no host.json (a managed host) is reported
+            // as running; one whose host.json cannot be read is not a host this
+            // nori can stand in for.
+            if files.directory.join("host.json").exists() {
+                let discovery = files.read_discovery();
+                if !discovery.as_ref().is_some_and(|discovery| {
+                    nori_protocol::host_serves_contract(
+                        &discovery.contract,
+                        nori_protocol::HOST_CONTRACT,
+                    )
+                }) {
+                    let (version, contract) = discovery
+                        .map(|discovery| (discovery.version, discovery.contract))
+                        .unwrap_or_else(|| ("unknown".to_owned(), "unknown".to_owned()));
+                    anyhow::bail!(
+                        "the running host (pid {}, nori {version}, contract {contract}) does not serve this nori's contract {}; \
+                         stop it with `nori host stop`, or run this nori's host beside it in another home: \
+                         NORI_HOME=<dir> nori host",
+                        host.pid,
+                        nori_protocol::HOST_CONTRACT,
+                    );
+                }
             }
             println!("Host already running (pid {})  {}", host.pid, host.endpoint);
             return Ok(());

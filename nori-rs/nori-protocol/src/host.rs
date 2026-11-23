@@ -77,8 +77,8 @@ pub const HOST_CONTRACT: &str = "1.0.0";
 /// Whether a host advertising contract `host` serves a client built for
 /// contract `client`: `host` must satisfy the caret requirement `^client`.
 /// For `1.x` and above that is the same major and a host contract no older
-/// than the client's; for `0.y` it is the same minor. Unparsable versions
-/// are incompatible.
+/// than the client's; for `0.y` it is the same minor. Pre-release and
+/// unparsable versions are incompatible.
 pub fn host_serves_contract(host: &str, client: &str) -> bool {
     let Ok(host) = semver::Version::parse(host) else {
         return false;
@@ -86,12 +86,15 @@ pub fn host_serves_contract(host: &str, client: &str) -> bool {
     let Ok(client) = semver::Version::parse(client) else {
         return false;
     };
+    if !host.pre.is_empty() || !client.pre.is_empty() {
+        return false;
+    }
     semver::Comparator {
         op: semver::Op::Caret,
         major: client.major,
         minor: Some(client.minor),
         patch: Some(client.patch),
-        pre: client.pre,
+        pre: semver::Prerelease::EMPTY,
     }
     .matches(&host)
 }
@@ -252,6 +255,9 @@ mod contract_tests {
             ("1.0.0", "not-a-version", false),
             ("not-a-version", "1.0.0", false),
             ("1.0.0+build.7", "1.0.0", true),
+            ("1.0.0-rc.2", "1.0.0-rc.1", false),
+            ("1.0.0", "1.0.0-rc.1", false),
+            ("1.1.0-rc.1", "1.0.0", false),
         ];
         for (host, client, expected) in cases {
             assert_eq!(
