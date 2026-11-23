@@ -148,8 +148,31 @@ fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
         return Line::from(" Sessions · /new starts a session · ctrl+d detaches".dim());
     };
     let row = |id: &str| state.sessions.iter().find(|row| row.session_id == id);
+    let conversation = state.conversations.get(id);
+    let external = conversation.and_then(|conversation| conversation.external_turn.as_ref());
+    let activity = external
+        .map(|turn| {
+            crate::external_cancel::pending_label(turn.state).unwrap_or(
+                if state.watching || state.request_on_screen() {
+                    "Agent working"
+                } else {
+                    "Agent working · ctrl+c cancel"
+                },
+            )
+        })
+        .or_else(|| {
+            conversation
+                .is_some_and(super::state::Conversation::cancelling_prompt)
+                .then_some("Cancel requested")
+        });
     let Some(current) = row(id) else {
-        return Line::from(format!(" session · {id}").dim());
+        return Line::from(
+            match activity {
+                Some(label) => format!(" session · {id} · {label}"),
+                None => format!(" session · {id}"),
+            }
+            .dim(),
+        );
     };
     let top_level = current.delegating_parent().and_then(row).is_none();
     // A top-level session speaks for its family, as in the session lists.
@@ -158,7 +181,7 @@ fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
     } else {
         current.status
     };
-    let label = crate::session_status::status_label(shown);
+    let label = activity.unwrap_or_else(|| crate::session_status::status_label(shown));
     let status = match &current.cwd {
         Some(cwd) => format!(
             " · {} · {label}",
@@ -358,7 +381,12 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
         }
         lines.push(Line::default());
     }
-    if state.transcript_text(id).is_empty() {
+    if conversation.external_turn.is_none()
+        && conversation.active_prompt().is_none()
+        && !conversation.cancelling_prompt()
+        && !conversation.submitted_prompt
+        && state.transcript_text(id).is_empty()
+    {
         lines.push(Line::from("Ready. Send a prompt to begin.".dim()));
     }
     let start = lines

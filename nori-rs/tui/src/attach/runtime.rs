@@ -17,6 +17,10 @@ pub(super) enum Pending {
     },
     New,
     TakeControl,
+    Prompt {
+        session_id: String,
+        draft: String,
+    },
     Mutation {
         draft: Option<String>,
     },
@@ -167,9 +171,9 @@ impl Runtime {
     }
 
     /// Send a JSON-RPC notification, which has no reply.
-    pub fn notify(&mut self, method: &str, params: Value) {
+    pub fn notify(&mut self, method: &str, params: Value) -> bool {
         if self.state.stopped.is_some() {
-            return;
+            return false;
         }
         if self
             .requests
@@ -178,7 +182,9 @@ impl Runtime {
         {
             self.state
                 .show_notice("Host connection worker stopped. Detach and try again.");
+            return false;
         }
+        true
     }
 
     /// `session/resume` for `id` in its folder; a host too old to report
@@ -238,12 +244,23 @@ impl Runtime {
                 self.send("initialize", json!({}), Pending::Initialize);
             }
             ConnectionEvent::Disconnected(reason) => {
+                for conversation in self.state.conversations.values_mut() {
+                    conversation.submitted_prompt = false;
+                    if let Some(turn) = &mut conversation.external_turn
+                        && turn.state == nori_protocol::ExternalTurnState::CancelRequested
+                    {
+                        turn.state = nori_protocol::ExternalTurnState::Unconfirmed;
+                    }
+                }
                 self.state.connected = false;
                 self.next_waiting_after_refresh = false;
                 let uncertain = self.pending.values().any(|pending| {
                     matches!(
                         pending,
-                        Pending::New | Pending::Mutation { .. } | Pending::FollowUp { .. }
+                        Pending::New
+                            | Pending::Mutation { .. }
+                            | Pending::Prompt { .. }
+                            | Pending::FollowUp { .. }
                     )
                 });
                 self.uncertain_delivery |= uncertain;
@@ -362,7 +379,13 @@ impl Runtime {
                 self.follow_up_notice(session_id, format!("{text} [{message_id}] {draft}"));
                 return Ok(());
             }
-            if let Pending::Mutation { draft: Some(draft) } = &pending
+            if let Pending::Prompt { session_id, .. } = &pending
+                && let Some(conversation) = self.state.conversations.get_mut(session_id)
+            {
+                conversation.submitted_prompt = false;
+            }
+            if let Pending::Mutation { draft: Some(draft) } | Pending::Prompt { draft, .. } =
+                &pending
                 && self.composer.is_empty()
             {
                 self.composer.handle_paste(draft.clone());
@@ -431,7 +454,9 @@ impl Runtime {
                     crate::follow_up::delivery_notice(status, &message_id, &draft),
                 );
             }
-            Pending::Subscribe { .. } | Pending::Mutation { .. } => self.refresh_list(),
+            Pending::Subscribe { .. } | Pending::Mutation { .. } | Pending::Prompt { .. } => {
+                self.refresh_list()
+            }
         }
         Ok(())
     }

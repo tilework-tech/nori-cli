@@ -1,50 +1,46 @@
 //! Track observed work independently of the local ACP request slot.
 
+use super::session_runtime_driver::SessionRuntimeInput;
 use nori_protocol::ExternalTurn;
 use nori_protocol::ExternalTurnState;
 use nori_protocol::acp::v1 as acp;
+use std::sync::Arc;
+use std::sync::OnceLock;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 
-/// Synchronously admit session-only cancels to the same queue as observed ACP
+/// Admit cancels directly to the same FIFO as observed ACP
 /// activity. A pending config RPC on the command loop must not retarget a cancel.
 #[derive(Clone, Default)]
-pub(crate) struct CancelAdmission(
-    std::sync::Arc<
-        std::sync::OnceLock<
-            tokio::sync::mpsc::WeakSender<super::session_runtime_driver::SessionRuntimeInput>,
-        >,
-    >,
-);
+pub(crate) struct CancelAdmission(Arc<OnceLock<mpsc::WeakSender<SessionRuntimeInput>>>);
 
 impl CancelAdmission {
-    pub(super) fn activate(
-        &self,
-        tx: &tokio::sync::mpsc::Sender<super::session_runtime_driver::SessionRuntimeInput>,
-    ) {
+    pub(super) fn activate(&self, tx: &mpsc::Sender<SessionRuntimeInput>) {
         let _ = self.0.set(tx.downgrade());
     }
 
-    pub(crate) fn submit(
+    pub(crate) async fn submit(
         &self,
-    ) -> anyhow::Result<tokio::sync::oneshot::Receiver<anyhow::Result<()>>> {
+        target: CancelTarget,
+    ) -> anyhow::Result<oneshot::Receiver<anyhow::Result<()>>> {
         let runtime = self
             .0
             .get()
-            .and_then(tokio::sync::mpsc::WeakSender::upgrade)
+            .and_then(mpsc::WeakSender::upgrade)
             .ok_or_else(|| anyhow::anyhow!("No active turn to cancel"))?;
-        let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+        let (response_tx, response_rx) = oneshot::channel();
         runtime
-            .try_send(super::session_runtime_driver::SessionRuntimeInput::Cancel {
-                target: CancelTarget::Current,
+            .send(SessionRuntimeInput::Cancel {
+                target,
                 response_tx,
             })
-            .map_err(|error| anyhow::anyhow!("Could not enqueue cancellation: {error}"))?;
+            .await
+            .map_err(|_| anyhow::anyhow!("Session closed before cancellation could be sent"))?;
         Ok(response_rx)
     }
 }
 
 pub(crate) enum CancelTarget {
-    /// Historical local action; an idle request is harmless.
-    Owned,
     External(String),
     /// Standard ACP notifications identify the session only.
     Current,
@@ -197,11 +193,10 @@ impl super::AcpBackend {
         let mut driver = self.session_driver.lock().await;
         let external = match (&target, driver.public_phase()) {
             (
-                CancelTarget::Owned | CancelTarget::Current,
+                CancelTarget::Current,
                 nori_protocol::SessionPhase::Prompting { .. }
                 | nori_protocol::SessionPhase::Cancelling { .. },
             ) => None,
-            (CancelTarget::Owned, _) => return Ok(()),
             (
                 CancelTarget::External(_) | CancelTarget::Current,
                 nori_protocol::SessionPhase::Idle,
@@ -230,7 +225,20 @@ impl super::AcpBackend {
             return Ok(());
         };
 
-        self.connection.cancel(&session).await?;
+        if let Err(error) = self.connection.cancel(&session).await {
+            drop(driver);
+            drop(session);
+            let notice = nori_protocol::NoriEvent::Notice(nori_protocol::Notice {
+                message: format!("Could not send cancellation: {error}"),
+            });
+            let _ = self
+                .backend_event_tx
+                .send(super::BackendEvent::Public(
+                    nori_protocol::SessionEvent::Nori(notice),
+                ))
+                .await;
+            return Err(error);
+        }
         let change = driver
             .external
             .set_state(&id, ExternalTurnState::CancelRequested);

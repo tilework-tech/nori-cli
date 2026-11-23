@@ -143,7 +143,14 @@ impl AcpBackend {
     ///
     /// # Returns
     /// A connected `AcpBackend` ready to receive operations.
-    pub(crate) async fn spawn(
+    pub async fn spawn(
+        prepared: super::prepared::PreparedAgent,
+        backend_event_tx: mpsc::Sender<BackendEvent>,
+    ) -> Result<Self> {
+        Self::spawn_with_cancel(prepared, backend_event_tx, CancelAdmission::default()).await
+    }
+
+    pub(crate) async fn spawn_with_cancel(
         prepared: super::prepared::PreparedAgent,
         backend_event_tx: mpsc::Sender<BackendEvent>,
         cancel_admission: CancelAdmission,
@@ -337,14 +344,6 @@ impl AcpBackend {
             relay_task_abort: Arc::new(Mutex::new(None)),
         };
 
-        let runtime_backend = backend.clone();
-        let runtime_task = tokio::spawn(async move {
-            while let Some(input) = session_event_rx.recv().await {
-                runtime_backend.apply_runtime_input(input).await;
-            }
-        });
-        *backend.runtime_task_abort.lock().await = Some(runtime_task.abort_handle());
-
         // Execute session_start hooks
         run_session_start_hooks(
             &config.session_start_hooks,
@@ -387,6 +386,14 @@ impl AcpBackend {
         if let Some(turn) = startup_turn {
             backend.publish_external_turn(turn).await;
         }
+
+        let runtime_backend = backend.clone();
+        let runtime_task = tokio::spawn(async move {
+            while let Some(input) = session_event_rx.recv().await {
+                runtime_backend.apply_runtime_input(input).await;
+            }
+        });
+        *backend.runtime_task_abort.lock().await = Some(runtime_task.abort_handle());
 
         // Spawn reducer loop: processes all transport events and prompt
         // results through the serialized reducer/runtime pipeline.

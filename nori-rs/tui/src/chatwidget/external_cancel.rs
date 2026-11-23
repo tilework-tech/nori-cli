@@ -29,8 +29,7 @@ impl ChatWidget {
     }
 
     pub(super) fn on_external_turn_changed(&mut self, turn: ExternalTurn) {
-        use ExternalTurnState::*;
-        if turn.state == Working {
+        if turn.state == ExternalTurnState::Working {
             self.start_proactive_turn();
             self.external_turn = Some(turn);
             self.bottom_pane
@@ -45,27 +44,23 @@ impl ChatWidget {
             return;
         }
 
-        match turn.state {
-            CancelRequested | Unconfirmed => {
-                self.external_turn = Some(turn);
-                self.bottom_pane.ensure_status_indicator();
-                self.bottom_pane.set_interrupt_hint_visible(false);
-                self.set_status_header(self.current_status_header.clone());
+        if let Some(label) = pending_label(turn.state) {
+            self.external_turn = Some(turn);
+            self.bottom_pane.ensure_status_indicator();
+            self.bottom_pane.set_interrupt_hint_visible(false);
+            self.set_status_header(label.to_owned());
+        } else {
+            let pending = self.external_cancel_status().is_some();
+            self.external_turn = None;
+            if turn.state == ExternalTurnState::Superseded {
+                self.separate_proactive_turn();
+                self.bottom_pane.hide_status_indicator();
+            } else {
+                self.complete_proactive_turn();
             }
-            Idle | Superseded | Cancelled => {
-                let pending = self.external_cancel_status().is_some();
-                self.external_turn = None;
-                if turn.state == Superseded {
-                    self.separate_proactive_turn();
-                    self.bottom_pane.hide_status_indicator();
-                } else {
-                    self.complete_proactive_turn();
-                }
-                if let Some(message) = terminal_message(turn.state, pending) {
-                    self.add_info_message(message.to_owned(), None);
-                }
+            if let Some(message) = terminal_message(turn.state, pending) {
+                self.add_info_message(message.to_owned(), None);
             }
-            Working => unreachable!(),
         }
         self.request_redraw();
     }
