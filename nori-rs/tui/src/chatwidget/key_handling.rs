@@ -17,6 +17,15 @@ impl ChatWidget {
         if self.handle_queue_list_key(key_event) {
             return;
         }
+        if key_event.code == KeyCode::Esc
+            && key_event.kind == KeyEventKind::Press
+            && !self.exiting
+            && self.can_control_external_turn()
+            && self.bottom_pane.can_interrupt_with_escape(key_event)
+        {
+            self.request_external_cancel();
+            return;
+        }
         match key_event {
             KeyEvent {
                 code: KeyCode::Char(c),

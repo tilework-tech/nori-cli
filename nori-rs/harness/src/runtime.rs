@@ -24,6 +24,8 @@ use tokio::sync::oneshot;
 use crate::backend::AcpBackend;
 use crate::backend::AcpBackendConfig;
 use crate::backend::BackendEvent;
+use crate::backend::CancelAdmission;
+use crate::backend::CancelTarget;
 use crate::backend::PromptAdmission;
 use crate::backend::SessionContext;
 pub use crate::backend::prepared::PreparedAgent;
@@ -99,6 +101,7 @@ enum HarnessCommand {
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
     Cancel {
+        target: CancelTarget,
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
     /// Let a paused queue send again.
@@ -243,6 +246,7 @@ impl AgentStartFailed {
 /// Typed handle for controlling one Nori harness session.
 #[derive(Clone)]
 pub struct HarnessHandle {
+    cancel_admission: CancelAdmission,
     command_tx: mpsc::UnboundedSender<HarnessCommand>,
     normal_shutdown: Arc<AtomicBool>,
     first_prompt_started: Option<Arc<FirstPromptStarted>>,
@@ -524,8 +528,33 @@ impl HarnessHandle {
     }
 
     pub async fn cancel(&self) -> anyhow::Result<()> {
-        self.request(|response_tx| HarnessCommand::Cancel { response_tx })
-            .await
+        self.cancel_target(CancelTarget::Owned).await
+    }
+
+    /// Cancel the current turn on a session-scoped ACP notification.
+    pub async fn cancel_current_turn(&self) -> anyhow::Result<()> {
+        self.submit_cancel_current_turn().await
+    }
+
+    /// Enqueue a controller's session-scoped cancel before its socket accepts another frame.
+    pub fn submit_cancel_current_turn(
+        &self,
+    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send + 'static {
+        let admitted = self.cancel_admission.submit();
+        async move { admitted?.await? }
+    }
+
+    /// Cancel only the external activity identified by a live ExternalTurnChanged event.
+    pub async fn cancel_external_turn(&self, id: String) -> anyhow::Result<()> {
+        self.cancel_target(CancelTarget::External(id)).await
+    }
+
+    async fn cancel_target(&self, target: CancelTarget) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::Cancel {
+            target,
+            response_tx,
+        })
+        .await
     }
 
     /// Let a queue paused by an interrupted or failed turn send again. The
@@ -997,7 +1026,9 @@ pub(crate) fn launch_session_from(
     };
     let context_timeline = Arc::new(tokio::sync::RwLock::new(initial_timeline));
     let normal_shutdown = Arc::new(AtomicBool::new(false));
+    let cancel_admission = CancelAdmission::default();
     let handle = HarnessHandle {
+        cancel_admission: cancel_admission.clone(),
         command_tx: agent_cmd_tx,
         normal_shutdown: Arc::clone(&normal_shutdown),
         first_prompt_started: None,
@@ -1035,13 +1066,16 @@ pub(crate) fn launch_session_from(
                 SessionStart::Resume(_) => "Failed to resume ACP session",
             };
             let result = match start {
-                SessionStart::New => AcpBackend::spawn(agent, backend_event_tx).await,
+                SessionStart::New => {
+                    AcpBackend::spawn(agent, backend_event_tx, cancel_admission).await
+                }
                 SessionStart::Resume(resume) => {
                     AcpBackend::resume_session(
                         agent,
                         resume.acp_session_id.as_deref(),
                         resume.transcript.as_ref(),
                         backend_event_tx,
+                        cancel_admission,
                     )
                     .await
                 }
@@ -1230,8 +1264,11 @@ pub(crate) fn launch_session_from(
                             .await;
                         let _ = response_tx.send(result);
                     }
-                    HarnessCommand::Cancel { response_tx } => {
-                        let _ = response_tx.send(backend_for_agent.cancel().await);
+                    HarnessCommand::Cancel {
+                        target,
+                        response_tx,
+                    } => {
+                        let _ = response_tx.send(backend_for_agent.cancel(target).await);
                     }
                     HarnessCommand::ResumeQueue { response_tx } => {
                         let _ = response_tx.send(backend_for_agent.resume_queue().await);
@@ -1543,6 +1580,7 @@ mod tests {
             }
         });
         let handle = HarnessHandle {
+            cancel_admission: Default::default(),
             command_tx,
             normal_shutdown: Arc::default(),
             first_prompt_started: None,
@@ -1574,6 +1612,7 @@ mod tests {
         let callback_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let callback_count_for_handle = Arc::clone(&callback_count);
         let handle = HarnessHandle {
+            cancel_admission: Default::default(),
             command_tx,
             normal_shutdown: Arc::default(),
             first_prompt_started: None,

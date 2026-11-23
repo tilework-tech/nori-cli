@@ -1837,3 +1837,76 @@ fn session_forked_shows_resume_hint_for_previous_conversation() {
         "fork hint should offer a copy-pasteable resume command for the previous conversation, got:\n{rendered}"
     );
 }
+
+fn external_state(
+    id: &str,
+    state: nori_protocol::ExternalTurnState,
+) -> nori_protocol::SessionEvent {
+    nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ExternalTurnChanged(
+        nori_protocol::ExternalTurn {
+            id: id.to_owned(),
+            state,
+        },
+    ))
+}
+
+#[test]
+fn external_turn_cancel_tracks_the_displayed_turn_until_confirmation() {
+    use nori_protocol::ExternalTurnState as State;
+
+    let (mut chat, mut rx, _) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.config.custom_working_messages = false;
+    chat.set_composer_text("Draft for later".to_owned());
+    chat.handle_session_event(generation, external_state("turn-a", State::Working));
+    let working = render_bottom_pane(&mut chat, 80);
+    assert!(working.contains("esc to interrupt"), "{working}");
+    chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(std::iter::from_fn(|| rx.try_recv().ok()).any(|event| matches!(
+        event, AppEvent::HarnessAction(crate::app_event::HarnessAction::CancelExternal { id, .. })
+        if id == "turn-a"
+    )));
+    chat.handle_session_event(generation, external_state("turn-a", State::CancelRequested));
+    chat.handle_session_event(
+        generation,
+        replay_text_chunk(
+            crate::presentation::MessageStream::Reasoning,
+            "thought",
+            "Still finishing.",
+        ),
+    );
+    let pending = render_bottom_pane(&mut chat, 80);
+    insta::assert_snapshot!("external_cancel_requested", pending);
+    chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(
+        std::iter::from_fn(|| rx.try_recv().ok())
+            .all(|event| !matches!(event, AppEvent::HarnessAction(_)))
+    );
+    chat.handle_session_event(generation, external_state("turn-a", State::Unconfirmed));
+    assert!(render_bottom_pane(&mut chat, 80).contains("unconfirmed"));
+    chat.handle_session_event(generation, external_state("turn-a", State::Idle));
+    assert!(history_text(&mut rx).contains("Agent is idle. Cancellation was not confirmed."));
+    chat.handle_session_event(generation, external_state("turn-b", State::Working));
+    chat.handle_session_event(generation, external_state("turn-a", State::Cancelled));
+    assert!(render_bottom_pane(&mut chat, 80).contains("esc to interrupt"));
+    chat.handle_session_event(generation, external_state("turn-b", State::Cancelled));
+    assert!(history_text(&mut rx).contains("Agent confirmed cancellation."));
+}
+
+#[test]
+fn follow_only_external_activity_has_no_cancel_control() {
+    let (mut chat, mut rx, _) = make_cloud_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.handle_session_event(generation, initialize_follow_only_agent_event());
+    chat.handle_session_event(
+        generation,
+        external_state("turn-a", nori_protocol::ExternalTurnState::Working),
+    );
+    let rendered = render_bottom_pane(&mut chat, 80);
+    assert!(!rendered.contains("esc to interrupt"), "{rendered}");
+    chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(
+        std::iter::from_fn(|| rx.try_recv().ok())
+            .all(|event| !matches!(event, AppEvent::HarnessAction(_)))
+    );
+}
