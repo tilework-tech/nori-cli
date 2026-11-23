@@ -56,7 +56,7 @@ session list or a supplied conversation ID. Explicit `--host` and
 Nori configuration without entering the local process-owning TUI `App`.
 Administrative list, new, and stop use host discovery directly, so a later malformed
 configuration file cannot prevent shutdown.
-Without `--launch`, `host --stdio` serves one client on stdin and stdout, relaying it to the home's running host when that host is compatible, the command has no config overrides, and the host grants it control, and otherwise running a private headless host; see [local host on stdio](src/host/docs.md#local-host-on-stdio).
+Without `--launch`, `host --stdio` serves one client on stdin and stdout, relaying it to the home's running host when that host is compatible, the command has no config overrides, and the host grants it control (or the client initializes with `observe: true` and joins as a watcher), and otherwise running a private headless host; see [local host on stdio](src/host/docs.md#local-host-on-stdio).
 On a dedicated managed machine, `host --stdio --launch <FILE> [--inherit-env]`
 runs the host in the foreground and serves one pinned adapter as plain ACP on
 stdin and stdout until stdin closes; see [managed launch on stdio](src/host/docs.md#managed-launch-on-stdio).

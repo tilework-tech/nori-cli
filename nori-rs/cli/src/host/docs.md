@@ -617,13 +617,15 @@ needs `--launch`.
   or sandbox override), `host.json` advertises a compatible contract
   (`compatible_discovery`, which one-shot exec shares), the client's first
   non-blank line is an `initialize`, and the running host answers it within
-  a short timeout with `control.role: "controller"`. The process then copies
+  a short timeout with `control.role: "controller"`, or that `initialize`
+  sets `observe: true` (the client then joins as a watcher). The process then copies
   stdin lines to `/acp` as text frames and the host's frames to stdout. The
   client shares the host's sessions with every other client and they outlive
   it: stdin EOF closes only this connection and exits 0; SIGINT or SIGTERM
-  closes it and exits non-zero. A watcher reply or an unreachable host closes
-  that connection, and the already-read `initialize` line is replayed to a
-  private host instead. A stdio client never takes control from another.
+  closes it and exits non-zero. A watcher reply to a client that did not ask
+  to observe, or an unreachable host, closes that connection, and the
+  already-read `initialize` line is replayed to a private host instead. A
+  stdio client never takes control from another.
 - **Private host.** Otherwise [`serve`](local_stdio.rs) builds the same
   `HostService` as the background host
   (through `local_host`, over the shared `host_service` constructor) but
@@ -690,7 +692,8 @@ nori exec "prompt"
   given, `session/set_mode` `approve-all` under
   `--dangerously-bypass-approvals-and-sandbox` else `agent`,
   `session/prompt`, then `session/close` even after a failed prompt. On a
-  running host the closed session stays listed as stored.
+  running host the closed session stays in `session/list` among the live
+  rows with `nori/session` `live: false`.
 - **Output.** Text `agent_message_chunk` updates for the session are
   concatenated; the CLI prints them plus a trailing newline. Every
   `session/request_permission` is answered with its `reject_once` or
