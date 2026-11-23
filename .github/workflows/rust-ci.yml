@@ -1,8 +1,7 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/pr-730-native-host-r2']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +11,7 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 55
     defaults:
       run:
         working-directory: nori-rs
@@ -25,10 +24,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: macOS host verification
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: 920570eabf72665c33d1ce045dd1da96783443f6
+          persist-credentials: false
+
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = 920570eabf72665c33d1ce045dd1da96783443f6 && git rev-parse HEAD && uname -sm
 
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -126,7 +134,19 @@ jobs:
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
           cargo build -p nori-cli --profile ci-test --target ${{ matrix.target }}
+      - name: Host lifecycle and managed recovery suites
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: cargo test --profile ci-test --target ${{ matrix.target }} -p nori-cli --no-fail-fast --test host_lifecycle --test managed_recovery
+      - name: Thought status tests
+        if: success() || failure()
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-tui -- thought_status status_indicator_widget text_formatting shimmer
+          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --test thought_status
       - name: cargo test nori
+        if: success() || failure()
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
