@@ -177,7 +177,8 @@ impl ClientToolCell {
     }
 
     /// `max_lines` caps command output and generic tool text; see
-    /// `exec_cell::cap_lines`. Diffs and Exploring rows ignore it.
+    /// `exec_cell::cap_lines`. Diffs and Exploring rows ignore it, and
+    /// `display_lines` passes it only for the full view.
     fn render(&self, width: u16, full: bool, max_lines: Option<i32>) -> Vec<Line<'static>> {
         if self.is_exploring() {
             return self.render_exploring_lines(width, full);
@@ -701,11 +702,8 @@ fn create_contextual_patch(
 
 impl HistoryCell for ClientToolCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        self.render(
-            width,
-            self.tool_output == ToolOutput::Full,
-            self.output_max_lines,
-        )
+        let full = self.tool_output == ToolOutput::Full;
+        self.render(width, full, self.output_max_lines.filter(|_| full))
     }
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {

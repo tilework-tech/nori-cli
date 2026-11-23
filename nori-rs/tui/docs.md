@@ -629,11 +629,13 @@ without that setting and does not resolve project settings, so it falls back
 to `ToolOutput::default()` and always renders full.
 
 The chat widget also passes `NoriConfig::tool_output_max_lines` through
-`with_output_max_lines`. This optional cap affects only `display_lines`: Execute
-output in the full inline view, and the invocation and artifact detail lines of
-Read, Search, Fetch, Think, and Other calls (which render the same in both
-views). Compact Execute, diffs, Exploring groups and their Execute steps, and
-`transcript_lines` ignore it, as does `nori attach`, which never sets it. The
+`with_output_max_lines`. This optional cap affects only `display_lines` in the
+full inline view: Execute output, and the invocation and artifact detail lines
+of Fetch, Think, and Other calls. Read and Search calls, ListFiles
+invocations, and read-only commands route to Exploring rows (see
+`is_exploring_snapshot`), so they are never capped. The compact view ignores the cap for
+every kind of call, as do diffs, Exploring groups and their Execute steps,
+`transcript_lines`, and `nori attach`, which never sets it. The
 cap counts logical lines before wrapping. [`cap_lines`](src/exec_cell/output_cap.rs)
 splits the text into a head and a tail, and `hidden_lines_marker` builds the
 faint italic `┄ N lines hidden` row placed between them. A cap of N gives N - 1

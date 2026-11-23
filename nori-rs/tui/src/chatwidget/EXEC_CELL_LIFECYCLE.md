@@ -108,7 +108,8 @@ overlay) is always full. The `nori attach` frontend builds cells without
 
 `with_output_max_lines` adds an optional line cap from
 `NoriConfig::tool_output_max_lines` (off when unset). It changes only
-`display_lines`, and only where the table below says "capped". A capped block
+`display_lines` in the full view, and only where the table below says
+"capped"; the compact view is never capped. A capped block
 keeps its first and last lines and puts one faint italic `┄ N lines hidden`
 row in place of the middle (built by `exec_cell::hidden_lines_marker`). Lines
 are counted before wrapping. `transcript_lines` and `nori attach` cells are
@@ -119,7 +120,7 @@ never capped.
 | Execute | `• Ran`/`Running` + `compact_command` summary, then one `└` line with the last non-blank output line (ANSI stripped, dim, red on failure); no `└` line when there is no output | `• Ran` + the whole command, syntax highlighted with command names bold (`full_command_lines`), then all output dim under `└` (capped) |
 | Exploring group | `• Explored N reads · M searches · K failed` + `└` the last step's label | Header, then every step with its own status dot; Execute steps render in full with all output (never capped) |
 | Create/Edit/Delete/Move | Header only: `Edited path (+A -R)` or `Edited N files (+A -R)` (`Moved` for moves); failures show the error under `└` | Header plus the diff |
-| Read/Search/Fetch/Think/Other (outside an Exploring group) | Header plus invocation and artifact detail lines (capped; same in both views) | Same |
+| Fetch/Think/Other | Header plus invocation and artifact detail lines | Same lines (capped) |
 
 Status is carried by the bullet colour alone: green for success, red for
 failure, a spinner while running. Execute success comes from `raw_output.exit_code`

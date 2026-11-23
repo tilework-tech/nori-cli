@@ -343,12 +343,14 @@ usually are. `1` shows only the hidden-lines row. Output that already fits is
 shown unchanged. `0` or a negative number means no cap, so a project or a
 `-c` override can lift a global cap.
 
-The cap applies to command output in the full view and to the detail text of
-read, search, fetch, think, and other generic tool calls; for those calls the
-invocation line counts as text too, so a very small cap can hide it. It
-counts output lines before they wrap to the terminal width. It does not apply
-to the compact view, edit diffs, exploring groups, the transcript view
-(Ctrl+T or Ctrl+O), saved transcripts, or `nori attach`.
+The cap applies only in the full view, to command output and to the text of
+fetch, think, and other tool calls. For those calls the invocation line counts
+as text too, so a very small cap can hide it. Read, search, and list-files
+calls and read-only commands such as `cat` or `rg` appear as exploring rows,
+which are not capped. The cap counts output lines before they
+wrap to the terminal width. It does not apply to the compact view, edit diffs,
+exploring groups, the transcript view (Ctrl+T or Ctrl+O), saved transcripts,
+or `nori attach`.
 
 The key is read in the same order as `tool_output`: `-c
 tui.tool_output_max_lines=N` (or a `-c tui={...}` table that sets it), then the

@@ -604,8 +604,8 @@ fn capped_generic_tool_keeps_head_and_tail_of_its_text() {
         .map(|n| format!("- note {n:02}: widget spacing adjusted"))
         .collect::<Vec<_>>()
         .join("\n");
-    let capped = cell(fetch_with_text(&body)).with_output_max_lines(Some(5));
-    let uncapped = cell(fetch_with_text(&body));
+    let capped = full_capped(fetch_with_text(&body), Some(5));
+    let uncapped = full_capped(fetch_with_text(&body), None);
     assert_snapshot!(format!(
         "--- before (no cap) ---\n{}\n--- after (tool_output_max_lines = 5) ---\n{}",
         text(&uncapped.display_lines(80), 80),
@@ -618,6 +618,28 @@ fn capped_generic_tool_keeps_head_and_tail_of_its_text() {
         text(&capped.transcript_lines(80), 80),
         text(&uncapped.transcript_lines(80), 80)
     );
+}
+
+#[test]
+fn generic_tool_text_is_capped_in_full_view_only() {
+    let body = (1..=8)
+        .map(|n| format!("fetched row {n:02}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let compact_capped = cell(fetch_with_text(&body)).with_output_max_lines(Some(3));
+    let compact_uncapped = cell(fetch_with_text(&body));
+    let compact = text(&compact_capped.display_lines(80), 80);
+    assert_eq!(compact, text(&compact_uncapped.display_lines(80), 80));
+    assert!(compact.contains("fetched row 04"), "{compact}");
+    assert!(!compact.contains("lines hidden"), "{compact}");
+
+    let full = text(
+        &full_capped(fetch_with_text(&body), Some(3)).display_lines(80),
+        80,
+    );
+    assert!(full.contains("┄ 7 lines hidden"), "{full}");
+    assert!(full.contains("fetched row 08"), "{full}");
+    assert!(!full.contains("fetched row 04"), "{full}");
 }
 
 #[test]
