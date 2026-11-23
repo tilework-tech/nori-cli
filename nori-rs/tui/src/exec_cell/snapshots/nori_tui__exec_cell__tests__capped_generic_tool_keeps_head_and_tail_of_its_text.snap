@@ -1,0 +1,26 @@
+---
+source: tui/src/exec_cell/tests.rs
+expression: "format!(\"--- before (no cap) ---\\n{}\\n--- after (tool_output_max_lines = 5) ---\\n{}\",\ntext(&uncapped.display_lines(80), 80), text(&capped.display_lines(80), 80))"
+---
+--- before (no cap) ---
+• Tool [completed]: Fetch release notes (fetch)
+  └ Tool: fetch {"url":"https://example.invalid/notes"}
+    - note 01: widget spacing adjusted
+    - note 02: widget spacing adjusted
+    - note 03: widget spacing adjusted
+    - note 04: widget spacing adjusted
+    - note 05: widget spacing adjusted
+    - note 06: widget spacing adjusted
+    - note 07: widget spacing adjusted
+    - note 08: widget spacing adjusted
+    - note 09: widget spacing adjusted
+    - note 10: widget spacing adjusted
+    - note 11: widget spacing adjusted
+    - note 12: widget spacing adjusted
+--- after (tool_output_max_lines = 5) ---
+• Tool [completed]: Fetch release notes (fetch)
+  └ Tool: fetch {"url":"https://example.invalid/notes"}
+    - note 01: widget spacing adjusted
+    ┄ 9 lines hidden
+    - note 11: widget spacing adjusted
+    - note 12: widget spacing adjusted

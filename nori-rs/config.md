@@ -324,6 +324,36 @@ default. The question is skipped only when a saved `[tui] tool_output =
 Directories that are already trusted never see the trust
 screen, so they keep full output unless you set the key yourself.
 
+## Tool output line cap: `tool_output_max_lines`
+
+```toml
+[tui]
+tool_output_max_lines = 40   # off when unset
+
+[projects."/home/me/work/app"]
+tool_output_max_lines = 0    # no cap in this project
+```
+
+This optional cap limits how many lines of tool output a tool call shows
+inline. It is off by default. A positive number N shows at most N rows: the
+first and last lines of the output, with one faint `┄ K lines hidden` row in
+place of the middle. The head gets half of the shown lines and the tail gets
+the rest, so the extra line goes to the end, where errors and summaries
+usually are. `1` shows only the hidden-lines row. Output that already fits is
+shown unchanged. `0` or a negative number means no cap, so a project or a
+`-c` override can lift a global cap.
+
+The cap applies to command output in the full view and to the detail text of
+read, search, fetch, think, and other generic tool calls; for those calls the
+invocation line counts as text too, so a very small cap can hide it. It
+counts output lines before they wrap to the terminal width. It does not apply
+to the compact view, edit diffs, exploring groups, the transcript view
+(Ctrl+T or Ctrl+O), saved transcripts, or `nori attach`.
+
+The key is read in the same order as `tool_output`: `-c
+tui.tool_output_max_lines=N` (or a `-c tui={...}` table that sets it), then the
+active project's entry, then `[tui]`, then no cap.
+
 ## Background host: `[host]`
 
 ```toml

@@ -56,7 +56,7 @@ snapshot
         finalize the answer stream
         displace active_cell: an incomplete Execute cell goes to
           pending_client_tool_cells; anything else is flushed to history
-        create ClientToolCell (with_tool_output from config); mark_exploring
+        create ClientToolCell (with_tool_output, with_output_max_lines from config); mark_exploring
           if exploring
         flush immediately if the snapshot is already terminal and not exploring
 ```
@@ -106,12 +106,20 @@ project's `tool_output`, or `[tui] tool_output`; see
 overlay) is always full. The `nori attach` frontend builds cells without
 `with_tool_output`, so they keep `ToolOutput::default()` and render full.
 
+`with_output_max_lines` adds an optional line cap from
+`NoriConfig::tool_output_max_lines` (off when unset). It changes only
+`display_lines`, and only where the table below says "capped". A capped block
+keeps its first and last lines and puts one faint italic `┄ N lines hidden`
+row in place of the middle (built by `exec_cell::hidden_lines_marker`). Lines
+are counted before wrapping. `transcript_lines` and `nori attach` cells are
+never capped.
+
 | Cell | Compact | Full |
 | --- | --- | --- |
-| Execute | `• Ran`/`Running` + `compact_command` summary, then one `└` line with the last non-blank output line (ANSI stripped, dim, red on failure); no `└` line when there is no output | `• Ran` + the whole command, syntax highlighted with command names bold (`full_command_lines`), then all output dim under `└` |
-| Exploring group | `• Explored N reads · M searches · K failed` + `└` the last step's label | Header, then every step with its own status dot; Execute steps render in full with output |
+| Execute | `• Ran`/`Running` + `compact_command` summary, then one `└` line with the last non-blank output line (ANSI stripped, dim, red on failure); no `└` line when there is no output | `• Ran` + the whole command, syntax highlighted with command names bold (`full_command_lines`), then all output dim under `└` (capped) |
+| Exploring group | `• Explored N reads · M searches · K failed` + `└` the last step's label | Header, then every step with its own status dot; Execute steps render in full with all output (never capped) |
 | Create/Edit/Delete/Move | Header only: `Edited path (+A -R)` or `Edited N files (+A -R)` (`Moved` for moves); failures show the error under `└` | Header plus the diff |
-| Fetch/Think/Other | Header plus invocation and artifact detail lines (same in both views) | Same |
+| Read/Search/Fetch/Think/Other (outside an Exploring group) | Header plus invocation and artifact detail lines (capped; same in both views) | Same |
 
 Status is carried by the bullet colour alone: green for success, red for
 failure, a spinner while running. Execute success comes from `raw_output.exit_code`
@@ -127,8 +135,9 @@ command names (basenames, plus the script name for interpreters such as
 segments that do not fit collapse into `+N more`. If the command cannot be
 parsed into any segment, its first line is truncated instead.
 
-The transcript overlay caps each cell at a fixed number of rows and ends a
-capped cell with `exec_cell::elision_line` (`┄ N more lines`, faint italic) so
+The transcript overlay ([pager_overlay.rs](../pager_overlay.rs)) has its own
+fixed row cap per cell, separate from `tool_output_max_lines`. It ends a capped
+cell with a faint italic `┄ N more lines` row, built inline in the overlay, so
 the marker never reads as command output.
 
 ## Debugging

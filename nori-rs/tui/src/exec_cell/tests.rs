@@ -451,3 +451,212 @@ fn group_stays_running_until_every_step_finishes() {
         header(&group)
     );
 }
+
+const TEST_RUN: &str = "cargo test -p nori-widgets";
+
+fn test_run_output(count: i32) -> String {
+    (1..=count)
+        .map(|n| format!("test layout::case_{n:02} ... ok"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn full_capped(snapshot: ToolSnapshot, max_lines: Option<i32>) -> ClientToolCell {
+    cell(snapshot)
+        .with_tool_output(ToolOutput::Full)
+        .with_output_max_lines(max_lines)
+}
+
+fn fetch_with_text(body: &str) -> ToolSnapshot {
+    ToolSnapshot {
+        artifacts: vec![Artifact::Text { text: body.into() }],
+        ..acp(
+            "f",
+            ToolKind::Fetch,
+            "Fetch release notes",
+            Invocation::Tool {
+                tool_name: "fetch".into(),
+                input: Some(serde_json::json!({ "url": "https://example.invalid/notes" })),
+            },
+        )
+    }
+}
+
+#[test]
+fn capped_full_view_keeps_head_and_tail_of_command_output() {
+    let snapshot = execute(
+        "t",
+        ToolPhase::Completed,
+        TEST_RUN,
+        Some((&test_run_output(30), 0)),
+    );
+    let capped = full_capped(snapshot.clone(), Some(7));
+    let uncapped = full_capped(snapshot, None);
+    assert_snapshot!(format!(
+        "--- before (no cap) ---\n{}\n--- after (tool_output_max_lines = 7) ---\n{}",
+        text(&uncapped.display_lines(80), 80),
+        text(&capped.display_lines(80), 80)
+    ));
+    let rendered = text(&capped.display_lines(80), 80);
+    assert_eq!(rendered.lines().count(), 1 + 7, "{rendered}");
+    assert!(rendered.contains("┄ 24 lines hidden"), "{rendered}");
+    assert!(rendered.contains("case_03") && rendered.contains("case_30"));
+    assert!(!rendered.contains("case_04"), "{rendered}");
+}
+
+#[test]
+fn cap_counts_output_lines_not_wrapped_rows() {
+    let long = format!("warning: {}", "unused import; ".repeat(12));
+    let output = format!("{long}\nstep 2\nstep 3\nstep 4\nstep 5\n");
+    let rendered = text(
+        &full_capped(
+            execute("w", ToolPhase::Failed, TEST_RUN, Some((&output, 1))),
+            Some(3),
+        )
+        .display_lines(60),
+        60,
+    );
+    assert!(rendered.contains("┄ 3 lines hidden"), "{rendered}");
+    assert!(rendered.contains("warning: unused import;"), "{rendered}");
+    assert!(
+        rendered
+            .lines()
+            .any(|row| row.trim_end().ends_with("step 5"))
+    );
+    assert!(!rendered.contains("step 4"), "{rendered}");
+}
+
+#[test]
+fn hidden_lines_marker_is_faint_italic() {
+    let capped = full_capped(
+        execute(
+            "t",
+            ToolPhase::Completed,
+            TEST_RUN,
+            Some((&test_run_output(30), 0)),
+        ),
+        Some(7),
+    );
+    let lines = capped.display_lines(80);
+    let marker = span_style(&lines, "┄ 24 lines hidden");
+    assert!(marker.style.add_modifier.contains(Modifier::DIM));
+    assert!(marker.style.add_modifier.contains(Modifier::ITALIC));
+}
+
+#[test]
+fn transcript_view_ignores_the_cap() {
+    let snapshot = execute(
+        "t",
+        ToolPhase::Completed,
+        TEST_RUN,
+        Some((&test_run_output(30), 0)),
+    );
+    assert_eq!(
+        text(
+            &full_capped(snapshot.clone(), Some(7)).transcript_lines(80),
+            80
+        ),
+        text(&full_capped(snapshot, None).transcript_lines(80), 80)
+    );
+}
+
+#[test]
+fn compact_view_ignores_the_cap() {
+    let snapshot = execute(
+        "t",
+        ToolPhase::Completed,
+        TEST_RUN,
+        Some((&test_run_output(30), 0)),
+    );
+    assert_eq!(
+        text(
+            &cell(snapshot.clone())
+                .with_output_max_lines(Some(3))
+                .display_lines(80),
+            80
+        ),
+        text(&cell(snapshot).display_lines(80), 80)
+    );
+}
+
+#[test]
+fn short_command_output_is_not_marked() {
+    let capped = full_capped(
+        execute(
+            "t",
+            ToolPhase::Completed,
+            TEST_RUN,
+            Some((&test_run_output(3), 0)),
+        ),
+        Some(3),
+    );
+    let rendered = text(&capped.display_lines(80), 80);
+    assert!(!rendered.contains("hidden"), "{rendered}");
+    assert!(rendered.contains("case_02"), "{rendered}");
+}
+
+#[test]
+fn capped_generic_tool_keeps_head_and_tail_of_its_text() {
+    let body = (1..=12)
+        .map(|n| format!("- note {n:02}: widget spacing adjusted"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let capped = cell(fetch_with_text(&body)).with_output_max_lines(Some(5));
+    let uncapped = cell(fetch_with_text(&body));
+    assert_snapshot!(format!(
+        "--- before (no cap) ---\n{}\n--- after (tool_output_max_lines = 5) ---\n{}",
+        text(&uncapped.display_lines(80), 80),
+        text(&capped.display_lines(80), 80)
+    ));
+    let rendered = text(&capped.display_lines(80), 80);
+    assert!(rendered.contains("┄ 9 lines hidden"), "{rendered}");
+    assert!(rendered.contains("note 12"), "{rendered}");
+    assert_eq!(
+        text(&capped.transcript_lines(80), 80),
+        text(&uncapped.transcript_lines(80), 80)
+    );
+}
+
+#[test]
+fn diffs_are_never_capped() {
+    let edit = ToolSnapshot {
+        call_id: "e".into(),
+        title: "Edit src/lib.rs".into(),
+        kind: ToolKind::Edit,
+        phase: ToolPhase::Completed,
+        locations: vec![],
+        invocation: None,
+        artifacts: vec![Artifact::Diff(FileChange {
+            path: cwd().join("src/lib.rs"),
+            old_text: Some(test_run_output(4)),
+            new_text: test_run_output(20),
+        })],
+        raw_input: None,
+        raw_output: None,
+        owner_request_id: None,
+    };
+    assert_eq!(
+        text(&full_capped(edit.clone(), Some(3)).display_lines(100), 100),
+        text(&full_capped(edit, None).display_lines(100), 100)
+    );
+}
+
+#[test]
+fn exploring_rows_are_never_capped() {
+    let mut capped = explore_group()
+        .with_tool_output(ToolOutput::Full)
+        .with_output_max_lines(Some(1));
+    let mut uncapped = explore_group().with_tool_output(ToolOutput::Full);
+    for group in [&mut capped, &mut uncapped] {
+        group.merge_exploring(execute(
+            "exec-9",
+            ToolPhase::Completed,
+            "rg -n case_ tests/",
+            Some((&test_run_output(12), 0)),
+        ));
+    }
+    assert_eq!(
+        text(&capped.display_lines(100), 100),
+        text(&uncapped.display_lines(100), 100)
+    );
+}

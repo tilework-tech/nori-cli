@@ -355,6 +355,7 @@ mod tests {
             nori_config::ProjectConfig {
                 trust_level: Some(TrustLevel::Trusted),
                 tool_output: Some(ToolOutput::Full),
+                tool_output_max_lines: None,
             }
         );
         assert_eq!(written_config(&tmp).tui.tool_output, None);
@@ -372,6 +373,7 @@ mod tests {
             nori_config::ProjectConfig {
                 trust_level: Some(TrustLevel::Trusted),
                 tool_output: Some(ToolOutput::Compact),
+                tool_output_max_lines: None,
             }
         );
         assert_eq!(written_config(&tmp).tui.tool_output, None);
@@ -389,6 +391,7 @@ mod tests {
             nori_config::ProjectConfig {
                 trust_level: Some(TrustLevel::Trusted),
                 tool_output: None,
+                tool_output_max_lines: None,
             }
         );
         assert_eq!(written_config(&tmp).tui.tool_output, None);
@@ -407,6 +410,7 @@ mod tests {
             nori_config::ProjectConfig {
                 trust_level: Some(TrustLevel::Untrusted),
                 tool_output: Some(ToolOutput::Compact),
+                tool_output_max_lines: None,
             }
         );
     }
