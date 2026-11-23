@@ -11,6 +11,7 @@ use serde_json::json;
 
 use super::runtime::Pending;
 use super::runtime::Runtime;
+use super::state::CancelDelivery;
 
 impl Runtime {
     /// False means detach. It never requests host or session shutdown.
@@ -132,8 +133,15 @@ impl Runtime {
             }
         }
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-            if self.composer.is_empty() {
-                self.submit("/cancel".into());
+            let observing = !self.state.list_open
+                && self
+                    .state
+                    .selected
+                    .as_ref()
+                    .and_then(|id| self.state.conversations.get(id))
+                    .is_some_and(|c| c.external_turn.is_some());
+            if self.composer.is_empty() || observing {
+                self.cancel_selected();
             } else {
                 self.composer.clear();
             }
@@ -332,8 +340,42 @@ impl Runtime {
         Ok(())
     }
 
-    fn submit(&mut self, text: String) -> bool {
-        self.submit_with_intent(text, None, nori_harness::FollowUpIntent::Steer)
+    fn cancel_selected(&mut self) {
+        if self.state.list_open {
+            return;
+        }
+        if let Err(error) = self.require_mutation() {
+            self.state.show_notice(error.to_string());
+            return;
+        }
+        let Some(id) = self.state.selected.clone() else {
+            self.state
+                .show_notice("Choose a session with /sessions or start one with /new.");
+            return;
+        };
+        self.state.notice = None;
+        let conversation = self.state.conversations.get(&id);
+        if let Some(c) = conversation
+            && let Some(turn) = &c.external_turn
+        {
+            if turn.state == nori_protocol::ExternalTurnState::Working
+                && c.cancel_delivery != CancelDelivery::AwaitingHost
+            {
+                let observed_turn_id = turn.id.clone();
+                self.send(
+                    "_nori/session/cancel_observed",
+                    json!({"sessionId":id, "observedTurnId":observed_turn_id}),
+                    Pending::CancelObserved {
+                        session_id: id,
+                        observed_turn_id,
+                    },
+                );
+            }
+        } else if conversation.is_some_and(|c| c.active_prompt().is_some() || c.submitted_prompt) {
+            self.notify("session/cancel", json!({"sessionId": id}));
+        } else if !conversation.is_some_and(super::state::Conversation::cancelling_prompt) {
+            self.state.show_notice("No active turn to cancel.");
+        }
     }
 
     fn submit_with_intent(
@@ -352,6 +394,10 @@ impl Runtime {
             return true;
         }
         if command.is_empty() {
+            return true;
+        }
+        if command == "/cancel" {
+            self.cancel_selected();
             return true;
         }
         if let Err(error) = self.require_mutation() {
@@ -396,33 +442,6 @@ impl Runtime {
                 json!({"sessionId": id}),
                 Pending::Mutation { draft: None },
             );
-        } else if command == "/cancel" {
-            let conversation = self.state.conversations.get(&id);
-            let external =
-                conversation.and_then(|conversation| conversation.external_turn.as_ref());
-            if conversation.is_some_and(super::state::Conversation::cancelling_prompt)
-                || external
-                    .is_some_and(|turn| crate::external_cancel::pending_label(turn.state).is_some())
-            {
-                return true;
-            }
-            if external.is_some()
-                || conversation.is_some_and(|c| c.active_prompt().is_some() || c.submitted_prompt)
-            {
-                if self.notify("session/cancel", json!({"sessionId": id}))
-                    && let Some(turn) = self
-                        .state
-                        .conversations
-                        .get_mut(&id)
-                        .and_then(|c| c.external_turn.as_mut())
-                {
-                    // The notification has no receipt. Only a host envelope can
-                    // establish that the request reached the active session.
-                    turn.state = nori_protocol::ExternalTurnState::Unconfirmed;
-                }
-            } else {
-                self.state.show_notice("No active turn to cancel.");
-            }
         } else if command == "/resume" {
             self.resume(&id);
         } else if let Some(expected_turn) = active_turn {

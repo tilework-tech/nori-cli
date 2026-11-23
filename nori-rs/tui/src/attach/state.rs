@@ -87,11 +87,21 @@ pub(super) struct Permission {
     pub selected: usize,
 }
 
+/// Local delivery of a fenced cancellation, independent of the agent's turn state.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum CancelDelivery {
+    #[default]
+    Unsent,
+    AwaitingHost,
+    Unknown,
+}
+
 #[derive(Default)]
 pub(super) struct Conversation {
     pub parts: Vec<Part>,
     pub phase: Option<nori_protocol::SessionPhase>,
     pub external_turn: Option<nori_protocol::ExternalTurn>,
+    pub cancel_delivery: CancelDelivery,
     /// A prompt sent by this terminal can be cancelled before its first phase arrives.
     pub submitted_prompt: bool,
     pub permissions: Vec<Permission>,
@@ -479,13 +489,13 @@ impl AttachState {
                     .retain(|permission| permission.request_id != resolved.request_id);
             }
             SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
-                if let Some(turn) = conversation.external_turn.take()
-                    && crate::external_cancel::pending_label(turn.state).is_some()
-                {
+                if conversation.external_cancel_status().is_some() {
                     conversation.parts.push(Part::Notice(
                         "Session ended. Cancellation was not confirmed.".into(),
                     ));
                 }
+                conversation.external_turn = None;
+                conversation.cancel_delivery = CancelDelivery::Unsent;
                 conversation.submitted_prompt = false;
                 conversation.phase = None;
                 conversation.parts.push(Part::Ended(ended.message));
@@ -547,10 +557,29 @@ impl Conversation {
         )
     }
 
+    pub fn external_cancel_status(&self) -> Option<&'static str> {
+        let state = self.external_turn.as_ref()?.state;
+        let display = if self.cancel_delivery != CancelDelivery::Unsent
+            && state == nori_protocol::ExternalTurnState::Working
+        {
+            nori_protocol::ExternalTurnState::Unconfirmed
+        } else {
+            state
+        };
+        crate::external_cancel::pending_label(display)
+    }
+
     fn apply_external_turn(&mut self, turn: nori_protocol::ExternalTurn) {
         use nori_protocol::ExternalTurnState::*;
         if turn.state == Working {
-            self.external_turn = Some(turn);
+            if self
+                .external_turn
+                .as_ref()
+                .is_none_or(|current| current.id != turn.id)
+            {
+                self.cancel_delivery = CancelDelivery::Unsent;
+                self.external_turn = Some(turn);
+            }
             return;
         }
         let Some(current) = &self.external_turn else {
@@ -562,13 +591,14 @@ impl Conversation {
         if matches!(turn.state, CancelRequested | Unconfirmed) {
             self.external_turn = Some(turn);
         } else {
-            let pending = crate::external_cancel::pending_label(current.state).is_some();
+            let pending = self.external_cancel_status().is_some();
             if let Some(message) = crate::external_cancel::terminal_message(turn.state, pending) {
                 self.parts.push(Part::Notice(message.into()));
             }
             self.external_turn = None;
             self.message_boundary = true;
         }
+        self.cancel_delivery = CancelDelivery::Unsent;
     }
 
     fn apply_presentation(&mut self, event: ClientEvent) {

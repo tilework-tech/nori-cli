@@ -402,6 +402,15 @@ fn the_delegation_approval_hint_names_esc_and_ctrl_c() {
 #[test]
 fn one_ctrl_c_cancels_a_pending_permission_and_keeps_the_draft() {
     let (mut runtime, mut rx) = runtime_with_draft(permission_event(1));
+    runtime
+        .state
+        .apply(external_change(
+            "parent-session",
+            2,
+            "example",
+            nori_protocol::ExternalTurnState::Working,
+        ))
+        .unwrap();
     let stays_open = runtime.key(crossterm::event::KeyEvent::new(
         KeyCode::Char('c'),
         KeyModifiers::CONTROL,
@@ -423,6 +432,15 @@ fn one_ctrl_c_cancels_a_pending_permission_and_keeps_the_draft() {
 #[test]
 fn one_ctrl_c_declines_a_pending_delegation_and_keeps_the_draft() {
     let (mut runtime, mut rx) = runtime_with_draft(delegation_event(1, "awaiting_approval"));
+    runtime
+        .state
+        .apply(external_change(
+            "parent-session",
+            2,
+            "example",
+            nori_protocol::ExternalTurnState::Working,
+        ))
+        .unwrap();
     key(&mut runtime, KeyCode::Char('c'), KeyModifiers::CONTROL);
     let sent = rx.try_recv().expect("the delegation is declined");
     assert_eq!(sent["method"], "_nori/session/delegation/resolve", "{sent}");

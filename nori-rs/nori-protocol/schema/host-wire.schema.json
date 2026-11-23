@@ -2058,6 +2058,54 @@
     "ExtResponse": {
       "description": "Allows for sending an arbitrary response to an [`ExtRequest`] that is not part of the ACP spec.\nExtension methods provide a way to add custom functionality while maintaining\nprotocol compatibility.\n\nSee protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)"
     },
+    "ExternalTurn": {
+      "description": "Observed activity for which the harness has no outstanding prompt.",
+      "properties": {
+        "id": {
+          "description": "Harness-local observation identity, distinct from ACP request IDs.",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ExternalTurnState"
+        }
+      },
+      "required": [
+        "id",
+        "state"
+      ],
+      "type": "object"
+    },
+    "ExternalTurnState": {
+      "oneOf": [
+        {
+          "enum": [
+            "working",
+            "cancel_requested"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "unconfirmed",
+          "description": "The peer has not reported a terminal boundary since the request.",
+          "type": "string"
+        },
+        {
+          "const": "idle",
+          "description": "The peer reported idle without confirming cancellation.",
+          "type": "string"
+        },
+        {
+          "const": "superseded",
+          "description": "A different turn took over the session.",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "description": "The peer reported a cancelled stop reason for the same identified turn.",
+          "type": "string"
+        }
+      ]
+    },
     "FileSystemCapabilities": {
       "description": "File system capabilities that a client may support.\n\nSee protocol docs: [FileSystem](https://agentclientprotocol.com/protocol/initialization#filesystem)",
       "properties": {
@@ -4004,6 +4052,22 @@
             },
             "event_type": {
               "const": "session_phase_changed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "event_type",
+            "event"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "event": {
+              "$ref": "#/$defs/ExternalTurn"
+            },
+            "event_type": {
+              "const": "external_turn_changed",
               "type": "string"
             }
           },
