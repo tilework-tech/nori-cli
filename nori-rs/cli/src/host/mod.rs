@@ -452,13 +452,11 @@ async fn serve(
     .await?;
     let endpoint = format!("ws://{}/sessions", server.local_addr());
     let pid = i64::from(std::process::id());
-    files.publish(&HostState {
-        endpoint: endpoint.clone(),
-        pid,
-    })?;
+    // `state.json` is what `nori host` waits for, so `host.json` must exist
+    // before it does.
     if host.launches.is_none() {
         files.publish_discovery(&nori_protocol::HostDiscovery {
-            endpoint,
+            endpoint: endpoint.clone(),
             token,
             pid,
             instance_id: host.instance.clone(),
@@ -473,6 +471,7 @@ async fn serve(
                 .unwrap_or_else(|| "nori-cli".to_owned()),
         })?;
     }
+    files.publish(&HostState { endpoint, pid })?;
     #[cfg(unix)]
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     #[cfg(unix)]
