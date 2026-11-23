@@ -547,6 +547,30 @@ pub(crate) enum AppEvent {
         message: String,
     },
 
+    /// Result of listing skillsets via the skillsets v2 CLI
+    /// (`[features] skillsets_v2`).
+    SkillsetV2ListResult {
+        /// The project the listing describes and changes will target.
+        project: crate::nori::skillset_picker_v2::SkillsetProject,
+        /// The listing, or a message explaining why it failed.
+        result: Result<nori_skillsets::SkillsetList, String>,
+    },
+
+    /// Request to layer (`layer == true`) or unlayer a skillset in `project`
+    /// via skillsets v2.
+    ChangeSkillset {
+        name: String,
+        project: PathBuf,
+        layer: bool,
+    },
+
+    /// Result of a `ChangeSkillset` request.
+    SkillsetChangeResult {
+        name: String,
+        layer: bool,
+        result: Result<nori_skillsets::LayerChange, String>,
+    },
+
     /// The skillset picker was dismissed without selection. When agent spawn was
     /// deferred for skillset_per_session, this triggers spawning the agent
     /// without a skillset (behaves as if the feature is disabled).

@@ -397,6 +397,10 @@ trust_level = "trusted"
         // This ensures footer displays git branch/nori version immediately
         cmd.env("NORI_SYNC_SYSTEM_INFO", "1");
 
+        // Skillsets v2 resolution must come from the test's PATH mocks, not
+        // a developer's override.
+        cmd.env_remove("NORI_SKILLSETS_COMMAND");
+
         // Mock instruction files for consistent banner width across machines
         // This returns a constant list (~/.claude/CLAUDE.md) instead of discovering real files
         if config.mock_instruction_files {

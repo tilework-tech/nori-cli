@@ -1390,6 +1390,29 @@ impl App {
                     .on_skillset_install_result(&name, success, &message);
                 self.on_skillset_applied(success);
             }
+            AppEvent::SkillsetV2ListResult { project, result } => {
+                self.chat_widget.on_skillset_v2_list_result(project, result);
+            }
+            AppEvent::ChangeSkillset {
+                name,
+                project,
+                layer,
+            } => {
+                self.chat_widget
+                    .on_change_skillset_request(name, project, layer);
+            }
+            AppEvent::SkillsetChangeResult {
+                name,
+                layer,
+                result,
+            } => {
+                self.chat_widget
+                    .on_skillset_change_result(&name, layer, result);
+                // A deferred per-session spawn starts even when the change
+                // failed, so a broken skillset never leaves the session
+                // without an agent.
+                self.on_skillset_applied(true);
+            }
             AppEvent::SkillsetSwitchResult {
                 name,
                 success,

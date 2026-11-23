@@ -743,6 +743,24 @@ stored connection. Thus `initialize`, optional `session/list`, and the chosen
 `session/new`, `session/load`, or `session/resume` use one child process. This
 orchestration lives in [`event_handling.rs`](src/app/event_handling.rs).
 
+**Skillsets v2 (feature-gated).** By default `/switch-skillset` uses the v1
+flow in [`skillset_picker.rs`](src/nori/skillset_picker.rs) (`nori-skillsets
+list`, `install`, `switch --install-dir`). With `[features] skillsets_v2`
+(`NoriConfig.skillsets_v2`, read at startup) the entry points
+`handle_switch_skillset_command(_with_name)` in
+[`pickers.rs`](src/chatwidget/pickers.rs) delegate instead to
+[`chatwidget/skillsets_v2.rs`](src/chatwidget/skillsets_v2.rs), which drives
+the toggle picker in [`skillset_picker_v2.rs`](src/nori/skillset_picker_v2.rs)
+through the [`nori-skillsets`](../skillsets/docs.md) crate: a layered row
+unlayers, any other row layers on top. The skillset project is the session's
+worktree, else `$HOME`, so the repo root is never compiled into. The flow uses
+its own `AppEvent`s (`SkillsetV2ListResult`, `ChangeSkillset`,
+`SkillsetChangeResult`). Two behaviors differ from v1 for the deferred
+per-session spawn: a v2 change result always resolves the spawn, even on
+failure (v1 install/switch results resolve it only on success), and a missing
+CLI, a failed listing, or an empty listing sends `SkillsetPickerDismissed`, so
+the agent still starts without a skillset.
+
 Every primary activation calls
 [`take_refreshed_prepared_agent`](src/app/session_setup.rs) before consuming the
 connection. The refresh applies current mutable approval and sandbox policy and
@@ -1527,6 +1545,13 @@ directories for a `.nori-config.json` `activeSkillset` key; current
 `nori-skillsets` no longer writes that key per folder, which is why nothing
 else reads it. The seed leaves the list empty, so it stays empty until the
 first background refresh lands.
+
+With `[features] skillsets_v2` on, collection reads the list from
+`get_active_skillsets_v2` instead: skillsets v2 `status --json` for the session's
+skillset project via `nori_skillsets::SkillsetsCli::layered`, with no
+`.nori-config.json` fallback and an empty list when the CLI is missing or fails.
+The flag reaches the worker through `SystemInfoRefreshRequest.skillsets_v2` and
+`SystemInfo::seed(dir, skillsets_v2)`.
 
 #### Session-info verbosity
 

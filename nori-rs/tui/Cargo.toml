@@ -51,6 +51,7 @@ codex-git = { workspace = true }
 codex-rmcp-client = { workspace = true }
 nori-installed = { workspace = true }
 nori-protocol = { workspace = true }
+nori-skillsets = { workspace = true }
 codex-file-search = { workspace = true }
 nori-tui-components = { workspace = true }
 codex-login = { workspace = true }

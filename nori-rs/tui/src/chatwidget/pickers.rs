@@ -491,6 +491,11 @@ impl ChatWidget {
     pub(crate) fn handle_switch_skillset_command(&mut self) {
         use crate::nori::skillset_picker;
 
+        if self.config.skillsets_v2 {
+            self.handle_switch_skillset_command_v2();
+            return;
+        }
+
         // Check if nori-skillsets is available in PATH
         if !skillset_picker::is_nori_skillsets_available() {
             self.add_info_message(skillset_picker::not_installed_message(), None);
@@ -534,6 +539,11 @@ impl ChatWidget {
     /// without showing the picker menu.
     pub(crate) fn handle_switch_skillset_command_with_name(&mut self, name: &str) {
         use crate::nori::skillset_picker;
+
+        if self.config.skillsets_v2 {
+            self.handle_switch_skillset_command_with_name_v2(name);
+            return;
+        }
 
         if !skillset_picker::is_nori_skillsets_available() {
             self.add_info_message(skillset_picker::not_installed_message(), None);

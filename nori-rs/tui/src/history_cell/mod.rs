@@ -514,6 +514,33 @@ impl HistoryCell for CompositeHistoryCell {
     }
 }
 
+pub(crate) fn new_skillset_changed_event(
+    name: &str,
+    layered: bool,
+    layers: &[String],
+) -> PlainHistoryCell {
+    let verb = if layered {
+        "Layered skillset "
+    } else {
+        "Unlayered skillset "
+    };
+    let stack = if layers.is_empty() {
+        "no skillsets layered".to_string()
+    } else {
+        format!("layers: {}", layers.join(", "))
+    };
+    let lines: Vec<Line<'static>> = vec![
+        vec![
+            "✔ ".green(),
+            verb.green(),
+            format!("\"{name}\"").green().bold(),
+            format!(" ({stack})").dim(),
+        ]
+        .into(),
+    ];
+    PlainHistoryCell { lines }
+}
+
 pub(crate) fn new_skillset_switched_event(name: &str) -> PlainHistoryCell {
     let lines: Vec<Line<'static>> = vec![
         vec![

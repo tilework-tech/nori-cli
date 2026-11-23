@@ -735,9 +735,9 @@ impl BottomPane {
     /// Fill the footer with the system facts that are cheap to read from `cwd`
     /// so the first frame already shows them, instead of leaving every segment
     /// blank until the background refresh lands.
-    pub(crate) fn seed_system_info(&mut self, cwd: &std::path::Path) {
+    pub(crate) fn seed_system_info(&mut self, cwd: &std::path::Path, skillsets_v2: bool) {
         self.composer
-            .set_system_info(crate::system_info::SystemInfo::seed(cwd));
+            .set_system_info(crate::system_info::SystemInfo::seed(cwd, skillsets_v2));
     }
 
     /// Update the approval mode label displayed in the footer and the slash

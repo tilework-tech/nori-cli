@@ -213,6 +213,8 @@ struct SystemInfoRefreshRequest {
     dir: PathBuf,
     model: Option<String>,
     first_message: Option<String>,
+    /// `[features] skillsets_v2`.
+    skillsets_v2: bool,
 }
 
 mod auth_preference;
@@ -569,6 +571,7 @@ impl App {
             dir,
             model,
             first_message,
+            skillsets_v2: self.config.skillsets_v2,
         };
         if self.system_info_tx.send(request).is_err() {
             tracing::error!("system info refresh channel is closed");
@@ -594,6 +597,7 @@ impl App {
                     &request.dir,
                     agent_kind,
                     request.first_message.as_deref(),
+                    request.skillsets_v2,
                 );
                 app_event_tx.send(AppEvent::SystemInfoRefreshed(info));
             }
