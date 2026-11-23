@@ -103,7 +103,15 @@ async fn initialize_negotiates_version_one_and_advertises_the_host_contract() {
 
     assert_eq!(result["protocolVersion"], 1);
     assert_eq!(result["agentInfo"]["name"], "nori-host");
-    assert_eq!(result["agentInfo"]["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(
+        result["agentInfo"]["version"],
+        format!(
+            "{}+contract.{}",
+            env!("CARGO_PKG_VERSION"),
+            nori_protocol::HOST_CONTRACT
+        ),
+        "agentInfo.version is the nori version with the host contract as build metadata"
+    );
     let capabilities = &result["agentCapabilities"];
     assert_eq!(capabilities["loadSession"], true);
     for capability in ["list", "resume", "close", "delete"] {
@@ -542,7 +550,7 @@ fn the_host_publishes_host_json_beside_the_legacy_discovery_files() {
     assert_eq!(published["pid"], state["pid"]);
     assert_eq!(published["token"], token.trim());
     assert_eq!(published["version"], env!("CARGO_PKG_VERSION"));
-    assert_eq!(published["contract"], json!({"acp": 1, "nori": 1}));
+    assert_eq!(published["contract"], nori_protocol::HOST_CONTRACT);
     assert_eq!(published["startedBy"], "nori-cli");
     assert!(
         uuid::Uuid::parse_str(published["instanceId"].as_str().unwrap()).is_ok(),

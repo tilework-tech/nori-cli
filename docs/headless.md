@@ -47,7 +47,7 @@ The complete assistant response is the only content written to stdout. Diagnosti
 
 Plaintext mode runs the session in the `agent` permission mode, which puts Claude Code in `acceptEdits` and Codex in `workspace-write` ([remote-control.md](remote-control.md#session-configuration)). Plaintext mode never displays an interactive approval prompt. If an ACP-visible permission request occurs, Nori immediately selects a reject option supplied by the agent, or cancels the request when none exists. The agent may still return a final explanation; Nori prints that text but exits unsuccessfully to distinguish the run from fully authorized completion.
 
-Plaintext mode is a client of `nori host`. When this `NORI_HOME`'s background host is running, speaks the current contract, and no other client controls it, the prompt runs there: in that host's process and environment, and the finished session stays listed by the host as stored. Otherwise, and always when `-c` or `--add-dir` is given (a running host applies its own configuration), Nori runs a private in-process host for the one prompt. Output and exit status are the same either way. On the running host the agent sees the host's environment, not the calling shell's: variables such as an API key set only for the `nori exec` command do not reach it. Interrupting `nori exec` (SIGINT or SIGTERM) cancels and closes its session on either host.
+Plaintext mode is a client of `nori host`. When this `NORI_HOME`'s background host is running, its host contract serves this `nori`'s ([choosing a host](remote-control.md#choosing-a-host-for-clients)), and no other client controls it, the prompt runs there: in that host's process and environment, and the finished session stays listed by the host as stored. Otherwise, and always when `-c` or `--add-dir` is given (a running host applies its own configuration), Nori runs a private in-process host for the one prompt. Output and exit status are the same either way. On the running host the agent sees the host's environment, not the calling shell's: variables such as an API key set only for the `nori exec` command do not reach it. Interrupting `nori exec` (SIGINT or SIGTERM) cancels and closes its session on either host.
 
 Use `--dangerously-bypass-approvals-and-sandbox` only for explicitly trusted unattended work. It disables Nori's approval and sandbox policy for operations visible through ACP. It cannot govern tools that a provider executes internally without requesting ACP permission.
 
@@ -68,15 +68,16 @@ follow-up, delegation, host stop). See
 for the wire contract.
 
 - **Joins the running host** when this `NORI_HOME`'s background host is
-  running and compatible, no `--agent`, `-c`, `--add-dir` or bypass flag is
+  running and serves this nori's host contract, no `--agent`, `-c`, `--add-dir` or bypass flag is
   given, and the host answers the client's first `initialize` with
   `control.role: "controller"`. The process relays the client to it over
   `/acp`; sessions are shared with every other client of that host and
   outlive this one. stdin EOF only disconnects (exit 0); SIGINT or SIGTERM
   disconnects with a non-zero exit. A stdio client never takes control from
   another; otherwise it falls back to a private host, described below.
-- `initialize` answers with `agentInfo.name = "nori-host"` and the host's
-  standard `sessionCapabilities`.
+- `initialize` answers with `agentInfo.name = "nori-host"`,
+  `agentInfo.version` carrying the host contract (`0.31.0+contract.1.0.0`),
+  and the host's standard `sessionCapabilities`.
 - One stream can run any number of sessions and any number of prompts per
   session. Turns stream `session/update` notifications as the agent produces
   them, then answer with the agent's `stopReason`.

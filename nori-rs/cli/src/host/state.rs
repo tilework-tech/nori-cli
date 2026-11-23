@@ -94,6 +94,13 @@ impl HostFiles {
         Ok(())
     }
 
+    /// The published `host.json`, read without touching the host lock;
+    /// `None` when it is missing or unreadable.
+    pub fn read_discovery(&self) -> Option<nori_protocol::HostDiscovery> {
+        let file = private_open(&self.directory.join("host.json"), false).ok()?;
+        serde_json::from_reader(file).ok()
+    }
+
     pub fn new_token(&self) -> anyhow::Result<String> {
         let token = format!(
             "{}{}",

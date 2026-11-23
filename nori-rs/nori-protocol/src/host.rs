@@ -57,17 +57,46 @@ pub struct HostDiscovery {
     pub token: String,
     pub pid: i64,
     pub instance_id: String,
-    /// The `nori` version serving the host.
+    /// The `nori` version serving the host. Informational: compatibility
+    /// is decided by `contract` alone.
     pub version: String,
-    pub contract: HostContractVersions,
+    /// The semver of the host wire contract the host serves ([`HOST_CONTRACT`]
+    /// of its build). See [`host_serves_contract`].
+    pub contract: String,
     /// Who started the host: `NORI_HOST_STARTED_BY`, else `nori-cli`.
     pub started_by: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct HostContractVersions {
-    pub acp: i64,
-    pub nori: i64,
+/// The host wire contract this build serves and speaks as a client: ACP v1
+/// on `/sessions`, the `nori/*` `_meta` keys, the `_nori/*` extension
+/// methods, and `host.json`. A change that a client of the previous contract
+/// could not use bumps the major; an addition such clients can ignore bumps
+/// the minor; a fix that changes no message bumps the patch.
+pub const HOST_CONTRACT: &str = "1.0.0";
+
+/// Whether a host advertising contract `host` serves a client built for
+/// contract `client`: `host` must satisfy the caret requirement `^client`.
+/// For `1.x` and above that is the same major and a host contract no older
+/// than the client's; for `0.y` it is the same minor. Pre-release and
+/// unparsable versions are incompatible.
+pub fn host_serves_contract(host: &str, client: &str) -> bool {
+    let Ok(host) = semver::Version::parse(host) else {
+        return false;
+    };
+    let Ok(client) = semver::Version::parse(client) else {
+        return false;
+    };
+    if !host.pre.is_empty() || !client.pre.is_empty() {
+        return false;
+    }
+    semver::Comparator {
+        op: semver::Op::Caret,
+        major: client.major,
+        minor: Some(client.minor),
+        patch: Some(client.patch),
+        pre: semver::Prerelease::EMPTY,
+    }
+    .matches(&host)
 }
 
 /// A connection's role on the host.
@@ -204,5 +233,38 @@ fn sorted(value: Value) -> Value {
         }
         Value::Array(items) => Value::Array(items.into_iter().map(sorted).collect()),
         other => other,
+    }
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+
+    #[test]
+    fn a_host_serves_clients_of_its_contract_major_up_to_its_own_minor() {
+        let cases = [
+            ("1.0.0", "1.0.0", true),
+            ("1.0.3", "1.0.0", true),
+            ("1.0.0", "1.0.3", false),
+            ("1.4.0", "1.2.0", true),
+            ("1.2.0", "1.4.0", false),
+            ("2.0.0", "1.9.0", false),
+            ("1.9.0", "2.0.0", false),
+            ("0.3.1", "0.3.0", true),
+            ("0.4.0", "0.3.0", false),
+            ("1.0.0", "not-a-version", false),
+            ("not-a-version", "1.0.0", false),
+            ("1.0.0+build.7", "1.0.0", true),
+            ("1.0.0-rc.2", "1.0.0-rc.1", false),
+            ("1.0.0", "1.0.0-rc.1", false),
+            ("1.1.0-rc.1", "1.0.0", false),
+        ];
+        for (host, client, expected) in cases {
+            assert_eq!(
+                host_serves_contract(host, client),
+                expected,
+                "host {host} serving a client built for {client}"
+            );
+        }
     }
 }

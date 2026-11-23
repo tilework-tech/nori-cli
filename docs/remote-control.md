@@ -304,7 +304,7 @@ released after cleanup. Startup and stop do not require a terminal.
 
 | Command | Behavior |
 | --- | --- |
-| `nori host` | Start the background host, or report the already-running host. |
+| `nori host` | Start the background host, or report the already-running host. Fails, naming both contracts, when the running host's contract does not serve this `nori`'s (see [Choosing a host](#choosing-a-host-for-clients)). |
 | `nori host ls` | List host sessions with delegated children under their parent and `├─`/`└─`/`│` tree guides inside the title column. Top-level rows show their `family_status` when the host sends it. On a TTY it prints the same two-row layout as the attached and local session lists (no ID column): status glyph, title, agent, status, and context, then a faint row with the session's short folder (`~/rel` up to 20 characters, else the folder name) and ` · ` before the reply start (or, while waiting on you, what the session asks for), model, and time since last activity; status words are colored (waiting on you yellow, working cyan, ready green, failed red, done in the default color, starting and closed dimmed) and every other session is shaded when stdin and stdout are terminals that report their background and support 24-bit colour. Piped output is one plain `ID AGENT STATUS AGE CWD TITLE` row per session with full values (CWD is the full canonical folder), no color, and `  (parent <full id>)` on every row with a parent, including a child whose parent is no longer listed and so prints at top level. |
 | `nori host ls --json` | Print a `sessions` array from the authenticated host. Each row contains the stable `session_id` returned by `host new` or managed ensure and the binding’s public `credential_refs` labels. Ordinary local sessions have an empty label list. |
 | `nori attach` | Open the host session list. |
@@ -493,14 +493,16 @@ unchanged and stays as legacy until durable sessions get their own design.
 
 - `protocolVersion: 1`, whatever the client asked for (the host speaks only
   ACP v1; a client that cannot speak it disconnects);
-- `agentInfo` `{name: "nori-host", version}`;
+- `agentInfo` `{name: "nori-host", version: "<nori version>+contract.<host contract>"}`,
+  for example `0.31.0+contract.1.0.0`: the host contract rides as semver
+  build metadata, so a client splits at `+contract.`;
 - `agentCapabilities`: `loadSession: true`,
   `sessionCapabilities` with `list`, `resume`, `close` and `delete`, and the
   ACP baseline for prompts and MCP servers (no image, audio, embedded context,
   HTTP or SSE promises, because those depend on each session's adapter);
 - `authMethods: []` (see deferred items below);
-- no Nori `_meta` key. The contract version is in `host.json`; a client
-  without it derives the version from `agentInfo.version`.
+- no Nori `_meta` key and no `_nori/*` method for the contract; the
+  standard `agentInfo` field carries it.
 
 The host's `_meta` keys use the registry prefix `nori/<camelCase>`
 (clifford 2026-11-22): `nori/agent` on `session/new` params and `session/list`
@@ -516,9 +518,51 @@ true` keeps a client from taking control, as before.
 After binding, the host writes `$NORI_HOME/host/host.json` (mode `0600`,
 written to a temporary file and renamed) beside the existing `state.json`
 and `token`, and removes it on stop:
-`{endpoint, token, pid, instanceId, version, contract: {acp: 1, nori: 1}, startedBy}`.
+`{endpoint, token, pid, instanceId, version, contract, startedBy}`.
 `startedBy` is `NORI_HOST_STARTED_BY` when set, else `nori-cli`. Managed hosts
 do not write it.
+
+`contract` is the semver string of the host wire contract,
+`nori_protocol::HOST_CONTRACT` (`1.0.0`). It covers ACP v1 on `/sessions`,
+the `nori/*` `_meta` keys, the `_nori/*` methods, and `host.json` itself. A
+change that a client of the previous contract cannot use bumps the major; an
+addition such clients can ignore bumps the minor; a fix that changes no
+message bumps the patch. `version` is the `nori` version (`0.0.0` in dev
+builds) and is informational only.
+
+A host with contract H serves a client built for contract C when H satisfies
+the semver caret requirement `^C` (`nori_protocol::host_serves_contract`):
+for `1.x` and above, the same major and H no older than C; for `0.y`, the
+same minor and H's patch no older than C's. Build metadata is ignored; a
+pre-release or unparsable version is incompatible. A host of contract `1.N.x` therefore
+serves clients built for `1.0.0` through `1.N.x`.
+
+#### Choosing a host (for clients)
+
+A client (Nori Native, `nori exec`, or any other) decides whether to reuse
+the user's running host:
+
+1. Read `$NORI_HOME/host/host.json`. If it is missing, or the host at
+   `endpoint` does not accept `token`, start a host.
+2. If `host_serves_contract(contract, <client's contract>)`, connect.
+   `agentInfo.version` in the `initialize` reply can confirm the contract.
+3. Otherwise start your own host in a separate `NORI_HOME`.
+
+All discovery and lock files (`lock`, `state.json`, `token`, `host.json`,
+`host.log`) live in `$NORI_HOME/host/`, and the lock allows one host per
+home, so a host in another home never touches the first one's files.
+`--port` alone is not enough: a second host in the same home is refused by
+the lock. The other home has its own `config.toml`, saved keys, and on-disk
+transcripts. For a single client, `nori host --stdio` (without `--launch`)
+writes no discovery files and runs beside the home's host (see
+[Stdio transport](#stdio-transport)).
+
+`nori host` itself follows this rule: with a host already running in its
+home, it reports "already running" when that host serves its contract (or
+publishes no `host.json`, as a managed host does), and otherwise, including
+when `host.json` cannot be read, exits non-zero with the running host's PID, version, and contract,
+its own contract, and the way out (`nori host stop`, or
+`NORI_HOME=<dir> nori host`).
 
 ### Sessions and turns
 
@@ -661,7 +705,8 @@ On its own host:
 ### One-shot exec as a client
 
 `nori exec "prompt"` and `nori -p` use only this face. When the home's host
-holds its lock, `host.json` advertises `contract {acp: 1, nori: 1}`, and
+holds its lock, its `host.json` contract serves this CLI's
+(`host_serves_contract`, above), and
 `initialize` (without `observe`) returns `control.role: "controller"`, the
 prompt runs on that host over `/acp` with the discovery token; exec never
 takes control from another client. Otherwise, and always with `-c` or

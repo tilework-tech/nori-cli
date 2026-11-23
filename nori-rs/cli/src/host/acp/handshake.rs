@@ -6,17 +6,24 @@ use serde_json::json;
 /// The only ACP protocol version the host speaks.
 const PROTOCOL_VERSION: i64 = 1;
 
-/// The `nori host` contract major version.
-pub(in crate::host) const CONTRACT: i64 = 1;
-
 /// Add the standard ACP fields to an `initialize` result that already
 /// carries the managed-session keys, which the attach terminal still reads.
-/// The contract version is in `host.json`, not in the handshake.
+/// `agentInfo.version` is the `nori` version with the host contract as
+/// semver build metadata (`0.31.0+contract.1.0.0`), the same pair
+/// `host.json` publishes, so a client can check compatibility from standard
+/// ACP fields alone.
 pub(in crate::host) fn initialize(result: &mut Value) {
     // ACP v1 negotiation: a host that supports only version 1 answers 1,
     // and a client that cannot speak it disconnects.
     result["protocolVersion"] = json!(PROTOCOL_VERSION);
-    result["agentInfo"] = json!({"name": "nori-host", "version": env!("CARGO_PKG_VERSION")});
+    result["agentInfo"] = json!({
+        "name": "nori-host",
+        "version": format!(
+            "{}+contract.{}",
+            env!("CARGO_PKG_VERSION"),
+            nori_protocol::HOST_CONTRACT
+        ),
+    });
     // Prompt content and MCP transports beyond the ACP baseline depend on
     // each session's adapter, so the host promises only the baseline.
     result["agentCapabilities"] = json!({
