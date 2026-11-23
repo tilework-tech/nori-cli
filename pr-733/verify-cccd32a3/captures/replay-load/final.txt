@@ -1,0 +1,146 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+›  tokemph
+
+
+│ I should check the synthetic loader.toml file before changing the default.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Tokemph scenario answered.
+
+
+› twohead
+
+
+│ Reading the loader
+│
+│ It merges sources.
+│
+│ Planning the alias change
+│
+│ One place.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Twohead scenario answered.
+
+
+› gemini
+
+
+│ Inspecting the synthetic loader
+│ I am reading how it merges sources.Planning the alias change
+│ Flip the default in one place.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Gemini scenario answered.
+
+
+› splitnot
+
+
+│ The loader is not safe to change yet.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Splitnot scenario answered.
+
+
+› mixed
+
+
+│ Listing the synthetic fixture directory first.
+
+• Explored 1 read
+  • Read fixtures/profile.toml
+
+│ The profile names look stable; next the alias table.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Intermediate note.
+
+│ Verifying the alias table
+│
+│ Two entries remain.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Mixed scenario answered.
+
+
+› endturn
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Endturn scenario answered.
+
+│ Nothing left to change after the synthetic edit.
+
+
+› startturn
+
+
+│ Starting the next synthetic turn fresh.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Startturn scenario answered.
+
+
+› reply
+
+
+• Ordinary synthetic reply.
+
+
+› / for slash command menu
+
+                                                                                            ⎇ master

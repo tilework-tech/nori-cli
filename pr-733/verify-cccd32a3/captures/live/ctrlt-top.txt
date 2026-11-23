@@ -1,0 +1,50 @@
+/ T R A N S C R I P T / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/pr733-fixtures/proj · Agent approvals
+  Agent        Synth
+
+
+
+› tokemph
+
+
+│ I should check the synthetic loader.toml file before changing the default.
+
+─ Worked for 1s ────────────────────────────────────────────────────────────────────────────────────
+
+• Tokemph scenario answered.
+
+
+› twohead
+
+
+│ Reading the loader
+│
+│ It merges sources.
+│
+│ Planning the alias change
+│
+│ One place.
+
+─ Worked for 1s ────────────────────────────────────────────────────────────────────────────────────
+
+• Twohead scenario answered.
+
+
+› gemini
+
+
+│ Inspecting the synthetic loader
+│ I am reading how it merges sources.Planning the alias change
+│ Flip the default in one place.
+
+─ Worked for 1s ────────────────────────────────────────────────────────────────────────────────────
+
+• Gemini scenario answered.
+
+
+─────────────────────────────────────────────────────────────────────────────────────────────── 0% ─
+ ↑/↓ to scroll   pgup/pgdn to page   home/end to jump
+ q to quit   esc to edit prev
+

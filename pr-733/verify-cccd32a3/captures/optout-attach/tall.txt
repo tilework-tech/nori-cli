@@ -1,0 +1,120 @@
+ Nori host  CONTROLLING
+ synth · tokemph · proj · ready
+
+ › You
+ tokemph
+
+
+ Tokemph scenario answered.
+
+ › You
+ twohead
+
+
+ Twohead scenario answered.
+
+ › You
+ gemini
+
+
+ Gemini scenario answered.
+
+ › You
+ splitnot
+
+
+ Splitnot scenario answered.
+
+ › You
+ mixed
+
+
+ • Explored 1 read
+   • Read fixtures/profile.toml
+
+
+ Intermediate note.
+
+
+ Mixed scenario answered.
+
+ › You
+ endturn
+
+ Endturn scenario answered.
+
+
+ › You
+ startturn
+
+
+ Startturn scenario answered.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg

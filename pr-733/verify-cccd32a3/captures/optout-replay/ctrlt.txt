@@ -1,0 +1,50 @@
+/ T R A N S C R I P T / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+
+• Gemini scenario answered.
+
+
+› splitnot
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Splitnot scenario answered.
+
+
+› mixed
+
+
+• Explored 1 read
+  • Read fixtures/profile.toml
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Intermediate note.
+
+• Mixed scenario answered.
+
+
+› endturn
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Endturn scenario answered.
+
+
+› startturn
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Startturn scenario answered.
+
+
+› reply
+
+
+• Ordinary synthetic reply.
+───────────────────────────────────────────────────────────────────────────────────────────── 100% ─
+ ↑/↓ to scroll   pgup/pgdn to page   home/end to jump
+ q to quit   esc to edit prev
+

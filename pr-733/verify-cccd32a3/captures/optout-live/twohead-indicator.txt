@@ -1,0 +1,50 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/pr733-fixtures/proj · Agent approvals
+  Agent        Synth
+
+
+› tokemph
+
+
+• Tokemph scenario answered.
+
+
+› twohead
+
+
+• Planning the alias change (1s • esc to interrupt)
+
+
+› / for slash command menu
+
+                                                                                            ⎇ master

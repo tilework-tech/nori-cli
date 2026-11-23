@@ -1,0 +1,50 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/pr733-fixtures/proj · Agent approvals
+  Agent        Synth
+
+
+› tokemph
+
+
+• I should check the synthetic loader.toml (1s • esc to interrupt)
+
+
+› ! for shell commands
+
+                                                                                            ⎇ master

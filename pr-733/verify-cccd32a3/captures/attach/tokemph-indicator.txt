@@ -1,0 +1,50 @@
+ Nori host  CONTROLLING
+ synth · tokemph · proj · working
+
+ › You
+ tokemph
+
+ │ I should check the synthetic loader.toml file before changing the default.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg

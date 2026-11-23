@@ -1,0 +1,98 @@
+<!doctype html><meta charset=utf-8><style>
+body{background:#0f1311;color:#d7e0da;font:14px system-ui;margin:24px;width:1500px}
+h1{font-size:20px;margin:0 0 4px} .sub{color:#8fa39a;margin-bottom:12px} h2{font-size:15px;margin:20px 0 8px;color:#9fe0b5}
+.row{display:flex;gap:12px} .p{flex:1;background:#151b18;border:1px solid #2a332e;border-radius:6px;padding:8px 10px;min-width:0}
+.p h3{font-size:12px;margin:0 0 6px;color:#aab8b0} .bad{border-color:#a84a4a} .good{border-color:#3f8f5a} .warn{border-color:#b89a3a}
+pre{margin:0;font:12px/1.35 'DejaVu Sans Mono',monospace;white-space:pre-wrap}</style>
+<h1>nori-cli #733: thought text in history, verified at cccd32a3</h1>
+<div class=sub>Real TUI driven in tmux with a synthetic ACP agent. All text is synthetic. Stack base: #730 c69d9d1c.</div><h2>1. Token-streamed bold (the <code>**</code> marker arrives as its own chunk)</h2><div class="row"><div class="p bad"><h3>656b488a (superseded): paragraph invented before closing ** (its ┊ gutter does not render in this font)</h3><pre><span style="font-weight:bold;opacity:.6;">› </span><span style="">tokemph</span>
+<span style="opacity:.6;">┊ </span><span style="opacity:.6;font-style:italic;">I should check the synthetic **loader.toml</span>
+<span style="opacity:.6;">┊</span>
+<span style="">┊ </span><span style="font-style:italic;">** file before changing the default.</span>
+<span style="opacity:.6;">─ Worked for 1s ────────────────────────────────────────────────────────────────────────────────────</span>
+<span style="">• </span><span style="">Tokemph scenario answered.</span>
+<span style="font-weight:bold;opacity:.6;">› </span><span style="">twohead</span>
+<span style="opacity:.6;">┊ </span><span style="opacity:.6;font-style:italic;">**Reading the loader</span>
+<span style="opacity:.6;">┊</span>
+<span style="">┊ </span><span style="font-style:italic;">**</span>
+<span style="opacity:.6;">┊</span>
+<span style="">┊ </span><span style="font-style:italic;">It merges sources.</span>
+<span style="opacity:.6;">┊</span>
+<span style="">┊ </span><span style="font-style:italic;">**Planning the alias change</span>
+<span style="opacity:.6;">┊</span>
+<span style="">┊ </span><span style="font-style:italic;">**</span>
+<span style="opacity:.6;">┊</span>
+<span style="">┊ </span><span style="font-style:italic;">One place.</span>
+<span style="opacity:.6;">─ Worked for 1s ────────────────────────────────────────────────────────────────────────────────────</span>
+<span style="">• </span><span style="">Twohead scenario answered.</span></pre></div><div class="p good"><h3>cccd32a3: text kept exactly as supplied</h3><pre><span style="font-weight:bold;opacity:.6;">› </span><span style="">tokemph</span>
+<span style="opacity:.6;">│ </span><span style="opacity:.6;font-style:italic;">I should check the synthetic </span><span style="font-weight:bold;opacity:.6;font-style:italic;">loader.toml</span><span style="opacity:.6;font-style:italic;"> file before changing the default.</span>
+<span style="opacity:.6;">─ Worked for 1s ────────────────────────────────────────────────────────────────────────────────────</span>
+<span style="">• </span><span style="">Tokemph scenario answered.</span>
+<span style="font-weight:bold;opacity:.6;">› </span><span style="">twohead</span>
+<span style="opacity:.6;">│ </span><span style="font-weight:bold;opacity:.6;font-style:italic;">Reading the loader</span>
+<span style="opacity:.6;">│</span>
+<span style="">│ </span><span style="font-style:italic;">It merges sources.</span>
+<span style="opacity:.6;">│</span>
+<span style="">│ </span><span style="font-weight:bold;font-style:italic;">Planning the alias change</span>
+<span style="opacity:.6;">│</span>
+<span style="">│ </span><span style="font-style:italic;">One place.</span>
+<span style="opacity:.6;">─ Worked for 1s ────────────────────────────────────────────────────────────────────────────────────</span>
+<span style="">• </span><span style="">Twohead scenario answered.</span></pre></div></div><h2>2. The same thought block on every surface at cccd32a3</h2><div class="row"><div class="p good"><h3>Live TUI</h3><pre>› mixed
+│ Listing the synthetic fixture directory first.
+• Explored 1 read
+  • Read fixtures/profile.toml
+│ The profile names look stable; next the alias table.
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+• Intermediate note.
+│ Verifying the alias table
+│
+│ Two entries remain.
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+• Mixed scenario answered.
+› endturn
+• Endturn scenario answered.
+│ Nothing left to change after the synthetic edit.
+› startturn
+│ Starting the next synthetic turn fresh.
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+• Startturn scenario answered.</pre></div><div class="p good"><h3>Replay (nori resume)</h3><pre>› mixed
+│ Listing the synthetic fixture directory first.
+• Explored 1 read
+  • Read fixtures/profile.toml
+│ The profile names look stable; next the alias table.
+• Intermediate note.
+│ Verifying the alias table
+│
+│ Two entries remain.
+• Mixed scenario answered.
+› endturn
+• Endturn scenario answered.
+│ Nothing left to change after the synthetic edit.
+› startturn
+│ Starting the next synthetic turn fresh.
+• Startturn scenario answered.</pre></div><div class="p good"><h3>nori attach (fresh attach)</h3><pre> mixed
+ │ Listing the synthetic fixture directory first.
+ • Explored 1 read
+   • Read fixtures/profile.toml
+ │ The profile names look stable; next the alias table.
+ Intermediate note.
+ │ Verifying the alias table
+ │
+ │ Two entries remain.
+ Mixed scenario answered.
+ › You
+ endturn
+ Endturn scenario answered.
+ │ Nothing left to change after the synthetic edit.
+ › You
+ startturn
+ │ Starting the next synthetic turn fresh.
+ Startturn scenario answered.</pre></div></div><h2>3. Finding: whole Gemini-style thoughts with no separator run together in history</h2><div class="row"><div class="p good"><h3>Working indicator during the turn (cccd32a3)</h3><pre>• Planning the alias change (1s • esc to interrupt)</pre></div><div class="p warn"><h3>History block after the turn (cccd32a3)</h3><pre><span style="font-weight:bold;opacity:.6;">› </span><span style="">gemini</span>
+<span style="opacity:.6;">│ </span><span style="font-weight:bold;opacity:.6;font-style:italic;">Inspecting the synthetic loader</span>
+<span style="opacity:.6;">│ </span><span style="opacity:.6;font-style:italic;">I am reading how it merges sources.</span><span style="font-weight:bold;opacity:.6;font-style:italic;">Planning the alias change</span>
+<span style="opacity:.6;">│ </span><span style="opacity:.6;font-style:italic;">Flip the default in one place.</span>
+<span style="opacity:.6;">─ Worked for 1s ────────────────────────────────────────────────────────────────────────────────────</span>
+<span style="">• </span><span style="">Gemini scenario answered.</span></pre></div></div><h2>4. Opt-out: [tui] thoughts_in_history = false at cccd32a3</h2><div class="row"><div class="p good"><h3>Live: working indicator still shows the thought</h3><pre>• Planning the alias change (1s • esc to interrupt)</pre></div><div class="p good"><h3>Live history after the turns: no thought blocks</h3><pre>› tokemph
+• Tokemph scenario answered.
+› twohead
+• Twohead scenario answered.</pre></div></div>

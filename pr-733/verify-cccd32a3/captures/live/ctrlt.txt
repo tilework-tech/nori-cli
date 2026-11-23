@@ -1,0 +1,50 @@
+/ T R A N S C R I P T / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+
+• Splitnot scenario answered.
+
+
+› mixed
+
+
+│ Listing the synthetic fixture directory first.
+
+• Explored 1 read
+  • Read fixtures/profile.toml
+
+│ The profile names look stable; next the alias table.
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+
+• Intermediate note.
+
+│ Verifying the alias table
+│
+│ Two entries remain.
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+
+• Mixed scenario answered.
+
+
+› endturn
+
+
+• Endturn scenario answered.
+
+│ Nothing left to change after the synthetic edit.
+
+
+› startturn
+
+
+│ Starting the next synthetic turn fresh.
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+
+• Startturn scenario answered.
+───────────────────────────────────────────────────────────────────────────────────────────── 100% ─
+ ↑/↓ to scroll   pgup/pgdn to page   home/end to jump
+ q to quit   esc to edit prev
+

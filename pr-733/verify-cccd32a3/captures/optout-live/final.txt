@@ -1,0 +1,81 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/pr733-fixtures/proj · Agent approvals
+  Agent        Synth
+
+
+› tokemph
+
+
+• Tokemph scenario answered.
+
+
+› twohead
+
+
+• Twohead scenario answered.
+
+
+› gemini
+
+
+• Gemini scenario answered.
+
+
+› mixed
+
+
+• Explored 1 read
+  • Read fixtures/profile.toml
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+
+• Intermediate note.
+
+• Mixed scenario answered.
+
+
+› / for slash command menu
+
+                                                                                            ⎇ master

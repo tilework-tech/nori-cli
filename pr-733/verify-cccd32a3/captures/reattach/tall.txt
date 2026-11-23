@@ -1,0 +1,120 @@
+ Nori host  CONTROLLING
+ synth · tokemph · proj · ready
+
+ › You
+ tokemph
+
+ │ I should check the synthetic loader.toml file before changing the default.
+
+ Tokemph scenario answered.
+
+ › You
+ twohead
+
+ │ Reading the loader
+ │
+ │ It merges sources.
+ │
+ │ Planning the alias change
+ │
+ │ One place.
+
+ Twohead scenario answered.
+
+ › You
+ gemini
+
+ │ Inspecting the synthetic loader
+ │ I am reading how it merges sources.Planning the alias change
+ │ Flip the default in one place.
+
+ Gemini scenario answered.
+
+ › You
+ splitnot
+
+ │ The loader is not safe to change yet.
+
+ Splitnot scenario answered.
+
+ › You
+ mixed
+
+ │ Listing the synthetic fixture directory first.
+
+ • Explored 1 read
+   • Read fixtures/profile.toml
+
+ │ The profile names look stable; next the alias table.
+
+ Intermediate note.
+
+ │ Verifying the alias table
+ │
+ │ Two entries remain.
+
+ Mixed scenario answered.
+
+ › You
+ endturn
+
+ Endturn scenario answered.
+
+ │ Nothing left to change after the synthetic edit.
+
+ › You
+ startturn
+
+ │ Starting the next synthetic turn fresh.
+
+ Startturn scenario answered.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg
