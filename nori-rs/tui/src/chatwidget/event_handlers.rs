@@ -49,7 +49,7 @@ impl ChatWidget {
                 nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
             ) => {
                 // Classify live proactive activity before projecting the same update for display.
-                if self.replay_source.is_none() {
+                if self.replay_source.is_none() && self.external_turn.is_none() {
                     self.handle_proactive_session_update(&notification.update);
                 }
                 let events = self
@@ -173,20 +173,20 @@ impl ChatWidget {
             )
     }
 
-    fn start_proactive_turn(&mut self) {
+    pub(super) fn start_proactive_turn(&mut self) {
         if !self.proactive_turn_active {
             self.proactive_turn_active = true;
             self.start_task_presentation(false);
         }
     }
 
-    fn separate_proactive_turn(&mut self) {
+    pub(super) fn separate_proactive_turn(&mut self) {
         self.record_proactive_assistant_message();
         self.proactive_turn_active = false;
         self.flush_answer_stream_with_separator();
     }
 
-    fn complete_proactive_turn(&mut self) {
+    pub(super) fn complete_proactive_turn(&mut self) {
         if self.proactive_turn_active {
             self.record_proactive_assistant_message();
             self.proactive_turn_active = false;
@@ -205,6 +205,11 @@ impl ChatWidget {
         match event {
             nori_protocol::NoriEvent::SessionStarted(started) => {
                 self.on_session_started(started);
+            }
+            nori_protocol::NoriEvent::ExternalTurnChanged(turn) => {
+                if self.replay_source.is_none() {
+                    self.on_external_turn_changed(turn);
+                }
             }
             nori_protocol::NoriEvent::SessionPhaseChanged(phase) => {
                 // A local request boundary separates statusless proactive output without completing it.
@@ -452,6 +457,7 @@ impl ChatWidget {
     }
 
     pub(super) fn set_status_header(&mut self, header: String) {
+        let header = self.external_cancel_status().map_or(header, str::to_owned);
         self.current_status_header = header.clone();
         self.bottom_pane.update_status_header(header);
     }
@@ -825,6 +831,10 @@ impl ChatWidget {
             return;
         }
 
+        if self.can_control_external_turn() {
+            self.request_external_cancel();
+            return;
+        }
         if self.bottom_pane.is_task_running() {
             self.bottom_pane.show_ctrl_c_quit_hint();
             self.submit_harness_action(crate::app_event::HarnessAction::Cancel);

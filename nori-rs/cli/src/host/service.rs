@@ -181,7 +181,7 @@ impl HostService {
                 self.manager
                     .handle(&id)
                     .ok_or_else(|| anyhow::anyhow!("session is not running"))?
-                    .cancel()
+                    .cancel_current_turn()
                     .await?
             }
             "_nori/session/resume" => {

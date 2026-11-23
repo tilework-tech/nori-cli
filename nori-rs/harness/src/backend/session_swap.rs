@@ -93,7 +93,17 @@ impl AcpBackend {
                 // `session_id` still names the old session) so the
                 // nori-client loop can take the local goal back over.
                 self.stop_stale_ext_goal().await;
-                *self.session_id.write().await = new_session_id.clone();
+                let previous_turn = {
+                    let mut session = self.session_id.write().await;
+                    let mut driver = self.session_driver.lock().await;
+                    *session = new_session_id.clone();
+                    driver
+                        .external
+                        .finish(nori_protocol::ExternalTurnState::Superseded)
+                };
+                if let Some(change) = previous_turn {
+                    self.publish_external_turn(change).await;
+                }
                 if matches!(mode, SessionSwapMode::ForkFromHead { .. }) {
                     self.fork_transcript(&new_session_id).await;
                 }
