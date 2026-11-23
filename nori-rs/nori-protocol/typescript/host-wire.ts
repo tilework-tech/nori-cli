@@ -432,6 +432,10 @@ export type NoriEvent =
       event_type: "session_phase_changed";
     }
   | {
+      event: ExternalTurn;
+      event_type: "external_turn_changed";
+    }
+  | {
       event: SessionEnded;
       event_type: "session_ended";
     }
@@ -522,6 +526,8 @@ export type SessionPhase =
       phase: "cancelling";
       request_id: RequestId;
     };
+export type ExternalTurnState =
+  ("working" | "cancel_requested") | "unconfirmed" | "idle" | "superseded" | "cancelled";
 export type SessionEndReason =
   "shutdown" | "closed" | "connection_lost" | "spawn_failed" | "timed_out";
 /**
@@ -3849,6 +3855,16 @@ export interface SessionStarted {
   history_log_id: number;
   transcript_id?: string | null;
   transcript_path?: string | null;
+}
+/**
+ * Observed activity for which the harness has no outstanding prompt.
+ */
+export interface ExternalTurn {
+  /**
+   * Harness-local observation identity, distinct from ACP request IDs.
+   */
+  id: string;
+  state: ExternalTurnState;
 }
 export interface SessionEnded {
   message?: string | null;

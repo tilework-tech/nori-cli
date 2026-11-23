@@ -30,8 +30,7 @@ async fn set_activity(client: &mut Acp, id: &str, working: bool, cancels: i32) {
     client.until(is_update_mentioning(id, &observed)).await;
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn controller_handoff_cancels_external_and_owned_turns_once() {
+fn external_turn_host() -> Host {
     let host = Host::new();
     let script = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/standard_acp/fixture.py");
     std::fs::write(
@@ -50,6 +49,12 @@ args = ["{script}", "external-turn"]
     )
     .unwrap();
     success(host.run(&["host", "--port", "0"]));
+    host
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn controller_handoff_cancels_external_and_owned_turns_once() {
+    let host = external_turn_host();
     let folder = TempDir::new().unwrap();
     let mut first = controller(&host);
     let mut second = controller(&host);
@@ -129,4 +134,76 @@ args = ["{script}", "external-turn"]
     assert_eq!(response["result"]["stopReason"], "cancelled");
     set_activity(&mut first, &id, false, 3).await;
     set_activity(&mut first, &other, false, 0).await;
+}
+
+async fn working_observation(observer: &mut Acp, session_id: &str) -> String {
+    let update = observer
+        .until(|frame| {
+            let params = &frame["params"];
+            let event = &params["event"]["event"];
+            frame["method"] == "_nori/session/event"
+                && params["conversation_id"] == session_id
+                && event["event_type"] == "external_turn_changed"
+                && event["event"]["state"] == "working"
+        })
+        .await;
+    update["params"]["event"]["event"]["event"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn observed_cancel_rejects_a_late_or_foreign_turn_and_only_the_controller_can_send_it() {
+    let host = external_turn_host();
+    let folder = TempDir::new().unwrap();
+    let mut control = controller(&host);
+    let mut observer = watcher(&host);
+    observer
+        .call("_nori/session/subscribe", json!({"session_id":"*"}))
+        .await
+        .unwrap();
+
+    let (id, _) = new_session(&mut control, folder.path()).await;
+    let (sibling, _) = new_session(&mut control, folder.path()).await;
+    set_activity(&mut control, &id, true, 0).await;
+    let amber = working_observation(&mut observer, &id).await;
+    set_activity(&mut control, &id, false, 0).await;
+    set_activity(&mut control, &id, true, 0).await;
+    let blue = working_observation(&mut observer, &id).await;
+    set_activity(&mut control, &sibling, true, 0).await;
+    let sibling_turn = working_observation(&mut observer, &sibling).await;
+    let method = "_nori/session/cancel_observed";
+
+    for guard in [json!(amber), json!(sibling_turn)] {
+        let error = control
+            .call(method, json!({"sessionId": id, "observedTurnId": guard}))
+            .await
+            .unwrap_err();
+        assert!(error.message.contains("no longer active"), "{error:?}");
+    }
+    for malformed in [
+        json!({"sessionId":id}),
+        json!({"observedTurnId":blue}),
+        json!({"sessionId":id, "observedTurnId": ""}),
+        json!({"sessionId":id, "observedTurnId": 7}),
+    ] {
+        let error = control.call(method, malformed).await.unwrap_err();
+        assert_eq!(error.code, -32602, "{error:?}");
+    }
+    let current = json!({"sessionId": id, "observedTurnId": blue});
+    let forbidden = observer.call(method, current.clone()).await.unwrap_err();
+    assert_eq!(forbidden.code, -32016);
+    set_activity(&mut control, &id, true, 0).await;
+    set_activity(&mut control, &sibling, true, 0).await;
+
+    for _ in 0..2 {
+        let result = control.call(method, current.clone()).await.unwrap();
+        assert_eq!(result, json!({"sessionId":id}));
+    }
+    control
+        .until(is_update_mentioning(&id, "Received cancel 1"))
+        .await;
+    set_activity(&mut control, &id, false, 1).await;
+    set_activity(&mut control, &sibling, false, 0).await;
 }

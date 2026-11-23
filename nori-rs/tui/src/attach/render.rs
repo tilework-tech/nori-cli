@@ -149,16 +149,15 @@ fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
     };
     let row = |id: &str| state.sessions.iter().find(|row| row.session_id == id);
     let conversation = state.conversations.get(id);
-    let external = conversation.and_then(|conversation| conversation.external_turn.as_ref());
-    let activity = external
-        .map(|turn| {
-            crate::external_cancel::pending_label(turn.state).unwrap_or(
-                if state.watching || state.request_on_screen() {
+    let activity = conversation
+        .filter(|c| c.external_turn.is_some())
+        .map(|c| {
+            c.external_cancel_status()
+                .unwrap_or(if state.watching || state.request_on_screen() {
                     "Agent working"
                 } else {
                     "Agent working · ctrl+c cancel"
-                },
-            )
+                })
         })
         .or_else(|| {
             conversation

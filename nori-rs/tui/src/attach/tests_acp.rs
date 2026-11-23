@@ -164,32 +164,41 @@ fn attached_external_cancel_respects_role_and_observed_activity() {
         .state
         .apply(external_change("one", 1, "sample", Working))
         .unwrap();
+    runtime.composer.set_text("Keep my draft".into());
     runtime.state.role_changed("watcher");
     runtime.key(interrupt);
     assert!(rx.try_recv().is_err());
-    runtime.composer.clear();
+    assert_eq!(runtime.composer.text(), "Keep my draft");
     runtime.state.role_changed("controller");
     runtime.key(interrupt);
+    let cancel = rx
+        .try_recv()
+        .expect("Ctrl+C interrupts even when the composer contains a draft");
+    assert_eq!(cancel["method"], "_nori/session/cancel_observed");
     assert_eq!(
-        rx.try_recv().unwrap(),
-        json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"one"}})
+        cancel["params"],
+        json!({"sessionId":"one","observedTurnId":"sample"})
     );
+    assert!(cancel["id"].is_number());
+    assert_eq!(runtime.composer.text(), "Keep my draft");
     assert!(screen(&runtime.state).contains("Cancel requested · unconfirmed"));
-    runtime.key(interrupt);
-    assert!(
-        rx.try_recv().is_err(),
-        "duplicate key before host feedback must stay local"
-    );
-    runtime
-        .state
-        .apply(external_change("one", 2, "sample", CancelRequested))
-        .unwrap();
+    for (seq, status) in [(2, CancelRequested), (3, Unconfirmed)] {
+        runtime.key(interrupt);
+        assert!(rx.try_recv().is_err(), "duplicate key must stay local");
+        runtime
+            .state
+            .apply(external_change("one", seq, "sample", status))
+            .unwrap();
+        assert_eq!(runtime.composer.text(), "Keep my draft");
+    }
     runtime.key(interrupt);
     assert!(rx.try_recv().is_err());
+    assert_eq!(runtime.composer.text(), "Keep my draft");
     runtime
         .state
-        .apply(external_change("one", 3, "sample", Idle))
+        .apply(external_change("one", 4, "sample", Idle))
         .unwrap();
+    runtime.composer.clear();
     runtime.key(interrupt);
     assert!(rx.try_recv().is_err());
     assert!(screen(&runtime.state).contains("No active turn to cancel"));
@@ -247,4 +256,125 @@ fn a_second_attached_interrupt_keeps_an_admitted_cancellation_pending() {
     assert!(screen(&runtime.state).contains("Cancel requested"));
     assert!(!screen(&runtime.state).contains("No active turn"));
     assert!(!screen(&runtime.state).contains("Ready. Send a prompt"));
+}
+
+#[test]
+fn external_cancel_replies_are_bound_to_the_observation_and_never_fall_back() {
+    use super::connection::ConnectionEvent;
+    use nori_protocol::ExternalTurnState::*;
+    let (mut runtime, mut rx) = runtime_on_session_one();
+    runtime
+        .state
+        .apply(external_change("one", 1, "first", Working))
+        .unwrap();
+    let first = sent_for(&mut runtime, &mut rx, "/cancel");
+    runtime
+        .state
+        .apply(external_change("one", 2, "first", Superseded))
+        .unwrap();
+    runtime
+        .state
+        .apply(external_change("one", 3, "second", Working))
+        .unwrap();
+    runtime
+        .connection_event(ConnectionEvent::Message(json!({
+            "id":first["id"], "result":{"sessionId":"one"}
+        })))
+        .unwrap();
+    assert!(!screen(&runtime.state).contains("Cancel requested"));
+    let second = sent_for(&mut runtime, &mut rx, "/cancel");
+    assert_eq!(second["params"]["observedTurnId"], "second");
+    runtime
+        .connection_event(ConnectionEvent::Message(json!({
+            "id":second["id"], "error":{"code":-32601, "message":"Method not found"}
+        })))
+        .unwrap();
+    assert!(
+        rx.try_recv().is_err(),
+        "an unsupported host must never get an unscoped interrupt"
+    );
+    assert!(screen(&runtime.state).contains("Method not found"));
+    assert!(!screen(&runtime.state).contains("Cancel requested"));
+}
+
+#[test]
+fn interrupted_external_cancel_transport_allows_a_scoped_manual_retry_after_reconnect() {
+    use super::connection::ConnectionEvent;
+    use nori_protocol::ExternalTurnState::*;
+    let (mut runtime, mut rx) = runtime_on_session_one();
+    runtime
+        .state
+        .apply(external_change("one", 1, "retry", Working))
+        .unwrap();
+    let first = sent_for(&mut runtime, &mut rx, "/cancel");
+    runtime
+        .connection_event(ConnectionEvent::Disconnected("offline".into()))
+        .unwrap();
+    runtime
+        .connection_event(ConnectionEvent::Connected)
+        .unwrap();
+    let initialize = rx.try_recv().unwrap();
+    runtime
+        .connection_event(ConnectionEvent::Message(json!({
+            "id":initialize["id"], "result":{"control":{"role":"controller"}}
+        })))
+        .unwrap();
+    for outbound in std::iter::from_fn(|| rx.try_recv().ok()) {
+        assert_ne!(outbound["method"], "_nori/session/cancel_observed");
+        assert_ne!(outbound["method"], "session/cancel");
+    }
+    assert!(screen(&runtime.state).contains("Cancel requested · unconfirmed"));
+    let retry = sent_for(&mut runtime, &mut rx, "/cancel");
+    assert_eq!(retry["method"], "_nori/session/cancel_observed");
+    assert_eq!(
+        retry["params"],
+        json!({"sessionId":"one","observedTurnId":"retry"})
+    );
+    assert_ne!(retry["id"], first["id"]);
+    runtime
+        .connection_event(ConnectionEvent::Message(json!({
+            "id":retry["id"], "result":{"sessionId":"one"}
+        })))
+        .unwrap();
+    assert!(screen(&runtime.state).contains("Cancel requested"));
+    assert!(!screen(&runtime.state).contains("Agent confirmed cancellation."));
+}
+
+#[test]
+fn picker_interrupt_cannot_cancel_a_hidden_session_or_its_permission() {
+    let (mut runtime, mut rx) = runtime_on_session_one();
+    runtime
+        .state
+        .replace_sessions(json!({"sessions":[
+            {"session_id":"one","agent":"sample","title":"First","status":"working"},
+            {"session_id":"two","agent":"sample","title":"Second","status":"working"}
+        ]}))
+        .unwrap();
+    for session in ["one", "two"] {
+        runtime
+            .state
+            .apply(external_change(
+                session,
+                1,
+                session,
+                nori_protocol::ExternalTurnState::Working,
+            ))
+            .unwrap();
+    }
+    let mut permission = permission_event(2);
+    permission.conversation_id = "one".into();
+    runtime.state.apply(permission).unwrap();
+    key(&mut runtime, KeyCode::Left, KeyModifiers::NONE);
+    key(&mut runtime, KeyCode::Down, KeyModifiers::NONE);
+    assert!(runtime.state.list_open);
+    assert_eq!(runtime.state.selected.as_deref(), Some("one"));
+    assert_eq!(runtime.state.picker.selected_item().unwrap().key, "two");
+    while rx.try_recv().is_ok() {}
+    key(&mut runtime, KeyCode::Char('c'), KeyModifiers::CONTROL);
+    assert!(
+        rx.try_recv().is_err(),
+        "the picker must never interrupt either session or answer the hidden permission"
+    );
+    assert_eq!(runtime.state.permission_count("one"), 1);
+    assert!(runtime.state.list_open);
 }
