@@ -41,6 +41,13 @@ struct PromptParams {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CancelObservedParams {
+    session_id: String,
+    observed_turn_id: String,
+}
+
+#[derive(Deserialize)]
 struct RespondParams {
     session_id: Option<String>,
     request_id: acp::RequestId,
@@ -209,6 +216,23 @@ impl ManagedRemoteHost {
                     .await
                     .map_err(|error| RemoteError::new(-32000, error))?;
                 Ok((json!(receipt), None))
+            }
+            "_nori/session/cancel_observed" if self.authenticated_controller => {
+                let params: CancelObservedParams = serde_json::from_value(params)
+                    .map_err(|error| RemoteError::new(-32602, error))?;
+                if params.observed_turn_id.trim().is_empty() {
+                    return Err(RemoteError::new(-32602, "observedTurnId is required"));
+                }
+                let id = self.target(Some(&params.session_id))?;
+                let handle = self
+                    .manager
+                    .handle(&id)
+                    .ok_or_else(|| RemoteError::new(-32002, "session is not running"))?;
+                handle
+                    .cancel_external_turn(params.observed_turn_id)
+                    .await
+                    .map_err(|error| RemoteError::new(-32000, error))?;
+                Ok((json!({"sessionId": id.to_string()}), None))
             }
             "_nori/session/prompt" => {
                 let params: PromptParams = serde_json::from_value(params)
