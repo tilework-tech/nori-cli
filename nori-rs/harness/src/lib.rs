@@ -79,6 +79,7 @@ pub use registry::get_agent_display_name;
 pub use registry::initialize_registry;
 pub use registry::list_available_agents;
 pub use registry::resolve_agent_slug;
+pub use registry::set_adapter_launch_overrides;
 pub use tracing_setup::init_file_tracing;
 pub use tracing_setup::init_rolling_file_tracing;
 pub use transcript_discovery::DiscoveryError;

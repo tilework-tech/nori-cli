@@ -27,7 +27,7 @@ Use `/agent` to switch agents, or select one at launch with `nori --agent grok-b
 
 ## Providers
 
-Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` release. Grok Build uses `npx` so its native executable is installed by the upstream npm package. Pi always uses `npx`, which installs the `pi-acp` adapter together with Earendil's Pi coding agent so the adapter finds `pi` on `PATH`. The adapters use their upstream dependencies and authentication settings. For Antigravity, install Google's CLI and make `agy` available on the host's `PATH`. [Antigravity CLI installation](https://antigravity.google/cli)
+Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` release. Grok Build uses `npx` so its native executable is installed by the upstream npm package. Pi always uses `npx`, which installs the `pi-acp` adapter together with Earendil's Pi coding agent so the adapter finds `pi` on `PATH`. To pin an adapter version or substitute your own adapter command, see [adapter launch](nori-rs/config.md#adapter-launch-acp_adapters). The adapters use their upstream dependencies and authentication settings. For Antigravity, install Google's CLI and make `agy` available on the host's `PATH`. [Antigravity CLI installation](https://antigravity.google/cli)
 
 | Agent | ID for `--agent` or `config.toml` | ACP launch | Sign in |
 | --- | --- | --- | --- |

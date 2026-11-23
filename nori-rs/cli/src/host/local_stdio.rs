@@ -23,6 +23,7 @@ pub(super) fn local_host(
     overrides: NoriConfigOverrides,
 ) -> anyhow::Result<Arc<HostService>> {
     nori_harness::initialize_registry(config.agents.clone())?;
+    nori_harness::set_adapter_launch_overrides(config.acp_adapters.clone())?;
     let manager = SessionManager::new(SessionManagerConfig {
         max_sessions: config.max_sessions,
         ..Default::default()

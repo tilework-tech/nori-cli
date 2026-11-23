@@ -21,6 +21,9 @@ The crate owns:
   `[default_models]` and the optional `[[agents]].model_override`
   (`ModelOverrideToml { env, arg }`) declaring how a custom agent accepts a
   forced model id at spawn time (see below);
+- `[acp_adapters.<slug>]` launch overrides (`AcpAdapterToml { command,
+  version }`, unknown keys rejected), passed through unvalidated for
+  `nori-acp-host` to check and apply;
 - named API connections (`[[token_providers]]`) and
   the `[agent_token_providers]` agent-to-provider binding;
 - `AskForApproval`, `SandboxPolicy`, `SandboxMode`, and `TrustLevel`;

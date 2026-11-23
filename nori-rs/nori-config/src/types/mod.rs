@@ -112,6 +112,20 @@ pub struct AgentConfigToml {
     pub model_override: Option<ModelOverrideToml>,
 }
 
+/// Launch control for one agent's ACP adapter, from `[acp_adapters.<slug>]`.
+///
+/// `command` replaces the resolved launch command (shell-split). `version`
+/// replaces `@latest` on the adapter package launched through npx or bunx.
+/// `NORI_ACP_COMMAND_<SLUG>` in the environment wins over both.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct AcpAdapterToml {
+    /// Full command line that launches the adapter, e.g. `"/opt/claude-agent-acp"`.
+    pub command: Option<String>,
+    /// Package version, range, or dist-tag used instead of `latest`.
+    pub version: Option<String>,
+}
+
 /// How a custom agent accepts a model id at spawn time. Set exactly one of
 /// `env` or `arg`; `env` wins if both are set.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -456,6 +470,10 @@ pub struct NoriConfigToml {
     /// Custom agent definitions
     #[serde(default)]
     pub agents: Vec<AgentConfigToml>,
+
+    /// Launch overrides for ACP adapters, keyed by agent slug
+    #[serde(default)]
+    pub acp_adapters: HashMap<String, AcpAdapterToml>,
 
     /// Cloud session settings
     #[serde(default)]
@@ -2503,6 +2521,9 @@ pub struct NoriConfig {
     /// Custom agent definitions from config
     pub agents: Vec<AgentConfigToml>,
 
+    /// Launch overrides for ACP adapters, keyed by agent slug
+    pub acp_adapters: HashMap<String, AcpAdapterToml>,
+
     /// Cloud broker URL from config (e.g., "https://nori-broker.myorg.fly.dev")
     pub cloud_broker_url: Option<String>,
 }
@@ -2576,6 +2597,7 @@ impl Default for NoriConfig {
             token_providers: Vec::new(),
             default_model_override_keys: Vec::new(),
             agents: Vec::new(),
+            acp_adapters: HashMap::new(),
             cloud_broker_url: None,
         }
     }

@@ -301,6 +301,7 @@ impl NoriConfig {
             default_models: toml.default_models,
             default_model_override_keys,
             agents: toml.agents,
+            acp_adapters: toml.acp_adapters,
             cloud_broker_url: toml.cloud.broker_url,
         })
     }

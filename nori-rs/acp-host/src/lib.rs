@@ -3,6 +3,7 @@
 //!
 //! This crate must stay independent of the session harness and any terminal UI.
 
+mod adapter_launch;
 pub mod connection;
 mod error_category;
 pub mod launch;
