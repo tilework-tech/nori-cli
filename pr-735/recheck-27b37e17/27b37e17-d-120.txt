@@ -1,0 +1,50 @@
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-demo/project · Agent approvals
+  Agent        Synthetic Explorer
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+
+› explore
+
+
+• Explored 18 searches
+  • Search fn_paint in src
+  • Search draw_cell in src
+  • Search past_end in src
+  • Search ZZ_NONE_C in src · no matches
+  • Search ZZ_NONE_N in src · no matches
+  • Search use_decl in src · 412 matches in 60 files
+  • Search Widget in lib · 1203 files
+  • Search Widget2 in lib · 40 files
+  • Search ZZ_NONE_F in lib · no matches
+  • Search slow_ctx in vendor
+  • Search slow_count in vendor · 88+ matches in 9+ files
+  • Search slow_files in vendor · 14+ files
+  • Search slow_none in vendor · no matches (incomplete)
+  • Search legacy in lib · 5+ files
+  • Search **/*.rs in crates · 100+ files
+  • Search **/*.snap in crates · 30+ files
+  • Search **/*.orig in crates · no matches (incomplete)
+  • Search **/*.bak in crates · no matches
+
+─ Worked for 1s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Synthetic Grep/Glob recheck finished.
+
+
+› $ for skill listing
+
