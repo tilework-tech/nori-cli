@@ -14,6 +14,22 @@ use super::state::HostFiles;
 pub(super) async fn start(files: &HostFiles) -> anyhow::Result<()> {
     match connect(files).await {
         Ok((_, host)) => {
+            if let Some(discovery) = files.read_discovery()
+                && !nori_protocol::host_serves_contract(
+                    &discovery.contract,
+                    nori_protocol::HOST_CONTRACT,
+                )
+            {
+                anyhow::bail!(
+                    "the running host (pid {}, nori {}, contract {}) does not serve this nori's contract {}; \
+                     stop it with `nori host stop`, or run this nori's host beside it in another home: \
+                     NORI_HOME=<dir> nori host",
+                    host.pid,
+                    discovery.version,
+                    discovery.contract,
+                    nori_protocol::HOST_CONTRACT,
+                );
+            }
             println!("Host already running (pid {})  {}", host.pid, host.endpoint);
             return Ok(());
         }

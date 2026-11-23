@@ -2152,28 +2152,12 @@
       ],
       "type": "string"
     },
-    "HostContractVersions": {
-      "properties": {
-        "acp": {
-          "format": "int64",
-          "type": "integer"
-        },
-        "nori": {
-          "format": "int64",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "acp",
-        "nori"
-      ],
-      "type": "object"
-    },
     "HostDiscovery": {
       "description": "`$NORI_HOME/host/host.json`, the host's discovery file.",
       "properties": {
         "contract": {
-          "$ref": "#/$defs/HostContractVersions"
+          "description": "The semver of the host wire contract the host serves ([`HOST_CONTRACT`]\nof its build). See [`host_serves_contract`].",
+          "type": "string"
         },
         "endpoint": {
           "description": "`ws://127.0.0.1:<port>/sessions`.",
@@ -2195,7 +2179,7 @@
           "type": "string"
         },
         "version": {
-          "description": "The `nori` version serving the host.",
+          "description": "The `nori` version serving the host. Informational: compatibility\nis decided by `contract` alone.",
           "type": "string"
         }
       },

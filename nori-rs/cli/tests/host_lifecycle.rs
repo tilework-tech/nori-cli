@@ -178,6 +178,67 @@ fn detached_host_stays_alive_empty_and_stops_explicitly() {
     success(host.run(&["host", "stop"]));
 }
 
+/// Rewrite the running host's `host.json` so it advertises `contract`, as an
+/// older or newer `nori` would.
+fn advertise_contract(host: &Host, contract: &str) {
+    let path = host.0.path().join("host/host.json");
+    let mut discovery: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    discovery["contract"] = serde_json::json!(contract);
+    std::fs::write(&path, discovery.to_string()).unwrap();
+}
+
+fn discovery(host: &Host) -> serde_json::Value {
+    serde_json::from_str(&std::fs::read_to_string(host.0.path().join("host/host.json")).unwrap())
+        .unwrap()
+}
+
+#[test]
+fn starting_beside_a_host_of_another_contract_fails_and_leaves_it_running() {
+    let host = Host::new();
+    success(host.run(&["host", "--port", "0"]));
+    advertise_contract(&host, "2.0.0");
+    let before = discovery(&host);
+
+    let refused = failure(host.run(&["host", "--port", "0"]));
+
+    assert!(refused.contains("2.0.0"), "{refused}");
+    assert!(refused.contains(nori_protocol::HOST_CONTRACT), "{refused}");
+    assert!(refused.contains("NORI_HOME"), "{refused}");
+    assert_eq!(discovery(&host), before);
+    success(host.run(&["host", "ls"]));
+}
+
+#[test]
+fn starting_beside_a_host_of_a_compatible_contract_reuses_it() {
+    let host = Host::new();
+    success(host.run(&["host", "--port", "0"]));
+    advertise_contract(&host, "1.7.0");
+    let before = discovery(&host);
+
+    let again = success(host.run(&["host", "--port", "0"]));
+
+    assert!(again.contains("already running"), "{again}");
+    assert_eq!(discovery(&host), before);
+}
+
+#[test]
+fn a_host_in_another_home_runs_beside_an_incompatible_one_and_leaves_it_alone() {
+    let incompatible = Host::new();
+    success(incompatible.run(&["host", "--port", "0"]));
+    advertise_contract(&incompatible, "2.0.0");
+    let path = incompatible.0.path().join("host/host.json");
+    let published = std::fs::read(&path).unwrap();
+
+    let own = Host::new();
+    success(own.run(&["host", "--port", "0"]));
+    success(own.run(&["host", "ls"]));
+    success(own.run(&["host", "stop"]));
+
+    assert_eq!(std::fs::read(&path).unwrap(), published);
+    success(incompatible.run(&["host", "ls"]));
+}
+
 #[test]
 fn host_token_is_private_and_never_printed() {
     let host = Host::new();

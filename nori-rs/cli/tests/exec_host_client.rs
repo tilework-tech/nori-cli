@@ -123,6 +123,59 @@ fn exec_runs_its_prompt_on_the_homes_running_host() {
     );
 }
 
+impl RunningHost {
+    /// Rewrite `host.json` so the host advertises `contract`, as an older or
+    /// newer `nori` would.
+    fn advertise_contract(&self, contract: &str) {
+        let path = self.0.path().join("host/host.json");
+        let mut discovery: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        discovery["contract"] = json!(contract);
+        std::fs::write(&path, discovery.to_string()).unwrap();
+    }
+}
+
+#[test]
+fn exec_runs_on_its_own_host_when_the_running_one_speaks_another_contract() {
+    let host = RunningHost::start();
+    host.advertise_contract("2.0.0");
+    let folder = TempDir::new().unwrap();
+
+    let output = host.exec(folder.path(), &["hello"]);
+
+    assert!(
+        stdout(&output).starts_with("Test message 1Test message 2"),
+        "{output:?}"
+    );
+    assert!(
+        !folder.path().join("marker.txt").exists(),
+        "the incompatible host was left alone"
+    );
+    let stopped = nori(host.0.path()).args(["host", "stop"]).output().unwrap();
+    assert!(
+        String::from_utf8_lossy(&stopped.stdout).contains("Host stopped"),
+        "{stopped:?}"
+    );
+}
+
+#[test]
+fn exec_runs_on_a_running_host_of_a_newer_compatible_contract() {
+    let host = RunningHost::start();
+    host.advertise_contract("1.7.0");
+    let folder = TempDir::new().unwrap();
+
+    let output = host.exec(folder.path(), &["hello"]);
+
+    assert!(
+        stdout(&output).starts_with("Test message 1Test message 2"),
+        "{output:?}"
+    );
+    assert!(
+        folder.path().join("marker.txt").exists(),
+        "the running host's agent ran the prompt"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn exec_runs_on_its_own_host_while_another_client_controls_the_running_one() {
     let host = RunningHost::start();

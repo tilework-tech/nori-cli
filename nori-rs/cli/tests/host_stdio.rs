@@ -437,7 +437,7 @@ async fn a_stale_discovery_file_leaves_the_stdio_client_a_host_of_its_own() {
     std::fs::write(
         &discovery,
         json!({"endpoint": endpoint, "token": "stale", "pid": 1, "instanceId": "stale",
-               "version": "0", "contract": {"acp": 1, "nori": 1}, "startedBy": "test"})
+               "version": "0", "contract": "1.0.0", "startedBy": "test"})
         .to_string(),
     )
     .unwrap();

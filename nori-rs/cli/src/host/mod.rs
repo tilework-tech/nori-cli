@@ -431,10 +431,7 @@ async fn serve(
             pid,
             instance_id: host.instance.clone(),
             version: env!("CARGO_PKG_VERSION").to_owned(),
-            contract: nori_protocol::HostContractVersions {
-                acp: 1,
-                nori: acp::handshake::CONTRACT,
-            },
+            contract: nori_protocol::HOST_CONTRACT.to_owned(),
             started_by: std::env::var("NORI_HOST_STARTED_BY")
                 .ok()
                 .filter(|started_by| !started_by.trim().is_empty())

@@ -2719,7 +2719,11 @@ export interface NewSessionMeta {
  * `$NORI_HOME/host/host.json`, the host's discovery file.
  */
 export interface HostDiscovery {
-  contract: HostContractVersions;
+  /**
+   * The semver of the host wire contract the host serves ([`HOST_CONTRACT`]
+   * of its build). See [`host_serves_contract`].
+   */
+  contract: string;
   /**
    * `ws://127.0.0.1:<port>/sessions`.
    */
@@ -2735,13 +2739,10 @@ export interface HostDiscovery {
    */
   token: string;
   /**
-   * The `nori` version serving the host.
+   * The `nori` version serving the host. Informational: compatibility
+   * is decided by `contract` alone.
    */
   version: string;
-}
-export interface HostContractVersions {
-  acp: number;
-  nori: number;
 }
 /**
  * Result of `_nori/control/status` and `_nori/control/take`, and

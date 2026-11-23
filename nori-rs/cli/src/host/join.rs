@@ -26,13 +26,11 @@ pub(super) enum Joined {
 /// contract. Reading it does not touch the host lock; only connecting proves
 /// the host is alive.
 pub(super) fn compatible_discovery(home: &Path) -> Option<nori_protocol::HostDiscovery> {
-    let path = home.join("host").join("host.json");
-    if !path.exists() {
-        return None;
+    let discovery = super::state::HostFiles {
+        directory: home.join("host"),
     }
-    let discovery: nori_protocol::HostDiscovery =
-        serde_json::from_reader(super::state::private_open(&path, false).ok()?).ok()?;
-    (discovery.contract.acp == 1 && discovery.contract.nori == super::acp::handshake::CONTRACT)
+    .read_discovery()?;
+    nori_protocol::host_serves_contract(&discovery.contract, nori_protocol::HOST_CONTRACT)
         .then_some(discovery)
 }
 
