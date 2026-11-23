@@ -137,12 +137,8 @@ impl App {
             tui.frame_requester().schedule_frame();
             return Ok(true);
         }
-        // A released cloud session keeps its history and the release
-        // confirmation on screen above the picker.
-        if !self.cloud_mode {
-            self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
-            self.session_reprint_pending = true;
-        }
+        self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
+        self.session_reprint_pending = true;
         self.cancel_primary_agent_preparation();
         self.discard_candidate();
         self.pending_session_activation = None;
@@ -153,6 +149,10 @@ impl App {
         let init = self.chat_widget_init(tui.frame_requester(), None, Vec::new(), None, true, None);
         self.install_active_widget(ChatWidget::new(init));
         self.configure_new_chat_widget();
+        if self.cloud_mode {
+            self.chat_widget
+                .add_info_message("Session closed (released).".to_string(), None);
+        }
         self.deferred_spawn_pending = true;
         self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Picker {
             fallback_to_spawn: false,
