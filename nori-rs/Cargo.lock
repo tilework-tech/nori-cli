@@ -3840,6 +3840,8 @@ dependencies = [
  "supports-color",
  "tempfile",
  "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
  "toml",
  "tracing",
  "unicode-segmentation",

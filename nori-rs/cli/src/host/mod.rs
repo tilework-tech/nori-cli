@@ -1,12 +1,14 @@
 //! Background session host commands and local discovery.
 
 mod acp;
+mod join;
 mod local_stdio;
 mod oneshot;
 mod recovery_control;
 mod recovery_history;
 mod service;
 mod session_lookup;
+mod start;
 mod state;
 mod stdio;
 mod table;
@@ -14,8 +16,6 @@ mod transcripts;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use std::process::Command;
-use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -177,10 +177,6 @@ pub(crate) struct AttachCommand {
 }
 
 pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        config.multi_session,
-        "nori attach requires [features] multi_session = true"
-    );
     let mut refresh_local_token = None;
     let (endpoint, token) = if let Some(endpoint) = command.host {
         let path = command.token_file.context("--token-file is required")?;
@@ -264,12 +260,31 @@ pub(crate) async fn run(
                 println!("No host running.");
                 return Ok(());
             }
-            let (mut client, _) = connect(&files).await?;
-            // Shutdown may close the socket before its reply. Ownership is
-            // released only after session cleanup, so wait for the lock below.
-            client
-                .send(json!({"jsonrpc":"2.0","id":2,"method":"_nori/host/stop","params":{}}))
-                .await?;
+            match connect(&files).await {
+                Ok((mut client, _)) => {
+                    // Shutdown may close the socket before its reply. Ownership is
+                    // released only after session cleanup, so wait for the lock below.
+                    client
+                        .send(
+                            json!({"jsonrpc":"2.0","id":2,"method":"_nori/host/stop","params":{}}),
+                        )
+                        .await?;
+                }
+                // A host at its client limit refuses this connection; the
+                // host holding the lock stops the same way on SIGTERM.
+                #[cfg(unix)]
+                Err(error) => {
+                    let (host, _) = files.read()?;
+                    let pid = libc::pid_t::try_from(host.pid)?;
+                    anyhow::ensure!(
+                        unsafe { libc::kill(pid, libc::SIGTERM) } == 0,
+                        "could not reach the host ({error:#}) or signal it: {}",
+                        std::io::Error::last_os_error()
+                    );
+                }
+                #[cfg(not(unix))]
+                Err(error) => return Err(error),
+            }
             let deadline = Instant::now() + Duration::from_secs(30);
             while files.running()? {
                 anyhow::ensure!(
@@ -318,7 +333,7 @@ pub(crate) async fn run(
             )
             .await
         }
-        None => start(&files).await,
+        None => start::start(&files).await,
     }
 }
 
@@ -343,64 +358,6 @@ async fn connect_endpoint(
     })
     .await
     .context("host did not answer")?
-}
-
-async fn start(files: &HostFiles) -> anyhow::Result<()> {
-    if let Ok((_, host)) = connect(files).await {
-        println!("Host already running (pid {})  {}", host.pid, host.endpoint);
-        return Ok(());
-    }
-    let log_path = files.directory.join("host.log");
-    let log = state::private_open(&log_path, true)?;
-    // Append through cloned handles without exposing output pipes to the daemon.
-    use std::io::Seek;
-    let mut log = log;
-    log.seek(std::io::SeekFrom::End(0))?;
-    let mut command = Command::new(std::env::current_exe()?);
-    command
-        .args(std::env::args_os().skip(1))
-        .arg("--foreground")
-        .stdin(Stdio::null())
-        .stdout(log.try_clone()?)
-        .stderr(log);
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        // Only the async-signal-safe syscall runs between fork and exec.
-        unsafe {
-            command.pre_exec(|| {
-                if libc::setsid() == -1 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                Ok(())
-            });
-        }
-    }
-    let mut child = command.spawn().context("could not start host process")?;
-    let deadline = Instant::now() + Duration::from_secs(15);
-    loop {
-        if let Ok((_, host)) = connect(files).await {
-            println!("Host started (pid {})  {}", host.pid, host.endpoint);
-            println!(
-                "Token: {} (owner-only)",
-                files.directory.join("token").display()
-            );
-            return Ok(());
-        }
-        if let Some(status) = child.try_wait()? {
-            anyhow::bail!(
-                "host exited during startup ({status}); check {}",
-                log_path.display()
-            );
-        }
-        if Instant::now() >= deadline {
-            // This is the child we just spawned, not a PID from stale state.
-            let _ = child.kill();
-            let _ = child.wait();
-            anyhow::bail!("host startup timed out; check {}", log_path.display());
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
 }
 
 async fn serve(
@@ -446,14 +403,23 @@ async fn serve(
     } else {
         None
     };
+    let max_clients = config.host.max_clients.max(1);
     let host = host_service(config, overrides, manager, launches, recovery);
-    let server = RemoteAcpServer::bind_host(
+    let server = RemoteAcpServer::bind_host_with_limit(
         format!("127.0.0.1:{port}").parse()?,
         host.clone(),
         token.clone(),
+        max_clients,
     )
     .await?;
-    let endpoint = format!("ws://{}/sessions", server.local_addr());
+    // A managed host keeps its legacy `/sessions` wire; every other host
+    // publishes the ACP remote transport path.
+    let path = if host.launches.is_some() {
+        "sessions"
+    } else {
+        "acp"
+    };
+    let endpoint = format!("ws://{}/{path}", server.local_addr());
     let pid = i64::from(std::process::id());
     // `state.json` is what `nori host` waits for, so `host.json` must exist
     // before it does.

@@ -293,47 +293,6 @@ fn cancel_sets_cancelling_but_does_not_end_turn() {
 }
 
 #[test]
-fn request_scoped_cancel_only_cancels_the_matching_turn() {
-    let mut rt = new_runtime();
-    let mut norm = new_normalizer();
-
-    reduce(
-        &mut rt,
-        InboundEvent::PromptSubmit(simple_prompt()),
-        &mut norm,
-    );
-    let active_request_id = rt
-        .active
-        .as_ref()
-        .expect("prompt should be active")
-        .request_id
-        .clone();
-    let stale = reduce(
-        &mut rt,
-        InboundEvent::CancelSubmitFor {
-            request_id: request_id("stale-turn"),
-        },
-        &mut norm,
-    );
-    assert!(stale.events.is_empty());
-    assert!(stale.side_effects.is_empty());
-    assert_eq!(rt.phase_view(), SessionPhaseView::Prompt);
-
-    let matching = reduce(
-        &mut rt,
-        InboundEvent::CancelSubmitFor {
-            request_id: active_request_id,
-        },
-        &mut norm,
-    );
-    assert!(has_side_effect(&matching.side_effects, |effect| matches!(
-        effect,
-        SideEffect::SendCancel
-    )));
-    assert_eq!(rt.phase_view(), SessionPhaseView::Cancelling);
-}
-
-#[test]
 fn double_cancel_is_noop() {
     let mut rt = new_runtime();
     let mut norm = new_normalizer();

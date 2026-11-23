@@ -21,7 +21,6 @@ async fn started_session(
                     active_agent: "mock-model".into(),
                     cwd: home.into(),
                     nori_home: home.into(),
-                    multi_session: true,
                     ..Default::default()
                 }),
                 cli_version: "action-failure-test".into(),

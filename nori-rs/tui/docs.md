@@ -394,8 +394,7 @@ the foreground (`ChatWidget::set_foreground`) and when a view stacked above it
 closes (`BottomPane::on_active_view_complete`), since the request beneath is
 newly visible. The `/delegate` approval prompt
 opts in through `SelectionViewParams.answer_guard`; other selection views
-carry no guard. This applies with or without `[features] multi_session`, since
-the overlay is shared. `nori attach` applies the same guard to its own request
+carry no guard. The overlay is shared by every session. `nori attach` applies the same guard to its own request
 prompts (see the [attach docs](src/attach/docs.md)). Filesystem requests do not enter this path because the host
 handles them. Terminal and extension request families are not advertised by
 the current host.
@@ -629,7 +628,7 @@ turn is not part of the transcript, so it stays in the viewport.
 Terminal scrollback belongs to one session at a time. A resume that replaces a
 live session therefore starts an empty transcript and runs this reprint before
 the resumed session replays, so `/new` followed by `/resume` shows each turn
-once. This applies with or without `[features] multi_session`. A resume that
+once. A resume that
 must first prepare its agent clears when the sessionless placeholder widget
 takes over instead, so the "Resuming session with" message the placeholder
 prints stays with the resumed session; the later activation does not clear
@@ -677,8 +676,8 @@ follows `SessionForked` to the child ID. `NoriEvent::RequestResolved`, which
 the manager adds when any handle answers a pending request, reaches the widget
 through `BottomPane::dismiss_request`: every open view gets
 `BottomPaneView::dismiss_request`, and `ApprovalOverlay` drops the matching
-request from its current slot or queue, so an approval answered by a
-remote-control client closes the TUI modal too. Views that hold no requests
+request from its current slot or queue, so an approval answered through
+another handle closes the TUI modal too. Views that hold no requests
 keep the default no-op. The `/agent` candidate's process is an
 ordinary manager session; `CandidateAgent` holds only UI flow state (picker,
 preparation, activation capture). The pre-session `PreparedAgent` that `App`
@@ -689,13 +688,6 @@ invariant: cloud stays picker-first and sessionless until the user chooses a
 session, and a candidate stays hidden until it publishes `SessionStarted`. Only
 the plain-local and per-session-skillset startup paths auto-activate; the
 prepared/candidate connection lifecycle and teardown are otherwise unchanged.
-
-A prepared agent carrying the recognized Nori remote-control active-session
-marker bypasses both primary and switch-candidate pickers. The TUI emits its
-existing resume action for the advertised stable session ID, and the harness
-uses `session/load` on that same connection without issuing `session/list` or
-`session/new`. A failed automatic load leaves the primary session unattached or
-the candidate uncommitted; it never creates a replacement session.
 
 When ordinary agent startup fails, the handler records the complete failure in
 history and opens the agent picker as the recovery action. Because that
@@ -781,8 +773,8 @@ a live candidate without changing the active `ChatWidget`; the private
 phases. The current and candidate subprocesses coexist while the candidate
 initializes and while its session picker is open. Choosing a session activates
 the candidate in a separate widget, and `SessionStarted` is the commit event:
-only then does `App` swap widgets, persist the selected agent, and shut down
-(or, with `[features] multi_session`, park) the replaced session. Until that event, positional or deferred input remains owned
+only then does `App` swap widgets, persist the selected agent, and park the
+replaced session. Until that event, positional or deferred input remains owned
 by the current widget; after commit it transfers to the candidate and is
 submitted once. Preparation failure, activation failure, picker dismissal,
 supersession, or application exit tears down only the candidate and leaves the
@@ -815,14 +807,6 @@ subprocess actually reads `auth.json`, since that subprocess is spawned with
 `CODEX_HOME` stripped (see `@/nori-rs/acp-host/docs.md`). The resolver
 deliberately ignores `$CODEX_HOME` because the subprocess ignores it too.
 
-The app-owned `HarnessRemoteHost` follows the same commit boundary. `App`
-attaches the stable host only after the active widget publishes
-`SessionStarted`, seeding identity from that observed event. During a switch it
-keeps following the current session until the candidate reaches that same
-commit event, so a failed or cancelled candidate cannot displace the current
-remote session. Listener enablement is independent of attachment: the host
-continues following the active harness while remote control is off.
-
 An orderly ACP close completes the typed close call, leaves the raw close
 response observable on the stream, observes `SessionEnded(Closed)`, and then
 handles stream closure. The TUI does not render a successful close-response
@@ -840,12 +824,12 @@ Every path that replaces the active widget calls
 [`session_setup.rs`](src/app/session_setup.rs) and
 [`session_view.rs`](src/app/session_view.rs)); a loop iteration is the
 exception and shuts the replaced session down directly so it is never parked
-(see the multi-session view below). Without `[features]
-multi_session`, shutting down a replaced session, a discarded candidate, or the
-old widget after a switch commits goes through `SessionManager::close` with the
-widget's managed conversation ID (with the cloud detach grace when in cloud
-mode). That
-ID follows branch-at-head forks. Exit keeps its existing path: the active
+(see the multi-session view below). A replaced widget that has a harness
+session or managed conversation is parked; one without either, and an
+activating candidate that is discarded, shuts down through
+`ChatWidget::shutdown_harness_session`, which calls `SessionManager::close`
+with the widget's managed conversation ID (with the cloud detach grace in
+cloud mode). That ID follows branch-at-head forks. Exit keeps its existing path: the active
 session shuts down through its handle and a candidate is discarded, so exit
 latency is unchanged; the TUI does not call `SessionManager::shutdown`.
 Preparation generations apply the
@@ -931,9 +915,9 @@ welcome-card identity, rejects local-only commands, and selects cloud
 detach/reattach wording. Reattach copy does not promise whether history is
 replayed because that is selected independently from ACP capabilities.
 Quitting an attached cloud session detaches through connection teardown;
-`/close` is available only in cloud mode and remains gated by the facade's
-`session/close` support, except that with `[features] multi_session` a local
-`/close` closes the session on screen (see the multi-session view below).
+`/close` in cloud mode remains gated by the facade's `session/close` support;
+a local `/close` closes the session on screen (see the multi-session view
+below).
 
 #### Queued follow-ups
 
@@ -1018,12 +1002,10 @@ Enter/e / Delete/x in the focused list (no popup or overlay)
 
 #### Multi-session view
 
-`[features] multi_session` (resolved as `NoriConfig.multi_session`) lets one
-TUI hold many live sessions and show one at a time. Without the flag, every
-path below is inert: replacing a session shuts it down, the session hotkeys,
-`/sessions`, and status lines do not exist, and widgets use an unscoped event
-sender. The only always-on part is the resume reprint described under inline
-transcript reflow.
+The TUI always holds many live sessions and shows one at a time; there is no
+feature flag (the former `[features] multi_session` key is ignored if
+present). The session hotkeys, `/sessions`, `/delegate`, and the status lines
+are always available, and `[tui] max_sessions` always caps the manager.
 
 These are interactive conveniences for one terminal. Long-lived sessions under
 remote or programmatic control belong to the background host
@@ -1043,15 +1025,15 @@ App
 - **Session deck.** [`SessionDeck`](src/app/session_deck.rs) keeps every
   session generation in a stable navigation order that status changes never
   reorder, and holds each off-screen session as a parked `ChatWidget` with its
-  own transcript, unsent input, and pending requests. With the flag, `/new`,
+  own transcript, unsent input, and pending requests. `/new`,
   `/resume`, the `/agent` "start new" path, a committed agent switch, and fork
   to an earlier message park the previous session instead of closing it:
   `shutdown_current_conversation` moves the live transcript aside and
   `install_active_widget` parks the old widget behind the new one, appending
-  the new session to the order. Without the flag the new widget takes the old
-  one's place in the order. Because the previous session keeps running, `/new`
-  does not print a `nori resume` hint for it. With the flag, `/new`, `/agent`,
-  and `/resume` pass the busy-task gate in
+  the new session to the order. A replaced widget with no live session instead
+  gives its place in the order to the new one. Because the previous session
+  keeps running, starting a new session prints no token-usage summary or
+  `nori resume` hint for it. `/new`, `/agent`, and `/resume` pass the busy-task gate in
   [`key_handling.rs`](src/chatwidget/key_handling.rs): the busy session is
   parked and keeps working, and the next prompt goes to the new session.
 - **Blank sessions.** A widget with no managed conversation and no harness
@@ -1065,7 +1047,7 @@ App
   the last target. The reprint waits while an overlay or the alternate screen
   is up, and a target with an active stream is reflowed again when the stream
   finishes. The shown session's agent becomes `App.config`'s active agent.
-- **History routing.** With the flag, each widget's `AppEventSender` is scoped
+- **History routing.** Each widget's `AppEventSender` is scoped
   to its session generation (`for_session` in
   [`app_event_sender.rs`](src/app_event_sender.rs)), wrapping
   `InsertHistoryCell` and `ConsolidateAgentMessage` in
@@ -1112,13 +1094,12 @@ a binding).
 | `open_session_list` | `alt+s` | Needs the composer in front |
 | `parent_session` | `alt+up` | On a delegated child (record source `Session` with a parent) shows the parent's widget. Elsewhere it is consumed and does nothing: the queue and any draft stay untouched, and it never reaches history recall |
 
-The Hotkeys view lists these actions only with the flag
-(`HotkeyAction::is_multi_session`).
+The Hotkeys view lists these actions with every other hotkey.
 
 The session list ([`SessionListView`](src/bottom_pane/session_list_view.rs))
 opens three ways, all intended: Left on an empty prompt (the documented
 default, behind `LEFT_ON_EMPTY_PROMPT_OPENS_SESSION_LIST`), `open_session_list`,
-or `/sessions` (hidden from the slash popup without the flag). Left with text
+or `/sessions`. Left with text
 in the prompt still moves the cursor.
 
 - Rows use the shared two-row session layout from
@@ -1143,8 +1124,7 @@ in the prompt still moves the cursor.
 - The title is the agent's own title from an ACP `session_info_update` or the
   prompt summary, whichever came last (a cleared agent title falls back to the
   first prompt), else the session's first user message as seen in
-  `UserMessageChunk` updates (so a prompt sent by a remote-control client also
-  titles it), else the widget's first prompt, cut to its first line. The host
+  `UserMessageChunk` updates (so a prompt sent by another client also titles it), else the widget's first prompt, cut to its first line. The host
   journal follows the same rule. Rows carry that whole line; the Session
   column (`cut_middle`) cuts it once, in the middle, to the column width, so
   sibling names sharing a long prefix keep their distinct ends. Notifications
@@ -1242,10 +1222,10 @@ Both path lines are built by [`session_path.rs`](src/session_path.rs), which
 | `fit_name(text, cells)` | Cuts by display cells in the middle (start, `…`, end), so names sharing a long prefix stay distinct; used for every session name on these lines. Delegates to `nori_tui_components::text::truncate_middle`, the same cut the session lists' Session columns use |
 
 While an `/agent` candidate is preparing, a dim `Preparing <agent>…` line sits
-above these. With the flag this replaces the history cell that single-session
-mode adds, so the session on screen keeps no line about another session.
+above these. No history cell is added for it, so the session on screen keeps
+no line about another session.
 
-Session lifecycle with the flag lives in
+Session lifecycle lives in
 [`session_lifecycle.rs`](src/app/session_lifecycle.rs):
 
 ```text
@@ -1259,7 +1239,8 @@ row reads `closed`/`done` ── Ctrl+D ──> AppEvent::RemoveSession ──> 
 cloud /close ──> session/close ──> SessionEnded(Closed)
         ──> AppEvent::SessionClosed{generation} ──> App::on_session_closed
               another open session? show it (released one stays listed closed)
-              none? park it and open the agent session picker
+              none? park it, open the agent session picker, and (cloud)
+                    add "Session closed (released)." to the new picker screen
 ```
 
 - **Session cap.** `App` builds its `SessionManager` with
@@ -1280,10 +1261,16 @@ cloud /close ──> session/close ──> SessionEnded(Closed)
   that widget's `SessionEnded(Shutdown)` from being read as "exit Nori". The
   closed widget stays in the deck so its row and transcript remain;
   `remove_session` drops it only when it is closed and not on screen.
-- **`/close`.** A local `/close` with the flag bypasses the cloud-only gate in
+- **`/close`.** A local `/close` bypasses the cloud-only gate in
   [`goal.rs`](src/chatwidget/goal.rs) and sends `CloseSession` for the session
   on screen. In cloud mode it still calls `session/close`
-  ([`session_close.rs`](src/chatwidget/session_close.rs)).
+  ([`session_close.rs`](src/chatwidget/session_close.rs)), which reports only
+  failure (`SessionCloseFailed`). The success confirmation is added by
+  `App::on_session_closed` to the fresh picker widget that replaces the
+  released session: a confirmation sent from the closing widget would be
+  tagged with that widget's generation and could arrive after the picker took
+  its place, filing it in the closed session's transcript where it is never
+  shown.
   `AppEvent::SessionClosed` carries the closing widget's generation, and a
   close from a session that is no longer on screen is ignored.
 - **Loop iterations.** `AppEvent::LoopIteration` carries the generation of the
@@ -1292,15 +1279,6 @@ cloud /close ──> session/close ──> SessionEnded(Closed)
   on-screen iteration takes the screen as before; a background iteration builds
   a non-deferred widget for the same agent, parks it in place with the old
   transcript, and never takes over the screen.
-- **Remote control.** The manager remembers each committed session's handle
-  and identity, including starts delivered to parked widgets. The on-screen
-  widget selects the default target; starting a background session does not
-  take it over. A legacy `/acp` connection pins that default when it connects
-  and stays on it across local navigation. A subsequent connection adopts the
-  newly selected default. Unstarted and ended on-screen sessions clear that
-  default, and removed or replaced widgets release their remembered handle.
-  The managed `/sessions` endpoint supports explicit
-  targets independently of the screen; see [the wire contract](../../docs/remote-control.md).
 
 The ignored `jump_timing_on_a_long_history` PTY test measures a jump to a
 long history; the reprint is bounded by the same cell and row caps as resize
@@ -1309,8 +1287,8 @@ reflow.
 #### Delegation
 
 `/delegate <agent> <task>` is the user entry point in the local and attached
-frontends. It is enabled only with `multi_session`; the session list does not
-start delegations. [`delegation.rs`](src/delegation.rs) holds the command
+frontends and is always offered; the session list does not start
+delegations. [`delegation.rs`](src/delegation.rs) holds the command
 parser and all delegation presentation shared by both frontends; naming and
 status words come from `nori_protocol`'s delegation helpers so the harness
 notices, result prompts, and terminal text agree. The
@@ -1390,8 +1368,8 @@ acknowledged a result turn. See the [manager lifecycle](../harness/docs.md#deleg
 
 #### Host attachment
 
-[`attach`](src/attach/docs.md) is the dedicated frontend for `nori attach`,
-entered only with `multi_session`. It consumes host-owned manager envelopes
+[`attach`](src/attach/docs.md) is the dedicated frontend for `nori attach`.
+It consumes host-owned manager envelopes
 through the harness's `ManagedClient` re-export. It does not construct the
 local process-owning `App`, launch agents, or shut down sessions when its
 terminal closes. Its session list and selected conversation are terminal-local;
@@ -1407,80 +1385,19 @@ permission answers require controller status locally and on the server. Socket
 recovery retains view state and resumes from applied per-session sequence
 cursors; mutation requests are never retransmitted. See the
 [host contract](../../docs/remote-control.md#11-background-host-and-attached-terminals)
-for command behavior and the distinction from the legacy listener below.
+for command behavior.
 
-#### Remote ACP transport activation
+#### No remote listener
 
-`--remote <ADDR>` (in [`cli.rs`](src/cli.rs)) serves the running interactive
-session as a remote ACP agent over WebSocket, per
-`@/docs/remote-control.md`. [`App`](src/app/) owns one
-[`RemoteControlManager`](src/remote_control.rs) for the complete run. Startup
-`--remote` and runtime commands both enter this manager, which retains one
-stable `HarnessRemoteHost`, owns every `RemoteAcpServer` listener, and shuts the
-listeners down on exit. With `multi_session` it also exposes a
-`ManagedRemoteHost` over the same app-owned `SessionManager` at `/sessions`.
-All remote types reach the TUI through
-`nori_harness::remote_agent` re-exports, preserving the dependency boundary.
-
-The client-owned `/remote-control` command is handled before active-session
-validation, so it never becomes an agent prompt and works while no agent is
-active. Its forms are:
-
-| Form | Runtime behavior |
-| --- | --- |
-| bare or `on` | Bind exact loopback on an allocated port. |
-| `on tailnet` | Require `tailscale status --json` to report a running node and exact IPv4, then bind loopback and that address on one shared port. |
-| `on IP:PORT` | Bind loopback and the exact address; a non-loopback address first opens a red, one-shot confirmation that is not persisted. |
-| `off` | Disconnect the controller and stop all listeners while preserving the host and harness. |
-| `status` | Report scope, reachable endpoints, and controller state. |
-
-Wildcard addresses are rejected. Successful enable and status results become
-durable history cells containing every reachable `ws://.../acp` URL, always
-including loopback while enabled. Local-only mode may suggest `on tailnet` when
-Tailscale is available, but does not present a tailnet URL until it is bound.
-An explicit loopback target, including IPv6 loopback supplied at startup or at
-runtime, is still classified as local-only and receives the same hint.
-
-A bare startup port remains loopback-only. An exact non-loopback startup
-address requires `--remote-allow-nonloopback`; after that gate it is normalized
-to loopback plus the exact address on the requested port. Runtime replacement
-normally binds the complete new surface before stopping the old one. When the
-new target reuses an exact nonzero address already owned by the old surface,
-the manager must shut down and await the old listeners first so the port can be
-rebound. It first snapshots the old target and exact addresses; if the new bind
-fails, it restores that surface and returns the original error, with the old
-controller disconnected and able to reconnect. Only a restoration bind failure
-leaves remote control off, and the user-visible error includes both failures.
-Repeating the active target is idempotent.
-
-The same-port replacement and rollback tests in
-[`remote_control.rs`](src/remote_control.rs) each run in an isolated test
-process. Concurrent subprocess launches elsewhere in the suite can briefly
-inherit a listening socket until exec, keeping its address occupied after the
-owning test closes it. Isolation preserves the close/rebind assertions without
-retrying replacement or rollback.
-
-Without `multi_session`, on every active session's `SessionStarted`,
-[`App`](src/app/event_handling.rs) attaches its stable host using the observed
-identity, even if listeners are
-disabled. During a candidate switch, the old host attachment remains until
-the replacement reaches that commit event. Committing the replacement closes
-any current controller; after reconnecting, it discovers the new conversation
-through `_meta.nori.remoteControl.activeSessionId` plus `session/load`; ordinary
-ACP clients can continue to discover it through `session/list` on the same
-configured listener endpoints. All remote types reach the TUI through
-`nori_harness::remote_agent` re-exports, preserving the rule that the TUI never
-imports the ACP host crate directly.
-
-While a remote controller drives the session, the TUI stays attached to the
-same handle and ordered event stream and renders remote-driven activity as an
-observer. Canonical user prompt chunks reach both consumers, including the
-frontend that submitted the prompt. The remote host rewrites only the outward
-session id on forwarded updates and sends delegated permission requests to its
-controller only when that controller owns the turn; the TUI continues to
-observe the same request on its own stream. The transport retains one remote
-controller, while the fan-out can feed future bounded observers. Policy for
-simultaneous local and remote input is deliberately deferred by the spec.
+The interactive TUI serves no remote endpoint. The earlier `--remote` /
+`--remote-allow-nonloopback` flags, the `/remote-control` command, the
+TUI-owned listener lifecycle, and the unauthenticated `/acp` endpoint it
+exposed were removed in favor of the background host: remote and multi-client
+access goes through `nori host` and its [attached frontend](src/attach/docs.md),
+and `/acp` is now that host's authenticated endpoint
+(see `@/docs/remote-control.md`). Prepared agents are no longer inspected for
+the old `nori.remoteControl` initialize marker, so every startup follows the
+ordinary picker or activation path.
 
 #### Footer configuration
 
@@ -1699,8 +1616,8 @@ part of the public harness protocol.
   selection.
 - Replace the active widget only through `shutdown_current_conversation` then
   `install_active_widget`. Assigning `App.chat_widget` directly skips parking
-  and the navigation order, so a multi-session session would be lost or leak.
-- With `[features] multi_session`, history from a widget must reach `App`
+  and the navigation order, so a session would be lost or leak.
+- History from a widget must reach `App`
   through its session-scoped sender. Printing a parked session's history
   directly would put it in the active session's scrollback.
 - Session-scoped `AppEvent`s that can arrive after the screen moved
@@ -1713,9 +1630,7 @@ part of the public harness protocol.
   a check against `Closed` alone misses finished delegated children.
 - The queued-message preview reflects the harness queue, not composer history.
   Composer history already holds each queued text, so editing a recalled
-  history entry and submitting it still delivers the queued original too; only
-  a reclaim through `HarnessHandle::reclaim_queued_prompt` removes it. With
-  or without `multi_session`, Alt+Up only navigates to a parent; outside a
+  history entry and submitting it still delivers the queued original too; only a reclaim through `HarnessHandle::reclaim_queued_prompt` removes it. Alt+Up only navigates to a parent; outside a
   delegated child it does nothing rather than reaching the queue or history
   recall.
 - `nori-config` is the source of approval and sandbox policy; ACP session config

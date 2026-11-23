@@ -4,9 +4,6 @@ use super::*;
 impl App {
     /// Adopt manager-started children without replacing the parent's widget.
     pub(super) fn adopt_delegated_sessions(&mut self, tui: &crate::tui::Tui) {
-        if !self.config.multi_session {
-            return;
-        }
         let known: std::collections::HashSet<_> = self
             .session_facts()
             .into_iter()

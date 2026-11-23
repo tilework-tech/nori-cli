@@ -21,7 +21,7 @@ fn mock_agent_binary() -> String {
 
 /// A running host whose default agent is the mock, with `extra` appended to
 /// its configuration and `env` passed to its agents.
-fn host_with(extra: &str, env: &[(&str, &str)]) -> Host {
+pub(super) fn host_with(extra: &str, env: &[(&str, &str)]) -> Host {
     let host = Host::new();
     std::fs::write(
         host.0.path().join("config.toml"),
@@ -53,15 +53,15 @@ fn connect(host: &Host) -> ManagedClient {
     })
 }
 
-fn controller(host: &Host) -> Acp {
+pub(super) fn controller(host: &Host) -> Acp {
     Acp::new(tokio::task::block_in_place(|| host.client()))
 }
 
-fn watcher(host: &Host) -> Acp {
+pub(super) fn watcher(host: &Host) -> Acp {
     Acp::new(tokio::task::block_in_place(|| host.observer()))
 }
 
-async fn new_session(acp: &mut Acp, folder: &std::path::Path) -> (String, Value) {
+pub(super) async fn new_session(acp: &mut Acp, folder: &std::path::Path) -> (String, Value) {
     let result = acp
         .call(
             "session/new",
@@ -72,7 +72,7 @@ async fn new_session(acp: &mut Acp, folder: &std::path::Path) -> (String, Value)
     (result["sessionId"].as_str().unwrap().to_owned(), result)
 }
 
-fn text(text: &str) -> Value {
+pub(super) fn text(text: &str) -> Value {
     json!([{"type": "text", "text": text}])
 }
 

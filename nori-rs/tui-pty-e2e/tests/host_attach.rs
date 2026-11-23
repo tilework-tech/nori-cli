@@ -44,7 +44,7 @@ impl Host {
         std::fs::write(
             home.path().join("config.toml"),
             format!(
-                "agent = \"mock-model\"\n[features]\nmulti_session = true\n\
+                "agent = \"mock-model\"\n\
                  [projects.{quoted_cwd}]\ntrust_level = \"trusted\"\n"
             ),
         )
@@ -64,7 +64,7 @@ impl Host {
     }
 
     fn args(args: &[&str]) -> Vec<String> {
-        ["-c", "features.multi_session=true", "--agent", "mock-model"]
+        ["--agent", "mock-model"]
             .into_iter()
             .chain(args.iter().copied())
             .map(str::to_owned)
@@ -749,7 +749,9 @@ fn same_port_host_restart_stops_reconnecting_and_explains_session_loss() {
         .as_str()
         .unwrap()
         .trim_start_matches("ws://")
-        .trim_end_matches("/sessions")
+        .split('/')
+        .next()
+        .unwrap()
         .parse()
         .unwrap();
     let old_token = std::fs::read(host.home.path().join("host/token")).unwrap();

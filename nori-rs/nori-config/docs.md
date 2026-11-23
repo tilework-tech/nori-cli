@@ -60,21 +60,25 @@ re-formats a project written as an inline table so an added field stays tidy.
 The TUI's directory-trust onboarding step uses both edits.
 
 `[features]` holds opt-in behavior flags, resolved to plain booleans on
-`NoriConfig`. `multi_session` (default `false`) lets the TUI hold several
-sessions and move between them; it is read once at startup. `[tui]
+`NoriConfig`. `FeaturesToml` does not deny unknown keys, so a retired flag such
+as `multi_session` (several sessions per TUI is now always on) left in a
+user's `config.toml` is silently ignored rather than failing the load. `[tui]
 max_sessions` resolves to `NoriConfig.max_sessions`, defaulting to
 `DEFAULT_MAX_SESSIONS` (eight) and clamped to at least one; the TUI passes it
 to the harness `SessionManager` as its capacity. `[tui.hotkeys]`
 resolves every `HotkeyAction` to a `HotkeyBinding`, with per-action defaults
 from `HotkeyAction::default_binding`. The session-move actions
 (`previous_session`, `next_session`, `next_waiting_session`,
-`open_session_list`, `parent_session`) always resolve, but `HotkeyAction::is_multi_session`
-marks them so frontends ignore and hide them unless `multi_session` is on.
+`open_session_list`, `parent_session`) resolve and are listed like every other
+action.
 
 `[host]` configures the background host. `default_mode` (`ask`, `agent` or
 `approve-all`, as `HostDefaultMode`) is the permission mode a local host gives
 sessions that clients start with ACP `session/new`; unset keeps each folder's
-own `approval_policy`. The other keys configure the managed machine listener.
+own `approval_policy`. `max_clients` (default `DEFAULT_MAX_CLIENTS`, 16) is
+the most WebSocket clients a non-managed background host serves at once across
+`/acp` and `/sessions`; the loader does not clamp it, and the host treats a
+value below 1 as 1. The other keys configure the managed machine listener.
 `managed` and `side_sessions`
 default to false. For both shared and dedicated layouts, `max_sessions` defaults
 to eight process slots and must be positive. A dedicated binding can use

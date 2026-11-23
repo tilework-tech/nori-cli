@@ -186,7 +186,9 @@ impl NoriClientService {
         Parameters(DelegateRequest { agent, task }): Parameters<DelegateRequest>,
     ) -> Result<CallToolResult, McpError> {
         let Some(context) = &self.shared.delegation_context else {
-            return Ok(tool_error("delegation requires multi_session"));
+            return Ok(tool_error(
+                "delegation is available only in sessions the session manager runs",
+            ));
         };
         match context.delegate(agent, task).await {
             Ok(delegation) => Ok(tool_success(

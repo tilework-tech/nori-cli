@@ -41,19 +41,21 @@ used in production.
 - `harness/` owns session orchestration, private reduction, transcripts, goals,
   undo, hooks, worktrees, history, and the embeddable runtime API. Its public
   event stream is an ordered fan-out: one primary frontend receiver plus
-  bounded subscribers such as the remote ACP host. Its `session_manager` module
+  bounded subscribers. Its `session_manager` module
   keeps a registry of live sessions (one agent process each) keyed by
   conversation ID; the TUI starts all of its sessions through it.
 - `acp-host/` owns the client-side ACP SDK, subprocess lifecycle, JSON-RPC
   connection, agent registry, delegated requests, and host-handled filesystem
-  operations. It also owns the optional remote ACP transport: a WebSocket
-  server that serves the running interactive session outward as an ACP Agent
-  through a `HostedAgent` trait that `harness/` implements, preserving the
-  `nori-harness -> nori-acp-host` dependency direction. The TUI owns startup
-  `--remote` and runtime `/remote-control` listener policy around that server
-  (see [the wire contract](../docs/remote-control.md)). A separate authenticated
-  managed listener serves the background host with controller/watcher roles;
-  its server and client retain the same downward dependency boundary.
+  operations. It also owns the remote ACP transport the background host
+  (`nori host`) serves: an authenticated WebSocket at `/acp` (the ACP
+  remote transport's WebSocket profile, `/sessions` as an alias) with
+  controller/watcher roles and a `[host] max_clients` limit, plus stdio and
+  pipe variants, behind a
+  `ManagedAgent` trait that `harness/` implements over its `SessionManager`,
+  preserving the `nori-harness -> nori-acp-host` dependency direction (see
+  [the wire contract](../docs/remote-control.md)). The interactive TUI opens
+  no listener; the earlier, unrelated unauthenticated TUI `/acp` surface
+  (`--remote`, `/remote-control`) was removed.
 - `nori-protocol/` owns no behavior. It exports `nori_protocol::acp`,
   `SessionEvent::{Acp, Nori}`, and the session manager's `SessionEnvelope` and
   `SessionStatus` types.
@@ -90,11 +92,11 @@ product crates.
   modes; the `acp` mode value still exists but nothing sends it since
   `nori exec --acp` became the headless host. Resume is not a mode or event; a resumed interactive session
   reports only if a new prompt reaches the transport.
-- The outward ACP surfaces are the background host's standard ACP face and
-  the interactive remote WebSocket projection. The host serves its face on an
-  authenticated `/sessions` WebSocket and, for one client, on stdio
-  (`nori host --stdio`, aliased by `nori exec --acp`); its lifetime is
-  independent of connected terminals.
+- The outward ACP surface is the background host's standard ACP face. The
+  host serves it to any number of clients on an authenticated `/acp`
+  WebSocket (alias `/sessions`) and on stdio (`nori host --stdio`, aliased by
+  `nori exec --acp`, which relays to the running host when it can and
+  otherwise runs a private one); its sessions outlive every client.
 - Rust 2024 and strict workspace lints apply. Add only the derive traits a
   public boundary type actually needs.
 

@@ -334,9 +334,7 @@ impl SessionManager {
             process
         };
 
-        if config.multi_session {
-            config.delegation_context = Some(DelegationContext::new(&self.shared, process));
-        }
+        config.delegation_context = Some(DelegationContext::new(&self.shared, process));
         match &mut agent_source {
             SessionAgentSource::Prepared(agent) => {
                 if let Some(activation) = agent.activation_config_mut() {

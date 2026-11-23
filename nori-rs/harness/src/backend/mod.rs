@@ -31,7 +31,6 @@ use crate::transcript::TranscriptRecorder;
 use crate::undo::GhostSnapshotStack;
 
 mod follow_up;
-mod remote_control_ext;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PromptAdmission {
@@ -156,8 +155,6 @@ pub fn enhance_agent_error(
 pub struct AcpBackendConfig {
     /// Agent name used to look up agent in registry
     pub agent: String,
-    /// Enable manager-owned delegation for this session.
-    pub multi_session: bool,
     /// Session/process-bound authority for the internal delegation tool.
     pub delegation_context: Option<crate::session_manager::DelegationContext>,
     /// Working directory for the session

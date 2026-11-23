@@ -1,4 +1,4 @@
-//! Several sessions in one TUI, behind `[features] multi_session`.
+//! Several sessions in one TUI.
 //!
 //! Each session runs on its own mock agent process. The scrollback always
 //! belongs to the session on screen: moving to another session clears it and
@@ -16,7 +16,6 @@ const BETA_ANSWER: &str = "beta agent answer";
 
 fn multi_session_config() -> SessionConfig {
     SessionConfig::new()
-        .with_extra_config_toml("[features]\nmulti_session = true\n")
         .with_agent_env("MOCK_AGENT_RESPONSE_MOCK_MODEL", ALPHA_ANSWER)
         .with_agent_env("MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT", BETA_ANSWER)
 }
@@ -135,26 +134,6 @@ fn session_moves_reprint_only_the_target_and_keep_unsent_input() {
         history.matches("first alpha question").count(),
         1,
         "each alpha turn appears once after the reprint:\n{history}"
-    );
-}
-
-#[test]
-#[cfg(target_os = "linux")]
-fn session_keys_do_nothing_without_the_flag() {
-    let config = SessionConfig::new()
-        .with_agent_env("MOCK_AGENT_RESPONSE_MOCK_MODEL", ALPHA_ANSWER)
-        .with_agent_env("MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT", BETA_ANSWER);
-    let mut session = spawn(config);
-    ask(&mut session, "first alpha question", ALPHA_ANSWER);
-    start_alt_session(&mut session);
-    ask(&mut session, "first beta question", BETA_ANSWER);
-
-    session.send_key(Key::Alt(',')).unwrap();
-    session.settle(Duration::from_secs(1));
-    let history = session.history_contents();
-    assert!(
-        history.contains("first alpha question") && history.contains("first beta question"),
-        "single-session use keeps appending one history:\n{history}"
     );
 }
 
@@ -291,9 +270,8 @@ fn jump_timing_on_a_long_history() {
 #[test]
 #[cfg(target_os = "linux")]
 fn session_moves_follow_the_bindings_in_config() {
-    let config = multi_session_config().with_extra_config_toml(
-        "[features]\nmulti_session = true\n\n[tui.hotkeys]\nprevious_session = \"alt+j\"\n",
-    );
+    let config = multi_session_config()
+        .with_extra_config_toml("[tui.hotkeys]\nprevious_session = \"alt+j\"\n");
     let mut session = spawn(config);
     ask(&mut session, "first alpha question", ALPHA_ANSWER);
     start_alt_session(&mut session);

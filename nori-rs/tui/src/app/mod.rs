@@ -51,41 +51,14 @@ pub struct AppExitInfo {
     pub update_action: Option<UpdateAction>,
 }
 
-fn session_summary(
-    token_usage: TokenUsage,
-    conversation_id: Option<ConversationId>,
-    conversation_has_activity: bool,
-) -> Option<SessionSummary> {
-    let usage_line = (!token_usage.is_zero()).then(|| token_usage.to_string());
-    let resume_command = conversation_id
-        .filter(|_| conversation_has_activity)
-        .map(|conversation_id| resume_command_for_conversation(&conversation_id));
-
-    if usage_line.is_none() && resume_command.is_none() {
-        return None;
-    }
-
-    Some(SessionSummary {
-        usage_line,
-        resume_command,
-    })
-}
-
 pub fn resume_command_for_conversation(conversation_id: &ConversationId) -> String {
     format!("nori resume {conversation_id}")
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct SessionSummary {
-    usage_line: Option<String>,
-    resume_command: Option<String>,
 }
 
 pub(crate) struct App {
     pub(crate) app_event_tx: AppEventSender,
     pub(crate) chat_widget: ChatWidget,
     pub(crate) auth_manager: Arc<AuthManager>,
-    remote_control: crate::remote_control::RemoteControlManager,
     /// Registry of every session this process runs. The active widget's
     /// session and a hidden `/agent` switch candidate are both entries.
     session_manager: nori_harness::session_manager::SessionManager,
@@ -106,7 +79,7 @@ pub(crate) struct App {
     session_deck: session_deck::SessionDeck<Box<ChatWidget>>,
     adopted_delegations: std::collections::HashSet<ConversationId>,
     /// The active session's transcript, taken when that session is about to be
-    /// parked behind a new one. Set only with `[features] multi_session`.
+    /// parked behind a new one.
     retiring_transcript: Option<Vec<Arc<dyn HistoryCell>>>,
     /// The active session changed and the terminal must be reprinted on the
     /// next draw. Several jumps before a draw reprint once.
@@ -268,7 +241,6 @@ impl App {
         vertical_footer: bool,
         cloud_mode: bool,
         cloud_onboard: bool,
-        startup_remote_addr: Option<std::net::SocketAddr>,
         analytics: Option<nori_installed::AnalyticsReporter>,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
@@ -282,15 +254,12 @@ impl App {
         // a later user/session decision, after any per-session skillset setup.
         let needs_deferred_spawn = true;
         let mut pending_session_activation = None;
-        let session_manager =
-            nori_harness::session_manager::SessionManager::new(if config.multi_session {
-                nori_harness::session_manager::SessionManagerConfig {
-                    max_sessions: config.max_sessions,
-                    ..nori_harness::session_manager::SessionManagerConfig::default()
-                }
-            } else {
-                nori_harness::session_manager::SessionManagerConfig::default()
-            });
+        let session_manager = nori_harness::session_manager::SessionManager::new(
+            nori_harness::session_manager::SessionManagerConfig {
+                max_sessions: config.max_sessions,
+                ..nori_harness::session_manager::SessionManagerConfig::default()
+            },
+        );
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -351,11 +320,6 @@ impl App {
             app_event_tx,
             chat_widget,
             auth_manager: auth_manager.clone(),
-            remote_control: if config.multi_session {
-                crate::remote_control::RemoteControlManager::with_sessions(session_manager.clone())
-            } else {
-                crate::remote_control::RemoteControlManager::new()
-            },
             session_manager,
             config,
             vertical_footer,
@@ -397,22 +361,7 @@ impl App {
             mcp_oauth_cancel_tx: None,
         };
 
-        if let Some(addr) = startup_remote_addr {
-            let report = app
-                .remote_control
-                .enable_startup(addr, false)
-                .await
-                .map_err(|error| color_eyre::eyre::eyre!(error))?;
-            for url in report.urls() {
-                tracing::info!("remote ACP transport listening on {url}");
-            }
-            app.chat_widget.add_boxed_history(Box::new(
-                crate::history_cell::new_remote_control_event(report.lines()),
-            ));
-        }
-
         app.session_deck.add(app.chat_widget.session_generation());
-        crate::slash_command::set_multi_session_commands(app.config.multi_session);
 
         // Propagate NoriConfig settings to the textarea.
         app.hotkey_config = app.config.hotkeys.clone();
@@ -527,10 +476,6 @@ impl App {
 
         tui.frame_requester().schedule_frame();
 
-        app.remote_control.select_session(
-            app.chat_widget.session_generation(),
-            app.chat_widget.managed_conversation_id(),
-        );
         while select! {
             Some(event) = app_event_rx.recv() => {
                 app.handle_event(tui, event).await?
@@ -538,12 +483,7 @@ impl App {
             Some(event) = tui_events.next() => {
                 app.handle_tui_event(tui, event).await?
             }
-        } {
-            app.remote_control.select_session(
-                app.chat_widget.session_generation(),
-                app.chat_widget.managed_conversation_id(),
-            );
-        }
+        } {}
 
         app.cancel_primary_agent_preparation();
         if let Some(agent) = app.prepared_agent.take() {
@@ -551,7 +491,6 @@ impl App {
         }
         app.prepared_agent_initial_context = None;
         app.discard_candidate();
-        app.remote_control.disable().await;
 
         // Don't clear terminal to allow exit message to remain visible
         // tui.terminal.clear()?;

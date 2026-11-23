@@ -189,9 +189,7 @@ fn alt_up_at_the_root_leaves_the_queue_and_the_draft_alone() {
 #[test]
 #[cfg(target_os = "linux")]
 fn alt_up_at_the_root_leaves_the_queue_and_the_draft_alone_with_several_sessions_enabled() {
-    alt_up_at_the_root_keeps_queue_and_draft(
-        SessionConfig::new().with_extra_config_toml("[features]\nmulti_session = true\n"),
-    );
+    alt_up_at_the_root_keeps_queue_and_draft(SessionConfig::new());
 }
 
 #[test]

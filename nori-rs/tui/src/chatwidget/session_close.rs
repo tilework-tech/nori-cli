@@ -2,7 +2,6 @@
 
 use super::ChatWidget;
 use crate::app_event::AppEvent;
-use crate::history_cell;
 
 impl ChatWidget {
     /// Release this cloud session through the agent's `session/close`.
@@ -14,20 +13,12 @@ impl ChatWidget {
         self.session_close_in_flight = true;
         let tx = self.app_event_tx.clone();
         tokio::spawn(async move {
-            match handle.close_session().await {
-                Ok(()) => {
-                    tx.send(AppEvent::InsertHistoryCell(Box::new(
-                        history_cell::new_info_event(
-                            "Session closed (released).".to_string(),
-                            None,
-                        ),
-                    )));
-                }
-                Err(e) => {
-                    tx.send(AppEvent::SessionCloseFailed {
-                        message: format!("{e}"),
-                    });
-                }
+            // Success ends the session; the app confirms the release on
+            // the screen that replaces it.
+            if let Err(e) = handle.close_session().await {
+                tx.send(AppEvent::SessionCloseFailed {
+                    message: format!("{e}"),
+                });
             }
         });
     }

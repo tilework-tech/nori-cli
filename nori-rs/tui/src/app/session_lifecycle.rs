@@ -1,5 +1,4 @@
-//! Closing sessions, the session cap, and loop iterations, with
-//! `[features] multi_session`.
+//! Closing sessions, the session cap, and loop iterations.
 //!
 //! A closed session stays in the session list, marked closed, until the user
 //! removes it, so it is clear what happened to it. Loop iterations replace
@@ -20,7 +19,7 @@ impl App {
     /// With several sessions, refuse to start another one at the cap and say
     /// how to make room. Returns true when the start was refused.
     pub(super) fn refuse_at_session_cap(&mut self) -> bool {
-        if !self.config.multi_session || self.session_manager.free_slots() > 0 {
+        if self.session_manager.free_slots() > 0 {
             return false;
         }
         let limit = self.session_manager.max_sessions();
@@ -119,7 +118,6 @@ impl App {
             return;
         }
         self.session_deck.remove(generation);
-        self.remote_control.forget_session(generation);
     }
 
     /// A session released through `/close`. With another session open, that
@@ -131,20 +129,16 @@ impl App {
         generation: SessionGeneration,
     ) -> Result<bool> {
         let active = self.chat_widget.session_generation();
-        if self.config.multi_session {
-            if generation != active {
-                return Ok(true);
-            }
-            if let Some(next) = self.next_open_session(generation) {
-                self.show_session(next);
-                tui.frame_requester().schedule_frame();
-                return Ok(true);
-            }
-            self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
-            self.session_reprint_pending = true;
-        } else if generation != active {
+        if generation != active {
             return Ok(true);
         }
+        if let Some(next) = self.next_open_session(generation) {
+            self.show_session(next);
+            tui.frame_requester().schedule_frame();
+            return Ok(true);
+        }
+        self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
+        self.session_reprint_pending = true;
         self.cancel_primary_agent_preparation();
         self.discard_candidate();
         self.pending_session_activation = None;
@@ -155,6 +149,10 @@ impl App {
         let init = self.chat_widget_init(tui.frame_requester(), None, Vec::new(), None, true, None);
         self.install_active_widget(ChatWidget::new(init));
         self.configure_new_chat_widget();
+        if self.cloud_mode {
+            self.chat_widget
+                .add_info_message("Session closed (released).".to_string(), None);
+        }
         self.deferred_spawn_pending = true;
         self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Picker {
             fallback_to_spawn: false,
@@ -225,7 +223,6 @@ impl App {
                 .replace(generation, next)
                 .map(|old| old.transcript)
                 .unwrap_or_default();
-            self.remote_control.forget_session(generation);
             self.session_deck.park(
                 next,
                 ParkedSession {

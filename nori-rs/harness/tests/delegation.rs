@@ -35,13 +35,12 @@ use env::EnvGuard;
 
 const WAIT: Duration = Duration::from_secs(20);
 
-fn spec(home: &Path, enabled: bool) -> AgentPrepareSpec {
+fn spec(home: &Path) -> AgentPrepareSpec {
     AgentPrepareSpec {
         config: Arc::new(NoriConfig {
             active_agent: "mock-model".into(),
             cwd: home.into(),
             nori_home: home.into(),
-            multi_session: enabled,
             ..Default::default()
         }),
         cli_version: "delegation-test".into(),
@@ -49,10 +48,10 @@ fn spec(home: &Path, enabled: bool) -> AgentPrepareSpec {
         initial_context: None,
     }
 }
-fn start(manager: &SessionManager, home: &Path, enabled: bool) -> ManagedSession {
+fn start(manager: &SessionManager, home: &Path) -> ManagedSession {
     manager
         .start(StartSession {
-            agent: SessionAgent::Prepare(spec(home, enabled)),
+            agent: SessionAgent::Prepare(spec(home)),
             start: SessionStart::New,
             parent: None,
             source: SessionSource::User,
@@ -128,7 +127,7 @@ async fn wait_parent_reply(parent: &mut ManagedSession, child: &str) -> String {
 async fn same_kind_starts_immediately_and_retains_child_history_after_releasing_slot() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(2);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let d = m
         .delegate(
@@ -156,7 +155,7 @@ async fn a_declined_delegation_reaches_the_parent_agent_without_a_session_id() {
     let _echo = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let mut p = start(&m, home.path(), true);
+    let mut p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let d = m
         .delegate(
@@ -188,7 +187,7 @@ async fn a_delegation_as_first_input_titles_the_parent_with_its_task_not_the_res
     let _echo = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let mut p = start(&m, home.path(), true);
+    let mut p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let d = m
         .delegate(
@@ -228,7 +227,7 @@ async fn a_delegation_as_first_input_titles_the_parent_with_its_task_not_the_res
 async fn the_session_list_marks_a_top_level_session_whose_child_waits_on_you() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let d = m
         .delegate(
@@ -259,7 +258,7 @@ async fn the_session_list_marks_a_top_level_session_whose_child_waits_on_you() {
 async fn different_kind_waits_for_approval_and_decline_never_launches() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let d = m
         .delegate(
@@ -306,7 +305,7 @@ async fn different_kind_waits_for_approval_and_decline_never_launches() {
 async fn depth_two_is_allowed_and_depth_three_is_rejected() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(5);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let a = m
         .delegate(
@@ -339,7 +338,7 @@ async fn depth_two_is_allowed_and_depth_three_is_rejected() {
 async fn child_permission_belongs_to_child_and_family_reports_waiting() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let mut events = m.subscribe(4096);
     let d = m
@@ -426,7 +425,7 @@ async fn result_is_automatically_submitted_as_attributed_parent_input() {
     let _echo = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let mut p = start(&m, home.path(), true);
+    let mut p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let d = m
         .delegate(
@@ -480,7 +479,7 @@ async fn result_is_automatically_submitted_as_attributed_parent_input() {
 async fn closing_parent_cancels_running_descendants_and_pending_approvals() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(5);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let a = m
         .delegate(
@@ -535,7 +534,7 @@ async fn closing_parent_cancels_running_descendants_and_pending_approvals() {
 async fn child_crash_returns_failure_without_failing_parent() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let mut p = start(&m, home.path(), true);
+    let mut p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let d = m
         .delegate(
@@ -566,7 +565,7 @@ async fn child_crash_returns_failure_without_failing_parent() {
 async fn competing_children_share_the_same_session_cap() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(2);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let (a, b) = tokio::join!(
         m.delegate(
@@ -586,29 +585,12 @@ async fn competing_children_share_the_same_session_cap() {
 }
 #[tokio::test]
 #[serial]
-async fn flag_off_rejects_delegation_without_starting_child() {
-    let home = tempfile::tempdir().unwrap();
-    let m = manager(3);
-    let p = start(&m, home.path(), false);
-    status(&m, &p.conversation_id, SessionStatus::Ready).await;
-    assert!(
-        m.delegate(&p.conversation_id, "mock-model".into(), "task".into())
-            .await
-            .unwrap_err()
-            .to_string()
-            .contains("multi_session")
-    );
-    assert_eq!(m.list().len(), 1);
-    m.shutdown(Duration::ZERO).await;
-}
-#[tokio::test]
-#[serial]
 async fn actual_agent_mcp_request_starts_child_and_nested_results_finish_once() {
     let _http = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
     let _echo = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
     let home = tempfile::tempdir().unwrap();
     let m = manager(4);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let mut events = m.subscribe(4096);
     p.handle
@@ -679,7 +661,7 @@ async fn crashed_parent_preserves_child_and_result_reaches_stable_resume() {
     let _response = EnvGuard::set("MOCK_AGENT_RESPONSE", "held unique result");
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let d = m
         .delegate(
@@ -700,7 +682,7 @@ async fn crashed_parent_preserves_child_and_result_reaches_stable_resume() {
     );
     let _echo = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
     let mut resumed = m
-        .resume(&p.conversation_id, spec(home.path(), true))
+        .resume(&p.conversation_id, spec(home.path()))
         .await
         .unwrap();
     assert_eq!(resumed.conversation_id, p.conversation_id);
@@ -727,7 +709,7 @@ async fn crashed_parent_preserves_child_and_result_reaches_stable_resume() {
 async fn closing_crashed_parent_still_cancels_child() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let d = m
         .delegate(
@@ -755,7 +737,7 @@ async fn closing_crashed_parent_still_cancels_child() {
 async fn approval_racing_parent_close_cannot_leave_a_running_child() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let d = m
         .delegate(
@@ -782,7 +764,7 @@ async fn child_result_waits_in_busy_parent_queue() {
     let delay = EnvGuard::set("MOCK_AGENT_DELAY_MS", "1000");
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let mut p = start(&m, home.path(), true);
+    let mut p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     drop(delay);
     p.handle.prompt(text("finish parent work")).await.unwrap();
@@ -823,8 +805,8 @@ async fn child_result_waits_in_busy_parent_queue() {
 async fn only_requesting_parent_can_resolve_and_concurrent_approval_starts_one_child() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(5);
-    let p = start(&m, home.path(), true);
-    let other = start(&m, home.path(), true);
+    let p = start(&m, home.path());
+    let other = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     status(&m, &other.conversation_id, SessionStatus::Ready).await;
     let d = m
@@ -848,42 +830,13 @@ async fn only_requesting_parent_can_resolve_and_concurrent_approval_starts_one_c
     assert_eq!(m.list().len(), 3);
     m.shutdown(Duration::ZERO).await;
 }
-#[tokio::test]
-#[serial]
-async fn flag_off_agent_cannot_invoke_delegate_over_mcp() {
-    let _http = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
-    let home = tempfile::tempdir().unwrap();
-    let m = manager(3);
-    let mut p = start(&m, home.path(), false);
-    status(&m, &p.conversation_id, SessionStatus::Ready).await;
-    let request = p
-        .handle
-        .prompt(text("mock:delegate mock-model forbidden child"))
-        .await
-        .unwrap();
-    tokio::time::timeout(WAIT, async {
-        loop {
-            if let SessionEvent::Acp(AcpEvent::Response { request_id, .. }) =
-                p.events.recv().await.unwrap().event
-                && request_id == request
-            {
-                break;
-            }
-        }
-    })
-    .await
-    .unwrap();
-    assert_eq!(m.list().len(), 1);
-    assert!(m.delegations(&p.conversation_id).is_empty());
-    m.shutdown(Duration::ZERO).await;
-}
 
 #[tokio::test]
 #[serial]
 async fn cancelling_child_reports_cancelled_to_parent() {
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let d = m
         .delegate(

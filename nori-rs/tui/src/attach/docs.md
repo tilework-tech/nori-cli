@@ -11,8 +11,7 @@ Path: @/nori-rs/tui/src/attach
 
 ### How it fits into the larger codebase
 
-- [CLI host dispatch](../../../cli/src/host/docs.md) supplies a resolved endpoint
-  and token after enforcing `multi_session`, plus the attaching terminal's
+- [CLI host dispatch](../../../cli/src/host/docs.md) supplies a resolved endpoint and token, plus the attaching terminal's
   configuration, whose `cwd` (the attaching directory, or `-C`) is where
   `/new` starts sessions. This frontend is separate from the
   local TUI `App`, whose shutdown owns its local sessions.

@@ -1,5 +1,5 @@
 #![cfg(unix)]
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod standard_acp;
 
@@ -69,10 +69,7 @@ impl Host {
 
     fn command(&self, args: &[&str]) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_nori"));
-        command
-            .env("NORI_HOME", self.0.path())
-            .args(["-c", "features.multi_session=true"])
-            .args(args);
+        command.env("NORI_HOME", self.0.path()).args(args);
         command
     }
 
@@ -212,18 +209,6 @@ fn occupied_port_fails_without_publishing_a_host() {
     assert!(!host.run(&["host", "ls"]).status.success());
     drop(listener);
     success(host.run(&["host", "--port", &port]));
-}
-
-#[test]
-fn attach_requires_multi_session_before_opening_terminal() {
-    let host = Host::new();
-    let result = bounded_output(
-        Command::new(env!("CARGO_BIN_EXE_nori"))
-            .env("NORI_HOME", host.0.path())
-            .args(["attach"]),
-    );
-    assert!(!result.status.success());
-    assert!(String::from_utf8_lossy(&result.stderr).contains("multi_session"));
 }
 
 #[test]
@@ -556,3 +541,6 @@ fn machine_transport_authenticates_before_upgrade() {
         );
     }
 }
+
+#[path = "host_lifecycle/remote_transport.rs"]
+mod remote_transport;

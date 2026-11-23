@@ -37,15 +37,6 @@ pub(super) fn onboarding_resume_event(
     })
 }
 
-pub(super) fn automatic_resume_event(
-    session_id: Option<&nori_protocol::acp::v1::SessionId>,
-) -> Option<AppEvent> {
-    session_id.map(|session_id| AppEvent::ResumeAcpSession {
-        acp_session_id: session_id.to_string(),
-        title: None,
-    })
-}
-
 impl App {
     /// Prepare a live pre-session agent (spawn → initialize → optional
     /// `session/list`) and report the still-owned connection as
@@ -158,13 +149,6 @@ impl App {
             .set_login_agent_override(Some(agent_name.clone()));
         let generation = crate::chatwidget::agent::next_session_generation();
         let config = self.config_for_agent(&agent_name);
-        // With several sessions the session lines say this instead, so the
-        // session on screen keeps no line about another session.
-        if !self.config.multi_session {
-            self.chat_widget
-                .add_info_message(format!("Preparing {display_name}…"), None);
-        }
-
         let spec = crate::chatwidget::agent::agent_prepare_spec(config, None);
         let tx = self.app_event_tx.clone();
         let prepared_agent_name = agent_name.clone();
@@ -248,12 +232,11 @@ impl App {
     }
 
     /// Let go of the active session before another widget takes its place.
-    /// With `[features] multi_session` a live session keeps running and is
-    /// parked when the next widget is installed; otherwise it shuts down.
+    /// A live session keeps running and is parked when the next widget is
+    /// installed; a session without one shuts down.
     pub(crate) fn shutdown_current_conversation(&mut self) {
-        if self.config.multi_session
-            && (self.chat_widget.has_harness_session()
-                || self.chat_widget.managed_conversation_id().is_some())
+        if self.chat_widget.has_harness_session()
+            || self.chat_widget.managed_conversation_id().is_some()
         {
             self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
         } else {
@@ -510,7 +493,6 @@ mod tests {
 
     use nori_protocol::acp::v1::SessionInfo;
 
-    use super::automatic_resume_event;
     use super::onboarding_resume_event;
     use crate::app_event::AppEvent;
 
@@ -538,17 +520,5 @@ mod tests {
         let ordinary = SessionInfo::new("ordinary", PathBuf::from("/"));
 
         assert!(onboarding_resume_event(vec![ordinary]).is_none());
-    }
-
-    #[test]
-    fn automatic_remote_control_session_bypasses_selection_with_resume_action() {
-        let session_id = nori_protocol::acp::v1::SessionId::new("remote-active");
-
-        assert!(matches!(
-            automatic_resume_event(Some(&session_id)),
-            Some(AppEvent::ResumeAcpSession { acp_session_id, title })
-                if acp_session_id == "remote-active" && title.is_none()
-        ));
-        assert!(automatic_resume_event(None).is_none());
     }
 }

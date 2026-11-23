@@ -1,4 +1,4 @@
-//! The session list and background requests, behind `[features] multi_session`.
+//! The session list and background requests.
 
 use std::time::Duration;
 use tui_pty_e2e::Key;
@@ -14,7 +14,6 @@ const BACKGROUND_REQUEST: &str = "mock:request-permission:rm -rf target/debug";
 
 fn config() -> SessionConfig {
     SessionConfig::new()
-        .with_extra_config_toml("[features]\nmulti_session = true\n")
         .with_agent_env("MOCK_AGENT_RESPONSE_MOCK_MODEL", ALPHA_ANSWER)
         .with_agent_env("MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT", BETA_ANSWER)
         .with_agent_env("MOCK_AGENT_PERMISSION_DELAY_MS", "1500")
@@ -198,23 +197,6 @@ fn enter_in_the_list_jumps_to_that_session() {
             Duration::from_secs(5),
         )
         .expect("Enter shows the chosen session");
-}
-
-#[test]
-#[cfg(target_os = "linux")]
-fn session_list_is_absent_without_the_flag() {
-    let mut session = TuiSession::spawn_with_config(30, 100, SessionConfig::new()).expect("spawn");
-    session
-        .wait_for_text("›", TIMEOUT)
-        .expect("TUI should start");
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Left).unwrap();
-    session.send_key(Key::Alt('s')).unwrap();
-    session.type_input("/sess").unwrap();
-    session.settle(Duration::from_millis(500));
-    let screen = session.screen_contents();
-    assert!(!screen.contains("Sessions"), "{screen}");
-    assert!(!screen.contains("/sessions"), "{screen}");
 }
 
 #[test]

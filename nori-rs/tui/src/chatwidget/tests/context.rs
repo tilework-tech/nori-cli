@@ -64,20 +64,18 @@ async fn context_requested_while_the_session_is_starting_still_prints_its_snapsh
     chat.dispatch_command(SlashCommand::Context);
     let printed = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         loop {
-            match rx.recv().await.expect("context event channel") {
-                AppEvent::ContextTimelineReady {
-                    generation,
-                    conversation_id,
-                    result,
-                } => {
-                    // The session reports its ID before the snapshot is ready.
-                    chat.conversation_id = Some(nori_harness::ConversationId::new());
-                    chat.handle_context_timeline(generation, conversation_id, result);
-                    break rx
-                        .try_recv()
-                        .is_ok_and(|event| matches!(event, AppEvent::InsertHistoryCell(_)));
-                }
-                _ => {}
+            if let AppEvent::ContextTimelineReady {
+                generation,
+                conversation_id,
+                result,
+            } = rx.recv().await.expect("context event channel")
+            {
+                // The session reports its ID before the snapshot is ready.
+                chat.conversation_id = Some(nori_harness::ConversationId::new());
+                chat.handle_context_timeline(generation, conversation_id, result);
+                break rx
+                    .try_recv()
+                    .is_ok_and(|event| matches!(event, AppEvent::InsertHistoryCell(_)));
             }
         }
     })

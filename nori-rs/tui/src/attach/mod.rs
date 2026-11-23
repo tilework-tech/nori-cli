@@ -29,10 +29,6 @@ pub async fn run_attach(
     config: nori_config::NoriConfig,
     options: AttachOptions,
 ) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        config.multi_session,
-        "nori attach requires [features] multi_session = true"
-    );
     let initial = ManagedClient::connect(&options.endpoint, &options.token).await?;
     let mut tui = crate::tui::Tui::new(crate::tui::init()?);
     let result = async {

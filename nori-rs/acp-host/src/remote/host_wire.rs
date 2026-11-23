@@ -1,4 +1,5 @@
-//! Authenticated managed-only WebSocket endpoint for a background host.
+//! Authenticated WebSocket endpoints for a background host: `/acp`, the
+//! WebSocket profile of the ACP remote transport, and its alias `/sessions`.
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicI64;
@@ -35,6 +36,8 @@ struct HostState<M> {
     instance: Arc<str>,
     control: Arc<Mutex<HostControl>>,
     generation: Arc<AtomicI64>,
+    clients: Arc<AtomicI64>,
+    max_clients: i64,
     shutdown: CancellationToken,
 }
 
@@ -47,6 +50,8 @@ impl<M> Clone for HostState<M> {
             instance: self.instance.clone(),
             control: self.control.clone(),
             generation: self.generation.clone(),
+            clients: self.clients.clone(),
+            max_clients: self.max_clients,
             shutdown: self.shutdown.clone(),
         }
     }
@@ -57,11 +62,14 @@ pub(super) fn router<M: ManagedAgent>(
     token: String,
     instance: String,
     control: Arc<Mutex<HostControl>>,
+    max_clients: i32,
     shutdown: CancellationToken,
 ) -> axum::Router {
     let mut router = axum::Router::new().route("/sessions", axum::routing::any(route::<M, false>));
     if host.standard_acp_enabled() {
         router = router.route("/managed", axum::routing::any(route::<M, true>));
+    } else {
+        router = router.route("/acp", axum::routing::any(route::<M, false>));
     }
     router.with_state(HostState {
         host,
@@ -70,6 +78,8 @@ pub(super) fn router<M: ManagedAgent>(
         instance: instance.into(),
         control,
         generation: Arc::new(AtomicI64::new(0)),
+        clients: Arc::new(AtomicI64::new(0)),
+        max_clients: i64::from(max_clients),
         shutdown,
     })
 }
@@ -101,13 +111,33 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
     let Ok(upgrade) = upgrade else {
         return (
             StatusCode::UPGRADE_REQUIRED,
-            "Use a WebSocket connection for managed sessions.",
+            [(axum::http::header::UPGRADE, "websocket")],
+            "This host serves ACP over WebSocket only; open a WebSocket connection.",
         )
             .into_response();
     };
+    // The legacy managed-mode wire is not limited.
+    let slot = if STANDARD || state.host.standard_acp_enabled() {
+        None
+    } else {
+        let Some(slot) = super::client_limit::ClientSlot::claim(&state.clients, state.max_clients)
+        else {
+            let limit = state.max_clients;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!(
+                    "This nori host already serves {limit} clients, its limit. Close another client, or raise [host] max_clients in config.toml and restart the host."
+                ),
+            )
+                .into_response();
+        };
+        Some(slot)
+    };
     let instance = state.instance.to_string();
+    let connection = uuid::Uuid::new_v4().to_string();
     let response = upgrade
         .on_upgrade(move |socket| async move {
+            let _slot = slot;
             let cancel = state.shutdown.child_token();
             if STANDARD {
                 tokio::select! {
@@ -132,7 +162,14 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
             state.control.lock().await.remove(client);
         })
         .into_response();
-    ([("x-nori-host-instance", instance)], response).into_response()
+    (
+        [
+            ("x-nori-host-instance", instance),
+            ("acp-connection-id", connection),
+        ],
+        response,
+    )
+        .into_response()
 }
 
 /// Outbound messages one connection may have queued before it counts as
@@ -159,14 +196,8 @@ async fn serve<M: ManagedAgent>(
     serve_frames(sink, incoming, state, client, cancel, Transport::WebSocket).await
 }
 
-/// Serve one host client on stdin and stdout until stdin closes or `stop`
-/// completes. A stop lets the reply already being written finish and
-/// returns the stop's value.
-pub(super) async fn serve_stdio<M: ManagedAgent, T>(
-    host: Arc<M>,
-    instance: String,
-    stop: impl std::future::Future<Output = T>,
-) -> anyhow::Result<Option<T>> {
+/// Lines of this process's stdin, without their newlines, until it closes.
+pub(super) fn stdin_lines() -> tokio::sync::mpsc::Receiver<std::io::Result<Vec<u8>>> {
     // A pending read on Tokio's stdin keeps the runtime from shutting down,
     // so lines are read on a plain thread that ends with the process.
     let (lines, input) = tokio::sync::mpsc::channel::<std::io::Result<Vec<u8>>>(64);
@@ -178,7 +209,19 @@ pub(super) async fn serve_stdio<M: ManagedAgent, T>(
             }
         }
     });
-    let incoming = tokio_stream::wrappers::ReceiverStream::new(input).filter_map(|line| async {
+    input
+}
+
+/// Serve one host client whose requests are `lines` and whose replies go to
+/// stdout, until `lines` ends or `stop` completes. A stop lets the reply
+/// already being written finish and returns the stop's value.
+pub(super) async fn serve_stdio<M: ManagedAgent, T>(
+    host: Arc<M>,
+    instance: String,
+    lines: impl futures::Stream<Item = std::io::Result<Vec<u8>>> + Send,
+    stop: impl std::future::Future<Output = T>,
+) -> anyhow::Result<Option<T>> {
+    let incoming = lines.filter_map(|line| async {
         match line.map(String::from_utf8) {
             Ok(Ok(line)) => Some(Ok(line)),
             // Not UTF-8, so not JSON either: a replacement character earns
@@ -242,6 +285,8 @@ async fn serve_lines<M: ManagedAgent, T>(
         instance: instance.into(),
         control: Default::default(),
         generation: Arc::new(AtomicI64::new(0)),
+        clients: Arc::new(AtomicI64::new(0)),
+        max_clients: 1,
         shutdown: shutdown.clone(),
     };
     let incoming = incoming.filter_map(|line| async {
@@ -410,7 +455,8 @@ where
                         Message::Ping(bytes) => send_frame(&mut sink, Message::Pong(bytes)).await?,
                         Message::Close(_) => break,
                         Message::Pong(_) => {},
-                        Message::Binary(_) => anyhow::bail!("managed sessions require text JSON frames"),
+                        // The ACP remote transport ignores binary frames.
+                        Message::Binary(_) => {},
                     }
                 }
                 event = async {

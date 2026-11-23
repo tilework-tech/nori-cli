@@ -8,8 +8,7 @@ use crate::TuiSession;
 ///
 /// Screen matching has to be whitespace-insensitive because the composer does
 /// not echo input back byte for byte: a leading `/` or `!` renders as a mode
-/// sigil followed by a space (`/remote-control status` becomes
-/// `/ remote-control status`), and long input wraps across lines.
+/// sigil followed by a space (`/status` becomes `/ status`), and long input wraps across lines.
 fn without_whitespace(text: &str) -> String {
     text.split_whitespace().collect()
 }

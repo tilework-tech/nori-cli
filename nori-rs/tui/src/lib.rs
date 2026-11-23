@@ -70,7 +70,6 @@ mod pager_overlay;
 mod pinned_plan_drawer;
 mod presentation;
 pub mod public_widgets;
-mod remote_control;
 mod render;
 mod resume_picker;
 mod session_log;
@@ -520,12 +519,6 @@ async fn run_ratatui_app(
 
     config.active_agent = nori_harness::resolve_agent_slug(&config.active_agent);
 
-    let startup_remote_addr = cli
-        .remote
-        .as_deref()
-        .map(|spec| nori_harness::remote_agent::parse_bind_addr(spec, cli.remote_allow_nonloopback))
-        .transpose()
-        .map_err(|error| color_eyre::eyre::eyre!(error.to_string()))?;
     let Cli {
         prompt,
         images,
@@ -545,7 +538,6 @@ async fn run_ratatui_app(
         vertical_footer,
         cloud_mode,
         cloud_onboard,
-        startup_remote_addr,
         analytics.clone(),
     )
     .await;

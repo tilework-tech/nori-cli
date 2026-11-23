@@ -251,21 +251,14 @@ impl App {
 
     /// Open the session list with the active session selected.
     pub(super) fn open_session_list(&mut self) {
-        if !self.config.multi_session {
-            return;
-        }
         let rows = self.session_rows();
         self.chat_widget.show_session_list(rows);
     }
 
     /// Refresh the lines about other sessions on the active widget. Runs
-    /// before every draw; with one session, or without
-    /// `[features] multi_session`, nothing is shown.
+    /// before every draw; with one session nothing is shown.
     /// `width` is the terminal width; the lines are fitted to one row each.
     pub(super) fn refresh_session_overview(&mut self, width: u16) {
-        if !self.config.multi_session {
-            return;
-        }
         let facts = self.session_facts();
         for fact in &facts {
             self.unseen_finishes

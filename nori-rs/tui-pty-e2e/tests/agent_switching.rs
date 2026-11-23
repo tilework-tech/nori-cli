@@ -457,9 +457,10 @@ fn test_agent_switch_activates_prepared_candidate() {
         process_exists_and_not_zombie(new_pid),
         "the prepared child must become the active agent"
     );
-    session
-        .wait_for(|_| !process_exists(initial_pid), Duration::from_secs(10))
-        .expect("the replaced process should be reaped after candidate SessionStarted");
+    assert!(
+        process_exists_and_not_zombie(initial_pid),
+        "the previous session keeps running in the background"
+    );
 
     session.submit_input("hello").unwrap();
     session

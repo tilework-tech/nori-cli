@@ -35,8 +35,6 @@ exec "$@"
         );
     let definition = format!(
         r#"
-[features]
-multi_session = true
 [[agents]]
 name = "Lab Agent"
 slug = "lab-agent"

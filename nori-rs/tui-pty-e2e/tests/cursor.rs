@@ -42,8 +42,7 @@ exec "$MOCK_ACP_AGENT_BIN"
         .with_excluded_binary("agent")
         .with_excluded_binary("cursor-agent")
         .with_agent_env("MOCK_ACP_AGENT_BIN", mock.to_str().unwrap())
-        .with_agent_env("CURSOR_API_KEY", "synthetic-cursor-key")
-        .with_extra_config_toml("[features]\nmulti_session = true");
+        .with_agent_env("CURSOR_API_KEY", "synthetic-cursor-key");
     (bin, config)
 }
 

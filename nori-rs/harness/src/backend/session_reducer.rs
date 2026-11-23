@@ -52,10 +52,6 @@ pub enum InboundEvent {
     /// The user requested cancellation of the active prompt.
     CancelSubmit,
     SteerSettled,
-    /// A controller requested cancellation only if it owns this prompt.
-    CancelSubmitFor {
-        request_id: acp::RequestId,
-    },
     /// A `session/load` was initiated.
     LoadSubmit {
         request_id: acp::RequestId,
@@ -74,7 +70,7 @@ pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
         InboundEvent::PromptStarted { .. } => "prompt_started",
         InboundEvent::PermissionRequest { .. } => "permission_request",
         InboundEvent::PromptSubmit(_) | InboundEvent::PromptSubmitIfIdle(_) => "prompt_submit",
-        InboundEvent::CancelSubmit | InboundEvent::CancelSubmitFor { .. } => "cancel_submit",
+        InboundEvent::CancelSubmit => "cancel_submit",
         InboundEvent::LoadSubmit { .. } => "load_submit",
         InboundEvent::ResumeQueue => "resume_queue",
     }
@@ -153,10 +149,7 @@ pub fn reduce(
             reduce_prompt_started(runtime, request_id, &mut out);
         }
         InboundEvent::CancelSubmit => {
-            reduce_cancel_submit(runtime, None, &mut out);
-        }
-        InboundEvent::CancelSubmitFor { request_id } => {
-            reduce_cancel_submit(runtime, Some(&request_id), &mut out);
+            reduce_cancel_submit(runtime, &mut out);
         }
         InboundEvent::LoadSubmit { request_id } => {
             reduce_load_submit(runtime, request_id, &mut out);
@@ -281,20 +274,13 @@ fn reduce_prompt_started(
 // Cancel submit
 // ---------------------------------------------------------------------------
 
-fn reduce_cancel_submit(
-    runtime: &mut SessionRuntime,
-    expected_request_id: Option<&acp::RequestId>,
-    out: &mut ReduceOutput,
-) {
+fn reduce_cancel_submit(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
     if let SessionPhase::Prompt {
         cancelling,
         request_id,
         ..
     } = &mut runtime.phase
     {
-        if expected_request_id.is_some_and(|expected| expected != request_id) {
-            return;
-        }
         if *cancelling {
             return; // double cancel is a no-op
         }

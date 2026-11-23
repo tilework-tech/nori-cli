@@ -372,6 +372,9 @@ pub struct HostConfig {
     pub side_sessions: bool,
     pub side_confinement: SideConfinement,
     pub max_sessions: i32,
+    /// Clients the background host serves at once over its WebSocket
+    /// endpoints (`/acp` and `/sessions`).
+    pub max_clients: i32,
     pub bindings_root: Option<PathBuf>,
     pub dedicated_roots: Option<DedicatedRoots>,
 }
@@ -384,6 +387,7 @@ impl Default for HostConfig {
             side_sessions: false,
             side_confinement: SideConfinement::default(),
             max_sessions: DEFAULT_MAX_SESSIONS,
+            max_clients: DEFAULT_MAX_CLIENTS,
             bindings_root: None,
             dedicated_roots: None,
         }
@@ -497,8 +501,6 @@ pub struct SandboxWorkspaceWrite {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct FeaturesToml {
     pub enable_experimental_windows_sandbox: Option<bool>,
-    /// Run several sessions in one TUI and move between them.
-    pub multi_session: Option<bool>,
 }
 
 /// Persisted safety notice acknowledgements.
@@ -1112,34 +1114,6 @@ impl HotkeyAction {
             Self::OpenSessionList,
             Self::ParentSession,
         ]
-    }
-
-    /// Whether the action moves between sessions, which only exists when
-    /// `[features] multi_session` is on.
-    pub fn is_multi_session(&self) -> bool {
-        match self {
-            Self::PreviousSession
-            | Self::NextSession
-            | Self::NextWaitingSession
-            | Self::OpenSessionList
-            | Self::ParentSession => true,
-            Self::OpenTranscript
-            | Self::OpenEditor
-            | Self::MoveBackwardChar
-            | Self::MoveForwardChar
-            | Self::MoveBeginningOfLine
-            | Self::MoveEndOfLine
-            | Self::MoveBackwardWord
-            | Self::MoveForwardWord
-            | Self::DeleteBackwardChar
-            | Self::DeleteForwardChar
-            | Self::DeleteBackwardWord
-            | Self::KillToEndOfLine
-            | Self::KillToBeginningOfLine
-            | Self::Yank
-            | Self::HistorySearch
-            | Self::TogglePlanDrawer => false,
-        }
     }
 }
 
@@ -2182,7 +2156,7 @@ pub struct TuiConfigToml {
     /// `None` or absent means disabled.
     pub loop_count: Option<i32>,
 
-    /// Most sessions that may run at once with `[features] multi_session`.
+    /// Most sessions that may run at once.
     pub max_sessions: Option<i32>,
 
     /// Automatically create a git worktree at session start.
@@ -2338,6 +2312,10 @@ pub struct ProjectConfig {
 /// Sessions allowed at once when `[tui] max_sessions` is not set.
 pub const DEFAULT_MAX_SESSIONS: i32 = 8;
 
+/// Clients a background host serves at once when `[host] max_clients` is
+/// not set.
+pub const DEFAULT_MAX_CLIENTS: i32 = 16;
+
 /// Resolved configuration with defaults applied
 #[derive(Debug, Clone)]
 pub struct NoriConfig {
@@ -2366,8 +2344,6 @@ pub struct NoriConfig {
 
     /// Whether the experimental Windows sandbox is enabled in user config.
     pub windows_sandbox_enabled: bool,
-    /// Several sessions in one TUI (`[features] multi_session`).
-    pub multi_session: bool,
 
     /// Environment inherited by sandboxed commands.
     pub shell_environment_policy: ShellEnvironmentPolicy,
@@ -2427,7 +2403,7 @@ pub struct NoriConfig {
     /// `None` means disabled (default).
     pub loop_count: Option<i32>,
 
-    /// Most sessions that may run at once with `[features] multi_session`.
+    /// Most sessions that may run at once.
     pub max_sessions: i32,
 
     /// Automatically create a git worktree at session start.
@@ -2550,7 +2526,6 @@ impl Default for NoriConfig {
             has_explicit_approval_or_sandbox_policy: false,
             forced_auto_mode_downgraded_on_windows: false,
             windows_sandbox_enabled: false,
-            multi_session: false,
             shell_environment_policy: ShellEnvironmentPolicy::default(),
             active_project: ProjectConfig::default(),
             notices: Notice::default(),

@@ -5,7 +5,7 @@ async fn forking_a_child_preserves_delegation_depth() {
     let _fork = EnvGuard::set("MOCK_AGENT_SUPPORT_SESSION_FORK", "1");
     let home = tempfile::tempdir().unwrap();
     let m = manager(6);
-    let p = start(&m, home.path(), true);
+    let p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let mut events = m.subscribe(4096);
     let child = m
@@ -101,7 +101,7 @@ async fn fork_migrates_running_children_and_pending_approval_to_new_parent() {
     let _fork = EnvGuard::set("MOCK_AGENT_SUPPORT_SESSION_FORK", "1");
     let home = tempfile::tempdir().unwrap();
     let m = manager(5);
-    let mut p = start(&m, home.path(), true);
+    let mut p = start(&m, home.path());
     status(&m, &p.conversation_id, SessionStatus::Ready).await;
     let running = m
         .delegate(
@@ -157,7 +157,7 @@ async fn result_queued_before_parent_crash_is_redelivered_after_resume() {
     let delay = EnvGuard::set("MOCK_AGENT_DELAY_MS", "5000");
     let home = tempfile::tempdir().unwrap();
     let m = manager(3);
-    let mut parent_spec = spec(home.path(), true);
+    let mut parent_spec = spec(home.path());
     Arc::make_mut(&mut parent_spec.config).acp_proxy = nori_config::AcpProxyConfig {
         enabled: true,
         log_dir: home.path().join("parent-wire"),
@@ -218,7 +218,7 @@ async fn result_queued_before_parent_crash_is_redelivered_after_resume() {
     status(&m, &p.conversation_id, SessionStatus::Failed).await;
     let _echo = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
     let mut resumed = m
-        .resume(&p.conversation_id, spec(home.path(), true))
+        .resume(&p.conversation_id, spec(home.path()))
         .await
         .unwrap();
     tokio::time::timeout(WAIT, async {
@@ -246,7 +246,7 @@ async fn cold_import_keeps_delegation_identity_and_terminal_state_without_launch
     let _echo = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
     let old_home = tempfile::tempdir().unwrap();
     let m = manager(2);
-    let mut parent = start(&m, old_home.path(), true);
+    let mut parent = start(&m, old_home.path());
     status(&m, &parent.conversation_id, SessionStatus::Ready).await;
     let delegation = m
         .delegate(

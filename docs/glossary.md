@@ -143,6 +143,7 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 | **Active session**   | The one **session** the TUI shows; the prompt, terminal title, and scrollback belong to it.        | Current tab        |
 | **Parked session**   | A live **session** the TUI holds off screen with its own transcript, input, and pending requests. | Hidden, paused     |
 | **Session cap**      | The most managed **sessions** that may run at once, set by `[tui] max_sessions`.                  | Limit, quota       |
+| **Client limit**     | The most clients a background `nori host` serves at once over `/acp` and `/sessions`, set by `[host] max_clients`. | Connection cap     |
 | **Delegated child**  | A **session** the **session manager** starts for a parent through `/delegate` or the MCP `delegate` tool; named by the first line of its task. | Subagent, worker   |
 | **Delegation origin** | Who asked for a **delegated child**: the parent's agent (`agent`) or the user (`user`).          | Requester, source  |
 
@@ -179,12 +180,12 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 - **Undo** changes files, not conversation state; **Rewind to message** changes conversation direction, not files.
 - A **session envelope's** sequence starts at 1 for each **conversation ID**; **branch at head** starts a new sequence for the child.
 - **Session status** is derived from the event stream; it is not the harness phase or a **Nori agent-turn status**.
-- Closing a local **session** in the multi-session TUI stops its agent process; it is not ACP **Close**. The closed session stays listed with **session status** closed until the user removes it.
+- Closing a local **session** in the TUI stops its agent process; it is not ACP **Close**. The closed session stays listed with **session status** closed until the user removes it.
 - **Branch at head** closes the parent and adds the child to the parent's **session family**.
 - **Rewind to message** starts a new agent process but still registers the child in the parent's **session family**.
 - A **request resolved** envelope removes that request from the ones keeping a **session status** at "waiting on you"; requests cleared by idle, cancel, or session end get none.
 - When the **session manager** restarts a failed session, its **conversation ID**, family position, and envelope sequence continue across the new agent process. Remote targets, subscriptions, and replay cursors keep using that ID.
-- With `[features] multi_session`, replacing the **active session** parks it instead of closing it; a **parked session** keeps running and receiving its events.
+- Replacing the **active session** with `/new`, `/agent`, or `/resume` parks it instead of closing it; a **parked session** keeps running and receiving its events.
 - A **delegated child** belongs to its parent's **session family** and, in the local TUI, is a **parked session** until the user moves to it; its result returns to the parent as a queued prompt.
 
 ### Example dialogue

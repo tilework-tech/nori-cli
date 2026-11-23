@@ -104,10 +104,6 @@ impl SessionManager {
                 &agent,
                 config.agent_token_providers.get(&agent),
             )?;
-            anyhow::ensure!(
-                config.multi_session,
-                "delegation requires [features] multi_session = true"
-            );
             let parent_agent = state
                 .registry
                 .record(parent)

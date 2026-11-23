@@ -5,7 +5,7 @@ Nori reads one TOML file at `$NORI_HOME/config.toml` (default
 at startup. The resolution architecture and the full set of runtime-policy types
 live in [`nori-config/docs.md`](nori-config/docs.md); this file documents the
 agent and model configuration surface, which is the most commonly hand-edited
-part of the file, plus tool call display and the opt-in multi-session feature.
+part of the file, plus tool call display and running several sessions in one TUI.
 
 ## Choosing an agent
 
@@ -232,12 +232,27 @@ default. The question is skipped only when a saved `[tui] tool_output =
 Directories that are already trusted never see the trust
 screen, so they keep full output unless you set the key yourself.
 
-## Several sessions in one TUI: `[features] multi_session`
+## Background host: `[host]`
 
 ```toml
-[features]
-multi_session = true
+[host]
+max_clients = 16
+```
 
+`[host] max_clients` (default 16) is the most clients a background `nori host`
+serves at once over its WebSocket endpoints, `/acp` and its alias `/sessions`,
+counting `nori attach` terminals, `nori host --stdio` clients that joined the
+host, and remote ACP clients alike. One more connection gets HTTP 503 with a
+message naming the limit; a missing or wrong bearer token gets 401 first.
+Values below 1 count as 1. A full host still reports itself running to
+`nori host`, and `nori host stop` stops it with SIGTERM when its connection
+is refused. A managed host (`[host] managed =
+true`) is not limited. Sessions are bounded separately by `[tui]
+max_sessions`. See [the ACP remote transport](../docs/remote-control.md#3-acp-remote-transport).
+
+## Several sessions in one TUI
+
+```toml
 [tui]
 max_sessions = 8
 
@@ -249,8 +264,9 @@ open_session_list = "alt+s"
 parent_session = "alt+up"
 ```
 
-Off by default; restart Nori after changing it. With it on, `/new`, `/resume`,
-switching agents with `/agent`, and forking to an earlier message keep the
+Several sessions per TUI is always on; there is no feature flag. The former
+`[features] multi_session` key is no longer read, and a leftover one in
+`config.toml` is ignored. `/new`, `/resume`, switching agents with `/agent`, and forking to an earlier message keep the
 previous session running in the background instead of ending it. `/new`,
 `/agent`, and `/resume` also work while the session on screen is busy: that
 session keeps working in the background and your next prompt goes to the new
@@ -276,7 +292,7 @@ another session and say how to close one.
 | `parent_session` | From a delegated child, return to the session that delegated it; elsewhere it does nothing |
 
 The `[tui.hotkeys]` values above are the defaults, and the actions appear in
-the Hotkeys view only with the feature on. Moving between sessions skips
+the Hotkeys view. Moving between sessions skips
 closed and done ones. In the session list, Tab shows only sessions waiting on you (Tab
 again shows all), arrows or `j`/`k` move, `/` (or `f`, Ctrl+F) starts a search
 that filters by title or agent, Enter jumps, Esc leaves the search and then
@@ -292,7 +308,7 @@ Closing a session:
 | --- | --- |
 | Ctrl+D in the session list | Closes the selected session and stops its agent. A working, starting, or waiting session needs a second Ctrl+D; any other key cancels |
 | Ctrl+D on a `closed` or `done` row | Removes it from the list |
-| `/close` | Closes the session on screen (local sessions); in Nori Cloud it releases the session |
+| `/close` | Closes the session on screen (local sessions); in Nori Cloud it releases the session and the picker that replaces it confirms "Session closed (released)." |
 
 A closed session stays in the list as `closed` until you remove it; a
 delegated child whose task finished stays as `done`. Closing
@@ -316,6 +332,3 @@ the full brief and result are in the transcript view (Ctrl+T). When the child
 ends, a short result block names it and shows up to six result lines, and the
 result goes back to the parent agent on its own. A child on a different agent
 asks first ("Yes, start it" / "No, decline"; Esc declines).
-
-Remote control (`--remote`, `/remote-control`) serves the most recently started
-session, which is not necessarily the one on screen.

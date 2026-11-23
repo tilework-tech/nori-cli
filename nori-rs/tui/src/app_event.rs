@@ -109,13 +109,6 @@ pub(crate) enum AppEvent {
         generation: SessionGeneration,
     },
 
-    /// Manage the app-owned remote ACP listener lifecycle.
-    RemoteControlRequested(crate::remote_control::RemoteControlRequest),
-
-    /// The user accepted the one-shot dangerous-exposure warning for an
-    /// explicit non-loopback address.
-    ConfirmRemoteControlExplicit(std::net::SocketAddr),
-
     /// An agent connection finished initialization and optional session
     /// listing. The successful value still owns that exact live connection.
     AgentPrepared {
@@ -194,7 +187,7 @@ pub(crate) enum AppEvent {
 
     InsertHistoryCell(Box<dyn HistoryCell>),
 
-    /// Open the list of sessions (`[features] multi_session`).
+    /// Open the list of sessions.
     OpenSessionList,
 
     ResolveDelegation {
