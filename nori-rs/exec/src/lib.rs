@@ -1,23 +1,7 @@
 //! Scriptable, terminal-independent execution over Nori's ACP harness.
 
-mod managed;
-
-use std::collections::HashSet;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::task::Context as TaskContext;
-use std::task::Poll;
 
-use agent_client_protocol::Agent;
-use agent_client_protocol::ByteStreams;
-use agent_client_protocol::Client;
-use agent_client_protocol::ConnectionTo;
-use agent_client_protocol::Responder;
-use anyhow::Context;
-use futures::io::AsyncRead;
 use nori_config::NoriConfig;
 use nori_harness::runtime::AgentPrepareSpec;
 use nori_harness::runtime::HarnessHandle;
@@ -25,17 +9,13 @@ use nori_harness::runtime::SessionLaunchSpec;
 use nori_harness::runtime::SessionStart;
 use nori_harness::runtime::launch_session;
 use nori_harness::runtime::prepare_agent;
-use nori_harness::runtime::prepare_and_launch_session;
 use nori_installed::AnalyticsReporter;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
 use nori_protocol::SessionEndReason;
 use nori_protocol::SessionEvent;
 use nori_protocol::acp::v1 as acp;
-use tokio::sync::Mutex;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio_util::compat::TokioAsyncReadCompatExt;
-use tokio_util::compat::TokioAsyncWriteCompatExt;
 
 /// Completed output from a finite plaintext execution.
 pub struct PlaintextOutcome {
@@ -96,16 +76,7 @@ pub async fn run_plaintext(
             });
         }
     };
-    let result = collect_prompt(
-        &launched.handle,
-        &mut launched.events,
-        request_id,
-        PermissionMode::Reject,
-        None,
-        None,
-        None,
-    )
-    .await;
+    let result = collect_prompt(&launched.handle, &mut launched.events, request_id).await;
     let shutdown_result = launched.handle.shutdown().await;
     let outcome = match result {
         Ok(result) => {
@@ -123,78 +94,20 @@ pub async fn run_plaintext(
     outcome
 }
 
-#[derive(Clone, Copy)]
-enum PermissionMode {
-    Reject,
-    Forward,
-}
-
 struct PromptResult {
     output: String,
-    response: acp::PromptResponse,
     permission_denied: bool,
 }
 
-trait PromptEvents {
-    fn recv_event(&mut self) -> impl Future<Output = Option<SessionEvent>> + Send;
-}
-
-impl PromptEvents for UnboundedReceiver<SessionEvent> {
-    async fn recv_event(&mut self) -> Option<SessionEvent> {
-        self.recv().await
-    }
-}
-
-impl PromptEvents for tokio::sync::mpsc::Receiver<SessionEvent> {
-    async fn recv_event(&mut self) -> Option<SessionEvent> {
-        self.recv().await
-    }
-}
-
-async fn next_permission_resolution(
-    resolutions: &mut Option<tokio::sync::mpsc::Receiver<nori_protocol::SessionEnvelope>>,
-) -> Option<acp::RequestId> {
-    loop {
-        let Some(events) = resolutions.as_mut() else {
-            return std::future::pending().await;
-        };
-        match events.recv().await {
-            Some(nori_protocol::SessionEnvelope {
-                event: SessionEvent::Nori(NoriEvent::RequestResolved(resolved)),
-                ..
-            }) => return Some(resolved.request_id),
-            Some(_) => {}
-            None => {
-                *resolutions = None;
-                return None;
-            }
-        }
-    }
-}
-
+/// Collect the turn's agent text, rejecting every permission request.
 async fn collect_prompt(
     handle: &HarnessHandle,
-    events: &mut impl PromptEvents,
+    events: &mut UnboundedReceiver<SessionEvent>,
     prompt_request_id: acp::RequestId,
-    permission_mode: PermissionMode,
-    client: Option<&ConnectionTo<Client>>,
-    outward_session_id: Option<&acp::SessionId>,
-    mut resolutions: Option<tokio::sync::mpsc::Receiver<nori_protocol::SessionEnvelope>>,
 ) -> anyhow::Result<PromptResult> {
     let mut output = String::new();
     let mut permission_denied = false;
-    let mut resolved_requests = HashSet::new();
-    loop {
-        let event = tokio::select! {
-            event = events.recv_event() => match event { Some(event) => event, None => break },
-            resolved = next_permission_resolution(&mut resolutions) => {
-                let Some(request_id) = resolved else {
-                    anyhow::bail!("permission resolution stream ended before the prompt completed");
-                };
-                resolved_requests.insert(request_id);
-                continue;
-            },
-        };
+    while let Some(event) = events.recv().await {
         match event {
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::AgentNotification::SessionNotification(notification),
@@ -207,57 +120,10 @@ async fn collect_prompt(
             }
             SessionEvent::Acp(AcpEvent::Request {
                 request_id,
-                request: acp::AgentRequest::RequestPermissionRequest(mut request),
+                request: acp::AgentRequest::RequestPermissionRequest(request),
             }) => {
-                if resolved_requests.remove(&request_id) {
-                    continue;
-                }
-                let response = match permission_mode {
-                    PermissionMode::Reject => {
-                        permission_denied = true;
-                        reject_permission(&request)
-                    }
-                    PermissionMode::Forward => {
-                        if let Some(id) = outward_session_id {
-                            request.session_id = id.clone();
-                        }
-                        let client = client.context("ACP client connection is unavailable")?;
-                        let answer = client.send_request(request).block_task();
-                        tokio::pin!(answer);
-                        let outcome = loop {
-                            tokio::select! {
-                                response = &mut answer => break Some(response),
-                                resolved = next_permission_resolution(&mut resolutions) => {
-                                    match resolved {
-                                        Some(resolved) if resolved == request_id => break None,
-                                        Some(resolved) => { resolved_requests.insert(resolved); },
-                                        None => anyhow::bail!("permission resolution stream ended before the request was answered"),
-                                    }
-                                },
-                            }
-                        };
-                        let Some(outcome) = outcome else {
-                            continue;
-                        };
-                        match outcome {
-                            Ok(response) => response,
-                            Err(error) => {
-                                handle
-                                    .respond_to_agent(
-                                        request_id,
-                                        Ok(acp::ClientResponse::RequestPermissionResponse(
-                                            acp::RequestPermissionResponse::new(
-                                                acp::RequestPermissionOutcome::Cancelled,
-                                            ),
-                                        )),
-                                    )
-                                    .await?;
-                                return Err(error)
-                                    .context("ACP caller did not answer the permission request");
-                            }
-                        }
-                    }
-                };
+                permission_denied = true;
+                let response = reject_permission(&request);
                 handle
                     .respond_to_agent(
                         request_id,
@@ -275,9 +141,8 @@ async fn collect_prompt(
                 response,
             }) if request_id == prompt_request_id => {
                 return match response {
-                    Ok(acp::AgentResponse::PromptResponse(response)) => Ok(PromptResult {
+                    Ok(acp::AgentResponse::PromptResponse(_)) => Ok(PromptResult {
                         output,
-                        response,
                         permission_denied,
                     }),
                     Ok(_) => {
@@ -314,313 +179,4 @@ fn reject_permission(request: &acp::RequestPermissionRequest) -> acp::RequestPer
         ))
     });
     acp::RequestPermissionResponse::new(outcome)
-}
-
-struct FacadeSession {
-    session_id: acp::SessionId,
-    handle: HarnessHandle,
-    events: Option<UnboundedReceiver<SessionEvent>>,
-    prompt_started: bool,
-}
-
-struct FacadeState {
-    base_config: Arc<NoriConfig>,
-    cli_version: String,
-    analytics: Option<AnalyticsReporter>,
-    session: Option<FacadeSession>,
-}
-
-struct ErrorOnEof<R> {
-    inner: R,
-    eof: Arc<AtomicBool>,
-    shutdown_delay: Option<Pin<Box<tokio::time::Sleep>>>,
-}
-
-impl<R> ErrorOnEof<R> {
-    fn new(inner: R, eof: Arc<AtomicBool>) -> Self {
-        Self {
-            inner,
-            eof,
-            shutdown_delay: None,
-        }
-    }
-}
-
-impl<R: AsyncRead + Unpin> AsyncRead for ErrorOnEof<R> {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut TaskContext<'_>,
-        buffer: &mut [u8],
-    ) -> Poll<std::io::Result<usize>> {
-        if let Some(delay) = self.shutdown_delay.as_mut() {
-            return match delay.as_mut().poll(cx) {
-                Poll::Ready(()) => Poll::Ready(Err(std::io::Error::new(
-                    std::io::ErrorKind::UnexpectedEof,
-                    "ACP caller closed stdin",
-                ))),
-                Poll::Pending => Poll::Pending,
-            };
-        }
-        match Pin::new(&mut self.inner).poll_read(cx, buffer) {
-            Poll::Ready(Ok(0)) if !buffer.is_empty() => {
-                self.eof.store(true, Ordering::SeqCst);
-                self.shutdown_delay = Some(Box::pin(tokio::time::sleep(
-                    std::time::Duration::from_millis(100),
-                )));
-                self.poll_read(cx, buffer)
-            }
-            result => result,
-        }
-    }
-}
-
-/// Serve a bounded ACP agent facade over stdin/stdout.
-pub async fn run_acp(
-    config: Arc<NoriConfig>,
-    cli_version: String,
-    analytics: Option<AnalyticsReporter>,
-) -> anyhow::Result<()> {
-    if config.multi_session {
-        return managed::run(config, cli_version, analytics).await;
-    }
-    let state = Arc::new(Mutex::new(FacadeState {
-        base_config: config,
-        cli_version,
-        analytics: analytics.clone(),
-        session: None,
-    }));
-
-    let eof = Arc::new(AtomicBool::new(false));
-    let connection_result = Agent
-        .builder()
-        .name("nori-exec")
-        .on_receive_request(
-            async move |request: acp::InitializeRequest,
-                        responder: Responder<acp::InitializeResponse>,
-                        _cx: ConnectionTo<Client>| {
-                responder.respond(
-                    acp::InitializeResponse::new(request.protocol_version)
-                        .agent_info(acp::Implementation::new("nori", env!("CARGO_PKG_VERSION"))),
-                )
-            },
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            {
-                let state = state.clone();
-                async move |request: acp::NewSessionRequest,
-                            responder: Responder<acp::NewSessionResponse>,
-                            _cx: ConnectionTo<Client>| {
-                    if !request.mcp_servers.is_empty() || !request.additional_directories.is_empty()
-                    {
-                        return responder.respond_with_error(acp::Error::invalid_params());
-                    }
-                    let (mut config, cli_version, analytics) = {
-                        let state = state.lock().await;
-                        if state.session.is_some() {
-                            return responder.respond_with_error(acp::Error::invalid_params());
-                        }
-                        (
-                            (*state.base_config).clone(),
-                            state.cli_version.clone(),
-                            state.analytics.clone(),
-                        )
-                    };
-                    config.cwd = request.cwd;
-                    let mut launched = prepare_and_launch_session(
-                        AgentPrepareSpec {
-                            config: Arc::new(config),
-                            cli_version,
-                            session_context: None,
-                            initial_context: None,
-                        },
-                        SessionStart::New,
-                    );
-                    if let Some(reporter) = analytics.as_ref() {
-                        launched.handle = reporter.attach(launched.handle);
-                    }
-                    let session_id = loop {
-                        match launched.events.recv().await {
-                            Some(SessionEvent::Nori(NoriEvent::SessionStarted(started))) => {
-                                break started.acp_session_id;
-                            }
-                            Some(SessionEvent::Nori(NoriEvent::SessionEnded(ended))) => {
-                                return responder.respond_with_error(acp::Error::new(
-                                    -32000,
-                                    ended
-                                        .message
-                                        .unwrap_or_else(|| "failed to start session".to_string()),
-                                ));
-                            }
-                            Some(_) => {}
-                            None => {
-                                return responder.respond_with_error(acp::Error::new(
-                                    -32000,
-                                    "ACP session ended during startup",
-                                ));
-                            }
-                        }
-                    };
-                    let config_options = launched.handle.get_session_config().await;
-                    state.lock().await.session = Some(FacadeSession {
-                        session_id: session_id.clone(),
-                        handle: launched.handle,
-                        events: Some(launched.events),
-                        prompt_started: false,
-                    });
-                    responder.respond(
-                        acp::NewSessionResponse::new(session_id).config_options(config_options),
-                    )
-                }
-            },
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            {
-                let state = state.clone();
-                async move |request: acp::SetSessionConfigOptionRequest,
-                            responder: Responder<acp::SetSessionConfigOptionResponse>,
-                            _cx: ConnectionTo<Client>| {
-                    let handle = {
-                        let state = state.lock().await;
-                        let Some(session) = state.session.as_ref() else {
-                            return responder.respond_with_error(acp::Error::invalid_params());
-                        };
-                        if session.session_id != request.session_id || session.prompt_started {
-                            return responder.respond_with_error(acp::Error::invalid_params());
-                        }
-                        session.handle.clone()
-                    };
-                    let Some(value) = request.value.as_value_id().map(ToString::to_string) else {
-                        return responder.respond_with_error(acp::Error::invalid_params());
-                    };
-                    match handle
-                        .set_session_config_option(request.config_id.to_string(), value)
-                        .await
-                    {
-                        Ok(options) => {
-                            responder.respond(acp::SetSessionConfigOptionResponse::new(options))
-                        }
-                        Err(error) => {
-                            responder.respond_with_error(acp::Error::new(-32000, error.to_string()))
-                        }
-                    }
-                }
-            },
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            {
-                let state = state.clone();
-                async move |request: acp::PromptRequest,
-                            responder: Responder<acp::PromptResponse>,
-                            cx: ConnectionTo<Client>| {
-                    let (handle, mut events) = {
-                        let mut state = state.lock().await;
-                        let Some(session) = state.session.as_mut() else {
-                            return responder.respond_with_error(acp::Error::invalid_params());
-                        };
-                        if session.session_id != request.session_id || session.prompt_started {
-                            return responder.respond_with_error(acp::Error::invalid_params());
-                        }
-                        session.prompt_started = true;
-                        let Some(events) = session.events.take() else {
-                            return responder.respond_with_error(acp::Error::invalid_params());
-                        };
-                        (session.handle.clone(), events)
-                    };
-                    let client = cx.clone();
-                    cx.spawn(async move {
-                        let request_id = match handle.prompt(request.prompt).await {
-                            Ok(request_id) => request_id,
-                            Err(error) => {
-                                return responder.respond_with_error(acp::Error::new(
-                                    -32000,
-                                    error.to_string(),
-                                ));
-                            }
-                        };
-                        let result = collect_prompt(
-                            &handle,
-                            &mut events,
-                            request_id,
-                            PermissionMode::Forward,
-                            Some(&client),
-                            None,
-                            None,
-                        )
-                        .await;
-                        if let Err(error) = handle.shutdown().await {
-                            return responder
-                                .respond_with_error(acp::Error::new(-32000, error.to_string()));
-                        }
-                        match result {
-                            Ok(result) => {
-                                if !result.output.is_empty() {
-                                    client.send_notification(acp::SessionNotification::new(
-                                        request.session_id,
-                                        acp::SessionUpdate::AgentMessageChunk(
-                                            acp::ContentChunk::new(acp::ContentBlock::Text(
-                                                acp::TextContent::new(result.output),
-                                            )),
-                                        ),
-                                    ))?;
-                                }
-                                responder.respond(result.response)
-                            }
-                            Err(error) => responder
-                                .respond_with_error(acp::Error::new(-32000, error.to_string())),
-                        }
-                    })?;
-                    Ok(())
-                }
-            },
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_notification(
-            {
-                let state = state.clone();
-                async move |notification: acp::CancelNotification, _cx: ConnectionTo<Client>| {
-                    let handle = {
-                        let state = state.lock().await;
-                        state.session.as_ref().and_then(|session| {
-                            (session.session_id == notification.session_id)
-                                .then(|| session.handle.clone())
-                        })
-                    };
-                    if let Some(handle) = handle {
-                        handle
-                            .cancel()
-                            .await
-                            .map_err(|error| acp::Error::new(-32000, error.to_string()))?;
-                    }
-                    Ok(())
-                }
-            },
-            agent_client_protocol::on_receive_notification!(),
-        )
-        .connect_to(ByteStreams::new(
-            tokio::io::stdout().compat_write(),
-            ErrorOnEof::new(tokio::io::stdin().compat(), eof.clone()),
-        ))
-        .await;
-
-    let handle = state
-        .lock()
-        .await
-        .session
-        .as_ref()
-        .map(|session| session.handle.clone());
-    if let Some(handle) = handle {
-        let _ = handle.cancel().await;
-        let _ = handle.shutdown().await;
-    }
-    if let Some(reporter) = analytics {
-        reporter.flush();
-    }
-    if eof.load(Ordering::SeqCst) {
-        Ok(())
-    } else {
-        connection_result.map_err(Into::into)
-    }
 }

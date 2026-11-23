@@ -14,13 +14,13 @@ disabled unless startup configuration or a runtime command explicitly enables
 it. Every enabled surface binds exact addresses and includes loopback; no
 wildcard listener or separate session-host crate is introduced.
 
-Without `[features] multi_session`, `nori exec --acp` remains a bounded,
-terminal-independent stdio facade and `/acp` exposes the interactive harness.
-With the flag, `/sessions` and the existing exec facade share the managed
-session commands described in section 10. The separate `nori host` process
-owns sessions without a terminal; `nori attach` is its feature-gated terminal
-frontend. Its authenticated endpoint and controller/watcher policy are
-described in section 11.
+`/acp` exposes the interactive harness. With `[features] multi_session`, the
+TUI adds `/sessions` with the managed session commands described in section 10.
+The separate `nori host` process owns sessions without a terminal; `nori
+attach` is its feature-gated terminal frontend. Its authenticated endpoint and
+controller/watcher policy are described in section 11, and its standard ACP
+face, served on `/sessions` and on stdio (`nori host --stdio`, aliased as
+`nori exec --acp`), in section 12.
 Sections 3–6 describe the legacy `/acp` projection unless stated otherwise.
 
 ## 2. Topology
@@ -73,7 +73,7 @@ The remote Agent forwards the post-harness ACP stream rather than translating
 it. `session/update` notifications pass through unmodified except for the
 outward session ID. Responses are correlated at the boundary: the transport
 tracks the harness request it issued and answers under the remote client's
-own request ID, as `nori exec --acp` does today. Delegated agent-to-client
+own request ID. Delegated agent-to-client
 requests such as `session/request_permission` go to the remote controller
 after harness policy. `SessionEnded` and `RequestFailed` surface as JSON-RPC
 errors on the affected request or close the connection; no other `NoriEvent`
@@ -271,7 +271,6 @@ nori-rs/
 │   ├── remote_control.rs                 # Runtime policy and app-owned lifecycle
 │   ├── app/                              # Commands and SessionStarted attachment
 │   └── chatwidget/                       # Input parsing and exposure confirmation
-└── exec/src/managed.rs                    # Flag-on stdio manager/extension adapter
 ```
 
 The `--remote` flag lives on the interactive CLI surface and is normalized into
@@ -319,9 +318,9 @@ within the current manager lifetime.
 ## 10. Managed session wire (`multi_session`)
 
 The TUI adds `GET /sessions` WebSocket upgrades on the same exact listener
-addresses as `/acp` only with `[features] multi_session`. The same flag selects
-managed operation for `nori exec --acp`. Flag-off behavior and loopback defaults
-are unchanged. `ManagedAgent` in
+addresses as `/acp` only with `[features] multi_session`. Flag-off behavior and
+loopback defaults are unchanged. The background host serves the same commands
+(section 11). `ManagedAgent` in
 [`acp-host`](../nori-rs/acp-host/src/remote/managed.rs) defines the transport
 boundary; [`ManagedRemoteHost`](../nori-rs/harness/src/managed_remote.rs)
 implements it over the app's `SessionManager`, keeping mutation and policy in
@@ -330,10 +329,7 @@ the harness.
 Each WebSocket text frame is a JSON-RPC 2.0 request with an ID and object
 params. `initialize` must come first and advertises
 `result.capabilities.nori_sessions` with version 1, envelopes, and reconnect.
-The stdio facade retains standard ACP initialization and advertises version 1
-at `agentCapabilities._meta["nori/multiSession"]`. It additionally accepts
-standard `session/new` for independent managed sessions and repeated standard
-prompts; the WebSocket extension controls sessions already owned by the TUI.
+On the TUI the extension controls sessions the TUI already owns.
 
 | Method | Params | Result |
 | --- | --- | --- |
@@ -366,7 +362,7 @@ ID can change when native load is unavailable or fails. `resumed_from` remains
 internal manager metadata and is omitted from the remote list.
 
 An explicit `session_id` always wins. Omitting it uses the currently selected
-TUI session (the first successfully started session in exec). Subscriptions pin that choice
+TUI session (on the background host, the most recently created session). Subscriptions pin that choice
 at subscription time; later commands that omit the ID use the current default.
 Use explicit IDs to keep mutations pinned across screen changes. Only subscribe
 accepts `"*"`, meaning all current and subsequently created sessions.
@@ -380,10 +376,7 @@ the correlated response in the event stream for the completed turn. Busy
 sessions return `-32015` for `_nori/session/prompt`. The authenticated background host additionally accepts an explicit [mid-turn follow-up](../nori-rs/cli/src/host/docs.md#mid-turn-follow-ups) from its controller. Permission replies
 address the pair of conversation and request IDs, and a repeated managed answer
 is rejected once claimed. `RequestResolved` tells subscribers that the request
-has been answered. In managed exec, an extension answer can also resolve a
-permission forwarded by a standard ACP prompt: the prompt collector observes
-the matching manager resolution and continues to the original prompt result
-without waiting for a second answer from the standard ACP caller.
+has been answered.
 
 Keep event payloads as raw JSON when storing or forwarding envelopes. ACP
 response types are untagged; interpret a response using its correlated request
@@ -511,14 +504,13 @@ shutdown detaches managed clients without stopping sessions, cancelling admitted
 permissions. Those permissions remain visible and answerable after reconnect
 or from the TUI. A slow managed consumer is dropped when its bounded live queue
 fills. The WebSocket adapter closes that connection after draining buffered
-events; socket writes also have a deadline. The stdio adapter instead sends
+events; socket writes also have a deadline. The background host's stdio
+transport (section 12) cannot close and reopen, so it instead sends
 `_nori/session/subscription_ended` with `{"reason":"replay_required"}` after
-buffered events and keeps the ACP connection usable. On that notification,
+buffered events and keeps the stream usable. On that notification,
 resubscribe using the last processed cursor for each session. Reconnect and
 resubscribe share the same cursor validation, so expiry cannot silently lose
-history. Stdio encoding or writer failure cannot guarantee an ending
-notification. At the exec process boundary, stdin EOF shuts down all managed
-sessions.
+history. Stdio writer failure cannot guarantee an ending notification.
 
 ## 11. Background host and attached terminals
 
@@ -705,8 +697,9 @@ with Ctrl+D and rerun `nori attach` to connect afresh.
 The normative contract for `nori host` is
 `docs/specs/nori-native/host-contract.md` in the workspace monorepo. This
 section records what the CLI implements. Standard ACP v1 methods share the
-authenticated `/sessions` socket with the `_nori/*` extension. A connection
-can work with any number of sessions. Managed mode (`[host] managed = true`)
+authenticated `/sessions` socket with the `_nori/*` extension, and the same
+face is also served on stdio (see [Stdio transport](#stdio-transport)). A
+connection can work with any number of sessions. Managed mode (`[host] managed = true`)
 does not serve these methods: its supervisor wire (`_nori/session/ensure`,
 `_nori/session/status`, `_nori/host/*`, `/managed`, `--stdio --launch`) is
 unchanged and stays as legacy until durable sessions get their own design.
@@ -726,8 +719,9 @@ unchanged and stays as legacy until durable sessions get their own design.
 - no Nori `_meta` key. The contract version is in `host.json`; a client
   without it derives the version from `agentInfo.version`.
 
-The host's only new `_meta` key is `nori/agent` (registry prefix `nori/<camelCase>`, clifford 2026-11-22) (on `session/new` params
-and `session/list` rows); see the extension registry
+The host's `_meta` keys use the registry prefix `nori/<camelCase>`
+(clifford 2026-11-22): `nori/agent` on `session/new` params and `session/list`
+rows, and `nori/session` on `session/list` rows; see the extension registry
 (`docs/acp-extensions.md` in the workspace monorepo).
 The `_nori/*` methods are unchanged, including `_nori/session/follow_up`
 and `_nori/session/subscribe`.
@@ -775,8 +769,8 @@ sign-in, not `ACP agent did not accept the prompt`.
 ### Schema and TypeScript types
 
 `nori-rs/nori-protocol/schema/host-wire.schema.json` (JSON Schema 2020-12)
-covers the ACP v1 messages above, the `nori/agent`
-`_meta` object, the `host.json` file, and the `_nori/*` extension (control, subscribe with its
+covers the ACP v1 messages above, the `session/list` row and `session/new`
+`_meta` objects (`nori/agent`, `nori/session`), the `host.json` file, and the `_nori/*` extension (control, subscribe with its
 `SessionEnvelope`, host stop, delegation). `nori-protocol/typescript/host-wire.ts`
 is generated from it by a pinned `json-schema-to-typescript`. Regenerate both
 with `scripts/generate-host-wire-types.sh`; `cargo test -p nori-cli --test
@@ -808,7 +802,7 @@ ID, continuing the same transcript file.
 
 | Method | Who may call | Behavior |
 | --- | --- | --- |
-| `session/list` | Any initialized client | Live sessions first, then stored sessions, most recently written first. Optional `cwd` (absolute) keeps the sessions working in that folder. Optional `cursor` takes a previous `nextCursor`, which is opaque and absent on the last page. Pages hold 50 rows. Each row is a standard ACP `SessionInfo` (`sessionId`, `cwd`, `title`, `updatedAt` in RFC 3339). Its `_meta` carries `nori/agent` (the agent slug, when known). A closed, failed or stored session restarts when loaded or resumed; whether a row is live is not reported yet (pending a decision on reusing the broker's `nori.dev/session` row object). A bad cursor or relative `cwd` fails with `-32602`. Unreadable transcripts, and transcripts whose metadata names another session, are left out. |
+| `session/list` | Any initialized client | Live sessions first, then stored sessions, most recently written first. Optional `cwd` (absolute) keeps the sessions working in that folder. Optional `cursor` takes a previous `nextCursor`, which is opaque and absent on the last page. Pages hold 50 rows. Each row is a standard ACP `SessionInfo` (`sessionId`, `cwd`, `title`, `updatedAt` in RFC 3339). Its `_meta` carries `nori/agent` (the agent slug, when known) and `nori/session` `{live}`: `true` while the host runs the session's agent (status starting, working, waiting on you or ready), `false` for a closed, failed or done record and for every stored session. A row with `live: false` restarts when loaded or resumed. A bad cursor or relative `cwd` fails with `-32602`. Unreadable transcripts, and transcripts whose metadata names another session, are left out. |
 | `session/load` | Any initialized client | Attaches the connection to the session. Its history arrives as `session/update` notifications **before** the response, then live updates follow. A live session replays from the manager journal (sequence 1 onward) with no gap before live delivery. If the journal has evicted the session's start, the transcript is replayed instead and live delivery starts at the journal's latest event, so updates in that interval can be missed. A stored session replays its transcript, then restarts on a new agent process in its recorded folder with its recorded agent; the response waits until the session has started. A failed live session restarts the same way. |
 | `session/resume` | Any initialized client | Like `session/load` without history: only updates after the response arrive. History the harness replays to the restarted agent is not forwarded. |
 
@@ -823,6 +817,32 @@ Attached connections receive `session/update` notifications whose
 one session, and each sees every update. Attachment ends when the connection
 closes. A connection that falls more than 1024 events behind a session is
 closed; reconnect and load again.
+
+### Stdio transport
+
+`nori host --stdio` without `--launch`, and its alias `nori exec --acp`, run
+a headless local host whose one client speaks this face as newline-delimited
+JSON-RPC on stdin and stdout. It is refused when `[host] managed = true`;
+managed hosts still need `--launch`.
+
+- Every method above and every `_nori/*` method is served exactly as on an
+  authenticated `/sessions` connection, any number of sessions on one stream.
+- There is no bearer token. The stdio client is always the controller; an
+  `observe: true` on `initialize` is ignored.
+- The process takes no host lock and writes no `host.json`, `state.json` or
+  `token`, so it runs beside a detached `nori host` of the same `NORI_HOME`.
+  Its sessions end with it; their transcripts remain as stored sessions. Neither host sees the
+  other's live sessions: each lists the other's as stored (`live: false`), and
+  loading or resuming one there runs it twice on one transcript. Do not.
+- stdin EOF or `_nori/host/stop` stops the sessions and exits 0; SIGINT or
+  SIGTERM stops them and exits non-zero. A client the face disconnects (for
+  example one more than 1024 events behind) cannot reconnect, so the host
+  stops its sessions and exits non-zero.
+- Blank lines are ignored; a line that is not JSON (including one that is
+  not UTF-8) receives `-32700` with a null `id`. stdout carries only ACP lines; logs go to stderr.
+- A `_nori/session/subscribe` subscription that falls behind ends with
+  `_nori/session/subscription_ended` `{"reason":"replay_required"}` instead of
+  a closed connection (section 10).
 
 ### Session configuration
 
@@ -873,4 +893,5 @@ adapter options.
 - `authenticate` / `logout` forwarding and aggregated `authMethods`.
 - `ask` behaving differently from `agent` (adapter strictest modes).
 - Follow-up (`steer`/`queue`) through `session/prompt`.
-- `nori host --stdio` without `--launch`.
+- Analytics for the headless host (`nori exec --acp` no longer sends the exec
+  `session_mode = acp` event).

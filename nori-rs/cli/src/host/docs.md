@@ -13,8 +13,11 @@ Path: @/nori-rs/cli/src/host
 - Local sessions use the host's start folder or a folder supplied by the client.
   A machine can enable [managed launch admission](#managed-launch-control-v1)
   to run each binding's pinned adapter in its provisioned workspace and home.
-  A dedicated managed machine can also serve one launch as plain ACP on the
-  host's own [stdin and stdout](#managed-launch-on-stdio).
+  The same local host can also serve one client on its own
+  [stdin and stdout](#local-host-on-stdio) without lock or discovery files
+  (`nori host --stdio`, aliased by `nori exec --acp`), and a dedicated managed
+  machine can serve one launch as plain ACP the
+  [same way](#managed-launch-on-stdio).
 - Owns Unix process lifetime and private host files; protocol framing remains
   in [acp-host](../../../acp-host/docs.md), and session policy remains in the
   [harness](../../../harness/docs.md).
@@ -165,8 +168,11 @@ host ls / stop / new --------------+                   SessionManager
   read through `TranscriptLoader::list_stored_sessions`); its cursor is
   `live:<index>` or a keyset over file modification time and ID, so new
   transcripts do not shift later pages. Rows are ACP `SessionInfo` with
-  `_meta` `nori/agent` (`nori_protocol::ListedSessionMeta`); loading a
-  closed, failed or done record restarts it. Deleted IDs are
+  `_meta` `nori/agent` and `nori/session` `{live}`
+  (`nori_protocol::ListedSessionMeta`, `ListedSessionState`): a manager
+  record is live while its status is starting, working, waiting on you or
+  ready; closed, failed and done records and every stored row are not.
+  Loading a closed, failed or done record restarts it. Deleted IDs are
   skipped. [Attaching](acp/attach.rs) forwards
   one connection's attached sessions' journal events as `session/update`
   notifications under the conversation ID. Stored sessions restart through
@@ -562,6 +568,42 @@ orphaned processes. For ordinary managed launches the host signals the
 adapter's process group and waits for its direct child. Orphaned descendants can remain as zombies until their
 adopting ancestor reaps them. See [process supervision](../../../acp-host/src/connection/child_lifecycle.rs).
 
+#### Local host on stdio
+
+`nori host --stdio` without `--launch` runs a headless local host in the
+foreground whose one client speaks the [ACP face](#local-host-and-attach) on
+stdin and stdout, one JSON-RPC message per line. `nori exec --acp` dispatches
+here from [CLI dispatch](../main.rs) with the same `--agent`, `-C`, `-c`,
+`--add-dir` and bypass overrides, before any prompt is read from stdin.
+`[host] managed = true` refuses it; that mode needs `--launch`.
+
+- [`serve_stdio`](mod.rs) builds the same `HostService` as `serve` (through
+  the shared `host_service` constructor) but without managed launches or
+  recovery, and hands it to `RemoteAcpServer::serve_host_stdio` in
+  [acp-host](../../../acp-host/docs.md). No port is bound, no token is
+  created, no host lock is taken and no `host.json`, `state.json` or `token`
+  is written, so it runs beside a detached host of the same `NORI_HOME`
+  without either seeing the other's live sessions. Its sessions end with it;
+  transcripts remain and later list as stored. Neither host sees the
+  other's live sessions: each lists the other's as stored (`live: false`), and
+  loading or resuming one there runs it twice on one transcript. Do not.
+- The socket loop is the WebSocket one with a stdio transport: the client is
+  always the controller (`observe: true` is ignored), and a lagging
+  `_nori/session/subscribe` subscription ends with
+  `_nori/session/subscription_ended` `{"reason":"replay_required"}` in band
+  instead of closing the stream.
+- Blank lines are ignored; a non-JSON line gets a `-32700` error with a null
+  `id`. stdout carries only ACP lines; logs go to stderr.
+
+| Event | Outcome |
+| --- | --- |
+| stdin reaches EOF | Sessions stop (zero grace) and the process exits 0, or non-zero if a session did not stop cleanly. |
+| The ACP face disconnects the client, for example one more than 1024 events behind | Sessions stop and the process exits non-zero. |
+| `_nori/host/stop` | As stdin EOF. |
+| SIGINT or SIGTERM | Sessions stop and the process exits non-zero. |
+
+See the [stdio host cases](../../tests/host_stdio.rs).
+
 #### Managed launch on stdio
 
 A machine bridge that already pipes an ACP adapter's stdin and stdout can run
@@ -734,7 +776,9 @@ Recovering model context never entails submitting an interrupted prompt.
 - [Lifecycle tests](../../tests/host_lifecycle.rs) use isolated homes and
   bounded process waits to cover detached startup, privacy, lock ownership,
   occupied ports, and explicit stop; the [ACP v1 cases](../../tests/host_lifecycle/acp_v1.rs)
-  drive the standard face against the mock agent. The published wire
+  drive the standard face against the mock agent, and the
+  [stdio host cases](../../tests/host_stdio.rs) drive it on stdin and stdout
+  (including `nori exec --acp`). The published wire
   schema is pinned by a [drift test](../../tests/host_wire_schema.rs) (see
   [nori-protocol](../../../nori-protocol/docs.md)).
 

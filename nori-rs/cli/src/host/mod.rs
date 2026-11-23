@@ -1,6 +1,7 @@
 //! Background session host commands and local discovery.
 
 mod acp;
+mod local_stdio;
 mod recovery_control;
 mod recovery_history;
 mod service;
@@ -31,6 +32,7 @@ use nori_harness::session_manager::SessionManagerConfig;
 use serde::Deserialize;
 use serde_json::json;
 
+pub(crate) use self::local_stdio::serve as serve_stdio;
 use self::service::HostService;
 use self::state::HostFiles;
 use self::state::HostState;
@@ -47,16 +49,17 @@ pub(crate) struct HostCommand {
     port: i32,
     #[arg(long, hide = true)]
     foreground: bool,
-    /// Serve one managed launch as ACP on stdin and stdout, in the foreground,
-    /// until stdin closes. Needs `[host] managed` and `[host.dedicated_roots]`.
-    #[arg(long, requires = "launch", conflicts_with = "foreground")]
+    /// Serve one client as ACP on stdin and stdout, in the foreground, until
+    /// stdin closes. With --launch, serve that one managed launch instead;
+    /// it needs `[host] managed` and `[host.dedicated_roots]`.
+    #[arg(long, conflicts_with = "foreground")]
     stdio: bool,
     /// JSON launch specification for --stdio.
     #[arg(long, value_name = "FILE", requires = "stdio")]
     launch: Option<PathBuf>,
     /// Add this process's environment to the --stdio launch. Variables in the
     /// specification win.
-    #[arg(long, requires = "stdio")]
+    #[arg(long, requires = "launch")]
     inherit_env: bool,
 }
 
@@ -276,6 +279,9 @@ pub(crate) async fn run(
             println!("Host stopped.");
             Ok(())
         }
+        None if command.stdio && command.launch.is_none() => {
+            local_stdio::serve(config.context("host configuration is required")?).await
+        }
         None if command.stdio => {
             let (config, overrides) = config.context("host configuration is required")?;
             let binding = config
@@ -437,21 +443,7 @@ async fn serve(
     } else {
         None
     };
-    let settings = acp::config::SettingsStore::open(&config.nori_home);
-    let host = Arc::new(HostService {
-        recovery,
-        launches,
-        managed: ManagedRemoteHost::authenticated_host(manager.clone()),
-        manager,
-        config: Arc::new(config),
-        overrides,
-        stop: tokio::sync::Notify::new(),
-        acp: acp::AcpFace::default(),
-        settings,
-        instance: uuid::Uuid::new_v4().to_string(),
-        deleted: Default::default(),
-        restarts: tokio::sync::Mutex::new(()),
-    });
+    let host = host_service(config, overrides, manager, launches, recovery);
     let server = RemoteAcpServer::bind_host(
         format!("127.0.0.1:{port}").parse()?,
         host.clone(),
@@ -508,6 +500,30 @@ async fn serve(
     );
     drop(lock);
     Ok(())
+}
+
+fn host_service(
+    config: NoriConfig,
+    overrides: NoriConfigOverrides,
+    manager: SessionManager,
+    launches: Option<nori_harness::managed_launch::ManagedLaunches>,
+    recovery: Option<recovery_control::RecoveryControl>,
+) -> Arc<HostService> {
+    let settings = acp::config::SettingsStore::open(&config.nori_home);
+    Arc::new(HostService {
+        recovery,
+        launches,
+        managed: ManagedRemoteHost::authenticated_host(manager.clone()),
+        manager,
+        config: Arc::new(config),
+        overrides,
+        stop: tokio::sync::Notify::new(),
+        acp: acp::AcpFace::default(),
+        settings,
+        instance: uuid::Uuid::new_v4().to_string(),
+        deleted: Default::default(),
+        restarts: tokio::sync::Mutex::new(()),
+    })
 }
 
 #[cfg(test)]

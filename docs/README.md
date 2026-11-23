@@ -9,7 +9,7 @@ each crate's `docs.md`.
 | [turn-lifecycle.md](turn-lifecycle.md) | Turn state, `session/update` routing, cancellation, and queue draining |
 | [remote-control.md](remote-control.md) | Remote ACP transport, authenticated background hosts, and attached terminals |
 | [nori-client-mcp.md](nori-client-mcp.md) | The backend-owned `nori-client` MCP server and goals |
-| [headless.md](headless.md) | `nori exec` plaintext mode and the ACP stdio facade |
+| [headless.md](headless.md) | `nori exec` plaintext mode and `nori exec --acp`, the headless host on stdio |
 | [transcripts.md](transcripts.md) | Transcript file locations and schema |
 
 Rules for these docs:

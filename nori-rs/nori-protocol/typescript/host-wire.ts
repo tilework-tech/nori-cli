@@ -2689,6 +2689,21 @@ export interface ListedSessionMeta {
    * The slug of the agent the session runs, when known.
    */
   "nori/agent"?: string | null;
+  /**
+   * Whether the host is running the session now.
+   */
+  "nori/session"?: ListedSessionState | null;
+}
+/**
+ * `_meta["nori/session"]` on a `session/list` row.
+ */
+export interface ListedSessionState {
+  /**
+   * `true` while the host runs the session's agent; `false` for a closed,
+   * failed, or finished session and for a stored transcript, which
+   * `session/load` or `session/resume` restarts.
+   */
+  live: boolean;
 }
 /**
  * `_meta` a client may put on `session/new`.

@@ -24,6 +24,18 @@ pub struct ListedSessionMeta {
     /// The slug of the agent the session runs, when known.
     #[serde(rename = "nori/agent", skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
+    /// Whether the host is running the session now.
+    #[serde(rename = "nori/session", skip_serializing_if = "Option::is_none")]
+    pub session: Option<ListedSessionState>,
+}
+
+/// `_meta["nori/session"]` on a `session/list` row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ListedSessionState {
+    /// `true` while the host runs the session's agent; `false` for a closed,
+    /// failed, or finished session and for a stored transcript, which
+    /// `session/load` or `session/resume` restarts.
+    pub live: bool,
 }
 
 /// `_meta` a client may put on `session/new`.

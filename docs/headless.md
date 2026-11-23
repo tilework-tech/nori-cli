@@ -1,6 +1,6 @@
 # Headless execution
 
-`nori exec` runs a configured ACP agent without starting the terminal UI. It has two intentionally separate interfaces: a plaintext command for one-off shell use and a standard ACP stdio facade for programmatic callers.
+`nori exec` runs a configured ACP agent without starting the terminal UI. It has two intentionally separate interfaces: a plaintext command for one-off shell use, and `--acp`, which runs a headless Nori host speaking standard ACP on stdio for programmatic callers.
 
 ## Plaintext mode
 
@@ -49,28 +49,57 @@ Plaintext mode never displays an interactive approval prompt. If an ACP-visible 
 
 Use `--dangerously-bypass-approvals-and-sandbox` only for explicitly trusted unattended work. It disables Nori's approval and sandbox policy for operations visible through ACP. It cannot govern tools that a provider executes internally without requesting ACP permission.
 
-## ACP stdio facade
+## ACP on stdio (headless host)
 
 ```sh
 nori exec --acp
 ```
 
-This mode makes Nori an ACP agent over line-delimited JSON-RPC on stdin and stdout. There is no Nori event envelope and no raw pass-through of the downstream agent's complete event stream.
+`nori exec --acp` is an alias for `nori host --stdio`: a headless local
+background host whose one client speaks newline-delimited JSON-RPC ACP v1 on
+stdin and stdout. It serves exactly the methods of an authenticated
+`/sessions` connection to `nori host` — `session/new`, `list`, `load`,
+`resume`, `prompt`, `cancel`, `close`, `delete`, `set_mode` and
+`set_config_option`, plus the `_nori/*` extension (control, subscribe,
+follow-up, delegation, host stop). See
+[remote-control.md §12](remote-control.md#12-standard-acp-v1-on-the-background-host)
+for the wire contract.
 
-The initial facade supports:
+- `initialize` answers with `agentInfo.name = "nori-host"` and the host's
+  standard `sessionCapabilities`.
+- One stream can run any number of sessions and any number of prompts per
+  session. Turns stream `session/update` notifications as the agent produces
+  them, then answer with the agent's `stopReason`.
+- `session/new` takes an absolute `cwd`, whose project configuration applies,
+  and accepts stdio and HTTP `mcpServers`.
+- The stdio client always holds control, so it receives every
+  `session/request_permission`; `observe: true` on `initialize` is ignored.
+  There is no bearer token.
+- `--agent`, `-C`, `-c`, `--add-dir` and
+  `--dangerously-bypass-approvals-and-sandbox` set the host's configuration
+  exactly as they do for `nori host`.
+- The process takes no host lock and publishes no discovery files, so it runs
+  beside a detached `nori host` using the same `NORI_HOME`. Its sessions end
+  with the process; their transcripts remain and `session/load` or
+  `session/resume` restarts them later. Neither host sees the
+  other's live sessions: each lists the other's as stored (`live: false`), and
+  loading or resuming one there runs it twice on one transcript. Do not.
 
-- `initialize`
-- `session/new`
-- `session/set_config_option` before the prompt starts
-- `session/prompt`
-- `session/cancel`
-- agent-to-client `session/request_permission`
+| Event | Outcome |
+| --- | --- |
+| stdin reaches EOF | Sessions stop; exit 0. |
+| `_nori/host/stop` | Sessions stop; exit 0. |
+| SIGINT or SIGTERM | Sessions stop; exit non-zero. |
+| The client falls too far behind and is disconnected | Sessions stop; exit non-zero. |
 
-`session/new` returns the downstream ACP session ID and its effective configuration options. During `session/prompt`, Nori collects the downstream assistant text and sends one complete standard `agent_message_chunk` update, followed by the correlated prompt response with the downstream `stopReason`. Permission requests are forwarded as standard ACP requests; the caller's correlated response is relayed to the downstream agent.
+Blank input lines are ignored. A line that is not JSON receives a `-32700`
+error with a null `id`. Stdout carries only ACP JSON-RPC lines; diagnostics go
+to stderr.
 
-Version one is deliberately bounded to one session and one prompt per process. Caller-provided `mcpServers` and `additionalDirectories` are rejected. Configure the selected agent, MCP servers, approval policy, sandbox, and other runtime settings through normal Nori configuration and command-line overrides instead.
-
-Closing stdin cancels active work, resolves outstanding downstream activity safely, and shuts down the process. Stdout remains exclusively ACP JSON-RPC; operational diagnostics use stderr or Nori's configured tracing destination.
+Clients of the earlier bounded facade see these differences: replies stream as
+chunks rather than one final text chunk, the `nori/multiSession` capability is
+no longer advertised, and caller `mcpServers` are accepted rather than
+rejected. The exec analytics event with `session_mode = acp` is no longer sent.
 
 ## Common options
 

@@ -139,13 +139,125 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
 /// too slow and is closed.
 const OUTBOUND_CAPACITY: usize = 16384;
 
+/// How a connection's transport differs from a WebSocket's.
+#[derive(Clone, Copy)]
+pub(super) enum Transport {
+    WebSocket,
+    /// The host's own stdin and stdout: its one client always controls, and
+    /// an ended subscription is reported in band, as the stream cannot close
+    /// and reopen.
+    Stdio,
+}
+
 async fn serve<M: ManagedAgent>(
     socket: WebSocket,
     state: &HostState<M>,
     client: i64,
     cancel: CancellationToken,
 ) -> anyhow::Result<()> {
-    let (mut sink, mut incoming) = socket.split();
+    let (sink, incoming) = socket.split();
+    serve_frames(sink, incoming, state, client, cancel, Transport::WebSocket).await
+}
+
+/// Serve one host client on stdin and stdout until stdin closes or `stop`
+/// completes. A stop lets the reply already being written finish and
+/// returns the stop's value.
+pub(super) async fn serve_stdio<M: ManagedAgent, T>(
+    host: Arc<M>,
+    instance: String,
+    stop: impl std::future::Future<Output = T>,
+) -> anyhow::Result<Option<T>> {
+    let shutdown = CancellationToken::new();
+    let state = HostState {
+        host,
+        lanes: Default::default(),
+        token: "".into(),
+        instance: instance.into(),
+        control: Default::default(),
+        generation: Arc::new(AtomicI64::new(0)),
+        shutdown: shutdown.clone(),
+    };
+    // A pending read on Tokio's stdin keeps the runtime from shutting down,
+    // so lines are read on a plain thread that ends with the process.
+    let (lines, input) = tokio::sync::mpsc::channel::<std::io::Result<Vec<u8>>>(64);
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        for line in std::io::stdin().lock().split(b'\n') {
+            if lines.blocking_send(line).is_err() {
+                break;
+            }
+        }
+    });
+    let incoming = tokio_stream::wrappers::ReceiverStream::new(input).filter_map(|line| async {
+        match line.map(String::from_utf8) {
+            Ok(Ok(line)) if line.trim().is_empty() => None,
+            Ok(Ok(line)) => Some(Ok::<_, axum::Error>(Message::Text(line.into()))),
+            // Not UTF-8, so not JSON either: an empty frame earns the same
+            // parse error as any other line that is not JSON.
+            Ok(Err(_)) => Some(Ok(Message::Text(String::new().into()))),
+            Err(error) => Some(Err(axum::Error::new(error))),
+        }
+    });
+    let sink = Box::pin(futures::sink::unfold(
+        tokio::io::stdout(),
+        |mut output, frame: Message| async move {
+            use tokio::io::AsyncWriteExt;
+            if let Message::Text(text) = frame {
+                output
+                    .write_all(format!("{}\n", text.as_str()).as_bytes())
+                    .await?;
+                output.flush().await?;
+            }
+            Ok::<_, std::io::Error>(output)
+        },
+    ));
+    let cancel = shutdown.child_token();
+    let serving = serve_frames(
+        sink,
+        Box::pin(incoming),
+        &state,
+        0,
+        cancel.clone(),
+        Transport::Stdio,
+    );
+    tokio::pin!(serving);
+    let stopped = tokio::select! {
+        served = &mut serving => {
+            served?;
+            None
+        }
+        stopped = stop => {
+            shutdown.cancel();
+            tokio::time::timeout(std::time::Duration::from_secs(5), serving)
+                .await
+                .map_err(|_| anyhow::anyhow!("the stdio client stopped reading"))??;
+            Some(stopped)
+        }
+    };
+    // The host closes a client that falls too far behind; a stdio client
+    // cannot reconnect, so that ends the host with an error.
+    anyhow::ensure!(
+        stopped.is_some() || !cancel.is_cancelled(),
+        "the stdio client fell too far behind and was disconnected"
+    );
+    Ok(stopped)
+}
+
+async fn serve_frames<M, S, I, E>(
+    mut sink: S,
+    mut incoming: I,
+    state: &HostState<M>,
+    client: i64,
+    cancel: CancellationToken,
+    transport: Transport,
+) -> anyhow::Result<()>
+where
+    M: ManagedAgent,
+    S: futures::Sink<Message> + Unpin + Send,
+    S::Error: std::error::Error + Send + Sync + 'static,
+    I: futures::Stream<Item = Result<Message, E>> + Unpin + Send,
+    E: std::error::Error + Send + Sync + 'static,
+{
     let mut subscription: Option<ManagedSubscription> = None;
     let mut initialized = false;
     let (changes, mut roles) = watch::channel("watcher");
@@ -205,7 +317,10 @@ async fn serve<M: ManagedAgent>(
                                 break;
                             }
                             let reply = if request["method"] == "initialize" {
-                                let observe = request["params"]["observe"] == true;
+                                let observe = match transport {
+                                    Transport::WebSocket => request["params"]["observe"] == true,
+                                    Transport::Stdio => false,
+                                };
                                 let mut reply = state.host.request_from(client, request).await;
                                 if reply.response.get("error").is_none() {
                                     reply.response["result"]["control"] = state.control.lock().await.register(client, &changes, observe);
@@ -263,7 +378,16 @@ async fn serve<M: ManagedAgent>(
                         None => std::future::pending().await,
                     }
                 } => {
-                    let Some(envelope) = event else { break; };
+                    let Some(envelope) = event else {
+                        match transport {
+                            Transport::WebSocket => break,
+                            Transport::Stdio => {
+                                subscription = None;
+                                send_frame(&mut sink, Message::Text(json!({"jsonrpc":"2.0","method":"_nori/session/subscription_ended","params":{"reason":"replay_required"}}).to_string().into())).await?;
+                                continue;
+                            }
+                        }
+                    };
                     send_frame(&mut sink, Message::Text(managed_event(&envelope).to_string().into())).await?;
                 }
             }

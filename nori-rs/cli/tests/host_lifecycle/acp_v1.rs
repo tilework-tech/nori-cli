@@ -556,7 +556,7 @@ fn the_host_publishes_host_json_beside_the_legacy_discovery_files() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn list_rows_say_which_agent_runs_a_session() {
+async fn list_rows_say_which_agent_runs_a_session_and_whether_it_is_live() {
     let host = host_with("", &[]);
     let folder = TempDir::new().unwrap();
     let mut acp = controller(&host);
@@ -581,11 +581,11 @@ async fn list_rows_say_which_agent_runs_a_session() {
 
     assert_eq!(
         listed(&listing, &live).unwrap()["_meta"],
-        json!({"nori/agent": "second-mock"})
+        json!({"nori/agent": "second-mock", "nori/session": {"live": true}})
     );
     assert_eq!(
         listed(&listing, &closed).unwrap()["_meta"],
-        json!({"nori/agent": "mock-model"})
+        json!({"nori/agent": "mock-model", "nori/session": {"live": false}})
     );
 }
 

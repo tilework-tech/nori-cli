@@ -90,7 +90,8 @@ canonical identity and organization fanout.
   backend.
 - The optional WebSocket Agent surface can be enabled by startup `--remote` or
   managed inside the TUI with `/remote-control`. It is specified in
-  `@/docs/remote-control.md` and remains separate from the bounded
-  `nori exec --acp` stdio facade.
+  `@/docs/remote-control.md` and remains separate from the background host's
+  standard ACP face, which `nori exec --acp` serves on stdio
+  (`@/docs/headless.md`).
 
 Created and maintained by Nori.

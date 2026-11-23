@@ -633,7 +633,9 @@ async fn run_exec(
             Some(AskForApproval::Never),
         )
     } else {
-        (None, Some(AskForApproval::OnRequest))
+        // The headless host keeps the configured policy, as `nori host
+        // --stdio` does; a one-shot run asks on request.
+        (None, (!acp).then_some(AskForApproval::OnRequest))
     };
     let cwd = cwd
         .or(interactive.cwd)
@@ -646,24 +648,18 @@ async fn run_exec(
         additional_writable_roots: interactive.add_dir,
         raw_overrides,
     };
+    if acp {
+        // `nori exec --acp` is the headless `nori host --stdio`.
+        let config = nori_config::NoriConfig::load_with_overrides(overrides.clone())?;
+        return host::serve_stdio((config, overrides)).await;
+    }
     let config = nori_config::NoriConfig::load_with_overrides(overrides)?;
     nori_harness::initialize_registry(config.agents.clone())
         .map_err(|error| anyhow::anyhow!("failed to initialize agent registry: {error}"))?;
-    let analytics = AnalyticsReporter::new(
-        if acp {
-            SessionMode::Acp
-        } else {
-            SessionMode::Exec
-        },
-        config.nori_home.clone(),
-    );
+    let analytics = AnalyticsReporter::new(SessionMode::Exec, config.nori_home.clone());
     let config = Arc::new(config);
 
-    if acp {
-        return nori_exec::run_acp(config, cli_version, Some(analytics)).await;
-    }
-
-    // Read stdin only after the ACP facade has had its chance to claim it.
+    // `--acp` has returned above, so stdin is free to carry the prompt.
     let (prompt, _) = stdin_prompt::resolve_prompt(prompt, stdin)?;
     let Some(prompt) = prompt else {
         anyhow::bail!("a prompt argument or piped stdin is required");
