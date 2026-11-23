@@ -81,7 +81,34 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   requests to its ACP client.
 - A private `SessionUpdate` copy feeds the harness reducer after the matching
   raw notification; it is implementation state, not another public protocol.
-- The [registry](src/registry.rs) checks configured slugs before resolving built-in aliases. Claude Code and Codex launch through the preferred package runner with upstream `@latest` resolution. Grok Build uses npm to run the upstream package’s native install step. Antigravity runs `agy acp --disable-telemetry` and OpenCode runs `opencode acp` from the host’s `PATH`. Cursor uses `cursor-agent acp` when the packaged executable is on PATH, then falls back to the standalone command `agent acp`. Cursor reads its own saved login or the inherited `CURSOR_API_KEY` at startup. Hermes runs `hermes acp` and resolves its provider from its profile and process environment. Pi uses `npx` to install `pi-acp` and `@earendil-works/pi-coding-agent` together so the adapter finds `pi` on its PATH. Explicit runtime settings and custom distributions continue to control the launch. See the [provider table](../../README.md#providers) for commands and authentication.
+- The [registry](src/registry.rs) checks configured slugs before resolving built-in aliases. Claude Code and Codex launch through the preferred package runner (`NORI_MANAGED_BY_BUN`, then `NORI_MANAGED_BY_NPM`, then `bunx` on PATH, else `npx`) with upstream `@latest` resolution unless a version is pinned (see below). Grok Build always uses npm to run the upstream package’s native install step, because bun skips that postinstall hook. Antigravity runs `agy acp --disable-telemetry` and OpenCode runs `opencode acp` from the host’s `PATH`. Cursor uses `cursor-agent acp` when the packaged executable is on PATH, then falls back to the standalone command `agent acp`. Cursor reads its own saved login or the inherited `CURSOR_API_KEY` at startup. Hermes runs `hermes acp` and resolves its provider from its profile and process environment. Pi uses `npx` to install `pi-acp` and `@earendil-works/pi-coding-agent` together so the adapter finds `pi` on its PATH. Explicit runtime settings and custom distributions continue to control the launch. See the [provider table](../../README.md#providers) for commands and authentication.
+- [Adapter launch control](src/adapter_launch.rs) runs after slug resolution
+  and before anything is spawned, for built-in and `[[agents]]` slugs alike.
+  Precedence per agent is `NORI_ACP_COMMAND_<SLUG>` (slug uppercased, `-` to
+  `_`), then `[acp_adapters.<slug>] command`, then `[acp_adapters.<slug>]
+  version`, then `@latest`. A command override is shell-split (shlex) and
+  replaces only `command`/`args` and the install hint; a built-in keeps its
+  identity, `CODEX_CONFIG`, model injection, and token-provider handling. A
+  version replaces `@latest` on the adapter package only (for Pi, `pi-acp`;
+  the Pi coding agent stays `@latest`) and adds `--prefer-offline` to npx so a
+  pinned launch does not revalidate registry metadata each run. A version on
+  an agent that Nori does not launch from an npm package (PATH-launched
+  built-ins and every custom distribution) fails that agent's launch with an
+  error naming `acp_adapters.<slug>.version`. Overrides live in a
+  process-wide slot that the frontends set next to `initialize_registry` (the
+  CLI's `exec`/ACP path, the TUI, and a non-managed `nori host`); managed
+  launches carry their own pinned definitions and ignore it. Config keys may
+  be aliases; they are matched after alias resolution, and the canonical key
+  wins over an alias.
+- `AcpAgentConfig::download_notice` is a "Downloading <specs>…" line set when
+  the npx or bunx cache appears to lack the adapter package. It reproduces the
+  npm 10 `_npx/<hash>` install-directory layout (under `$npm_config_cache` or
+  `~/.npm`) and bun 1.x's `$TMPDIR/bunx-<uid>-<spec>` layout, so it is a
+  heuristic: other installs or cache layouts can produce a spurious notice,
+  and npx `@latest` updates or bunx's stale re-installs go unannounced. It is
+  `None` for command overrides and PATH-launched agents. The
+  [connection](src/connection/acp_connection.rs) logs it at info level just
+  before spawning; it is not forwarded over ACP.
 - Hermes v0.23.3 needs working loopback to reach its profile’s gateway during
   `session/new`. An auto-started gateway can outlive `nori host stop`. Its
   idle timeout defaults to 600 seconds (`gateway.unmanaged_idle_exit_seconds`).

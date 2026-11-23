@@ -463,6 +463,9 @@ impl AcpConnection {
             config.args,
             cwd.display()
         );
+        if let Some(notice) = &config.download_notice {
+            tracing::info!("{notice}");
+        }
 
         // --- Spawn the agent subprocess ---
         let mut server = crate::launch::ServerCommand::new(&config.command, &config.args);
