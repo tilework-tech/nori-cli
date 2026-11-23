@@ -1,0 +1,30 @@
+• Multi scenario answered.
+
+
+› inline
+
+
+• Inline scenario answered.
+
+
+› reply
+
+
+• Ordinary synthetic reply.
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› emoji
+
+
+• Emoji scenario answered.
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ master

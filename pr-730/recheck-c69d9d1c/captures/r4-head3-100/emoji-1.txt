@@ -1,0 +1,30 @@
+• Multi scenario answered.
+
+
+› inline
+
+
+• Inline scenario answered.
+
+
+› reply
+
+
+• Ordinary synthetic reply.
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› emoji
+
+
+• 設定ローダーを読んでから既定値を変更します🧪次にテストを更新して👩‍💻確認... (1s • esc to interrupt)
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ master

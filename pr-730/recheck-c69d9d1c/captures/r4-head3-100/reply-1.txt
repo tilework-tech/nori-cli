@@ -1,0 +1,30 @@
+
+
+› multi
+
+
+• Explored 1 read
+  • Read fixtures/profile.toml
+
+─ Worked for 4s ────────────────────────────────────────────────────────────────────────────────────
+
+• Intermediate note from the agent.
+
+• Multi scenario answered.
+
+
+› inline
+
+
+• Inline scenario answered.
+
+
+› reply
+
+
+• Rearranging deck chairs on the Titanic (1s • esc to interrupt)
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ master

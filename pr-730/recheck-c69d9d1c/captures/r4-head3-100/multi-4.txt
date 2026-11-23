@@ -1,0 +1,30 @@
+
+
+› plain
+
+
+• Plain scenario answered.
+
+
+› bold
+
+
+• Bold scenario answered.
+
+
+› multi
+
+
+• Explored 1 read
+  • Read fixtures/profile.toml
+
+─ Worked for 4s ────────────────────────────────────────────────────────────────────────────────────
+
+• Intermediate note from the agent.
+
+• Verifying the alias table (6s • esc to interrupt)
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ master

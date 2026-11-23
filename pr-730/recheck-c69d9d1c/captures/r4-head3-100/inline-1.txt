@@ -1,0 +1,30 @@
+
+
+› bold
+
+
+• Bold scenario answered.
+
+
+› multi
+
+
+• Explored 1 read
+  • Read fixtures/profile.toml
+
+─ Worked for 4s ────────────────────────────────────────────────────────────────────────────────────
+
+• Intermediate note from the agent.
+
+• Multi scenario answered.
+
+
+› inline
+
+
+• I should open the synthetic loader.toml file before editing the default... (1s • esc to interrupt)
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ master

@@ -1,0 +1,30 @@
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/pr730-fixtures/proj · Agent approvals
+  Agent        Synth
+
+
+› tokhead
+
+
+• Tokhead scenario answered.
+
+
+› tokemph
+
+
+• Tokemph scenario answered.
+
+
+› twohead
+
+
+• Twohead scenario answered.
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ master

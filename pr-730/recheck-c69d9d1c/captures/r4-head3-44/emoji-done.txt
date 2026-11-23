@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/…/pr730-fixtures/proj ·
+Agent approvals
+  Agent        Synth
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› emoji
+
+
+• Emoji scenario answered.
+
+
+› / for slash command menu
+
+                                    ⎇ master

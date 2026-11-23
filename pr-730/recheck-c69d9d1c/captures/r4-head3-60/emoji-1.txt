@@ -1,0 +1,30 @@
+• Tokemph scenario answered.
+
+
+› twohead
+
+
+• Twohead scenario answered.
+
+
+› gemini
+
+
+• Gemini scenario answered.
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› emoji
+
+
+• 設定ローダーを読んでから既定値... (1s • esc to interrupt)
+
+
+› ! for shell commands
+
+                                                    ⎇ master

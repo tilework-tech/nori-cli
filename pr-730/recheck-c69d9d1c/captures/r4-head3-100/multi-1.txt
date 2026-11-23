@@ -1,0 +1,30 @@
+• Twohead scenario answered.
+
+
+› gemini
+
+
+• Gemini scenario answered.
+
+
+› plain
+
+
+• Plain scenario answered.
+
+
+› bold
+
+
+• Bold scenario answered.
+
+
+› multi
+
+
+• Listing the synthetic fixture directory first. (1s • esc to interrupt)
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ master

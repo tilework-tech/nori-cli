@@ -1,0 +1,30 @@
+• Inline scenario answered.
+
+
+› reply
+
+
+• Ordinary synthetic reply.
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› emoji
+
+
+• Emoji scenario answered.
+
+
+› long
+
+
+• Comparing the synthetic loader defaults against the fixture profile so ... (1s • esc to interrupt)
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ master

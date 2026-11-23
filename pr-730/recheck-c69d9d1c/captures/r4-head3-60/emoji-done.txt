@@ -1,0 +1,30 @@
+• Tokemph scenario answered.
+
+
+› twohead
+
+
+• Twohead scenario answered.
+
+
+› gemini
+
+
+• Gemini scenario answered.
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› emoji
+
+
+• Emoji scenario answered.
+
+
+› ! for shell commands
+
+                                                    ⎇ master

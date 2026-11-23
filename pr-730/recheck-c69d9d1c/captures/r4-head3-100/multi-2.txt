@@ -1,0 +1,30 @@
+› gemini
+
+
+• Gemini scenario answered.
+
+
+› plain
+
+
+• Plain scenario answered.
+
+
+› bold
+
+
+• Bold scenario answered.
+
+
+› multi
+
+
+• Explored 1 read
+  • Read fixtures/profile.toml
+
+• Listing the synthetic fixture directory first. (3s • esc to interrupt)
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ master

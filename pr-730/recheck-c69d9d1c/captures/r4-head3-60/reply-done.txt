@@ -1,0 +1,30 @@
+• Gemini scenario answered.
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› emoji
+
+
+• Emoji scenario answered.
+
+
+› long
+
+
+• Long scenario answered.
+
+
+› reply
+
+
+• Ordinary synthetic reply.
+
+
+› ! for shell commands
+
+                                                    ⎇ master

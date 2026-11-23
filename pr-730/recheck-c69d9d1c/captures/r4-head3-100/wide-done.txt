@@ -1,0 +1,30 @@
+  • Read fixtures/profile.toml
+
+─ Worked for 4s ────────────────────────────────────────────────────────────────────────────────────
+
+• Intermediate note from the agent.
+
+• Multi scenario answered.
+
+
+› inline
+
+
+• Inline scenario answered.
+
+
+› reply
+
+
+• Ordinary synthetic reply.
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ master

@@ -1,0 +1,30 @@
+• Gemini scenario answered.
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› emoji
+
+
+• Emoji scenario answered.
+
+
+› long
+
+
+• Long scenario answered.
+
+
+› reply
+
+
+• Counting backwards from infinity (1s • esc to interrupt)
+
+
+› ! for shell commands
+
+                                                    ⎇ master

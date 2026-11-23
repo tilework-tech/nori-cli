@@ -1,0 +1,30 @@
+• Twohead scenario answered.
+
+
+› gemini
+
+
+• Gemini scenario answered.
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› emoji
+
+
+• Emoji scenario answered.
+
+
+› long
+
+
+• Comparing the synthetic loader ... (1s • esc to interrupt)
+
+
+› ! for shell commands
+
+                                                    ⎇ master

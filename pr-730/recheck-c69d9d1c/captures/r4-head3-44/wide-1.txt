@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/…/pr730-fixtures/proj ·
+Agent approvals
+  Agent        Synth
+
+
+› wide
+
+
+• 合成設定ファイルを読み込んで既定値を比較し
+
+
+› / for slash command menu
+
+                                    ⎇ master

@@ -1,0 +1,30 @@
+  Agent        Synth
+
+
+› tokhead
+
+
+• Tokhead scenario answered.
+
+
+› tokemph
+
+
+• Tokemph scenario answered.
+
+
+› twohead
+
+
+• Twohead scenario answered.
+
+
+› gemini
+
+
+• Planning the alias change (2s • esc to interrupt)
+
+
+› ! for shell commands
+
+                                                    ⎇ master
