@@ -3,6 +3,7 @@
 mod browser_modify;
 mod context_usage;
 mod delegation;
+mod modes;
 mod runaway_search;
 
 #[cfg(test)]
@@ -126,6 +127,7 @@ struct MockSessionConfig {
     model_id: String,
     thought_level: Option<String>,
     speed: Option<String>,
+    mode: Option<String>,
 }
 
 fn default_session_config() -> MockSessionConfig {
@@ -139,6 +141,7 @@ fn default_session_config() -> MockSessionConfig {
         model_id,
         thought_level: Some("medium".to_string()),
         speed: None,
+        mode: modes::starting_mode(),
     }
 }
 
@@ -189,6 +192,9 @@ fn config_options_for_state(config: &MockSessionConfig) -> Vec<acp::SessionConfi
             .description("Reasoning depth for the active model")
             .category(acp::SessionConfigOptionCategory::ThoughtLevel),
         );
+    }
+    if let Some(mode) = &config.mode {
+        options.push(modes::option(mode));
     }
 
     options
@@ -1262,7 +1268,16 @@ impl MockAgent {
         }
 
         // Support requesting permission from client for testing approval bridging
-        if request_permission || std::env::var("MOCK_AGENT_REQUEST_PERMISSION").is_ok() {
+        let mode_asks = {
+            let sessions = self.state.session_configs.lock().unwrap();
+            modes::asks(
+                sessions
+                    .get(&session_id.to_string())
+                    .and_then(|config| config.mode.as_deref()),
+            )
+        };
+        if request_permission || mode_asks || std::env::var("MOCK_AGENT_REQUEST_PERMISSION").is_ok()
+        {
             if let Some(delay) = std::env::var("MOCK_AGENT_PERMISSION_DELAY_MS")
                 .ok()
                 .and_then(|value| value.parse::<u64>().ok())
@@ -2188,10 +2203,23 @@ fn mock_agent() -> impl ConnectTo<Client> {
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async move |_arguments: acp::SetSessionModeRequest,
-                        responder: Responder<acp::SetSessionModeResponse>,
-                        _cx: ConnectionTo<Client>| {
-                responder.respond(acp::SetSessionModeResponse::new())
+            {
+                let state = state.clone();
+                async move |arguments: acp::SetSessionModeRequest,
+                            responder: Responder<acp::SetSessionModeResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    let mode = arguments.mode_id.to_string();
+                    if modes::is_advertised(&mode) {
+                        state
+                            .session_configs
+                            .lock()
+                            .unwrap()
+                            .entry(arguments.session_id.to_string())
+                            .or_insert_with(default_session_config)
+                            .mode = Some(mode);
+                    }
+                    responder.respond(acp::SetSessionModeResponse::new())
+                }
             },
             agent_client_protocol::on_receive_request!(),
         )
@@ -2238,6 +2266,10 @@ fn mock_agent() -> impl ConnectTo<Client> {
                             }
                             "speed" => {
                                 cfg.speed = Some(value);
+                                Ok(config_options_for_state(cfg))
+                            }
+                            "mode" if modes::is_advertised(&value) => {
+                                cfg.mode = Some(value);
                                 Ok(config_options_for_state(cfg))
                             }
                             _ => Err(acp::Error::invalid_params()),

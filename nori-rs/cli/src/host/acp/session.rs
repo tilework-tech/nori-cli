@@ -156,6 +156,7 @@ impl HostService {
             self.settings
                 .update(&id, |settings| settings.mcp_servers = Some(servers));
         }
+        self.settle_adapter_mode(&id).await?;
         self.managed.set_selected_session(Some(id));
         let (options, modes) = self.session_configuration(&id).await?;
         Ok(json!({"sessionId": id.to_string(), "configOptions": options, "modes": modes}))

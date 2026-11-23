@@ -89,10 +89,11 @@ action.
 `[host]` configures the background host. `default_mode` (`ask`, `agent` or
 `approve-all`, as `HostDefaultMode`) is the permission mode a local host gives
 sessions that clients start with ACP `session/new`; unset keeps each folder's
-own `approval_policy`. `max_clients` (default `DEFAULT_MAX_CLIENTS`, 16) is
-the most WebSocket clients a non-managed background host serves at once across
-`/acp` and `/sessions`; the loader does not clamp it, and the host treats a
-value below 1 as 1. The other keys configure the managed machine listener.
+own `approval_policy`. A default of `ask` gives `agent` to sessions whose
+adapter cannot ask every time. `max_clients` (default `DEFAULT_MAX_CLIENTS`,
+16) is the most WebSocket clients a non-managed background host serves at once
+across `/acp` and `/sessions`; the loader does not clamp it, and the host treats
+a value below 1 as 1. The other keys configure the managed machine listener.
 `managed` and `side_sessions`
 default to false. For both shared and dedicated layouts, `max_sessions` defaults
 to eight process slots and must be positive. A dedicated binding can use
