@@ -1,7 +1,7 @@
 name: rust-ci
 on:
   push:
-    branches: ['verify/pr-733-native-host']
+    branches: ['verify/pr-733-native-host-r2']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,11 +32,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: 656b488a087161217602289f5bf17df5cbf07a2c
+          ref: 38b012d0f0ee453fb17c45c83e116ac3e5213c26
           persist-credentials: false
 
       - name: Verify source revision
-        run: test "$(git rev-parse HEAD)" = 656b488a087161217602289f5bf17df5cbf07a2c && git rev-parse HEAD && uname -sm
+        run: test "$(git rev-parse HEAD)" = 38b012d0f0ee453fb17c45c83e116ac3e5213c26 && git rev-parse HEAD && uname -sm
 
       - name: Free disk space
         if: runner.os == 'Linux'
