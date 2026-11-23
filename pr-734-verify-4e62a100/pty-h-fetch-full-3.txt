@@ -1,0 +1,11 @@
+› go
+
+
+• Tool [completed]: Fetch release notes (fetch)
+  └ Tool: Fetch release notes {"url":"https://example.test/notes"}
+    ┄ 7 lines hidden
+    fetched row 08
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Synthetic turn finished.

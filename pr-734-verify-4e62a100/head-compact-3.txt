@@ -1,0 +1,40 @@
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/v734/run/q3-hc/orbit-demo · Agent approvals
+  Agent        Synthetic Agent
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+
+› go
+
+
+• Ran cargo …
+  └ cmd line 12 of 12
+
+• Tool [completed]: Fetch release notes (fetch)
+  └ Tool: Fetch release notes {"url":"https://example.test/notes"}
+    fetched row 01
+    fetched row 02
+    fetched row 03
+    fetched row 04
+    fetched row 05
+    fetched row 06
+    fetched row 07
+    fetched row 08
+
+• Edited /tmp/v734/run/q3-hc/orbit-demo/orbit.rs (+3 -3)
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+
+• Synthetic turn finished.
+
+
+› ! for shell commands
+

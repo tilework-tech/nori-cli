@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/v734/run/q3-rs/orbit-demo · Agent approvals
+  Agent        Synthetic Agent
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+
+› go
+
+
+• Explored 1 read · 1 search
+  • Search match
+  • Read orbit.rs
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+
+• Synthetic turn finished.
+
+
+› @ for file mentions
+
