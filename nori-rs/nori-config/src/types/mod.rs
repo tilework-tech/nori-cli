@@ -519,6 +519,9 @@ pub struct SandboxWorkspaceWrite {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct FeaturesToml {
     pub enable_experimental_windows_sandbox: Option<bool>,
+    /// Use the skillsets v2 CLI (list, layer, unlayer) for the skillset
+    /// picker and footer instead of the v1 commands.
+    pub skillsets_v2: Option<bool>,
 }
 
 /// Persisted safety notice acknowledgements.
@@ -2358,6 +2361,8 @@ pub struct NoriConfig {
 
     /// Whether the experimental Windows sandbox is enabled in user config.
     pub windows_sandbox_enabled: bool,
+    /// Skillset picker and footer use skillsets v2 (`[features] skillsets_v2`).
+    pub skillsets_v2: bool,
 
     /// Environment inherited by sandboxed commands.
     pub shell_environment_policy: ShellEnvironmentPolicy,
@@ -2546,6 +2551,7 @@ impl Default for NoriConfig {
             has_explicit_approval_or_sandbox_policy: false,
             forced_auto_mode_downgraded_on_windows: false,
             windows_sandbox_enabled: false,
+            skillsets_v2: false,
             shell_environment_policy: ShellEnvironmentPolicy::default(),
             active_project: ProjectConfig::default(),
             notices: Notice::default(),

@@ -90,17 +90,11 @@ fn test_footer_full_startup_with_all_info() {
     // Create a temp directory for our mock nori-skillsets binary
     let mock_bin_dir = tempfile::tempdir().expect("Failed to create temp dir for mock binary");
 
-    // Create a mock skillsets v2 executable that handles --version and
-    // `-n status --json`.
+    // Create a mock nori-skillsets executable that handles --version and list-active
     let mock_nori = mock_bin_dir.path().join("nori-skillsets");
     std::fs::write(
         &mock_nori,
-        r#"#!/bin/sh
-case "$2" in
-  status) echo '{"ok":true,"data":{"compiled":true,"layers":[{"name":"test-skillset","version":"1.0.0","mode":"published"}],"agents":["claude"],"entries":[],"counts":{}}}';;
-  *) echo 'nori-skillsets 0.9.99';;
-esac
-"#,
+        "#!/bin/sh\ncase \"$1\" in\n  list-active) echo 'test-skillset';;\n  *) echo 'nori-skillsets 0.9.99';;\nesac\n",
     )
     .expect("Failed to write mock nori-skillsets");
     std::fs::set_permissions(&mock_nori, std::fs::Permissions::from_mode(0o755))
@@ -334,5 +328,68 @@ fn test_default_idle_footer_has_no_metadata_clutter() {
     assert_snapshot!(
         "default_idle_footer",
         normalize_for_input_snapshot(contents)
+    );
+}
+
+/// Start the TUI with a CLI that answers only skillsets v2 `status` (layer
+/// `v2-layer`) plus `--version`, with the footer skillset and version segments
+/// on, and return the screen once the footer is populated.
+#[cfg(target_os = "linux")]
+fn footer_with_skillsets_v2_cli(features_toml: &str) -> String {
+    use std::os::unix::fs::PermissionsExt;
+
+    let mock_bin_dir = tempfile::tempdir().expect("Failed to create temp dir for mock binary");
+    let mock = mock_bin_dir.path().join("nori-skillsets");
+    std::fs::write(
+        &mock,
+        r#"#!/bin/sh
+for a in "$@"; do
+  case "$a" in
+    status) echo '{"ok":true,"data":{"compiled":true,"layers":[{"name":"v2-layer","version":"1.0.0","mode":"published"}],"agents":["claude"],"entries":[],"counts":{}}}'; exit 0 ;;
+    --version) echo 'nori-skillsets 0.9.99'; exit 0 ;;
+  esac
+done
+echo "error: unknown command" >&2
+exit 1
+"#,
+    )
+    .expect("Failed to write mock nori-skillsets");
+    std::fs::set_permissions(&mock, std::fs::Permissions::from_mode(0o755))
+        .expect("Failed to set permissions on mock nori-skillsets");
+
+    let extra_config_toml =
+        format!("{features_toml}\n[tui.footer_segments]\nskillset = true\nnori_version = true\n");
+    let mut session = TuiSession::spawn_with_config(
+        24,
+        120,
+        SessionConfig::new()
+            .with_extra_path(mock_bin_dir.path().to_path_buf())
+            .with_extra_config_toml(extra_config_toml),
+    )
+    .expect("Failed to spawn");
+
+    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_text("Skillsets v", TIMEOUT).unwrap();
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    session.screen_contents()
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn footer_shows_skillsets_v2_layers_when_the_feature_is_on() {
+    let contents = footer_with_skillsets_v2_cli("[features]\nskillsets_v2 = true\n");
+    assert!(
+        contents.contains("v2-layer"),
+        "footer should show the skillset layered via skillsets v2. Contents: {contents}"
+    );
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn footer_ignores_skillsets_v2_when_the_feature_is_off() {
+    let contents = footer_with_skillsets_v2_cli("");
+    assert!(
+        !contents.contains("v2-layer"),
+        "footer must not query skillsets v2 without the feature. Contents: {contents}"
     );
 }

@@ -389,6 +389,27 @@ delegated child whose task finished stays as `done`. Closing
 the session on screen shows the next open one. The last open session cannot be
 closed this way; use `/quit`.
 
+## Skillsets v2: `[features] skillsets_v2`
+
+```toml
+[features]
+skillsets_v2 = true
+```
+
+Experimental and off by default; it is not part of v1 scope. Restart Nori after
+changing it, or try it once with `-c features.skillsets_v2=true`. It requires
+the skillsets v2 CLI, installed with
+`curl -fsSL https://cli.noriskillsets.dev/install.sh | sh` (the npm
+`nori-skillsets` package is v1), or a launcher named in
+`NORI_SKILLSETS_COMMAND`.
+
+With it on, `/switch-skillset` lists the skillsets layered into, or published
+for, the session's worktree (or your home directory when there is no worktree)
+and toggles the one you pick: a layered skillset is unlayered, any other is
+layered on top. `/switch-skillset <name>` layers that skillset directly. The
+footer and `/status` show the layered skillsets. With it off, both use the v1
+`nori-skillsets` commands.
+
 A status line above the prompt counts open sessions by status (starting,
 working, waiting on you, ready, failed) once two or more are open, a separate
 line names a background session that is waiting on you (for a delegated child,

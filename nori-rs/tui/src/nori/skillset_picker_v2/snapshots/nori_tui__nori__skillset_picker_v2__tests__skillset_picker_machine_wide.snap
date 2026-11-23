@@ -1,5 +1,5 @@
 ---
-source: tui/src/nori/skillset_picker/tests.rs
+source: tui/src/nori/skillset_picker_v2/tests.rs
 expression: "render(params, 80)"
 ---
   Select skillset

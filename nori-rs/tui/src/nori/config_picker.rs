@@ -203,6 +203,7 @@ pub fn config_picker_params(
         }),
         (SettingsItem::PerSessionSkillsets, {
             let skillset_per_session = config.skillset_per_session;
+            let skillsets_v2 = config.skillsets_v2;
             let status = if skillset_per_session { "on" } else { "off" };
             let display_name = format!("Per Session Skillsets ({status})");
             let tx = app_event_tx;
@@ -210,12 +211,9 @@ pub fn config_picker_params(
                 if skillset_per_session {
                     // Toggle off
                     tx.send(AppEvent::SetConfigSkillsetPerSession(false));
-                } else if !skillset_picker::is_nori_skillsets_available() {
-                    // nori-skillsets not available, show info message
+                } else if let Some(message) = missing_skillsets_cli(skillsets_v2) {
                     tx.send(AppEvent::InsertHistoryCell(Box::new(
-                        crate::history_cell::new_error_event(
-                            skillset_picker::not_installed_message(),
-                        ),
+                        crate::history_cell::new_error_event(message),
                     )));
                 } else {
                     // Open the worktree choice modal
@@ -752,6 +750,20 @@ pub fn file_manager_picker_params(
         ..Default::default()
     }
     .picker()
+}
+
+/// Why skillsets cannot be used, or `None` when the CLI for the active
+/// skillsets version (`[features] skillsets_v2`) can be launched.
+fn missing_skillsets_cli(skillsets_v2: bool) -> Option<String> {
+    if skillsets_v2 {
+        nori_skillsets::SkillsetsCli::resolve()
+            .err()
+            .map(|error| error.to_string())
+    } else if skillset_picker::is_nori_skillsets_available() {
+        None
+    } else {
+        Some(skillset_picker::not_installed_message())
+    }
 }
 
 #[cfg(test)]
@@ -1537,6 +1549,35 @@ mod tests {
             .expect("should have Per Session Skillsets item");
 
         // When skillset_per_session is off, clicking should open the worktree choice modal
+        for action in &per_session_item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        assert!(
+            matches!(event, AppEvent::OpenSkillsetPerSessionWorktreeChoice),
+            "expected OpenSkillsetPerSessionWorktreeChoice, got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn config_picker_enabling_skillset_per_session_finds_the_skillsets_v2_cli() {
+        if nori_skillsets::SkillsetsCli::resolve().is_err() {
+            // Skip: no skillsets v2 CLI (PATH or NORI_SKILLSETS_COMMAND) here.
+            return;
+        }
+
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut config = make_test_config(false);
+        config.skillsets_v2 = true;
+
+        let params = config_picker_params(&config, tx.clone(), None);
+        let per_session_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Per Session Skillsets"))
+            .expect("should have Per Session Skillsets item");
         for action in &per_session_item.actions {
             action(&tx);
         }

@@ -662,3 +662,17 @@ fn unknown_auth_settings_are_rejected() {
 
     assert!(format!("{error:#}").contains("prefer_apikey"), "{error:#}");
 }
+
+#[test]
+fn skillsets_v2_feature_is_off_unless_enabled() {
+    let home = TempDir::new().expect("tempdir");
+    let config_path = home.path().join("config.toml");
+
+    std::fs::write(&config_path, "").expect("write empty config");
+    let default = NoriConfig::load_from_path(&config_path).expect("load default config");
+    assert!(!default.skillsets_v2);
+
+    std::fs::write(&config_path, "[features]\nskillsets_v2 = true\n").expect("write config");
+    let enabled = NoriConfig::load_from_path(&config_path).expect("load enabled config");
+    assert!(enabled.skillsets_v2);
+}

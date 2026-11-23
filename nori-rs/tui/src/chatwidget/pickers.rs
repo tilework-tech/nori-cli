@@ -486,143 +486,186 @@ impl ChatWidget {
         self.bottom_pane.should_handle_vim_insert_escape(key_event)
     }
 
-    /// Handle the /switch-skillset command: list skillsets for the session's
-    /// skillset project and open the picker.
+    /// Handle the /switch-skillset command.
+    /// Checks if nori-skillsets is available and lists available skillsets.
     pub(crate) fn handle_switch_skillset_command(&mut self) {
         use crate::nori::skillset_picker;
 
-        let Some(project) = self.skillset_project_or_report() else {
+        if self.config.skillsets_v2 {
+            self.handle_switch_skillset_command_v2();
             return;
-        };
+        }
+
+        // Check if nori-skillsets is available in PATH
+        if !skillset_picker::is_nori_skillsets_available() {
+            self.add_info_message(skillset_picker::not_installed_message(), None);
+            return;
+        }
+
+        // Install into the session's worktree when we're in one; otherwise
+        // fall back to the home install rather than polluting the repo root.
+        let install_dir = skillset_picker::session_skillset_install_dir(&self.config.cwd);
+
+        // Spawn async task to list skillsets
         let tx = self.app_event_tx.clone();
         tokio::spawn(async move {
-            let result = skillset_picker::list_skillsets(project.path().to_path_buf()).await;
-            tx.send(AppEvent::SkillsetListResult { project, result });
+            match skillset_picker::list_skillsets().await {
+                Ok(names) if names.is_empty() => {
+                    tx.send(AppEvent::SkillsetListResult {
+                        names: Some(vec![]),
+                        error: Some("No skillsets available.".to_string()),
+                        install_dir,
+                    });
+                }
+                Ok(names) => {
+                    tx.send(AppEvent::SkillsetListResult {
+                        names: Some(names),
+                        error: None,
+                        install_dir,
+                    });
+                }
+                Err(message) => {
+                    tx.send(AppEvent::SkillsetListResult {
+                        names: None,
+                        error: Some(message),
+                        install_dir,
+                    });
+                }
+            }
         });
     }
 
-    /// Handle `/switch-skillset <name>`: layer the named skillset without
-    /// showing the picker.
+    /// Handle `/switch-skillset <name>` — directly switch to a named skillset
+    /// without showing the picker menu.
     pub(crate) fn handle_switch_skillset_command_with_name(&mut self, name: &str) {
-        let Some(project) = self.skillset_project_or_report() else {
-            return;
-        };
-        self.on_change_skillset_request(name.to_string(), project.path().to_path_buf(), true);
-    }
-
-    /// The session's skillset project, or `None` after reporting why skillsets
-    /// cannot be used. Dismisses the picker flow so a deferred per-session
-    /// agent spawn still starts.
-    fn skillset_project_or_report(
-        &mut self,
-    ) -> Option<crate::nori::skillset_picker::SkillsetProject> {
         use crate::nori::skillset_picker;
 
-        let problem = match nori_skillsets::SkillsetsCli::resolve() {
-            Err(error) => error.to_string(),
-            Ok(_) => match skillset_picker::current_skillset_project(&self.config.cwd) {
-                Some(project) => return Some(project),
-                None => "Cannot find a home directory to layer skillsets into.".to_string(),
-            },
-        };
-        self.add_error_message(problem);
-        self.app_event_tx.send(AppEvent::SkillsetPickerDismissed);
-        None
+        if self.config.skillsets_v2 {
+            self.handle_switch_skillset_command_with_name_v2(name);
+            return;
+        }
+
+        if !skillset_picker::is_nori_skillsets_available() {
+            self.add_info_message(skillset_picker::not_installed_message(), None);
+            return;
+        }
+
+        let install_dir = skillset_picker::session_skillset_install_dir(&self.config.cwd);
+
+        if let Some(dir) = install_dir {
+            self.on_switch_skillset_request(name, &dir);
+        } else {
+            self.on_install_skillset_request(name);
+        }
     }
 
     /// Handle the result of listing skillsets.
-    ///
-    /// When there is nothing to pick (an error or an empty listing) the picker
-    /// flow is dismissed so a deferred per-session agent spawn still starts.
     pub(crate) fn on_skillset_list_result(
         &mut self,
-        project: crate::nori::skillset_picker::SkillsetProject,
-        result: Result<nori_skillsets::SkillsetList, String>,
+        names: Option<Vec<String>>,
+        error: Option<String>,
+        install_dir: Option<PathBuf>,
     ) {
-        use crate::nori::skillset_picker;
-
-        if let Ok(nori_skillsets::SkillsetList {
-            warning: Some(warning),
-            ..
-        }) = &result
-        {
-            self.add_to_history(history_cell::new_warning_event(format!(
-                "Showing layered skillsets only; published releases could not be read: {warning}"
-            )));
-        }
-        match result {
-            Ok(list) if !list.skillsets.is_empty() => {
-                // "No Skillset" and the worktree warning only matter in the
-                // per-session startup flow.
+        match (names, error) {
+            (Some(names), None) if !names.is_empty() => {
+                // Determine whether to show "No Skillset" option and worktree warning.
+                // These are relevant when skillset_per_session is enabled (indicated
+                // by the on_dismiss callback being set, which only happens in the
+                // per-session startup flow).
                 let is_per_session = self.config.skillset_per_session;
                 let auto_worktree_off = is_per_session && !self.config.auto_worktree.is_enabled();
 
                 let on_dismiss: SelectionAction = Box::new(|tx| {
                     tx.send(AppEvent::SkillsetPickerDismissed);
                 });
-                let params = skillset_picker::skillset_picker_params(
-                    list,
-                    project,
+                let params = crate::nori::skillset_picker::skillset_picker_params(
+                    names,
+                    install_dir,
                     Some(on_dismiss),
                     is_per_session,
                     auto_worktree_off,
                 );
                 self.bottom_pane.show_selection_view(params);
             }
-            Ok(list) => {
-                self.add_info_message(skillset_picker::empty_list_message(&list), None);
-                self.app_event_tx.send(AppEvent::SkillsetPickerDismissed);
+            (_, Some(error)) => {
+                self.add_error_message(error);
             }
-            Err(error) => {
-                self.add_error_message(format!("Failed to list skillsets: {error}"));
-                self.app_event_tx.send(AppEvent::SkillsetPickerDismissed);
+            _ => {
+                self.add_info_message("No skillsets available.".to_string(), None);
             }
         }
     }
 
-    /// Layer (`layer == true`) or unlayer `name` in `project`.
-    pub(crate) fn on_change_skillset_request(
-        &mut self,
-        name: String,
-        project: PathBuf,
-        layer: bool,
-    ) {
+    /// Handle a request to install a skillset.
+    pub(crate) fn on_install_skillset_request(&mut self, name: &str) {
         use crate::nori::skillset_picker;
 
+        let name = name.to_string();
         let tx = self.app_event_tx.clone();
         tokio::spawn(async move {
-            let result = skillset_picker::change_skillset(project, name.clone(), layer).await;
-            tx.send(AppEvent::SkillsetChangeResult {
-                name,
-                layer,
-                result,
-            });
+            match skillset_picker::install_skillset(&name).await {
+                Ok(message) => {
+                    tx.send(AppEvent::SkillsetInstallResult {
+                        name,
+                        success: true,
+                        message,
+                    });
+                }
+                Err(message) => {
+                    tx.send(AppEvent::SkillsetInstallResult {
+                        name,
+                        success: false,
+                        message,
+                    });
+                }
+            }
         });
     }
 
-    /// Handle the result of layering or unlayering a skillset.
-    pub(crate) fn on_skillset_change_result(
-        &mut self,
-        name: &str,
-        layer: bool,
-        result: Result<nori_skillsets::LayerChange, String>,
-    ) {
-        match result {
-            Ok(change) => {
-                self.add_to_history(history_cell::new_skillset_changed_event(
-                    name,
-                    layer,
-                    &change.layers,
-                ));
-                for note in change.notes {
-                    self.add_to_history(history_cell::new_warning_event(note));
+    /// Handle the result of installing a skillset.
+    pub(crate) fn on_skillset_install_result(&mut self, name: &str, success: bool, message: &str) {
+        if success {
+            self.add_to_history(history_cell::new_skillset_switched_event(name));
+            self.request_redraw();
+        } else {
+            self.add_error_message(format!("Failed to install skillset '{name}': {message}"));
+        }
+    }
+
+    /// Handle a request to switch to a skillset with a specific install directory.
+    pub(crate) fn on_switch_skillset_request(&mut self, name: &str, install_dir: &std::path::Path) {
+        use crate::nori::skillset_picker;
+
+        let name = name.to_string();
+        let install_dir = install_dir.to_path_buf();
+        let tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            match skillset_picker::switch_skillset(&name, &install_dir).await {
+                Ok(message) => {
+                    tx.send(AppEvent::SkillsetSwitchResult {
+                        name,
+                        success: true,
+                        message,
+                    });
                 }
-                self.request_redraw();
+                Err(message) => {
+                    tx.send(AppEvent::SkillsetSwitchResult {
+                        name,
+                        success: false,
+                        message,
+                    });
+                }
             }
-            Err(message) => {
-                let verb = if layer { "layer" } else { "unlayer" };
-                self.add_error_message(format!("Failed to {verb} skillset '{name}': {message}"));
-            }
+        });
+    }
+
+    /// Handle the result of switching a skillset.
+    pub(crate) fn on_skillset_switch_result(&mut self, name: &str, success: bool, message: &str) {
+        if success {
+            self.add_to_history(history_cell::new_skillset_switched_event(name));
+            self.request_redraw();
+        } else {
+            self.add_error_message(format!("Failed to switch to skillset '{name}': {message}"));
         }
     }
 

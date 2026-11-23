@@ -162,7 +162,7 @@ mod part8;
 mod queue_list;
 mod queue_recall;
 mod session_title_envelope;
-mod skillsets;
+mod skillsets_v2;
 
 /// Type `text` as key presses and let the composer settle them.
 pub(crate) fn type_text(chat: &mut ChatWidget, text: &str) {
