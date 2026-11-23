@@ -26,6 +26,14 @@ The crate owns:
   `nori-acp-host` to check and apply;
 - named API connections (`[[token_providers]]`) and
   the `[agent_token_providers]` agent-to-provider binding;
+- per-agent `[auth.<agent>]` sign-in preferences (`AgentAuthPreference` in
+  [`auth.rs`](src/auth.rs): `prefer_api_key`, `api_billing_confirmed`, both
+  default `false`, unknown fields rejected), stored in `NoriConfig.auth` by
+  agent slug and read through `NoriConfig::auth_preference(slug)`, which
+  returns the defaults for an absent agent. The harness turns this into
+  `AcpBackendConfig.prefer_api_key`, which gates saved-key injection in
+  [`nori-providers`](../providers/docs.md); `nori auth prefer-api-key` and the
+  TUI's `/api-key` write it with `NoriConfigEdits`;
 - `AskForApproval`, `SandboxPolicy`, `SandboxMode`, and `TrustLevel`;
 - `McpServerConfig` and MCP transport configuration;
 - `ShellEnvironmentPolicy` and related environment patterns;

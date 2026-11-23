@@ -53,6 +53,7 @@ use crate::text_formatting::truncate_text;
 use crate::tui::FrameRequester;
 pub(crate) mod agent;
 mod agent_status;
+pub(crate) mod api_key;
 pub(crate) use self::agent::HarnessHandle;
 use self::agent::spawn_acp_agent_resume;
 use self::agent::spawn_agent;

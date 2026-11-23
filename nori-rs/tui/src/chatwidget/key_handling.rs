@@ -274,6 +274,7 @@ impl ChatWidget {
             SlashCommand::Login => {
                 self.handle_login_command();
             }
+            SlashCommand::ApiKey => self.open_api_key_preference(),
             SlashCommand::Logout => {
                 self.add_info_message(
                     "To logout, run the agent's logout command directly (e.g., `claude /logout`)"

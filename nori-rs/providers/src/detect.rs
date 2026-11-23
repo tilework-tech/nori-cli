@@ -59,10 +59,13 @@ pub struct DetectContext<'a> {
     pub platform: Platform,
     pub keychain: &'a dyn KeychainProbe,
     pub saved: &'a SavedIndex,
+    /// Whether an agent is set (`[auth.<agent>] prefer_api_key`) to receive
+    /// saved API keys. Agents that are not keep their own login.
+    pub prefer_api_key: &'a dyn Fn(AgentKind) -> bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ProvidersReport {
+pub struct AuthReport {
     /// Where saved credentials live (`NORI_CREDENTIALS_STORE`).
     pub store: StoreBackend,
     /// Why saved credentials could not be read, when they could not. The
@@ -108,6 +111,8 @@ pub struct Notice {
     /// `api_key_overrides_subscription`: the credential the agent will use is
     /// an API key or token, ranked above a subscription sign-in, so usage is
     /// billed to the API account rather than the plan.
+    /// `saved_key_not_used`: a key is saved for a provider the agent talks
+    /// to, but the agent does not prefer API keys, so it keeps its own login.
     pub code: &'static str,
     pub message: String,
 }
@@ -121,9 +126,12 @@ pub struct AgentAuthStatus {
     /// talk to one provider the first is the one the agent will use; for
     /// OpenCode and Pi the order holds per `provider`.
     pub credentials: Vec<DetectedCredential>,
-    /// Providers whose saved key this agent receives, and the variable each is
-    /// passed in. Empty when the agent only signs in through its own login.
+    /// Providers whose saved key this agent can receive, and the variable each
+    /// is passed in. Empty when the agent only signs in through its own login.
     pub saved_keys: Vec<ProviderKeyRoute>,
+    /// Whether the agent receives saved keys at launch. When false the agent
+    /// keeps its own login and saved keys are not listed in `credentials`.
+    pub prefer_api_key: bool,
     pub notices: Vec<Notice>,
     pub hint: String,
 }
@@ -187,7 +195,7 @@ pub enum CredentialSource {
     },
 }
 
-pub fn detect_all(ctx: &DetectContext<'_>) -> ProvidersReport {
+pub fn detect_all(ctx: &DetectContext<'_>) -> AuthReport {
     let providers = Provider::all()
         .iter()
         .map(|provider| ProviderStatus {
@@ -206,7 +214,7 @@ pub fn detect_all(ctx: &DetectContext<'_>) -> ProvidersReport {
                 .collect(),
         })
         .collect();
-    ProvidersReport {
+    AuthReport {
         store: ctx.saved.store(),
         store_error: None,
         providers,
@@ -261,13 +269,31 @@ pub fn detect_agent(agent: AgentKind, ctx: &DetectContext<'_>) -> AgentAuthStatu
         (true, true) => AuthStatus::Unknown,
         (true, false) => AuthStatus::SignedOut,
     };
-    let notices = if multi {
+    let prefer_api_key = (ctx.prefer_api_key)(agent);
+    let mut notices: Vec<Notice> = if multi {
         Vec::new()
     } else {
         billing_notice(agent, &found.credentials)
             .into_iter()
             .collect()
     };
+    if !prefer_api_key {
+        notices.extend(
+            crate::key_routes(agent)
+                .iter()
+                .filter(|route| ctx.saved.record_type(route.provider).is_some())
+                .map(|route| Notice {
+                    code: "saved_key_not_used",
+                    message: format!(
+                        "{} uses its own login, not the saved {} API key; run \
+                         `nori auth prefer-api-key {}` to use the key",
+                        agent.display_name(),
+                        route.provider.id(),
+                        agent.slug()
+                    ),
+                }),
+        );
+    }
     AgentAuthStatus {
         agent: agent.slug().to_string(),
         name: agent.display_name().to_string(),
@@ -280,8 +306,40 @@ pub fn detect_agent(agent: AgentKind, ctx: &DetectContext<'_>) -> AgentAuthStatu
                 env: route.env,
             })
             .collect(),
+        prefer_api_key,
         notices,
         hint: agent.auth_hint().to_string(),
+    }
+}
+
+impl AgentAuthStatus {
+    /// The warning to show before this agent is set to prefer saved API keys:
+    /// present when it is signed in with a subscription that the key would
+    /// replace, which moves billing from the plan to the API account. OpenCode
+    /// and Pi keep using their own login for a provider even when given a key,
+    /// so they never warn.
+    pub fn api_key_billing_warning(&self) -> Option<Notice> {
+        let agent = AgentKind::from_slug(&self.agent)?;
+        if crate::multi_provider(agent) {
+            return None;
+        }
+        let subscription = self
+            .credentials
+            .iter()
+            .find(|credential| credential.kind == CredentialKind::Subscription)?;
+        let plan = subscription
+            .detail
+            .as_deref()
+            .map(|plan| format!(" ({plan})"))
+            .unwrap_or_default();
+        Some(Notice {
+            code: "api_key_overrides_subscription",
+            message: format!(
+                "{} is signed in with a subscription{plan}. Preferring the saved API key bills \
+                 usage to that API account, not the subscription.",
+                self.name
+            ),
+        })
     }
 }
 
@@ -442,7 +500,7 @@ impl Found<'_, '_> {
             CredentialSource::Env { name } => (true, format!("unset {name} to disconnect")),
             CredentialSource::NoriSaved { provider, .. } => (
                 false,
-                format!("run `nori providers remove-key {provider}` to disconnect"),
+                format!("run `nori auth remove-key {provider}` to disconnect"),
             ),
             CredentialSource::File { .. } | CredentialSource::Keychain { .. } => (
                 true,
@@ -481,6 +539,9 @@ impl Found<'_, '_> {
     }
 
     fn saved(&mut self) {
+        if !(self.ctx.prefer_api_key)(self.agent) {
+            return;
+        }
         for KeyRoute { provider, env } in crate::key_routes(self.agent) {
             let kind = match self.ctx.saved.record_type(*provider) {
                 Some("api_key") => CredentialKind::ApiKey,

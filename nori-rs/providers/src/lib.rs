@@ -8,10 +8,13 @@
 //! each agent as that agent's own environment variable at launch.
 
 mod detect;
+mod key_format;
 mod launch;
+mod local;
 mod store;
 
 pub use detect::AgentAuthStatus;
+pub use detect::AuthReport;
 pub use detect::AuthStatus;
 pub use detect::CredentialKind;
 pub use detect::CredentialSource;
@@ -21,19 +24,23 @@ pub use detect::KeychainProbe;
 pub use detect::Notice;
 pub use detect::Platform;
 pub use detect::ProviderStatus;
-pub use detect::ProvidersReport;
+pub use nori_acp_host::registry::AgentKind;
+
 pub use detect::SystemKeychain;
 pub use detect::detect_agent;
 pub use detect::detect_all;
+pub use key_format::key_prefix;
+pub use key_format::masked_key;
 pub use launch::apply_saved_keys;
 pub use launch::inject_saved_keys;
+pub use local::LocalAgentAuth;
+pub use local::detect_local_agent;
 pub use store::Credential;
 pub use store::CredentialStore;
 pub use store::STORE_BACKEND_ENV;
 pub use store::SavedIndex;
 pub use store::StoreBackend;
 
-use nori_acp_host::registry::AgentKind;
 use serde::Serialize;
 
 /// A model provider whose API key Nori can save once and hand to every agent

@@ -4009,6 +4009,7 @@ dependencies = [
  "nori-harness",
  "nori-installed",
  "nori-protocol",
+ "nori-providers",
  "nori-tui-components",
  "pathdiff",
  "pretty_assertions",

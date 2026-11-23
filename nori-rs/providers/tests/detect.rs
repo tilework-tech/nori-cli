@@ -310,6 +310,7 @@ fn codex_default_store_ignores_a_keychain_item_on_macos() {
 #[test]
 fn key_saved_through_nori_is_reported_after_ambient_env() {
     let f = Fixture::new()
+        .prefer_api_key(&[AgentKind::ClaudeCode])
         .save_key(Provider::Anthropic, "sk-ant-api03-SECRET")
         .env("ANTHROPIC_API_KEY", "SECRET-value");
     assert_eq!(
@@ -332,6 +333,7 @@ fn key_saved_through_nori_is_reported_after_ambient_env() {
 fn saved_claude_key_outranks_the_subscription_login() {
     let f = Fixture::new()
         .file(".claude/.credentials.json", CLAUDE_OAUTH)
+        .prefer_api_key(&[AgentKind::ClaudeCode])
         .save_key(Provider::Anthropic, "sk-ant-api03-SECRET");
     assert_eq!(
         outcome(&f, AgentKind::ClaudeCode),
@@ -355,7 +357,9 @@ fn saved_claude_key_outranks_the_subscription_login() {
 
 #[test]
 fn saved_key_alone_signs_an_opaque_agent_in() {
-    let f = Fixture::new().save_key(Provider::Cursor, "SECRET-cursor");
+    let f = Fixture::new()
+        .prefer_api_key(&[AgentKind::Cursor])
+        .save_key(Provider::Cursor, "SECRET-cursor");
     assert_eq!(
         outcome(&f, AgentKind::Cursor),
         (
@@ -494,6 +498,7 @@ fn agents_with_their_own_opaque_login_are_unknown_without_env() {
 #[test]
 fn saved_key_is_listed_after_every_environment_credential() {
     let f = Fixture::new()
+        .prefer_api_key(&[AgentKind::Gemini])
         .save_key(Provider::Google, "SECRET-saved")
         .env("GOOGLE_API_KEY", "SECRET-value");
     assert_eq!(
@@ -570,6 +575,7 @@ fn report_covers_every_built_in_agent() {
         platform: f.platform,
         keychain: &f.keychain,
         saved: &f.saved,
+        prefer_api_key: &f.prefers(),
     });
     let slugs: Vec<_> = report.agents.iter().map(|a| a.agent.as_str()).collect();
     let expected: Vec<_> = AgentKind::all().iter().map(AgentKind::slug).collect();
@@ -584,6 +590,7 @@ fn pi_credentials_name_their_provider() {
             r#"{"anthropic":{"type":"oauth","access":"SECRET"}}"#,
         )
         .env("XAI_API_KEY", "SECRET-value")
+        .prefer_api_key(&[AgentKind::Pi])
         .save_key(Provider::OpenAi, "SECRET-saved");
     let providers: Vec<_> = f
         .detect(AgentKind::Pi)
@@ -608,14 +615,122 @@ fn pi_credentials_name_their_provider() {
 }
 
 #[test]
-fn one_saved_provider_key_signs_in_every_agent_that_uses_it() {
-    let f = Fixture::new().save_key(Provider::OpenAi, "SECRET-saved");
+fn one_saved_provider_key_signs_in_every_agent_that_prefers_api_keys() {
+    let f = Fixture::new()
+        .prefer_api_key(&[AgentKind::Codex, AgentKind::Pi, AgentKind::ClaudeCode])
+        .save_key(Provider::OpenAi, "SECRET-saved");
     let signed_in: Vec<_> = AgentKind::all()
         .iter()
         .filter(|agent| f.detect(**agent).status == AuthStatus::SignedIn)
         .map(AgentKind::slug)
         .collect();
-    assert_eq!(signed_in, vec!["codex", "opencode", "pi"]);
+    assert_eq!(signed_in, vec!["codex", "pi"]);
+}
+
+#[test]
+fn agents_keep_their_own_login_and_are_told_about_an_unused_saved_key() {
+    let f = Fixture::new()
+        .file(".claude/.credentials.json", CLAUDE_OAUTH)
+        .save_key(Provider::Anthropic, "SECRET-saved")
+        .save_key(Provider::OpenAi, "SECRET-saved");
+    let claude = f.detect(AgentKind::ClaudeCode);
+    let codex = f.detect(AgentKind::Codex);
+    assert_eq!(
+        [&claude, &codex].map(|agent| (
+            agent.status,
+            agent.prefer_api_key,
+            agent.credentials.iter().map(|c| c.kind).collect::<Vec<_>>(),
+            agent.notices.clone()
+        )),
+        [
+            (
+                AuthStatus::SignedIn,
+                false,
+                vec![CredentialKind::Subscription],
+                vec![Notice {
+                    code: "saved_key_not_used",
+                    message: "Claude Code uses its own login, not the saved anthropic API key; \
+                              run `nori auth prefer-api-key claude-code` to use the key"
+                        .to_string()
+                }]
+            ),
+            (
+                AuthStatus::SignedOut,
+                false,
+                vec![],
+                vec![Notice {
+                    code: "saved_key_not_used",
+                    message: "Codex uses its own login, not the saved openai API key; \
+                              run `nori auth prefer-api-key codex` to use the key"
+                        .to_string()
+                }]
+            ),
+        ]
+    );
+}
+
+#[test]
+fn preferring_api_keys_over_a_subscription_comes_with_a_billing_warning() {
+    let subscribed = Fixture::new().file(".claude/.credentials.json", CLAUDE_OAUTH);
+    let codex_subscribed = Fixture::new().file(
+        ".codex/auth.json",
+        r#"{"auth_mode":"chatgpt","tokens":{"access_token":"SECRET"}}"#,
+    );
+    let pi_subscribed = Fixture::new().file(
+        ".pi/agent/auth.json",
+        r#"{"anthropic":{"type":"oauth","access":"SECRET"}}"#,
+    );
+    let unsubscribed = Fixture::new().env("ANTHROPIC_API_KEY", "SECRET-value");
+    let codex_api_key_login = Fixture::new().file(
+        ".codex/auth.json",
+        r#"{"auth_mode":"apikey","OPENAI_API_KEY":"SECRET"}"#,
+    );
+
+    let warnings = [
+        subscribed.detect(AgentKind::ClaudeCode),
+        codex_subscribed.detect(AgentKind::Codex),
+        pi_subscribed.detect(AgentKind::Pi),
+        unsubscribed.detect(AgentKind::ClaudeCode),
+        codex_api_key_login.detect(AgentKind::Codex),
+    ]
+    .map(|status| status.api_key_billing_warning());
+
+    assert_eq!(
+        warnings,
+        [
+            Some(Notice {
+                code: "api_key_overrides_subscription",
+                message: "Claude Code is signed in with a subscription (max). Preferring the \
+                          saved API key bills usage to that API account, not the subscription."
+                    .to_string()
+            }),
+            Some(Notice {
+                code: "api_key_overrides_subscription",
+                message: "Codex is signed in with a subscription (chatgpt). Preferring the \
+                          saved API key bills usage to that API account, not the subscription."
+                    .to_string()
+            }),
+            // Pi keeps using its own login for a provider even when given a key.
+            None,
+            None,
+            None,
+        ]
+    );
+}
+
+#[test]
+fn no_unused_key_notice_without_a_saved_key_or_once_the_agent_prefers_it() {
+    let nothing_saved = Fixture::new().file(".claude/.credentials.json", CLAUDE_OAUTH);
+    let preferred = Fixture::new()
+        .prefer_api_key(&[AgentKind::Codex])
+        .save_key(Provider::OpenAi, "SECRET-saved");
+    assert_eq!(
+        [
+            nothing_saved.detect(AgentKind::ClaudeCode).notices,
+            preferred.detect(AgentKind::Codex).notices,
+        ],
+        [vec![], vec![]]
+    );
 }
 
 #[test]
@@ -623,6 +738,7 @@ fn only_keys_saved_through_nori_can_be_disconnected_by_nori() {
     let f = Fixture::new()
         .env("ANTHROPIC_API_KEY", "SECRET-value")
         .file(".claude/.credentials.json", CLAUDE_OAUTH)
+        .prefer_api_key(&[AgentKind::ClaudeCode])
         .save_key(Provider::Anthropic, "SECRET-saved");
     let rows: Vec<_> = f
         .detect(AgentKind::ClaudeCode)
@@ -636,7 +752,7 @@ fn only_keys_saved_through_nori_can_be_disconnected_by_nori() {
             (true, "unset ANTHROPIC_API_KEY to disconnect".to_string()),
             (
                 false,
-                "run `nori providers remove-key anthropic` to disconnect".to_string()
+                "run `nori auth remove-key anthropic` to disconnect".to_string()
             ),
             (true, "sign out in Claude Code to disconnect".to_string()),
         ]
@@ -648,6 +764,7 @@ fn api_key_ahead_of_a_subscription_raises_a_billing_notice() {
     let subscription_only = Fixture::new().file(".claude/.credentials.json", CLAUDE_OAUTH);
     let saved_key_too = Fixture::new()
         .file(".claude/.credentials.json", CLAUDE_OAUTH)
+        .prefer_api_key(&[AgentKind::ClaudeCode])
         .save_key(Provider::Anthropic, "SECRET-saved");
 
     assert_eq!(
@@ -667,7 +784,9 @@ fn api_key_ahead_of_a_subscription_raises_a_billing_notice() {
 
 #[test]
 fn report_lists_each_provider_with_its_saved_record_and_agents() {
-    let f = Fixture::new().save_key(Provider::Google, "SECRET-saved");
+    let f = Fixture::new()
+        .prefer_api_key(&[AgentKind::Gemini])
+        .save_key(Provider::Google, "SECRET-saved");
     let home = f.home();
     let env = |_: &str| None;
     let report = detect_all(&DetectContext {
@@ -676,6 +795,7 @@ fn report_lists_each_provider_with_its_saved_record_and_agents() {
         platform: f.platform,
         keychain: &f.keychain,
         saved: &f.saved,
+        prefer_api_key: &f.prefers(),
     });
     let json = serde_json::to_value(&report).unwrap();
     assert_eq!(json["store"], "file");

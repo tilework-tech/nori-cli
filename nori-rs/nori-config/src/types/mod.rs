@@ -460,6 +460,10 @@ pub struct NoriConfigToml {
     #[serde(default)]
     pub default_models: HashMap<String, String>,
 
+    /// Per-agent choice between the agent's own login and a saved API key.
+    #[serde(default)]
+    pub auth: HashMap<String, crate::AgentAuthPreference>,
+
     #[serde(
         default,
         deserialize_with = "crate::token_providers::deserialize_entries"
@@ -2517,6 +2521,9 @@ pub struct NoriConfig {
     /// Default model overrides per agent (e.g., "claude-code" -> "haiku")
     pub default_models: HashMap<String, String>,
 
+    /// Per-agent `[auth.<agent>]` preferences, keyed by agent slug.
+    pub auth: HashMap<String, crate::AgentAuthPreference>,
+
     /// Named API connections available to a provider picker.
     pub token_providers: Vec<crate::token_providers::TokenProvider>,
 
@@ -2602,6 +2609,7 @@ impl Default for NoriConfig {
             async_post_agent_response_hooks: Vec::new(),
             default_models: HashMap::new(),
             agent_token_providers: HashMap::new(),
+            auth: HashMap::new(),
             token_providers: Vec::new(),
             default_model_override_keys: Vec::new(),
             agents: Vec::new(),

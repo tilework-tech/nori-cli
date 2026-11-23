@@ -6,7 +6,8 @@ Path: @/nori-rs/providers
 
 - Reports, for each built-in ACP agent, whether it is signed in and which credentials it would find, without returning or logging secret values.
 - Saves credentials entered through Nori keyed by **model provider** (`anthropic`, `openai`, `google`, `xai`, `cursor`), not by agent, so one saved OpenAI key reaches every OpenAI-backed agent.
-- At launch, passes each saved provider key to the agent in that agent's own variable for the provider, unless the user already supplied a credential for that provider.
+- At launch, passes each saved provider key to the agent in that agent's own variable for the provider, but only for agents the user opted in with `[auth.<agent>] prefer_api_key = true`. By default an agent's own login (for example a Claude.ai or ChatGPT subscription) always wins and saved keys are not passed.
+- Recognises keys by their public prefix so the CLI can echo and confirm a key without revealing its secret part.
 
 ### How it fits into the larger codebase
 
@@ -14,11 +15,15 @@ Path: @/nori-rs/providers
 Nori Native app / user shell
             |  (subprocess of the bundled nori binary)
             v
-nori providers [--json|set-key|remove-key]   PreparedAgent::prepare
-   (@/nori-rs/cli/src/providers.rs)          (@/nori-rs/harness/src/backend/prepared.rs)
-            |                                         |
-            v                                         v
-   detect_all / CredentialStore             inject_saved_keys -> AcpAgentConfig.env
+nori auth [--json|set-key|remove-key|      PreparedAgent::prepare
+  prefer-api-key|prefer-login]               (@/nori-rs/harness/src/backend/prepared.rs)
+  (@/nori-rs/cli/src/auth.rs)                 AcpBackendConfig.prefer_api_key
+TUI /api-key                                         |
+  (@/nori-rs/tui/src/chatwidget/api_key.rs)          |
+            |                                         v
+            v                                 inject_saved_keys -> AcpAgentConfig.env
+   detect_all / detect_local_agent /
+   CredentialStore / masked_key
             \                                         /
              +------------- nori-providers -----------+
                      |                       |
@@ -26,10 +31,12 @@ nori providers [--json|set-key|remove-key]   PreparedAgent::prepare
           (@/nori-rs/keyring-store)    (AgentKind, AcpAgentConfig)
 ```
 
-- The CLI's `nori providers` subcommand ([`providers.rs`](../cli/src/providers.rs)) is the stable interface for the Nori Native app: the app runs the bundled `nori` binary as a subprocess and uses `nori providers --json`, `set-key <provider>` (key on stdin, never argv), and `remove-key <provider>`. There is no ACP `authMethods` mapping and no custom ACP wire method for providers; the JSON report is the contract.
-- The harness calls `inject_saved_keys` during agent preparation ([`prepared.rs`](../harness/src/backend/prepared.rs)), so the TUI, `nori exec`, local host sessions, and delegated children all receive saved keys. See [`nori-harness`](../harness/docs.md).
+- The CLI's `nori auth` subcommand ([`auth.rs`](../cli/src/auth.rs)) is the stable interface for the Nori Native app: the app runs the bundled `nori` binary as a subprocess and uses `nori auth --json`, `set-key <provider>` (key on stdin, never argv), `remove-key <provider>`, and `prefer-api-key <agent> --json` / `prefer-login <agent> --json`. There is no ACP `authMethods` mapping and no custom ACP wire method for providers; the JSON output is the contract. The crate keeps the `nori-providers` name because its domain is model providers and sign-in detection; only the CLI surface is called `auth`.
+- The per-agent opt-in lives in `config.toml` as `[auth.<agent>]` (`AgentAuthPreference` in [`nori-config`](../nori-config/docs.md)). This crate never reads config itself: callers resolve the preference and pass it in, as `DetectContext.prefer_api_key` for detection and as the `prefer_api_key` argument of `inject_saved_keys` / `apply_saved_keys` / `detect_local_agent`.
+- The harness calls `inject_saved_keys` during agent preparation ([`prepared.rs`](../harness/src/backend/prepared.rs)) with `AcpBackendConfig.prefer_api_key`, so the TUI, `nori exec`, local host sessions, and delegated children receive saved keys only for agents that prefer them. See [`nori-harness`](../harness/docs.md).
+- The TUI's `/api-key` picker ([`api_key.rs`](../tui/src/chatwidget/api_key.rs)) and `nori auth prefer-api-key` both call `detect_local_agent` to find a subscription before asking the user to confirm the billing change.
 - Managed launches (broker-started `nori host --stdio --launch`, built from [`managed_launch.rs`](../harness/src/managed_launch.rs) with an empty child environment) intentionally do not use saved keys. This is a design decision: the session broker's own credential management supplies credentials for those launches.
-- Agent identity (`AgentKind`, slugs, aliases, display names, auth hints) and the launch config it mutates (`AcpAgentConfig`) come from [`nori-acp-host`](../acp-host/docs.md)'s registry. Custom `[[agents]]` entries have no `builtin_kind` and are ignored.
+- Agent identity (`AgentKind`, slugs, aliases, display names, auth hints) and the launch config it mutates (`AcpAgentConfig`) come from [`nori-acp-host`](../acp-host/docs.md)'s registry. `AgentKind` is re-exported so the CLI and TUI need no direct `nori-acp-host` dependency for it. Custom `[[agents]]` entries have no `builtin_kind` and are ignored.
 - Keyring access goes through the `KeyringStore` trait in [`codex-keyring-store`](../keyring-store/docs.md), so tests substitute in-memory or failing keyrings.
 - "Provider" here is the glossary's **provider** (the model vendor), distinct from a named **token provider** ([`docs/glossary.md`](../../docs/glossary.md)). An agent bound to a token provider never receives saved keys.
 
@@ -67,15 +74,15 @@ Agents with more than one route (OpenCode, Pi) are "multi-provider"; their crede
 
 `set` and `remove` are read-modify-write cycles serialized across processes (the app and the CLI) by an advisory `flock` on the `$NORI_HOME` directory itself, so the store has no lock file and no separate index file. Reads take no lock. `StoreBackend::as_str()` gives the `file` / `keyring` name used in CLI output.
 
-**Detection** ([`detect.rs`](src/detect.rs)). `detect_all(&DetectContext)` returns a `ProvidersReport`; `detect_agent` builds one `AgentAuthStatus`. `DetectContext` injects every input (home directory, environment lookup, `Platform`, a `KeychainProbe`, and the `SavedIndex`), so tests point it at fixture homes and fake keychains.
+**Detection** ([`detect.rs`](src/detect.rs)). `detect_all(&DetectContext)` returns an `AuthReport`; `detect_agent` builds one `AgentAuthStatus`. `DetectContext` injects every input (home directory, environment lookup, `Platform`, a `KeychainProbe`, the `SavedIndex`, and a `prefer_api_key` lookup per agent), so tests point it at fixture homes and fake keychains. `detect_local_agent` ([`local.rs`](src/local.rs)) is the one-agent convenience used by the CLI and TUI: it builds the context from the real environment, system keychain, and the store `NORI_CREDENTIALS_STORE` selects, and returns a `LocalAgentAuth` (the agent's status plus the providers it talks to that have a saved key). It errors when the store cannot be read and may block on the OS keyring.
 
 ```text
-ProvidersReport
+AuthReport
   store:       file | keyring
   store_error: string, only when the store could not be read
   providers: [{id, name, saved: {type} | null, agents: [{agent, env}]}]
   agents:    [{agent, name, status, credentials, saved_keys: [{provider, env}],
-               notices: [{code, message}], hint}]
+               prefer_api_key, notices: [{code, message}], hint}]
 
 DetectedCredential
   kind:       subscription | api_key | cloud | token | login
@@ -85,7 +92,7 @@ DetectedCredential
   detail:     non-secret detail (plan name, Codex auth_mode)
   read_only:  true except keys saved through Nori
   disconnect: "unset VAR to disconnect"
-              | "run `nori providers remove-key <provider>` to disconnect"
+              | "run `nori auth remove-key <provider>` to disconnect"
               | "sign out in <Agent> to disconnect"
 ```
 
@@ -100,26 +107,38 @@ Credentials are listed in the order the agent prefers them:
 | OpenCode, Pi | Their own `auth.json` entries first (OpenCode: `$XDG_DATA_HOME` or `~/.local/share` + `opencode/auth.json`; Pi: `~/.pi/agent/auth.json`), then env credentials, then saved keys. OpenCode reads `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` / `GOOGLE_API_KEY` / `GEMINI_API_KEY`, `XAI_API_KEY`; Pi additionally reads `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_OAUTH_TOKEN` before `ANTHROPIC_API_KEY`. |
 | Hermes | Nothing |
 
+Saved keys (`nori_saved`) appear in `credentials` only for agents whose `prefer_api_key` is true; for other agents they are omitted, so the list reflects what the agent will actually use. `saved_keys` always lists the routes the agent *could* receive.
+
 For single-provider agents the first credential is the one the agent will use; for OpenCode and Pi the order holds per `provider`. Their `auth.json` entries carry the entry's provider id in `provider` and a kind mapped from the entry's `type` (`oauth` → subscription, `api`/`api_key` → api_key, `wellknown` → token, otherwise login).
 
-`notices` are raised only for single-provider agents. Code `api_key_overrides_subscription` fires when the first credential is an API key or token and a subscription sign-in also exists, e.g. a saved `ANTHROPIC_API_KEY` beating a Claude.ai plan; usage is then billed to the API account. The app warns on it, and the CLI table prints it as a `note:`.
+Notice codes (the CLI table prints each as a `note:`):
 
-**Launch** ([`launch.rs`](src/launch.rs)). `apply_saved_keys(config, store, env)` walks the agent's `key_routes` and, for each route, inserts the saved key into `AcpAgentConfig.env` under the route's variable, returning the variables set. A route is skipped when:
+| Code | When |
+| --- | --- |
+| `api_key_overrides_subscription` | Single-provider agents only. The first credential is an API key or token and a subscription sign-in also exists, e.g. `ANTHROPIC_API_KEY` in the environment, or a saved anthropic key Claude Code prefers, beating a Claude.ai plan; usage is then billed to the API account. |
+| `saved_key_not_used` | Any agent with `prefer_api_key` false that has a saved key for a provider it talks to; one notice per such provider, naming `nori auth prefer-api-key <agent>`. |
+
+`AgentAuthStatus::api_key_billing_warning()` returns the warning to show *before* an agent is switched to prefer saved keys (code `api_key_overrides_subscription`, naming the detected plan): present when a subscription credential is detected. It is always `None` for multi-provider agents (OpenCode, Pi), because they keep using their own `auth.json` login per provider even when given a key, so opting them in never moves billing.
+
+**Key format** ([`key_format.rs`](src/key_format.rs)). `key_prefix(key)` returns the longest known public prefix the key starts with and the issuer it names (Anthropic, OpenAI, OpenRouter, Google, xAI, Groq; empty issuer for the shared generic `sk-`). `masked_key(key)` keeps that prefix and replaces every other character with `*`; a key with no known prefix is masked entirely. These prefixes are fixed issuer constants and carry no secret, which is why showing them is allowed. The CLI uses them for the hidden `set-key` prompt, the saved confirmation, and the wrong-issuer warning.
+
+**Launch** ([`launch.rs`](src/launch.rs)). `apply_saved_keys(config, store, prefer_api_key, env)` returns without setting anything unless `prefer_api_key` is true. Otherwise it walks the agent's `key_routes` and, for each route, inserts the saved key into `AcpAgentConfig.env` under the route's variable, returning the variables set. A route is skipped when:
 
 - any `env_credentials` entry for the same provider is set in the ambient environment or the agent config's `env`, or
 - the provider's base-URL variable (`Provider::base_url_env`) is set non-blank in the ambient environment or the agent config's `env`, so a real key is never sent to a gateway or proxy, or
 - the route's variable is listed in `launch.env_remove`; this is how one agent opts out of a saved key that others still receive.
 
-The whole agent is skipped when it is bound to a named token provider or has no routes. The store is read only when at least one route survives. `inject_saved_keys` wraps this with the backend chosen by `NORI_CREDENTIALS_STORE`, the system keyring, and `$NORI_HOME`, and turns any error (bad backend value, legacy files present, unreadable file or keyring) into a warning that names the agent but no value; the agent still launches.
+The whole agent is skipped when it does not prefer API keys, is bound to a named token provider, or has no routes. The store is read only when at least one route survives, so agents that keep their own login never touch the store (or the keyring). `inject_saved_keys(config, nori_home, prefer_api_key, env)` wraps this with the backend chosen by `NORI_CREDENTIALS_STORE`, the system keyring, and `$NORI_HOME`, and turns any error (bad backend value, legacy files present, unreadable file or keyring) into a warning that names the agent but no value; the agent still launches.
 
 ### Things to Know
 
-- No secrets in output: detection never returns key values, the report and table show only variable names, file paths, keychain service names, and record types, warnings never include values, and `Credential`'s `Debug` is redacted.
+- No secrets in output: detection never returns key values, key display goes through `masked_key` (prefix plus `*`), the report and table show only variable names, file paths, keychain service names, and record types, warnings never include values, and `Credential`'s `Debug` is redacted.
+- The default is the agent's own login. Saving a key changes nothing at launch until the user opts that agent in (`nori auth prefer-api-key <agent>` or the TUI's `/api-key`), which writes `[auth.<agent>] prefer_api_key = true`. The opt-in applies at the agent's next launch, not to a running session.
 - Precedence is per provider: an explicit environment credential for a provider always wins over that provider's saved key, but does not block saved keys for the agent's other providers (relevant to OpenCode and Pi).
-- Because `ANTHROPIC_API_KEY` outranks a Claude.ai login, saving one anthropic key makes Claude Code bill the API account instead of a Claude.ai plan; that is why the `api_key_overrides_subscription` notice exists. Adding `ANTHROPIC_API_KEY` to Claude Code's `launch.env_remove` keeps it on the plan while OpenCode and Pi still get the key.
+- Because `ANTHROPIC_API_KEY` outranks a Claude.ai login, opting Claude Code in to a saved anthropic key makes it bill the API account instead of a Claude.ai plan. That is why both opt-in paths show a billing warning once and remember acceptance as `[auth.<agent>] api_billing_confirmed = true`, and why `api_key_overrides_subscription` is still reported afterwards. `launch.env_remove` still withholds one route from an agent that otherwise prefers API keys.
 - The report's detection reads only the ambient environment, so it does not reflect an agent's config `env`, `launch.env_remove`, base-URL override, or token-provider binding the way launch does; a key the report lists as saved for an agent may still be withheld at launch.
 - The directory `flock` works on local Linux and macOS filesystems. On NFS homes Linux emulates `flock` with `fcntl` locks, which need a writable descriptor, while the store locks a read-only directory handle, so `set-key` / `remove-key` may fail there. Reads and launches are unaffected.
-- With the `keyring` backend, `nori providers`, `set-key`, `remove-key`, and every launch read the keyring, which may prompt on macOS (notably after the `nori` binary changes). The harness bounds the launch lookup with a timeout, after which the agent starts without saved keys. The default `file` backend never touches the keyring.
+- With the `keyring` backend, `nori auth`, `set-key`, `remove-key`, `prefer-api-key`, `/api-key`, and every launch of an agent that prefers API keys read the keyring, which may prompt on macOS (notably after the `nori` binary changes). The harness bounds the launch lookup with a timeout, after which the agent starts without saved keys. The default `file` backend never touches the keyring.
 - Legacy per-agent format: if `saved-keys.json` exists in `$NORI_HOME`, every store call errors and tells the user to delete `saved-keys.json`, `saved-keys.secret.json`, `saved-keys.lock` (and any `Nori Provider Keys` keychain items) and re-save with `set-key`. That format was never released, so there is no migration.
 - `cursor` is both a provider id and an agent slug; `Provider::parse` resolves it as the provider.
 - Saved keys are not added to the ACP wire log's redaction list (only named token-provider credentials are), the same as ambient API keys.

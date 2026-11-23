@@ -60,7 +60,7 @@ pub(super) async fn persist_default_model_value(
 }
 
 impl App {
-    fn sync_runtime_config(&mut self) {
+    pub(super) fn sync_runtime_config(&mut self) {
         self.chat_widget.set_config(self.config.clone());
     }
 

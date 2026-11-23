@@ -898,6 +898,7 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
         .or(default_model);
     AcpBackendConfig {
         agent_token_providers: Arc::new(config.agent_token_providers.clone()),
+        prefer_api_key: config.auth_preference(&agent).prefer_api_key,
         agent,
         delegation_context: None,
         cwd: config.cwd.clone(),

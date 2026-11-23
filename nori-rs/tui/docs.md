@@ -507,6 +507,35 @@ default (`persist_browser_profile_setting`, writing the top-level
 `launch_browser_session`, which spawns `BrowserSession::launch_and_store(mode)`
 in `nori-harness`.
 
+#### The `/api-key` sign-in picker
+
+`/api-key` (`@/nori-rs/tui/src/chatwidget/api_key.rs`) chooses whether the
+active agent uses its own login (the default) or the API key saved through
+`nori auth set-key`. It is the TUI equivalent of `nori auth prefer-api-key` /
+`prefer-login` (see `@/nori-rs/cli/docs.md`) and is `CommandScope::LocalOnly`,
+so cloud mode rejects it (managed launches never use saved keys).
+
+- An agent with no saved-key routes (for example Hermes or a custom agent)
+  gets an info message instead of a picker.
+- Otherwise `nori_providers::detect_local_agent` runs on a blocking task (it
+  may touch the OS keyring) and posts `AppEvent::OpenApiKeyPreference` with an
+  `ApiKeyPreference`: the current `[auth.<agent>]` values, the providers with a
+  saved key, and the `api_key_billing_warning()` message when a subscription is
+  detected. A store read failure is shown as an error cell.
+- The picker has two items, the agent's own login and the saved API key, with
+  the current choice marked and preselected. Choosing the saved key when a
+  billing warning exists and `api_billing_confirmed` is false opens
+  `AppEvent::OpenApiKeyBillingConfirmation` instead: a red "WARNING: this
+  changes who you are billed" header with `Yes, bill the API key` and `Cancel`,
+  where Cancel is preselected so a stray Enter keeps the plan.
+- Both paths end in `AppEvent::PersistApiKeyPreference`, handled by
+  `App::persist_api_key_preference` (`@/nori-rs/tui/src/app/config_persistence.rs`),
+  which writes `[auth.<agent>]` to `config.toml` (`api_billing_confirmed` is
+  only ever written as `true`), updates the in-memory config, and syncs the
+  runtime config. The choice is read by `build_backend_config` when an agent is
+  prepared, so it takes effect at the agent's next start (`/new`), not in the
+  running session; the info message says so.
+
 #### Terminal requirements
 
 Initialization requires stdout to be a terminal. It does not require the same of

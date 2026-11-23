@@ -59,10 +59,11 @@ used in production.
 - `nori-protocol/` owns no behavior. It exports `nori_protocol::acp`,
   `SessionEvent::{Acp, Nori}`, and the session manager's `SessionEnvelope` and
   `SessionStatus` types.
-- `providers/` detects each built-in agent's sign-in without reading secrets
-  and stores API keys saved per model provider through `nori providers`; the
-  harness passes each saved key to the agents that use that provider at launch
-  (see [its docs](providers/docs.md)).
+- `providers/` (`nori-providers`) detects each built-in agent's sign-in
+  without reading secrets and stores API keys saved per model provider through
+  `nori auth`; the harness passes a saved key at launch only to agents opted
+  in with `[auth.<agent>] prefer_api_key`, so by default an agent's own login
+  wins (see [its docs](providers/docs.md)).
 - `nori-config/` owns CLI configuration and the approval, sandbox, MCP, trust,
   and shell-policy types consumed at runtime.
 - `installed/` keeps local installation/launch state and owns the authenticated
