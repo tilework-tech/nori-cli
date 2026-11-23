@@ -1,0 +1,11 @@
+---
+source: tui/src/terminal_title.rs
+expression: rendered
+---
+fresh session   | harbor-ledger
+titled, idle    | Claude Code · harbor-ledger · Fix login flakes
+titled, working | ⠼ Codex · harbor-ledger · Fix login flakes
+custom agent    | night-shift… · harbor-ledger · Review open diffs
+long labels     | Synthetic R… · an-exceptionall… · Investigate the intermittent checkout failure seen after th…
+wide labels     | 合成エージ… · 日本語のとても… · ログインの不具合を直す
+no project      | Pi · Tidy the README

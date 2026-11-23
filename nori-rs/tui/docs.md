@@ -1540,6 +1540,21 @@ the same value reaches the `title:` row of the `/status` card. Agents such as Pi
 Nori's context envelope; the presentation layer drops that envelope from the
 title and shows no title when the agent cut it off inside the envelope.
 
+The [terminal title](src/terminal_title.rs) (OSC 0) reads
+`agent · project · session`, for example
+`Claude Code · harbor-ledger · Fix login flakes`, led by a spinner frame while
+a turn is working and animations are on. The agent is the display name the
+footer shows (a custom agent's own name), the project is the working
+directory's last segment, and the session is the first non-blank line of the
+same cleaned agent title, else of the widget's first prompt. Until a session
+has either, the title is the project alone. The agent is cut to 12 columns,
+the project to 16 and the session to 60, each by display width with `…`, so
+the session title keeps most of a narrow tab. Every part is sanitized first:
+whitespace becomes single spaces, control, bidi and zero-width characters are
+dropped, and the zero-width joiner stays so emoji sequences survive. Renames
+rewrite the title at once; a parked session never writes it, and the session
+brought on screen writes its own.
+
 Custom formats are deliberately limited to literal text and built-in
 placeholders. `{{` and `}}` emit literal braces. Unknown placeholders,
 unbalanced braces, expressions, conditions, and format specifiers are rejected

@@ -665,6 +665,7 @@ impl ChatWidget {
     /// Mirror the merged session title into the footer and the `/status` card.
     /// This is the part of a session-info update worth showing on every build,
     /// including the stable releases that suppress the metadata dump.
+    /// The terminal title follows it too.
     pub(super) fn publish_session_title(&mut self) {
         let title = self
             .session_info_state
@@ -679,6 +680,7 @@ impl ChatWidget {
             })
             .filter(|title| !title.is_empty());
         self.bottom_pane.set_session_title(title);
+        self.refresh_terminal_title();
     }
 
     pub(crate) fn on_undo_snapshots_loaded(&mut self, snapshots: Vec<nori_harness::UndoSnapshot>) {
