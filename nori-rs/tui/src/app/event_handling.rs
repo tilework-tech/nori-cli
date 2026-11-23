@@ -1323,6 +1323,9 @@ impl App {
             AppEvent::SetConfigPinnedPlanDrawer(enabled) => {
                 self.persist_pinned_plan_drawer_setting(enabled).await;
             }
+            AppEvent::SetConfigThoughtsInHistory(enabled) => {
+                self.persist_thoughts_in_history_setting(enabled).await;
+            }
             AppEvent::SetConfigResizeReflow(enabled) => {
                 self.persist_resize_reflow_setting(enabled, tui).await;
             }

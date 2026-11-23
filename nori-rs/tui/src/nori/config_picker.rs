@@ -27,6 +27,7 @@ use crate::nori::skillset_picker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SettingsItem {
     PinnedPlanDrawer,
+    ThoughtsInHistory,
     ResizeReflow,
     CustomWorkingMessages,
     VerticalFooter,
@@ -59,6 +60,7 @@ pub fn config_picker_params(
         config.terminal_notifications == TerminalNotifications::Enabled;
     let os_notifications_enabled = config.os_notifications == OsNotifications::Enabled;
     let pinned_plan_drawer_enabled = config.pinned_plan_drawer;
+    let thoughts_in_history_enabled = config.thoughts_in_history;
     let resize_reflow_enabled = config.resize_reflow;
     let custom_working_messages_enabled = config.custom_working_messages;
     let custom_working_messages_description = if config.custom_working_message_list.is_empty() {
@@ -82,6 +84,21 @@ pub fn config_picker_params(
                     let new_value = !pinned_plan_drawer_enabled;
                     move || {
                         tx.send(AppEvent::SetConfigPinnedPlanDrawer(new_value));
+                    }
+                },
+            ),
+        ),
+        (
+            SettingsItem::ThoughtsInHistory,
+            build_toggle_item(
+                "Thoughts in History",
+                "Show agent thoughts in history, not only in the working indicator",
+                thoughts_in_history_enabled,
+                {
+                    let tx = app_event_tx.clone();
+                    let new_value = !thoughts_in_history_enabled;
+                    move || {
+                        tx.send(AppEvent::SetConfigThoughtsInHistory(new_value));
                     }
                 },
             ),
@@ -829,6 +846,29 @@ mod tests {
     }
 
     #[test]
+    fn thoughts_in_history_is_on_by_default_and_toggles_off() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx.clone(), None);
+        let item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Thoughts in History"))
+            .expect("config picker should include Thoughts in History");
+        assert!(item.name.contains("(on)"), "{}", item.name);
+        for action in &item.actions {
+            action(&tx);
+        }
+
+        match rx.try_recv().expect("should receive event") {
+            AppEvent::SetConfigThoughtsInHistory(enabled) => assert!(!enabled),
+            other => panic!("expected SetConfigThoughtsInHistory, got: {other:?}"),
+        }
+    }
+
+    #[test]
     fn config_picker_shows_current_state_on() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
@@ -1115,7 +1155,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx, None);
 
-        assert_eq!(params.items.len(), 15);
+        assert_eq!(params.items.len(), 16);
         // Find the vim mode item
         let vim_mode_item = params
             .items

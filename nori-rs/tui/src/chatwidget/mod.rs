@@ -154,7 +154,7 @@ pub(crate) struct ChatWidget {
     replay_message: Option<ReplayMessage>,
     // Accumulates the current reasoning block text to extract a header
     reasoning_buffer: String,
-    // Accumulates full reasoning content for transcript-only recording
+    // The thought block that goes to history when other output ends it.
     full_reasoning_buffer: String,
     // Current status header shown in the status indicator.
     current_status_header: String,

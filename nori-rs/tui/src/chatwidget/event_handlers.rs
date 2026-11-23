@@ -326,12 +326,14 @@ impl ChatWidget {
                 nori_protocol::HookOutputLevel::Error => self.on_error(output.message),
             },
             nori_protocol::NoriEvent::ReplayStarted(started) => {
+                self.flush_thought_block();
                 self.flush_answer_stream_with_separator();
                 self.flush_replay_message();
                 self.replay_source = Some(started.source);
             }
             nori_protocol::NoriEvent::ReplayFinished => {
                 self.flush_replay_message();
+                self.flush_thought_block();
                 self.replay_source = None;
             }
             nori_protocol::NoriEvent::Undo(_) | nori_protocol::NoriEvent::UserShell(_) => {}
@@ -492,18 +494,11 @@ impl ChatWidget {
     pub(super) fn on_agent_reasoning_delta(&mut self, delta: String) {
         self.flush_answer_stream_with_separator();
 
-        // Thought text is not streamed to history. The working indicator shows
-        // the current thought block's header; any other agent output ends the
-        // block, so the next thought replaces it.
-        // Gemini sends each whole thought as one `**subject**\ndescription`
-        // chunk with no separator, so a chunk opening with `**` starts a line.
-        if delta.starts_with("**")
-            && !self.reasoning_buffer.is_empty()
-            && !self.reasoning_buffer.ends_with('\n')
-        {
-            self.reasoning_buffer.push('\n');
-        }
-        self.reasoning_buffer.push_str(&delta);
+        // The working indicator shows the current thought block's header; any
+        // other agent output ends the block, so the next thought replaces it.
+        // The block itself goes to history once it ends.
+        history_cell::push_thought_chunk(&mut self.reasoning_buffer, &delta);
+        self.push_thought_text(&delta);
 
         if let Some(header) = thought_status_header(&self.reasoning_buffer) {
             self.set_status_header(header);
@@ -511,7 +506,21 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    // Raw reasoning uses the same flow as summarized reasoning
+    /// Adds thought text to the block that goes to history when it ends,
+    /// unless thoughts stay in the working indicator only.
+    fn push_thought_text(&mut self, text: &str) {
+        if self.config.thoughts_in_history {
+            history_cell::push_thought_chunk(&mut self.full_reasoning_buffer, text);
+        }
+    }
+
+    /// Ends the current thought block, adding it to history once.
+    pub(super) fn flush_thought_block(&mut self) {
+        let text = std::mem::take(&mut self.full_reasoning_buffer);
+        if let Some(cell) = history_cell::ThoughtCell::new(text) {
+            self.add_to_history(cell);
+        }
+    }
 
     pub(super) fn on_task_started(&mut self) {
         self.start_task_presentation(true);
@@ -530,7 +539,7 @@ impl ChatWidget {
             self.config.custom_working_messages,
             &self.config.custom_working_message_list,
         ));
-        self.full_reasoning_buffer.clear();
+        self.flush_thought_block();
         self.reasoning_buffer.clear();
         self.completed_client_tool_calls.clear();
         self.assistant_stream_seen_for_stats = false;
@@ -557,6 +566,7 @@ impl ChatWidget {
     }
 
     fn finish_task_presentation(&mut self, last_agent_message: Option<String>, notify: bool) {
+        self.flush_thought_block();
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
 
@@ -587,6 +597,7 @@ impl ChatWidget {
 
     /// Finalize any active tool as failed and stop/clear running UI state.
     pub(super) fn finalize_turn(&mut self) {
+        self.flush_thought_block();
         self.flush_answer_stream_with_separator();
         self.finalize_active_cell_as_failed();
         self.pending_client_tool_cells.clear();
@@ -825,6 +836,7 @@ impl ChatWidget {
             crate::presentation::ClientEvent::ApprovalRequest(_) => {}
             crate::presentation::ClientEvent::ToolSnapshot(tool_snapshot) => {
                 self.reasoning_buffer.clear();
+                self.flush_thought_block();
                 self.handle_client_tool_snapshot(tool_snapshot);
             }
             crate::presentation::ClientEvent::MessageDelta(message_delta) => {
@@ -917,6 +929,7 @@ impl ChatWidget {
                 if message_delta.delta.is_empty() {
                     return;
                 }
+                self.flush_thought_block();
 
                 let continues_active_message =
                     self.active_user_message_id == message_delta.message_id
@@ -942,6 +955,7 @@ impl ChatWidget {
             }
             crate::presentation::MessageStream::Answer => {
                 self.reasoning_buffer.clear();
+                self.flush_thought_block();
                 self.assistant_stream_seen_for_stats = true;
                 self.on_agent_message_delta(message_delta.delta)
             }
@@ -952,6 +966,7 @@ impl ChatWidget {
     }
 
     fn handle_client_plan_snapshot(&mut self, plan_snapshot: crate::presentation::PlanSnapshot) {
+        self.flush_thought_block();
         self.on_plan_update(plan_snapshot_to_update_plan_args(plan_snapshot));
     }
 
@@ -1040,17 +1055,24 @@ impl ChatWidget {
     fn handle_replay_client_event(&mut self, event: crate::presentation::ClientEvent) {
         match event {
             crate::presentation::ClientEvent::MessageDelta(delta) => {
+                // Consecutive thought chunks form one block whatever their
+                // message ids, as they do live.
                 let same_message = self.replay_message.as_ref().is_some_and(|message| {
                     message.stream == delta.stream
-                        && match (&message.message_id, &delta.message_id) {
-                            (Some(current), Some(incoming)) => current == incoming,
-                            (None, None) => true,
-                            (Some(_), None) | (None, Some(_)) => false,
-                        }
+                        && (delta.stream == crate::presentation::MessageStream::Reasoning
+                            || match (&message.message_id, &delta.message_id) {
+                                (Some(current), Some(incoming)) => current == incoming,
+                                (None, None) => true,
+                                (Some(_), None) | (None, Some(_)) => false,
+                            })
                 });
                 if same_message {
                     if let Some(message) = self.replay_message.as_mut() {
-                        message.text.push_str(&delta.delta);
+                        if message.stream == crate::presentation::MessageStream::Reasoning {
+                            history_cell::push_thought_chunk(&mut message.text, &delta.delta);
+                        } else {
+                            message.text.push_str(&delta.delta);
+                        }
                     }
                 } else {
                     self.flush_replay_message();
@@ -1088,6 +1110,7 @@ impl ChatWidget {
         let Some(message) = self.replay_message.take() else {
             return;
         };
+        let ends_thought_block = message.stream == crate::presentation::MessageStream::Reasoning;
         let replay_entry = match message.stream {
             crate::presentation::MessageStream::User => {
                 crate::presentation::ReplayEntry::UserMessage { text: message.text }
@@ -1100,9 +1123,19 @@ impl ChatWidget {
             }
         };
         self.handle_client_replay_entry(replay_entry);
+        if ends_thought_block {
+            self.flush_thought_block();
+        }
     }
 
     fn handle_client_replay_entry(&mut self, replay_entry: crate::presentation::ReplayEntry) {
+        // Consecutive replayed thoughts form one block; anything else ends it.
+        if !matches!(
+            replay_entry,
+            crate::presentation::ReplayEntry::ReasoningMessage { .. }
+        ) {
+            self.flush_thought_block();
+        }
         match replay_entry {
             crate::presentation::ReplayEntry::UserMessage { text } => {
                 self.add_to_history(history_cell::new_user_prompt(text));
@@ -1112,8 +1145,7 @@ impl ChatWidget {
                 self.flush_answer_stream_with_separator();
             }
             crate::presentation::ReplayEntry::ReasoningMessage { text } => {
-                let cell = history_cell::new_reasoning_summary_block(text);
-                self.add_boxed_history(cell);
+                self.push_thought_text(&text);
             }
             crate::presentation::ReplayEntry::PlanSnapshot { snapshot } => {
                 self.add_to_history(history_cell::new_plan_update(

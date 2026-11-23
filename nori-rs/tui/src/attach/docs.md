@@ -55,6 +55,9 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
 - [Rendering](render.rs) keeps role and connectivity visible beside the
   selected conversation or session list. Watchers receive the same content and
   permissions but must take control before sending mutations.
+- Consecutive thought chunks join into one part with the chat view's
+  `push_thought_chunk` and render as the same `ThoughtCell` block, before the
+  answer that ends them. `[tui] thoughts_in_history = false` hides them.
 - The identity line under the header shows the selected session as
   `<agent> · <name> · <folder> · <status>` (the folder is
   `session_table::short_folder` of the row's `cwd`, omitted when an older host

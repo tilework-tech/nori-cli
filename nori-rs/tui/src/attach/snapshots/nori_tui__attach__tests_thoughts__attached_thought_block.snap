@@ -1,0 +1,19 @@
+---
+source: tui/src/attach/tests_thoughts.rs
+expression: screen
+---
+ Nori host  WATCHING · read-only · alt+t take control
+ session · one
+
+ ┊ Reading the config loader
+ ┊
+ ┊ It merges three sources.
+ ┊
+ ┊ Choosing the edit
+ ┊ One place.
+
+ The default now lives in one place.
+
+
+
+› Send a prompt

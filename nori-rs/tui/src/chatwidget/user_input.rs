@@ -50,6 +50,10 @@ impl ChatWidget {
     }
 
     pub(crate) fn add_boxed_history(&mut self, cell: Box<dyn HistoryCell>) {
+        // A pending thought block precedes whatever ends it.
+        if !self.full_reasoning_buffer.is_empty() {
+            self.flush_thought_block();
+        }
         if !cell.display_lines(u16::MAX).is_empty() {
             // Always flush active cell before inserting new history to preserve
             // chronological ordering.

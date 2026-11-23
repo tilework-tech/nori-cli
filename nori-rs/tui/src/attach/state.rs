@@ -115,6 +115,8 @@ pub(super) struct AttachState {
     pub parent_binding: nori_config::HotkeyBinding,
     /// Key that opens the next session waiting on the user.
     pub jump_binding: nori_config::HotkeyBinding,
+    /// Show agent thought text as a thought block; otherwise hide it.
+    pub thoughts_in_history: bool,
 }
 
 impl Default for AttachState {
@@ -140,6 +142,7 @@ impl Default for AttachState {
             scroll: 0,
             parent_binding: nori_config::HotkeyConfig::default().parent_session,
             jump_binding: nori_config::HotkeyConfig::default().next_waiting_session,
+            thoughts_in_history: true,
         }
     }
 }
@@ -523,12 +526,18 @@ impl Conversation {
     fn apply_presentation(&mut self, event: ClientEvent) {
         match event {
             ClientEvent::MessageDelta(delta) => {
+                // Consecutive thought chunks form one block whatever their
+                // message ids, as in the chat view.
                 if !self.message_boundary
                     && let Some(Part::Message { stream, id, text }) = self.parts.last_mut()
                     && *stream == delta.stream
-                    && *id == delta.message_id
+                    && (delta.stream == MessageStream::Reasoning || *id == delta.message_id)
                 {
-                    text.push_str(&delta.delta);
+                    if delta.stream == MessageStream::Reasoning {
+                        crate::history_cell::push_thought_chunk(text, &delta.delta);
+                    } else {
+                        text.push_str(&delta.delta);
+                    }
                 } else {
                     self.parts.push(Part::Message {
                         stream: delta.stream,

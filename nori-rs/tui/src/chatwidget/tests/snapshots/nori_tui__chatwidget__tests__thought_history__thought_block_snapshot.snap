@@ -1,0 +1,11 @@
+---
+source: tui/src/chatwidget/tests/thought_history.rs
+assertion_line: 326
+expression: terminal.backend()
+---
+"┊ Reading the config loader                                 "
+"┊                                                           "
+"┊ The loader merges three sources: the user file, the       "
+"┊ project file, and command-line overrides. The tui table is"
+"┊ read last.                                                "
+"                                                            "
