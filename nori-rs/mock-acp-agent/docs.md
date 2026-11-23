@@ -20,8 +20,12 @@ Typed SDK handlers implement initialize, authentication, session new/load,
 resume/list/close, prompt, cancel, mode, and config-option behavior. Scenario
 environment variables select deterministic streams for:
 
-- messages, thoughts, plans, tools, usage, modes, config, and commands;
+- messages, thoughts, plans, tools, usage, config, and commands;
 - permission round trips with schema-native success and error responses;
+- adapter permission modes: `MOCK_AGENT_MODES` advertises a `mode` config
+  option (category `mode`, starting in its first id) and
+  `MOCK_AGENT_ASKING_MODES` names the modes in which every turn asks for
+  permission, as a strict adapter mode does ([`modes.rs`](src/modes.rs));
 - host-handled filesystem reads and writes;
 - session load/list/resume/close and structured ACP failures;
 - initialize/new-session failures (including candidate-only activation

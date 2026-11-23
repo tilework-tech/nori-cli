@@ -200,7 +200,18 @@ remote ACP client (via TLS front) -+                       agent processes
   host-owned `agent` and `mode` options around the adapter's options, maps
   modes onto the harness approval policy through
   `nori_harness::permission_mode`, and keeps clients' choices in
-  `host/session-settings.json` so a restarted session gets them back. A
+  `host/session-settings.json` so a restarted session gets them back.
+  [Adapter modes](acp/adapter_modes.rs) map each permission mode onto a
+  built-in adapter's own `mode` config option (`ask` onto its strictest
+  mode). `settle_adapter_mode` applies it on ACP `session/new`, on
+  load/resume (after any restart they trigger) and on an agent change, and
+  moves a session in `ask` whose adapter cannot ask to `agent`, telling
+  attached clients; `apply_when_started` applies it after
+  `_nori/session/new` and `_nori/session/resume`. `change_mode` serves
+  `session/set_mode`. Both hold `mode_changes`, so the adapter's mode and
+  the reported mode change together. `ask` is left out of the offered modes
+  for adapters that cannot ask. The mock agent's `MOCK_AGENT_MODES` and
+  `MOCK_AGENT_ASKING_MODES` stand in for these adapters in tests. A
   changed agent restarts the session's process through
   `SessionManager::replace_agent`. Wire details:
   [remote-control.md §12](../../../../docs/remote-control.md#12-standard-acp-v1-on-the-background-host).

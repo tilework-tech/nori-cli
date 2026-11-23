@@ -20,6 +20,7 @@ use serde_json::Value;
 use serde_json::json;
 
 use super::AcpError;
+use super::adapter_modes;
 use crate::host::service::HostService;
 
 pub(super) const AGENT_OPTION: &str = "agent";
@@ -139,19 +140,25 @@ fn agent_option(current: &str) -> Value {
     select(AGENT_OPTION, "Agent", AGENT_CATEGORY, current, choices)
 }
 
-fn mode_option(mode: PermissionMode) -> Value {
-    let choices = PermissionMode::ALL
+/// The permission modes a session can choose: `ask` only when its adapter
+/// can ask before every edit and command, or the session is already in it.
+fn offered(mode: PermissionMode, can_ask: bool) -> impl Iterator<Item = PermissionMode> {
+    PermissionMode::ALL
         .into_iter()
+        .filter(move |offered| can_ask || *offered != PermissionMode::Ask || mode == *offered)
+}
+
+fn mode_option(mode: PermissionMode, can_ask: bool) -> Value {
+    let choices = offered(mode, can_ask)
         .map(|mode| json!({"value": mode.id(), "name": mode.name(), "description": mode.description()}))
         .collect();
     select(MODE_OPTION, "Mode", MODE_OPTION, mode.id(), choices)
 }
 
-pub(super) fn modes(mode: PermissionMode) -> Value {
+pub(super) fn modes(mode: PermissionMode, can_ask: bool) -> Value {
     json!({
         "currentModeId": mode.id(),
-        "availableModes": PermissionMode::ALL
-            .into_iter()
+        "availableModes": offered(mode, can_ask)
             .map(|mode| json!({"id": mode.id(), "name": mode.name(), "description": mode.description()}))
             .collect::<Vec<_>>(),
     })
@@ -159,19 +166,24 @@ pub(super) fn modes(mode: PermissionMode) -> Value {
 
 /// The host's options around the adapter's. Adapter options that would
 /// shadow the host-owned agent or permission mode are left out.
-pub(super) fn compose(agent: &str, mode: PermissionMode, adapter: &[Value]) -> Vec<Value> {
+pub(super) fn compose(
+    agent: &str,
+    mode: PermissionMode,
+    adapter: &[acp::SessionConfigOption],
+) -> Vec<Value> {
+    let can_ask = adapter_modes::offers_ask(agent, adapter);
     std::iter::once(agent_option(agent))
         .chain(
             adapter
                 .iter()
+                .filter_map(|option| serde_json::to_value(option).ok())
                 .filter(|option| {
                     option["id"] != AGENT_OPTION
                         && option["id"] != MODE_OPTION
                         && option["category"] != MODE_OPTION
-                })
-                .cloned(),
+                }),
         )
-        .chain(std::iter::once(mode_option(mode)))
+        .chain(std::iter::once(mode_option(mode, can_ask)))
         .collect()
 }
 
@@ -182,7 +194,9 @@ pub(super) fn update(session: &str, update: Value) -> Value {
 
 /// The adapter's own options carried by a session event, when it changes
 /// them; `Some` for the adapter's `config_option_update`.
-pub(super) fn adapter_options_update(event: &SessionEvent) -> Option<Vec<Value>> {
+pub(super) fn adapter_options_update(
+    event: &SessionEvent,
+) -> Option<Vec<acp::SessionConfigOption>> {
     let SessionEvent::Acp(AcpEvent::Notification(acp::AgentNotification::SessionNotification(
         notification,
     ))) = event
@@ -190,13 +204,7 @@ pub(super) fn adapter_options_update(event: &SessionEvent) -> Option<Vec<Value>>
         return None;
     };
     match &notification.update {
-        acp::SessionUpdate::ConfigOptionUpdate(update) => Some(
-            update
-                .config_options
-                .iter()
-                .filter_map(|option| serde_json::to_value(option).ok())
-                .collect(),
-        ),
+        acp::SessionUpdate::ConfigOptionUpdate(update) => Some(update.config_options.clone()),
         _ => None,
     }
 }
@@ -232,17 +240,9 @@ impl HostService {
             .get(id)
             .ok_or_else(|| AcpError::not_found("unknown session"))?;
         let mode = PermissionMode::from_approval_policy(record.approval_policy);
-        let adapter = match self.manager.handle(id) {
-            Some(handle) => handle
-                .get_session_config()
-                .await
-                .unwrap_or_default()
-                .iter()
-                .filter_map(|option| serde_json::to_value(option).ok())
-                .collect(),
-            None => Vec::new(),
-        };
-        Ok((compose(&record.agent, mode, &adapter), modes(mode)))
+        let adapter = self.adapter_options(id).await;
+        let can_ask = adapter_modes::offers_ask(&record.agent, &adapter);
+        Ok((compose(&record.agent, mode, &adapter), modes(mode, can_ask)))
     }
 
     pub(super) async fn set_mode(
@@ -255,28 +255,7 @@ impl HostService {
                 "unknown mode {mode_id}; use ask, agent or approve-all"
             ))
         })?;
-        self.manager
-            .set_approval_policy(id, mode.approval_policy())
-            .await?;
-        self.settings
-            .update(id, |settings| settings.mode = Some(mode.id().to_owned()));
-        let session = id.to_string();
-        self.acp.broadcast(
-            id,
-            update(
-                &session,
-                json!({"sessionUpdate":"current_mode_update","currentModeId":mode.id()}),
-            ),
-        );
-        let (options, _) = self.session_configuration(id).await?;
-        self.acp.broadcast(
-            id,
-            update(
-                &session,
-                json!({"sessionUpdate":"config_option_update","configOptions":options}),
-            ),
-        );
-        Ok(())
+        self.change_mode(id, mode).await
     }
 
     pub(super) async fn set_config_option(
@@ -346,7 +325,7 @@ impl HostService {
             .await?;
         self.settings
             .update(id, |settings| settings.options.clear());
-        Ok(())
+        self.settle_adapter_mode(id).await
     }
 
     /// Whether any prompt reached the session, judged from its journal.

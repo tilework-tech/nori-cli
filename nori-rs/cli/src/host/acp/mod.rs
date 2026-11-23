@@ -9,6 +9,7 @@
 //! session's `session/request_permission` requests. See
 //! `docs/remote-control.md` §12.
 
+pub(super) mod adapter_modes;
 mod attach;
 pub(super) mod config;
 pub(super) mod handshake;

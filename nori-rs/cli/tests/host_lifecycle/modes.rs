@@ -132,13 +132,12 @@ async fn an_attached_session_reports_its_agent_model_and_permission_mode() {
     let mode = option(options, "mode");
     assert_eq!(mode["category"], "mode");
     assert_eq!(mode["currentValue"], "agent");
-    assert_eq!(values(mode), vec!["ask", "agent", "approve-all"]);
+    assert_eq!(values(mode), vec!["agent", "approve-all"]);
     assert_eq!(
         result["modes"],
         json!({
             "currentModeId": "agent",
             "availableModes": [
-                {"id": "ask", "name": "Ask", "description": "Ask before every edit and command."},
                 {"id": "agent", "name": "Agent", "description": "The agent asks when it judges it needs to."},
                 {"id": "approve-all", "name": "Approve all", "description": "Nori approves every permission request."},
             ],

@@ -485,6 +485,7 @@ impl HostService {
                 subscription.events
             }
         };
+        self.settle_adapter_mode(&id).await?;
         forwarder.seed_open_requests(&id);
         let delivered = forwarder.delivered();
         self.acp
