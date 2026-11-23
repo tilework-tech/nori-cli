@@ -3,22 +3,26 @@ source: tui/src/client_tool_cell_explore_tests.rs
 expression: "format!(\"--- full 120 ---\\n{}\\n--- full 60 ---\\n{}\\n--- compact 120 ---\\n{}\\n--- compact 40 ---\\n{}\",\ntext(&group.transcript_lines(120), 120),\ntext(&group.transcript_lines(60), 60), text(&group.display_lines(120), 120),\ntext(&group.display_lines(40), 40),)"
 ---
 --- full 120 ---
-• Explored 2 reads · 2 searches
+• Explored 2 reads · 4 searches
   • Read nori-rs/tui/src/client_tool_cell.rs · lines 180–259 of 2230
   • Read Cargo.toml · 64 lines
   • Search render_exploring_lines in nori-rs · 3 matches in 2 files
   • Search **/*.snap in nori-rs/tui · 41 files
+  • Search TODO in nori-rs/tui/src
+  • Search **/*.orig in nori-rs · no matches (incomplete)
 --- full 60 ---
-• Explored 2 reads · 2 searches
+• Explored 2 reads · 4 searches
   • Read nori-rs/tui/src/client_tool_cell.rs · lines 180–259
     of 2230
   • Read Cargo.toml · 64 lines
   • Search render_exploring_lines in nori-rs · 3 matches in
     2 files
   • Search **/*.snap in nori-rs/tui · 41 files
+  • Search TODO in nori-rs/tui/src
+  • Search **/*.orig in nori-rs · no matches (incomplete)
 --- compact 120 ---
-• Explored 2 reads · 2 searches
-  └ Search **/*.snap in nori-rs/tui · 41 files
+• Explored 2 reads · 4 searches
+  └ Search **/*.orig in nori-rs · no matches (incomplete)
 --- compact 40 ---
-• Explored 2 reads · 2 searches
-  └ Search **/*.snap in nori-rs/tui
+• Explored 2 reads · 4 searches
+  └ Search **/*.orig in nori-rs

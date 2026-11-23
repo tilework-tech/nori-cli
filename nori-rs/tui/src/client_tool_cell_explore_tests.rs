@@ -464,7 +464,7 @@ fn search_counts_a_single_file_in_the_singular() {
 }
 
 #[test]
-fn search_marks_counts_cut_off_by_a_limit() {
+fn file_list_search_without_a_total_marks_its_limited_count() {
     let row = step_row(&[
         grep_start("s", "use crate", &abs("src")),
         completed("s", None),
@@ -545,20 +545,218 @@ fn search_counts_from_opencode_style_raw_output_metadata() {
     assert_eq!(row, "• Search TODO in src · 7 matches");
 }
 
+fn grep_row(pattern: &str, response: serde_json::Value) -> String {
+    step_row(&[
+        grep_start("s", pattern, &abs("src")),
+        completed("s", None),
+        meta_update("s", claude_response("Grep", response)),
+    ])
+}
+
+fn glob_row(response: serde_json::Value) -> String {
+    step_row(&[
+        glob_start("g", "**/*.rs", &abs("tui")),
+        completed("g", None),
+        meta_update("g", claude_response("Glob", response)),
+    ])
+}
+
+/// Claude Code's content-mode Grep reports `numFiles: 0` and no match count
+/// even when it found hits; `numLines`/`totalLines` count output lines,
+/// including context lines, not hits.
 #[test]
-fn search_in_content_mode_counts_files() {
+fn content_mode_search_with_hits_shows_no_count() {
+    let row = grep_row(
+        "TODO",
+        json!({
+            "mode": "content",
+            "numFiles": 0,
+            "filenames": [],
+            "content": "src/a.rs:3:// TODO tidy\nsrc/b.rs:9:// TODO split",
+            "numLines": 2,
+            "totalLines": 2
+        }),
+    );
+    assert_eq!(row, "• Search TODO in src");
+}
+
+#[test]
+fn content_mode_search_never_reports_output_lines_as_hits() {
+    let row = grep_row(
+        "fn render",
+        json!({
+            "mode": "content",
+            "numFiles": 0,
+            "filenames": [],
+            "content": "src/a.rs-1-use x;\nsrc/a.rs:2:fn render() {}",
+            "numLines": 20,
+            "totalLines": 57,
+            "appliedLimit": 20
+        }),
+    );
+    assert_eq!(row, "• Search fn render in src");
+}
+
+#[test]
+fn content_mode_search_with_no_output_says_no_matches() {
+    let row = grep_row(
+        "missing_symbol",
+        json!({
+            "mode": "content",
+            "numFiles": 0,
+            "filenames": [],
+            "content": "",
+            "numLines": 0,
+            "totalLines": 0
+        }),
+    );
+    assert_eq!(row, "• Search missing_symbol in src · no matches");
+}
+
+#[test]
+fn content_mode_search_without_a_mode_field_shows_no_count() {
+    let row = grep_row(
+        "TODO",
+        json!({ "numFiles": 0, "filenames": [], "content": "src/a.rs:3:TODO", "numLines": 1 }),
+    );
+    assert_eq!(row, "• Search TODO in src");
+}
+
+#[test]
+fn file_list_search_cut_off_by_a_limit_shows_the_exact_total() {
+    let row = grep_row(
+        "use crate",
+        json!({
+            "mode": "files_with_matches",
+            "numFiles": 250,
+            "totalFiles": 1203,
+            "appliedLimit": 250,
+            "filenames": []
+        }),
+    );
+    assert_eq!(row, "• Search use crate in src · 1203 files");
+}
+
+#[test]
+fn count_mode_totals_are_exact_when_a_limit_trims_the_list() {
+    let row = grep_row(
+        "unwrap",
+        json!({
+            "mode": "count",
+            "numFiles": 60,
+            "numMatches": 412,
+            "appliedLimit": 20,
+            "content": "",
+            "filenames": []
+        }),
+    );
+    assert_eq!(row, "• Search unwrap in src · 412 matches in 60 files");
+}
+
+#[test]
+fn timed_out_count_mode_search_marks_both_counts_as_lower_bounds() {
+    let row = grep_row(
+        "unwrap",
+        json!({
+            "mode": "count",
+            "numFiles": 60,
+            "numMatches": 412,
+            "timedOut": true,
+            "content": "",
+            "filenames": []
+        }),
+    );
+    assert_eq!(row, "• Search unwrap in src · 412+ matches in 60+ files");
+}
+
+#[test]
+fn timed_out_file_list_search_marks_its_count() {
+    let row = grep_row(
+        "use crate",
+        json!({
+            "mode": "files_with_matches",
+            "numFiles": 37,
+            "totalFiles": 37,
+            "timedOut": true,
+            "filenames": []
+        }),
+    );
+    assert_eq!(row, "• Search use crate in src · 37+ files");
+}
+
+#[test]
+fn timed_out_search_with_no_hits_is_not_called_empty() {
+    let files = grep_row(
+        "missing_symbol",
+        json!({
+            "mode": "files_with_matches",
+            "numFiles": 0,
+            "totalFiles": 0,
+            "timedOut": true,
+            "filenames": []
+        }),
+    );
+    assert_eq!(
+        files,
+        "• Search missing_symbol in src · no matches (incomplete)"
+    );
+    let content = grep_row(
+        "missing_symbol",
+        json!({
+            "mode": "content",
+            "numFiles": 0,
+            "filenames": [],
+            "content": "",
+            "numLines": 0,
+            "totalLines": 0,
+            "timedOut": true
+        }),
+    );
+    assert_eq!(
+        content,
+        "• Search missing_symbol in src · no matches (incomplete)"
+    );
+}
+
+#[test]
+fn timed_out_file_search_marks_its_count() {
+    let partial = glob_row(json!({
+        "numFiles": 12,
+        "truncated": false,
+        "totalMatches": 12,
+        "countIsComplete": false,
+        "timedOut": true,
+        "filenames": []
+    }));
+    assert_eq!(partial, "• Search **/*.rs in tui · 12+ files");
+}
+
+#[test]
+fn timed_out_file_search_with_no_hits_is_not_called_empty() {
+    let empty = glob_row(json!({
+        "numFiles": 0,
+        "truncated": false,
+        "totalMatches": 0,
+        "countIsComplete": false,
+        "timedOut": true,
+        "filenames": []
+    }));
+    assert_eq!(empty, "• Search **/*.rs in tui · no matches (incomplete)");
+    let legacy =
+        glob_row(json!({ "numFiles": 0, "truncated": false, "timedOut": true, "filenames": [] }));
+    assert_eq!(legacy, "• Search **/*.rs in tui · no matches (incomplete)");
+}
+
+#[test]
+fn cut_off_search_with_no_hits_from_raw_output_metadata_is_not_called_empty() {
     let row = step_row(&[
         grep_start("s", "TODO", &abs("src")),
-        completed("s", None),
-        meta_update(
+        completed(
             "s",
-            claude_response(
-                "Grep",
-                json!({ "mode": "content", "numFiles": 3, "numLines": 17, "filenames": [] }),
-            ),
+            Some(json!({ "metadata": { "matches": 0, "truncated": true } })),
         ),
     ]);
-    assert_eq!(row, "• Search TODO in src · 3 files");
+    assert_eq!(row, "• Search TODO in src · no matches (incomplete)");
 }
 
 #[test]
@@ -626,6 +824,25 @@ fn detailed_group() -> ClientToolCell {
         claude_response(
             "Glob",
             json!({ "numFiles": 41, "truncated": false, "filenames": [] }),
+        ),
+    ));
+
+    push(grep_start("s2", "TODO", &abs("nori-rs/tui/src")));
+    push(completed("s2", None));
+    push(meta_update(
+        "s2",
+        claude_response(
+            "Grep",
+            json!({ "mode": "content", "numFiles": 0, "filenames": [], "content": "a.rs:1:// TODO", "numLines": 1, "totalLines": 1 }),
+        ),
+    ));
+    push(glob_start("g2", "**/*.orig", &abs("nori-rs")));
+    push(completed("g2", None));
+    push(meta_update(
+        "g2",
+        claude_response(
+            "Glob",
+            json!({ "numFiles": 0, "truncated": false, "totalMatches": 0, "countIsComplete": false, "timedOut": true, "filenames": [] }),
         ),
     ));
 

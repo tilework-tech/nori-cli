@@ -641,6 +641,14 @@ by anchored prefix stripping: the working directory itself shows as `.`, paths
 outside it stay absolute, and a search scoped to the working directory omits
 the ` in <dir>` suffix. A step may append a dim ` · <summary>` such as
 `lines 40–120 of 845`, `12 matches in 4 files`, `250+ files`, or `no matches`.
+A `+` marks a lower bound: a Glob or legacy Grep list cut at a limit, or a
+search that reported `timedOut`. A search that found nothing but stopped early
+shows `no matches (incomplete)`, never `no matches`. Claude Code's Grep report
+is read per `mode`: in `content` mode `numFiles` is always 0 and
+`numLines`/`totalLines` count output lines (context included), so the row
+shows no count unless `totalLines` is 0; in `count` mode the totals cover every
+result even when `appliedLimit` trims the list; in `files_with_matches` mode
+`totalFiles` is the exact count before the limit.
 The summary comes from the snapshot's typed `ToolDetails`
 ([`tool_details.rs`](src/presentation/tool_details.rs)), never from output
 text or file IO, so servers that send no structured fields get the bare row.

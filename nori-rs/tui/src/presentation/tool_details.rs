@@ -33,8 +33,9 @@ pub struct LineSpan {
     pub total: Option<i64>,
 }
 
-/// What a search found. `more` marks a count the server cut off at a limit,
-/// so the real number is at least the one shown.
+/// What a search found. `more` marks a count that is only a lower bound,
+/// because the server cut the search off at a limit or a time limit, so the
+/// real numbers are at least the ones shown.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct HitCount {
@@ -79,9 +80,12 @@ impl HitCount {
     fn summary(&self) -> Option<String> {
         let more = if self.more { "+" } else { "" };
         match (self.matches, self.files) {
+            (Some(0), _) | (None, Some(0)) if self.more => {
+                Some("no matches (incomplete)".to_string())
+            }
             (Some(0), _) | (None, Some(0)) => Some("no matches".to_string()),
             (Some(matches), Some(files)) => Some(format!(
-                "{matches}{more} {} in {files} {}",
+                "{matches}{more} {} in {files}{more} {}",
                 plural(matches, "match", "matches"),
                 plural(files, "file", "files")
             )),
@@ -227,16 +231,9 @@ fn requested_read(tool_call: &acp::ToolCall) -> Option<LineSpan> {
 
 fn claude_search_hits(report: Option<(&str, &Value)>) -> Option<HitCount> {
     let (name, response) = report?;
+    let timed_out = response.get("timedOut").and_then(Value::as_bool) == Some(true);
     match name {
-        "Grep" => {
-            let matches = count(response.get("numMatches"));
-            let files = count(response.get("numFiles"));
-            (matches.is_some() || files.is_some()).then(|| HitCount {
-                matches,
-                files,
-                more: count(response.get("appliedLimit")).is_some(),
-            })
-        }
+        "Grep" => claude_grep_hits(response, timed_out),
         "Glob" => {
             let (files, more) = match count(response.get("totalMatches")) {
                 Some(total) => (
@@ -251,11 +248,60 @@ fn claude_search_hits(report: Option<(&str, &Value)>) -> Option<HitCount> {
             files.map(|files| HitCount {
                 matches: None,
                 files: Some(files),
-                more,
+                more: more || timed_out,
             })
         }
         _ => None,
     }
+}
+
+/// Claude Code's Grep report depends on its output mode:
+/// - `content`: `numFiles` is always 0 and there is no match count;
+///   `numLines`/`totalLines` count output lines, including context lines.
+///   Only an empty output (`totalLines: 0`) says anything about hits.
+/// - `count`: `numMatches` and `numFiles` are totals over every result;
+///   `appliedLimit` trims only the listed lines.
+/// - `files_with_matches`: `totalFiles` is the total before `appliedLimit`
+///   and `numFiles` is the number listed after it.
+fn claude_grep_hits(response: &Value, timed_out: bool) -> Option<HitCount> {
+    let mode = response.get("mode").and_then(Value::as_str);
+    let has = |key: &str| response.get(key).is_some();
+    let mode = mode.unwrap_or(if has("numMatches") {
+        "count"
+    } else if has("numLines") || has("totalLines") {
+        "content"
+    } else {
+        "files_with_matches"
+    });
+    let hits = match mode {
+        "content" => {
+            let empty = count(response.get("totalLines")) == Some(0);
+            return empty.then_some(HitCount {
+                matches: Some(0),
+                files: None,
+                more: timed_out,
+            });
+        }
+        "count" => HitCount {
+            matches: count(response.get("numMatches")),
+            files: count(response.get("numFiles")),
+            more: timed_out,
+        },
+        "files_with_matches" => match count(response.get("totalFiles")) {
+            Some(total) => HitCount {
+                matches: None,
+                files: Some(total),
+                more: timed_out,
+            },
+            None => HitCount {
+                matches: None,
+                files: count(response.get("numFiles")),
+                more: timed_out || count(response.get("appliedLimit")).is_some(),
+            },
+        },
+        _ => return None,
+    };
+    (hits.matches.is_some() || hits.files.is_some()).then_some(hits)
 }
 
 /// Counts under `rawOutput.metadata`, as OpenCode reports its grep (`matches`)
