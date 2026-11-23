@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/tmp.oKELj8GRSO · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› make the default explicit
+
+
+│ Reading the config loader
+│
+│ The loader merges three sources: the user file, the project file, and command-line overrides. The
+│ tui table is read last, so a default set there wins.
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+
+• I flipped the default in the loader and updated its test.
+
+
+› ! for shell commands
+

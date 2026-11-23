@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/tmp.A6oE9ApX5E · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› make the default explicit
+
+
+• I flipped the default in the loader and updated its test.
+
+
+› ? for shortcuts
+
