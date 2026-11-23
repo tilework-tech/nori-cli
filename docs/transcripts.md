@@ -26,7 +26,8 @@ $NORI_HOME/transcripts/by-project/{project-id}/
 
 | Recording | `{session-id}` |
 | --- | --- |
-| Session started through the session manager (TUI, `nori host`, or `nori exec --acp` with `multi_session`) | The conversation ID the manager assigns before launch. A same-ID restart of a failed session keeps it. |
+| Session started through the session manager (TUI, `nori host`, or `nori exec`, which runs through a host) | The conversation ID the manager assigns before launch. A same-ID restart of a failed session keeps it. |
+| Stored session resumed by the host | The transcript's own `session_id`; the file continues in place. |
 | Branch-at-head fork child | A fresh ID minted by the recorder; the manager adopts it from `SessionForked`. |
 | Harness started without a session manager | A fresh ID minted when recording starts. |
 | Host managed-launch recording | A fresh ID unrelated to the managed conversation ID, stored under the binding's own home (`<binding home>/.nori/cli`). |
@@ -242,9 +243,10 @@ rewritten.
 | Delegation | A delegated child has its own transcript in the project of the parent's working directory; its first `user` line is the task. The child's result returns to the parent as an ordinary prompt starting `[Nori delegation result]` and is recorded as a parent `user` line. `DelegationChanged`, delegation "waiting on you" notices, and `RequestResolved` come from the session manager, not the runtime, and are not recorded. |
 | Session start | `SessionStarted` carries `transcript_id` and `transcript_path`. |
 
-Because no file records the parent link, delegation lineage lives only in the
-running session manager. After a host restart, resuming a child transcript
-opens it as a top-level session.
+No transcript records the parent link, so delegation lineage lives in the
+running session manager and, on a managed host, in its recovery checkpoints.
+After a host restart, resuming a child transcript opens it as a top-level
+session unless a managed recovery checkpoint restores its parent link.
 
 A host managed-launch recording (`nori-rs/harness/src/backend/managed_additions.rs`)
 uses a separate recorder. It writes only `session_meta` (with the ACP session
@@ -336,7 +338,8 @@ retryable, so an unattended `/loop` stays armed after a busy prompt failure.
 
 [`SessionManager::resume`](../nori-rs/harness/src/session_manager/mod.rs)
 restarts a failed session under its existing conversation ID (session list
-Ctrl+R, or host `_nori/session/resume`). Because the conversation ID equals the
+Ctrl+R, or on the background host `session/load`, `session/resume`, or
+`_nori/session/resume`). Because the conversation ID equals the
 transcript's `session_id`, the Harness continues the same file through
 [`TranscriptRecorder::resume_same_session`](../nori-rs/harness/src/transcript/recorder.rs):
 
@@ -348,6 +351,15 @@ transcript's `session_id`, the Harness continues the same file through
 - If this recorder cannot be created, activation fails instead of running
   without history. A new session whose recorder fails only logs a warning and
   runs without a transcript.
+
+The background host also resumes a session it never ran, from its transcript on
+disk, through
+[`SessionManager::resume_stored`](../nori-rs/harness/src/session_manager/mod.rs)
+(host `session/load`, `session/resume`, or `_nori/session/resume`). The session
+keeps the transcript's `session_id` as its conversation ID, so it continues the
+same file the same way, and its manager journal starts at sequence 1. When the
+transcript's `session_meta` names no agent, the host drops the recorded ACP
+session ID and resumes by transcript replay.
 
 The seed depends on the history source:
 

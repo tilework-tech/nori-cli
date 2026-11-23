@@ -124,26 +124,6 @@ async fn wait_for_started(session: &mut LaunchedSession) {
     .expect("prepared session should start");
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "test helper should fail at the session-start boundary"
-)]
-async fn wait_for_failed_start(session: &mut LaunchedSession) -> Vec<SessionEvent> {
-    tokio::time::timeout(Duration::from_secs(10), async {
-        let mut events = Vec::new();
-        loop {
-            let event = session.events.recv().await.expect("session event stream");
-            let finished = matches!(event, SessionEvent::Nori(NoriEvent::SessionEnded(_)));
-            events.push(event);
-            if finished {
-                return events;
-            }
-        }
-    })
-    .await
-    .expect("failed prepared session should finish startup")
-}
-
 #[tokio::test]
 #[serial]
 async fn listed_agent_is_activated_on_the_same_connection() {
@@ -241,150 +221,6 @@ async fn listed_agent_loads_on_the_same_connection() {
         "load must consume the connection that produced the selected catalog row"
     );
     session.handle.shutdown().await.expect("shutdown session");
-}
-
-#[tokio::test]
-#[serial]
-async fn marked_nori_remote_control_agent_loads_its_active_session_immediately() {
-    // SAFETY: environment-mutating mock-agent tests run serially.
-    unsafe {
-        std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
-        std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
-        std::env::set_var(
-            "MOCK_AGENT_INITIALIZE_META",
-            r#"{"nori":{"remoteControl":{"version":1,"activeSessionId":"remote-active"}}}"#,
-        );
-    }
-    let _list_guard = EnvGuard("MOCK_AGENT_SUPPORT_SESSION_LIST");
-    let _load_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
-    let _meta_guard = EnvGuard("MOCK_AGENT_INITIALIZE_META");
-    let temp = tempfile::tempdir().expect("create test directory");
-    let wire_log_dir = temp.path().join("wire-logs");
-
-    let prepared = prepare_agent(prepare_spec(temp.path(), wire_log_dir.clone()))
-        .await
-        .expect("prepare marked remote-control agent");
-    assert_eq!(
-        recorded_client_methods(&wire_log_dir),
-        vec!["initialize"],
-        "automatic reattachment must not list sessions before loading the advertised active session"
-    );
-
-    let mut session = launch_session(SessionLaunchSpec {
-        agent: prepared,
-        start: SessionStart::New,
-    });
-    wait_for_started(&mut session).await;
-
-    assert_eq!(
-        recorded_client_methods(&wire_log_dir),
-        vec!["initialize", "session/load"],
-        "the marked active session must replace the caller's fresh-session directive"
-    );
-    let messages = recorded_client_messages(&wire_log_dir);
-    let load = messages
-        .iter()
-        .find(|message| message["method"] == "session/load")
-        .expect("automatic session/load request");
-    assert_eq!(load["params"]["sessionId"], "remote-active");
-    session.handle.shutdown().await.expect("shutdown session");
-}
-
-#[tokio::test]
-#[serial]
-async fn unsupported_or_malformed_remote_control_metadata_keeps_the_normal_lifecycle() {
-    // SAFETY: environment-mutating mock-agent tests run serially.
-    unsafe { std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_LIST", "1") };
-    let _list_guard = EnvGuard("MOCK_AGENT_SUPPORT_SESSION_LIST");
-    let _load_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
-    let _meta_guard = EnvGuard("MOCK_AGENT_INITIALIZE_META");
-
-    let cases = [
-        (
-            r#"{"nori":{"remoteControl":{"version":2,"activeSessionId":"remote-active"}}}"#,
-            true,
-        ),
-        (
-            r#"{"nori":{"remoteControl":{"version":1,"activeSessionId":42}}}"#,
-            true,
-        ),
-        (
-            r#"{"nori":{"remoteControl":{"version":1,"activeSessionId":"remote-active"}}}"#,
-            false,
-        ),
-        (r#"{"nori":{"remoteControl":{"version":1}}}"#, true),
-    ];
-
-    for (meta, advertise_load) in cases {
-        // SAFETY: environment-mutating mock-agent tests run serially.
-        unsafe {
-            std::env::set_var("MOCK_AGENT_INITIALIZE_META", meta);
-            if advertise_load {
-                std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
-            } else {
-                std::env::remove_var("MOCK_AGENT_SUPPORT_LOAD_SESSION");
-            }
-        }
-        let temp = tempfile::tempdir().expect("create test directory");
-        let wire_log_dir = temp.path().join("wire-logs");
-        let prepared = prepare_agent(prepare_spec(temp.path(), wire_log_dir.clone()))
-            .await
-            .expect("prepare ordinary agent lifecycle");
-        let mut session = launch_session(SessionLaunchSpec {
-            agent: prepared,
-            start: SessionStart::New,
-        });
-        wait_for_started(&mut session).await;
-        assert_eq!(
-            recorded_client_methods(&wire_log_dir),
-            vec!["initialize", "session/list", "session/new"],
-            "case must not opt an agent into Nori automatic reattachment: {meta}"
-        );
-        session.handle.shutdown().await.expect("shutdown session");
-    }
-}
-
-#[tokio::test]
-#[serial]
-async fn automatic_remote_control_load_failure_never_starts_a_replacement_session() {
-    // SAFETY: environment-mutating mock-agent tests run serially.
-    unsafe {
-        std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
-        std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
-        std::env::set_var("MOCK_AGENT_LOAD_SESSION_FAIL", "1");
-        std::env::set_var(
-            "MOCK_AGENT_INITIALIZE_META",
-            r#"{"nori":{"remoteControl":{"version":1,"activeSessionId":"remote-active"}}}"#,
-        );
-    }
-    let _list_guard = EnvGuard("MOCK_AGENT_SUPPORT_SESSION_LIST");
-    let _load_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
-    let _failure_guard = EnvGuard("MOCK_AGENT_LOAD_SESSION_FAIL");
-    let _meta_guard = EnvGuard("MOCK_AGENT_INITIALIZE_META");
-    let temp = tempfile::tempdir().expect("create test directory");
-    let wire_log_dir = temp.path().join("wire-logs");
-
-    let prepared = prepare_agent(prepare_spec(temp.path(), wire_log_dir.clone()))
-        .await
-        .expect("prepare marked remote-control agent");
-    let mut session = launch_session(SessionLaunchSpec {
-        agent: prepared,
-        start: SessionStart::New,
-    });
-    let events = wait_for_failed_start(&mut session).await;
-
-    assert!(events.iter().any(|event| matches!(
-        event,
-        SessionEvent::Acp(AcpEvent::Response {
-            response: Err(_),
-            ..
-        })
-    )));
-    assert_eq!(
-        recorded_client_methods(&wire_log_dir),
-        vec!["initialize", "session/load"],
-        "a failed automatic load must surface without session/list or session/new fallback"
-    );
 }
 
 #[tokio::test]
@@ -631,4 +467,64 @@ async fn refresh_rejects_spawn_fixed_changes_without_destroying_the_prepared_age
     assert_eq!(methods.first().map(String::as_str), Some("initialize"));
     assert!(methods.iter().any(|method| method == "session/new"));
     session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
+async fn pi_bound_to_a_token_provider_without_its_key_fails_before_launch() {
+    let temp = tempfile::tempdir().expect("create test directory");
+    let wire_log_dir = temp.path().join("wire-logs");
+    let mut spec = prepare_spec(temp.path(), wire_log_dir.clone());
+    let config = Arc::make_mut(&mut spec.config);
+    config.active_agent = "pi-acp".to_string();
+    let binding = test_connection();
+    config.token_providers = vec![binding.clone()];
+    config.agent_token_providers = [("pi".to_string(), binding)].into();
+
+    let error = prepare_agent(spec)
+        .await
+        .expect_err("a missing token-provider key must stop the launch");
+
+    let message = format!("{error:#}");
+    assert!(message.contains("NORI_TEST_PI_KEY_NEVER_SET"), "{message}");
+    assert!(
+        !wire_log_dir.exists() || recorded_client_methods(&wire_log_dir).is_empty(),
+        "no agent may be started when its credential is missing"
+    );
+    assert!(
+        !temp.path().join("token-providers").exists(),
+        "no Pi configuration may be written when its credential is missing"
+    );
+}
+
+fn test_connection() -> nori_config::token_providers::TokenProvider {
+    use nori_config::token_providers::Preset;
+    use nori_config::token_providers::Protocol;
+    use nori_config::token_providers::TokenProvider;
+    TokenProvider {
+        name: "lab".into(),
+        preset: Preset::Custom,
+        protocol: Protocol::OpenaiCompletions,
+        model: "lab-small".into(),
+        env_key: "NORI_TEST_PI_KEY_NEVER_SET".into(),
+        base_url: "http://127.0.0.1:4567/v1".into(),
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn a_token_provider_change_while_preparing_is_not_activated_on_the_old_process() {
+    let temp = tempfile::tempdir().expect("create test directory");
+    let mut prepared = prepare_agent(prepare_spec(temp.path(), temp.path().join("wire-logs")))
+        .await
+        .expect("prepare agent");
+    let mut changed = prepare_spec(temp.path(), temp.path().join("wire-logs"));
+    let binding = test_connection();
+    Arc::make_mut(&mut changed.config).agent_token_providers =
+        [("mock-model".to_string(), binding)].into();
+
+    let error = refresh_prepared_agent(&mut prepared, changed)
+        .expect_err("a binding change must not reuse the prepared process");
+    assert!(format!("{error:#}").contains("token provider"), "{error:#}");
+    prepared.shutdown().await;
 }

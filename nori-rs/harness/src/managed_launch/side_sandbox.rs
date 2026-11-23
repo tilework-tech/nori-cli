@@ -77,8 +77,10 @@ impl Sandbox {
 #[cfg(not(target_os = "linux"))]
 pub(super) fn command(
     _: &LaunchSpec,
+    _: &nori_acp_host::launch::ServerCommand,
     _: &Path,
     _: &Path,
+    _: Option<&Path>,
     _: Option<[std::fs::File; 2]>,
     _: &Path,
 ) -> anyhow::Result<Command> {
@@ -88,8 +90,10 @@ pub(super) fn command(
 #[cfg(target_os = "linux")]
 pub(super) fn command(
     spec: &LaunchSpec,
+    server: &nori_acp_host::launch::ServerCommand,
     cwd: &Path,
     home: &Path,
+    runtime_dir: Option<&Path>,
     side_fds: Option<[std::fs::File; 2]>,
     launcher: &Path,
 ) -> anyhow::Result<Command> {
@@ -138,6 +142,13 @@ pub(super) fn command(
             set_env(key, OsStr::new(value))?;
         }
     }
+    if let Some(dir) = runtime_dir {
+        ensure!(
+            private_codex.is_none(),
+            "prepared runtimes are unsupported for a private Codex side"
+        );
+        set_env(nori_config::AGENT_RUNTIME_ENV, dir.as_os_str())?;
+    }
     set_env("HOME", home.as_os_str())?;
     if let Some(private) = &private_codex {
         super::codex_home::validate_launch(spec)?;
@@ -180,8 +191,7 @@ pub(super) fn command(
         .arg("--args")
         .arg(settings.as_raw_fd().to_string())
         .arg("--")
-        .arg(&spec.adapter.path)
-        .args(&spec.adapter.args)
+        .args(server.argv())
         .current_dir(cwd)
         .stderr(Stdio::null());
     descriptors.push(settings);

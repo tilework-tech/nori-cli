@@ -13,23 +13,14 @@ pub(super) async fn apply_default_model(
     connection: &AcpConnection,
     session_id: &acp::SessionId,
     default_model: &str,
+    builtin: bool,
 ) {
     let config_options = connection.config_options();
     let model_option = config_options
         .iter()
         .find(|option| option.category == Some(acp::SessionConfigOptionCategory::Model));
 
-    if let Some(option) = model_option {
-        apply_via_config_option(connection, session_id, option, default_model).await;
-    }
-}
-
-async fn apply_via_config_option(
-    connection: &AcpConnection,
-    session_id: &acp::SessionId,
-    option: &acp::SessionConfigOption,
-    default_model: &str,
-) {
+    let Some(option) = model_option else { return };
     let acp::SessionConfigKind::Select(select) = &option.kind else {
         warn!("Model config option is not a select; skipping default model '{default_model}'");
         return;
@@ -37,6 +28,27 @@ async fn apply_via_config_option(
     if select.current_value.to_string() == default_model {
         debug!("Default model '{default_model}' is already active");
         return;
+    }
+
+    if builtin {
+        let offered = |values: &[acp::SessionConfigSelectOption]| {
+            values
+                .iter()
+                .any(|choice| choice.value.0.as_ref() == default_model)
+        };
+        let available = match &select.options {
+            acp::SessionConfigSelectOptions::Ungrouped(values) => offered(values),
+            acp::SessionConfigSelectOptions::Grouped(groups) => {
+                groups.iter().any(|group| offered(&group.options))
+            }
+            _ => false,
+        };
+        if !available {
+            warn!(
+                "The agent did not offer the default model '{default_model}'; keeping its current model"
+            );
+            return;
+        }
     }
 
     match connection

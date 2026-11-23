@@ -110,10 +110,6 @@ enum HarnessCommand {
         event_id: String,
         response_tx: oneshot::Sender<anyhow::Result<Option<String>>>,
     },
-    CancelRequest {
-        request_id: acp::v1::RequestId,
-        response_tx: oneshot::Sender<anyhow::Result<()>>,
-    },
     AddHistory {
         text: String,
         response_tx: oneshot::Sender<anyhow::Result<()>>,
@@ -206,6 +202,43 @@ enum HarnessCommand {
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
 struct HarnessTransportClosed(&'static str);
+
+/// The agent never started, so a command waiting for it cannot run. Carries
+/// the agent's ACP error code when it refused with one, for example
+/// `-32000` (authentication required).
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("{message}")]
+pub struct AgentStartFailed {
+    pub message: String,
+    pub code: Option<i32>,
+}
+
+impl AgentStartFailed {
+    fn new(message: String, error: Option<&anyhow::Error>) -> Self {
+        let code = error.and_then(|error| {
+            error
+                .chain()
+                .find_map(|cause| cause.downcast_ref::<acp::v1::Error>())
+                .map(|error| i32::from(error.code))
+        });
+        Self { message, code }
+    }
+
+    /// Answer commands that arrived while the agent was starting.
+    fn fail_waiting(&self, commands: VecDeque<HarnessCommand>) {
+        for command in commands {
+            match command {
+                HarnessCommand::Prompt { response_tx, .. } => {
+                    let _ = response_tx.send(Err(anyhow::Error::new(self.clone())));
+                }
+                HarnessCommand::FollowUp { response_tx, .. } => {
+                    let _ = response_tx.send(Err(anyhow::Error::new(self.clone())));
+                }
+                _ => {}
+            }
+        }
+    }
+}
 
 /// Typed handle for controlling one Nori harness session.
 #[derive(Clone)]
@@ -511,17 +544,6 @@ impl HarnessHandle {
     pub async fn reclaim_queued_prompt(&self, event_id: String) -> anyhow::Result<Option<String>> {
         self.request(|response_tx| HarnessCommand::ReclaimQueuedPrompt {
             event_id,
-            response_tx,
-        })
-        .await
-    }
-
-    pub(crate) async fn cancel_request(
-        &self,
-        request_id: acp::v1::RequestId,
-    ) -> anyhow::Result<()> {
-        self.request(|response_tx| HarnessCommand::CancelRequest {
-            request_id,
             response_tx,
         })
         .await
@@ -859,11 +881,25 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
     } else {
         crate::config::AutoWorktree::Off
     };
-    let agent = config.active_agent.clone();
+    let (agent, saved_model) =
+        crate::registry::resolve_agent_selection(&config.active_agent, &config.default_models);
+    let default_model = config
+        .default_model_override_keys
+        .iter()
+        .find(|key| crate::resolve_agent_slug(key) == agent)
+        .and_then(|key| config.default_models.get(key))
+        .cloned()
+        .or(saved_model);
 
+    let token_provider = config.agent_token_providers.get(&agent).cloned();
+    let default_model = token_provider
+        .as_ref()
+        .map(|binding| nori_acp_host::token_provider::bound_model_id(&agent, binding))
+        .or(default_model);
     AcpBackendConfig {
-        agent: agent.clone(),
-        multi_session: config.multi_session,
+        agent_token_providers: Arc::new(config.agent_token_providers.clone()),
+        prefer_api_key: config.auth_preference(&agent).prefer_api_key,
+        agent,
         delegation_context: None,
         cwd: config.cwd.clone(),
         approval_policy: config.approval_policy,
@@ -895,7 +931,7 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
         async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
         async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
         script_timeout: config.script_timeout.as_duration(),
-        default_model: config.default_models.get(&agent).cloned(),
+        default_model,
         initial_context,
         session_context,
         mcp_servers: config.mcp_servers.clone(),
@@ -994,15 +1030,6 @@ pub(crate) fn launch_session_from(
                     }
                 }
             };
-            let start = agent
-                .automatic_session_id()
-                .map(|session_id| {
-                    SessionStart::Resume(SessionResume {
-                        acp_session_id: Some(session_id.to_string()),
-                        transcript: None,
-                    })
-                })
-                .unwrap_or(start);
             let failure_label = match &start {
                 SessionStart::New => "Failed to start ACP session",
                 SessionStart::Resume(_) => "Failed to resume ACP session",
@@ -1053,6 +1080,8 @@ pub(crate) fn launch_session_from(
                                 },
                             )));
                         }
+                        AgentStartFailed::new(message.clone(), Some(&e))
+                            .fail_waiting(std::mem::take(&mut pending_commands));
                         let _ = event_tx.send(SessionEvent::Nori(NoriEvent::SessionEnded(
                             SessionEnded {
                                 reason: SessionEndReason::SpawnFailed,
@@ -1100,6 +1129,8 @@ pub(crate) fn launch_session_from(
                         kind: RequestFailureKind::Retryable,
                     },
                 )));
+                AgentStartFailed::new(message.clone(), None)
+                    .fail_waiting(std::mem::take(&mut pending_commands));
                 let _ = event_tx.send(SessionEvent::Nori(NoriEvent::SessionEnded(
                     SessionEnded {
                         reason: SessionEndReason::TimedOut,
@@ -1211,13 +1242,6 @@ pub(crate) fn launch_session_from(
                     } => {
                         let _ = response_tx
                             .send(backend_for_agent.reclaim_queued_prompt(event_id).await);
-                    }
-                    HarnessCommand::CancelRequest {
-                        request_id,
-                        response_tx,
-                    } => {
-                        let _ =
-                            response_tx.send(backend_for_agent.cancel_request(request_id).await);
                     }
                     HarnessCommand::AddHistory { text, response_tx } => {
                         let _ = response_tx.send(backend_for_agent.add_history(text).await);
@@ -1419,6 +1443,76 @@ mod tests {
     use nori_protocol::acp::v1::SessionConfigOptionCategory;
     use nori_protocol::acp::v1::SessionConfigSelectOption;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn launch_uses_one_agent_and_model_across_provider_aliases() {
+        for (requested, saved, expected) in [
+            ("agy", "antigravity", "gemini"),
+            ("gemini", "agy", "gemini"),
+            ("grok", "grok-build", "grok-build"),
+            ("grok-build", "grok", "grok-build"),
+        ] {
+            let config = crate::config::NoriConfig {
+                active_agent: requested.into(),
+                default_models: [(saved.into(), "selected".into())].into(),
+                ..Default::default()
+            };
+            let backend = build_backend_config(AgentPrepareSpec {
+                config: Arc::new(config),
+                cli_version: "test".into(),
+                initial_context: None,
+                session_context: None,
+            });
+            assert_eq!(
+                (backend.agent.as_str(), backend.default_model.as_deref()),
+                (expected, Some("selected"))
+            );
+        }
+    }
+
+    #[test]
+    fn last_explicit_model_override_wins_across_aliases() {
+        let home = tempfile::tempdir().unwrap();
+        let path = home.path().join("config.toml");
+        std::fs::write(&path, "[default_models]\ngemini = 'saved'\n").unwrap();
+        let before_table = ("default_models.agy".into(), "early".into());
+        let table: toml::Table = "gemini = 'canonical'\nagy = 'legacy'".parse().unwrap();
+        for (raw_overrides, expected) in [
+            (
+                vec![("default_models.agy".into(), "explicit".into())],
+                "explicit",
+            ),
+            (
+                vec![
+                    ("default_models.gemini".into(), "first".into()),
+                    ("default_models.antigravity".into(), "last".into()),
+                    ("default_models.codex".into(), "other-agent".into()),
+                ],
+                "last",
+            ),
+            (
+                vec![before_table, ("default_models".into(), table.into())],
+                "canonical",
+            ),
+        ] {
+            let config = nori_config::NoriConfig::load_from_path_with_overrides(
+                &path,
+                nori_config::NoriConfigOverrides {
+                    agent: Some("agy".into()),
+                    raw_overrides,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let backend = build_backend_config(AgentPrepareSpec {
+                config: Arc::new(config),
+                cli_version: "test".into(),
+                initial_context: None,
+                session_context: None,
+            });
+            assert_eq!(backend.default_model.as_deref(), Some(expected));
+        }
+    }
 
     fn mode_option(current_value: &str) -> SessionConfigOption {
         SessionConfigOption::select(

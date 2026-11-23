@@ -44,7 +44,7 @@ impl Host {
         std::fs::write(
             home.path().join("config.toml"),
             format!(
-                "agent = \"mock-model\"\n[features]\nmulti_session = true\n\
+                "agent = \"mock-model\"\n\
                  [projects.{quoted_cwd}]\ntrust_level = \"trusted\"\n"
             ),
         )
@@ -64,7 +64,7 @@ impl Host {
     }
 
     fn args(args: &[&str]) -> Vec<String> {
-        ["-c", "features.multi_session=true", "--agent", "mock-model"]
+        ["--agent", "mock-model"]
             .into_iter()
             .chain(args.iter().copied())
             .map(str::to_owned)
@@ -749,7 +749,9 @@ fn same_port_host_restart_stops_reconnecting_and_explains_session_loss() {
         .as_str()
         .unwrap()
         .trim_start_matches("ws://")
-        .trim_end_matches("/sessions")
+        .split('/')
+        .next()
+        .unwrap()
         .parse()
         .unwrap();
     let old_token = std::fs::read(host.home.path().join("host/token")).unwrap();
@@ -992,4 +994,43 @@ fn attached_enter_delivers_to_the_original_turn_then_tab_drains_once() {
     host.start();
     let mut client = host.create_session();
     steering::exercise(&mut client);
+}
+
+#[test]
+fn cancel_in_an_attached_terminal_ends_the_running_turn() {
+    let host = Host::new();
+    host.start();
+    let mut client = host.create_session();
+    client.submit_input("mock:stream-until-cancel").unwrap();
+    let working = |host: &Host| {
+        host.list()
+            .lines()
+            .nth(1)
+            .is_some_and(|row| row.contains("working"))
+    };
+    let deadline = Instant::now() + TIMEOUT;
+    while !working(&host) {
+        assert!(Instant::now() < deadline, "the turn never started");
+        client.settle(Duration::from_millis(50));
+    }
+
+    client.submit_input("/cancel").unwrap();
+
+    let deadline = Instant::now() + TIMEOUT;
+    while working(&host) {
+        assert!(
+            Instant::now() < deadline,
+            "the turn kept running: {}",
+            host.list()
+        );
+        client.settle(Duration::from_millis(50));
+    }
+    assert!(
+        host.list()
+            .lines()
+            .nth(1)
+            .is_some_and(|row| row.contains("ready")),
+        "the session is ready for the next prompt: {}",
+        host.list()
+    );
 }

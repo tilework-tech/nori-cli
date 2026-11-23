@@ -1,5 +1,5 @@
 #![cfg(unix)]
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod standard_acp;
 
@@ -69,10 +69,7 @@ impl Host {
 
     fn command(&self, args: &[&str]) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_nori"));
-        command
-            .env("NORI_HOME", self.0.path())
-            .args(["-c", "features.multi_session=true"])
-            .args(args);
+        command.env("NORI_HOME", self.0.path()).args(args);
         command
     }
 
@@ -93,6 +90,15 @@ impl Host {
     }
 
     fn client(&self) -> nori_harness::remote_agent::ManagedClient {
+        self.connect(serde_json::json!({}))
+    }
+
+    /// A client that initializes as an observer and never takes control.
+    fn observer(&self) -> nori_harness::remote_agent::ManagedClient {
+        self.connect(serde_json::json!({"observe": true}))
+    }
+
+    fn connect(&self, initialize: serde_json::Value) -> nori_harness::remote_agent::ManagedClient {
         let state: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(self.0.path().join("host/state.json")).unwrap(),
         )
@@ -106,10 +112,7 @@ impl Host {
             )
             .await
             .unwrap();
-            client
-                .request("initialize", serde_json::json!({}))
-                .await
-                .unwrap();
+            client.request("initialize", initialize).await.unwrap();
             client
         })
     }
@@ -175,6 +178,84 @@ fn detached_host_stays_alive_empty_and_stops_explicitly() {
     success(host.run(&["host", "stop"]));
 }
 
+/// Rewrite the running host's `host.json` so it advertises `contract`, as an
+/// older or newer `nori` would.
+fn advertise_contract(host: &Host, contract: &str) {
+    let path = host.0.path().join("host/host.json");
+    let mut discovery: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    discovery["contract"] = serde_json::json!(contract);
+    std::fs::write(&path, discovery.to_string()).unwrap();
+}
+
+fn discovery(host: &Host) -> serde_json::Value {
+    serde_json::from_str(&std::fs::read_to_string(host.0.path().join("host/host.json")).unwrap())
+        .unwrap()
+}
+
+#[test]
+fn starting_beside_a_host_of_another_contract_fails_and_leaves_it_running() {
+    let host = Host::new();
+    success(host.run(&["host", "--port", "0"]));
+    advertise_contract(&host, "2.0.0");
+    let before = discovery(&host);
+
+    let refused = failure(host.run(&["host", "--port", "0"]));
+
+    assert!(refused.contains("2.0.0"), "{refused}");
+    assert!(refused.contains(nori_protocol::HOST_CONTRACT), "{refused}");
+    assert!(refused.contains("NORI_HOME"), "{refused}");
+    assert_eq!(discovery(&host), before);
+    success(host.run(&["host", "ls"]));
+}
+
+#[test]
+fn starting_beside_a_host_whose_contract_cannot_be_read_fails() {
+    let host = Host::new();
+    success(host.run(&["host", "--port", "0"]));
+    let path = host.0.path().join("host/host.json");
+    let mut published: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    published["contract"] = serde_json::json!({"acp": 1, "nori": 1});
+    std::fs::write(&path, published.to_string()).unwrap();
+
+    let refused = failure(host.run(&["host", "--port", "0"]));
+
+    assert!(refused.contains(nori_protocol::HOST_CONTRACT), "{refused}");
+    assert!(refused.contains("NORI_HOME"), "{refused}");
+    success(host.run(&["host", "ls"]));
+}
+
+#[test]
+fn starting_beside_a_host_of_a_compatible_contract_reuses_it() {
+    let host = Host::new();
+    success(host.run(&["host", "--port", "0"]));
+    advertise_contract(&host, "1.7.0");
+    let before = discovery(&host);
+
+    let again = success(host.run(&["host", "--port", "0"]));
+
+    assert!(again.contains("already running"), "{again}");
+    assert_eq!(discovery(&host), before);
+}
+
+#[test]
+fn a_host_in_another_home_runs_beside_an_incompatible_one_and_leaves_it_alone() {
+    let incompatible = Host::new();
+    success(incompatible.run(&["host", "--port", "0"]));
+    advertise_contract(&incompatible, "2.0.0");
+    let path = incompatible.0.path().join("host/host.json");
+    let published = std::fs::read(&path).unwrap();
+
+    let own = Host::new();
+    success(own.run(&["host", "--port", "0"]));
+    success(own.run(&["host", "ls"]));
+    success(own.run(&["host", "stop"]));
+
+    assert_eq!(std::fs::read(&path).unwrap(), published);
+    success(incompatible.run(&["host", "ls"]));
+}
+
 #[test]
 fn host_token_is_private_and_never_printed() {
     let host = Host::new();
@@ -206,18 +287,6 @@ fn occupied_port_fails_without_publishing_a_host() {
     assert!(!host.run(&["host", "ls"]).status.success());
     drop(listener);
     success(host.run(&["host", "--port", &port]));
-}
-
-#[test]
-fn attach_requires_multi_session_before_opening_terminal() {
-    let host = Host::new();
-    let result = bounded_output(
-        Command::new(env!("CARGO_BIN_EXE_nori"))
-            .env("NORI_HOME", host.0.path())
-            .args(["attach"]),
-    );
-    assert!(!result.status.success());
-    assert!(String::from_utf8_lossy(&result.stderr).contains("multi_session"));
 }
 
 #[test]
@@ -299,6 +368,12 @@ fn new_session_folder_defaults_to_and_resolves_against_the_callers_directory() {
     let plain = new_in(&[]);
     assert_eq!(plain["cwd"], canonical(caller.path()));
     assert!(plain["session_id"].is_string());
+    let listing: serde_json::Value =
+        serde_json::from_str(&success(host.run(&["host", "ls", "--json"]))).unwrap();
+    assert_eq!(
+        listing,
+        serde_json::json!({"sessions": [{"session_id": plain["session_id"], "credential_refs": []}]})
+    );
     let relative = new_in(&["--cwd", "nested"]);
     assert_eq!(relative["cwd"], canonical(&caller.path().join("nested")));
 }
@@ -491,6 +566,21 @@ async fn a_delegated_child_works_in_its_parents_folder() {
 #[path = "host_lifecycle/managed.rs"]
 mod managed;
 
+#[path = "host_lifecycle/acp_client.rs"]
+mod acp_client;
+
+#[path = "host_lifecycle/transcripts.rs"]
+mod transcripts;
+
+#[path = "host_lifecycle/modes.rs"]
+mod modes;
+
+#[path = "host_lifecycle/ask_mode.rs"]
+mod ask_mode;
+
+#[path = "host_lifecycle/acp_v1.rs"]
+mod acp_v1;
+
 #[test]
 fn machine_transport_authenticates_before_upgrade() {
     use std::io::Write;
@@ -532,3 +622,6 @@ fn machine_transport_authenticates_before_upgrade() {
         );
     }
 }
+
+#[path = "host_lifecycle/remote_transport.rs"]
+mod remote_transport;

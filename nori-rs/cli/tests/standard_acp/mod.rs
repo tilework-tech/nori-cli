@@ -282,10 +282,15 @@ fn start_config(host: Host, config: String) -> (Host, String, String) {
     let token = fs::read_to_string(host.0.path().join("host/token")).unwrap();
     (
         host,
-        state["endpoint"]
-            .as_str()
-            .unwrap()
-            .replace("/sessions", "/managed"),
+        format!(
+            "{}/managed",
+            state["endpoint"]
+                .as_str()
+                .unwrap()
+                .rsplit_once('/')
+                .unwrap()
+                .0
+        ),
         token,
     )
 }

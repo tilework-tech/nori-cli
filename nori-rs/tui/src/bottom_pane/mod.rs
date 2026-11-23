@@ -735,9 +735,9 @@ impl BottomPane {
     /// Fill the footer with the system facts that are cheap to read from `cwd`
     /// so the first frame already shows them, instead of leaving every segment
     /// blank until the background refresh lands.
-    pub(crate) fn seed_system_info(&mut self, cwd: &std::path::Path) {
+    pub(crate) fn seed_system_info(&mut self, cwd: &std::path::Path, skillsets_v2: bool) {
         self.composer
-            .set_system_info(crate::system_info::SystemInfo::seed(cwd));
+            .set_system_info(crate::system_info::SystemInfo::seed(cwd, skillsets_v2));
     }
 
     /// Update the approval mode label displayed in the footer and the slash
@@ -1173,7 +1173,7 @@ mod tests {
             false,
         ));
 
-        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 22));
 
         assert_selected_row_has_symmetric_rails(&rendered, "Mock ACP");
         assert!(!rendered.contains("/ search"), "{rendered}");
@@ -1182,7 +1182,7 @@ mod tests {
 
         pane.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         pane.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
-        let navigated = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        let navigated = render_snapshot(&pane, Rect::new(0, 0, 100, 22));
         let mock_row = navigated
             .lines()
             .find(|row| row.contains("Mock ACP"))
@@ -1246,10 +1246,10 @@ mod tests {
         pane.show_selection_view(
             crate::nori::session_config_picker::acp_session_config_value_picker_params(
                 &option,
-                &[nori_harness::OtherModel {
+                Some(&[nori_harness::OtherModel {
                     id: "experimental",
                     label: "Experimental",
-                }],
+                }]),
             ),
         );
         let model_render = render_snapshot(&pane, Rect::new(0, 0, 100, 18));

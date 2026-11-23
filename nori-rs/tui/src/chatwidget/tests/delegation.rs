@@ -71,8 +71,7 @@ fn delegating_parent_with_clock() -> (
     crate::answer_guard::ManualClock,
 ) {
     let clock = crate::answer_guard::ManualClock::new();
-    let (mut chat, mut rx, _) = make_chatwidget_with_clock(clock.clock());
-    chat.config.multi_session = true;
+    let (chat, mut rx, _) = make_chatwidget_with_clock(clock.clock());
     while rx.try_recv().is_ok() {}
     (chat, rx, clock)
 }
@@ -456,7 +455,6 @@ fn a_delivered_result_fits_one_row_at_80_columns() {
 #[test]
 fn child_shutdown_preserves_terminal_and_history() {
     let (mut chat, mut rx, _) = make_chatwidget_manual();
-    chat.config.multi_session = true;
     let id =
         nori_harness::ConversationId::from_string("00000000-0000-0000-0000-000000000002").unwrap();
     chat.managed_conversation_id = Some(id);
@@ -480,24 +478,6 @@ fn child_shutdown_preserves_terminal_and_history() {
             "a completed child must not exit or replace the visible session"
         );
     }
-}
-
-#[test]
-fn local_delegate_rejects_flag_off_without_prompting_agent() {
-    let (mut chat, mut rx, _) = make_chatwidget_manual();
-    chat.submit_user_message_text("/delegate mock-model-alt inspect parser".into());
-    let mut output = String::new();
-    while let Ok(event) = rx.try_recv() {
-        if let AppEvent::InsertHistoryCell(cell) = event {
-            output.push_str(&lines_to_single_string(&cell.display_lines(120)));
-        } else {
-            assert!(
-                !matches!(event, AppEvent::HarnessAction(_) | AppEvent::NewSession),
-                "flag-off command cannot submit work"
-            );
-        }
-    }
-    assert!(output.contains("multi_session"), "{output}");
 }
 
 #[test]
@@ -535,7 +515,6 @@ fn forked_parent_refreshes_pending_approval_target() {
 #[test]
 fn delegation_result_and_parent_continuation_preserve_composer_draft() {
     let (mut chat, _rx, _) = make_chatwidget_manual();
-    chat.config.multi_session = true;
     chat.set_composer_text("/sessions".into());
     let generation = chat.session_generation();
     chat.handle_session_event(generation, delegation("completed"));

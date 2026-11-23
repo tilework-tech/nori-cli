@@ -7,9 +7,9 @@ each crate's `docs.md`.
 | --- | --- |
 | [glossary.md](glossary.md) | Canonical terms for actors, turns, sessions, and tools |
 | [turn-lifecycle.md](turn-lifecycle.md) | Turn state, `session/update` routing, cancellation, follow-ups (steering), and queue draining |
-| [remote-control.md](remote-control.md) | Remote ACP transport, authenticated background hosts, and attached terminals |
+| [remote-control.md](remote-control.md) | Remote access through the authenticated background host (`nori host`): the ACP remote transport at `/acp`, its wire contracts, the client limit, and attached terminals |
 | [nori-client-mcp.md](nori-client-mcp.md) | The backend-owned `nori-client` MCP server and goals |
-| [headless.md](headless.md) | `nori exec` plaintext mode and the ACP stdio facade |
+| [headless.md](headless.md) | `nori exec` plaintext mode (a client of `nori host`) and `nori exec --acp`, a stdio client that joins the running host or runs a private one |
 | [transcripts.md](transcripts.md) | Transcript file locations and schema |
 
 Rules for these docs:

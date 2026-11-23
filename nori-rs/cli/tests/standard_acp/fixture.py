@@ -117,6 +117,9 @@ for line in sys.stdin:
             send(method="session/update", params={"sessionId": sid, "update": changed})
             send(id=rid, result={"stopReason": "end_turn"})
             continue
+        if text == "inspect-argv":
+            send(id=rid, result={"stopReason": "end_turn", "_meta": {"argv": sys.argv[1:]}})
+            continue
         if text == "inspect-settings":
             send(id=rid, result={"stopReason": "end_turn", "_meta": {"mode": modes[sid], "model": models[sid]}})
             continue

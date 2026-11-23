@@ -87,6 +87,17 @@ async fn concurrent_ensure_uses_one_slot_and_preserves_the_pinned_process() {
     );
     let first = first.unwrap();
     assert_eq!(retry.unwrap(), first);
+    let mut repeated = launch.clone();
+    repeated["spec"]["envRemove"] = json!([]);
+    assert_eq!(a.request(ENSURE, repeated.clone()).await.unwrap(), first);
+    repeated["spec"]["envRemove"] = json!(["SAMPLE_REMOVED"]);
+    assert!(
+        a.request(ENSURE, repeated)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("conflict")
+    );
     assert_eq!(first["conversationId"], launch["conversationId"]);
     assert_eq!(first["state"], "spawned");
     let cwd = Path::new(launch["spec"]["cwd"].as_str().unwrap());
@@ -123,6 +134,209 @@ async fn refusal_code(client: &mut ManagedClient, params: Value) -> i64 {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn prepared_runtimes_and_public_labels_follow_their_binding() {
+    let host = start(2, true);
+    let mut client = client(&host);
+    let mut expected = Vec::new();
+    for name in ["alpha", "beta"] {
+        let mut launch = request(&host, name);
+        let spec = &mut launch["spec"];
+        let runtime = Path::new(spec["home"].as_str().unwrap()).join("prepared");
+        let cwd = Path::new(spec["cwd"].as_str().unwrap()).to_owned();
+        fs::create_dir(&runtime).unwrap();
+        fs::write(runtime.join("marker"), name).unwrap();
+        let label = format!("sessions:token-connection:{name}:v1");
+        spec["runtimeDir"] = json!(runtime);
+        spec["credentialRefs"] = json!([label, "opaque-legacy-reference"]);
+        spec["env"]["API_KEY"] = json!("synthetic-secret");
+        spec["adapter"]["path"] = json!("/bin/sh");
+        spec["adapter"]["args"] = json!([
+            "-c",
+            r#"set -eu; test "$API_KEY" = synthetic-secret; /bin/cat "$NORI_AGENT_RUNTIME_DIR/marker" > result.tmp; /bin/mv result.tmp result"#
+        ]);
+        let receipt = client.request(ENSURE, launch.clone()).await.unwrap();
+        assert_eq!(client.request(ENSURE, launch).await.unwrap(), receipt);
+        wait_for_file(&cwd.join("result"));
+        assert_eq!(fs::read_to_string(cwd.join("result")).unwrap(), name);
+        expected.push(json!({"session_id": receipt["conversationId"], "credential_refs": [label]}));
+    }
+    let listing: Value =
+        serde_json::from_str(&success(host.run(&["host", "ls", "--json"]))).unwrap();
+    assert_eq!(listing, json!({"sessions": expected}));
+    let wire = client
+        .request("_nori/session/list", json!({}))
+        .await
+        .unwrap()
+        .to_string();
+    for private in [
+        "synthetic-secret",
+        "opaque-legacy-reference",
+        "API_KEY",
+        "marker",
+    ] {
+        assert!(!wire.contains(private));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn removing_an_environment_key_in_one_binding_preserves_its_siblings_value() {
+    let host = start(2, true);
+    let mut control = client(&host);
+    let state: Value =
+        serde_json::from_slice(&fs::read(host.0.path().join("host/state.json")).unwrap()).unwrap();
+    let endpoint = state["endpoint"]
+        .as_str()
+        .unwrap()
+        .replace("/sessions", "/managed");
+    let token = fs::read_to_string(host.0.path().join("host/token")).unwrap();
+    let mut machine = ManagedClient::connect(&endpoint, token.trim())
+        .await
+        .unwrap();
+    for (binding, set, removed) in [
+        ("parent", "PARENT_MARK", "SIBLING_MARK"),
+        ("sibling", "SIBLING_MARK", "PARENT_MARK"),
+    ] {
+        let mut launch = request(&host, binding);
+        launch["spec"]["env"][set] = json!(binding);
+        launch["spec"]["envRemove"] = json!([removed]);
+        // Capture once at startup, and again when the host delivers ACP initialize.
+        let observer = r#"observe() { printf '%s %s' "${PARENT_MARK-unset}" "${SIBLING_MARK-unset}"; }
+observe > startup.tmp && /bin/mv startup.tmp startup
+IFS= read -r request || exit 1
+printf '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{},"_meta":{"observed":"%s"}}}\n' "$(observe)"
+IFS= read -r request
+"#;
+        launch["spec"]["adapter"]["path"] = json!("/bin/sh");
+        launch["spec"]["adapter"]["args"] = json!(["-c", observer]);
+        control.request(ENSURE, launch.clone()).await.unwrap();
+        let observed = Path::new(launch["spec"]["cwd"].as_str().unwrap()).join("startup");
+        wait_for_file(&observed);
+        assert_eq!(
+            fs::read_to_string(observed).unwrap(),
+            if binding == "parent" {
+                "parent unset"
+            } else {
+                "unset sibling"
+            }
+        );
+    }
+    for (binding, expected) in [("sibling", "unset sibling"), ("parent", "parent unset")] {
+        machine
+            .send(json!({"bindingId":binding,"generation":1,"message":{
+                "jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}
+            }}))
+            .await
+            .unwrap();
+        let frame = tokio::time::timeout(Duration::from_secs(5), machine.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(frame["bindingId"], binding);
+        assert_eq!(frame["message"]["result"]["_meta"]["observed"], expected);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn invalid_runtime_or_token_label_refuses_the_launch_before_spawn() {
+    let host = start(1, true);
+    let mut client = client(&host);
+    let mut launch = request(&host, "alpha");
+    let home = Path::new(launch["spec"]["home"].as_str().unwrap()).to_owned();
+    let foreign = request(&host, "beta");
+    let other = Path::new(foreign["spec"]["home"].as_str().unwrap());
+    fs::write(home.join("file"), "fixture").unwrap();
+    std::os::unix::fs::symlink(other, home.join("redirect")).unwrap();
+    for dir in [
+        json!("relative"),
+        json!(home.join("missing")),
+        json!(home.join("file")),
+        json!(other),
+        json!(home.join("redirect")),
+    ] {
+        launch["spec"]["runtimeDir"] = dir;
+        assert_eq!(refusal_code(&mut client, launch.clone()).await, -32602);
+    }
+    launch["spec"].as_object_mut().unwrap().remove("runtimeDir");
+    for label in [
+        "sessions:token-connection::v1",
+        "sessions:token-connection:../beta:v1",
+        "sessions:token-connection:alpha:v2",
+    ] {
+        launch["spec"]["credentialRefs"] = json!([label]);
+        assert_eq!(refusal_code(&mut client, launch.clone()).await, -32602);
+    }
+    launch["spec"]["credentialRefs"] = json!(["sessions:codex-subscription-file:v1"]);
+    let mut spoofed = launch.clone();
+    spoofed["spec"]["env"]["nori_agent_runtime_dir"] = json!(other);
+    assert_eq!(refusal_code(&mut client, spoofed).await, -32602);
+    client.request(ENSURE, launch.clone()).await.unwrap();
+    let listing: Value =
+        serde_json::from_str(&success(host.run(&["host", "ls", "--json"]))).unwrap();
+    assert_eq!(
+        listing,
+        json!({"sessions": [{"session_id": launch["conversationId"],
+        "credential_refs": ["sessions:codex-subscription-file:v1"]}]})
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn managed_wrapper_requires_its_own_pin_and_is_part_of_the_binding_identity() {
+    let host = start(1, true);
+    let mut control = client(&host);
+    let mut launch = request(&host, "wrapped");
+    let home = Path::new(launch["spec"]["home"].as_str().unwrap());
+    let runtime = home.join("prepared");
+    let sibling = home.join("prepared-other");
+    fs::create_dir_all(&runtime).unwrap();
+    fs::create_dir_all(&sibling).unwrap();
+    let wrapper = runtime.join("entry");
+    fs::copy("/bin/sh", &wrapper).unwrap();
+    let outside = sibling.join("entry");
+    fs::copy("/bin/sh", &outside).unwrap();
+    std::os::unix::fs::symlink(&outside, runtime.join("redirect")).unwrap();
+    std::os::unix::fs::symlink(&sibling, runtime.join("redirect-dir")).unwrap();
+
+    let pinned =
+        json!({"path":wrapper, "version":"1", "args":["-c", "exec \"$@\"", "fixture wrapper"]});
+    launch["spec"]["adapter"]["wrapper"] = pinned.clone();
+    assert_eq!(refusal_code(&mut control, launch.clone()).await, -32602);
+
+    launch["spec"]["runtimeDir"] = json!(runtime);
+    for invalid in [
+        json!({"path":"relative", "version":"1"}),
+        json!({"path":runtime.join("missing"), "version":"1"}),
+        json!({"path":outside, "version":"1"}),
+        json!({"path":runtime.join("../prepared-other/entry"), "version":"1"}),
+        json!({"path":runtime.join("redirect"), "version":"1"}),
+        json!({"path":runtime.join("redirect-dir/entry"), "version":"1"}),
+        json!({"path":wrapper}),
+        json!({"path":wrapper, "version":"  "}),
+        json!({"path":wrapper, "version":"1", "args":["bad\0arg"]}),
+        json!({"path":wrapper, "version":"1", "wrapper":{"path":wrapper,"version":"1"}}),
+    ] {
+        launch["spec"]["adapter"]["wrapper"] = invalid;
+        assert_eq!(refusal_code(&mut control, launch.clone()).await, -32602);
+    }
+    std::os::unix::fs::symlink("entry", runtime.join("current")).unwrap();
+    launch["spec"]["adapter"]["wrapper"] = pinned;
+    launch["spec"]["adapter"]["wrapper"]["path"] = json!(runtime.join("current"));
+    let receipt = control.request(ENSURE, launch.clone()).await.unwrap();
+    assert_eq!(
+        control.request(ENSURE, launch.clone()).await.unwrap(),
+        receipt
+    );
+    launch["spec"]["adapter"]["wrapper"]["version"] = json!("2");
+    assert!(
+        control
+            .request(ENSURE, launch)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("conflict")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn full_host_refuses_new_binding_with_capacity_code() {
     let host = start(1, true);
     let mut client = client(&host);
@@ -150,12 +364,18 @@ async fn invalid_ensure_returns_invalid_params_even_on_a_full_host() {
         .request(ENSURE, request(&host, "alpha"))
         .await
         .unwrap();
-    let invalid = request(&host, "beta");
+    let mut invalid = request(&host, "beta");
+    invalid["spec"]["envRemove"] = json!([]);
     for (path, value) in [
         ("/spec/cwd", json!("relative")),
         ("/spec/cwd", Value::Null),
         ("/spec/adapter/args", json!(["arg\0value"])),
         ("/spec/env", json!({"LABEL":"env\0value"})),
+        ("/spec/envRemove", json!([""])),
+        ("/spec/envRemove", json!(["bad=name"])),
+        ("/spec/envRemove", json!(["bad\0name"])),
+        ("/spec/envRemove", json!(["home"])),
+        ("/spec/envRemove", json!(["LABEL"])),
     ] {
         let mut invalid = invalid.clone();
         *invalid.pointer_mut(path).unwrap() = value;
@@ -377,4 +597,24 @@ fn unusable_dedicated_layout_fails_before_discovery() {
     configure_dedicated(&host, "single", &home, &work);
     failure(host.run(&["host", "--port", "0"]));
     assert!(!host.0.path().join("host/state.json").exists());
+}
+
+/// Managed mode keeps its legacy supervisor wire: unlike the local host's
+/// ACP face, its `/sessions` takes no notifications and answers a frame
+/// without a request ID as an invalid request.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_managed_host_rejects_notifications() {
+    let host = start(2, true);
+    let mut client = tokio::task::block_in_place(|| host.client());
+
+    client
+        .send(json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"x"}}))
+        .await
+        .unwrap();
+    let reply = tokio::time::timeout(Duration::from_secs(10), client.recv())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(reply["error"]["code"], -32600, "{reply}");
 }

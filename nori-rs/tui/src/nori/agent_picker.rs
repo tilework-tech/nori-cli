@@ -42,7 +42,7 @@ pub fn agent_picker_params_with_subtitle(
     subtitle: String,
 ) -> SelectionViewParams {
     let available_agents = list_available_agents();
-    let current_normalized = current_agent.to_lowercase();
+    let current_normalized = nori_harness::resolve_agent_slug(current_agent);
 
     let items: Vec<SelectionItem> = available_agents
         .into_iter()
@@ -120,7 +120,7 @@ pub fn acp_model_picker_params() -> SelectionViewParams {
     // In ACP mode, we show a message that models are not directly selectable
     // and users should use /agent instead
     let items: Vec<SelectionItem> = vec![SelectionItem {
-        name: "Model switching disabled in ACP mode".to_string(),
+        name: "This agent has no model selector".to_string(),
         description: Some("Use /agent to switch between ACP agents".to_string()),
         is_current: false,
         actions: vec![],
@@ -130,7 +130,7 @@ pub fn acp_model_picker_params() -> SelectionViewParams {
 
     SelectionViewParams {
         title: Some("Select model".to_string()),
-        subtitle: Some("Not available in ACP mode - use /agent instead".to_string()),
+        subtitle: Some("No model option was advertised for this session".to_string()),
         footer_hint: Some(Line::from(
             "Press esc to dismiss, or use /agent to switch agents.",
         )),
@@ -143,7 +143,7 @@ pub fn acp_model_picker_params() -> SelectionViewParams {
 /// Get information about an agent by agent name
 #[allow(dead_code)]
 pub fn get_agent_info(agent_name: &str) -> Option<AcpAgentInfo> {
-    let normalized = agent_name.to_lowercase();
+    let normalized = nori_harness::resolve_agent_slug(agent_name);
     list_available_agents()
         .into_iter()
         .find(|agent| agent.agent_name.to_lowercase() == normalized)
@@ -171,6 +171,30 @@ mod tests {
         let mock_agent = params.items.iter().find(|i| i.name == "Mock ACP");
         assert!(mock_agent.is_some());
         assert!(mock_agent.unwrap().is_current);
+    }
+
+    #[test]
+    fn picker_marks_the_selected_alias_and_starts_its_registered_agent() {
+        for (alias, expected, slug) in [
+            ("agy", "Antigravity", "gemini"),
+            ("grok", "Grok Build", "grok-build"),
+            ("cursor-agent", "Cursor Agent", "cursor"),
+            ("hermes-agent", "Hermes Agent", "hermes"),
+        ] {
+            let (tx, mut rx) = unbounded_channel::<AppEvent>();
+            let tx = AppEventSender::new(tx);
+            let params = agent_picker_params(alias, tx.clone(), false);
+            let selected = params
+                .items
+                .iter()
+                .find(|item| item.is_current)
+                .expect("selected provider");
+            assert_eq!(selected.name, expected);
+            (selected.actions[0])(&tx);
+            assert!(
+                matches!(rx.try_recv(), Ok(AppEvent::PrepareAgentCandidate { agent_name, .. }) if agent_name == slug)
+            );
+        }
     }
 
     #[test]
@@ -228,7 +252,7 @@ mod tests {
 
         assert!(params.title.is_some());
         assert!(params.subtitle.is_some());
-        assert!(params.subtitle.unwrap().contains("Not available"));
+        assert!(params.subtitle.unwrap().contains("No model option"));
     }
 
     #[test]

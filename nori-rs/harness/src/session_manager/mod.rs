@@ -43,6 +43,7 @@ use crate::runtime::SessionResume;
 use crate::runtime::SessionStart;
 use crate::runtime::build_backend_config;
 use crate::runtime::launch_session_from;
+use crate::transcript::Transcript;
 use crate::transcript::load_transcript_from_path;
 
 /// How a session came to exist. A user-started session, a fork and a session
@@ -333,9 +334,7 @@ impl SessionManager {
             process
         };
 
-        if config.multi_session {
-            config.delegation_context = Some(DelegationContext::new(&self.shared, process));
-        }
+        config.delegation_context = Some(DelegationContext::new(&self.shared, process));
         match &mut agent_source {
             SessionAgentSource::Prepared(agent) => {
                 if let Some(activation) = agent.activation_config_mut() {
@@ -459,7 +458,9 @@ impl SessionManager {
         if record.status != SessionStatus::Failed {
             return Err(ResumeError::NotFailed(*failed));
         }
-        if spec.config.active_agent != record.agent {
+        if crate::resolve_agent_slug(&spec.config.active_agent)
+            != crate::resolve_agent_slug(&record.agent)
+        {
             return Err(ResumeError::AgentMismatch {
                 id: *failed,
                 expected: record.agent,
@@ -496,6 +497,45 @@ impl SessionManager {
         Ok(resumed)
     }
 
+    /// Resume a session this manager has not run, from its transcript on disk.
+    ///
+    /// The session keeps the transcript's conversation ID, so it continues
+    /// the same transcript file. The harness picks native `session/load`,
+    /// live `session/resume`, or client-side replay as for any resume. The
+    /// manager journal starts at sequence 1 for it.
+    pub fn resume_stored(
+        &self,
+        id: ConversationId,
+        transcript: Transcript,
+        spec: AgentPrepareSpec,
+    ) -> Result<ManagedSession, ResumeError> {
+        if transcript.meta.session_id != id.to_string() {
+            return Err(ResumeError::Transcript {
+                id,
+                source: std::io::Error::other(format!(
+                    "the transcript records session {}",
+                    transcript.meta.session_id
+                )),
+            });
+        }
+        self.start_session(
+            StartSession {
+                agent: SessionAgent::Prepare(spec),
+                start: SessionStart::Resume(SessionResume {
+                    acp_session_id: transcript.meta.acp_session_id.clone(),
+                    transcript: Some(transcript),
+                }),
+                parent: None,
+                source: SessionSource::User,
+            },
+            Some(id),
+        )
+        .map_err(|error| match error {
+            StartError::NotFailed(id) => ResumeError::NotFailed(id),
+            error => ResumeError::Start(error),
+        })
+    }
+
     pub fn get(&self, conversation_id: &ConversationId) -> Option<SessionRecord> {
         self.shared.state().registry.record(conversation_id)
     }
@@ -527,6 +567,58 @@ impl SessionManager {
         let state = self.shared.state();
         let process = state.registry.live_process(conversation_id)?;
         state.handles.get(&process).cloned()
+    }
+
+    /// Change how a running session answers permission requests from now
+    /// on, and record it. Requests already waiting on a client keep waiting.
+    pub async fn set_approval_policy(
+        &self,
+        conversation_id: &ConversationId,
+        policy: AskForApproval,
+    ) -> anyhow::Result<()> {
+        self.handle(conversation_id)
+            .ok_or_else(|| anyhow::anyhow!("session is not running"))?
+            .set_approval_policy(policy)
+            .await?;
+        self.shared
+            .state()
+            .registry
+            .set_approval_policy(conversation_id, policy);
+        Ok(())
+    }
+
+    /// Let a closed session start again under its own ID through
+    /// [`resume`](Self::resume), as a failed one can.
+    pub fn reopen(&self, conversation_id: &ConversationId) {
+        self.shared.state().registry.allow_restart(conversation_id);
+    }
+
+    /// Stop a top-level session's agent process and start `spec`'s agent as a
+    /// new session under the same conversation ID. The caller ensures the
+    /// session has no conversation yet; its transcript starts over.
+    pub async fn replace_agent(
+        &self,
+        conversation_id: &ConversationId,
+        spec: AgentPrepareSpec,
+    ) -> anyhow::Result<ManagedSession> {
+        let record = self
+            .get(conversation_id)
+            .ok_or_else(|| anyhow::anyhow!("unknown session id"))?;
+        anyhow::ensure!(
+            record.parent.is_none(),
+            "a delegated session cannot change its agent"
+        );
+        self.close_one(conversation_id, Duration::ZERO).await?;
+        self.shared.state().registry.allow_restart(conversation_id);
+        Ok(self.start_session(
+            StartSession {
+                agent: SessionAgent::Prepare(spec),
+                start: SessionStart::New,
+                parent: None,
+                source: record.source,
+            },
+            Some(*conversation_id),
+        )?)
     }
 
     /// Follow every session's envelopes from now on. A subscriber that falls

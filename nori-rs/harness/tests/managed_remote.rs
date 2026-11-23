@@ -10,7 +10,6 @@ use futures::SinkExt;
 use futures::StreamExt;
 use nori_config::NoriConfig;
 use nori_harness::ConversationId;
-use nori_harness::remote_agent::HarnessRemoteHost;
 use nori_harness::remote_agent::ManagedAgent;
 use nori_harness::remote_agent::ManagedRemoteHost;
 use nori_harness::remote_agent::RemoteAcpServer;
@@ -30,8 +29,10 @@ use tokio_tungstenite::MaybeTlsStream;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 const WAIT: Duration = Duration::from_secs(15);
+const TOKEN: &str = "managed-remote-test-token";
 type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
 struct Fixture {
@@ -52,7 +53,6 @@ impl Fixture {
                 .start(StartSession {
                     agent: SessionAgent::Prepare(AgentPrepareSpec {
                         config: Arc::new(NoriConfig {
-                            multi_session: true,
                             active_agent: if index == 0 {
                                 "mock-model"
                             } else {
@@ -77,12 +77,12 @@ impl Fixture {
         for id in ids {
             wait_status(&manager, id, SessionStatus::Ready).await;
         }
-        let host = Arc::new(ManagedRemoteHost::new(manager.clone()));
+        let host = Arc::new(ManagedRemoteHost::authenticated_host(manager.clone()));
         host.set_selected_session(Some(ids[0]));
-        let server = RemoteAcpServer::bind_many_managed(
-            ["127.0.0.1:0".parse().unwrap()],
-            Arc::new(HarnessRemoteHost::new()),
+        let server = RemoteAcpServer::bind_host(
+            "127.0.0.1:0".parse().unwrap(),
             host.clone(),
+            TOKEN.to_string(),
         )
         .await
         .unwrap();
@@ -95,16 +95,34 @@ impl Fixture {
         }
     }
 
+    /// Connect as the controller, once any previous controller has left.
     async fn connect(&self) -> Socket {
-        let (mut socket, _) = connect_async(format!("ws://{}/sessions", self.server.local_addr()))
-            .await
-            .unwrap();
+        tokio::time::timeout(WAIT, async {
+            while self.server.controller_connected().await {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let mut socket = self.open().await;
         send(&mut socket, 0, "initialize", json!({})).await;
         let initialized = receive(&mut socket).await;
         assert!(
             initialized["result"]["capabilities"]["nori_sessions"].is_object(),
             "{initialized}"
         );
+        assert_eq!(initialized["result"]["control"]["role"], "controller");
+        socket
+    }
+
+    async fn open(&self) -> Socket {
+        let mut request = format!("ws://{}/sessions", self.server.local_addr())
+            .into_client_request()
+            .unwrap();
+        request
+            .headers_mut()
+            .insert("authorization", format!("Bearer {TOKEN}").parse().unwrap());
+        let (socket, _) = connect_async(request).await.unwrap();
         socket
     }
 
@@ -482,22 +500,9 @@ async fn invalid_cursors_are_errors_and_overflow_drops_only_subscriber() {
 }
 
 #[tokio::test]
-async fn managed_endpoint_is_opt_in_and_requires_initialize_first() {
-    let legacy = RemoteAcpServer::bind(
-        "127.0.0.1:0".parse().unwrap(),
-        Arc::new(HarnessRemoteHost::new()),
-    )
-    .await
-    .unwrap();
-    let rejected = connect_async(format!("ws://{}/sessions", legacy.local_addr())).await;
-    assert!(
-        matches!(rejected, Err(tokio_tungstenite::tungstenite::Error::Http(response)) if response.status() == 404)
-    );
-    legacy.shutdown().await;
+async fn managed_endpoint_requires_initialize_first() {
     let fixture = Fixture::new(4096).await;
-    let (mut socket, _) = connect_async(format!("ws://{}/sessions", fixture.server.local_addr()))
-        .await
-        .unwrap();
+    let mut socket = fixture.open().await;
     send(&mut socket, 1, "_nori/session/list", json!({})).await;
     let rejected = receive(&mut socket).await;
     assert_eq!(rejected["error"]["code"], -32001);

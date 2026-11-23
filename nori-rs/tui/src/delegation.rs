@@ -124,14 +124,14 @@ pub(crate) fn approval_lines(delegation: &Delegation) -> (String, Vec<Line<'stat
     let (title, asked_by) = match delegation.origin {
         DelegationOrigin::User => (
             format!(
-                "Would you like to start a {} session for your task?",
+                "Would you like to start a session with {} for your task?",
                 delegation.agent
             ),
             "you, with /delegate".to_owned(),
         ),
         DelegationOrigin::Agent => (
             format!(
-                "Would you like {} to start a {} session?",
+                "Would you like {} to start a session with {}?",
                 delegation.parent_agent, delegation.agent
             ),
             format!("{} (this session)", delegation.parent_agent),

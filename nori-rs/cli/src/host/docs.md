@@ -6,11 +6,21 @@ Path: @/nori-rs/cli/src/host
 
 - Implements `nori host`, its administrative commands (`ls`, `stop`, `new`),
   and `nori attach` discovery so agent sessions can outlive every terminal.
+- A local host's client contract is standard ACP v1 over the ACP remote
+  transport's WebSocket profile on `/acp` (alias `/sessions`; any number of
+  clients up to `[host] max_clients`, any number of sessions per connection) plus the `_nori/*` extension; the
+  older `_nori/session/*` methods remain as aliases that `nori attach` and
+  the administrative commands still use.
 - Local sessions use the host's start folder or a folder supplied by the client.
   A machine can enable [managed launch admission](#managed-launch-control-v1)
   to run each binding's pinned adapter in its provisioned workspace and home.
-  A dedicated managed machine can also serve one launch as plain ACP on the
-  host's own [stdin and stdout](#managed-launch-on-stdio).
+  A stdio client (`nori host --stdio`, aliased by `nori exec --acp`)
+  [joins the running host](#local-host-on-stdio) and shares its sessions when
+  it can, and otherwise gets a private host without lock or discovery files;
+  a dedicated managed
+  machine can serve one launch as plain ACP the
+  [same way](#managed-launch-on-stdio). One-shot `nori exec "prompt"` is a
+  [thin ACP client](#one-shot-exec) of a running host or of an in-process one.
 - Owns Unix process lifetime and private host files; protocol framing remains
   in [acp-host](../../../acp-host/docs.md), and session policy remains in the
   [harness](../../../harness/docs.md).
@@ -22,8 +32,7 @@ Path: @/nori-rs/cli/src/host
   absolute. Startup keeps those command-line overrides alongside the resolved
   configuration so the host can reapply them in another folder.
   Administrative list, stop, and new only need host discovery, so they
-  remain available if the configuration file becomes invalid. Attach requires
-  `multi_session` and invokes the dedicated
+  remain available if the configuration file becomes invalid. Attach invokes the dedicated
   [terminal frontend](../../../tui/src/attach/docs.md), bypassing the
   local process-owning TUI application.
 - In local mode, [HostService](service.rs) implements `ManagedAgent`, delegates envelope
@@ -34,12 +43,12 @@ Path: @/nori-rs/cli/src/host
   process termination. Ending the last session never ends the host.
 
 ```text
-host command -> detached host -> authenticated /sessions -> HostService
-                                   ^                         |
-attach TUI ------------------------+                         v
-host ls / stop / new --------------+                   SessionManager
-                                                             |
-                                                       agent processes
+host command -> detached host -> authenticated /acp -----> HostService
+                                   ^  (alias /sessions)          |
+attach TUI ------------------------+                             v
+host ls / stop / new --------------+                       SessionManager
+stdio client (joined) -------------+                             |
+remote ACP client (via TLS front) -+                       agent processes
 ```
 
 ### Core Implementation
@@ -54,6 +63,18 @@ host ls / stop / new --------------+                   SessionManager
   owner-only permissions. It validates ownership, rejects file symlinks and
   nonregular files, and holds an OS file lock for the entire host lifetime.
   Discovery state contains the endpoint and PID; the lock decides liveness.
+  A local (non-managed) host also publishes `host.json`, the host contract's
+  single discovery file (`nori_protocol::HostDiscovery`: endpoint, token, PID,
+  instance ID, version, the semver host contract `nori_protocol::HOST_CONTRACT`, and `startedBy` from
+  `NORI_HOST_STARTED_BY`, else `nori-cli`), written privately to a temporary
+  file and renamed into place after binding, and removed on stop. `state.json`
+  and `token` stay for existing clients. `HostFiles::read_discovery` reads
+  `host.json` without touching the lock. When `nori host` finds a host
+  already answering in its home, it reuses it only if
+  `nori_protocol::host_serves_contract` accepts that host's contract;
+  otherwise it exits non-zero naming both contracts, `nori host stop`, and
+  `NORI_HOME=<dir> nori host` (a host in another home shares none of these
+  files). See [choosing a host](../../../../docs/remote-control.md#choosing-a-host-for-clients).
 - Each start generates a token and binds loopback before publishing discovery
   state. Administrative clients initialize with `observe: true`, so list and
   stop do not claim the controller slot. [List formatting](table.rs)
@@ -107,6 +128,100 @@ host ls / stop / new --------------+                   SessionManager
   exact ID wins; several matches fail with the candidates (ID, agent, title)
   listed; no match fails with a pointer to `nori host ls | cat` (full IDs) and
   to `nori attach` without an ID. The host itself only knows full IDs.
+- In local mode the host's client contract is standard ACP v1, served by the
+  [ACP face](acp/mod.rs) on `/acp` (and its alias `/sessions`) beside the
+  `_nori/*` extension. [Startup](mod.rs) publishes `ws://127.0.0.1:<port>/acp`
+  in `host.json` and `state.json`; a managed host publishes `/sessions`
+  instead. The listener is bound with `bind_host_with_limit` and
+  `[host] max_clients` (at least 1), so one client past the limit gets HTTP
+  503. A full host still answers `nori host` with "already running"
+  ([start](start.rs) checks the host lock when its probe is refused), and
+  `nori host stop` sends SIGTERM to the locked host's PID when its connection
+  is refused. A
+  client's disconnect never ends sessions; it reconnects with a new
+  `initialize` and `session/load` or `session/resume`.
+  Managed mode (`[host] managed = true`) does not serve these methods and
+  keeps its supervisor wire unchanged. The socket loop in
+  [acp-host](../../../acp-host/src/remote/host_wire.rs) hands each
+  initialized connection to `HostService` as a `HostConnection` (an outbound
+  queue, its role watch, and a close token), runs the slow methods (new,
+  load, resume, prompt, close, delete, config changes) concurrently, and
+  passes client notifications (`session/cancel`) and permission answers to
+  `message_from`.
+  [The handshake](acp/handshake.rs) adds `protocolVersion: 1`, `agentInfo`
+  (version `<nori version>+contract.<HOST_CONTRACT>`),
+  ACP `agentCapabilities` (load, list, resume, close, delete; only the
+  baseline prompt and MCP capabilities, because the rest depend on each
+  session's adapter) and empty `authMethods` to the `initialize` reply, with
+  no Nori `_meta`; the reply still carries the managed-session keys `nori
+  attach` reads. The host picks its instance ID at startup and announces the
+  same value on upgrades and in `host.json`.
+- [Session lifecycle](acp/session.rs): `session/new` loads the configuration
+  of the requested folder as `_nori/session/new` does, adds the client's
+  stdio and HTTP `mcpServers` (remembered in the session settings so an agent
+  change or restart keeps them), starts the agent named in
+  `_meta["nori/agent"]` if any (an alias such as `hermes-agent` is resolved
+  with `nori_harness::resolve_agent_slug` first), applies `[host] default_mode` when set, then
+  attaches the connection from the session's first event and answers once
+  the agent has started. A session whose agent never starts is hidden (marked
+  deleted) and the agent's own error code is returned, carried up from
+  `nori_harness::runtime::AgentStartFailed`. The [forwarder](acp/attach.rs)
+  keeps that code but replaces its message with the harness's explanation from
+  the session's end event when there is one (for example `Authentication
+  required for X.` plus the sign-in or install hint). `session/prompt` attaches the
+  connection if needed, rejects a second turn with `-32015`, waits for the
+  turn's ACP prompt response, and answers only after this connection's
+  forwarder has delivered up to that journal sequence (a delivered-sequence
+  watch, bounded wait), so clients see the turn's updates before its
+  `stopReason`. `session/close` closes the manager session (it stays listed
+  and restarts through `SessionManager::reopen` on load or resume);
+  `session/delete` closes it, removes its transcript only when it lies under
+  `NORI_HOME`, clears remembered settings, and records the ID in
+  `HostService.deleted`, which hides it from list, load and prompt for the
+  rest of the host's life.
+- Permission requests reach only the controller. Each connection's
+  forwarder tracks open `session/request_permission` requests per session,
+  sends them under host-chosen JSON-RPC IDs, and re-asks what is still open
+  when the connection attaches later or its role watch turns to controller.
+  Only the current controller's answer is used, routed through the managed
+  respond path, so the first answer (including `_nori/session/respond`) wins;
+  an error answer counts as `cancelled`.
+- [Listing](acp/list.rs) merges manager records with
+  [stored sessions](transcripts.rs) (transcripts the host is not running,
+  read through `TranscriptLoader::list_stored_sessions`); its cursor is
+  `live:<index>` or a keyset over file modification time and ID, so new
+  transcripts do not shift later pages. Rows are ACP `SessionInfo` with
+  `_meta` `nori/agent` and `nori/session` `{live}`
+  (`nori_protocol::ListedSessionMeta`, `ListedSessionState`): a manager
+  record is live while its status is starting, working, waiting on you or
+  ready; closed, failed and done records and every stored row are not.
+  Loading a closed, failed or done record restarts it. Deleted IDs are
+  skipped. [Attaching](acp/attach.rs) forwards
+  one connection's attached sessions' journal events as `session/update`
+  notifications under the conversation ID. Stored sessions restart through
+  `SessionManager::resume_stored`; closed live records are first made
+  restartable with `SessionManager::reopen`, then restart as failed ones do.
+  A startup refusal reported by the agent (an ACP error response before
+  session start) becomes the load or new error. `_nori/session/resume` keeps accepting
+  stored IDs as an alias. [Session configuration](acp/config.rs) composes the
+  host-owned `agent` and `mode` options around the adapter's options, maps
+  modes onto the harness approval policy through
+  `nori_harness::permission_mode`, and keeps clients' choices in
+  `host/session-settings.json` so a restarted session gets them back.
+  [Adapter modes](acp/adapter_modes.rs) map each permission mode onto a
+  built-in adapter's own `mode` config option (`ask` onto its strictest
+  mode). `settle_adapter_mode` applies it on ACP `session/new`, on
+  load/resume (after any restart they trigger) and on an agent change, and
+  moves a session in `ask` whose adapter cannot ask to `agent`, telling
+  attached clients; `apply_when_started` applies it after
+  `_nori/session/new` and `_nori/session/resume`. `change_mode` serves
+  `session/set_mode`. Both hold `mode_changes`, so the adapter's mode and
+  the reported mode change together. `ask` is left out of the offered modes
+  for adapters that cannot ask. The mock agent's `MOCK_AGENT_MODES` and
+  `MOCK_AGENT_ASKING_MODES` stand in for these adapters in tests. A
+  changed agent restarts the session's process through
+  `SessionManager::replace_agent`. Wire details:
+  [remote-control.md §12](../../../../docs/remote-control.md#12-standard-acp-v1-on-the-background-host).
 - Lifecycle requests prepare agents using the host's configuration.
   `_nori/session/new` takes optional `cwd`, `agent`, and `prompt` strings and
   replies `{session_id, cwd}`. A `cwd` must be absolute; [HostService](service.rs)
@@ -136,6 +251,8 @@ host ls / stop / new --------------+                   SessionManager
   sending, and the host checks the folder exists on its machine. Without
   `--cwd` the local host starts the session in the caller's directory; a host
   named with `--host` may be another machine, so it uses its own folder.
+  The host applies the agent's token-provider binding from its own config, so
+  the key variable must be set in the host's environment, not the caller's.
 
 #### Mid-turn follow-ups
 
@@ -149,7 +266,7 @@ An external client calls `_nori/session/follow_up` with a fresh JSON-RPC request
 
 | Transport | Session and turn identifiers | Authenticated sender in receipt |
 | --- | --- | --- |
-| Local host `/sessions` | Initialize with the host bearer and acquire the controller role. Check `result.capabilities.nori_sessions.follow_up == 1`. Use the conversation's `session_id` and the harness `request_id` from prompt admission or its prompting event. | `host-controller`. Observers receive the read-only error. |
+| Local host `/acp` | Initialize with the host bearer and acquire the controller role. Check `result.capabilities.nori_sessions.follow_up == 1`. Use the conversation's `session_id` and the harness `request_id` from prompt admission or its prompting event. | `host-controller`. Observers receive the read-only error. |
 | Machine host `/managed` | Discover `nori.dev/followUp.version == 1` in the control initialize result’s `agentCapabilities._meta`. After ensure and ACP initialization, wrap the request in the same `{bindingId,generation,message}` envelope as the original prompt. Use the regular ACP session ID and that prompt's JSON-RPC ID, retaining its string or integer type. Allocate unique prompt IDs throughout the logical session. | `machine-client`, authenticated by the machine bearer and scoped to the admitted generation. |
 
 Send exactly the fields shown. Choose `steer` or `queue` for `intent`, supply nonempty ACP content and assign a stable, nonblank `message_id` of at most 256 bytes per submission. The host supplies the sender from the authorized path. It identifies the calling principal at this transport boundary. The response is a delivery receipt such as `{"message_id":"correction-1","sender":"host-controller","status":"injected"}`.
@@ -163,7 +280,7 @@ Send exactly the fields shown. Choose `steer` or `queue` for `intent`, supply no
 | `rejected` | The host or adapter refused this delivery, for example because a different turn already owns the session. |
 | `unknown` | Delivery could not be confirmed. Keep the message ID for reconciliation. |
 
-The local harness and the machine host use the [same steering guard](../../../harness/src/follow_up.rs). The live ACP v1 initialize result must advertise `_meta.steering.supported == true` and report an exact verified `agentInfo.name` and `agentInfo.version` pair. Verified versions are `@agentclientprotocol/claude-agent-acp` 0.102.0, 0.108.1 and 0.109.0, and `@agentclientprotocol/codex-acp` 2.7.0. The [default Claude launch](../../../acp-host/src/registry.rs) resolves `@latest`, so an adapter upgrade can change the live identity without a CLI release. An unverified version gets `unsupported_queued` until its [wire behavior is checked](../../../../scripts/verify-host-follow-up/README.md#checking-a-claude-adapter-upgrade).
+The local harness and the machine host use the [same steering guard](../../../harness/src/follow_up.rs). The live ACP v1 initialize result must advertise `_meta.steering.supported == true` and report an exact verified `agentInfo.name` and `agentInfo.version` pair. Verified versions are `@agentclientprotocol/claude-agent-acp` 0.102.0, 0.108.1 and 0.109.0, and `@agentclientprotocol/codex-acp` 2.7.0 and 2.8.0. The standalone CLI follows the upstream releases. A newly resolved adapter version must pass the steering checks before Nori admits it. Antigravity, Grok Build and Pi queue active-turn input for the next turn. Explicit managed launch specifications supply their own adapter path, arguments and version. An unverified version gets `unsupported_queued` until its [wire behavior is checked](../../../../scripts/verify-host-follow-up/README.md#checking-a-claude-adapter-upgrade).
 
 The host sends `_session/steering` with `_meta.steering.idleBehavior = "promptRequired"`. A pending permission still needs its own response. Normal turn completion and settlement of pending permission requests allow the FIFO to drain. With prompt echo enabled, `/managed` emits `_nori/session/follow_up/submitted` before writing a steer. Use its message ID to place the pending input ahead of provider output and update it from the delivery receipt. For host-started queued prompts on `/managed`, correlate `_nori/session/follow_up/started` and `_nori/session/follow_up/finished` using `message_id` and `turn_id`. The finished notification carries the result or error. Local-host clients follow the ordinary managed session envelopes.
 
@@ -228,9 +345,23 @@ to contain `{"version":1,"maxSessions":2,"standardAcp":1}` for the shared config
 (or `maxSessions: 8` for the dedicated configuration).
 The ordinary local host omits that key. The `standardAcp` field advertises version 1 of the scoped ACP transport at
 `/managed`. The control socket accepts `_nori/session/ensure`,
-`_nori/session/status` and `_nori/host/stop` from any authenticated,
+`_nori/session/list`, `_nori/session/status` and `_nori/host/stop` from any authenticated,
 initialized connection. The transport also implements its existing
 `_nori/control/status` and `_nori/control/take` role operations.
+
+**List admitted sessions.** `nori host ls --json` observes the authenticated
+`/sessions` endpoint. Its output contains only the host’s stable conversation
+IDs and public credential reference labels. A binding named `sample` could produce this row.
+
+```json
+{"sessions":[{"session_id":"00000000-0000-4000-8000-000000000001","credential_refs":["sessions:token-connection:sample:v1"]}]}
+```
+
+The [managed inventory](../../../harness/src/managed_launch/listing.rs) reads
+the current host’s launch registry, including resident exit and spawn-failure
+records. Release removes the row. After a cold import, the row carries the
+same conversation ID and the labels from the destination launch specification.
+The recovery journal alone does not create an inventory entry.
 
 **Ensure a process.** ACP session setup requires a running adapter, so the
 machine sends this administrative request before the ACP client starts its
@@ -250,9 +381,15 @@ own handshake.
       "projectId": "fixture-project",
       "runId": "fixture-run",
       "agent": "fixture",
-      "adapter": {"path": "/opt/fixture/1.2.3/bin/fixture-acp", "version": "1.2.3"},
+      "adapter": {
+        "path": "/opt/fixture/1.2.3/bin/fixture-acp",
+        "version": "1.2.3",
+        "args": ["--profile", "Review team"],
+        "wrapper": {"path": "/srv/fixture/bindings/sample/home/runtime/launch", "version": "1.0", "args": ["--"]}
+      },
       "cwd": "/srv/fixture/bindings/sample/work",
       "home": "/srv/fixture/bindings/sample/home",
+      "runtimeDir": "/srv/fixture/bindings/sample/home/runtime",
       "additions": {"promptEcho": false, "statusEvents": false, "recording": false, "clientMcp": false}
     }
   }
@@ -267,11 +404,17 @@ own handshake.
   regular and side ACP IDs.
 - The provisioner installs the versioned executable, protects it from
   replacement, resolves credential references and prepares binding-owned
-  paths. The host executes the absolute `adapter.path` directly with
-  `adapter.args` (optional string array, default empty). The version string
-  identifies that installation in the spec. The host performs no download
-  or binary-version probe. Keep binary selection and launch requests in
-  trusted machine code.
+  paths. The host runs the installed absolute `adapter.path` with
+  `adapter.args` (default empty). For a wrapped launch, set
+  `adapter.wrapper` to an object with an installed absolute `path`, a
+  nonblank `version`, and optional `args`. A managed outer wrapper requires
+  a prepared `runtimeDir`. The host resolves the wrapper path before launching
+  the parent or a side and rejects a target outside that directory, including
+  a symlink that points outside it. The wrapper receives its prefix arguments,
+  the adapter path, then the adapter arguments. Each array element stays one
+  argument. Version strings identify the provisioned installations. The
+  provisioner selects and installs both executables before admission. An
+  ordinary ACP client connects to an admitted session through its binding.
 - The existing session-folder validator canonicalizes the absolute `cwd`
   and `home`. Both must exist and be distinct directories. In the shared
   layout both must be strictly beneath `bindings_root/bindingId`, and the
@@ -281,16 +424,36 @@ own handshake.
   dangling links. The provisioner must control directory
   replacement during launch. Same-UID filesystem access remains subject
   to OS permissions.
-- Optional fields inside `spec` are `model` (string or null), `env`
-  (string-to-string map), `credentialRefs` and `resumeArtifacts` (string
-  arrays). Missing maps and arrays default to empty. Project, run, agent,
+- The broker may set `spec.runtimeDir` to the absolute path of an existing
+  directory it prepared for this binding. Its canonical path must lie strictly
+  inside the shared binding root or the dedicated home. It must be disjoint
+  from the workspace and cannot contain or equal the binding home. The
+  adapter receives this path as `NORI_AGENT_RUNTIME_DIR`. Rebuilt sides
+  revalidate the canonical path pinned at admission. A confined side using
+  the private Codex home refuses a prepared runtime. The provisioner owns
+  staging and cleanup outside checkpointed worktrees. It stages the files
+  again at a recovery destination.
+- The broker supplies public labels in `credentialRefs`. The inventory
+  recognizes `sessions:codex-subscription-file:v1` and
+  `sessions:token-connection:<id>:v1`. A connection ID matches
+  `^[a-z0-9][a-z0-9-]{0,63}$`. Malformed token-connection labels fail
+  admission. Older opaque references stay private. The host leaves
+  credential resolution and provider configuration to the provisioner.
+- Other optional fields inside `spec` are `model` (string or null), `env`
+  (string-to-string map), `envRemove` (array of variable names) and
+  `resumeArtifacts` (string array). Missing maps
+  and arrays default to empty. Project, run, agent,
   model, credential and resume metadata stay with the immutable spec.
   The executable receives only its arguments, working directory and child
   environment. Unknown request or spec fields are rejected.
-- The host clears inherited environment, applies `spec.env`, and sets
+- The host clears its inherited environment, applies `spec.envRemove` before
+  `spec.env`, and sets
   `HOME=home` and `NORI_HOME=home/.nori/cli`. The default `CODEX_HOME`
   is `home/.codex`.
-  Those names and `USERPROFILE` are reserved case-insensitively. Adapter
+  The host reserves those names, `USERPROFILE`, and `NORI_AGENT_RUNTIME_DIR`
+  case-insensitively for both setting and removal. Admission also rejects a
+  name present in both `env` and `envRemove`. Ordinary environment names are
+  case-sensitive on Unix and case-insensitive on Windows. Adapter
   arguments and environment entries must be free of NUL characters.
   Supply variables such as `PATH` explicitly when the adapter needs them.
   Subprocesses inherit the binding environment. Host `.env` values stay
@@ -379,7 +542,7 @@ the JSON-RPC `result` has the following fields.
   "bindingId":"sample",
   "generation":1,
   "conversationId":"00000000-0000-4000-8000-000000000001",
-  "specDigest":"be38062d7d4f3978fff3a223d10370562d2ff9ea813eaf46891b7b434a6b1662",
+  "specDigest":"7c9b31a083fc52411db88c9db7d3dcba09343cf810fafee2e009218b4aa5bf72",
   "state":"spawned"
 }
 ```
@@ -439,6 +602,110 @@ orphaned processes. For ordinary managed launches the host signals the
 adapter's process group and waits for its direct child. Orphaned descendants can remain as zombies until their
 adopting ancestor reaps them. See [process supervision](../../../acp-host/src/connection/child_lifecycle.rs).
 
+#### Local host on stdio
+
+`nori host --stdio` without `--launch` serves one client that speaks the
+[ACP face](#local-host-and-attach) on stdin and stdout, one JSON-RPC message
+per line. `nori exec --acp` dispatches here from [CLI dispatch](../main.rs)
+with the same `--agent`, `-C`, `-c`, `--add-dir` and bypass overrides, before
+any prompt is read from stdin. `[host] managed = true` refuses it; that mode
+needs `--launch`.
+
+- **Joining the running host.** [`join.rs`](join.rs) relays the client to
+  the home's running background host when all of these hold: the command
+  carries no configuration of its own (no agent, `-c`, `--add-dir`, approval
+  or sandbox override), `host.json` advertises a compatible contract
+  (`compatible_discovery`, which one-shot exec shares), the client's first
+  non-blank line is an `initialize`, and the running host answers it within
+  a short timeout with `control.role: "controller"`. The process then copies
+  stdin lines to `/acp` as text frames and the host's frames to stdout. The
+  client shares the host's sessions with every other client and they outlive
+  it: stdin EOF closes only this connection and exits 0; SIGINT or SIGTERM
+  closes it and exits non-zero. A watcher reply or an unreachable host closes
+  that connection, and the already-read `initialize` line is replayed to a
+  private host instead. A stdio client never takes control from another.
+- **Private host.** Otherwise [`serve`](local_stdio.rs) builds the same
+  `HostService` as the background host
+  (through `local_host`, over the shared `host_service` constructor) but
+  without managed launches or recovery, and hands it with the stdin lines
+  (prefixed by any replayed `initialize`) to
+  `RemoteAcpServer::serve_host_stdio_lines` in
+  [acp-host](../../../acp-host/docs.md). No port is bound, no token is
+  created, no host lock is taken and no `host.json`, `state.json` or `token`
+  is written, so it runs beside a detached host of the same `NORI_HOME`
+  without either seeing the other's live sessions. Its sessions end with it;
+  transcripts remain and later list as stored. Neither host sees the
+  other's live sessions: each lists the other's as stored (`live: false`), and
+  loading or resuming one there runs it twice on one transcript. Do not.
+- The socket loop is the WebSocket one with a stdio transport: the client is
+  always the controller (`observe: true` is ignored), and a lagging
+  `_nori/session/subscribe` subscription ends with
+  `_nori/session/subscription_ended` `{"reason":"replay_required"}` in band
+  instead of closing the stream.
+- Blank lines are ignored; a non-JSON line gets a `-32700` error with a null
+  `id`. stdout carries only ACP lines; logs go to stderr.
+
+On a private host:
+
+| Event | Outcome |
+| --- | --- |
+| stdin reaches EOF | Sessions stop (zero grace) and the process exits 0, or non-zero if a session did not stop cleanly. |
+| The ACP face disconnects the client, for example one more than 1024 events behind | Sessions stop and the process exits non-zero. |
+| `_nori/host/stop` | As stdin EOF. |
+| SIGINT or SIGTERM | Sessions stop and the process exits non-zero. |
+
+See the [stdio host cases](../../tests/host_stdio.rs).
+
+#### One-shot exec
+
+[`oneshot.rs`](oneshot.rs) implements `nori exec "prompt"` and `nori -p` as
+an ACP v1 client of the host (contract §2/§5.3), replacing the deleted
+`nori-exec` crate. [CLI dispatch](../main.rs) resolves the prompt and
+configuration, calls `run`, and keeps ownership of stdout, stderr and the exit
+status, so flags and output are unchanged.
+
+```text
+nori exec "prompt"
+   |
+   +-- running host usable? --yes--> WebSocket (token from host.json)
+   |                                     session runs in that host's process
+   +-- otherwise ------------------> in-process local_host
+                                         RemoteAcpServer::serve_host_pipe
+                                         (in-memory line channels)
+```
+
+- **Host choice.** The running host is used only when its OS lock is held,
+  `nori_protocol::host_serves_contract(host.json contract, HOST_CONTRACT)`
+  holds (so a newer `1.x` host is used and a `2.x` one is not), it accepts
+  the discovery token within a short timeout, and the `initialize` reply
+  (sent without `observe`) gives this client `control.role = controller`.
+  Exec never takes control from another client; any failed check falls back.
+  A run with `-c` overrides or `--add-dir` (`own_host`) always skips the
+  running host, because that host applies its own configuration. The
+  in-process host takes no lock, publishes no discovery and binds no socket,
+  and its sessions stop (zero grace) when the run ends.
+- **Per run.** `initialize` (pipe only; the socket path already initialized
+  during host choice), `session/new` with the resolved `-C` folder or current
+  folder, empty `mcpServers` and `_meta["nori/agent"]` when `--agent`/`-a` was
+  given, `session/set_mode` `approve-all` under
+  `--dangerously-bypass-approvals-and-sandbox` else `agent`,
+  `session/prompt`, then `session/close` even after a failed prompt. On a
+  running host the closed session stays listed as stored.
+- **Output.** Text `agent_message_chunk` updates for the session are
+  concatenated; the CLI prints them plus a trailing newline. Every
+  `session/request_permission` is answered with its `reject_once` or
+  `reject_always` option, else `cancelled`, and marks the outcome
+  `permission_denied`, which the CLI turns into a non-zero exit with
+  "permission request was rejected during unattended execution". Any other
+  host request gets `-32601`. A JSON-RPC error on any call (an agent that fails
+  to start, a refused prompt) becomes the run's error on stderr, using the
+  host's message.
+- **Analytics.** `AnalyticsReporter::session_started` fires when the prompt's
+  response arrives (event mode stays `exec`), and the reporter is flushed
+  whether or not the run succeeded.
+
+See the [exec host client cases](../../tests/exec_host_client.rs).
+
 #### Managed launch on stdio
 
 A machine bridge that already pipes an ACP adapter's stdin and stdout can run
@@ -458,8 +725,7 @@ cwd = "/srv/fixture/home/org/workspace"
 ```
 
 ```sh
-NORI_HOME=/srv/fixture/nori nori -c features.multi_session=true \
-  host --stdio --launch /srv/fixture/launch.json
+NORI_HOME=/srv/fixture/nori nori host --stdio --launch /srv/fixture/launch.json
 ```
 
 - The host runs in the foreground on an ephemeral loopback port. The
@@ -479,8 +745,9 @@ NORI_HOME=/srv/fixture/nori nori -c features.multi_session=true \
 - Blank input lines are ignored. A line that is not JSON receives a JSON-RPC
   `-32700` error with a null `id` on stdout.
 - `--inherit-env` adds the host process's environment to the launch's `env`.
-  Variables in the specification win. `HOME`, `USERPROFILE`, `CODEX_HOME` and
-  `NORI_HOME` are never inherited, because the host assigns them. Entries
+  The relay excludes names in `envRemove` and keeps explicit values in `env`.
+  The relay skips the host-assigned
+  `HOME`, `USERPROFILE`, `CODEX_HOME`, `NORI_HOME`, and `NORI_AGENT_RUNTIME_DIR`. Entries
   that are not UTF-8 are skipped. Without the flag the adapter receives only
   `spec.env` and the host-assigned variables.
 - stdout carries only ACP messages. Logs never go to stdout.
@@ -530,9 +797,16 @@ prompt waiting for permission can remain open during its parent’s checkpoint. 
 stops the binding's processes and waits for its rebuilt sides and parent relay
 to finish before exporting the final checkpoint.
 
-When `spec.additions.recording` is enabled, checkpoint flushes and syncs each
-binding-owned recorder through its open file handle, then verifies that the
-output watermarks still match. On checkpoint or release error, read
+During export, the host freezes command admission while the adapter can still
+emit output, including status updates after `session/load`. The host syncs
+each enabled recorder through its open file handle and exports session
+history. If the journal advances during that work, the host repeats it on the
+same binding generation without resending the prompt. It returns a checkpoint
+once the output watermarks hold steady across a pass. Continued output can
+exhaust the bounded retry and return `output advanced during checkpoint`.
+Storage failures return immediately. [Checkpoint implementation](recovery_control.rs)
+
+On checkpoint or release error, read
 `error.data.savedThrough` when present. Its source cursors identify the last
 durable output the host could verify. A known storage failure closes admission
 with `-32020` before a fresh command enters the ledger. A failure during the
@@ -589,9 +863,10 @@ Recovering model context never entails submitting an interrupted prompt.
   file validation after a reconnect authentication failure. Explicit endpoints
   require `--host` together with `--token-file` and receive no local credential
   rediscovery callback. Token contents never appear in startup output.
-- The authenticated listener serves `/sessions` and adds `/managed` when
-  managed launches are enabled. For the local attach protocol, see the
-  [wire contract](../../../../docs/remote-control.md#2-managed-session-wire-sessions).
+- The authenticated listener serves `/acp` and its alias `/sessions`; with
+  managed launches enabled it serves `/sessions` and `/managed` instead, with
+  no `/acp` and no client limit. For the local attach protocol, see the
+  [wire contract](../../../../docs/remote-control.md#11-background-host-and-attached-terminals).
 - Delegation requests pass through `ManagedRemoteHost` to the same manager
   used by local sessions. Child sessions consume the ordinary session cap
   and inherit the parent's backend configuration, so they work in the
@@ -601,10 +876,25 @@ Recovering model context never entails submitting an interrupted prompt.
 - The host has no persistent manager snapshot. Transcripts survive normally,
   but in-memory registry state and reconnect replay belong to the current host
   process. After a restart, earlier sessions, including finished delegated
-  children, are not listed; `/resume` on a child's transcript reopens it as a
-  live top-level `ready` session without its parent link. The token rotates when that process starts again.
+  children, are missing from `_nori/session/list` (and so from `nori host ls`
+  and `nori attach`); ACP `session/list` still shows them as `stored` from
+  their transcripts. Resuming a child's transcript reopens it as a live
+  top-level `ready` session without its parent link. The set of deleted
+  session IDs is in memory only; deletion is durable because the transcript
+  file is removed. The token rotates when that process starts again.
 - [Lifecycle tests](../../tests/host_lifecycle.rs) use isolated homes and
   bounded process waits to cover detached startup, privacy, lock ownership,
-  occupied ports, and explicit stop.
+  occupied ports, and explicit stop; the [ACP v1 cases](../../tests/host_lifecycle/acp_v1.rs)
+  drive the standard face against the mock agent, the
+  [remote transport cases](../../tests/host_lifecycle/remote_transport.rs)
+  cover `/acp` and its alias, `Acp-Connection-Id`, refusals, binary frames,
+  the client limit, and sessions outliving their client, the
+  [stdio host cases](../../tests/host_stdio.rs) drive it on stdin and stdout
+  (including `nori exec --acp`), and the
+  [exec host client cases](../../tests/exec_host_client.rs) cover one-shot
+  exec on a running host, beside a controlling client, and with overrides.
+  The published wire
+  schema is pinned by a [drift test](../../tests/host_wire_schema.rs) (see
+  [nori-protocol](../../../nori-protocol/docs.md)).
 
 Created and maintained by Nori.

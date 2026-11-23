@@ -2,7 +2,7 @@
 source: tui/src/chatwidget/tests/delegation.rs
 expression: rendered
 ---
-  Would you like to start a mock-model-alt session for your task?
+  Would you like to start a session with mock-model-alt for your task?
 
   asked by  you, with /delegate
   runs on   mock-model-alt · a different agent from this session

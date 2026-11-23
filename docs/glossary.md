@@ -14,15 +14,16 @@ term names.
 | **[Client](turn-lifecycle.md)** | An ACP client, such as Nori CLI or webchat, that mediates between a **user** and an **agent**. | Harness, peer, observer |
 | **[Agent](turn-lifecycle.md)** | An ACP server that performs work and emits requests, responses, and session updates. | Model, provider, backend |
 | **[Provider](turn-lifecycle.md)** | The external organization or service from which an **agent** obtains models or credentials. | Agent, model, ACP server |
+| **[Token provider](../nori-rs/config.md#named-api-token-providers)** | A **provider** endpoint that Nori configures an **agent** to call, authenticated by a key the user keeps in a named environment variable. | Agent, preset, model |
 
 ### Nori runtime boundaries
 
 | Term | Definition | Aliases to avoid |
 | --- | --- | --- |
-| **[ACP host](remote-control.md)** | The `nori-rs/acp-host` crate layer: owns the ACP SDK connection, agent process, wire lifecycle, and delegated-request routing, and serves ACP outward for remote control and the **host**. | Host, client, harness |
+| **[ACP host](remote-control.md)** | The `nori-rs/acp-host` crate layer: owns the ACP SDK connection, agent process, wire lifecycle, and delegated-request routing, and serves ACP outward for the **host**. | Host, client, harness |
 | **[Session harness](turn-lifecycle.md)** | Nori's headless runtime that composes the **ACP host** with product lifecycle and one ordered event stream. | ACP host, client, session broker |
-| **[Session manager](remote-control.md)** | Nori's registry of live **sessions** keyed by **conversation ID**, running one **session harness** and agent process per session. It runs inside the TUI, the **host**, and `nori exec --acp` with `[features] multi_session = true`. | Broker, session broker, harness |
-| **[Host](remote-control.md)** | The detached `nori host` process: a **session manager** that outlives any terminal and serves sessions to attached clients over `/sessions`. | ACP host, server, broker |
+| **[Session manager](remote-control.md)** | Nori's registry of live **sessions** keyed by **conversation ID**, running one **session harness** and agent process per session. It runs inside the TUI and the **host**. | Broker, session broker, harness |
+| **[Host](remote-control.md#11-background-host-and-attached-terminals)** | The `nori host` process: a **session manager** that serves standard ACP v1 over `/acp` (alias `/sessions`) to attached clients and outlives any terminal. `nori host --stdio` (alias `nori exec --acp`) serves one client on stdin and stdout, joining the running host when it can, and one-shot `nori exec` runs as a client of a host. | ACP host, server, broker |
 | **[Session broker](remote-control.md)** | The Nori Sessions service that shares a **session**, acting as agent downstream and client toward the upstream agent. Not part of this repository. | Host, provider, transport |
 
 ### Connections
@@ -41,6 +42,16 @@ term names.
   connections and the client upstream.
 - An **agent** may call a **provider**, but provider-internal work crosses no
   ACP boundary unless the agent exposes it through ACP.
+- A **token provider** replaces an **agent's** own sign-in for model calls.
+  The agent stays the ACP server, and Nori stores only the name of the key's
+  environment variable.
+- [`nori auth`](../nori-rs/config.md#saved-api-keys) reports each **agent's**
+  sign-in, and `nori auth set-key` / `remove-key` manage API keys saved per
+  **provider** (for example `openai`). An **agent** receives a saved key only
+  when it calls that provider and is opted in with `nori auth prefer-api-key`
+  (`[auth.<agent>] prefer_api_key`); otherwise its own login wins. A saved
+  provider key is not a **token provider**: it configures no endpoint and is
+  never applied to an agent bound to a token provider.
 
 ## Turns and Ownership
 
@@ -92,7 +103,7 @@ term names.
 | --- | --- | --- |
 | **[Follow-up](turn-lifecycle.md#follow-ups)** | A message the user sends while a **prompt turn** is running, aimed at that turn. It is either **steered** or **queued**, and returns a delivery receipt. | Interrupt, managed follow-up |
 | **[Steer](turn-lifecycle.md#keys)** | Enter during a running turn: inject the **follow-up** into that turn through `_session/steering`. Only allowlisted adapter versions support it; otherwise the message is queued. | Interrupt, append, send now |
-| **[Queue](turn-lifecycle.md#prompt-queue)** | Tab during a running turn: hold the **follow-up** in the harness-owned FIFO and send it as a new **prompt turn** after the current turn ends with `end_turn`. `/sessions` subscribers see it through `QueueChanged` snapshots; `/acp` drops them and `nori attach` does not render them. | Buffer, outbox, pending prompts |
+| **[Queue](turn-lifecycle.md#prompt-queue)** | Tab during a running turn: hold the **follow-up** in the harness-owned FIFO and send it as a new **prompt turn** after the current turn ends with `end_turn`. `_nori/session/subscribe` clients see it through `QueueChanged` snapshots; standard ACP sessions on the **host** carry none, and `nori attach` does not render them. | Buffer, outbox, pending prompts |
 | **[Paused queue](turn-lifecycle.md#drain-and-pause)** | A **queue** holding user prompts after a turn that did not end with `end_turn` (`interrupted` or `turn_failed`). It sends nothing until resumed; only the local TUI that owns the harness can resume it. | Stuck queue, cancelled queue |
 
 - A **steer** adds input to the running turn; it does not start a new
@@ -120,46 +131,45 @@ term names.
 
 | Term | Definition | Aliases to avoid |
 | --- | --- | --- |
-| **[Session envelope](remote-control.md)** | A session event tagged with its **conversation ID**, agent, and per-conversation sequence number. | Frame, message |
-| **[Session status](remote-control.md)** | A managed session's coarse state: starting, working, waiting on you, ready, failed, closed, or done (a delegated child whose task finished). | Phase, turn status |
-| **[Session source](remote-control.md)** | How a managed session began: `user` (started by a client), `fork` (forked from its parent), or `session` (a **delegated child**). | Origin, kind |
-| **[Session family](remote-control.md)** | A top-level **session** plus all of its descendants, whose **session statuses** roll up into one. | Thread, tree |
-| **[Request resolved](remote-control.md)** | A **session envelope** announcing that a client answered a pending agent request, and which client. | Approval event |
-| **[Active session](remote-control.md)** | The one **session** the TUI shows; the prompt, terminal title, and scrollback belong to it. | Current tab |
-| **[Parked session](remote-control.md)** | A live **session** the TUI holds off screen with its own history view, input, and pending requests. | Hidden, paused |
-| **[Session cap](remote-control.md)** | The most managed **sessions** that may run at once, set by `[tui] max_sessions` (default 8) for both the TUI and `nori host`. `[host] max_sessions` is a separate limit that bounds only managed launches. | Limit, quota |
+| **[Session envelope](remote-control.md#10-managed-session-wire)** | A session event tagged with its **conversation ID**, agent, and per-conversation sequence number. | Frame, message |
+| **[Session status](remote-control.md#10-managed-session-wire)** | A managed session's coarse state: starting, working, waiting on you, ready, failed, closed, or done (a delegated child whose task finished). | Phase, turn status |
+| **[Session source](remote-control.md#10-managed-session-wire)** | How a managed session began: `user` (started by a client), `fork` (forked from its parent), or `session` (a **delegated child**). | Origin, kind |
+| **[Session family](remote-control.md#10-managed-session-wire)** | A top-level **session** plus all of its descendants, whose **session statuses** roll up into one. | Thread, tree |
+| **[Request resolved](remote-control.md#10-managed-session-wire)** | A **session envelope** announcing that a client answered a pending agent request, and which client. | Approval event |
+| **[Active session](../nori-rs/config.md#several-sessions-in-one-tui)** | The one **session** the TUI shows; the prompt, terminal title, and scrollback belong to it. | Current tab |
+| **[Parked session](../nori-rs/config.md#several-sessions-in-one-tui)** | A live **session** the TUI holds off screen with its own history view, input, and pending requests. | Hidden, paused |
+| **[Session cap](../nori-rs/config.md#several-sessions-in-one-tui)** | The most managed **sessions** that may run at once, set by `[tui] max_sessions` (default 8) for both the TUI and `nori host`. `[host] max_sessions` is a separate limit that bounds only **managed launches**. | Limit, quota |
+| **[Client limit](remote-control.md#11-background-host-and-attached-terminals)** | The most clients a background `nori host` serves at once over `/acp` and `/sessions`, set by `[host] max_clients` (default 16). A managed host has none. | Connection cap |
 
 ### Delegation
 
-Delegation requires `[features] multi_session` (default false).
-
 | Term | Definition | Aliases to avoid |
 | --- | --- | --- |
-| **[Delegation](turn-lifecycle.md)** | Starting a child **session** to work on a task for a parent, through `/delegate` or the `nori-client` MCP `delegate` tool. A different agent kind asks the user first; the same kind starts at once. | Subagent call, handoff |
-| **[Delegated child](remote-control.md)** | The **session** a **delegation** starts, with **session source** `session`, named by the first line of its task. Its result returns to the parent as a queued prompt. | Subagent, worker |
-| **[Delegation origin](remote-control.md)** | Who asked for a **delegated child**: the parent's agent (`agent`, via MCP) or the user or a client calling the manager (`user`). | Requester, source |
+| **[Delegation](remote-control.md#delegation)** | Starting a child **session** to work on a task for a parent, through `/delegate` or the `nori-client` MCP `delegate` tool. A same-kind child starts at once; a different agent kind waits for approval. | Subagent call, handoff |
+| **[Delegated child](remote-control.md#delegation)** | The **session** a **delegation** starts, with **session source** `session`, named by the first line of its task. Its result returns to the parent as a queued prompt. | Subagent, worker |
+| **[Delegation origin](remote-control.md#delegation)** | Who asked for a **delegated child**: the parent's agent (`agent`, via MCP) or the user or a client calling the manager (`user`). | Requester, source |
 
 ### Hosts, attach, and managed launches
 
 | Term | Definition | Aliases to avoid |
 | --- | --- | --- |
-| **[Attach](remote-control.md)** | `nori attach`: a terminal frontend connected to a **host**'s `/sessions` endpoint instead of owning agent processes. Requires `[features] multi_session`. | Connect, resume, remote control |
-| **[Controller](remote-control.md)** | The one client of a **host** that may prompt, send **follow-ups**, and answer requests. A client claims the role with `_nori/control/take`. | Owner, primary |
-| **[Watcher](remote-control.md)** | A read-only client of a **host** that receives events but cannot act; it connects with `observe: true`. | Observer, viewer, spectator |
-| **[Managed launch](remote-control.md)** | A host session run for a provisioned **binding** over the host's `/managed` endpoint, enabled by `[host] managed = true` (default false). | Hosted session, managed session |
-| **[Binding](remote-control.md)** | A provisioned workspace and home with a pinned adapter that a **managed launch** runs in, identified by binding ID and generation. | Workspace, sandbox |
-| **[Side session](remote-control.md)** | A secondary ACP session opened beside a parent session on the same **binding**, rebuilt or forked. A managed-host protocol for an external client, enabled by `[host] managed` and `[host] side_sessions`; Nori's own terminals cannot open one. | Subsession, child session |
+| **[Attach](remote-control.md#attached-frontend-and-recovery)** | `nori attach`: a terminal frontend connected to a **host**'s published endpoint (`/acp`, alias `/sessions`) instead of owning agent processes. | Connect, resume, remote control |
+| **[Controller](remote-control.md#control-and-lifecycle-requests)** | The one client of a **host** that may prompt, send **follow-ups**, answer requests, and delegate. The first interactive client claims the empty role; another client takes it with `_nori/control/take`. | Owner, primary |
+| **[Watcher](remote-control.md#control-and-lifecycle-requests)** | A client of a **host** without the **controller** role: it receives the same events but must take control before changing a session. A client that initializes with `observe: true` never claims control. | Observer, viewer, spectator |
+| **[Managed launch](../nori-rs/cli/src/host/docs.md#managed-launch-control-v1)** | A host session run for a provisioned **binding** over the host's `/managed` endpoint, enabled by `[host] managed = true` (default false). A managed host serves `/sessions` and `/managed` and no `/acp`. | Hosted session, managed session |
+| **[Binding](../nori-rs/cli/src/host/docs.md#managed-launch-control-v1)** | A provisioned workspace and home with a pinned adapter that a **managed launch** runs in, identified by binding ID and generation. | Workspace, sandbox |
+| **[Side session](../nori-rs/cli/src/host/docs.md#managed-launch-control-v1)** | A secondary ACP session opened beside a parent session on the same **binding**, rebuilt or forked. A managed-host protocol for an external client, enabled by `[host] managed` and `[host] side_sessions`; Nori's own terminals cannot open one. | Subsession, child session |
 
 ### Session lifecycle
 
 | Term | Definition | Aliases to avoid |
 | --- | --- | --- |
 | **[New](remote-control.md)** | ACP `session/new` creates an independent session and returns its ACP session ID. | Resume, reconnect |
-| **[List](remote-control.md)** | ACP `session/list` discovers agent-known sessions without restoring them. The host's `_nori/session/list` lists **session manager** sessions instead. | History, load |
+| **[List](remote-control.md)** | ACP `session/list` discovers agent-known sessions without restoring them. On the **host**, it lists live **session manager** sessions, then stored transcripts the host is not running. | History, load |
 | **[Load](transcripts.md)** | ACP v1 `session/load` restores a session and replays its conversation history before responding. | Resume, transcript replay |
 | **[Resume](transcripts.md)** | ACP v1 `session/resume` restores a session without replaying prior messages. | Load, Nori resume |
 | **[Nori resume](transcripts.md)** | The resume picker or `nori resume`: opens a transcript in a new conversation using **Load**, **Resume**, or **New** plus transcript **replay**, by agent capability. | `session/resume`, reload |
-| **[Restart](transcripts.md)** | Session-list Ctrl+R or `_nori/session/resume`: relaunches a failed managed session under the same **conversation ID** and transcript. | Nori resume, reload |
+| **[Restart](transcripts.md#restarting-a-failed-session)** | Relaunching a failed managed session on a new agent process under the same **conversation ID** and transcript, through session-list Ctrl+R or `_nori/session/resume`. On the **host**, ACP **Load** or **Resume** of a failed or stored session restarts it the same way. | Nori resume, reload |
 | **[Close](remote-control.md)** | ACP `session/close` cancels ongoing work and frees resources for an active session. | Quit, detach, delete |
 
 ### History and continuity operations
@@ -179,28 +189,40 @@ Delegation requires `[features] multi_session` (default false).
 
 - One **conversation ID** may outlive several **ACP session IDs**, notably
   after fallback **compaction** or a **restart**.
+- On the **host**'s `/acp`, `sessionId` is the **conversation ID**; the
+  agent's own **ACP session ID** stays inside the host.
 - **Load** produces agent-sourced **replay**; Nori's fallback produces
   transcript-sourced replay after **New**.
+- A **transcript** records selected session traffic; it is not the
+  agent-maintained **conversation history**.
 - **Nori resume** creates a new **conversation ID**; **restart** keeps it.
+  The **session manager** carries the conversation ID, family position, and
+  envelope sequence across the new agent process, so subscriptions and replay
+  cursors keep using that ID.
 - `/fork` exposes **branch at head** (which uses ACP **fork**) and **rewind to
-  message** (which does not). Both add the child to the parent's **session
-  family**.
+  message** (which does not). Branch at head closes the parent; rewind to
+  message starts a new agent process. Both add the child to the parent's
+  **session family**.
 - **Undo** changes files, not conversation state; **rewind to message**
   changes conversation direction, not files.
 - A **session envelope's** sequence starts at 1 for each **conversation ID**
-  and continues across a **restart** in the same process.
+  and continues across a **restart**. **Branch at head** starts a new sequence
+  for the child.
 - **Session status** is derived from the event stream; it is not the harness
   phase or a **Nori agent-turn status**.
-- Closing a session in the multi-session TUI stops its agent process; it is
-  not ACP **Close**. The session stays listed as closed until removed.
-- With `[features] multi_session`, replacing the **active session** parks it
-  instead of closing it. A **delegated child** stays parked until the user
-  switches to it.
+- Closing a local session in the TUI stops its agent process; it is not ACP
+  **Close**. The session stays listed as closed until removed. `/close` in
+  `nori attach` sends ACP **Close** to the host.
+- Replacing the **active session** with `/new`, `/agent`, or `/resume` parks
+  it instead of closing it; a **parked session** keeps running and receiving
+  its events. A **delegated child** stays parked until the user switches to it.
 - A **request resolved** envelope clears that request from "waiting on you";
   requests cleared by idle, cancel, or session end get none.
 - A **delegated child**'s transcript has no link to its parent; lineage lives
   only in the running **session manager**.
 - "Session ID" alone is unsafe; say **ACP session ID** or **conversation ID**.
+- "Resume" alone may mean **Nori resume**, ACP **Resume**, or a **restart**;
+  name which.
 - "History" may mean **conversation history**, a **transcript**, the session
   list, or composer prompt history; qualify it.
 - "Child session" may mean a **delegated child**, a **branch at head** child,

@@ -38,6 +38,7 @@ chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive"] }
 nori-harness = { workspace = true }
 nori-config = { workspace = true }
+nori-auth-providers = { workspace = true }
 codex-ansi-escape = { workspace = true }
 codex-arg0 = { workspace = true }
 codex-common = { workspace = true, features = [
@@ -50,6 +51,7 @@ codex-git = { workspace = true }
 codex-rmcp-client = { workspace = true }
 nori-installed = { workspace = true }
 nori-protocol = { workspace = true }
+nori-skillsets = { workspace = true }
 codex-file-search = { workspace = true }
 nori-tui-components = { workspace = true }
 codex-login = { workspace = true }

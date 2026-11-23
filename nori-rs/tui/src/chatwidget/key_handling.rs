@@ -167,11 +167,10 @@ impl ChatWidget {
         }
         // With several sessions, starting another one leaves the busy one
         // running in the background.
-        let starts_beside = self.config.multi_session
-            && matches!(
-                cmd,
-                SlashCommand::New | SlashCommand::Agent | SlashCommand::Resume
-            );
+        let starts_beside = matches!(
+            cmd,
+            SlashCommand::New | SlashCommand::Agent | SlashCommand::Resume
+        );
         if !cmd.available_during_task() && !starts_beside && self.bottom_pane.is_task_running() {
             let message = format!(
                 "'/{}' is disabled while a task is in progress.",
@@ -224,7 +223,7 @@ impl ChatWidget {
                 self.open_viewonly_session_picker();
             }
             SlashCommand::Close => {
-                if self.config.multi_session && !self.cloud_mode {
+                if !self.cloud_mode {
                     self.app_event_tx.send(AppEvent::CloseSession {
                         generation: self.session_generation,
                     });
@@ -275,6 +274,7 @@ impl ChatWidget {
             SlashCommand::Login => {
                 self.handle_login_command();
             }
+            SlashCommand::ApiKey => self.open_api_key_preference(),
             SlashCommand::Logout => {
                 self.add_info_message(
                     "To logout, run the agent's logout command directly (e.g., `claude /logout`)"
@@ -326,11 +326,6 @@ impl ChatWidget {
                 self.add_status_output();
             }
             SlashCommand::Context => self.add_context_output(),
-            SlashCommand::RemoteControl => {
-                self.app_event_tx.send(AppEvent::RemoteControlRequested(
-                    crate::remote_control::RemoteControlRequest::EnableLocal,
-                ));
-            }
             SlashCommand::Memory => {
                 self.add_memory_output();
             }

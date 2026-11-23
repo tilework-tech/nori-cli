@@ -54,9 +54,9 @@ impl App {
     }
 
     /// Make `widget` the active session. A session let go of with
-    /// `shutdown_current_conversation` under `[features] multi_session` is
-    /// parked and the screen starts clean for the new one; otherwise the new
-    /// widget takes the old one's place in the navigation order.
+    /// `shutdown_current_conversation` while live is parked and the screen
+    /// starts clean for the new one; otherwise the new widget takes the old
+    /// one's place in the navigation order.
     pub(crate) fn install_active_widget(&mut self, widget: ChatWidget) {
         let previous = self.chat_widget.session_generation();
         let next = widget.session_generation();
@@ -76,11 +76,8 @@ impl App {
             }
             None => {
                 self.session_deck.replace(previous, next);
-                self.remote_control.forget_session(previous);
             }
         }
-        self.remote_control
-            .select_session(next, self.chat_widget.managed_conversation_id());
     }
 
     /// Bring session `target` on screen. Its widget becomes active right away,
@@ -112,8 +109,6 @@ impl App {
         }
         self.backtrack = crate::app_backtrack::BacktrackState::default();
         self.chat_widget.set_foreground(true);
-        self.remote_control
-            .select_session(target, self.chat_widget.managed_conversation_id());
         let agent = self.chat_widget.config_ref().active_agent.clone();
         self.config.agent = agent.clone();
         self.config.active_agent = agent;

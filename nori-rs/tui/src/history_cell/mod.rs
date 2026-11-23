@@ -514,6 +514,33 @@ impl HistoryCell for CompositeHistoryCell {
     }
 }
 
+pub(crate) fn new_skillset_changed_event(
+    name: &str,
+    layered: bool,
+    layers: &[String],
+) -> PlainHistoryCell {
+    let verb = if layered {
+        "Layered skillset "
+    } else {
+        "Unlayered skillset "
+    };
+    let stack = if layers.is_empty() {
+        "no skillsets layered".to_string()
+    } else {
+        format!("layers: {}", layers.join(", "))
+    };
+    let lines: Vec<Line<'static>> = vec![
+        vec![
+            "✔ ".green(),
+            verb.green(),
+            format!("\"{name}\"").green().bold(),
+            format!(" ({stack})").dim(),
+        ]
+        .into(),
+    ];
+    PlainHistoryCell { lines }
+}
+
 pub(crate) fn new_skillset_switched_event(name: &str) -> PlainHistoryCell {
     let lines: Vec<Line<'static>> = vec![
         vec![
@@ -539,22 +566,6 @@ pub(crate) fn new_info_event(message: String, hint: Option<String>) -> PlainHist
     }
     let lines: Vec<Line<'static>> = vec![line.into()];
     PlainHistoryCell { lines }
-}
-
-pub(crate) fn new_remote_control_event(lines: &[String]) -> PlainHistoryCell {
-    let lines = lines
-        .iter()
-        .enumerate()
-        .map(|(index, text)| {
-            let prefix = if index == 0 {
-                "• ".dim()
-            } else {
-                "  ".into()
-            };
-            Line::from(vec![prefix, text.clone().into()])
-        })
-        .collect();
-    PlainHistoryCell::new(lines)
 }
 
 pub(crate) fn new_error_event(message: String) -> PlainHistoryCell {

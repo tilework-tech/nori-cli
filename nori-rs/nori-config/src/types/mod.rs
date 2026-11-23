@@ -112,6 +112,20 @@ pub struct AgentConfigToml {
     pub model_override: Option<ModelOverrideToml>,
 }
 
+/// Launch control for one agent's ACP adapter, from `[acp_adapters.<slug>]`.
+///
+/// `command` replaces the resolved launch command (shell-split). `version`
+/// replaces `@latest` on the adapter package launched through npx or bunx.
+/// `NORI_ACP_COMMAND_<SLUG>` in the environment wins over both.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct AcpAdapterToml {
+    /// Full command line that launches the adapter, e.g. `"/opt/claude-agent-acp"`.
+    pub command: Option<String>,
+    /// Package version, range, or dist-tag used instead of `latest`.
+    pub version: Option<String>,
+}
+
 /// How a custom agent accepts a model id at spawn time. Set exactly one of
 /// `env` or `arg`; `env` wins if both are set.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -178,10 +192,12 @@ impl AgentDistributionToml {
         self.validate()?;
 
         if let Some(local) = &self.local {
+            local.launch.validate(&local.env)?;
             return Ok(ResolvedDistribution::Local {
                 command: local.command.clone(),
                 args: local.args.clone(),
                 env: local.env.clone(),
+                launch: local.launch.clone(),
             });
         }
         if let Some(npx) = &self.npx {
@@ -212,10 +228,81 @@ impl AgentDistributionToml {
     }
 }
 
+/// A launcher exposes an already prepared directory to the ACP server here.
+pub const AGENT_RUNTIME_ENV: &str = "NORI_AGENT_RUNTIME_DIR";
+
+/// Compare variable names as the child process environment does on this platform.
+pub fn env_names_equal(left: &str, right: &str) -> bool {
+    #[cfg(windows)]
+    {
+        if left.is_ascii() && right.is_ascii() {
+            return left.eq_ignore_ascii_case(right);
+        }
+        // Command uses Windows' ordinal case comparison for UTF-16 names.
+        let mut environment = std::process::Command::new("");
+        environment.env(left, "").env(right, "");
+        environment.get_envs().count() == 1
+    }
+    #[cfg(not(windows))]
+    {
+        left == right
+    }
+}
+
+/// Optional process settings for a locally registered ACP server.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+pub struct LocalLaunchOptions {
+    /// Prefix argv: the wrapper executable followed by its own arguments.
+    pub wrapper: Option<Vec<String>>,
+    /// Variables to remove from the inherited child environment.
+    #[serde(default)]
+    pub env_remove: Vec<String>,
+    /// An existing, absolute directory containing files supplied by the caller.
+    pub runtime_dir: Option<PathBuf>,
+}
+
+impl LocalLaunchOptions {
+    fn validate(&self, env: &HashMap<String, String>) -> Result<(), String> {
+        if let Some(wrapper) = &self.wrapper
+            && (wrapper
+                .first()
+                .is_none_or(|program| program.trim().is_empty())
+                || wrapper.iter().any(|arg| arg.contains('\0')))
+        {
+            return Err("wrapper needs a nonempty executable and valid arguments".to_string());
+        }
+        for key in &self.env_remove {
+            if key.is_empty() || key.contains(['=', '\0']) {
+                return Err("env_remove needs nonempty environment variable names".to_string());
+            }
+            if env.keys().any(|name| env_names_equal(name, key)) {
+                return Err(format!("cannot both set and remove {key}"));
+            }
+        }
+        if let Some(dir) = &self.runtime_dir {
+            if env
+                .keys()
+                .chain(&self.env_remove)
+                .any(|key| key.eq_ignore_ascii_case(AGENT_RUNTIME_ENV))
+            {
+                return Err(format!(
+                    "runtime_dir supplies {AGENT_RUNTIME_ENV}; omit it from env and env_remove"
+                ));
+            }
+            if !dir.is_absolute() {
+                return Err("runtime_dir must be absolute".to_string());
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Local binary distribution: direct command execution.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct LocalDistribution {
+    #[serde(flatten)]
+    pub launch: LocalLaunchOptions,
     /// Path to the executable
     pub command: String,
     /// Arguments to pass to the command
@@ -242,6 +329,7 @@ pub struct PackageDistribution {
 pub enum ResolvedDistribution {
     /// Local binary: direct command execution
     Local {
+        launch: LocalLaunchOptions,
         command: String,
         args: Vec<String>,
         env: HashMap<String, String>,
@@ -278,13 +366,29 @@ pub enum SideConfinement {
     Required,
 }
 
+/// The permission mode a host gives sessions that clients start through ACP
+/// `session/new`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HostDefaultMode {
+    Ask,
+    #[default]
+    Agent,
+    ApproveAll,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HostConfig {
     pub managed: bool,
+    /// Unset keeps each folder's own `approval_policy`.
+    pub default_mode: Option<HostDefaultMode>,
     pub side_sessions: bool,
     pub side_confinement: SideConfinement,
     pub max_sessions: i32,
+    /// Clients the background host serves at once over its WebSocket
+    /// endpoints (`/acp` and `/sessions`).
+    pub max_clients: i32,
     pub bindings_root: Option<PathBuf>,
     pub dedicated_roots: Option<DedicatedRoots>,
 }
@@ -293,9 +397,11 @@ impl Default for HostConfig {
     fn default() -> Self {
         Self {
             managed: false,
+            default_mode: None,
             side_sessions: false,
             side_confinement: SideConfinement::default(),
             max_sessions: DEFAULT_MAX_SESSIONS,
+            max_clients: DEFAULT_MAX_CLIENTS,
             bindings_root: None,
             dedicated_roots: None,
         }
@@ -354,9 +460,28 @@ pub struct NoriConfigToml {
     #[serde(default)]
     pub default_models: HashMap<String, String>,
 
+    /// Per-agent choice between the agent's own login and a saved API key.
+    #[serde(default)]
+    pub auth: HashMap<String, crate::AgentAuthPreference>,
+
+    #[serde(
+        default,
+        deserialize_with = "crate::token_providers::deserialize_entries"
+    )]
+    pub token_providers: Vec<crate::token_providers::TokenProvider>,
+    #[serde(
+        default,
+        deserialize_with = "crate::token_providers::deserialize_bindings"
+    )]
+    pub agent_token_providers: HashMap<String, String>,
+
     /// Custom agent definitions
     #[serde(default)]
     pub agents: Vec<AgentConfigToml>,
+
+    /// Launch overrides for ACP adapters, keyed by agent slug
+    #[serde(default)]
+    pub acp_adapters: HashMap<String, AcpAdapterToml>,
 
     /// Cloud session settings
     #[serde(default)]
@@ -398,8 +523,9 @@ pub struct SandboxWorkspaceWrite {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct FeaturesToml {
     pub enable_experimental_windows_sandbox: Option<bool>,
-    /// Run several sessions in one TUI and move between them.
-    pub multi_session: Option<bool>,
+    /// Use the skillsets v2 CLI (list, layer, unlayer) for the skillset
+    /// picker and footer instead of the v1 commands.
+    pub skillsets_v2: Option<bool>,
 }
 
 /// Persisted safety notice acknowledgements.
@@ -1013,34 +1139,6 @@ impl HotkeyAction {
             Self::OpenSessionList,
             Self::ParentSession,
         ]
-    }
-
-    /// Whether the action moves between sessions, which only exists when
-    /// `[features] multi_session` is on.
-    pub fn is_multi_session(&self) -> bool {
-        match self {
-            Self::PreviousSession
-            | Self::NextSession
-            | Self::NextWaitingSession
-            | Self::OpenSessionList
-            | Self::ParentSession => true,
-            Self::OpenTranscript
-            | Self::OpenEditor
-            | Self::MoveBackwardChar
-            | Self::MoveForwardChar
-            | Self::MoveBeginningOfLine
-            | Self::MoveEndOfLine
-            | Self::MoveBackwardWord
-            | Self::MoveForwardWord
-            | Self::DeleteBackwardChar
-            | Self::DeleteForwardChar
-            | Self::DeleteBackwardWord
-            | Self::KillToEndOfLine
-            | Self::KillToBeginningOfLine
-            | Self::Yank
-            | Self::HistorySearch
-            | Self::TogglePlanDrawer => false,
-        }
     }
 }
 
@@ -2083,7 +2181,7 @@ pub struct TuiConfigToml {
     /// `None` or absent means disabled.
     pub loop_count: Option<i32>,
 
-    /// Most sessions that may run at once with `[features] multi_session`.
+    /// Most sessions that may run at once.
     pub max_sessions: Option<i32>,
 
     /// Automatically create a git worktree at session start.
@@ -2239,6 +2337,10 @@ pub struct ProjectConfig {
 /// Sessions allowed at once when `[tui] max_sessions` is not set.
 pub const DEFAULT_MAX_SESSIONS: i32 = 8;
 
+/// Clients a background host serves at once when `[host] max_clients` is
+/// not set.
+pub const DEFAULT_MAX_CLIENTS: i32 = 16;
+
 /// Resolved configuration with defaults applied
 #[derive(Debug, Clone)]
 pub struct NoriConfig {
@@ -2267,8 +2369,8 @@ pub struct NoriConfig {
 
     /// Whether the experimental Windows sandbox is enabled in user config.
     pub windows_sandbox_enabled: bool,
-    /// Several sessions in one TUI (`[features] multi_session`).
-    pub multi_session: bool,
+    /// Skillset picker and footer use skillsets v2 (`[features] skillsets_v2`).
+    pub skillsets_v2: bool,
 
     /// Environment inherited by sandboxed commands.
     pub shell_environment_policy: ShellEnvironmentPolicy,
@@ -2328,7 +2430,7 @@ pub struct NoriConfig {
     /// `None` means disabled (default).
     pub loop_count: Option<i32>,
 
-    /// Most sessions that may run at once with `[features] multi_session`.
+    /// Most sessions that may run at once.
     pub max_sessions: i32,
 
     /// Automatically create a git worktree at session start.
@@ -2424,8 +2526,23 @@ pub struct NoriConfig {
     /// Default model overrides per agent (e.g., "claude-code" -> "haiku")
     pub default_models: HashMap<String, String>,
 
+    /// Per-agent `[auth.<agent>]` preferences, keyed by agent slug.
+    pub auth: HashMap<String, crate::AgentAuthPreference>,
+
+    /// Named API connections available to a provider picker.
+    pub token_providers: Vec<crate::token_providers::TokenProvider>,
+
+    /// Validated API routes by canonical agent slug. Credentials are resolved at spawn.
+    pub agent_token_providers: HashMap<String, crate::token_providers::TokenProvider>,
+
+    /// Agent keys explicitly set with `-c default_models.<agent>`, latest first.
+    pub default_model_override_keys: Vec<String>,
+
     /// Custom agent definitions from config
     pub agents: Vec<AgentConfigToml>,
+
+    /// Launch overrides for ACP adapters, keyed by agent slug
+    pub acp_adapters: HashMap<String, AcpAdapterToml>,
 
     /// Cloud broker URL from config (e.g., "https://nori-broker.myorg.fly.dev")
     pub cloud_broker_url: Option<String>,
@@ -2442,7 +2559,7 @@ impl Default for NoriConfig {
             has_explicit_approval_or_sandbox_policy: false,
             forced_auto_mode_downgraded_on_windows: false,
             windows_sandbox_enabled: false,
-            multi_session: false,
+            skillsets_v2: false,
             shell_environment_policy: ShellEnvironmentPolicy::default(),
             active_project: ProjectConfig::default(),
             notices: Notice::default(),
@@ -2497,7 +2614,12 @@ impl Default for NoriConfig {
             async_pre_agent_response_hooks: Vec::new(),
             async_post_agent_response_hooks: Vec::new(),
             default_models: HashMap::new(),
+            agent_token_providers: HashMap::new(),
+            auth: HashMap::new(),
+            token_providers: Vec::new(),
+            default_model_override_keys: Vec::new(),
             agents: Vec::new(),
+            acp_adapters: HashMap::new(),
             cloud_broker_url: None,
         }
     }

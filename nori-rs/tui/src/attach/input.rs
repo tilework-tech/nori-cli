@@ -103,11 +103,7 @@ impl Runtime {
                 if self.state.sessions.iter().any(|row| {
                     row.session_id == id && row.status == nori_protocol::SessionStatus::Failed
                 }) {
-                    self.send(
-                        "_nori/session/resume",
-                        json!({"session_id":id}),
-                        Pending::Mutation { draft: None },
-                    );
+                    self.resume(&id);
                 } else {
                     self.state
                         .show_notice("Only failed sessions can be resumed.");
@@ -394,18 +390,16 @@ impl Runtime {
             }
             return true;
         }
-        let method = match command {
-            "/close" => Some("_nori/session/close"),
-            "/cancel" => Some("_nori/session/cancel"),
-            "/resume" => Some("_nori/session/resume"),
-            _ => None,
-        };
-        if let Some(method) = method {
+        if command == "/close" {
             self.send(
-                method,
-                json!({"session_id":id}),
+                "session/close",
+                json!({"sessionId": id}),
                 Pending::Mutation { draft: None },
             );
+        } else if command == "/cancel" {
+            self.notify("session/cancel", json!({"sessionId": id}));
+        } else if command == "/resume" {
+            self.resume(&id);
         } else if let Some(expected_turn) = active_turn {
             let message_id = uuid::Uuid::new_v4().to_string();
             self.send(

@@ -1,4 +1,5 @@
-//! Authenticated managed-only WebSocket endpoint for a background host.
+//! Authenticated WebSocket endpoints for a background host: `/acp`, the
+//! WebSocket profile of the ACP remote transport, and its alias `/sessions`.
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicI64;
@@ -35,6 +36,8 @@ struct HostState<M> {
     instance: Arc<str>,
     control: Arc<Mutex<HostControl>>,
     generation: Arc<AtomicI64>,
+    clients: Arc<AtomicI64>,
+    max_clients: i64,
     shutdown: CancellationToken,
 }
 
@@ -47,6 +50,8 @@ impl<M> Clone for HostState<M> {
             instance: self.instance.clone(),
             control: self.control.clone(),
             generation: self.generation.clone(),
+            clients: self.clients.clone(),
+            max_clients: self.max_clients,
             shutdown: self.shutdown.clone(),
         }
     }
@@ -57,11 +62,14 @@ pub(super) fn router<M: ManagedAgent>(
     token: String,
     instance: String,
     control: Arc<Mutex<HostControl>>,
+    max_clients: i32,
     shutdown: CancellationToken,
 ) -> axum::Router {
     let mut router = axum::Router::new().route("/sessions", axum::routing::any(route::<M, false>));
     if host.standard_acp_enabled() {
         router = router.route("/managed", axum::routing::any(route::<M, true>));
+    } else {
+        router = router.route("/acp", axum::routing::any(route::<M, false>));
     }
     router.with_state(HostState {
         host,
@@ -70,6 +78,8 @@ pub(super) fn router<M: ManagedAgent>(
         instance: instance.into(),
         control,
         generation: Arc::new(AtomicI64::new(0)),
+        clients: Arc::new(AtomicI64::new(0)),
+        max_clients: i64::from(max_clients),
         shutdown,
     })
 }
@@ -101,13 +111,33 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
     let Ok(upgrade) = upgrade else {
         return (
             StatusCode::UPGRADE_REQUIRED,
-            "Use a WebSocket connection for managed sessions.",
+            [(axum::http::header::UPGRADE, "websocket")],
+            "This host serves ACP over WebSocket only; open a WebSocket connection.",
         )
             .into_response();
     };
+    // The legacy managed-mode wire is not limited.
+    let slot = if STANDARD || state.host.standard_acp_enabled() {
+        None
+    } else {
+        let Some(slot) = super::client_limit::ClientSlot::claim(&state.clients, state.max_clients)
+        else {
+            let limit = state.max_clients;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!(
+                    "This nori host already serves {limit} clients, its limit. Close another client, or raise [host] max_clients in config.toml and restart the host."
+                ),
+            )
+                .into_response();
+        };
+        Some(slot)
+    };
     let instance = state.instance.to_string();
+    let connection = uuid::Uuid::new_v4().to_string();
     let response = upgrade
         .on_upgrade(move |socket| async move {
+            let _slot = slot;
             let cancel = state.shutdown.child_token();
             if STANDARD {
                 tokio::select! {
@@ -132,7 +162,28 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
             state.control.lock().await.remove(client);
         })
         .into_response();
-    ([("x-nori-host-instance", instance)], response).into_response()
+    (
+        [
+            ("x-nori-host-instance", instance),
+            ("acp-connection-id", connection),
+        ],
+        response,
+    )
+        .into_response()
+}
+
+/// Outbound messages one connection may have queued before it counts as
+/// too slow and is closed.
+const OUTBOUND_CAPACITY: usize = 16384;
+
+/// How a connection's transport differs from a WebSocket's.
+#[derive(Clone, Copy)]
+pub(super) enum Transport {
+    WebSocket,
+    /// The host's own stdin and stdout: its one client always controls, and
+    /// an ended subscription is reported in band, as the stream cannot close
+    /// and reopen.
+    Stdio,
 }
 
 async fn serve<M: ManagedAgent>(
@@ -141,85 +192,299 @@ async fn serve<M: ManagedAgent>(
     client: i64,
     cancel: CancellationToken,
 ) -> anyhow::Result<()> {
-    let (mut sink, mut incoming) = socket.split();
+    let (sink, incoming) = socket.split();
+    serve_frames(sink, incoming, state, client, cancel, Transport::WebSocket).await
+}
+
+/// Lines of this process's stdin, without their newlines, until it closes.
+pub(super) fn stdin_lines() -> tokio::sync::mpsc::Receiver<std::io::Result<Vec<u8>>> {
+    // A pending read on Tokio's stdin keeps the runtime from shutting down,
+    // so lines are read on a plain thread that ends with the process.
+    let (lines, input) = tokio::sync::mpsc::channel::<std::io::Result<Vec<u8>>>(64);
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        for line in std::io::stdin().lock().split(b'\n') {
+            if lines.blocking_send(line).is_err() {
+                break;
+            }
+        }
+    });
+    input
+}
+
+/// Serve one host client whose requests are `lines` and whose replies go to
+/// stdout, until `lines` ends or `stop` completes. A stop lets the reply
+/// already being written finish and returns the stop's value.
+pub(super) async fn serve_stdio<M: ManagedAgent, T>(
+    host: Arc<M>,
+    instance: String,
+    lines: impl futures::Stream<Item = std::io::Result<Vec<u8>>> + Send,
+    stop: impl std::future::Future<Output = T>,
+) -> anyhow::Result<Option<T>> {
+    let incoming = lines.filter_map(|line| async {
+        match line.map(String::from_utf8) {
+            Ok(Ok(line)) => Some(Ok(line)),
+            // Not UTF-8, so not JSON either: a replacement character earns
+            // the same parse error as any other line that is not JSON.
+            Ok(Err(_)) => Some(Ok(char::REPLACEMENT_CHARACTER.to_string())),
+            Err(error) => Some(Err(error)),
+        }
+    });
+    let sink = futures::sink::unfold(
+        tokio::io::stdout(),
+        |mut output, frame: Message| async move {
+            use tokio::io::AsyncWriteExt;
+            if let Message::Text(line) = frame {
+                output
+                    .write_all(format!("{}\n", line.as_str()).as_bytes())
+                    .await?;
+                output.flush().await?;
+            }
+            Ok::<_, std::io::Error>(output)
+        },
+    );
+    serve_lines(host, instance, incoming, sink, stop).await
+}
+
+/// Serve one in-process host client over channels of JSON-RPC lines until
+/// `input` closes or `stop` completes.
+pub(super) async fn serve_pipe<M: ManagedAgent, T>(
+    host: Arc<M>,
+    instance: String,
+    input: tokio::sync::mpsc::Receiver<String>,
+    output: tokio::sync::mpsc::Sender<String>,
+    stop: impl std::future::Future<Output = T>,
+) -> anyhow::Result<Option<T>> {
+    let incoming = tokio_stream::wrappers::ReceiverStream::new(input).map(Ok::<_, std::io::Error>);
+    let sink = futures::sink::unfold(output, |output, frame: Message| async move {
+        if let Message::Text(line) = frame {
+            output
+                .send(line.as_str().to_owned())
+                .await
+                .map_err(|_| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
+        }
+        Ok::<_, std::io::Error>(output)
+    });
+    serve_lines(host, instance, incoming, sink, stop).await
+}
+
+/// The client of a line transport always controls; blank lines are skipped
+/// and only text frames are written.
+async fn serve_lines<M: ManagedAgent, T>(
+    host: Arc<M>,
+    instance: String,
+    incoming: impl futures::Stream<Item = std::io::Result<String>> + Send,
+    sink: impl futures::Sink<Message, Error = std::io::Error> + Send,
+    stop: impl std::future::Future<Output = T>,
+) -> anyhow::Result<Option<T>> {
+    let shutdown = CancellationToken::new();
+    let state = HostState {
+        host,
+        lanes: Default::default(),
+        token: "".into(),
+        instance: instance.into(),
+        control: Default::default(),
+        generation: Arc::new(AtomicI64::new(0)),
+        clients: Arc::new(AtomicI64::new(0)),
+        max_clients: 1,
+        shutdown: shutdown.clone(),
+    };
+    let incoming = incoming.filter_map(|line| async {
+        match line {
+            Ok(line) if line.trim().is_empty() => None,
+            Ok(line) => Some(Ok::<_, axum::Error>(Message::Text(line.into()))),
+            Err(error) => Some(Err(axum::Error::new(error))),
+        }
+    });
+    let sink = Box::pin(sink);
+    let cancel = shutdown.child_token();
+    let serving = serve_frames(
+        sink,
+        Box::pin(incoming),
+        &state,
+        0,
+        cancel.clone(),
+        Transport::Stdio,
+    );
+    tokio::pin!(serving);
+    let stopped = tokio::select! {
+        served = &mut serving => {
+            served?;
+            None
+        }
+        stopped = stop => {
+            shutdown.cancel();
+            tokio::time::timeout(std::time::Duration::from_secs(5), serving)
+                .await
+                .map_err(|_| anyhow::anyhow!("the client stopped reading"))??;
+            Some(stopped)
+        }
+    };
+    // The host closes a client that falls too far behind; a line client
+    // cannot reconnect, so that ends the host with an error.
+    anyhow::ensure!(
+        stopped.is_some() || !cancel.is_cancelled(),
+        "the client fell too far behind and was disconnected"
+    );
+    Ok(stopped)
+}
+
+async fn serve_frames<M, S, I, E>(
+    mut sink: S,
+    mut incoming: I,
+    state: &HostState<M>,
+    client: i64,
+    cancel: CancellationToken,
+    transport: Transport,
+) -> anyhow::Result<()>
+where
+    M: ManagedAgent,
+    S: futures::Sink<Message> + Unpin + Send,
+    S::Error: std::error::Error + Send + Sync + 'static,
+    I: futures::Stream<Item = Result<Message, E>> + Unpin + Send,
+    E: std::error::Error + Send + Sync + 'static,
+{
     let mut subscription: Option<ManagedSubscription> = None;
     let mut initialized = false;
     let (changes, mut roles) = watch::channel("watcher");
-    loop {
-        tokio::select! {
-            biased;
-            _ = cancel.cancelled() => break,
-            changed = roles.changed(), if initialized => {
-                changed?;
-                let role = *roles.borrow_and_update();
-                send_frame(&mut sink, Message::Text(json!({"jsonrpc":"2.0","method":"_nori/control/changed","params":{"role":role}}).to_string().into())).await?;
-            }
-            frame = incoming.next() => {
-                let Some(frame) = frame else { break; };
-                match frame? {
-                    Message::Text(text) => {
-                        let request: Value = match serde_json::from_str(&text) {
-                            Ok(request) => request,
-                            Err(_) => {
-                                send_frame(&mut sink, Message::Text(failure(Value::Null, -32700, "invalid JSON").response.to_string().into())).await?;
+    let (outbound, mut queued) = tokio::sync::mpsc::channel::<Value>(OUTBOUND_CAPACITY);
+    let result = async {
+        loop {
+            tokio::select! {
+                biased;
+                _ = cancel.cancelled() => break,
+                changed = roles.changed(), if initialized => {
+                    changed?;
+                    let role = *roles.borrow_and_update();
+                    send_frame(&mut sink, Message::Text(json!({"jsonrpc":"2.0","method":"_nori/control/changed","params":{"role":role}}).to_string().into())).await?;
+                }
+                message = queued.recv() => {
+                    let Some(message) = message else { break; };
+                    send_frame(&mut sink, Message::Text(message.to_string().into())).await?;
+                }
+                frame = incoming.next() => {
+                    let Some(frame) = frame else { break; };
+                    match frame? {
+                        Message::Text(text) => {
+                            let request: Value = match serde_json::from_str(&text) {
+                                Ok(request) => request,
+                                Err(_) => {
+                                    send_frame(&mut sink, Message::Text(failure(Value::Null, -32700, "invalid JSON").response.to_string().into())).await?;
+                                    continue;
+                                }
+                            };
+                            let id = request.get("id").cloned().unwrap_or(Value::Null);
+                            let id_valid = id.is_string() || id.is_i64() || id.is_null();
+                            // Notifications and answers to the host's own
+                            // requests carry no reply.
+                            if initialized
+                                && state.host.accepts_client_messages()
+                                && request["jsonrpc"] == "2.0"
+                                && ((request["method"].is_string() && request.get("id").is_none())
+                                    || (request.get("method").is_none()
+                                        && id_valid
+                                        && (request.get("result").is_some() || request.get("error").is_some())))
+                            {
+                                let host = state.host.clone();
+                                tokio::spawn(async move { host.message_from(client, request).await });
                                 continue;
                             }
-                        };
-                        let id = request.get("id").cloned().unwrap_or(Value::Null);
-                        let valid = request["jsonrpc"] == "2.0"
-                            && request["method"].is_string()
-                            && request.get("id").is_some()
-                            && (id.is_string() || id.is_i64() || id.is_null())
-                            && request.get("params").is_none_or(Value::is_object);
-                        if !valid {
-                            send_frame(&mut sink, Message::Text(failure(id, -32600, "expected a JSON-RPC request with an id and object params").response.to_string().into())).await?;
-                            continue;
-                        }
-                        if !initialized && request["method"] != "initialize" {
-                            send_frame(&mut sink, Message::Text(failure(id, -32001, "initialize must be the first request").response.to_string().into())).await?;
-                            break;
-                        }
-                        let reply = if request["method"] == "initialize" {
-                            let observe = request["params"]["observe"] == true;
-                            let mut reply = state.host.request(request).await;
-                            if reply.response.get("error").is_none() {
-                                reply.response["result"]["control"] = state.control.lock().await.register(client, &changes, observe);
+                            let valid = request["jsonrpc"] == "2.0"
+                                && request["method"].is_string()
+                                && request.get("id").is_some()
+                                && id_valid
+                                && request.get("params").is_none_or(Value::is_object);
+                            if !valid {
+                                send_frame(&mut sink, Message::Text(failure(id, -32600, "expected a JSON-RPC request with an id and object params").response.to_string().into())).await?;
+                                continue;
                             }
-                            reply
-                        } else {
-                            let admitted = state.control.lock().await.admit(client, &changes, request);
-                            match admitted {
-                                HostRequest::Reply(reply) => reply,
-                                HostRequest::Forward(request) => state.host.request(request).await,
+                            if !initialized && request["method"] != "initialize" {
+                                send_frame(&mut sink, Message::Text(failure(id, -32001, "initialize must be the first request").response.to_string().into())).await?;
+                                break;
                             }
-                        };
-                        initialized |= reply.response.get("error").is_none();
-                        send_frame(&mut sink, Message::Text(reply.response.to_string().into())).await?;
-                        drop(reply.delivery_guard);
-                        if let Some(mut next) = reply.subscription {
-                            for envelope in next.replay.drain(..) {
-                                send_frame(&mut sink, Message::Text(managed_event(&envelope).to_string().into())).await?;
+                            let reply = if request["method"] == "initialize" {
+                                let observe = match transport {
+                                    Transport::WebSocket => request["params"]["observe"] == true,
+                                    Transport::Stdio => false,
+                                };
+                                let mut reply = state.host.request_from(client, request).await;
+                                if reply.response.get("error").is_none() {
+                                    reply.response["result"]["control"] = state.control.lock().await.register(client, &changes, observe);
+                                    // The client learns its first role from this reply,
+                                    // not from a change notification.
+                                    roles.borrow_and_update();
+                                    if !initialized {
+                                        state.host.connection_opened(super::managed::HostConnection {
+                                            client,
+                                            outbound: outbound.clone(),
+                                            close: cancel.clone(),
+                                            role: roles.clone(),
+                                        });
+                                    }
+                                }
+                                reply
+                            } else {
+                                let admitted = state.control.lock().await.admit(client, &changes, request);
+                                match admitted {
+                                    HostRequest::Reply(reply) => reply,
+                                    HostRequest::Forward(request) => {
+                                        let method = request["method"].as_str().unwrap_or_default();
+                                        if state.host.runs_concurrently(method) {
+                                            let host = state.host.clone();
+                                            let outbound = outbound.clone();
+                                            tokio::spawn(async move {
+                                                let reply = host.request_from(client, request).await;
+                                                let _ = outbound.send(reply.response).await;
+                                            });
+                                            continue;
+                                        }
+                                        state.host.request_from(client, request).await
+                                    }
+                                }
+                            };
+                            initialized |= reply.response.get("error").is_none();
+                            send_frame(&mut sink, Message::Text(reply.response.to_string().into())).await?;
+                            drop(reply.delivery_guard);
+                            if let Some(mut next) = reply.subscription {
+                                for envelope in next.replay.drain(..) {
+                                    send_frame(&mut sink, Message::Text(managed_event(&envelope).to_string().into())).await?;
+                                }
+                                subscription = Some(next);
                             }
-                            subscription = Some(next);
                         }
+                        Message::Ping(bytes) => send_frame(&mut sink, Message::Pong(bytes)).await?,
+                        Message::Close(_) => break,
+                        Message::Pong(_) => {},
+                        // The ACP remote transport ignores binary frames.
+                        Message::Binary(_) => {},
                     }
-                    Message::Ping(bytes) => send_frame(&mut sink, Message::Pong(bytes)).await?,
-                    Message::Close(_) => break,
-                    Message::Pong(_) => {},
-                    Message::Binary(_) => anyhow::bail!("managed sessions require text JSON frames"),
                 }
-            }
-            event = async {
-                match subscription.as_mut() {
-                    Some(subscription) => subscription.events.recv().await,
-                    None => std::future::pending().await,
+                event = async {
+                    match subscription.as_mut() {
+                        Some(subscription) => subscription.events.recv().await,
+                        None => std::future::pending().await,
+                    }
+                } => {
+                    let Some(envelope) = event else {
+                        match transport {
+                            Transport::WebSocket => break,
+                            Transport::Stdio => {
+                                subscription = None;
+                                send_frame(&mut sink, Message::Text(json!({"jsonrpc":"2.0","method":"_nori/session/subscription_ended","params":{"reason":"replay_required"}}).to_string().into())).await?;
+                                continue;
+                            }
+                        }
+                    };
+                    send_frame(&mut sink, Message::Text(managed_event(&envelope).to_string().into())).await?;
                 }
-            } => {
-                let Some(envelope) = event else { break; };
-                send_frame(&mut sink, Message::Text(managed_event(&envelope).to_string().into())).await?;
             }
         }
+        anyhow::Ok(())
+    }
+    .await;
+    if initialized {
+        state.host.connection_closed(client);
     }
     let _ = send_frame(&mut sink, Message::Close(None)).await;
-    Ok(())
+    result
 }

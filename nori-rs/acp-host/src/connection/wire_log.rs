@@ -21,6 +21,7 @@ pub(super) struct WireLogger {
     inner: Arc<Mutex<File>>,
     agent: String,
     child_pid: i64,
+    credential: Option<Arc<str>>,
 }
 
 impl WireLogger {
@@ -28,6 +29,7 @@ impl WireLogger {
         config: &AcpProxyConfig,
         agent_config: &AcpAgentConfig,
         pid: u32,
+        credential: Option<Arc<str>>,
     ) -> Result<Self> {
         std::fs::create_dir_all(&config.log_dir).with_context(|| {
             format!(
@@ -48,6 +50,7 @@ impl WireLogger {
             inner: Arc::new(Mutex::new(file)),
             agent: agent_config.provider_slug.clone(),
             child_pid,
+            credential,
         })
     }
 
@@ -58,6 +61,15 @@ impl WireLogger {
     }
 
     fn try_record(&self, direction: WireDirection, line: &str) -> Result<()> {
+        let line = if self
+            .credential
+            .as_ref()
+            .is_some_and(|key| crate::token_launch::contains_key(line, key))
+        {
+            r#""[redacted]""#
+        } else {
+            line
+        };
         let record = match serde_json::from_str::<Value>(line) {
             Ok(message) => json!({
                 "ts_ms": unix_time_millis(),

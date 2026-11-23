@@ -139,6 +139,7 @@ impl AcpBackend {
         backend_event_tx: mpsc::Sender<BackendEvent>,
     ) -> Result<Self> {
         let super::prepared::PreparedAgentParts {
+            agent_config,
             connection,
             mut event_rx,
             config,
@@ -147,7 +148,6 @@ impl AcpBackend {
         let config = &config;
         let cwd = config.cwd.clone();
 
-        let agent_config = get_agent_config(&config.agent)?;
         debug!(
             "Activating prepared ACP backend for agent: {}",
             config.agent
@@ -194,7 +194,13 @@ impl AcpBackend {
 
         // Apply default model from config if one is set for this agent
         if let Some(ref default_model) = config.default_model {
-            session_defaults::apply_default_model(&connection, &session_id, default_model).await;
+            session_defaults::apply_default_model(
+                &connection,
+                &session_id,
+                default_model,
+                agent_config.builtin_kind.is_some(),
+            )
+            .await;
         }
         forward_available_setup_events(&mut event_rx, &backend_event_tx).await?;
 
@@ -282,6 +288,7 @@ impl AcpBackend {
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(true)),
             prompt_summary_enabled: config.prompt_summary_enabled,
+            agent_config,
             agent_name: config.agent.clone(),
             cli_version: config.cli_version.clone(),
             auto_worktree: config.auto_worktree,

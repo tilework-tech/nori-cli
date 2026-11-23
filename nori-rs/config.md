@@ -4,8 +4,9 @@ Nori reads one TOML file at `$NORI_HOME/config.toml` (default
 `~/.nori/cli/config.toml`). Launch flags and dotted overrides are layered on top
 at startup. The resolution architecture and the full set of runtime-policy types
 live in [`nori-config/docs.md`](nori-config/docs.md); this file documents the
-agent and model configuration surface, which is the most commonly hand-edited
-part of the file, plus tool call display and the opt-in multi-session feature.
+agent, adapter launch, and model configuration surface, which is the most commonly
+hand-edited part of the file, plus saved API keys, tool call display, and running
+several sessions in one TUI.
 
 ## Choosing an agent
 
@@ -14,7 +15,43 @@ part of the file, plus tool call display and the opt-in multi-session feature.
 agent = "claude-code"
 ```
 
-Built-in agents are `claude-code`, `codex`, and `gemini`.
+Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), `grok-build`, `opencode`, `cursor` (Cursor Agent), `hermes` (Hermes Agent), and `pi`. An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
+
+## Adapter launch: `[acp_adapters]`
+
+Claude Code, Codex, Grok Build, and Pi fetch their ACP adapter from npm at
+launch (`@latest` by default). Pin a version or replace the launch command per
+agent:
+
+```toml
+[acp_adapters.claude-code]
+version = "0.109.0"            # replaces @latest; ranges and dist-tags also work
+
+[acp_adapters.codex]
+command = "/opt/nori/adapters/codex-acp --verbose"   # shell-split, no package runner
+```
+
+| Key | Effect |
+| --- | --- |
+| `command` | Replaces the launch command and arguments. Works for built-in and `[[agents]]` slugs. A built-in keeps its own model and credential handling. |
+| `version` | Replaces `@latest` on the adapter package: `@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp`, `@xai-official/grok`, or `pi-acp` (Pi's coding agent stays `@latest`). npx launches also get `--prefer-offline`. |
+
+Table keys accept aliases (`[acp_adapters.claude]`); the canonical key wins
+when both are set. `command` wins over
+`version`. Setting `version` on an agent Nori does not launch from npm
+(Antigravity, OpenCode, Cursor, Hermes, or a custom agent) makes its launch
+fail; use `command` instead. Unknown keys are a config error.
+
+The environment variable `NORI_ACP_COMMAND_<SLUG>` (slug uppercased, `-` as
+`_`, e.g. `NORI_ACP_COMMAND_GROK_BUILD`) overrides both keys for that agent.
+An empty value or unbalanced quotes is a launch error naming the variable.
+
+The package runner is unchanged: `NORI_MANAGED_BY_BUN` selects `bunx`,
+`NORI_MANAGED_BY_NPM` selects `npx`, otherwise `bunx` when it is on `PATH`,
+else `npx`. Grok Build and Pi always use `npx`. When the runner's cache
+appears to lack the package, Nori logs a `Downloading <package>@<version>…`
+line before spawning. These overrides apply to the TUI, `nori exec`, and a
+local `nori host`; a managed host uses its machine-supplied launch.
 
 ## Default models: `[default_models]`
 
@@ -27,20 +64,142 @@ claude-code = "claude-opus-4-6"
 codex = "gpt-5.1-codex"
 ```
 
-The value is **not** validated against the agent's advertised model catalog. ACP
-adapters advertise only a subset of the models they can actually run and reject
-anything outside that list over the live `session/set_config_option` RPC. To make
-an out-of-catalog model usable, Nori forces it through the agent's own
-out-of-band channel at spawn time (see model injection below), so it becomes the
-session's current model. An invalid id is only rejected at the first prompt;
-recovery is manual (pick another model via `/model`).
+Nori saves model choices under the agent’s canonical ID. For example, selecting a model after launching `--agent agy` saves it under `gemini`. If the canonical entry is missing, Nori reads an existing alias entry, choosing the first key in alphabetical order if several match. A custom agent with an alias as its slug keeps its own model preference.
 
-When you pick a custom model with `/model` and the agent rejects it, Nori writes
-the value here and restarts the session so the model is injected on the next
-spawn. The `/model` picker also surfaces a curated per-agent **Other** section of
-known-good models the adapter does not advertise, so you can select one instead
-of typing its id; choosing one follows the same reject → persist-here → restart
-path.
+For a single launch, `nori --agent agy -c 'default_models.antigravity="gemini-3.6-flash"'` overrides the saved Gemini model. If several dotted `-c` assignments name the same agent through different aliases, the last one wins. Assigning the entire `default_models` table replaces earlier assignments.
+
+For Antigravity, Grok Build, OpenCode, Hermes Agent, and Pi, choose a model advertised in `/model`. Nori requests it through the agent's ACP model option, and the agent retains its current selection if it rejects the value.
+
+OpenCode advertises enabled models for the session's working directory, using IDs such as `nori-gateway/<model>` for a gateway configured under that provider name. OpenCode reads its provider, endpoint, and default model from its native configuration, including a file selected with `OPENCODE_CONFIG`. It uses the credentials for that provider from its saved accounts, supported environment variables, or the provider configuration. [OpenCode providers](https://opencode.ai/docs/cli/providers/) · [OpenCode models](https://opencode.ai/docs/models/)
+
+When signed in with a ChatGPT plan, OpenCode 2.2.6 and 2.3.2 offer GPT chat models with a numeric version above 5.5, excluding the exact ID `gpt-5.6` and models that require pro reasoning mode. For example, `gpt-5.10` passes the version filter. API-key and gateway connections have their own catalogs. [2.2.6 provider filter](https://github.com/anomalyco/opencode/blob/v2.2.6/packages/core/src/plugin/provider/openai.ts#L283-L305) · [2.3.2 provider filter](https://github.com/anomalyco/opencode/blob/v2.3.2/packages/core/src/plugin/provider/openai.ts#L285-L307)
+
+Claude Code, Codex, and custom agents with a configured injection channel can also accept model IDs at process startup. For these agents, `/model` offers a custom ID and any curated additional choices. If the agent rejects a custom choice over ACP, Nori can save it here and restart the session to apply it. A provider may still reject an unknown model at the first prompt.
+
+## Named API token providers
+
+To run built-in Codex against a Responses endpoint, define a connection in
+`$NORI_HOME/config.toml` and select it for the canonical agent slug:
+
+```toml
+[agent_token_providers]
+codex = "lab"
+
+[[token_providers]]
+name = "lab"
+preset = "custom"
+protocol = "openai-responses"
+base_url = "https://gateway.example.invalid/v1"
+env_key = "LAB_MODEL_KEY"
+model = "lab/model-a"
+```
+
+Replace the example endpoint and model with the values supplied by your gateway.
+Make the API key available as `LAB_MODEL_KEY` in the environment that starts
+Nori (for `nori host`, the host process). Save only its variable name in
+`env_key`. Give each connection a unique name. A base URL accepts HTTP(S)
+and excludes credentials, query parameters and fragments.
+
+Run `nori --agent codex`, `nori --agent codex exec "hello"`, or
+`nori host new --agent codex` with a locally configured host. A binding's
+`model` supplies the exact API model ID and takes precedence over
+`[default_models]` for that agent. A built-in launch alias such as `codex-acp` uses the saved `codex` binding.
+Use the canonical slug as the key in `[agent_token_providers]`. A missing or
+blank key stops launch,
+including when native credentials are available. Remove the agent's binding
+to resume its usual model and authentication settings. ChatGPT subscriptions
+use Codex's native sign-in. Codex ACP can also generate a thread title using
+its own auxiliary model on the selected connection.
+
+**Protocol compatibility.** The resolver understands `openai-completions`,
+`openai-responses`, and `anthropic-messages`. A `custom` endpoint exposes
+exactly its declared protocol. `openrouter`, `fireworks`, and `subconscious`
+try the declared protocol first, then other eligible protocols on the same
+connection, keeping its endpoint, model and key reference. `cloudflare` accepts only `openai-completions`.
+Subconscious uses Completions for Pi and OpenCode, Responses for Codex, and
+Messages for Claude Code. Use the published gateway base URL for a named
+preset or the account-scoped Workers AI URL for Cloudflare.
+
+A bound launch requires an eligible pairing, a concrete wire protocol and an
+adapter for the selected executable. A custom command that shadows a built-in
+keeps its own launch definition. Broker-managed Sessions supply an admitted
+launch specification. [Compatibility contract](nori-config/docs.md#api-token-provider-resolution)
+
+### Pi connections
+
+Selecting `pi` uses Pi's native profile by default. To use a named connection,
+set `pi = "lab-pi"` under `[agent_token_providers]` and define the connection.
+
+```toml
+[[token_providers]]
+name = "lab-pi"
+preset = "custom"
+protocol = "openai-completions"
+base_url = "https://gateway.example.invalid/v1"
+env_key = "LAB_PI_KEY"
+model = "demo-model"
+```
+
+Make the key available to the process starting Nori. The selected endpoint,
+protocol, model and key reference determine the private Pi profile. The model
+ID on ACP is `lab-pi/demo-model`. Remove the `pi` binding to return to Pi's
+native settings. Each launch owns its generated profile until the child exits. The next local launch removes abandoned profiles. Pi session history remains in the connection’s existing sessions directory. Nori also reads earlier Pi provider tables, preserving their
+selected route, endpoint and key variable.
+
+## Saved API keys
+
+An agent's own login (for example a Claude.ai or ChatGPT subscription) always
+wins by default. A key saved through Nori is passed to an agent only after you
+opt that agent in under `[auth.<agent>]`, keyed by canonical agent slug like
+`[agent_token_providers]`:
+
+```toml
+[auth.claude-code]
+prefer_api_key = true          # pass saved keys to this agent at launch (default false)
+api_billing_confirmed = true   # you accepted the billing change once; remembered
+```
+
+Unknown fields in an `[auth.<agent>]` table are rejected. Set the preference
+with `nori auth prefer-api-key <agent>` / `nori auth prefer-login <agent>` or
+the TUI's `/api-key` picker rather than by hand: when the agent is signed in
+with a subscription, both warn that usage will be billed to the API account
+and ask once, then write `api_billing_confirmed = true` so later opt-ins do not
+ask again. `nori auth prefer-api-key` fails without a terminal (or with
+`--json`, printing a `confirmation_required` error) unless `--yes` is passed.
+OpenCode and Pi never warn, because their own login still wins per provider.
+A change applies the next time the agent starts (`/new` in the TUI).
+
+`nori auth set-key <provider>` saves an API key for a model provider
+(`anthropic`, `openai`, `google`, `xai`, or `cursor`) outside `config.toml`.
+At a terminal the key is read hidden, echoing only its public prefix and `*`
+for the rest; piped input is read silently. One saved key reaches every
+built-in agent that talks to that provider and prefers API keys, in the agent's
+own variable: for example, a saved `openai` key reaches Codex, OpenCode, and Pi
+as `OPENAI_API_KEY`, and a saved `google` key reaches Antigravity and Pi as
+`GEMINI_API_KEY` but OpenCode as `GOOGLE_GENERATIVE_AI_API_KEY`. Hermes takes
+none. Passing an agent name instead of a provider is an error that names the
+provider to use. `nori auth remove-key <provider>` forgets it. `nori auth`
+shows each agent's credential, and flags agents that have a saved key they do
+not use.
+
+`NORI_CREDENTIALS_STORE` selects where saved credentials live, with no fallback
+between the two:
+
+- `file` (default, also unset): the owner-only file `$NORI_HOME/credentials.json`.
+- `keyring`: one OS keyring item (service `Nori Credentials`) holding the same
+  JSON document; no file is written. Every launch of an agent that prefers API
+  keys then reads the keyring, which may prompt on macOS.
+
+For an agent that prefers API keys, a provider's key is still skipped at launch
+when any credential variable the agent honours for that provider is already set
+(in the environment or the agent's config `env`), when the provider's base-URL
+variable (`ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `GOOGLE_GEMINI_BASE_URL`) is
+set non-blank there, so a real key is never sent to a gateway or proxy, or when
+the agent's variable is in `launch.env_remove`; agents bound to a named token
+provider receive no saved keys. Broker-managed sessions never use saved keys.
+Keys saved per agent by earlier development builds (`saved-keys.json`) are
+rejected with instructions to delete them and save again.
+[Details](auth-providers/docs.md)
 
 ## Custom agents: `[[agents]]`
 
@@ -53,19 +212,56 @@ slug = "my-agent"            # machine id used as a slug / cmdline value
 context_window_size = 200000 # optional token budget override
 auth_hint = "run: my-agent login"  # optional message shown on auth failure
 transcript_base_dir = ".my-agent"  # optional transcript dir, relative to home
+model_override = { env = "MY_AGENT_MODEL" }   # optional, or { arg = "--model" }
 
 # Exactly one distribution variant must be set.
 [agents.distribution.local]
 command = "/usr/bin/my-agent"
 args = ["acp"]
-env = { MY_AGENT_KEY = "value" }   # extra env for the spawned subprocess
-
-# Optional: how to force a chosen model on this agent at spawn.
-model_override = { env = "MY_AGENT_MODEL" }   # or { arg = "--model" }
+env = { MY_AGENT_REGION = "lab" }   # extra env for the spawned subprocess
 ```
 
-Distribution variants (choose one): `local` (`command`/`args`/`env`), or one of
-the package runners `npx`, `bunx`, `pipx`, `uvx` (each takes `package`/`args`).
+Choose one distribution. Use `local` for an installed executable or a package
+runner (`npx`, `bunx`, `pipx`, `uvx`) with `package` and `args`.
+
+### ACP server launch
+
+In a local distribution, `command` and `args` select the ACP server. Add
+`env` for settings the child should receive. Use `env_remove` to drop inherited
+variables for this launch. A name can appear in only one of these fields.
+A server that delegates to a second executable can read its path from an environment variable the server
+supports. To run a wrapper first, supply its executable and each prefix
+argument in a `wrapper` array.
+
+```toml
+[[agents]]
+name = "Review"
+slug = "review"
+
+[agents.distribution.local]
+command = "/opt/example/bin/example-acp"
+args = ["--profile", "Review team"]
+wrapper = ["/opt/example/bin/runtime-wrapper", "--"]
+runtime_dir = "/opt/example/prepared/review"
+env = { EXAMPLE_ENGINE = "/opt/example/bin/engine" }
+env_remove = ["EXAMPLE_PROFILE"]
+```
+
+The wrapper receives `--`, the server path, `--profile`, and `Review team` as
+four separate arguments. Nori performs no shell expansion. The wrapper must
+pass ACP stdin and stdout through to the server and direct diagnostics to
+stderr. When using `runtime_dir`, supply an existing absolute directory. The
+child receives its path in `NORI_AGENT_RUNTIME_DIR` and keeps the session
+workspace as its working directory. When supplying this path, leave
+`NORI_AGENT_RUNTIME_DIR` out of both environment fields. Omit the wrapper, runtime or environment
+independently when the server runs without them.
+
+Picker selections, `nori exec`, local host sessions and delegated launches
+use the registered agent slug. On a managed host the machine supplies the
+pinned definition and stages any outer wrapper inside that binding’s prepared
+runtime directory. An adapter that supports selecting its own inner executable
+through an environment variable reads that setting from its child environment.
+[Managed launch admission](cli/src/host/docs.md#managed-launch-control-v1)
 
 ### `model_override`
 
@@ -78,9 +274,7 @@ tells Nori which out-of-band channel carries a forced model id so a
 | `env` | Environment variable set to the model id on the spawned subprocess |
 | `arg` | CLI flag appended, followed by the model id |
 
-Set exactly one; `env` wins if both are present. Built-in agents know their own
-channel (Claude → `ANTHROPIC_MODEL`, Gemini → `GEMINI_MODEL`, Codex → the `model`
-key of `CODEX_CONFIG`) and ignore this field. For env-based channels, Nori's
+Set exactly one. If both are present, `env` wins. This field configures custom agents. The built-in Claude Code uses `ANTHROPIC_MODEL` and Codex uses the `model` key of `CODEX_CONFIG`. For env-based channels, Nori's
 injected value takes precedence over the agent's own configured model (for
 example `~/.claude/settings.json`) for Nori-spawned sessions — Nori's
 `[default_models]` is authoritative there by design.
@@ -130,12 +324,27 @@ default. The question is skipped only when a saved `[tui] tool_output =
 Directories that are already trusted never see the trust
 screen, so they keep full output unless you set the key yourself.
 
-## Several sessions in one TUI: `[features] multi_session`
+## Background host: `[host]`
 
 ```toml
-[features]
-multi_session = true
+[host]
+max_clients = 16
+```
 
+`[host] max_clients` (default 16) is the most clients a background `nori host`
+serves at once over its WebSocket endpoints, `/acp` and its alias `/sessions`,
+counting `nori attach` terminals, `nori host --stdio` clients that joined the
+host, and remote ACP clients alike. One more connection gets HTTP 503 with a
+message naming the limit; a missing or wrong bearer token gets 401 first.
+Values below 1 count as 1. A full host still reports itself running to
+`nori host`, and `nori host stop` stops it with SIGTERM when its connection
+is refused. A managed host (`[host] managed =
+true`) is not limited. Sessions are bounded separately by `[tui]
+max_sessions`. See [the ACP remote transport](../docs/remote-control.md#3-acp-remote-transport).
+
+## Several sessions in one TUI
+
+```toml
 [tui]
 max_sessions = 8
 
@@ -147,8 +356,9 @@ open_session_list = "alt+s"
 parent_session = "alt+up"
 ```
 
-Off by default; restart Nori after changing it. With it on, `/new`, `/resume`,
-switching agents with `/agent`, and forking to an earlier message keep the
+Several sessions per TUI is always on; there is no feature flag. The former
+`[features] multi_session` key is no longer read, and a leftover one in
+`config.toml` is ignored. `/new`, `/resume`, switching agents with `/agent`, and forking to an earlier message keep the
 previous session running in the background instead of ending it. `/new`,
 `/agent`, and `/resume` also work while the session on screen is busy: that
 session keeps working in the background and your next prompt goes to the new
@@ -174,7 +384,7 @@ another session and say how to close one.
 | `parent_session` | From a delegated child, return to the session that delegated it; elsewhere it does nothing |
 
 The `[tui.hotkeys]` values above are the defaults, and the actions appear in
-the Hotkeys view only with the feature on. Moving between sessions skips
+the Hotkeys view. Moving between sessions skips
 closed and done ones. In the session list, Tab shows only sessions waiting on you (Tab
 again shows all), arrows or `j`/`k` move, `/` (or `f`, Ctrl+F) starts a search
 that filters by title or agent, Enter jumps, Esc leaves the search and then
@@ -190,12 +400,33 @@ Closing a session:
 | --- | --- |
 | Ctrl+D in the session list | Closes the selected session and stops its agent. A working, starting, or waiting session needs a second Ctrl+D; any other key cancels |
 | Ctrl+D on a `closed` or `done` row | Removes it from the list |
-| `/close` | Closes the session on screen (local sessions); in Nori Cloud it releases the session |
+| `/close` | Closes the session on screen (local sessions); in Nori Cloud it releases the session and the picker that replaces it confirms "Session closed (released)." |
 
 A closed session stays in the list as `closed` until you remove it; a
 delegated child whose task finished stays as `done`. Closing
 the session on screen shows the next open one. The last open session cannot be
 closed this way; use `/quit`.
+
+## Skillsets v2: `[features] skillsets_v2`
+
+```toml
+[features]
+skillsets_v2 = true
+```
+
+Experimental and off by default; it is not part of v1 scope. Restart Nori after
+changing it, or try it once with `-c features.skillsets_v2=true`. It requires
+the skillsets v2 CLI, installed with
+`curl -fsSL https://cli.noriskillsets.dev/install.sh | sh` (the npm
+`nori-skillsets` package is v1), or a launcher named in
+`NORI_SKILLSETS_COMMAND`.
+
+With it on, `/switch-skillset` lists the skillsets layered into, or published
+for, the session's worktree (or your home directory when there is no worktree)
+and toggles the one you pick: a layered skillset is unlayered, any other is
+layered on top. `/switch-skillset <name>` layers that skillset directly. The
+footer and `/status` show the layered skillsets. With it off, both use the v1
+`nori-skillsets` commands.
 
 A status line above the prompt counts open sessions by status (starting,
 working, waiting on you, ready, failed) once two or more are open, a separate
@@ -214,6 +445,3 @@ the full brief and result are in the transcript view (Ctrl+T). When the child
 ends, a short result block names it and shows up to six result lines, and the
 result goes back to the parent agent on its own. A child on a different agent
 asks first ("Yes, start it" / "No, decline"; Esc declines).
-
-Remote control (`--remote`, `/remote-control`) serves the most recently started
-session, which is not necessarily the one on screen.

@@ -538,6 +538,27 @@ impl Registry {
         }
     }
 
+    /// Record a change made to a session's live approval policy.
+    pub(crate) fn set_approval_policy(
+        &mut self,
+        conversation_id: &ConversationId,
+        policy: AskForApproval,
+    ) {
+        if let Some(entry) = self.sessions.get_mut(conversation_id) {
+            entry.settings.approval_policy = policy;
+        }
+    }
+
+    /// Let a session whose process was stopped to replace its agent start
+    /// again under the same ID.
+    pub(crate) fn allow_restart(&mut self, conversation_id: &ConversationId) {
+        if let Some(entry) = self.sessions.get_mut(conversation_id)
+            && entry.process.is_none()
+        {
+            entry.ended = Some(SessionStatus::Failed);
+        }
+    }
+
     /// Mark a delegated child whose task finished, so closing it reads as
     /// done rather than closed.
     pub(crate) fn mark_task_done(&mut self, conversation_id: &ConversationId) {

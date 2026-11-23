@@ -10,7 +10,7 @@ The `nori-cli` crate is the main binary that provides the `nori` command. It ser
 
 This crate is the primary entry point that ties together the core crates:
 
-- **Always included:** `nori-tui`, `nori-exec`, `nori-harness`, `nori-config`, `codex-sandbox`
+- **Always included:** `nori-tui`, `nori-harness`, `nori-config`, `codex-sandbox`, `nori-auth-providers`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 - **Uses** `codex-sandbox` (`@/nori-rs/sandbox/`) for the `nori sandbox` debug subcommand's seatbelt/landlock/windows spawn helpers
 - Owns the background [host lifecycle](src/host/docs.md), composing the
@@ -18,14 +18,14 @@ This crate is the primary entry point that ties together the core crates:
   [attached frontend](../tui/src/attach/docs.md) owns only terminal state.
 - Maps each agent-bearing entrypoint to the stable product analytics modes in
   [`nori-installed`](../installed/docs.md): ordinary and resumed TUI sessions
-  are `interactive`, `nori cloud` is `cloud`, plaintext execution is `exec`, and
-  the stdio facade is `acp`.
+  are `interactive`, `nori cloud` is `cloud`, and plaintext execution is `exec`.
+  `nori exec --acp` runs the headless host, which reports no analytics yet.
 
 ### Core Implementation
 
 [`main.rs`](src/main.rs) constructs an `AnalyticsReporter` only for agent-bearing
-TUI, cloud, plaintext, and ACP-facade routes, then passes it into the owning
-frontend. Help, version, configuration-only, sandbox, and other sessionless
+TUI, cloud, and plaintext exec routes, then passes it into the owning
+frontend (for plaintext exec, the host's one-shot client). Help, version, configuration-only, sandbox, and other sessionless
 commands do not create a reportable session. The reporter receives the resolved
 Nori home for durable opt-out state. Authenticated Firebase credentials come
 from the shared user-level `~/.nori-config.json`; the CLI does not derive
@@ -50,23 +50,23 @@ PostHog identity or organization membership itself.
 
 **Host and attach:** `nori host` starts a detached Unix process owning an empty
 session manager; `host ls` prints its sessions tree-ordered (the shared two-row session-list layout on a terminal, a plain one-row-per-session table when piped; see [host docs](src/host/docs.md)) `host new [--cwd DIR] [--agent AGENT] [--prompt TEXT] [--json]` starts a session in a folder (default: the caller's directory) and prints its ID, and `host stop` shuts it down. Each host session loads configuration for its own folder, so that folder's project trust applies.
-The host outlives both attached terminals and its final session. `nori attach`
-requires `multi_session`, discovers the local host and token, then opens the
+The host outlives both attached terminals and its final session. `nori attach` discovers the local host and token, then opens the
 session list or a supplied conversation ID. Explicit `--host` and
 `--token-file` must be supplied together. Startup and attach resolve ordinary
 Nori configuration without entering the local process-owning TUI `App`.
 Administrative list, new, and stop use host discovery directly, so a later malformed
 configuration file cannot prevent shutdown.
+Without `--launch`, `host --stdio` serves one client on stdin and stdout, relaying it to the home's running host when that host is compatible, the command has no config overrides, and the host grants it control, and otherwise running a private headless host; see [local host on stdio](src/host/docs.md#local-host-on-stdio).
 On a dedicated managed machine, `host --stdio --launch <FILE> [--inherit-env]`
 runs the host in the foreground and serves one pinned adapter as plain ACP on
 stdin and stdout until stdin closes; see [managed launch on stdio](src/host/docs.md#managed-launch-on-stdio).
-See [the command and wire contract](../../docs/remote-control.md#3-background-host-nori-host).
+See [the command and wire contract](../../docs/remote-control.md#11-background-host-and-attached-terminals).
 
 **ExecCommand**: Provides two terminal-independent execution surfaces:
-- `nori exec [PROMPT]` runs one prompt through the selected ACP agent and writes only the complete assistant text to stdout. The prompt may come from the positional argument, from piped stdin, or from both (see **Prompt Sources**). Diagnostics and failures remain on stderr so the answer can be piped or redirected directly.
-- `nori exec --acp` serves Nori itself as a bounded ACP agent over stdio. The caller uses standard ACP JSON-RPC methods and notifications; Nori does not add a JSONL envelope or a second event schema.
-- `nori -p` / `--print` is a top-level boolean flag rather than a subcommand, matching the flag other agent CLIs use to select non-interactive output. It synthesizes an `ExecCommand` from the already-parsed interactive flags and routes into the same plaintext path, so it is an alias in behavior and not a second implementation. It cannot reach the ACP facade; that stays behind the explicit `exec --acp`.
-- Both modes use the same resolved configuration and `nori-harness` runtime as the TUI. `--agent`, `--cwd`, and raw `-c` overrides remain available without initializing Ratatui.
+- `nori exec [PROMPT]` runs one prompt through the selected ACP agent and writes only the complete assistant text to stdout. The prompt may come from the positional argument, from piped stdin, or from both (see **Prompt Sources**). Diagnostics and failures remain on stderr so the answer can be piped or redirected directly. It is an ACP v1 client of `nori host`: `run_exec` resolves the prompt and configuration, then calls the host's [one-shot client](src/host/docs.md#one-shot-exec), which uses the home's running host when it can and an in-process host otherwise. A run with `-c` overrides or `--add-dir` always gets its own host, because a running host applies its own configuration.
+- `nori exec --acp` is an alias for `nori host --stdio`: one client of the host's standard ACP face (any number of sessions, plus `_nori/*`) on stdin and stdout, either relayed to the running host (sharing its sessions) or served by a private host with no lock or discovery files. Dispatch loads configuration with the exec overrides and calls the host's `serve_stdio`; see [Local host on stdio](src/host/docs.md#local-host-on-stdio).
+- `nori -p` / `--print` is a top-level boolean flag rather than a subcommand, matching the flag other agent CLIs use to select non-interactive output. It synthesizes an `ExecCommand` from the already-parsed interactive flags and routes into the same plaintext path, so it is an alias in behavior and not a second implementation. It cannot serve ACP on stdio; that stays behind the explicit `exec --acp`.
+- Both modes use the same resolved configuration and `nori-harness` session manager (through the host) as the TUI. `--agent`, `--cwd`, and raw `-c` overrides remain available without initializing Ratatui.
 - The explicit `--dangerously-bypass-approvals-and-sandbox` flag is the only unattended auto-approval path and applies only to permission boundaries visible through ACP.
 
 **Prompt Sources** (`stdin_prompt.rs`): A prompt can arrive as a positional argument, on piped stdin, or as both. Resolution is shared by the interactive and non-interactive entry points so the two never drift:
@@ -75,7 +75,7 @@ See [the command and wire contract](../../docs/remote-control.md#3-background-ho
 - The interactive path re-points file descriptor 0 at the controlling terminal once it has drained a pipe. Children the TUI spawns with inherited stdin (`$EDITOR`, the file browser) would otherwise receive an EOF'd pipe and exit immediately; repairing the descriptor once covers all of them.
 - `-p` selects a mode, so it is rejected alongside a subcommand or `--image` rather than silently ignoring either.
 - The two modes differ only in what "no prompt from any source" means. `exec` (and `-p`) requires one and fails otherwise; interactive treats it as an ordinary empty session.
-- **Stdin is read only after `exec --acp` has taken its early return into the facade.** The ACP stdio facade speaks JSON-RPC over stdin and must keep exclusive ownership of it, so the CLI must never ingest stdin during dispatch or anywhere upstream of the mode decision. This ordering is the load-bearing constraint of the piped-prompt path; violating it silently corrupts the ACP protocol rather than failing loudly.
+- **Stdin is read only after `exec --acp` has taken its early return into the host.** The stdio host speaks JSON-RPC over stdin and must keep exclusive ownership of it, so the CLI must never ingest stdin during dispatch or anywhere upstream of the mode decision. This ordering is the load-bearing constraint of the piped-prompt path; violating it silently corrupts the ACP protocol rather than failing loudly.
 - Piping into bare `nori` does not select headless behavior. The piped text seeds the first turn and the TUI starts normally, which requires only that a controlling terminal is reachable for key input (see `@/nori-rs/tui/docs.md`). Environments with no terminal at all must use `exec` or `-p`.
 
 **CloudCommand** (`cloud.rs`): Runs a TUI session backed by Nori Sessions by delegating everything cloud-related to the external `nori-handroll` binary. The cloud route contains no broker client, OAuth flow, or cloud WebSocket transport; it only translates the broker configuration passed to Handroll:
@@ -87,6 +87,22 @@ See [the command and wire contract](../../docs/remote-control.md#3-background-ho
 - Auth, broker REST, session acquisition/release, and tunnel transport all live inside `nori-handroll cloud-acp`. Quitting the TUI is a detach: the graceful stdin-EOF shutdown contract in `@/nori-rs/acp-host/src/connection/acp_connection.rs` lets the child detach cleanly, and the broker session keeps running for later reattach -- only ACP `session/close` releases it
 - ACP capabilities select supported operations and the resume strategy: handroll can advertise `sessionCapabilities.{list,resume,close}` and `loadSession`, serve recorded history through `session/load`, and release via `session/close`. They do not identify the deployment because handroll is a synthetic agent facade. The explicit `cloud_mode` launch fact instead governs cloud identity, command scope, picker behavior, and detach/reattach wording. The one-active-session contract (close before claiming another) remains agent-side. See `@/nori-rs/harness/docs.md` (resume strategy and failure handling) and `@/nori-rs/tui/docs.md` (cloud-mode presentation and lifecycle)
 - TUI flags such as `--agent` and approval-bypass options can still be passed after `cloud` (only `--agent` is overridden)
+
+**AuthCommand** ([`auth.rs`](src/auth.rs), with [`table.rs`](src/auth/table.rs), [`key_input.rs`](src/auth/key_input.rs), and [`prefer.rs`](src/auth/prefer.rs)): Reports per-agent sign-in status, manages API keys saved per model provider through Nori, and records each agent's choice between its own login and a saved key, backed by [`nori-auth-providers`](../auth-providers/docs.md) and the `[auth.<agent>]` table in [`nori-config`](../nori-config/docs.md). It runs on a blocking task because detection, keyring access, and terminal input are synchronous. It is the stable interface the Nori Native app uses, by running the bundled `nori` binary as a subprocess.
+- `nori auth` prints an `AGENT  STATUS  CREDENTIAL  SOURCE` table showing the credential each built-in agent will use (or its sign-in hint), how to disconnect read-only credentials, every notice as a `note:` line, and which providers have saved keys; `--json` prints the full `AuthReport` (`store`, `providers`, `agents`, with every credential in precedence order and each agent's `prefer_api_key`). Saved keys appear as an agent's credential only when that agent prefers API keys; otherwise the agent gets a `saved_key_not_used` notice. When the store cannot be read (legacy `saved-keys.json` present, corrupt `credentials.json`, keyring unavailable) the report still runs as if nothing were saved and carries a top-level `store_error` string in JSON, or a stderr warning in the table. Detection reads only the ambient environment, so the report does not reflect an agent's config `env`, `launch.env_remove`, or token-provider binding the way launch does.
+- `nori auth set-key <provider> [--json]` (`anthropic`, `openai`, `google`, `xai`, `cursor`) never takes the key on argv. At a terminal it enters crossterm raw mode with bracketed paste *before* printing the prompt, so the terminal never echoes the key; it redraws only the key's known public prefix plus `*` for each other character (Enter or Ctrl-D accepts, Esc or Ctrl-C cancels, Ctrl-U clears). A guard restores the terminal on any exit. Piped stdin is read silently. The key is saved in `$NORI_HOME/credentials.json`, or the OS keyring when `NORI_CREDENTIALS_STORE=keyring`. The confirmation shows only `prefix****` and the agents that would receive the key once they prefer API keys; `--json` prints `{provider, type, store, agents}`. A key whose prefix names another issuer (for example an `sk-ant-` key given to `set-key openai`) prints a stderr warning but is still saved. An agent slug or alias is refused with the provider to use.
+- `nori auth remove-key <provider>` deletes the saved credential. `set-key` and `remove-key` fail outright when the store is unreadable, and may fail on NFS-mounted `$NORI_HOME` (see the locking note in [`nori-auth-providers`](../auth-providers/docs.md)). Unknown provider input is never echoed back, since it may be a pasted key.
+- `nori auth prefer-api-key <agent> [--yes] [--json]` writes `[auth.<agent>] prefer_api_key = true` through `NoriConfigEdits`. A provider id is refused with the agents that use it, and an agent with no saved-key routes (Hermes) is refused. It first runs `detect_local_agent`; when `api_key_billing_warning()` reports a subscription and `api_billing_confirmed` is not yet set, confirmation is required:
+
+  | Situation | Behavior |
+  | --- | --- |
+  | `--yes` | Accepted without asking |
+  | TTY, no `--json` | Prints a red `WARNING: THIS CHANGES WHO YOU ARE BILLED` banner to stderr and requires typing `yes`; anything else keeps the agent on its own login and exits 0 without writing |
+  | `--json` or no TTY | Fails with non-zero exit; with `--json`, stdout is `{"error":"confirmation_required","code":"api_key_overrides_subscription","message":...}` |
+
+  Once confirmed, `api_billing_confirmed = true` is written alongside, so later opt-ins for that agent do not ask again. Success with `--json` prints `{agent, prefer_api_key, api_billing_confirmed}`; text output notes when no key is saved yet. The expected Native flow is: run with `--json`, show the message on `confirmation_required`, then rerun with `--yes`.
+- `nori auth prefer-login <agent> [--json]` writes `prefer_api_key = false` and leaves `api_billing_confirmed` untouched. Both preference changes apply from the agent's next launch.
+- The command prints only variable names, file paths, keychain service names, and masked keys, never full key values.
 
 **Debug Sandbox** (`debug_sandbox.rs`): Implementation of the sandbox testing commands.
 
@@ -103,6 +119,8 @@ The `skillsets` subcommand is an alias that delegates to the `nori-skillsets` pa
 - If found in PATH, runs it directly
 - If not in PATH, falls back to `npx nori-skillsets` or `bunx nori-skillsets` based on `detect_preferred_package_manager()`
 - Passes through all arguments, stdout, stderr, and exit code
+
+This passthrough is version-agnostic and is not the path the TUI uses. It ignores `NORI_SKILLSETS_COMMAND`, and its `npx`/`bunx` fallback resolves the npm package, which today is skillsets v1 (0.33.x); skillsets v2 is installed only with `curl -fsSL https://cli.noriskillsets.dev/install.sh | sh`. By default the TUI picker and footer call the v1 commands directly; with `[features] skillsets_v2` they go through [@/nori-rs/skillsets](../skillsets/docs.md), which requires v2.
 
 **Shell Completions:**
 

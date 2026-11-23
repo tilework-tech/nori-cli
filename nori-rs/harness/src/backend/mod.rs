@@ -26,13 +26,11 @@ use tracing::warn;
 
 use crate::connection::DelegatedRequest;
 use crate::connection::acp_connection::AcpConnection;
-use crate::registry::get_agent_config;
 use crate::transcript::ContentBlock;
 use crate::transcript::TranscriptRecorder;
 use crate::undo::GhostSnapshotStack;
 
 mod follow_up;
-mod remote_control_ext;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PromptAdmission {
@@ -79,7 +77,7 @@ pub fn enhanced_error_message(
             format!("Rate limit or quota exceeded for {provider_name}: {original_error}")
         }
         AcpErrorCategory::ExecutableNotFound => {
-            format!("Could not find the {display_name} CLI. Please install it with: {install_hint}")
+            format!("Could not find the {display_name} CLI. Suggested fix: {install_hint}")
         }
         AcpErrorCategory::Initialization => {
             format!(
@@ -157,8 +155,6 @@ pub fn enhance_agent_error(
 pub struct AcpBackendConfig {
     /// Agent name used to look up agent in registry
     pub agent: String,
-    /// Enable manager-owned delegation for this session.
-    pub multi_session: bool,
     /// Session/process-bound authority for the internal delegation tool.
     pub delegation_context: Option<crate::session_manager::DelegationContext>,
     /// Working directory for the session
@@ -223,6 +219,11 @@ pub struct AcpBackendConfig {
     pub script_timeout: std::time::Duration,
     /// Default model to apply on session start (from config.toml [default_models])
     pub default_model: Option<String>,
+    pub agent_token_providers:
+        std::sync::Arc<HashMap<String, nori_config::token_providers::TokenProvider>>,
+    /// The user set `[auth.<agent>] prefer_api_key`, so keys saved through
+    /// `nori auth set-key` are passed to the agent at launch.
+    pub prefer_api_key: bool,
     /// Optional initial context to inject into the first prompt.
     /// Used by fork to provide conversation history as context to the new session.
     pub initial_context: Option<String>,
@@ -323,6 +324,7 @@ pub struct AcpBackend {
     is_first_prompt: Arc<Mutex<bool>>,
     /// Whether the first prompt should be summarized for the footer.
     prompt_summary_enabled: bool,
+    agent_config: crate::registry::AcpAgentConfig,
     /// Agent name stored for spawning summarization connection
     agent_name: String,
     /// CLI version recorded in transcript metadata (including forked transcripts)

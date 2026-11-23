@@ -468,7 +468,6 @@ impl ChatWidget {
     pub(crate) fn open_hotkey_picker(&mut self, hotkey_config: nori_config::HotkeyConfig) {
         let view = crate::nori::hotkey_picker::HotkeyPickerView::new(
             &hotkey_config,
-            self.config.multi_session,
             self.app_event_tx.clone(),
         );
         self.bottom_pane.show_view(Box::new(view));
@@ -491,6 +490,11 @@ impl ChatWidget {
     /// Checks if nori-skillsets is available and lists available skillsets.
     pub(crate) fn handle_switch_skillset_command(&mut self) {
         use crate::nori::skillset_picker;
+
+        if self.config.skillsets_v2 {
+            self.handle_switch_skillset_command_v2();
+            return;
+        }
 
         // Check if nori-skillsets is available in PATH
         if !skillset_picker::is_nori_skillsets_available() {
@@ -535,6 +539,11 @@ impl ChatWidget {
     /// without showing the picker menu.
     pub(crate) fn handle_switch_skillset_command_with_name(&mut self, name: &str) {
         use crate::nori::skillset_picker;
+
+        if self.config.skillsets_v2 {
+            self.handle_switch_skillset_command_with_name_v2(name);
+            return;
+        }
 
         if !skillset_picker::is_nori_skillsets_available() {
             self.add_info_message(skillset_picker::not_installed_message(), None);
@@ -752,12 +761,16 @@ impl ChatWidget {
         &mut self,
         option: nori_protocol::acp::v1::SessionConfigOption,
     ) {
-        let other_models = nori_harness::AgentKind::from_slug(&self.config.active_agent)
-            .map(nori_harness::AgentKind::other_models)
-            .unwrap_or(&[]);
+        let extra_models = nori_harness::get_agent_config(&self.config.active_agent)
+            .ok()
+            .and_then(|config| match config.builtin_kind {
+                Some(kind) if config.supports_model_injection() => Some(kind.other_models()),
+                Some(_) => None,
+                None => Some(&[][..]),
+            });
         let params = crate::nori::session_config_picker::acp_session_config_value_picker_params(
             &option,
-            other_models,
+            extra_models,
         );
         self.bottom_pane.show_selection_view(params);
     }

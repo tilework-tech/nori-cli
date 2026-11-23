@@ -20,8 +20,12 @@ Typed SDK handlers implement initialize, authentication, session new/load,
 resume/list/close, prompt, cancel, mode, and config-option behavior. Scenario
 environment variables select deterministic streams for:
 
-- messages, thoughts, plans, tools, usage, modes, config, and commands;
+- messages, thoughts, plans, tools, usage, config, and commands;
 - permission round trips with schema-native success and error responses;
+- adapter permission modes: `MOCK_AGENT_MODES` advertises a `mode` config
+  option (category `mode`, starting in its first id) and
+  `MOCK_AGENT_ASKING_MODES` names the modes in which every turn asks for
+  permission, as a strict adapter mode does ([`modes.rs`](src/modes.rs));
 - host-handled filesystem reads and writes;
 - session load/list/resume/close and structured ACP failures;
 - initialize/new-session failures (including candidate-only activation
@@ -46,6 +50,9 @@ count, image count, image MIME type, and image data through the
 `MOCK_AGENT_EXPECT_*` prompt variables. A mismatch returns a structured prompt
 error, allowing PTY lifecycle tests to verify that deferred positional or typed
 input reaches ACP exactly once without transforming text or attachments.
+`MOCK_AGENT_MCP_LOG=<path>` writes the name of every MCP server a
+`session/new` request carried to that file, one per line.
+
 `MOCK_AGENT_PROMPT_LOG=<path>` appends each delivered prompt's last text block
 to that file as one JSON string per line, so tests can assert on exactly which
 prompts reached the agent and how many times (for example, that a reclaimed
@@ -123,9 +130,8 @@ than calling host internals. This makes the public `AcpEvent::Request` and
 - The mock has no catch-all dispatch handler; the SDK default must be allowed to
   forward responses to the mock's own pending client requests.
 - `MOCK_AGENT_INITIALIZE_META` accepts a JSON object for initialize-response
-  metadata. Tests use it to exercise extension recognition without making the
-  fixture itself identify as a Nori remote-control surface; invalid or
-  non-object JSON is ignored.
+  metadata, so a test can exercise initialize-extension recognition without the
+  fixture advertising it by default; invalid or non-object JSON is ignored.
 - `ExitOnEof` preserves the host's stdin-EOF shutdown contract. A dedicated
   scenario can ignore EOF to test the hard-exit watchdog.
 - A Unix lifecycle fixture can leave a descendant running after the mock agent

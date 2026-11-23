@@ -12,7 +12,7 @@ expression: rendered
 
 
 
- Would you like mock-model to start a mock-model-alt session?
+ Would you like mock-model to start a session with mock-model-alt?
  asked by  mock-model (this session)
  runs on   mock-model-alt · a different agent from this session
  task      Review the parser

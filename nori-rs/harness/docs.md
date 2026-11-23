@@ -24,12 +24,12 @@ coarse `SessionStatus` for each session and each session family.
 ### How it fits into the larger codebase
 
 ```text
-nori-exec       nori-tui       remote ACP client
-        \           |               |  WebSocket /acp
-         \          |               v
-          \         |     RemoteAcpServer (nori-acp-host::remote)
-           v        v               |  HostedAgent trait
-              nori-harness  <-------+  (remote_agent.rs implements it)
+                nori-tui       nori host client (/acp, stdio, pipe)
+                    |               |
+                    |               v
+                    |     RemoteAcpServer (nori-acp-host::remote)
+                    v               |  ManagedAgent trait
+              nori-harness  <-------+  (managed_remote.rs implements it)
                /       \
               v         v
       nori-acp-host   nori-config
@@ -43,29 +43,28 @@ changing ACP semantics, and adds the small Nori-owned event branch. Stateful
 ACP reduction remains private because it supports harness behavior; widget and
 display projection remains private to the TUI.
 
-`nori-exec` is the production headless consumer. It uses the same typed handle
-and event stream to implement both a finite plaintext projection and a bounded
-ACP agent facade. The facade preserves ACP request/response semantics where the
-shell caller participates, rather than serializing the private reducer or
-inventing a second public event vocabulary.
-
 `nori-tui` starts every session through one app-owned `SessionManager`. The
 manager calls the same launch internals as `launch_session`, so a managed
-session behaves exactly like a directly launched one. With the runtime
-`multi_session` flag, `nori-exec --acp` and the remote `/sessions` endpoint also
-use that manager. Plaintext, flag-off exec, and the public
+session behaves exactly like a directly launched one. The TUI serves no
+remote listener; the background host (including its stdio form,
+`nori exec --acp`) owns its own manager and is the only remote surface. One-shot `nori exec "prompt"` is an ACP client of that host
+(a running one or an in-process one, see
+[the host client](../cli/src/host/docs.md#one-shot-exec)), so it no longer
+drives a `HarnessHandle` directly. The public
 `launch_session`/`prepare_and_launch_session` entry points retain their direct
 per-session runtime paths.
 
-The remote ACP transport (`@/docs/remote-control.md`) is the other
-headless consumer. `nori-acp-host` owns the WebSocket server and defines the
-`HostedAgent` trait; [`remote_agent.rs`](src/remote_agent.rs) implements that
-trait over `HarnessHandle`, while
-[`managed_remote.rs`](src/managed_remote.rs) implements `ManagedAgent` over
-`SessionManager`. Both keep the dependency direction
+The remote ACP transport (`@/docs/remote-control.md`) is the
+headless consumer. `nori-acp-host` owns the server and defines the
+`ManagedAgent` trait; [`managed_remote.rs`](src/managed_remote.rs) implements
+it over `SessionManager`, and [`remote_agent.rs`](src/remote_agent.rs)
+re-exports that host with the transport types so frontends need not import
+`nori-acp-host`. This keeps the dependency direction
 `nori-harness -> nori-acp-host`. Remote mutations pass through the same typed
-handle as local ones, so hooks, transcripts, goals, and permission policy all
-still apply, and the TUI observes remote-driven activity on its own stream.
+handles as local ones, so hooks, transcripts, goals, and permission policy all
+still apply. The earlier `HarnessRemoteHost`, which served one TUI session on
+an unauthenticated `/acp` endpoint, was removed; `/acp` is now the background
+host's authenticated endpoint.
 
 ### Core Implementation
 
@@ -73,13 +72,10 @@ still apply, and the TUI observes remote-driven activity on its own stream.
 
 A frontend constructs `AgentPrepareSpec` with one resolved `Arc<NoriConfig>`,
 the CLI version, and optional product/conversation context. `prepare_agent`
-resolves the persisted default model and injects it through the agent's
-spawn-time channel before spawning the ACP subprocess. It then completes
+uses the bound API provider's model when present and otherwise resolves the
+agent's default model. It injects the result through the agent's spawn-time channel before spawning the ACP subprocess. It then completes
 `initialize`, reads the connection's capabilities, and normally calls
-`session/list` when advertised. When a version-1
-`_meta.nori.remoteControl.activeSessionId` marker is paired with `loadSession`,
-the prepared owner records that ID, skips listing, and loads it as the first
-post-initialize request during activation. It returns an
+`session/list` when advertised. It returns an
 opaque, non-cloneable `PreparedAgent` that still owns that exact
 `AcpConnection`, its event receiver, resolved backend configuration, buffered
 initialize event, and a `SessionCatalog`. The catalog distinguishes
@@ -93,10 +89,7 @@ The frontend then chooses `SessionStart::New` or
 `SessionLaunchSpec`. `launch_session` consumes it, so a connection cannot be
 activated twice or used for pre-session prompt/config operations. Resume
 selects the existing load, live-resume, or transcript-replay path from the
-agent capabilities and supplied resume data. A recognized Nori remote-control
-ID overrides the ordinary product choice, including picker-first TUI flows;
-load failure remains terminal and never creates a replacement session.
-Frontends that have already made their session choice may use
+agent capabilities and supplied resume data. Frontends that have already made their session choice may use
 `prepare_and_launch_session`; it performs the two phases in one background
 lifecycle while retaining the same connection. It returns the handle
 immediately, queues ordinary commands until activation, and
@@ -108,7 +101,7 @@ A frontend that keeps a prepared connection behind a picker may call
 `refresh_prepared_agent(&mut agent, spec)` immediately before activation. This
 replaces session-time policy and context from the latest resolved config while
 preserving the initialized transport. The prepared agent identity, working
-directory, ACP proxy/wire-recording configuration, and default model are
+directory, ACP proxy/wire-recording configuration, named API binding, and default model are
 preparation-fixed inputs; if any changed, refresh fails and the caller must
 discard the connection and prepare again. This lets mutable settings change
 during a picker without silently applying them to the wrong process or
@@ -132,8 +125,7 @@ represent preparation.
 The stream is an ordered fan-out (`SessionEventFanout` in
 [`runtime.rs`](src/runtime.rs)): the primary receiver returned by
 `launch_session` is unbounded and unchanged, while
-`HarnessHandle::subscribe_events()` registers additional bounded consumers such
-as the remote ACP host. Every consumer sees the same events in the same order.
+`HarnessHandle::subscribe_events()` registers additional bounded consumers. Every consumer sees the same events in the same order.
 A subscriber that falls a full queue behind is dropped — its receiver closes —
 so a slow consumer can never block the harness or the primary frontend.
 Subscribe commands are honored immediately even during the connect phase,
@@ -148,8 +140,8 @@ chunk for that prompt carries one shared message id, so all frontends—includin
 the submitter—observe and group the same canonical input. Nori-owned context
 prepended to the downstream wire prompt is not part of this public copy.
 `nori_protocol::PROMPT_ECHO_ID_META_KEY` names the
-`nori.dev/promptEchoId` correlation extension. Remote prompt metadata crosses
-`HostedAgent` and `HarnessHandle` intact; the harness supplies the marker when
+`nori.dev/promptEchoId` correlation extension. Prompt metadata crosses
+`HarnessHandle` intact; the harness supplies the marker when
 absent, retains the complete metadata while queued, and forwards it on the
 top-level downstream `session/prompt` without changing prompt content. The
 canonical user chunks carry only this marker, not the prompt's other metadata.
@@ -214,7 +206,11 @@ exists are cancelled. A raw ACP setup error precedes
 `SessionEnded(SpawnFailed)` and is not mirrored as
 `NoriEvent::RequestFailed`.
 
-The persisted `[default_models]` entry (`AcpBackendConfig.default_model`) is
+[Preparation](src/backend/prepared.rs) uses the named connection resolved for the requested agent. A missing key or unsupported route fails preparation before the candidate starts. The TUI, local host sessions (including those of `nori exec`) and delegated children use this path. A delegated child resolves its own registered agent. Managed sessions start from a [binding-specific launch specification](src/managed_launch.rs). Both routes compose argv before the [process supervisor](../acp-host/src/connection/child_lifecycle.rs) takes ownership of the child and its ACP pipes.
+
+After model injection, preparation calls [`nori-auth-providers`](../auth-providers/docs.md)' `inject_saved_keys` on a blocking task bounded by a short timeout (with `NORI_CREDENTIALS_STORE=keyring` it reads the OS keyring, which can prompt). It passes `AcpBackendConfig.prefer_api_key`, which `build_backend_config` in [`runtime.rs`](src/runtime.rs) resolves from the agent's `[auth.<agent>] prefer_api_key` ([`nori-config`](../nori-config/docs.md)). When it is false (the default) nothing is injected and the store is not read, so the agent uses its own login. When it is true, each provider key saved with `nori auth set-key` is added to the agent's launch environment, in the agent's own variable for that provider. A provider is skipped when any credential variable the agent honours for that provider is already set in the ambient environment or the agent config, the provider's base-URL variable (for example `ANTHROPIC_BASE_URL`) is set non-blank there, or its variable is removed by `launch.env_remove`; an agent bound to a named token provider receives none. A store failure or timeout is logged without values and the agent launches without saved keys. Managed launches build their environment from the admitted specification and intentionally never receive saved keys; the broker supplies their credentials.
+
+The resolved model preference (`AcpBackendConfig.default_model`) is
 applied at both process and session boundaries. During preparation,
 [`prepared.rs`](src/backend/prepared.rs) calls the injection helper in
 [`spawn_and_relay.rs`](src/backend/spawn_and_relay.rs) before spawning the exact
@@ -291,8 +287,7 @@ their raw response visible for schema-complete observation.
 `flush_transcript()` is a write barrier: everything recorded before the call is
 on disk when it returns (backed by `AcpBackend::flush_transcript` in
 [`submit_and_ops.rs`](src/backend/submit_and_ops.rs); a missing recorder
-flushes trivially). The remote host uses it before serving `session/load` from
-the transcript.
+flushes trivially).
 
 Queued prompts are published as `NoriEvent::QueueChanged` snapshots built in
 [`session_reducer/reclaim.rs`](src/backend/session_reducer/reclaim.rs). Each
@@ -350,94 +345,17 @@ ends with `end_turn`. Draining then continues one prompt per completed turn. A
 resume without a pause, or while a session load is in flight, is a no-op, and an interrupt or failure after a resume
 pauses whatever is still queued.
 
-#### Remote ACP hosting
-
-[`remote_agent.rs`](src/remote_agent.rs) implements the acp-host `HostedAgent`
-trait over `HarnessHandle` as `HarnessRemoteHost`, and re-exports the server
-types so frontends reach the whole remote surface through
-`nori_harness::remote_agent` without importing `nori-acp-host`. An embedding
-frontend creates one host for its own application lifetime; the harness does
-not keep a process-global host or own listener policy.
-
-- `attach(handle, nori_home)` follows a newly launched session through a
-  `subscribe_events` subscription, replacing any previously followed session.
-  Embedders that use this path call it immediately after `launch_session` so
-  the subscription registers ahead of startup events.
-- The TUI instead calls `attach_started(handle, nori_home, started)` only after
-  an active session publishes `SessionStarted`. This seeds the outward identity
-  and working directory from the already-consumed start event, then subscribes
-  from that commit boundary onward. During an agent switch the current session
-  remains attached until the candidate reaches this event, so candidate
-  preparation, failure, or cancellation cannot replace it.
-- With multi-session TUI navigation, `set_default_started` stages the visible
-  session for the next legacy subscription without replacing the current
-  controller's attached session. Committed identities are remembered for
-  background widgets too, so the most recently started session cannot override
-  the on-screen default. `clear_default_session` leaves the next controller
-  unattached when the visible session has not started or has ended, without
-  retargeting an already connected controller.
-- Host attachment and listener lifetime are independent. The TUI keeps the
-  app-owned host attached while runtime remote control is disabled, allowing a
-  later enable to expose the current session without relaunching it. Stopping
-  the listeners disconnects the controller but does not shut down the host or
-  harness.
-- The outward ACP session id is the stable Nori conversation id (transcript
-  id), captured from `SessionStarted`. Downstream swaps that continue the
-  conversation (compact, restore) stay invisible to remote clients; forwarded
-  `session/update` notifications have their session ids rewritten to the
-  outward id. A fork mints a new conversation id, so the host closes the
-  remote connection and a reconnecting client rediscovers the forked session
-  through `session/list`.
-- `session/load` flushes the transcript, loads it from disk through
-  `TranscriptLoader`, and projects it with
-  `transcript_to_replay_session_events`, keeping only session notifications
-  and restamping them with the outward id.
-- Live `session/update` notifications—including canonical user prompt chunks
-  and `working`/`idle` lifecycle hints—are forwarded from the shared harness
-  fan-out without content translation; only their outward session id is
-  rewritten, so correlation and observer lifecycle survive the boundary. The
-  transport still has one controller, while the fan-out remains the common
-  source for the TUI and future bounded observers.
-- Remote prompt admission is serialized with the session runtime and rejects
-  with ACP error `-32015` while a turn is active, a steer is unsettled, or a
-  local prompt is queued and the queue is not paused. Local submissions keep the ordinary harness queue. The admission
-  barrier provides a fast rejection before prompt hooks and snapshots, while
-  the reducer repeats the same decision at the state transition boundary.
-- Turn ownership is tracked by harness request id after a remote prompt is
-  admitted. An outcome that races ahead of registration is claimed from a
-  small bounded buffer. Only remote-owned turns forward their final response,
-  `RequestFailed`, and delegated permission requests to the controller; local
-  turns expose their content and lifecycle notifications but keep responses
-  and permission decisions with the local frontend.
-- Prompt registration runs in a detached host task, so dropping the calling
-  WebSocket task during disconnect does not abandon the admission operation or
-  leave the host permanently busy. Each registration carries a monotonic
-  submission token; completion may clear pending prompt and cancel state only
-  while that token still matches. Session replacement invalidates the token,
-  while controller reconnection leaves the host-owned registration running to
-  completion.
-- Remote `session/cancel` targets a harness request id rather than whichever
-  turn happens to be active. If cancel arrives while an admitted remote prompt
-  is still awaiting request-id registration, the host remembers it and sends
-  the request-scoped cancel immediately after registration. The reducer applies
-  that cancel only when the same request still owns the active turn, so a late
-  cancel cannot affect a later local turn. With no pending or registered remote
-  prompt, remote cancel is a no-op.
-- When the remote controller detaches or is replaced, its unanswered delegated
-  requests are answered with a cancelled permission outcome so they cannot
-  wedge the agent.
-
 #### Managed remote hosting
 
 [`ManagedRemoteHost`](src/managed_remote.rs) shares one command boundary
-between the WebSocket `/sessions` adapter and managed ACP stdio. It lists
+between the WebSocket `/acp` (alias `/sessions`) adapter and managed ACP stdio. It lists
 manager records and journal cursors (each row also carries `family_status`,
 the record's `SessionManager::family_status`, else its own status, plus the
 additive display fields `reply_preview`, `waiting_request`, `idle_seconds`,
 `context_used`, and `context_size` from the replay journal and `model` from the record), resolves explicit conversation IDs before
 using the frontend's selected default, and opens one-session or all-session
 subscriptions. Its `_nori/session/event` notifications retain the complete
-manager envelope, including Nori events; legacy ACP projection stays separate.
+manager envelope, including Nori events.
 The [wire contract](../../docs/remote-control.md) defines request parameters,
 acknowledgements, and reconnect errors.
 
@@ -445,14 +363,20 @@ Legacy `_nori/session/prompt` admission calls `HarnessHandle::prompt_with_meta_i
 the harness request ID; completion remains in the envelope stream. Permission
 answers validate the session/request pair against manager pending requests and
 serialize managed answer claims until the event pump observes resolution.
-They use the remote responder label, so TUI and remote observers see the same
+They use the remote responder label, so every observer sees the same
 `RequestResolved`. Managed disconnect does not cancel a turn or resolve its
 pending permission: the continuing session can be controlled after reconnect.
 
 The [follow-up operation](../cli/src/host/docs.md#mid-turn-follow-ups) uses the same harness session driver for direct input and background-host controllers. It checks the expected turn, retains a receipt keyed by message ID and routes an explicit queue or guarded fallback through the existing prompt FIFO. A successful injection leaves the original prompt responsible for completion, usage and cancellation.
 
 The background [`HostService`](../cli/src/host/service.rs) composes this
-adapter with manager lifecycle operations for new, close, cancel, and resume.
+adapter with manager lifecycle operations for new, close, cancel, and resume,
+and finds stored sessions through `TranscriptLoader::list_stored_sessions` and
+`find_stored_session`, which scan `transcripts/by-project/*/sessions/*.jsonl`
+reading only each file's metadata line and modification time.
+`SessionManager::resume_stored` starts a session the manager has not run from
+its transcript under the transcript's own ID, so the recorder continues the
+same file; the journal numbers it from 1.
 It owns the manager independently of every attached terminal. Transport
 authentication and controller/watcher admission live below this layer in
 [`acp-host`](../acp-host/src/remote/host_control.rs); the harness remains the
@@ -526,8 +450,8 @@ ACP permission requests that require a consumer decision are emitted as
 `SessionEvent::Acp(AcpEvent::Request { request_id, request })`. A consumer
 responds through `respond_to_agent` with the same ID and a schema-native success
 or error. Each handle carries a responder label (`with_responder`, default
-`runtime::DEFAULT_RESPONDER` = `client`; the remote host labels its attached
-handle `remote_agent::REMOTE_CONTROL_RESPONDER` = `remote_control`) that the
+`runtime::DEFAULT_RESPONDER` = `client`; `ManagedRemoteHost` labels the handles
+it answers through `remote_agent::REMOTE_CONTROL_RESPONDER` = `remote_control`) that the
 session manager uses to say who answered. `AskForApproval::Never` resolves permission requests inside the
 harness, and setup-time permission requests are cancelled internally because no
 consumer session exists yet. Filesystem requests are handled in
@@ -575,6 +499,14 @@ Session end reasons are:
 - `ConnectionLost` for unexpected transport or child loss;
 - `SpawnFailed` when no session could be established; and
 - `TimedOut` when a lifecycle watchdog owns the terminal outcome.
+
+Prompts and follow-ups submitted while the agent is still starting wait in the
+runtime until it has started. If startup ends in `SpawnFailed` or `TimedOut`,
+each waiting command is answered with `runtime::AgentStartFailed` (the startup
+message plus the agent's ACP error code when it refused with one) rather than
+being dropped. Callers such as the [background host](../cli/src/host/docs.md)
+read that code, so an adapter that needs sign-in surfaces its own `-32000`
+authentication error instead of a generic "did not accept the prompt".
 
 Explicit local shutdown uses immediate ACP process-group cleanup. Cloud exit
 supplies a short child grace so `nori-handroll cloud-acp` can process stdin EOF
@@ -799,13 +731,10 @@ Execute call is read-only.
   agent tools cannot stop harness continuation.
 - Consumers should correlate raw requests and responses only by the supplied
   ACP `RequestId`.
-- The legacy `HarnessRemoteHost` exposes one attached session; the managed
-  host exposes the manager registry. Legacy `--remote` WebSocket endpoints
-  share one controller slot (last connect wins); the background host instead
-  admits one controller and independent watchers. Bounded consumers close on overflow without
-  blocking sessions. [Legacy remote tests](tests/remote_host.rs) exercise the
-  ACP projection; [managed WebSocket tests](tests/managed_remote.rs) compare
-  reconnect delivery against the manager's envelope stream.
+- The managed host exposes the manager registry; the background host admits
+  one controller and independent watchers. Bounded consumers close on overflow
+  without blocking sessions. [Managed WebSocket tests](tests/managed_remote.rs)
+  compare reconnect delivery against the manager's envelope stream.
 - Session manager invariants: one agent process per session; conversation ID
   = transcript ID = envelope `conversation_id`; envelope `seq` starts at 1 per
   conversation with no gaps, a crash resume continues it, and a fork starts a
@@ -817,12 +746,6 @@ Execute call is read-only.
   through the raw `HarnessHandle`. Prepared agents held outside the manager
   (such as a TUI warm-up before any session exists) do not count against the
   cap.
-- Legacy remote and local frontends share notifications but not request
-  ownership. Local prompts may queue; remote prompts reject while busy,
-  legacy remote cancel is scoped to the registered harness request id, and only the remote submitter
-  receives a correlated prompt outcome. Prompt registration belongs to
-  `HarnessRemoteHost`, so controller replacement cannot strand admission state,
-  while hosted-session replacement invalidates the old registration token.
 - The harness uses the submission path to decide whether the local composer
   may reclaim a queued item. For follow-ups, `HarnessHandle::local_follow_up`
   marks composer input as local. An authenticated controller uses

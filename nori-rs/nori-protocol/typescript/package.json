@@ -1,0 +1,8 @@
+{
+  "name": "@nori/host-wire-types-generator",
+  "private": true,
+  "description": "Pins the generator for host-wire.ts. Run scripts/generate-host-wire-types.sh from the repository root.",
+  "devDependencies": {
+    "json-schema-to-typescript": "16.0.0"
+  }
+}

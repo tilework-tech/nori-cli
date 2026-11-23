@@ -6,24 +6,31 @@
 //! ## Agent Names
 //! - `claude-code` - Anthropic's Claude Code CLI agent
 //! - `codex` - OpenAI's Codex CLI agent
-//! - `gemini` - Google's Gemini CLI agent
+//! - `gemini` - Google Antigravity
+//! - `grok-build` - xAI Grok Build
+//! - `opencode` - OpenCode with its configured providers
+//! - `cursor` - Cursor Agent
+//! - `hermes` - Nous Research Hermes Agent
 //!
 //! ## Provider Names
 //! - `anthropic` - Anthropic
 //! - `openai` - OpenAI
 //! - `google` - Google
+//! - `xai` - xAI
+//! - `cursor` - Cursor
+//! - `nous-research` - Nous Research
 
 use anyhow::Context;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
-use std::process::Command;
-use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::time::Duration;
 
 use nori_config::AgentConfigToml;
+
+pub use crate::adapter_launch::set_adapter_launch_overrides;
 use nori_config::ResolvedDistribution;
 
 /// Default idle timeout for ACP streaming (5 minutes)
@@ -116,8 +123,18 @@ pub enum AgentKind {
     ClaudeCode,
     /// OpenAI's Codex CLI
     Codex,
-    /// Google's Gemini CLI
+    /// Google Antigravity, retaining its original Gemini identifier.
     Gemini,
+    /// xAI Grok Build.
+    GrokBuild,
+    /// OpenCode with its native provider configuration.
+    OpenCode,
+    /// Cursor CLI in ACP mode.
+    Cursor,
+    /// Nous Research Hermes Agent.
+    Hermes,
+    /// Earendil's Pi coding agent, through the pi-acp adapter.
+    Pi,
 }
 
 impl AgentKind {
@@ -127,6 +144,11 @@ impl AgentKind {
             AgentKind::ClaudeCode => "claude-code",
             AgentKind::Codex => "codex",
             AgentKind::Gemini => "gemini",
+            AgentKind::GrokBuild => "grok-build",
+            AgentKind::OpenCode => "opencode",
+            AgentKind::Cursor => "cursor",
+            AgentKind::Hermes => "hermes",
+            AgentKind::Pi => "pi",
         }
     }
 
@@ -135,7 +157,12 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => "Claude Code",
             AgentKind::Codex => "Codex",
-            AgentKind::Gemini => "Gemini",
+            AgentKind::Gemini => "Antigravity",
+            AgentKind::GrokBuild => "Grok Build",
+            AgentKind::OpenCode => "OpenCode",
+            AgentKind::Cursor => "Cursor Agent",
+            AgentKind::Hermes => "Hermes Agent",
+            AgentKind::Pi => "Pi",
         }
     }
 
@@ -145,11 +172,18 @@ impl AgentKind {
     /// - Claude Code: 1M tokens
     /// - Codex: 258K tokens
     /// - Gemini: 1M tokens
-    pub fn context_window_size(&self) -> i64 {
+    ///
+    /// Grok Build and Pi depend on the model chosen at runtime.
+    pub fn context_window_size(&self) -> Option<i64> {
         match self {
-            AgentKind::ClaudeCode => 1_000_000,
-            AgentKind::Codex => 258_000,
-            AgentKind::Gemini => 1_000_000,
+            AgentKind::ClaudeCode => Some(1_000_000),
+            AgentKind::Codex => Some(258_000),
+            AgentKind::Gemini => Some(1_000_000),
+            AgentKind::GrokBuild
+            | AgentKind::OpenCode
+            | AgentKind::Cursor
+            | AgentKind::Hermes
+            | AgentKind::Pi => None,
         }
     }
 
@@ -159,59 +193,60 @@ impl AgentKind {
             AgentKind::ClaudeCode => Provider::Anthropic,
             AgentKind::Codex => Provider::OpenAI,
             AgentKind::Gemini => Provider::Google,
-        }
-    }
-
-    /// Get the npm package name for the underlying agent (for installation detection)
-    pub fn npm_package(&self) -> &'static str {
-        match self {
-            AgentKind::ClaudeCode => "@anthropic-ai/claude-code",
-            AgentKind::Codex => "@openai/codex",
-            AgentKind::Gemini => "@google/gemini-cli",
-        }
-    }
-
-    /// Get the ACP adapter package name for launching this agent
-    pub fn acp_package(&self) -> &'static str {
-        match self {
-            // @latest forces bunx to resolve the new scope instead of a stale
-            // @zed-industries cache entry with the same unscoped package name.
-            AgentKind::ClaudeCode => "@agentclientprotocol/claude-agent-acp@latest",
-            AgentKind::Codex => "@agentclientprotocol/codex-acp@latest",
-            // Gemini has native ACP support
-            AgentKind::Gemini => "@google/gemini-cli",
+            AgentKind::GrokBuild => Provider::Xai,
+            AgentKind::OpenCode => Provider::OpenCode,
+            AgentKind::Cursor => Provider::Cursor,
+            AgentKind::Hermes => Provider::NousResearch,
+            AgentKind::Pi => Provider::Earendil,
         }
     }
 
     /// Get all agent variants
     pub fn all() -> &'static [AgentKind] {
-        &[AgentKind::ClaudeCode, AgentKind::Codex, AgentKind::Gemini]
+        &[
+            AgentKind::ClaudeCode,
+            AgentKind::Codex,
+            AgentKind::Gemini,
+            AgentKind::GrokBuild,
+            AgentKind::OpenCode,
+            AgentKind::Cursor,
+            AgentKind::Hermes,
+            AgentKind::Pi,
+        ]
     }
 
     /// The out-of-band channel this built-in agent uses to receive a forced
-    /// model id at spawn time. Verified against each adapter: Claude honors
-    /// `ANTHROPIC_MODEL`, Gemini honors `GEMINI_MODEL` (both in ACP mode), and
-    /// Codex reads the `model` key from its `CODEX_CONFIG` JSON.
+    /// model id at spawn time. Agents without an injection channel negotiate models over ACP.
     pub fn model_injection(&self) -> ModelInjection {
         match self {
             AgentKind::ClaudeCode => ModelInjection::Env {
                 var: "ANTHROPIC_MODEL".to_string(),
             },
-            AgentKind::Gemini => ModelInjection::Env {
-                var: "GEMINI_MODEL".to_string(),
-            },
+            AgentKind::Gemini
+            | AgentKind::GrokBuild
+            | AgentKind::OpenCode
+            | AgentKind::Hermes
+            | AgentKind::Pi => ModelInjection::None,
             AgentKind::Codex => ModelInjection::CodexConfig,
+            AgentKind::Cursor => ModelInjection::Arg {
+                flag: "--model".to_string(),
+            },
         }
     }
 
     /// Get the base directory for transcript files, relative to home directory.
     ///
     /// Returns the path where this agent stores session transcript files.
-    pub fn transcript_base_dir(&self) -> &'static str {
+    pub fn transcript_base_dir(&self) -> Option<&'static str> {
         match self {
-            AgentKind::ClaudeCode => ".claude/projects",
-            AgentKind::Codex => ".codex/sessions",
-            AgentKind::Gemini => ".gemini/tmp",
+            AgentKind::ClaudeCode => Some(".claude/projects"),
+            AgentKind::Codex => Some(".codex/sessions"),
+            AgentKind::Gemini
+            | AgentKind::GrokBuild
+            | AgentKind::OpenCode
+            | AgentKind::Cursor
+            | AgentKind::Hermes
+            | AgentKind::Pi => None,
         }
     }
 
@@ -222,7 +257,20 @@ impl AgentKind {
         match self {
             AgentKind::ClaudeCode => "Run /login for instructions, or set ANTHROPIC_API_KEY.",
             AgentKind::Codex => "Run /login to authenticate, or set OPENAI_API_KEY.",
-            AgentKind::Gemini => "Run /login for instructions, or set GOOGLE_API_KEY.",
+            AgentKind::Gemini => "Run /login for Antigravity instructions, or set GEMINI_API_KEY.",
+            AgentKind::Hermes => {
+                "Run `hermes model` in another terminal to configure the provider and its credentials."
+            }
+            AgentKind::GrokBuild => "Run /login for Grok Build instructions, or set XAI_API_KEY.",
+            AgentKind::OpenCode => {
+                "Run `opencode auth login` in another terminal or configure a provider in OpenCode."
+            }
+            AgentKind::Cursor => {
+                "Run `agent login` (or `cursor-agent login`) in another terminal, or set CURSOR_API_KEY to a user API key from your Cursor dashboard."
+            }
+            AgentKind::Pi => {
+                "Use Pi's /login for native sign-in, or configure a named API connection."
+            }
         }
     }
 
@@ -232,7 +280,14 @@ impl AgentKind {
         match normalized.as_str() {
             "claude-code" | "claude" | "claude-acp" | "claude-4.5" => Some(AgentKind::ClaudeCode),
             "codex" | "codex-acp" => Some(AgentKind::Codex),
-            "gemini" | "gemini-acp" | "gemini-2.5-flash" => Some(AgentKind::Gemini),
+            "gemini" | "gemini-acp" | "gemini-2.5-flash" | "antigravity" | "agy" => {
+                Some(AgentKind::Gemini)
+            }
+            "hermes" | "hermes-agent" => Some(AgentKind::Hermes),
+            "grok-build" | "grok" => Some(AgentKind::GrokBuild),
+            "opencode" => Some(AgentKind::OpenCode),
+            "cursor" | "cursor-agent" => Some(AgentKind::Cursor),
+            "pi" | "pi-acp" => Some(AgentKind::Pi),
             _ => None,
         }
     }
@@ -265,20 +320,12 @@ impl AgentKind {
                 id: "gpt-5.3-codex",
                 label: "GPT-5.3-Codex",
             }],
-            AgentKind::Gemini => &[
-                OtherModel {
-                    id: "gemini-3.7-flash",
-                    label: "Gemini 3.7 Flash",
-                },
-                OtherModel {
-                    id: "gemini-3.5-flash",
-                    label: "Gemini 3.5 Flash",
-                },
-                OtherModel {
-                    id: "gemini-3.5-flash-lite",
-                    label: "Gemini 3.5 Flash-Lite",
-                },
-            ],
+            AgentKind::Gemini
+            | AgentKind::GrokBuild
+            | AgentKind::OpenCode
+            | AgentKind::Cursor
+            | AgentKind::Hermes
+            | AgentKind::Pi => &[],
         }
     }
 }
@@ -298,6 +345,16 @@ pub enum Provider {
     OpenAI,
     /// Google
     Google,
+    /// xAI
+    Xai,
+    /// The model provider selected in OpenCode.
+    OpenCode,
+    /// Cursor
+    Cursor,
+    /// Nous Research
+    NousResearch,
+    /// Earendil, the maker of Pi
+    Earendil,
 }
 
 impl Provider {
@@ -307,6 +364,11 @@ impl Provider {
             Provider::Anthropic => "anthropic",
             Provider::OpenAI => "openai",
             Provider::Google => "google",
+            Provider::Xai => "xai",
+            Provider::OpenCode => "opencode",
+            Provider::Cursor => "cursor",
+            Provider::NousResearch => "nous-research",
+            Provider::Earendil => "earendil",
         }
     }
 
@@ -316,6 +378,11 @@ impl Provider {
             Provider::Anthropic => "Anthropic",
             Provider::OpenAI => "OpenAI",
             Provider::Google => "Google",
+            Provider::Xai => "xAI",
+            Provider::OpenCode => "Configured in OpenCode",
+            Provider::Cursor => "Cursor",
+            Provider::NousResearch => "Nous Research",
+            Provider::Earendil => "Earendil",
         }
     }
 }
@@ -391,7 +458,7 @@ pub struct RegisteredAgent {
 /// Global agent registry. Protected by RwLock so tests can reset it.
 static AGENT_REGISTRY: RwLock<Option<Vec<RegisteredAgent>>> = RwLock::new(None);
 
-/// Build the three default (built-in) agents.
+/// Build the default (built-in) agents.
 pub fn build_default_agents() -> Vec<RegisteredAgent> {
     AgentKind::all()
         .iter()
@@ -400,9 +467,9 @@ pub fn build_default_agents() -> Vec<RegisteredAgent> {
             slug: kind.slug().to_string(),
             kind: Some(*kind),
             distribution: None, // built-ins use auto-detection
-            context_window_size: Some(kind.context_window_size()),
+            context_window_size: kind.context_window_size(),
             auth_hint: Some(kind.auth_hint().to_string()),
-            transcript_base_dir: Some(kind.transcript_base_dir().to_string()),
+            transcript_base_dir: kind.transcript_base_dir().map(str::to_owned),
             model_injection: kind.model_injection(),
         })
         .collect()
@@ -525,90 +592,27 @@ impl AcpAgentInfo {
 // Installation Detection
 // =============================================================================
 
-/// Cache for agent installation detection (PATH-based, fast).
-/// Caching avoids repeated subprocess calls on every picker open.
-static INSTALLATION_CACHE: OnceLock<HashMap<AgentKind, (bool, Option<PackageManager>)>> =
-    OnceLock::new();
-
-/// Pre-warm the installation detection cache.
-///
-/// Detection is now fast (PATH lookup only), so prewarming is optional.
-/// Call this at app startup to avoid any startup latency from `which` commands.
-pub fn prewarm_installation_cache() {
-    let _ = INSTALLATION_CACHE.get_or_init(|| {
-        let mut map = HashMap::new();
-        for kind in AgentKind::all() {
-            map.insert(*kind, detect_agent_installation_uncached(*kind));
-        }
-        map
-    });
-}
-
-/// Detect if an agent is installed and which package manager manages it.
-///
-/// Uses PATH-based detection (fast `which` command) with caching.
-/// Agents not in PATH can still be launched via npx/bunx.
-fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>) {
-    let cache = INSTALLATION_CACHE.get_or_init(|| {
-        let mut map = HashMap::new();
-        for kind in AgentKind::all() {
-            map.insert(*kind, detect_agent_installation_uncached(*kind));
-        }
-        map
-    });
-
-    cache.get(&agent).copied().unwrap_or((false, None))
-}
-
-/// Perform the actual installation detection (uncached).
-///
-/// Only checks PATH for fast detection. Agents not in PATH can still be
-/// launched via npx/bunx (which downloads and runs on-the-fly if needed).
-fn detect_agent_installation_uncached(agent: AgentKind) -> (bool, Option<PackageManager>) {
-    let binary_name = match agent {
-        AgentKind::ClaudeCode => "claude",
-        AgentKind::Codex => "codex",
-        AgentKind::Gemini => "gemini",
-    };
-
-    // Check if the binary exists in PATH (fast check)
-    if let Ok(output) = Command::new("which").arg(binary_name).output()
-        && output.status.success()
-    {
-        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let managed_by = detect_package_manager_from_path(&path);
-        return (true, managed_by);
-    }
-
-    // On Windows, try `where` instead
-    #[cfg(target_os = "windows")]
-    if let Ok(output) = Command::new("where").arg(binary_name).output() {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let managed_by = detect_package_manager_from_path(&path);
-            return (true, managed_by);
-        }
-    }
-
-    // Binary not in PATH - agent is not locally installed.
-    // It can still be launched via npx/bunx which will download on-the-fly.
-    (false, None)
-}
-
-/// Detect package manager from binary path
-fn detect_package_manager_from_path(path: &str) -> Option<PackageManager> {
-    let path_lower = path.to_lowercase();
-    if path_lower.contains(".bun") || path_lower.contains("bun/bin") {
-        Some(PackageManager::Bun)
-    } else if path_lower.contains("npm")
-        || path_lower.contains("node_modules")
-        || path_lower.contains(".npm")
-    {
-        Some(PackageManager::Npm)
+// Prefer Cursor’s unambiguous executable if another program also installs `agent`.
+fn cursor_command() -> &'static str {
+    if which::which("cursor-agent").is_ok() {
+        "cursor-agent"
     } else {
-        // Default to npm if we can't determine
-        Some(PackageManager::Npm)
+        "agent"
     }
+}
+
+fn detect_agent_installation(agent: AgentKind) -> (bool, Option<PackageManager>) {
+    let binary = match agent {
+        AgentKind::ClaudeCode => "claude-agent-acp",
+        AgentKind::Codex => "codex-acp",
+        AgentKind::Gemini => "agy",
+        AgentKind::GrokBuild => "grok",
+        AgentKind::OpenCode => "opencode",
+        AgentKind::Cursor => cursor_command(),
+        AgentKind::Hermes => "hermes",
+        AgentKind::Pi => "pi-acp",
+    };
+    (which::which(binary).is_ok(), None)
 }
 
 /// Detect the preferred package manager for launching ACP agents.
@@ -616,7 +620,7 @@ fn detect_package_manager_from_path(path: &str) -> Option<PackageManager> {
 /// Priority:
 /// 1. NORI_MANAGED_BY_BUN env var → use bunx
 /// 2. NORI_MANAGED_BY_NPM env var → use npx
-/// 3. bun in PATH → use bunx
+/// 3. bunx in PATH → use bunx
 /// 4. Default to npx
 pub fn detect_preferred_package_manager() -> PackageManager {
     // Check explicit env var overrides first
@@ -627,8 +631,7 @@ pub fn detect_preferred_package_manager() -> PackageManager {
         return PackageManager::Npm;
     }
 
-    // Check if bun is available in PATH
-    if Command::new("bun").arg("--version").output().is_ok() {
+    if which::which("bunx").is_ok() {
         return PackageManager::Bun;
     }
 
@@ -668,8 +671,16 @@ impl Default for AcpProviderInfo {
 /// Configuration for an ACP agent subprocess
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcpAgentConfig {
+    /// Retains generated launch inputs across cloned configs and their children.
+    pub owned_runtime: Option<std::sync::Arc<crate::launch::OwnedRuntime>>,
+    /// Child process options for a locally registered server.
+    pub launch: nori_config::LocalLaunchOptions,
+    /// Explicit API route containing only a credential reference.
+    pub token_provider: Option<crate::token_provider::BoundConnection>,
     /// Agent identifier (placeholder for custom agents)
     pub agent: AgentKind,
+    /// Built-in provider using its default launch configuration. Custom commands have no built-in identity.
+    pub builtin_kind: Option<AgentKind>,
     /// Provider identifier (e.g., "claude-code", "gemini")
     /// Used to determine when subprocess can be reused vs needs replacement
     pub provider_slug: String,
@@ -689,6 +700,9 @@ pub struct AcpAgentConfig {
     pub install_hint: String,
     /// How to force a model on this agent at spawn time.
     pub model_injection: ModelInjection,
+    /// Status line announcing that the launcher is about to download the
+    /// adapter package (npx/bunx cache miss). `None` when nothing is fetched.
+    pub download_notice: Option<String>,
 }
 
 impl AcpAgentConfig {
@@ -790,30 +804,39 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
     agents
 }
 
-/// Remove stale `@zed-industries/claude-agent-acp*` and `codex-acp*` entries
-/// from bun's install cache. These packages were renamed to the
-/// `@agentclientprotocol` scope but leftover cache entries under the old scope
-/// can interfere with resolution.
-fn clean_stale_acp_cache(cache_dir: &std::path::Path) {
-    let zed_scope = cache_dir.join("@zed-industries");
-    let entries = match std::fs::read_dir(&zed_scope) {
-        Ok(entries) => entries,
-        Err(_) => return,
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if name.starts_with("claude-agent-acp") || name.starts_with("codex-acp") {
-            let path = entry.path();
-            tracing::info!("removing stale ACP cache entry: {}", path.display());
-            if let Err(e) = std::fs::remove_dir_all(&path) {
-                tracing::warn!(
-                    "failed to remove stale ACP cache entry {}: {e}",
-                    path.display()
-                );
-            }
-        }
+/// Resolve aliases after checking configured slugs, which may deliberately shadow an alias.
+pub fn resolve_agent_slug(name: &str) -> String {
+    registered_slug(name, &get_registry())
+}
+
+fn registered_slug(name: &str, registry: &[RegisteredAgent]) -> String {
+    let normalized = name.to_lowercase();
+    if registry.iter().any(|entry| entry.slug == normalized) {
+        return normalized;
     }
+    AgentKind::from_slug(&normalized).map_or(normalized, |kind| kind.slug().to_owned())
+}
+
+/// Resolve the launch identity and its saved model with the same registry.
+pub fn resolve_agent_selection(
+    requested: &str,
+    defaults: &HashMap<String, String>,
+) -> (String, Option<String>) {
+    let registry = get_registry();
+    let agent = registered_slug(requested, &registry);
+    let model = defaults
+        .get(&agent)
+        .or_else(|| {
+            // Older clients wrote the spelling used to launch the agent. When several
+            // old spellings disagree, choose consistently, regardless of the current spelling.
+            defaults
+                .iter()
+                .filter(|(key, _)| registered_slug(key, &registry) == agent)
+                .min_by_key(|(key, _)| *key)
+                .map(|(_, model)| model)
+        })
+        .cloned();
+    (agent, model)
 }
 
 /// Get ACP agent configuration for a given agent name
@@ -828,12 +851,78 @@ fn clean_stale_acp_cache(cache_dir: &std::path::Path) {
 /// # Errors
 /// Returns error if agent_name is not recognized
 pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
-    // Normalize agent name: lowercase
-    let normalized = agent_name.to_lowercase();
+    get_agent_launch_config(agent_name, None)
+}
+
+/// Resolve the command and an optional named API connection together.
+pub fn get_agent_launch_config(
+    agent_name: &str,
+    binding: Option<&nori_config::token_providers::TokenProvider>,
+) -> Result<AcpAgentConfig> {
+    let mut config = agent_command(agent_name, binding.is_none())?;
+    let Some(binding) = binding else {
+        return Ok(config);
+    };
+    use nori_config::token_providers::Protocol;
+    binding.validate()?;
+    let mut binding = binding.clone();
+    binding.protocol = binding.protocol_for(&config.provider_slug)?;
+    let child_key = match config.builtin_kind {
+        Some(AgentKind::Codex) => {
+            anyhow::ensure!(
+                binding.protocol == Protocol::OpenaiResponses,
+                "Codex requires openai-responses"
+            );
+            crate::token_launch::configure_codex(&mut config, &binding);
+            crate::token_launch::CHILD_KEY.to_owned()
+        }
+        Some(AgentKind::Pi) => binding.env_key.clone(),
+        _ => anyhow::bail!("this agent has no named token provider launch adapter"),
+    };
+    Ok(AcpAgentConfig {
+        auth_hint: format!("Check the credential referenced by {}.", binding.env_key),
+        token_provider: Some(crate::token_provider::BoundConnection {
+            connection: binding,
+            child_key,
+        }),
+        ..config
+    })
+}
+
+/// Resolve the launch command, then apply `NORI_ACP_COMMAND_<SLUG>` /
+/// `[acp_adapters]` overrides (see `crate::adapter_launch`).
+fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentConfig> {
+    let slug = resolve_agent_slug(agent_name);
+    let command_override = crate::adapter_launch::command_override(&slug)?;
+    let pin = if command_override.is_some() {
+        None
+    } else {
+        crate::adapter_launch::version_pin(&slug)
+    };
+    let mut config = default_agent_command(&slug, use_native_config, pin.as_deref())?;
+    if let Some((command, args)) = command_override {
+        config.install_hint = format!("ensure '{command}' is in your PATH");
+        config.command = command;
+        config.args = args;
+        config.download_notice = None;
+    }
+    Ok(config)
+}
+
+fn default_agent_command(
+    normalized: &str,
+    use_native_config: bool,
+    pin: Option<&str>,
+) -> Result<AcpAgentConfig> {
+    let pin_error = |display: &str| {
+        anyhow::anyhow!(
+            "acp_adapters.{normalized}.version is set, but {display} is not launched from an npm package Nori resolves; remove the version or set acp_adapters.{normalized}.command"
+        )
+    };
 
     // Try mock agents first (only available in debug builds)
     #[cfg(debug_assertions)]
-    if let Some(config) = get_mock_agent_config(&normalized) {
+    if let Some(config) = get_mock_agent_config(normalized) {
         return Ok(config);
     }
 
@@ -842,30 +931,56 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
     if let Some(registered) = registry.iter().find(|a| a.slug == normalized)
         && let Some(ref dist) = registered.distribution
     {
+        if pin.is_some() {
+            return Err(pin_error(&registered.name));
+        }
         // Custom distribution: use the resolved distribution directly
-        let (command, args, env) = match dist {
-            ResolvedDistribution::Local { command, args, env } => {
-                (command.clone(), args.clone(), env.clone())
-            }
+        let (command, args, env, launch) = match dist {
+            ResolvedDistribution::Local {
+                command,
+                args,
+                env,
+                launch,
+            } => (command.clone(), args.clone(), env.clone(), launch.clone()),
             ResolvedDistribution::Npx { package, args } => {
                 let mut full_args = vec![package.clone()];
                 full_args.extend(args.iter().cloned());
-                ("npx".to_string(), full_args, HashMap::new())
+                (
+                    "npx".to_string(),
+                    full_args,
+                    HashMap::new(),
+                    Default::default(),
+                )
             }
             ResolvedDistribution::Bunx { package, args } => {
                 let mut full_args = vec![package.clone()];
                 full_args.extend(args.iter().cloned());
-                ("bunx".to_string(), full_args, HashMap::new())
+                (
+                    "bunx".to_string(),
+                    full_args,
+                    HashMap::new(),
+                    Default::default(),
+                )
             }
             ResolvedDistribution::Pipx { package, args } => {
                 let mut full_args = vec!["run".to_string(), package.clone()];
                 full_args.extend(args.iter().cloned());
-                ("pipx".to_string(), full_args, HashMap::new())
+                (
+                    "pipx".to_string(),
+                    full_args,
+                    HashMap::new(),
+                    Default::default(),
+                )
             }
             ResolvedDistribution::Uvx { package, args } => {
                 let mut full_args = vec![package.clone()];
                 full_args.extend(args.iter().cloned());
-                ("uvx".to_string(), full_args, HashMap::new())
+                (
+                    "uvx".to_string(),
+                    full_args,
+                    HashMap::new(),
+                    Default::default(),
+                )
             }
         };
 
@@ -888,7 +1003,11 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
         };
 
         return Ok(AcpAgentConfig {
+            owned_runtime: None,
+            launch,
+            token_provider: None,
             agent: registered.kind.unwrap_or(AgentKind::ClaudeCode),
+            builtin_kind: None,
             provider_slug: registered.slug.clone(),
             command,
             args,
@@ -901,62 +1020,102 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
             display_name: registered.name.clone(),
             install_hint,
             model_injection: registered.model_injection.clone(),
+            download_notice: None,
         });
     }
 
     // Try to parse as a built-in AgentKind (auto-detection path)
-    if let Some(agent) = AgentKind::from_slug(&normalized) {
-        let package_manager = detect_preferred_package_manager();
-
-        if matches!(agent, AgentKind::ClaudeCode | AgentKind::Codex)
-            && package_manager == PackageManager::Bun
-        {
-            let cache_dir = std::env::var("BUN_INSTALL_CACHE_DIR")
-                .map(std::path::PathBuf::from)
-                .or_else(|_| {
-                    std::env::var("BUN_INSTALL")
-                        .map(|p| std::path::PathBuf::from(p).join("install/cache"))
-                })
-                .unwrap_or_else(|_| {
-                    dirs::home_dir()
-                        .unwrap_or_default()
-                        .join(".bun/install/cache")
-                });
-            clean_stale_acp_cache(&cache_dir);
-        }
-
-        let (command, args) = match agent {
-            // Claude and Codex use external ACP adapters
-            AgentKind::ClaudeCode | AgentKind::Codex => (
-                package_manager.command().to_string(),
-                vec![agent.acp_package().to_string()],
-            ),
-            // Gemini has native ACP support via --experimental-acp flag
-            AgentKind::Gemini => (
-                package_manager.command().to_string(),
-                vec![
-                    agent.acp_package().to_string(),
-                    "--experimental-acp".to_string(),
-                ],
-            ),
+    if let Some(agent) = AgentKind::from_slug(normalized) {
+        let package = match agent {
+            AgentKind::ClaudeCode => Some("@agentclientprotocol/claude-agent-acp"),
+            AgentKind::Codex => Some("@agentclientprotocol/codex-acp"),
+            AgentKind::GrokBuild => Some("@xai-official/grok"),
+            AgentKind::Pi => Some("pi-acp"),
+            AgentKind::Gemini | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Hermes => None,
         };
-
-        // Workaround: the v0.30.0+ Claude ACP adapter resolves its native
-        // binary via require.resolve() on platform-specific optional deps.
-        // On glibc Linux, bunx installs both musl and glibc variants; the
-        // adapter tries musl first, require.resolve succeeds (file exists),
-        // but execution fails (no musl loader). Point CLAUDE_CODE_EXECUTABLE
-        // at the system binary to bypass the broken resolution.
-        let mut env = HashMap::new();
-        if agent == AgentKind::ClaudeCode
-            && let Ok(path) = which::which("claude")
-        {
-            env.insert(
-                "CLAUDE_CODE_EXECUTABLE".to_string(),
-                path.to_string_lossy().to_string(),
+        let package = match (package, pin) {
+            (Some(package), pin) => Some(format!("{package}@{}", pin.unwrap_or("latest"))),
+            (None, Some(_)) => return Err(pin_error(agent.display_name())),
+            (None, None) => None,
+        };
+        let mut download_notice = None;
+        let (command, args, install_hint) = if agent == AgentKind::Pi {
+            let specs = [
+                format!("pi-acp@{}", pin.unwrap_or("latest")),
+                "@earendil-works/pi-coding-agent@latest".to_string(),
+            ];
+            download_notice = crate::adapter_launch::download_notice(PackageManager::Npm, &specs);
+            let [adapter, coding_agent] = specs;
+            let mut args = vec!["--yes".to_string()];
+            if pin.is_some() {
+                args.push("--prefer-offline".to_string());
+            }
+            // pi-acp runs `pi` from PATH; npx puts both packages' binaries there.
+            args.extend([
+                format!("--package={adapter}"),
+                format!("--package={coding_agent}"),
+                "pi-acp".to_string(),
+            ]);
+            (
+                PackageManager::Npm.command(),
+                args,
+                "install npm and make `npx` available on PATH".to_string(),
+            )
+        } else if let Some(package) = package {
+            // Grok relies on npm's postinstall to select the package's native
+            // binary. Bun skips the hook and can run an older ~/.grok/bin/grok.
+            let manager = if agent == AgentKind::GrokBuild {
+                PackageManager::Npm
+            } else {
+                detect_preferred_package_manager()
+            };
+            let mut args = Vec::new();
+            if manager == PackageManager::Npm {
+                args.push("--yes".to_string());
+                if pin.is_some() {
+                    args.push("--prefer-offline".to_string());
+                }
+            }
+            download_notice =
+                crate::adapter_launch::download_notice(manager, std::slice::from_ref(&package));
+            args.push(package);
+            if agent == AgentKind::GrokBuild {
+                args.extend(["agent".to_string(), "stdio".to_string()]);
+            }
+            let hint = format!(
+                "install {} and make `{}` available on PATH",
+                manager.display_name(),
+                manager.command()
             );
-        }
-        if agent == AgentKind::Codex {
+            (manager.command(), args, hint)
+        } else if agent == AgentKind::OpenCode {
+            (
+                "opencode",
+                vec!["acp".to_string()],
+                "install OpenCode and add `opencode` to PATH".to_string(),
+            )
+        } else if agent == AgentKind::Cursor {
+            (
+                cursor_command(),
+                vec!["acp".to_string()],
+                "install the Cursor CLI from https://cursor.com/docs/cli/installation and add `agent` or `cursor-agent` to PATH".to_string(),
+            )
+        } else if agent == AgentKind::Hermes {
+            (
+                "hermes",
+                vec!["acp".to_string()],
+                "install Hermes Agent with its ACP extra on PATH and run `hermes acp --check`: https://hermes-agent.nousresearch.com/docs/user-guide/features/acp".to_string(),
+            )
+        } else {
+            (
+                "agy",
+                vec!["acp".to_string(), "--disable-telemetry".to_string()],
+                "install Antigravity from https://antigravity.google/cli and add `agy` to PATH"
+                    .to_string(),
+            )
+        };
+        let mut env = HashMap::new();
+        if use_native_config && agent == AgentKind::Codex {
             let ambient_config = std::env::var("CODEX_CONFIG").ok();
             env.insert(
                 "CODEX_CONFIG".to_string(),
@@ -965,9 +1124,13 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
         }
 
         return Ok(AcpAgentConfig {
+            owned_runtime: None,
+            launch: Default::default(),
+            token_provider: None,
             agent,
+            builtin_kind: Some(agent),
             provider_slug: agent.slug().to_string(),
-            command,
+            command: command.to_string(),
             args,
             env,
             provider_info: AcpProviderInfo {
@@ -976,12 +1139,13 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
             },
             auth_hint: agent.auth_hint().to_string(),
             display_name: agent.display_name().to_string(),
-            install_hint: format!("npm install -g {}", agent.npm_package()),
+            install_hint,
             model_injection: agent.model_injection(),
+            download_notice,
         });
     }
 
-    anyhow::bail!("Unknown ACP agent: {agent_name}")
+    anyhow::bail!("Unknown ACP agent: {normalized}")
 }
 
 /// Get the display name for an agent by agent name.
@@ -989,7 +1153,7 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
 /// Returns the human-readable display name if the agent is registered.
 /// Falls back to the agent_name itself if not recognized.
 pub fn get_agent_display_name(agent_name: &str) -> String {
-    let normalized = agent_name.to_lowercase();
+    let normalized = resolve_agent_slug(agent_name);
 
     // Mock agents (debug builds only)
     #[cfg(debug_assertions)]
@@ -1059,7 +1223,11 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
             };
 
             Some(AcpAgentConfig {
+                owned_runtime: None,
+                launch: Default::default(),
+                token_provider: None,
                 agent: AgentKind::ClaudeCode, // Dummy
+                builtin_kind: None,
                 provider_slug: "mock-acp".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
@@ -1077,6 +1245,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                 model_injection: ModelInjection::Env {
                     var: "MOCK_AGENT_INJECTED_MODEL".to_string(),
                 },
+                download_notice: None,
             })
         }
         "mock-model-alt" => {
@@ -1110,7 +1279,11 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
             };
 
             Some(AcpAgentConfig {
+                owned_runtime: None,
+                launch: Default::default(),
+                token_provider: None,
                 agent: AgentKind::ClaudeCode, // Dummy
+                builtin_kind: None,
                 provider_slug: "mock-acp-alt".to_string(),
                 command: exe_path.to_string_lossy().to_string(),
                 args: vec![],
@@ -1128,6 +1301,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                 model_injection: ModelInjection::Env {
                     var: "MOCK_AGENT_INJECTED_MODEL".to_string(),
                 },
+                download_notice: None,
             })
         }
         _ => None,
@@ -1142,6 +1316,72 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
 mod tests {
     use super::*;
     use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn opencode_uses_its_native_acp_command_and_provider_settings() {
+        reset_registry();
+        let config = get_agent_config("opencode").expect("OpenCode is built in");
+        assert_eq!(config.command, "opencode");
+        assert_eq!(config.args, ["acp"]);
+        assert!(config.env.is_empty());
+        assert_eq!(config.model_injection, ModelInjection::None);
+        assert_eq!(config.provider_slug, "opencode");
+        assert!(
+            list_available_agents().iter().any(|entry| {
+                entry.agent_name == "opencode" && entry.display_name == "OpenCode"
+            })
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn builtin_aliases_use_vendor_update_channels() {
+        reset_registry();
+        for (alias, slug, package, extra_args) in [
+            (
+                "claude",
+                "claude-code",
+                "@agentclientprotocol/claude-agent-acp@latest",
+                vec![],
+            ),
+            (
+                "codex-acp",
+                "codex",
+                "@agentclientprotocol/codex-acp@latest",
+                vec![],
+            ),
+            (
+                "grok",
+                "grok-build",
+                "@xai-official/grok@latest",
+                vec!["agent", "stdio"],
+            ),
+        ] {
+            let config = get_agent_config(alias).unwrap();
+            assert_eq!(config.provider_slug, slug);
+            if slug == "grok-build" {
+                assert_eq!(config.command, "npx");
+            }
+            let mut expected = match config.command.as_str() {
+                "npx" => vec!["--yes"],
+                "bunx" => vec![],
+                command => panic!("expected the configured npm or Bun runner, got {command}"),
+            };
+            expected.push(package);
+            expected.extend(extra_args);
+            assert_eq!(config.args, expected);
+        }
+        let google = get_agent_config("antigravity").unwrap();
+        assert_eq!(google.provider_slug, "gemini");
+        assert_eq!(google.command, "agy");
+        assert_eq!(google.args, ["acp", "--disable-telemetry"]);
+        assert!(
+            google
+                .install_hint
+                .contains("https://antigravity.google/cli")
+        );
+    }
 
     #[test]
     fn test_agent_slugs() {
@@ -1246,17 +1486,6 @@ mod tests {
 
         assert_eq!(config.provider_slug, "claude-code");
         assert_eq!(config.agent, AgentKind::ClaudeCode);
-        // Command should be npx or bunx
-        assert!(
-            config.command == "npx" || config.command == "bunx",
-            "Command should be npx or bunx, got: {}",
-            config.command
-        );
-        assert!(
-            config
-                .args
-                .contains(&"@agentclientprotocol/claude-agent-acp@latest".to_string())
-        );
         assert_eq!(config.provider_info.name, "Claude Code ACP");
     }
 
@@ -1266,16 +1495,6 @@ mod tests {
 
         assert_eq!(config.provider_slug, "codex");
         assert_eq!(config.agent, AgentKind::Codex);
-        assert!(
-            config.command == "npx" || config.command == "bunx",
-            "Command should be npx or bunx, got: {}",
-            config.command
-        );
-        // Uses the actively maintained Agent Client Protocol adapter.
-        assert_eq!(
-            config.args,
-            vec!["@agentclientprotocol/codex-acp@latest".to_string()]
-        );
         let codex_config = config
             .env
             .get("CODEX_CONFIG")
@@ -1332,18 +1551,11 @@ mod tests {
     }
 
     #[test]
-    fn gemini_injects_model_via_gemini_model_env() {
-        let mut config = get_agent_config("gemini").expect("gemini config");
-
-        config
-            .inject_model("gemini-2.5-pro")
-            .expect("model injection should succeed");
-
-        assert_eq!(
-            config.env.get("GEMINI_MODEL").map(String::as_str),
-            Some("gemini-2.5-pro"),
-            "the spawned Gemini subprocess must receive the model via GEMINI_MODEL"
-        );
+    fn native_providers_use_the_advertised_acp_model_options() {
+        for name in ["gemini", "grok-build", "opencode"] {
+            let config = get_agent_config(name).unwrap();
+            assert!(!config.supports_model_injection());
+        }
     }
 
     #[test]
@@ -1385,6 +1597,7 @@ mod tests {
             slug: "custom-env".to_string(),
             distribution: AgentDistributionToml {
                 local: Some(LocalDistribution {
+                    launch: Default::default(),
                     command: "/usr/bin/agent".to_string(),
                     args: vec!["acp".to_string()],
                     env: std::collections::HashMap::new(),
@@ -1425,6 +1638,7 @@ mod tests {
             slug: "custom-arg".to_string(),
             distribution: AgentDistributionToml {
                 local: Some(LocalDistribution {
+                    launch: Default::default(),
                     command: "/usr/bin/agent".to_string(),
                     args: vec!["acp".to_string()],
                     env: std::collections::HashMap::new(),
@@ -1464,6 +1678,7 @@ mod tests {
             slug: "custom-none".to_string(),
             distribution: AgentDistributionToml {
                 local: Some(LocalDistribution {
+                    launch: Default::default(),
                     command: "/usr/bin/agent".to_string(),
                     args: vec!["acp".to_string()],
                     env: std::collections::HashMap::from([("K".to_string(), "v".to_string())]),
@@ -1501,14 +1716,7 @@ mod tests {
 
         assert_eq!(config.provider_slug, "gemini");
         assert_eq!(config.agent, AgentKind::Gemini);
-        assert!(
-            config.command == "npx" || config.command == "bunx",
-            "Command should be npx or bunx, got: {}",
-            config.command
-        );
-        assert!(config.args.contains(&"@google/gemini-cli".to_string()));
-        assert!(config.args.contains(&"--experimental-acp".to_string()));
-        assert_eq!(config.provider_info.name, "Gemini ACP");
+        assert_eq!(config.provider_info.name, "Antigravity ACP");
     }
 
     #[test]
@@ -1570,15 +1778,15 @@ mod tests {
     fn test_list_available_agents_debug_build() {
         reset_registry();
         let agents = list_available_agents();
-        // Debug build should have 5 agents: mock, mock-alt, claude-code, codex, gemini
-        assert_eq!(agents.len(), 5, "Debug build should have 5 agents");
+        assert_eq!(agents.len(), AgentKind::all().len() + 2);
 
         let names: Vec<&str> = agents.iter().map(|a| a.display_name.as_str()).collect();
         assert!(names.contains(&"Mock ACP"), "Should have Mock ACP");
         assert!(names.contains(&"Mock ACP Alt"), "Should have Mock ACP Alt");
         assert!(names.contains(&"Claude Code"), "Should have Claude Code");
         assert!(names.contains(&"Codex"), "Should have Codex");
-        assert!(names.contains(&"Gemini"), "Should have Gemini");
+        assert!(names.contains(&"Antigravity"));
+        assert!(names.contains(&"Grok Build"));
     }
 
     #[test]
@@ -1589,7 +1797,8 @@ mod tests {
         // Production agents should always be present
         assert!(names.contains(&"Claude Code"), "Should have Claude Code");
         assert!(names.contains(&"Codex"), "Should have Codex");
-        assert!(names.contains(&"Gemini"), "Should have Gemini");
+        assert!(names.contains(&"Antigravity"));
+        assert!(names.contains(&"Grok Build"));
     }
 
     #[test]
@@ -1617,14 +1826,30 @@ mod tests {
     }
 
     #[test]
+    fn hermes_launches_the_native_acp_server() {
+        for name in ["hermes", "hermes-agent"] {
+            let config = get_agent_config(name).expect("registered Hermes agent");
+            assert_eq!(config.provider_slug, "hermes");
+            assert_eq!(config.display_name, "Hermes Agent");
+            assert_eq!(config.command, "hermes");
+            assert_eq!(config.args, ["acp"]);
+            assert_eq!(config.model_injection, ModelInjection::None);
+            assert!(config.env.is_empty());
+        }
+    }
+
+    #[test]
     fn test_agent_transcript_base_dir() {
         // Each agent should return the correct base directory path relative to home
         assert_eq!(
             AgentKind::ClaudeCode.transcript_base_dir(),
-            ".claude/projects"
+            Some(".claude/projects")
         );
-        assert_eq!(AgentKind::Codex.transcript_base_dir(), ".codex/sessions");
-        assert_eq!(AgentKind::Gemini.transcript_base_dir(), ".gemini/tmp");
+        assert_eq!(
+            AgentKind::Codex.transcript_base_dir(),
+            Some(".codex/sessions")
+        );
+        assert_eq!(AgentKind::Gemini.transcript_base_dir(), None);
     }
 
     // ========================================================================
@@ -1638,13 +1863,18 @@ mod tests {
     }
 
     #[test]
-    fn test_build_default_agents_returns_three_builtins() {
+    fn test_build_default_agents_returns_builtins() {
         let agents = build_default_agents();
-        assert_eq!(agents.len(), 3);
+        assert_eq!(agents.len(), AgentKind::all().len());
         let slugs: Vec<&str> = agents.iter().map(|a| a.slug.as_str()).collect();
         assert!(slugs.contains(&"claude-code"));
         assert!(slugs.contains(&"codex"));
         assert!(slugs.contains(&"gemini"));
+        assert!(slugs.contains(&"grok-build"));
+        assert!(slugs.contains(&"opencode"));
+        assert!(slugs.contains(&"cursor"));
+        assert!(slugs.contains(&"hermes"));
+        assert!(slugs.contains(&"pi"));
     }
 
     #[test]
@@ -1655,7 +1885,7 @@ mod tests {
         let codex = agents.iter().find(|a| a.slug == "codex").unwrap();
         assert_eq!(codex.name, "Codex");
         let gemini = agents.iter().find(|a| a.slug == "gemini").unwrap();
-        assert_eq!(gemini.name, "Gemini");
+        assert_eq!(gemini.name, "Antigravity");
     }
 
     #[test]
@@ -1673,7 +1903,7 @@ mod tests {
     #[test]
     fn test_build_registry_with_no_custom_agents() {
         let registry = build_registry(vec![]).unwrap();
-        assert_eq!(registry.len(), 3);
+        assert_eq!(registry.len(), AgentKind::all().len());
     }
 
     #[test]
@@ -1697,7 +1927,7 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom]).unwrap();
-        assert_eq!(registry.len(), 4);
+        assert_eq!(registry.len(), AgentKind::all().len() + 1);
         let kimi = registry.iter().find(|a| a.slug == "kimi").unwrap();
         assert_eq!(kimi.name, "Kimi");
         assert!(kimi.kind.is_none());
@@ -1713,6 +1943,7 @@ mod tests {
             slug: "claude-code".to_string(),
             distribution: AgentDistributionToml {
                 local: Some(LocalDistribution {
+                    launch: Default::default(),
                     command: "/my/claude".to_string(),
                     args: vec![],
                     env: std::collections::HashMap::new(),
@@ -1725,8 +1956,8 @@ mod tests {
             model_override: None,
         };
         let registry = build_registry(vec![custom_claude]).unwrap();
-        // Should still be 3 agents (override, not add)
-        assert_eq!(registry.len(), 3);
+        // An override keeps the built-in registry size.
+        assert_eq!(registry.len(), AgentKind::all().len());
         let claude = registry.iter().find(|a| a.slug == "claude-code").unwrap();
         assert_eq!(claude.name, "My Claude");
         assert_eq!(claude.context_window_size, Some(300_000));
@@ -1815,6 +2046,7 @@ mod tests {
             slug: "local-test".to_string(),
             distribution: AgentDistributionToml {
                 local: Some(LocalDistribution {
+                    launch: Default::default(),
                     command: "/usr/bin/my-agent".to_string(),
                     args: vec!["--mode".to_string(), "acp".to_string()],
                     env: std::collections::HashMap::from([("KEY".to_string(), "val".to_string())]),
@@ -1895,53 +2127,7 @@ mod tests {
 
     #[test]
     fn test_claude_code_context_window_is_1m() {
-        assert_eq!(AgentKind::ClaudeCode.context_window_size(), 1_000_000);
-    }
-
-    #[test]
-    fn test_clean_stale_acp_cache_removes_zed_entries() {
-        let cache_dir = tempfile::tempdir().unwrap();
-        let zed_scope = cache_dir.path().join("@zed-industries");
-        std::fs::create_dir_all(zed_scope.join("claude-agent-acp@0.23.1@@@1")).unwrap();
-        std::fs::create_dir_all(zed_scope.join("claude-agent-acp@0.20.0@@@1")).unwrap();
-        std::fs::create_dir_all(zed_scope.join("codex-acp@0.5.0@@@1")).unwrap();
-        // Unrelated package under the same scope should be preserved
-        std::fs::create_dir_all(zed_scope.join("some-other-package@1.0.0@@@1")).unwrap();
-
-        let acp_scope = cache_dir.path().join("@agentclientprotocol");
-        std::fs::create_dir_all(acp_scope.join("claude-agent-acp@0.70.0@@@1")).unwrap();
-        std::fs::create_dir_all(acp_scope.join("codex-acp@0.10.0@@@1")).unwrap();
-
-        clean_stale_acp_cache(cache_dir.path());
-
-        // Stale @zed-industries entries should be gone
-        assert!(!zed_scope.join("claude-agent-acp@0.23.1@@@1").exists());
-        assert!(!zed_scope.join("claude-agent-acp@0.20.0@@@1").exists());
-        assert!(!zed_scope.join("codex-acp@0.5.0@@@1").exists());
-        // Unrelated package should be preserved
-        assert!(zed_scope.join("some-other-package@1.0.0@@@1").exists());
-        // @agentclientprotocol entries should be untouched
-        assert!(acp_scope.join("claude-agent-acp@0.70.0@@@1").exists());
-        assert!(acp_scope.join("codex-acp@0.10.0@@@1").exists());
-    }
-
-    #[test]
-    fn test_clean_stale_acp_cache_noop_when_no_zed_scope() {
-        let cache_dir = tempfile::tempdir().unwrap();
-        let acp_scope = cache_dir.path().join("@agentclientprotocol");
-        std::fs::create_dir_all(acp_scope.join("claude-agent-acp@0.70.0@@@1")).unwrap();
-
-        // Should not panic or error when @zed-industries doesn't exist
-        clean_stale_acp_cache(cache_dir.path());
-
-        assert!(acp_scope.join("claude-agent-acp@0.70.0@@@1").exists());
-    }
-
-    #[test]
-    fn test_clean_stale_acp_cache_noop_when_cache_dir_missing() {
-        let cache_dir = std::path::PathBuf::from("/tmp/nonexistent-bun-cache-test-dir");
-        // Should not panic or error
-        clean_stale_acp_cache(&cache_dir);
+        assert_eq!(AgentKind::ClaudeCode.context_window_size(), Some(1_000_000));
     }
 
     #[test]

@@ -109,13 +109,6 @@ pub(crate) enum AppEvent {
         generation: SessionGeneration,
     },
 
-    /// Manage the app-owned remote ACP listener lifecycle.
-    RemoteControlRequested(crate::remote_control::RemoteControlRequest),
-
-    /// The user accepted the one-shot dangerous-exposure warning for an
-    /// explicit non-loopback address.
-    ConfirmRemoteControlExplicit(std::net::SocketAddr),
-
     /// An agent connection finished initialization and optional session
     /// listing. The successful value still owns that exact live connection.
     AgentPrepared {
@@ -194,7 +187,7 @@ pub(crate) enum AppEvent {
 
     InsertHistoryCell(Box<dyn HistoryCell>),
 
-    /// Open the list of sessions (`[features] multi_session`).
+    /// Open the list of sessions.
     OpenSessionList,
 
     ResolveDelegation {
@@ -283,6 +276,20 @@ pub(crate) enum AppEvent {
 
     /// Update whether the full access warning prompt has been acknowledged.
     UpdateFullAccessWarningAcknowledged(bool),
+
+    /// Open the `/api-key` picker with the agent's detected sign-in.
+    OpenApiKeyPreference(crate::chatwidget::api_key::ApiKeyPreference),
+
+    /// Warn that preferring the saved API key bills the API account instead
+    /// of the agent's subscription, and ask once.
+    OpenApiKeyBillingConfirmation(crate::chatwidget::api_key::ApiKeyPreference),
+
+    /// Save `[auth.<agent>]` in config.toml.
+    PersistApiKeyPreference {
+        agent: String,
+        prefer_api_key: bool,
+        api_billing_confirmed: bool,
+    },
 
     /// Update whether the world-writable directories warning has been acknowledged.
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -403,20 +410,6 @@ pub(crate) enum AppEvent {
     LoginComplete {
         /// Whether the login was successful
         success: bool,
-    },
-
-    /// Output from external CLI login process (e.g., gemini login)
-    ExternalCliLoginOutput {
-        /// Raw output string from the CLI (ANSI codes stripped)
-        data: String,
-    },
-
-    /// External CLI login process completed
-    ExternalCliLoginComplete {
-        /// Whether the process exited successfully (exit code 0)
-        success: bool,
-        /// The agent name for display purposes
-        agent_name: String,
     },
 
     /// Set the TUI vertical footer config setting.
@@ -552,6 +545,30 @@ pub(crate) enum AppEvent {
         success: bool,
         /// Filtered output on success, or error message on failure.
         message: String,
+    },
+
+    /// Result of listing skillsets via the skillsets v2 CLI
+    /// (`[features] skillsets_v2`).
+    SkillsetV2ListResult {
+        /// The project the listing describes and changes will target.
+        project: crate::nori::skillset_picker_v2::SkillsetProject,
+        /// The listing, or a message explaining why it failed.
+        result: Result<nori_skillsets::SkillsetList, String>,
+    },
+
+    /// Request to layer (`layer == true`) or unlayer a skillset in `project`
+    /// via skillsets v2.
+    ChangeSkillset {
+        name: String,
+        project: PathBuf,
+        layer: bool,
+    },
+
+    /// Result of a `ChangeSkillset` request.
+    SkillsetChangeResult {
+        name: String,
+        layer: bool,
+        result: Result<nori_skillsets::LayerChange, String>,
     },
 
     /// The skillset picker was dismissed without selection. When agent spawn was

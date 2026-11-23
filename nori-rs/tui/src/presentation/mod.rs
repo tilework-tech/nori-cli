@@ -476,6 +476,7 @@ impl ClientEventNormalizer {
                 })]
             }
             acp::SessionUpdate::SessionInfoUpdate(update) => {
+                let update = &without_cli_context_title(update);
                 if let Some(message) = nori_connection_message(update) {
                     vec![ClientEvent::SessionUpdateInfo(SessionUpdateInfo {
                         kind: SessionUpdateKind::SessionInfo,
@@ -1075,6 +1076,39 @@ fn message_delta_from_chunk(
         message_id: chunk.message_id.as_ref().map(ToString::to_string),
         delta,
     })
+}
+
+/// First line of the context envelope Nori CLI prepends to a session's first
+/// prompt (`tui/session_context*.md`).
+const CLI_CONTEXT_SOURCE: &str = "Source: this message is from Nori CLI.";
+
+/// Agents such as Pi title a session from its first prompt, which starts with
+/// Nori's context envelope. Show only what follows the envelope, and no title
+/// when the agent cut the title off inside it.
+fn without_cli_context_title(update: &acp::SessionInfoUpdate) -> acp::SessionInfoUpdate {
+    let Some(Some(title)) = update.title.as_opt_ref() else {
+        return update.clone();
+    };
+    let Some(body) = title.trim_start().strip_prefix("<context>") else {
+        return update.clone();
+    };
+    let body = body.trim_start();
+    let first_line = body.lines().next().unwrap_or_default().trim_end();
+    let from_cli = body.starts_with(CLI_CONTEXT_SOURCE)
+        || (!first_line.is_empty() && CLI_CONTEXT_SOURCE.starts_with(first_line));
+    if !from_cli {
+        return update.clone();
+    }
+    let prompt = body
+        .split_once("</context>")
+        .map(|(_, prompt)| prompt.trim())
+        .filter(|prompt| !prompt.is_empty());
+    let mut cleaned = update.clone();
+    cleaned.title = match prompt {
+        Some(prompt) => MaybeUndefined::Value(prompt.to_string()),
+        None => MaybeUndefined::Undefined,
+    };
+    cleaned
 }
 
 fn session_update_info_from_session_info(update: &acp::SessionInfoUpdate) -> SessionUpdateInfo {

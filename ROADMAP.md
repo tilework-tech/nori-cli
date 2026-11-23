@@ -15,8 +15,9 @@ At a high level:
 done                          now                          next                         later
  ●─────────────────────────────●────────────────────────────●────────────────────────────●──────────────→
 core loop                     session forking              session config               agent auth
-local agent registry          images/resources             official agent registry      multi-session
-session lifecycle             message queue                                             unstable ACP
+local agent registry          images/resources             official agent registry      unstable ACP
+session lifecycle             message queue
+multi-session
 ```
 
 | Product area          | Status     | User value                         | Next work                                                      | Maintainer note                                                         |
@@ -31,8 +32,8 @@ session lifecycle             message queue                                     
 | Session configuration | `✅ done`  | agents can expose useful controls  | custom options like thinking/effort level and plan/build modes | keep this driven by agent-provided config, not hardcoding               |
 | Agent discovery       | `🟡 next`  | custom agents are easier to find   | support the official ACP Registry                              | local config registration already works                                 |
 | Agent-driven auth     | `⚪ later` | agents can own login/logout flows  | auth methods and `logout`                                      | wait until lifecycle, config, and registry are settled                  |
-| Multi-session UX      | `⚪ later` | users can move across active work  | multi-session support and navigation                           | keep this separate from single-session lifecycle cleanup                |
-| Steering messages     | `✅ done`  | users can redirect an active turn  | allowlist new adapter versions after checks                    | adapter `_session/steering` extension; others queue                     |
+| Multi-session UX      | `✅ done`  | users can move across active work  | keep session navigation stable                                 | always on since #717: `/sessions`, session-switch keys, `[tui] max_sessions` |
+| Steering messages     | `✅ done`  | users can redirect an active turn  | allowlist new adapter versions after checks                    | Nori's adapter `_session/steering` follow-up extension, only for allowlisted adapter versions (Claude adapter 0.102.0, 0.108.1, 0.109.0; Codex adapter 2.7.0, 2.8.0; `nori-rs/harness/src/follow_up.rs`); other versions queue, and default `@latest` launches can resolve outside the allowlist, so pin with `[acp_adapters.<slug>] version` |
 | Subagent UX           | `⚪ later` | group subagent updates             | wait for ACP support, then design Nori behavior                | unsupported by ACP today                                                |
 | Experimental ACP      | `⚪ later` | adopt new protocol ideas carefully | elicitation, NES, `session/delete`, provider endpoint work     | do not let draft features complicate the core client                    |
 
@@ -47,7 +48,7 @@ This table keeps the roadmap grounded in the current ACP spec and draft surface.
 | Session lifecycle     | `session/resume`                              | unstable landed              | done                  |
 | Session lifecycle     | `session/fork`                                | unstable landed              | branch-at-head done; fork-at-message blocked on upstream PR #629 |
 | Session lifecycle     | `session/close`                               | unstable landed              | handled               |
-| Session lifecycle     | `session/delete`                              | draft only                   | not planned near term |
+| Session lifecycle     | `session/delete`                              | stable                       | served by `nori host`; not sent to agents |
 | Session lifecycle     | undo, rewind, checkpoints                     | not first-class ACP today    | local only            |
 | Session metadata      | `session_info_update`, context/usage metadata | stable + unstable landed     | done                  |
 | Session metadata      | `messageId` and `userMessageId`               | unstable landed              | partial               |
@@ -71,6 +72,6 @@ This table keeps the roadmap grounded in the current ACP spec and draft surface.
 
 ## Notes
 
-- This reflects our current understanding as of April 2026.
+- This reflects our understanding as of April 2026. The Multi-session UX and Steering messages rows and the `session/delete` appendix row were checked against `main` on 2026-11-23; the other rows were not re-checked.
 - "Done" means done enough for initial usage within Nori, not necessarily that every implementation detail is perfect.
 - We will keep preferring fewer special cases and more native ACP behavior as we iterate.

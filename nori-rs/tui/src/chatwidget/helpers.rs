@@ -192,7 +192,8 @@ impl ChatWidget {
     /// first frame already shows them instead of leaving every segment blank
     /// until the background refresh lands.
     pub(crate) fn seed_system_info(&mut self) {
-        self.bottom_pane.seed_system_info(&self.config.cwd);
+        self.bottom_pane
+            .seed_system_info(&self.config.cwd, self.config.skillsets_v2);
     }
 
     /// Update system info in the footer (for background refresh).
@@ -323,10 +324,6 @@ impl ChatWidget {
                 tracing::warn!(%error, "failed to shut down replaced harness session");
             }
         });
-    }
-
-    pub(crate) fn harness_handle(&self) -> Option<HarnessHandle> {
-        self.harness_handle.clone()
     }
 
     pub(crate) fn submit_harness_action(&self, action: crate::app_event::HarnessAction) {

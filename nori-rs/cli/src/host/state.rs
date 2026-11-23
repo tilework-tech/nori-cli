@@ -79,6 +79,28 @@ impl HostFiles {
         Ok(())
     }
 
+    /// Publish `host.json`, the single discovery file of the host contract,
+    /// by writing a private temporary file and renaming it into place.
+    pub fn publish_discovery(
+        &self,
+        discovery: &nori_protocol::HostDiscovery,
+    ) -> anyhow::Result<()> {
+        let temporary = self.directory.join("host.json.tmp");
+        let mut file = private_open(&temporary, true)?;
+        file.set_len(0)?;
+        file.write_all(&serde_json::to_vec_pretty(discovery)?)?;
+        file.sync_all()?;
+        std::fs::rename(&temporary, self.directory.join("host.json"))?;
+        Ok(())
+    }
+
+    /// The published `host.json`, read without touching the host lock;
+    /// `None` when it is missing or unreadable.
+    pub fn read_discovery(&self) -> Option<nori_protocol::HostDiscovery> {
+        let file = private_open(&self.directory.join("host.json"), false).ok()?;
+        serde_json::from_reader(file).ok()
+    }
+
     pub fn new_token(&self) -> anyhow::Result<String> {
         let token = format!(
             "{}{}",

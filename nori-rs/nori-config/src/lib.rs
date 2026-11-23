@@ -3,13 +3,18 @@
 //! Provides a minimal, standalone configuration system for ACP-only mode.
 //! Configuration is loaded from `~/.nori/cli/config.toml`.
 
+mod auth;
 mod config_types;
 mod edits;
 mod git_root;
+pub mod harness_compat;
+mod legacy_pi;
 mod loader;
 mod policy;
+pub mod token_providers;
 mod types;
 
+pub use auth::AgentAuthPreference;
 pub use config_types::EnvironmentVariablePattern;
 pub use config_types::McpServerConfig;
 pub use config_types::McpServerTransportConfig;
@@ -27,6 +32,8 @@ pub use loader::find_nori_home;
 pub use policy::AskForApproval;
 pub use policy::SandboxPolicy;
 pub use policy::WritableRoot;
+pub use types::AGENT_RUNTIME_ENV;
+pub use types::AcpAdapterToml;
 pub use types::AcpProxyConfig;
 pub use types::AcpProxyConfigToml;
 pub use types::AgentConfigToml;
@@ -35,6 +42,7 @@ pub use types::AutoWorktree;
 pub use types::BrowserProfileMode;
 pub use types::CloudConfigToml;
 pub use types::DEFAULT_AGENT;
+pub use types::DEFAULT_MAX_CLIENTS;
 pub use types::DedicatedRoots;
 pub use types::FeaturesToml;
 pub use types::FileManager;
@@ -49,11 +57,13 @@ pub use types::FooterSegmentConfigToml;
 pub use types::HistoryPersistence;
 pub use types::HooksConfigToml;
 pub use types::HostConfig;
+pub use types::HostDefaultMode;
 pub use types::HotkeyAction;
 pub use types::HotkeyBinding;
 pub use types::HotkeyConfig;
 pub use types::HotkeyConfigToml;
 pub use types::LocalDistribution;
+pub use types::LocalLaunchOptions;
 pub use types::ModelOverrideToml;
 pub use types::NoriConfig;
 pub use types::NoriConfigOverrides;
@@ -70,6 +80,7 @@ pub use types::TerminalNotifications;
 pub use types::ToolOutput;
 pub use types::TuiConfig;
 pub use types::VimEnterBehavior;
+pub use types::env_names_equal;
 pub use types::resolve_hook_paths;
 
 #[cfg(test)]

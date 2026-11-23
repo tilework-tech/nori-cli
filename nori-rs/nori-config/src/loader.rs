@@ -94,6 +94,15 @@ impl NoriConfig {
                 _ => None,
             })
             .unwrap_or(false);
+        // Keep command-line precedence until the registry can resolve custom agent aliases.
+        // A whole-table assignment replaces every dotted assignment before it.
+        let default_model_override_keys = overrides
+            .raw_overrides
+            .iter()
+            .rev()
+            .take_while(|(path, _)| path != "default_models")
+            .filter_map(|(path, _)| path.strip_prefix("default_models.").map(str::to_owned))
+            .collect();
         let NoriConfigOverrides {
             agent: agent_override,
             sandbox_mode: sandbox_mode_override,
@@ -210,7 +219,7 @@ impl NoriConfig {
                 .features
                 .enable_experimental_windows_sandbox
                 .unwrap_or(false),
-            multi_session: toml.features.multi_session.unwrap_or(false),
+            skillsets_v2: toml.features.skillsets_v2.unwrap_or(false),
             shell_environment_policy: toml.shell_environment_policy.into(),
             active_project,
             notices: toml.notice,
@@ -285,8 +294,16 @@ impl NoriConfig {
             async_post_tool_call_hooks,
             async_pre_agent_response_hooks,
             async_post_agent_response_hooks,
+            agent_token_providers: crate::token_providers::resolve_bindings(
+                &toml.token_providers,
+                toml.agent_token_providers,
+            )?,
+            token_providers: toml.token_providers,
             default_models: toml.default_models,
+            auth: toml.auth,
+            default_model_override_keys,
             agents: toml.agents,
+            acp_adapters: toml.acp_adapters,
             cloud_broker_url: toml.cloud.broker_url,
         })
     }
@@ -303,6 +320,14 @@ fn load_toml(
             toml::Value::Table(toml::Table::new())
         } else {
             toml::from_str::<toml::Value>(&content)
+                .map_err(|error| {
+                    if content.contains("token_providers") {
+                        // TOML syntax errors include the offending source line.
+                        anyhow::anyhow!("invalid TOML in provider configuration")
+                    } else {
+                        error.into()
+                    }
+                })
                 .with_context(|| format!("Failed to parse {}", config_path.display()))?
         }
     } else {
@@ -311,6 +336,16 @@ fn load_toml(
 
     for (path, override_value) in raw_overrides {
         apply_toml_override(&mut value, path, override_value.clone());
+    }
+
+    if value
+        .get("token_providers")
+        .is_some_and(toml::Value::is_table)
+    {
+        let mut document = toml::to_string(&value)?.parse::<toml_edit::DocumentMut>()?;
+        crate::legacy_pi::normalize(&mut document)?;
+        value = toml::from_str(&document.to_string())
+            .map_err(|_| anyhow::anyhow!("invalid legacy Pi token provider configuration"))?;
     }
 
     if value.get("profile").is_some() || value.get("profiles").is_some() {

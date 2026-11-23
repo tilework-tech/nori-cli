@@ -11,8 +11,7 @@ Path: @/nori-rs/tui/src/attach
 
 ### How it fits into the larger codebase
 
-- [CLI host dispatch](../../../cli/src/host/docs.md) supplies a resolved endpoint
-  and token after enforcing `multi_session`, plus the attaching terminal's
+- [CLI host dispatch](../../../cli/src/host/docs.md) supplies a resolved endpoint and token, plus the attaching terminal's
   configuration, whose `cwd` (the attaching directory, or `-C`) is where
   `/new` starts sessions. This frontend is separate from the
   local TUI `App`, whose shutdown owns its local sessions.
@@ -221,6 +220,14 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
   failed session with Ctrl+R while retaining its conversation identity.
 - Detach closes only the client. Session close, cancellation, and resume are
   explicit host commands, and a role handoff never closes the old controller.
+  `/close` sends ACP `session/close`, `/cancel` the `session/cancel`
+  notification, and `/resume` and Ctrl+R `session/resume` with the row's
+  folder (`_nori/session/resume` for an older host whose rows carry no
+  folder). A resumed session is attached to this connection, so the host
+  also sends it plain `session/update` notifications and
+  `session/request_permission` requests. Attach ignores both: it renders the
+  subscription and answers permissions through it. A request from the host is
+  never matched against attach's own pending request IDs.
 - Unacknowledged mutations are not replayed after reconnect because the host
   may already have applied them. Recovery clears pending correlations and
   warns when an outcome is uncertain; only the event subscription resumes.

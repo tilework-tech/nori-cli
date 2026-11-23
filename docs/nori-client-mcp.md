@@ -32,7 +32,7 @@ appends it to the session's MCP servers as `McpServer::Http` named
 | Kind      | Name                                                                               |
 | --------- | ---------------------------------------------------------------------------------- |
 | Tools     | `get_goal`, `create_goal`, `update_goal`                                           |
-| Tools     | `delegate` (only with `[features] multi_session = true`)                           |
+| Tools     | `delegate` (only in sessions the session manager runs)                             |
 | Resources | `nori://context/cli`, `nori://context/repo`                                        |
 | Resources | `nori://help/custom-acp-agent`, `nori://help/acp-wire-logs`                        |
 | Prompts   | `register_custom_acp_agent`, `debug_acp_wire_protocol`, `answer_nori_cli_question` |
@@ -50,12 +50,12 @@ Tool contracts:
   the harness, never the agent.
 - `delegate {agent, task}` starts a child session and returns
   `{"delegation": <record>}`. The route exists only when the session runs
-  under the session manager with `[features] multi_session = true` (default
-  `false`); otherwise the tool is not listed. A child of the same agent kind
+  under the session manager (the TUI, `nori host`, and `nori exec`, which
+  runs through a host); otherwise the tool is not listed. A child of the same agent kind
   starts immediately, a different kind waits for user approval, children may
   nest at most two levels below the top session, and children share the
-  session cap. See [remote control](remote-control.md) for the delegation
-  model.
+  session cap. See [remote control](remote-control.md#delegation) for the
+  delegation model.
 - All tool requests reject unknown fields.
 
 Resources are `text/markdown`. An unknown resource URI returns a
@@ -108,8 +108,9 @@ It never exposes `delegate`.
 
 ## First-Prompt Source Envelope
 
-Only the TUI (local and cloud) supplies a source envelope. `nori exec` (both
-plaintext and `--acp`) and the background host send none. When the TUI
+Only the TUI (local and cloud) supplies a source envelope. The background
+host sends none, and so does `nori exec`: one-shot exec runs through a host,
+and `nori exec --acp` is `nori host --stdio`. When the TUI
 supplies one, the harness prepends exactly one `<context>` block to the first
 prompt request and never repeats it. The TUI passes both variants
 (`nori-rs/tui/session_context_http_mcp.md`, `nori-rs/tui/session_context.md`);
@@ -215,8 +216,8 @@ availability from `builtin_commands`, not from raw ACP capabilities.
   MCP and non-MCP variants.
 - `nori-rs/harness/tests/goal_ext_bridge.rs`: extension set/clear against the
   mock agent (`MOCK_AGENT_GOAL_EXT`, `MOCK_AGENT_GOAL_EXT_AUTOCOMPLETE`).
-- `nori-rs/harness/tests/delegation.rs`: `delegate` over a real MCP call, and
-  no child when `multi_session` is off.
+- `nori-rs/harness/tests/delegation.rs`: `delegate` over a real MCP call,
+  approval, depth limit, and the shared session cap.
 - `nori-rs/nori-config/src/loader.rs`: reserved-name rejection.
 - `nori-rs/acp-host/src/registry.rs`: Codex native goals disabled.
 

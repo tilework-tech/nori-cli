@@ -13,7 +13,7 @@ types, agent hosting, sandboxing, authentication, and testing.
 The production path is layered downward:
 
 ```text
-nori-cli / nori-tui / nori-exec
+nori-cli / nori-tui
         -> nori-installed -> authenticated analytics ingress
         -> nori-harness
         -> nori-acp-host
@@ -31,9 +31,9 @@ used in production.
 - `cli/` dispatches the `nori` binary and sandbox debug commands. Its
   [host module](cli/src/host/docs.md) owns the detached process, private token,
   and session manager used by `nori host`, whose sessions each work in
-  their own folder.
-- `exec/` projects the harness into a final-answer plaintext command or a
-  bounded standard ACP-over-stdio agent facade.
+  their own folder. One-shot `nori exec "prompt"` is a thin ACP client of
+  that host: it uses the home's running host when it can and an in-process
+  host otherwise.
 - `tui/` renders events and forwards user intent through typed harness methods.
   Its [attach frontend](tui/src/attach/docs.md) instead consumes host-owned
   envelopes and sends managed commands; closing that terminal never ends the
@@ -41,28 +41,39 @@ used in production.
 - `harness/` owns session orchestration, private reduction, transcripts, goals,
   undo, hooks, worktrees, history, and the embeddable runtime API. Its public
   event stream is an ordered fan-out: one primary frontend receiver plus
-  bounded subscribers such as the remote ACP host. Its `session_manager` module
+  bounded subscribers. Its `session_manager` module
   keeps a registry of live sessions (one agent process each) keyed by
   conversation ID; the TUI starts all of its sessions through it.
 - `acp-host/` owns the client-side ACP SDK, subprocess lifecycle, JSON-RPC
   connection, agent registry, delegated requests, and host-handled filesystem
-  operations. It also owns the optional remote ACP transport: a WebSocket
-  server that serves the running interactive session outward as an ACP Agent
-  through a `HostedAgent` trait that `harness/` implements, preserving the
-  `nori-harness -> nori-acp-host` dependency direction. The TUI owns startup
-  `--remote` and runtime `/remote-control` listener policy around that server
-  (see [the wire contract](../docs/remote-control.md)). A separate authenticated
-  managed listener serves the background host with controller/watcher roles;
-  its server and client retain the same downward dependency boundary.
+  operations. It also owns the remote ACP transport the background host
+  (`nori host`) serves: an authenticated WebSocket at `/acp` (the ACP
+  remote transport's WebSocket profile, `/sessions` as an alias) with
+  controller/watcher roles and a `[host] max_clients` limit, plus stdio and
+  pipe variants, behind a
+  `ManagedAgent` trait that `harness/` implements over its `SessionManager`,
+  preserving the `nori-harness -> nori-acp-host` dependency direction (see
+  [the wire contract](../docs/remote-control.md)). The interactive TUI opens
+  no listener; the earlier, unrelated unauthenticated TUI `/acp` surface
+  (`--remote`, `/remote-control`) was removed.
 - `nori-protocol/` owns no behavior. It exports `nori_protocol::acp`,
   `SessionEvent::{Acp, Nori}`, and the session manager's `SessionEnvelope` and
   `SessionStatus` types.
+- `auth-providers/` (`nori-auth-providers`) detects each built-in agent's sign-in
+  without reading secrets and stores API keys saved per model provider through
+  `nori auth`; the harness passes a saved key at launch only to agents opted
+  in with `[auth.<agent>] prefer_api_key`, so by default an agent's own login
+  wins (see [its docs](auth-providers/docs.md)).
 - `nori-config/` owns CLI configuration and the approval, sandbox, MCP, trust,
   and shell-policy types consumed at runtime.
 - `installed/` keeps local installation/launch state and owns the authenticated
   `nori_agent_session_started` reporter. Frontends attach it to a harness
   handle so one logical session is counted only after its first prompt reaches
   ACP; identity and organization expansion remain server-owned.
+- `skillsets/` is a blocking client for the skillsets v2 CLI (list, layer,
+  unlayer). The TUI's skillset picker and footer use it only with the
+  experimental, off-by-default `[features] skillsets_v2`; otherwise they use
+  the v1 `nori-skillsets` commands. See [its docs](skillsets/docs.md).
 - `sandbox/` and the platform crates implement local sandbox debug execution;
   agent tool execution itself occurs in the external ACP agent.
 
@@ -86,13 +97,15 @@ product crates.
 - ACP capabilities describe an agent facade's operations, not whether the
   deployment is local or cloud. The top-level `nori cloud` launch carries that
   identity explicitly into the TUI.
-- Product analytics distinguishes `interactive`, `cloud`, `exec`, and `acp`
-  session modes. Resume is not a mode or event; a resumed interactive session
+- Product analytics distinguishes `interactive`, `cloud`, and `exec` session
+  modes; the `acp` mode value still exists but nothing sends it since
+  `nori exec --acp` became the headless host. Resume is not a mode or event; a resumed interactive session
   reports only if a new prompt reaches the transport.
-- The outward ACP surfaces are `nori exec --acp` and the interactive remote
-  WebSocket projection. With `multi_session`, exec also exposes managed-session
-  commands. The background host serves authenticated managed envelopes without
-  a legacy ACP projection; its lifetime is independent of connected terminals.
+- The outward ACP surface is the background host's standard ACP face. The
+  host serves it to any number of clients on an authenticated `/acp`
+  WebSocket (alias `/sessions`) and on stdio (`nori host --stdio`, aliased by
+  `nori exec --acp`, which relays to the running host when it can and
+  otherwise runs a private one); its sessions outlive every client.
 - Rust 2024 and strict workspace lints apply. Add only the derive traits a
   public boundary type actually needs.
 

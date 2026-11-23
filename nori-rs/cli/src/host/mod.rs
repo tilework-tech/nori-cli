@@ -1,17 +1,21 @@
 //! Background session host commands and local discovery.
 
+mod acp;
+mod join;
+mod local_stdio;
+mod oneshot;
 mod recovery_control;
 mod recovery_history;
 mod service;
 mod session_lookup;
+mod start;
 mod state;
 mod stdio;
 mod table;
+mod transcripts;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use std::process::Command;
-use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -20,13 +24,18 @@ use anyhow::Context;
 use clap::Parser;
 use nori_config::NoriConfig;
 use nori_config::NoriConfigOverrides;
+use nori_harness::managed_launch::HostSessionIdentity;
 use nori_harness::remote_agent::ManagedClient;
 use nori_harness::remote_agent::ManagedRemoteHost;
 use nori_harness::remote_agent::RemoteAcpServer;
 use nori_harness::session_manager::SessionManager;
 use nori_harness::session_manager::SessionManagerConfig;
+use serde::Deserialize;
 use serde_json::json;
 
+pub(crate) use self::local_stdio::serve as serve_stdio;
+pub(crate) use self::oneshot::Request as OneShot;
+pub(crate) use self::oneshot::run as run_one_shot;
 use self::service::HostService;
 use self::state::HostFiles;
 use self::state::HostState;
@@ -35,21 +44,25 @@ use self::state::HostState;
 pub(crate) struct HostCommand {
     #[command(subcommand)]
     action: Option<HostAction>,
+    /// Agent for this host or its new session.
+    #[arg(long, short = 'a')]
+    agent: Option<String>,
     /// Loopback port; zero chooses an available port.
     #[arg(long, default_value = "7420")]
     port: i32,
     #[arg(long, hide = true)]
     foreground: bool,
-    /// Serve one managed launch as ACP on stdin and stdout, in the foreground,
-    /// until stdin closes. Needs `[host] managed` and `[host.dedicated_roots]`.
-    #[arg(long, requires = "launch", conflicts_with = "foreground")]
+    /// Serve one client as ACP on stdin and stdout, in the foreground, until
+    /// stdin closes. With --launch, serve that one managed launch instead;
+    /// it needs `[host] managed` and `[host.dedicated_roots]`.
+    #[arg(long, conflicts_with = "foreground")]
     stdio: bool,
     /// JSON launch specification for --stdio.
     #[arg(long, value_name = "FILE", requires = "stdio")]
     launch: Option<PathBuf>,
     /// Add this process's environment to the --stdio launch. Variables in the
     /// specification win.
-    #[arg(long, requires = "stdio")]
+    #[arg(long, requires = "launch")]
     inherit_env: bool,
 }
 
@@ -58,7 +71,11 @@ enum HostAction {
     /// Stop the host and all of its sessions.
     Stop,
     /// List sessions in a flat table, plain when piped.
-    Ls,
+    Ls {
+        /// Print session IDs and public credential reference labels as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Start a session on the running host and print its ID.
     New(NewCommand),
 }
@@ -70,7 +87,7 @@ struct NewCommand {
     /// with --host uses its own folder by default.
     #[arg(long)]
     cwd: Option<PathBuf>,
-    /// Agent to run instead of the host's default.
+    /// Agent to run: claude-code, codex, gemini (Antigravity), grok-build, opencode, cursor, hermes, pi, or a configured agent.
     #[arg(long)]
     agent: Option<String>,
     /// First prompt to send once the session starts.
@@ -88,6 +105,15 @@ struct NewCommand {
 }
 
 impl HostCommand {
+    pub(crate) fn select_agent(&mut self, root_agent: Option<String>) -> Option<String> {
+        let agent = self.agent.take().or(root_agent);
+        if let Some(HostAction::New(command)) = &mut self.action {
+            command.agent = command.agent.take().or(agent);
+            return None;
+        }
+        agent
+    }
+
     pub(crate) fn needs_config(&self) -> bool {
         self.action.is_none()
     }
@@ -151,10 +177,6 @@ pub(crate) struct AttachCommand {
 }
 
 pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        config.multi_session,
-        "nori attach requires [features] multi_session = true"
-    );
     let mut refresh_local_token = None;
     let (endpoint, token) = if let Some(endpoint) = command.host {
         let path = command.token_file.context("--token-file is required")?;
@@ -212,9 +234,15 @@ pub(crate) async fn run(
     let files = HostFiles::new(&home)?;
     match command.action {
         Some(HostAction::New(new)) => new_session(new, &files).await,
-        Some(HostAction::Ls) => {
+        Some(HostAction::Ls { json }) => {
             let (mut client, _) = connect(&files).await?;
             let listing = client.request("_nori/session/list", json!({})).await?;
+            if json {
+                let sessions = Vec::<HostSessionIdentity>::deserialize(&listing["sessions"])
+                    .context("host returned an invalid session list")?;
+                println!("{}", json!({"sessions":sessions}));
+                return Ok(());
+            }
             let tty = std::io::stdout().is_terminal();
             let width = tty
                 .then(|| crossterm::terminal::size().map_or(80, |(width, _)| usize::from(width)));
@@ -232,12 +260,31 @@ pub(crate) async fn run(
                 println!("No host running.");
                 return Ok(());
             }
-            let (mut client, _) = connect(&files).await?;
-            // Shutdown may close the socket before its reply. Ownership is
-            // released only after session cleanup, so wait for the lock below.
-            client
-                .send(json!({"jsonrpc":"2.0","id":2,"method":"_nori/host/stop","params":{}}))
-                .await?;
+            match connect(&files).await {
+                Ok((mut client, _)) => {
+                    // Shutdown may close the socket before its reply. Ownership is
+                    // released only after session cleanup, so wait for the lock below.
+                    client
+                        .send(
+                            json!({"jsonrpc":"2.0","id":2,"method":"_nori/host/stop","params":{}}),
+                        )
+                        .await?;
+                }
+                // A host at its client limit refuses this connection; the
+                // host holding the lock stops the same way on SIGTERM.
+                #[cfg(unix)]
+                Err(error) => {
+                    let (host, _) = files.read()?;
+                    let pid = libc::pid_t::try_from(host.pid)?;
+                    anyhow::ensure!(
+                        unsafe { libc::kill(pid, libc::SIGTERM) } == 0,
+                        "could not reach the host ({error:#}) or signal it: {}",
+                        std::io::Error::last_os_error()
+                    );
+                }
+                #[cfg(not(unix))]
+                Err(error) => return Err(error),
+            }
             let deadline = Instant::now() + Duration::from_secs(30);
             while files.running()? {
                 anyhow::ensure!(
@@ -249,6 +296,9 @@ pub(crate) async fn run(
             }
             println!("Host stopped.");
             Ok(())
+        }
+        None if command.stdio && command.launch.is_none() => {
+            local_stdio::serve(config.context("host configuration is required")?).await
         }
         None if command.stdio => {
             let (config, overrides) = config.context("host configuration is required")?;
@@ -283,7 +333,7 @@ pub(crate) async fn run(
             )
             .await
         }
-        None => start(&files).await,
+        None => start::start(&files).await,
     }
 }
 
@@ -308,64 +358,6 @@ async fn connect_endpoint(
     })
     .await
     .context("host did not answer")?
-}
-
-async fn start(files: &HostFiles) -> anyhow::Result<()> {
-    if let Ok((_, host)) = connect(files).await {
-        println!("Host already running (pid {})  {}", host.pid, host.endpoint);
-        return Ok(());
-    }
-    let log_path = files.directory.join("host.log");
-    let log = state::private_open(&log_path, true)?;
-    // Append through cloned handles without exposing output pipes to the daemon.
-    use std::io::Seek;
-    let mut log = log;
-    log.seek(std::io::SeekFrom::End(0))?;
-    let mut command = Command::new(std::env::current_exe()?);
-    command
-        .args(std::env::args_os().skip(1))
-        .arg("--foreground")
-        .stdin(Stdio::null())
-        .stdout(log.try_clone()?)
-        .stderr(log);
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        // Only the async-signal-safe syscall runs between fork and exec.
-        unsafe {
-            command.pre_exec(|| {
-                if libc::setsid() == -1 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                Ok(())
-            });
-        }
-    }
-    let mut child = command.spawn().context("could not start host process")?;
-    let deadline = Instant::now() + Duration::from_secs(15);
-    loop {
-        if let Ok((_, host)) = connect(files).await {
-            println!("Host started (pid {})  {}", host.pid, host.endpoint);
-            println!(
-                "Token: {} (owner-only)",
-                files.directory.join("token").display()
-            );
-            return Ok(());
-        }
-        if let Some(status) = child.try_wait()? {
-            anyhow::bail!(
-                "host exited during startup ({status}); check {}",
-                log_path.display()
-            );
-        }
-        if Instant::now() >= deadline {
-            // This is the child we just spawned, not a PID from stale state.
-            let _ = child.kill();
-            let _ = child.wait();
-            anyhow::bail!("host startup timed out; check {}", log_path.display());
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
 }
 
 async fn serve(
@@ -400,6 +392,7 @@ async fn serve(
         )?)
     } else {
         nori_harness::initialize_registry(config.agents.clone())?;
+        nori_harness::set_adapter_launch_overrides(config.acp_adapters.clone())?;
         None
     };
     let manager = SessionManager::new(SessionManagerConfig {
@@ -411,22 +404,41 @@ async fn serve(
     } else {
         None
     };
-    let host = Arc::new(HostService {
-        recovery,
-        launches,
-        managed: ManagedRemoteHost::authenticated_host(manager.clone()),
-        manager,
-        config: Arc::new(config),
-        overrides,
-        stop: tokio::sync::Notify::new(),
-    });
-    let server =
-        RemoteAcpServer::bind_host(format!("127.0.0.1:{port}").parse()?, host.clone(), token)
-            .await?;
-    files.publish(&HostState {
-        endpoint: format!("ws://{}/sessions", server.local_addr()),
-        pid: i64::from(std::process::id()),
-    })?;
+    let max_clients = config.host.max_clients.max(1);
+    let host = host_service(config, overrides, manager, launches, recovery);
+    let server = RemoteAcpServer::bind_host_with_limit(
+        format!("127.0.0.1:{port}").parse()?,
+        host.clone(),
+        token.clone(),
+        max_clients,
+    )
+    .await?;
+    // A managed host keeps its legacy `/sessions` wire; every other host
+    // publishes the ACP remote transport path.
+    let path = if host.launches.is_some() {
+        "sessions"
+    } else {
+        "acp"
+    };
+    let endpoint = format!("ws://{}/{path}", server.local_addr());
+    let pid = i64::from(std::process::id());
+    // `state.json` is what `nori host` waits for, so `host.json` must exist
+    // before it does.
+    if host.launches.is_none() {
+        files.publish_discovery(&nori_protocol::HostDiscovery {
+            endpoint: endpoint.clone(),
+            token,
+            pid,
+            instance_id: host.instance.clone(),
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            contract: nori_protocol::HOST_CONTRACT.to_owned(),
+            started_by: std::env::var("NORI_HOST_STARTED_BY")
+                .ok()
+                .filter(|started_by| !started_by.trim().is_empty())
+                .unwrap_or_else(|| "nori-cli".to_owned()),
+        })?;
+    }
+    files.publish(&HostState { endpoint, pid })?;
     #[cfg(unix)]
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     #[cfg(unix)]
@@ -443,10 +455,64 @@ async fn serve(
     }
     let report = host.manager.shutdown(Duration::ZERO).await;
     std::fs::remove_file(files.directory.join("state.json"))?;
+    match std::fs::remove_file(files.directory.join("host.json")) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
     anyhow::ensure!(
         report.timed_out.is_empty() && report.failed.is_empty(),
         "some sessions did not stop cleanly: {report:?}"
     );
     drop(lock);
     Ok(())
+}
+
+fn host_service(
+    config: NoriConfig,
+    overrides: NoriConfigOverrides,
+    manager: SessionManager,
+    launches: Option<nori_harness::managed_launch::ManagedLaunches>,
+    recovery: Option<recovery_control::RecoveryControl>,
+) -> Arc<HostService> {
+    let settings = acp::config::SettingsStore::open(&config.nori_home);
+    Arc::new(HostService {
+        recovery,
+        launches,
+        managed: ManagedRemoteHost::authenticated_host(manager.clone()),
+        manager,
+        config: Arc::new(config),
+        overrides,
+        stop: tokio::sync::Notify::new(),
+        acp: acp::AcpFace::default(),
+        settings,
+        instance: uuid::Uuid::new_v4().to_string(),
+        deleted: Default::default(),
+        restarts: tokio::sync::Mutex::new(()),
+        mode_changes: tokio::sync::Mutex::new(()),
+    })
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+
+    #[test]
+    fn new_session_uses_the_nearest_explicit_agent() {
+        for (args, expected) in [
+            (vec!["host", "new"], "codex"),
+            (vec!["host", "--agent", "agy", "new"], "agy"),
+            (
+                vec!["host", "--agent", "agy", "new", "--agent", "grok"],
+                "grok",
+            ),
+        ] {
+            let mut host = HostCommand::try_parse_from(args).unwrap();
+            host.select_agent(Some("codex".into()));
+            let Some(HostAction::New(command)) = host.action else {
+                panic!("expected new");
+            };
+            assert_eq!(command.agent.as_deref(), Some(expected));
+        }
+    }
 }

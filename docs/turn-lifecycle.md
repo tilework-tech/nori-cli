@@ -27,6 +27,8 @@ Nori follows ACP v1 (https://agentclientprotocol.com/protocol/v1/prompt-turn):
   None of them may open, complete, or cancel a request on their own authority.
 - A turn is client-owned only on the connection that sent its prompt. That
   ownership never grants cancel or permission rights on another connection.
+  On the background host, cancel and permission answers belong to the
+  controlling connection.
 - Never invent a request ID, and never attribute an unowned update to an
   earlier or later local request.
 
@@ -220,8 +222,10 @@ itself. If the agent does not answer, the harness publishes
 `Agent is slow to cancel. Will force-cancel in 7s…` after 3 s and forces the
 turn to end after 10 s.
 
-A remote cancel names its request ID and cancels only when that ID matches
-the active prompt, so it never cancels a turn started by the local TUI.
+On the background host, `session/cancel` (or `_nori/session/cancel`) from a
+controlling connection cancels the session's active turn, whichever client
+started it; a watching connection's cancel is ignored. The interactive TUI
+serves no remote endpoint, so no remote cancel reaches its harness.
 
 ## Error Categories
 
@@ -255,11 +259,12 @@ failed user prompt. The category picks the user message and the
 
 ## Remote Prompts
 
-Remote prompts (`session/prompt` from a remote-control client, or
-`_nori/session/prompt` from a host controller) use `PromptSubmitIfIdle` and
+Host prompts (`session/prompt` from any ACP client of `nori host`, over
+`/acp`, its `/sessions` alias, or stdio, or `_nori/session/prompt` from
+`nori attach`) use `PromptSubmitIfIdle` and
 never queue. They are rejected as busy with `-32015` when the session is not
 `Idle`, when the queue holds entries and is not paused, or while a steer is
-unsettled. A paused queue does not make the session busy: a remote prompt
+unsettled. A paused queue does not make the session busy: a host prompt
 runs ahead of it and leaves it paused. The controller's
 `_nori/session/follow_up` is the deliberate way to queue remote input (see
 below).
@@ -323,12 +328,14 @@ The harness steers only when the live initialize result has
 | `agentInfo.name` | Versions |
 | --- | --- |
 | `@agentclientprotocol/claude-agent-acp` | 0.102.0, 0.108.1, 0.109.0 |
-| `@agentclientprotocol/codex-acp` | 2.7.0 |
+| `@agentclientprotocol/codex-acp` | 2.7.0, 2.8.0 |
 
 Any other agent or version gets `unsupported_queued`: the input is queued for
 the next turn instead. Default Claude and Codex launches resolve `@latest`
 (`nori-rs/acp-host/src/registry.rs`), so an adapter release can change the
-result without a Nori release.
+result without a Nori release. Pin an allowlisted version with
+`[acp_adapters.<slug>] version`
+(`nori-rs/acp-host/src/adapter_launch.rs`) to keep steering.
 
 ### Receipts
 
@@ -387,8 +394,9 @@ merged into another message or restored into the composer automatically.
 - Taking back the last held user prompt clears the pause.
 - Resume and discard are possible only from the local TUI that owns the
   harness. No other client can edit, resume, or discard the harness queue.
-  `/sessions` subscribers receive `QueueChanged` snapshots, `/acp` drops
-  them, and `nori attach` does not render them.
+  `_nori/session/subscribe` subscribers receive `QueueChanged` snapshots,
+  standard ACP `session/update` streams on the host drop them, and
+  `nori attach` does not render them.
 
 ### Recall, edit, and delete
 
@@ -418,7 +426,7 @@ cannot be taken back.
 
 ### Local queue vs `/managed` queue
 
-| | Local (TUI, harness, `nori host` `/sessions`) | `/managed` relay (`[host] managed = true`) |
+| | Local (TUI, harness, `nori host` `/acp`, `/sessions`, stdio) | `/managed` relay (`[host] managed = true`) |
 | --- | --- | --- |
 | Owner | Session harness reducer | Per-session FIFO in `nori-rs/harness/src/managed_acp/follow_ups.rs` |
 | Pause after interrupt or error | Yes, visible in `QueueSnapshot.paused` | No pause state |
@@ -430,7 +438,7 @@ cannot be taken back.
 
 ## Delegated Child Results
 
-Delegation requires `[features] multi_session = true` (default false). When a
+Delegation is available in every session the session manager runs. When a
 child session finishes, its result returns to the parent as an ordinary
 queued prompt:
 
@@ -442,7 +450,7 @@ queued prompt:
 - The harness retains the delivery until the parent's correlated prompt
   response arrives.
 
-See [remote control](remote-control.md) for delegation controls.
+See [remote control](remote-control.md#delegation) for delegation controls.
 
 ## Load
 
@@ -481,7 +489,7 @@ Reject changes that:
 - treat cancel as immediate idle
 - start queued prompts after a turn that did not end with `end_turn` without
   an explicit resume
-- queue a remote `session/prompt`, or let a remote cancel affect a local turn
+- queue a host `session/prompt`
 - reduce inbound ACP traffic for a session out of order
 
 | Rule | Tests |
@@ -489,7 +497,7 @@ Reject changes that:
 | Phase, cancel, drain, ownership, warnings, assembly | `nori-rs/harness/src/backend/session_reducer/tests.rs` |
 | Ordered inbox; prompt after cancel gets its own response | `nori-rs/acp-host/src/connection/acp_connection_tests.rs` |
 | Prompt echo order and suppression; child exit | `nori-rs/harness/tests/session_event_boundary.rs` |
-| Observer brackets; remote busy and cancel scoping | `nori-rs/harness/tests/remote_host.rs`, `nori-rs/acp-host/tests/remote_ws.rs` |
+| Observer brackets; host busy and cancel | `nori-rs/cli/tests/host_lifecycle/acp_v1.rs`, `nori-rs/cli/tests/standard_acp/mod.rs` |
 | Follow-ups, steering guard, steer timeout | `nori-rs/harness/tests/follow_up.rs`, `nori-rs/harness/src/managed_acp/follow_up_tests.rs` |
 | Queue pause, resume, and reclaim | `nori-rs/harness/tests/queue_pause.rs`, `nori-rs/harness/tests/queue_reclaim.rs` |
 | Delegated results in a busy parent | `nori-rs/harness/tests/delegation.rs` |

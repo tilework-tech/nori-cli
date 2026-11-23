@@ -17,7 +17,6 @@ use futures::AsyncBufReadExt;
 use futures::AsyncWriteExt;
 use futures::StreamExt;
 use futures::io::BufReader;
-use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -72,6 +71,9 @@ fn schema_request_id(id: serde_json::Value) -> RequestId {
 pub struct AcpConnection {
     /// Connection context for sending requests to the agent.
     cx: ConnectionTo<Agent>,
+
+    /// Advertised API-key method for a built-in launched with a key.
+    key_auth_method: Option<&'static str>,
 
     /// Agent capabilities from the initialization handshake.
     agent_capabilities: acp::AgentCapabilities,
@@ -412,6 +414,7 @@ async fn establish_connection(
     Ok(AcpConnection {
         cx,
         agent_capabilities: capabilities,
+        key_auth_method: None,
         initialize_meta,
         initialize_result,
         permissions,
@@ -460,28 +463,68 @@ impl AcpConnection {
             config.args,
             cwd.display()
         );
+        if let Some(notice) = &config.download_notice {
+            tracing::info!("{notice}");
+        }
 
         // --- Spawn the agent subprocess ---
-        let mut cmd = Command::new(&config.command);
-        cmd.args(&config.args)
-            .envs(&config.env)
-            .env_remove("CODEX_HOME")
+        let mut server = crate::launch::ServerCommand::new(&config.command, &config.args);
+        if let Some((program, args)) = config
+            .launch
+            .wrapper
+            .as_deref()
+            .and_then(|argv| argv.split_first())
+        {
+            server = server.with_wrapper(program, args);
+        }
+        let runtime_dir = config.launch.runtime_dir.as_deref();
+        if let Some(dir) = runtime_dir {
+            anyhow::ensure!(
+                dir.is_dir(),
+                "prepared runtime_dir is not a directory: {}",
+                dir.display()
+            );
+        }
+        let mut cmd = server.command(
+            crate::launch::ChildEnvironment::Inherit,
+            &config.env,
+            &config.launch.env_remove,
+            runtime_dir,
+        );
+        cmd.env_remove("CODEX_HOME")
             .current_dir(cwd)
             .stderr(Stdio::piped());
+
+        let credential = config
+            .token_provider
+            .as_ref()
+            .map(|binding| {
+                let key = crate::token_launch::credential(&binding.connection, &|key| {
+                    std::env::var(key).ok()
+                })?;
+                cmd.env(&binding.child_key, key.as_ref());
+                anyhow::Ok(key)
+            })
+            .transpose()?;
 
         let AgentProcess {
             stdin,
             stdout,
             stderr,
             handle: child_handle,
-        } = AgentProcess::spawn(cmd)
+        } = AgentProcess::spawn_with_resource(cmd, config.owned_runtime.clone())
             .with_context(|| format!("Failed to spawn ACP agent: {}", config.command))?;
         let stderr = stderr.context("Failed to take stderr")?;
         let pid = child_handle.pid;
         debug!("ACP agent spawned (pid: Some({pid}))");
 
         let wire_logger = if proxy_config.enabled {
-            Some(WireLogger::new(&proxy_config, config, pid)?)
+            Some(WireLogger::new(
+                &proxy_config,
+                config,
+                pid,
+                credential.clone(),
+            )?)
         } else {
             None
         };
@@ -494,6 +537,7 @@ impl AcpConnection {
         >::new()));
         let stderr_task = tokio::spawn({
             let stderr_tail = std::sync::Arc::clone(&stderr_tail);
+            let credential = credential.clone();
             async move {
                 let mut stderr = BufReader::new(stderr.compat());
                 let mut line = String::new();
@@ -501,7 +545,8 @@ impl AcpConnection {
                     if n == 0 {
                         break;
                     }
-                    let trimmed = line.trim();
+                    let safe = crate::token_launch::redact(line.trim(), credential.as_deref());
+                    let trimmed = safe.as_ref();
                     warn!("ACP agent stderr: {trimmed}");
                     if let Ok(mut tail) = stderr_tail.lock() {
                         if tail.len() >= STDERR_TAIL_LINES {
@@ -555,9 +600,26 @@ impl AcpConnection {
             },
         );
 
+        let (bad_stdout, invalid_first_frame) = oneshot::channel();
+        let mut wrapper_startup = config.launch.wrapper.as_ref().map(|_| bad_stdout);
         let incoming_logger = wire_logger;
         let incoming_lines = Box::pin(BufReader::new(stdout.compat()).lines().map(
             move |line_result| {
+                if let Some(signal) = wrapper_startup.take()
+                    && let Ok(line) = &line_result
+                    && !serde_json::from_str::<serde_json::Value>(line)
+                        .is_ok_and(|frame| frame["jsonrpc"] == "2.0")
+                {
+                    let _ = signal.send(());
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "invalid ACP JSON-RPC startup frame",
+                    ));
+                }
+                let line_result = line_result.map(|line| match &credential {
+                    Some(key) => crate::token_launch::redact_error(line, key),
+                    None => line,
+                });
                 if let Ok(line) = &line_result
                     && let Some(logger) = &incoming_logger
                 {
@@ -579,6 +641,8 @@ impl AcpConnection {
         };
         let init = establish_connection(transport, cwd, event_tx, event_rx, initialize_event_tx);
         let init_result = tokio::select! {
+            biased;
+            Ok(()) = invalid_first_frame => anyhow::bail!("wrapped ACP server wrote invalid ACP JSON-RPC to stdout during initialization; send wrapper diagnostics to stderr"),
             result = init => result,
             () = child_died => Err(anyhow::anyhow!("agent exited before initialization finished")),
         };
@@ -615,9 +679,72 @@ impl AcpConnection {
                 );
             }
         };
+        let key_method = match config.builtin_kind {
+            Some(crate::registry::AgentKind::Gemini) => {
+                Some(("gemini-api-key", &["GEMINI_API_KEY"][..]))
+            }
+            Some(crate::registry::AgentKind::Codex) if config.token_provider.is_none() => {
+                Some(("api-key", &["CODEX_API_KEY", "OPENAI_API_KEY"][..]))
+            }
+            _ => None,
+        };
+        connection.key_auth_method = key_method.and_then(|(method, keys)| {
+            let key_available = keys.iter().any(|key| {
+                config.env.get(*key).map_or_else(
+                    || std::env::var_os(key).is_some_and(|value| !value.is_empty()),
+                    |value| !value.is_empty(),
+                )
+            });
+            let advertised = connection.initialize_result["authMethods"]
+                .as_array()
+                .is_some_and(|methods| {
+                    methods
+                        .iter()
+                        .any(|item| item["id"].as_str() == Some(method))
+                });
+            (key_available && advertised).then_some(method)
+        });
         connection.child = Some(child_handle);
         connection.stderr_task = Some(stderr_task);
         Ok(connection)
+    }
+
+    /// Give existing sign-ins the first attempt. Some adapters require an explicit
+    /// ACP authenticate request even when their API key is in the environment.
+    async fn session_request<T: agent_client_protocol::JsonRpcResponse>(
+        &self,
+        send: impl Fn() -> agent_client_protocol::SentRequest<T>,
+        started: Option<mpsc::UnboundedSender<RequestId>>,
+    ) -> (RequestId, Result<T, acp::Error>) {
+        let request = send();
+        let id = schema_request_id(request.id());
+        if let Some(started) = &started {
+            let _ = started.send(id.clone());
+        }
+        let response = request.block_task().await;
+        if let (Err(error), Some(method)) = (&response, self.key_auth_method)
+            && error.code == acp::ErrorCode::AuthRequired
+        {
+            let auth = self.cx.send_request(acp::AuthenticateRequest::new(method));
+            if let Err(auth_error) = auth.block_task().await {
+                warn!("ACP authentication with {method} failed: {auth_error}");
+                return (id, response);
+            }
+            let _ = self
+                .event_tx
+                .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
+                    request_id: id,
+                    response: Err(error.clone()),
+                })))
+                .await;
+            let retry = send();
+            let retry_id = schema_request_id(retry.id());
+            if let Some(started) = &started {
+                let _ = started.send(retry_id.clone());
+            }
+            return (retry_id, retry.block_task().await);
+        }
+        (id, response)
     }
 
     /// Create a new session with the agent.
@@ -629,11 +756,10 @@ impl AcpConnection {
         cwd: &Path,
         mcp_servers: Vec<acp::McpServer>,
     ) -> Result<acp::SessionId> {
-        let request = self
-            .cx
-            .send_request(acp::NewSessionRequest::new(cwd).mcp_servers(mcp_servers));
-        let request_id = schema_request_id(request.id());
-        let response = request.block_task().await;
+        let params = acp::NewSessionRequest::new(cwd).mcp_servers(mcp_servers);
+        let (request_id, response) = self
+            .session_request(|| self.cx.send_request(params.clone()), None)
+            .await;
         let _ = self
             .event_tx
             .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
@@ -662,16 +788,13 @@ impl AcpConnection {
         session_id: &str,
         cwd: &Path,
         mcp_servers: Vec<acp::McpServer>,
-        request_started: Option<oneshot::Sender<RequestId>>,
+        request_started: Option<mpsc::UnboundedSender<RequestId>>,
     ) -> Result<acp::SessionId> {
-        let request = self.cx.send_request(
-            acp::LoadSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers),
-        );
-        let request_id = schema_request_id(request.id());
-        if let Some(request_started) = request_started {
-            let _ = request_started.send(request_id.clone());
-        }
-        let response = request.block_task().await;
+        let params =
+            acp::LoadSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers);
+        let (request_id, response) = self
+            .session_request(|| self.cx.send_request(params.clone()), request_started)
+            .await;
         let _ = self
             .event_tx
             .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
@@ -706,11 +829,11 @@ impl AcpConnection {
         cwd: &Path,
         mcp_servers: Vec<acp::McpServer>,
     ) -> Result<acp::SessionId> {
-        let request = self.cx.send_request(
-            acp::ResumeSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers),
-        );
-        let request_id = schema_request_id(request.id());
-        let response = request.block_task().await;
+        let params =
+            acp::ResumeSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers);
+        let (request_id, response) = self
+            .session_request(|| self.cx.send_request(params.clone()), None)
+            .await;
         let _ = self
             .event_tx
             .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
@@ -807,9 +930,9 @@ impl AcpConnection {
                 request = request.cursor(cursor);
             }
 
-            let request = self.cx.send_request(request);
-            let request_id = schema_request_id(request.id());
-            let response = request.block_task().await;
+            let (request_id, response) = self
+                .session_request(|| self.cx.send_request(request.clone()), None)
+                .await;
             let _ = self
                 .event_tx
                 .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {

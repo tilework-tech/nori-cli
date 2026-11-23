@@ -428,6 +428,48 @@ fn model_command_works_before_first_prompt() {
 
 #[cfg(target_os = "linux")]
 #[test]
+fn picker_choice_supersedes_an_alias_override_in_the_next_session() {
+    let bin = tempfile::tempdir().unwrap();
+    let test_binary = std::env::current_exe().unwrap();
+    let mock = test_binary
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("mock_acp_agent");
+    std::os::unix::fs::symlink(mock, bin.path().join("agy")).unwrap();
+    let config = SessionConfig::new()
+        .with_agent("antigravity".into())
+        .with_extra_path(bin.path().to_owned())
+        .with_extra_config_toml("[default_models]\ngemini = 'mock-model-fast'")
+        .with_arg("-c")
+        .with_arg("default_models.agy=mock-model-default");
+
+    let mut session = TuiSession::spawn_with_config(40, 120, config).unwrap();
+    session
+        .wait_for_text("Model=Mock Default Model", TIMEOUT)
+        .unwrap();
+    session.submit_input("/model").unwrap();
+    session.wait_for_text("Mock Fast Model", TIMEOUT).unwrap();
+    session.send_key(Key::Down).unwrap();
+    session.send_key(Key::Enter).unwrap();
+    session.wait_for_text("saved as default", TIMEOUT).unwrap();
+    session.send_key(Key::Escape).unwrap();
+    session
+        .wait_for(
+            |screen| !screen.contains("Select an ACP session setting"),
+            TIMEOUT,
+        )
+        .unwrap();
+    session.submit_input("/new").unwrap();
+    session.wait_for_text("2 ready", TIMEOUT).unwrap();
+    session
+        .wait_for_text("Antigravity · Mock Fast Model", TIMEOUT)
+        .unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
 fn skillset_per_session_activates_after_selection() {
     // With per-session skillsets the session must auto-activate once a skillset
     // is applied (after `.claude/CLAUDE.md` is written), not wait for a prompt.
@@ -463,4 +505,109 @@ fn skillset_per_session_activates_after_selection() {
     session
         .wait_for_text("Mock Default Model", TIMEOUT)
         .expect("session should auto-activate after the skillset is applied");
+}
+
+/// Config enabling `[features] skillsets_v2` and per-session skillsets.
+#[cfg(target_os = "linux")]
+const SKILLSETS_V2_PER_SESSION: &str =
+    "[features]\nskillsets_v2 = true\n\n[tui]\nskillset_per_session = true\n";
+
+/// A skillsets v2 mock on PATH whose `status` points at a real Git repository
+/// publishing `skillsets/default@1.0.0`. `layer_ok` picks whether `layer`
+/// succeeds or fails with a v2 error envelope.
+#[cfg(target_os = "linux")]
+fn skillsets_v2_mock(layer_ok: bool) -> (tempfile::TempDir, tempfile::TempDir) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let repo = tempfile::tempdir().expect("Failed to create skillsets repo");
+    for args in [
+        vec!["init", "--quiet"],
+        vec!["commit", "--quiet", "--allow-empty", "-m", "init"],
+        vec!["tag", "skillsets/default@1.0.0"],
+    ] {
+        let status = std::process::Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+            .args(["-c", "commit.gpgSign=false", "-c", "tag.gpgSign=false"])
+            .arg("-C")
+            .arg(repo.path())
+            .args(&args)
+            .status()
+            .expect("run git");
+        assert!(status.success(), "git {args:?} failed");
+    }
+    let layer = if layer_ok {
+        r#"echo '{"ok":true,"data":{"layers":["default"],"agents":["claude"],"written":[],"unchanged":[],"removed":[],"kept":[],"refusals":[],"notes":[]}}'; exit 0"#
+    } else {
+        r#"echo '{"ok":false,"error":{"code":"SOURCE_INVALID","message":"mock layer failure"}}'; exit 1"#
+    };
+    let bin_dir = tempfile::tempdir().expect("Failed to create mock nori-skillsets dir");
+    let script = bin_dir.path().join("nori-skillsets");
+    std::fs::write(
+        &script,
+        format!(
+            r#"#!/bin/sh
+for a in "$@"; do
+  case "$a" in
+    status) echo '{{"ok":true,"data":{{"compiled":true,"layers":[],"repository":"{repo}","agents":["claude"],"entries":[],"counts":{{}}}}}}'; exit 0 ;;
+    layer) {layer} ;;
+  esac
+done
+echo "error: unknown command" >&2
+exit 1
+"#,
+            repo = repo.path().display()
+        ),
+    )
+    .expect("Failed to write mock nori-skillsets");
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+        .expect("Failed to make mock nori-skillsets executable");
+    (repo, bin_dir)
+}
+
+/// With `[features] skillsets_v2`, start with per-session skillsets, pick the
+/// published skillset from the startup picker, and wait for the session to
+/// activate.
+#[cfg(target_os = "linux")]
+fn pick_startup_skillset_v2_then_expect_activation(layer_ok: bool) -> TuiSession {
+    let (_repo, bin_dir) = skillsets_v2_mock(layer_ok);
+    let config = SessionConfig::default()
+        .with_extra_config_toml(SKILLSETS_V2_PER_SESSION)
+        .with_extra_path(bin_dir.path().to_path_buf());
+    let mut session = TuiSession::spawn_with_config(24, 90, config).expect("Failed to spawn");
+
+    session
+        .wait_for_text("Select skillset", TIMEOUT)
+        .expect("per-session skillset picker should appear at startup");
+    session
+        .wait_for_text("v1.0.0", TIMEOUT)
+        .expect("the published release should be listed");
+    // Row 0 is "No Skillset"; move to the real skillset row and apply it.
+    session
+        .send_key(Key::Down)
+        .expect("move to the skillset row");
+    session.send_key(Key::Enter).expect("apply the skillset");
+
+    session
+        .wait_for_text("Mock Default Model", TIMEOUT)
+        .expect("session should auto-activate after the skillset change finishes");
+    session
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn skillsets_v2_per_session_activates_after_layering() {
+    // With per-session skillsets the session must auto-activate once a skillset
+    // is layered, not wait for a prompt.
+    let _session = pick_startup_skillset_v2_then_expect_activation(true);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn skillsets_v2_per_session_activates_even_when_layering_fails() {
+    // A broken skillset must not leave the session without an agent, and the
+    // failure is reported.
+    let mut session = pick_startup_skillset_v2_then_expect_activation(false);
+    session
+        .wait_for_text("mock layer failure", TIMEOUT)
+        .expect("the layer failure should be reported");
 }

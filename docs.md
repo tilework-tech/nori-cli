@@ -88,9 +88,14 @@ canonical identity and organization fanout.
 - `nori-acp-host` owns the initialized connection. `nori-harness` may retain it
   without a session and consumes it exactly once to build a session-bound
   backend.
-- The optional WebSocket Agent surface can be enabled by startup `--remote` or
-  managed inside the TUI with `/remote-control`. It is specified in
-  `@/docs/remote-control.md` and remains separate from the bounded
-  `nori exec --acp` stdio facade.
+- Remote and multi-client access goes only through the background host,
+  `nori host`, which serves any number of clients that all reach the same
+  sessions: its authenticated WebSocket at `/acp` (the ACP remote transport's
+  WebSocket profile, `/sessions` as an alias), `nori attach`, and stdio
+  (`nori host --stdio`, aliased as `nori exec --acp`, which joins the running
+  host when it can). The interactive TUI opens no listener; the earlier,
+  unrelated unauthenticated TUI `/acp` surface (`--remote`,
+  `/remote-control`) was removed. See
+  `@/docs/remote-control.md` and `@/docs/headless.md`.
 
 Created and maintained by Nori.

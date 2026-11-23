@@ -131,7 +131,11 @@ Path: @/nori-rs/harness/src/session_manager
   private registry metadata used for restart logging; neither `SessionRecord`
   nor managed remote list responses expose it.
   Resume validates failed status, agent identity, and a readable transcript,
-  then reserves capacity before launching the replacement.
+  then reserves capacity before launching the replacement. `reopen(id)` marks
+  a closed session whose process has exited as restartable, so the same
+  `resume` path brings it back under its ID; the background host uses this
+  when a client loads or resumes a session it earlier closed with ACP
+  `session/close`.
 - **Managed checkpoint metadata.** `checkpoint_session(id, include_private_transcript)`
   captures the named conversation's identity, parent, source, status and its
   delegation records. The caller holds the binding admission barrier.
@@ -185,9 +189,11 @@ approval, parent/child links, result delivery, and descendant lifetime. Both ter
 tool on the existing authenticated
 [`nori-client` HTTP MCP server](../backend/nori_client_mcp.rs) enter this same
 manager path. The tool takes an agent and task; its authority comes from the
-calling session, not a caller-supplied parent ID. Delegation requires the
-parent's resolved `multi_session` flag. Direct single-session launch behavior
-is unchanged.
+calling session, not a caller-supplied parent ID. Every session the manager
+launches gets a delegation context, so delegation is always available there;
+a session launched directly through `launch_session` outside the manager has
+none, and its `delegate` tool answers "delegation is available only in
+sessions the session manager runs".
 
 ```text
 parent agent -- HTTP MCP delegate --+
@@ -279,7 +285,13 @@ remote /session/delegate ----------+         |
 
 Agents without HTTP MCP support can still receive children started by the
 user's `/delegate`; an agent-side stdio delegation tool is not provided.
-The [managed remote contract](../../../../docs/remote-control.md#delegation-as-seen-by-remote-clients) defines
+The [managed remote contract](../../../../docs/remote-control.md#delegation) defines
 controller authorization and request payloads.
 
 Created and maintained by Nori.
+
+`set_approval_policy` changes a running session's approval policy and records
+it on the session. `replace_agent` stops a top-level session's process and
+starts another agent under the same conversation ID; the host only uses it
+before the session's first prompt, so the restarted transcript loses nothing.
+

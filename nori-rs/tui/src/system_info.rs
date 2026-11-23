@@ -50,8 +50,8 @@ impl SystemInfo {
     /// Collect system info synchronously (blocking).
     /// Only available in debug builds for E2E testing via NORI_SYNC_SYSTEM_INFO=1.
     #[cfg(debug_assertions)]
-    pub fn collect_sync() -> Self {
-        Self::collect_fresh(None)
+    pub fn collect_sync(skillsets_v2: bool) -> Self {
+        Self::collect_fresh(None, skillsets_v2)
     }
 
     /// The subset of system info worth blocking startup for: the git identity
@@ -62,12 +62,15 @@ impl SystemInfo {
     /// the worktree disk check walk the filesystem — so those fields stay at
     /// their defaults until the background refresh overwrites this snapshot
     /// wholesale.
-    pub(crate) fn seed(dir: &std::path::Path) -> Self {
+    ///
+    /// `skillsets_v2` (`[features] skillsets_v2`) picks how the active
+    /// skillsets are read when the full collection runs.
+    pub(crate) fn seed(dir: &std::path::Path, skillsets_v2: bool) -> Self {
         // E2E snapshots pin the complete, deterministic snapshot, so debug
         // builds under `NORI_SYNC_SYSTEM_INFO=1` still collect everything.
         #[cfg(debug_assertions)]
         if env::var("NORI_SYNC_SYSTEM_INFO").is_ok() {
-            return Self::collect_sync();
+            return Self::collect_sync(skillsets_v2);
         }
 
         let is_worktree = is_git_worktree(Some(dir));
@@ -91,8 +94,10 @@ impl SystemInfo {
     /// * `agent_kind` - Optional agent kind to use for transcript discovery.
     ///   If provided, searches for transcripts from that specific agent.
     ///   If None, attempts to detect the agent from environment variables.
-    pub(crate) fn collect_fresh(agent_kind: Option<AgentKind>) -> Self {
-        Self::collect_impl(None, agent_kind, None)
+    /// * `skillsets_v2` - Read active skillsets via skillsets v2
+    ///   (`[features] skillsets_v2`) instead of v1 `list-active`.
+    pub(crate) fn collect_fresh(agent_kind: Option<AgentKind>, skillsets_v2: bool) -> Self {
+        Self::collect_impl(None, agent_kind, None, skillsets_v2)
     }
 
     /// Collect system info for a specific directory. This is blocking and should
@@ -112,7 +117,7 @@ impl SystemInfo {
         dir: &std::path::Path,
         agent_kind: Option<AgentKind>,
     ) -> Self {
-        Self::collect_impl(Some(dir), agent_kind, None)
+        Self::collect_impl(Some(dir), agent_kind, None, false)
     }
 
     /// Collect system info for a specific directory with first-message matching.
@@ -125,18 +130,22 @@ impl SystemInfo {
     /// * `dir` - The directory to collect system info for
     /// * `agent_kind` - Optional agent kind to use for transcript discovery.
     /// * `first_message` - The first user message for transcript matching (used by Claude Code)
+    /// * `skillsets_v2` - Read active skillsets via skillsets v2
+    ///   (`[features] skillsets_v2`) instead of v1 `list-active`.
     pub(crate) fn collect_for_directory_with_message(
         dir: &std::path::Path,
         agent_kind: Option<AgentKind>,
         first_message: Option<&str>,
+        skillsets_v2: bool,
     ) -> Self {
-        Self::collect_impl(Some(dir), agent_kind, first_message)
+        Self::collect_impl(Some(dir), agent_kind, first_message, skillsets_v2)
     }
 
     fn collect_impl(
         dir: Option<&std::path::Path>,
         agent_kind: Option<AgentKind>,
         first_message: Option<&str>,
+        skillsets_v2: bool,
     ) -> Self {
         let (git_lines_added, git_lines_removed) = get_git_stats(dir);
         let transcript_location = match dir {
@@ -161,7 +170,11 @@ impl SystemInfo {
 
         Self {
             git_branch: get_git_branch(dir),
-            active_skillsets: get_active_skillsets(dir),
+            active_skillsets: if skillsets_v2 {
+                get_active_skillsets_v2(dir)
+            } else {
+                get_active_skillsets(dir)
+            },
             nori_version,
             nori_version_source,
             git_lines_added,
@@ -297,6 +310,24 @@ fn get_active_skillsets(dir: Option<&std::path::Path>) -> Vec<String> {
         // nori-skillsets not installed at all.
         Err(_) => Vec::new(),
     }
+}
+
+/// Names of the skillsets layered into the session's skillset project (the
+/// session worktree, else the home directory), via skillsets v2 `status`.
+///
+/// Returns an empty list when the skillsets v2 CLI is missing or fails; the
+/// footer is informational and the picker reports those errors.
+fn get_active_skillsets_v2(dir: Option<&std::path::Path>) -> Vec<String> {
+    let Some(project) = dir
+        .map(std::path::Path::to_path_buf)
+        .or_else(|| env::current_dir().ok())
+        .and_then(|cwd| crate::nori::skillset_picker_v2::current_skillset_project(&cwd))
+    else {
+        return Vec::new();
+    };
+    nori_skillsets::SkillsetsCli::resolve()
+        .and_then(|cli| cli.layered(project.path()))
+        .unwrap_or_default()
 }
 
 /// Read the active skillset from `.nori-config.json` by walking parent directories.
@@ -722,7 +753,7 @@ mod tests {
         // A file git would have to diff or stat if seeding did that work.
         std::fs::write(repo.path().join("untracked.txt"), "scratch\n").expect("write file");
 
-        let seeded = SystemInfo::seed(repo.path());
+        let seeded = SystemInfo::seed(repo.path(), false);
 
         assert_eq!(seeded.git_branch.as_deref(), Some("main"));
         assert_eq!(
@@ -746,7 +777,7 @@ mod tests {
     fn seed_of_a_non_git_directory_is_empty() {
         let dir = tempfile::TempDir::new().expect("temp dir should be created");
 
-        let seeded = SystemInfo::seed(dir.path());
+        let seeded = SystemInfo::seed(dir.path(), false);
 
         assert_eq!(seeded.git_branch, None);
         assert!(!seeded.is_worktree);
@@ -986,7 +1017,7 @@ Filesystem     1024-blocks      Used Available Capacity Mounted on
         // This test runs collect_sync and verifies the returned data is valid
         // Note: CI runners may checkout in detached HEAD state, so git_branch
         // may be None - we only verify format when it's present
-        let info = SystemInfo::collect_sync();
+        let info = SystemInfo::collect_sync(false);
         if let Some(branch) = &info.git_branch {
             assert!(!branch.is_empty(), "git_branch should not be empty if set");
             assert!(

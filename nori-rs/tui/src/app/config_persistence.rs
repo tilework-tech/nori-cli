@@ -19,8 +19,7 @@ async fn persist_resize_reflow_config(nori_home: &Path, enabled: bool) -> anyhow
 
 /// Persist a session config option selection as the agent's default model.
 ///
-/// Returns `Ok(true)` only when `config_id` names the agent's Model-category
-/// option and the selection was written to `[default_models]` in config.toml.
+/// Returns the stored agent key when the selection was a Model-category option.
 /// Non-model options (mode, thought level, ...) are not persisted.
 pub(super) async fn persist_default_model_selection(
     nori_home: &Path,
@@ -28,20 +27,18 @@ pub(super) async fn persist_default_model_selection(
     config_id: &str,
     value: &str,
     config_options: &[nori_protocol::acp::v1::SessionConfigOption],
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<Option<String>> {
     let is_model_option = config_options.iter().any(|option| {
         option.id.to_string() == config_id
             && option.category == Some(nori_protocol::acp::v1::SessionConfigOptionCategory::Model)
     });
     if !is_model_option {
-        return Ok(false);
+        return Ok(None);
     }
 
-    ConfigEditsBuilder::new(nori_home)
-        .set_default_model(agent, value)
-        .apply()
-        .await?;
-    Ok(true)
+    persist_default_model_value(nori_home, agent, value)
+        .await
+        .map(Some)
 }
 
 /// Persist a model as the agent's default without inspecting the advertised
@@ -53,16 +50,26 @@ pub(super) async fn persist_default_model_value(
     nori_home: &Path,
     agent: &str,
     value: &str,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<String> {
+    let agent = nori_harness::resolve_agent_slug(agent);
     ConfigEditsBuilder::new(nori_home)
-        .set_default_model(agent, value)
+        .set_default_model(&agent, value)
         .apply()
-        .await
+        .await?;
+    Ok(agent)
 }
 
 impl App {
-    fn sync_runtime_config(&mut self) {
+    pub(super) fn sync_runtime_config(&mut self) {
         self.chat_widget.set_config(self.config.clone());
+    }
+
+    fn apply_saved_model(&mut self, key: String, value: &str) {
+        self.config
+            .default_model_override_keys
+            .retain(|name| nori_harness::resolve_agent_slug(name) != key);
+        self.config.default_models.insert(key, value.to_owned());
+        self.sync_runtime_config();
     }
 
     pub(super) async fn persist_default_model_selection(
@@ -80,13 +87,11 @@ impl App {
             config_options,
         )
         .await?;
-        if persisted {
-            self.config
-                .default_models
-                .insert(agent.to_string(), value.to_string());
-            self.sync_runtime_config();
-        }
-        Ok(persisted)
+        let Some(key) = persisted else {
+            return Ok(false);
+        };
+        self.apply_saved_model(key, value);
+        Ok(true)
     }
 
     /// Persist a custom model as the agent's default, unconditionally.
@@ -97,16 +102,16 @@ impl App {
     /// next session start it is forced through the agent's spawn-time injection
     /// channel. Returns `true` when the value was persisted.
     pub(super) async fn persist_custom_default_model(&mut self, agent: &str, value: &str) -> bool {
-        if let Err(err) = persist_default_model_value(&self.config.nori_home, agent, value).await {
-            tracing::error!(error = %err, "failed to persist custom default model");
-            self.chat_widget
-                .add_error_message(format!("Failed to save model '{value}': {err}"));
-            return false;
-        }
-        self.config
-            .default_models
-            .insert(agent.to_string(), value.to_string());
-        self.sync_runtime_config();
+        let key = match persist_default_model_value(&self.config.nori_home, agent, value).await {
+            Ok(key) => key,
+            Err(err) => {
+                tracing::error!(error = %err, "failed to persist custom default model");
+                self.chat_widget
+                    .add_error_message(format!("Failed to save model '{value}': {err}"));
+                return false;
+            }
+        };
+        self.apply_saved_model(key, value);
         true
     }
 
@@ -779,6 +784,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn saving_from_an_alias_writes_the_builtin_model_key() {
+        let temp = tempfile::tempdir().unwrap();
+        persist_default_model_value(temp.path(), "antigravity", "chosen")
+            .await
+            .unwrap();
+        let saved =
+            nori_config::NoriConfig::load_from_path(&temp.path().join("config.toml")).unwrap();
+        assert_eq!(
+            saved.default_models,
+            [("gemini".into(), "chosen".into())].into()
+        );
+    }
+
+    #[tokio::test]
     async fn model_selection_persists_default_model_for_agent() {
         let temp = TempDir::new().expect("temp home");
 
@@ -792,7 +811,7 @@ mod tests {
         .await
         .expect("persist model selection");
 
-        assert!(persisted, "model selection should be persisted");
+        assert_eq!(persisted.as_deref(), Some("claude-code"));
         let content = std::fs::read_to_string(temp.path().join("config.toml"))
             .expect("read persisted config");
         let parsed: toml::Value = toml::from_str(&content).expect("config toml");
@@ -841,7 +860,10 @@ mod tests {
         .await
         .expect("handle mode selection");
 
-        assert!(!persisted, "mode selection should not be persisted");
+        assert!(
+            persisted.is_none(),
+            "mode selection should not be persisted"
+        );
         assert!(
             !temp.path().join("config.toml").exists(),
             "no config file should be written for non-model selections"
@@ -862,7 +884,10 @@ mod tests {
         .await
         .expect("handle unknown option");
 
-        assert!(!persisted, "unknown options should not be persisted");
+        assert!(
+            persisted.is_none(),
+            "unknown options should not be persisted"
+        );
         assert!(!temp.path().join("config.toml").exists());
     }
 

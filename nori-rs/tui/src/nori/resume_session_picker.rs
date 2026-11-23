@@ -393,9 +393,14 @@ pub async fn load_resumable_sessions(
     let session_infos = loader.find_session_metadata_for_cwd(cwd).await?;
     let session_info_count = session_infos.len();
 
+    let filter_slug = nori_harness::resolve_agent_slug(agent_filter);
     let matching_session_infos: Vec<_> = session_infos
         .into_iter()
-        .filter(|info| info.agent.as_deref() == Some(agent_filter))
+        .filter(|info| {
+            info.agent
+                .as_deref()
+                .is_some_and(|agent| nori_harness::resolve_agent_slug(agent) == filter_slug)
+        })
         .collect();
 
     tracing::info!(

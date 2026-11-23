@@ -81,7 +81,7 @@ impl SessionManager {
         let _admission = self.shared.admission.lock().await;
         let task = task.trim().to_string();
         anyhow::ensure!(!task.is_empty(), "delegation task must not be empty");
-        crate::get_agent_config(&agent)?;
+        let agent = crate::resolve_agent_slug(&agent);
         let value = {
             let mut state = self.shared.state();
             anyhow::ensure!(
@@ -100,10 +100,10 @@ impl SessionManager {
                 .configs
                 .get(&process)
                 .ok_or_else(|| anyhow::anyhow!("parent session configuration is unavailable"))?;
-            anyhow::ensure!(
-                config.multi_session,
-                "delegation requires [features] multi_session = true"
-            );
+            crate::registry::get_agent_launch_config(
+                &agent,
+                config.agent_token_providers.get(&agent),
+            )?;
             let parent_agent = state
                 .registry
                 .record(parent)
@@ -299,7 +299,13 @@ impl SessionManager {
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("parent configuration unavailable"))?;
             if config.agent != value.agent {
-                config.default_model = None;
+                config.default_model =
+                    config
+                        .agent_token_providers
+                        .get(&value.agent)
+                        .map(|provider| {
+                            nori_acp_host::token_provider::bound_model_id(&value.agent, provider)
+                        });
             }
             config.agent.clone_from(&value.agent);
             config.conversation_id = Some(child);

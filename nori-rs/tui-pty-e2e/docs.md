@@ -63,8 +63,7 @@ notification tests.
 
 Scenarios cover representative raw ACP messages, tools, plans, permissions and
 responses; Nori lifecycle and failure behavior; query-driven pickers; cloud
-list/resume/close/detach; transcript persistence and view-only selection; MCP
-and browser workflows; runtime remote-control ownership; and ordering races
+list/resume/close/detach; transcript persistence and view-only selection; MCP and browser workflows; and ordering races
 between streaming text and tool updates. Agent-switch coverage observes real
 child PIDs to prove that the current and prepared candidate coexist, activation
 reuses the prepared child, and cancellation or activation failure leaves the
@@ -91,12 +90,6 @@ sink. They prove interactive and cloud launches remain silent while merely
 connected, submit the first user prompt through the real ACP agent, observe the
 exact public `session_mode`, and verify a later prompt on the same logical
 session does not create another activity.
-
-The remote-control workflow drives startup and runtime listener management
-through a real WebSocket ACP client, then switches agents. It proves both entry
-paths share one listener owner, disabling listeners preserves the harness, and
-the stable endpoint exposes a replacement only after its `SessionStarted`
-commit.
 
 The [host attachment scenarios](tests/host_attach.rs) run a detached host and
 independent attached PTYs sharing a disposable Nori home. They cover the flat
@@ -139,14 +132,13 @@ and per-session-skillset policies independently. Each must still reach the
 Handroll session picker without showing a local gate, creating a local
 worktree, or delaying agent preparation.
 
-Multi-session scenarios enable `[features] multi_session` through extra
-config TOML and run each session on its own mock agent process, using the
+Multi-session scenarios need no configuration (several sessions per TUI is
+always on) and run each session on its own mock agent process, using the
 mock's per-prompt markers so sessions behave differently on one binary.
 [`multi_session.rs`](tests/multi_session.rs) asserts on full history, not only
 the screen: a session move must reprint only the target's history and keep
 unsent input, `/new` keeps the previous session running, a burst of moves
-lands on the last target, configured bindings are honored, and nothing
-changes without the flag. [`session_list.rs`](tests/session_list.rs) covers
+lands on the last target, and configured bindings are honored. [`session_list.rs`](tests/session_list.rs) covers
 the list's status words, agent-sent titles, reply and context rows, the
 single status summary while the list is open, filter, and jumps, a background request
 answered through `next_waiting_session`, a dead agent failing only its own
@@ -161,12 +153,7 @@ second press a busy session needs) and from `/close`, starting a session beside
 a busy one, a background loop staying in its own row, a restarted session
 keeping its title and conversation ID through manager resume, `/agent`
 preparation leaving no line in the old session, and the background-request line
-fitting one row. Real WebSocket coverage verifies
-that remote permission answers clear the TUI modal, that the default remote
-session is the one on screen, and that an existing controller remains pinned
-when the local user changes sessions. The restart scenario keeps a managed
-WebSocket subscription open through Ctrl+R, checks the list ID and continued
-envelope sequence, and sends a prompt to that same ID after restart. A cloud-mode
+fitting one row. A cloud-mode
 scenario checks that `/close` beside another open session lists the released one
 as closed. The ignored `jump_timing_on_a_long_history` test reports how long a
 jump to a long history takes; run it with `--ignored --nocapture`.
@@ -185,8 +172,7 @@ to move it back into the composer. After an edit, Tab appends the
 revised text to the queue and Enter steers the active turn. The mock agent's
 prompt log checks that the withdrawn text never runs as a separate prompt.
 Coverage includes identical messages, Down from the newest selected message
-returning to the composer, and Alt+Up at the root session (with
-`[features] multi_session` off and on) leaving the queue, an empty composer,
+returning to the composer, and Alt+Up at the root session leaving the queue, an empty composer,
 and a typed draft untouched.
 
 [Queue pause scenarios](tests/queue_pause.rs) queue follow-ups behind a slow
@@ -223,7 +209,11 @@ typed `HarnessHandle` methods available to headless embedders.
   `TuiSession::submit_input`, never a bare `send_str` followed by a sleep. A
   string written in one PTY burst is classified as a paste, and Enter is folded
   into that buffer as a newline until the buffer flushes, so the helpers wait
-  for the composer to render the text before sending the next key.
+  for the composer to render the text before sending the next key. That
+  render check ignores slash-popup rows: a leading `/` or `!` counts only
+  when it renders as the composer's mode sigil followed by whitespace
+  (`/ context`), because the popup lists `/context` as soon as it opens on a
+  prefix, before the rest of the input has reached the composer.
 - Timing-sensitive scenarios use bounded waits, but assertions target visible
   behavior rather than private reducer calls.
 - Prepared-lifecycle scenarios assert process ownership as well as terminal

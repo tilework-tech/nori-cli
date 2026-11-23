@@ -9,10 +9,11 @@ use tokio::sync::mpsc;
 
 use super::AcpBackendConfig;
 use super::enhance_agent_error;
-use super::get_agent_config;
-use super::remote_control_ext;
 use crate::connection::ConnectionEvent;
 use crate::connection::acp_connection::AcpConnection;
+use crate::registry::get_agent_launch_config;
+
+const SAVED_KEY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// A prepared connection owns no remote session that needs the active-session
 /// detach grace. Allow a brief EOF cleanup, then reap it promptly.
@@ -33,11 +34,11 @@ pub enum SessionCatalog {
 /// dropping it kills the unused subprocess through [`AcpConnection`]'s drop
 /// backstop.
 pub struct PreparedAgent {
+    agent_config: crate::registry::AcpAgentConfig,
     connection: Option<AcpConnection>,
     event_rx: Option<mpsc::Receiver<ConnectionEvent>>,
     config: Option<AcpBackendConfig>,
     catalog: SessionCatalog,
-    automatic_session_id: Option<acp::SessionId>,
     setup_events: Option<Vec<SessionEvent>>,
     fork_parent: Option<crate::ConversationId>,
 }
@@ -48,7 +49,6 @@ impl fmt::Debug for PreparedAgent {
             .debug_struct("PreparedAgent")
             .field("agent", &self.config.as_ref().map(|config| &config.agent))
             .field("catalog", &self.catalog)
-            .field("automatic_session_id", &self.automatic_session_id)
             .finish_non_exhaustive()
     }
 }
@@ -70,12 +70,46 @@ impl PreparedAgent {
     pub(crate) async fn prepare(
         config: AcpBackendConfig,
     ) -> std::result::Result<Self, AgentPrepareFailure> {
-        let mut agent_config = get_agent_config(&config.agent)
-            .map_err(|error| AgentPrepareFailure::new(error, Vec::new()))?;
+        let mut agent_config = get_agent_launch_config(
+            &config.agent,
+            config.agent_token_providers.get(&config.agent),
+        )
+        .map_err(|error| AgentPrepareFailure::new(error, Vec::new()))?;
+        nori_acp_host::token_provider::prepare_pi_profile(
+            &mut agent_config,
+            &config.nori_home,
+            &|key| std::env::var(key).ok(),
+        )
+        .map_err(|error| AgentPrepareFailure::new(error, Vec::new()))?;
         super::spawn_and_relay::inject_default_model(
             &mut agent_config,
             config.default_model.as_deref(),
         );
+        // Saved keys reach only agents the user set to prefer them. A keychain
+        // that prompts or hangs must not hold up the launch.
+        if config.prefer_api_key {
+            let nori_home = config.nori_home.clone();
+            let mut with_saved_key = agent_config.clone();
+            let lookup = tokio::task::spawn_blocking(move || {
+                nori_auth_providers::inject_saved_keys(
+                    &mut with_saved_key,
+                    &nori_home,
+                    true,
+                    &|key| std::env::var(key).ok(),
+                );
+                with_saved_key
+            });
+            match tokio::time::timeout(SAVED_KEY_TIMEOUT, lookup).await {
+                Ok(joined) => {
+                    agent_config = joined
+                        .map_err(|error| AgentPrepareFailure::new(error.into(), Vec::new()))?;
+                }
+                Err(_) => tracing::warn!(
+                    "launching {} without saved API keys: the keyring did not answer within {SAVED_KEY_TIMEOUT:?}",
+                    agent_config.display_name
+                ),
+            }
+        }
         let (initialize_event_tx, mut initialize_event_rx) = mpsc::channel(1);
         let connection_result = AcpConnection::spawn_with_initialize_event_sender(
             &agent_config,
@@ -107,17 +141,9 @@ impl PreparedAgent {
         };
         let mut event_rx = connection.take_event_receiver();
         let mut inspection_events = Vec::new();
-        let automatic_session_id = remote_control_ext::automatic_session_id(
-            connection.initialize_meta(),
-            connection.capabilities(),
-        );
 
         let catalog_result: Result<SessionCatalog> = async {
-            if automatic_session_id.is_some() {
-                // The Nori RC marker is itself the connection-specific index.
-                // Loading it must be the first post-initialize request.
-                Ok(SessionCatalog::Unsupported)
-            } else if connection
+            if connection
                 .capabilities()
                 .session_capabilities
                 .list
@@ -157,11 +183,11 @@ impl PreparedAgent {
         };
 
         Ok(Self {
+            agent_config,
             connection: Some(connection),
             event_rx: Some(event_rx),
             config: Some(config),
             catalog,
-            automatic_session_id,
             setup_events: Some(setup_events),
             fork_parent: None,
         })
@@ -182,11 +208,6 @@ impl PreparedAgent {
             .as_ref()
             .expect("prepared connection is present until activation")
             .capabilities()
-    }
-
-    /// Session selected by a recognized Nori remote-control initialize marker.
-    pub fn automatic_session_id(&self) -> Option<&acp::SessionId> {
-        self.automatic_session_id.as_ref()
     }
 
     /// Configuration the session will be activated with, until activation.
@@ -219,6 +240,11 @@ impl PreparedAgent {
             "ACP wire-recording configuration changed while the agent was preparing; retry the switch"
         );
         anyhow::ensure!(
+            prepared_config.agent_token_providers.get(&config.agent)
+                == config.agent_token_providers.get(&config.agent),
+            "token provider changed while the agent was preparing; retry the switch"
+        );
+        anyhow::ensure!(
             prepared_config.default_model == config.default_model,
             "prepared agent default model changed while the agent was preparing; retry the switch"
         );
@@ -241,6 +267,7 @@ impl PreparedAgent {
     )]
     pub(super) fn into_parts(mut self) -> PreparedAgentParts {
         PreparedAgentParts {
+            agent_config: self.agent_config,
             connection: self
                 .connection
                 .take()
@@ -276,6 +303,7 @@ impl AgentPrepareFailure {
 }
 
 pub(super) struct PreparedAgentParts {
+    pub(super) agent_config: crate::registry::AcpAgentConfig,
     pub(super) connection: AcpConnection,
     pub(super) event_rx: mpsc::Receiver<ConnectionEvent>,
     pub(super) config: AcpBackendConfig,

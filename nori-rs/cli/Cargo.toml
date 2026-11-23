@@ -19,9 +19,9 @@ workspace = true
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
+futures = { workspace = true }
 nori-harness = { workspace = true }
 nori-installed = { workspace = true }
-nori-exec = { workspace = true }
 nori-config = { workspace = true }
 codex-arg0 = { workspace = true }
 codex-common = { workspace = true, features = ["cli"] }
@@ -32,8 +32,10 @@ codex-stdio-to-uds = { workspace = true }
 nori-tui = { workspace = true }
 nori-tui-components = { workspace = true }
 nori-protocol = { workspace = true }
+nori-auth-providers = { workspace = true }
+codex-keyring-store = { workspace = true }
 ctor = { workspace = true }
-crossterm = { workspace = true }
+crossterm = { workspace = true, features = ["bracketed-paste"] }
 unicode-segmentation = { workspace = true }
 unicode-width = { workspace = true }
 libc = { workspace = true }
@@ -43,6 +45,7 @@ serde_json = { workspace = true }
 dirs = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 uuid = { workspace = true, features = ["v4"] }
+chrono = { workspace = true }
 supports-color = { workspace = true }
 toml = { workspace = true }
 tokio = { workspace = true, features = [
@@ -52,6 +55,7 @@ tokio = { workspace = true, features = [
     "rt-multi-thread",
     "signal",
 ] }
+tokio-stream = { workspace = true }
 tracing = { workspace = true }
 which = { workspace = true }
 
@@ -68,3 +72,4 @@ assert_matches = { workspace = true }
 predicates = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
+tokio-tungstenite = { workspace = true }

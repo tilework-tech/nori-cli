@@ -49,7 +49,7 @@ pub struct Cli {
     #[clap(skip)]
     pub cloud_onboard: bool,
 
-    /// Agent the CLI should use (e.g., "claude-code", "gemini", "codex").
+    /// Agent to run: claude-code, codex, gemini (Antigravity), grok-build, opencode, cursor, hermes, pi, or a configured agent.
     #[arg(long, short = 'a')]
     pub agent: Option<String>,
 
@@ -83,20 +83,6 @@ pub struct Cli {
     /// Intended for testing and automation scenarios.
     #[arg(long = "skip-trust-directory", default_value_t = false)]
     pub skip_trust_directory: bool,
-
-    /// Serve this session as a remote ACP agent over the WebSocket transport
-    /// on ADDR (a bare PORT binds loopback; IP:PORT binds that address).
-    #[arg(long = "remote", value_name = "ADDR")]
-    pub remote: Option<String>,
-
-    /// Allow --remote to bind a non-loopback address, exposing the
-    /// unauthenticated ACP surface beyond this machine.
-    #[arg(
-        long = "remote-allow-nonloopback",
-        default_value_t = false,
-        requires = "remote"
-    )]
-    pub remote_allow_nonloopback: bool,
 
     /// Extra agent registry entries injected by the caller, appended after
     /// the config's `[[agents]]`. Used by `nori cloud` to pin the

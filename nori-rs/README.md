@@ -2,7 +2,7 @@
 
 The Rust workspace behind the `nori` binary — a multi-provider terminal AI
 coding assistant. Nori is an ACP (Agent Client Protocol) host: it spawns
-agents such as Claude Code, Codex, and Gemini as subprocesses and drives them
+Claude Code, Codex, Antigravity, Grok Build, OpenCode, Cursor Agent, Hermes Agent, Pi, or a configured agent and drives it
 over JSON-RPC/stdio, presenting one terminal interface for all of them.
 
 The workspace began as a fork of the OpenAI Codex CLI. The codex agent engine
@@ -19,6 +19,7 @@ progressively adopted or removed (see the crate layering rules in `../docs.md`).
 | `harness/` (`nori-harness`) | Headless ACP session harness: session runtime, transcripts, hooks |
 | `acp-host/` (`nori-acp-host`) | Agent-agnostic ACP hosting: subprocess spawn, wire client, registry |
 | `nori-config/` | Nori config layer (`~/.nori/cli/config.toml`) |
+| `auth-providers/` (`nori-auth-providers`) | Per-agent sign-in detection and API keys saved per model provider through Nori |
 | `nori-protocol/` | Session-runtime types over the ACP schema |
 | `sandbox/` (`codex-sandbox`) | Sandboxed exec engine: Seatbelt, Landlock/seccomp, Windows restricted tokens |
 | `installed/` (`nori-installed`) | Local install state and prompt-bound authenticated analytics |

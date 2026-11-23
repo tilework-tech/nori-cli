@@ -5,7 +5,7 @@ use super::*;
 /// fire-and-forget task from `handle_user_input`.
 pub(super) async fn run_prompt_summary(
     event_tx: &mpsc::Sender<BackendEvent>,
-    agent_name: &str,
+    agent: &crate::registry::AcpAgentConfig,
     cwd: &std::path::Path,
     user_prompt: &str,
     auto_worktree: crate::config::AutoWorktree,
@@ -15,8 +15,7 @@ pub(super) async fn run_prompt_summary(
     use tokio::time::Duration;
     use tokio::time::timeout;
 
-    let agent_config = get_agent_config(agent_name)?;
-    let mut connection = AcpConnection::spawn(&agent_config, cwd, acp_proxy).await?;
+    let mut connection = AcpConnection::spawn(agent, cwd, acp_proxy).await?;
     let session_id = connection.create_session(cwd, vec![]).await?;
 
     let summarization_prompt = format!(

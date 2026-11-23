@@ -8,7 +8,9 @@ Path: @/nori-rs/nori-protocol
 session. It re-exports the official ACP schema as `nori_protocol::acp` and adds
 only the session events whose semantics belong to the Nori harness, plus the
 envelope and status types the session manager publishes for multi-session
-clients.
+clients. It also defines the `nori host` wire additions (discovery file,
+`_meta` objects, `_nori/*` extension types) and the host's published JSON
+Schema.
 
 ### How it fits into the larger codebase
 
@@ -181,6 +183,41 @@ previews use it directly.
 
 `text()` is the oldest open request, or `None` when nothing is open.
 
+[`host.rs`](src/host.rs) holds the wire types of `nori host`'s standard ACP
+face that ACP itself does not define: the host's `_meta` keys
+(`ListedSessionMeta` on list rows, carrying `nori/agent` and `nori/session`
+`{live}` as `ListedSessionState`; `NewSessionMeta` with `nori/agent` on
+`session/new`), the `host.json`
+discovery file (`HostDiscovery`), the host contract, and the params and results of the `_nori/*`
+extension (control, subscribe, host stop, delegation). The
+[host face](../cli/src/host/docs.md) serializes these types rather than
+building ad hoc JSON, so the published schema matches what is sent.
+
+`HOST_CONTRACT` is the semver of the host wire contract a build serves and
+speaks as a client; `HostDiscovery.contract` publishes it as a string, so the
+schema and the TypeScript type carry `contract: string`. `version` is the
+`nori` version and is informational. `host_serves_contract(host, client)`
+decides compatibility with the semver caret rule `^client` (same major and a
+host no older than the client for `1.x`, same minor for `0.y`; build metadata
+ignored; unparsable means incompatible). `nori host` and `nori exec` both use
+it before reusing a running host; the bump rules are in
+[remote-control.md §12](../../docs/remote-control.md#handshake-and-discovery).
+
+`host_wire_schema()` publishes one JSON Schema (draft 2020-12) covering the
+ACP v1 request, response and notification types the host serves plus every
+type above and `SessionEnvelope`, with definitions under `$defs` and keys
+sorted for stable output. The envelope and event types derive `JsonSchema`
+from schemars 1.x, because the ACP schema crate implements that trait; this
+crate depends on schemars 1.x directly while older workspace crates stay on
+0.8. The checked-in [schema](schema/host-wire.schema.json) and the
+[TypeScript types](typescript/host-wire.ts) derived from it by a pinned
+`json-schema-to-typescript` are regenerated together by
+`scripts/generate-host-wire-types.sh`; a drift test in the
+[cli crate](../cli/tests/host_wire_schema.rs) fails when either no longer
+matches (the TypeScript half is skipped without Node.js). The normative
+contract is
+[remote-control.md §12](../../docs/remote-control.md#12-standard-acp-v1-on-the-background-host).
+
 Session termination reasons are `Shutdown`, `Closed`, `ConnectionLost`,
 `SpawnFailed`, and `TimedOut`. Raw ACP request and response envelopes retain the
 original `RequestId`; consumers do not correlate requests from content or from
@@ -200,6 +237,9 @@ exact ACP wire `RequestId` for harness-issued operations.
   consumers such as [`nori-tui`](../tui/docs.md).
 - `SessionEnvelope` and `SessionStatus` are Nori routing and summary types, not
   ACP extensions.
+- Any change to a type reachable from `host_wire_schema()` (including ACP
+  schema upgrades and `SessionEvent` variants) changes the checked-in schema;
+  rerun `scripts/generate-host-wire-types.sh` or the cli drift test fails.
 - The crate contains no reducer, normalizer, transcript compatibility
   decoder, or presentation state. The delegation text helpers are plain
   strings with no styling; each frontend applies its own colors.

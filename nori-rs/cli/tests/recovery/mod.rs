@@ -33,9 +33,7 @@ impl Host {
         side_sessions: bool,
         env: &[(&str, &Path)],
     ) -> Self {
-        let config = format!(
-            "[features]\nmulti_session = true\n[host]\nmanaged = {managed}\nside_sessions = {side_sessions}\n"
-        );
+        let config = format!("[host]\nmanaged = {managed}\nside_sessions = {side_sessions}\n");
         fs::write(home.join("config.toml"), config).unwrap();
         let process = Command::new(env!("CARGO_BIN_EXE_nori"))
             .env_clear()

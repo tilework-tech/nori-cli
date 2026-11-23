@@ -2333,9 +2333,9 @@ checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.2.1"
+version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
+checksum = "afa489199eaffb1211795df1c6236ce1ad0d41a6fa45250add73e3b02420f06e"
 dependencies = [
  "percent-encoding",
 ]
@@ -2927,9 +2927,9 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "idna"
-version = "1.0.3"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "686f825264d630750a544639377bae737628043f20d38bbc029e8f29ea968a7e"
+checksum = "3b0875f23caa03898994f6ddc501886a45c7d3d62d04d2d90788d47be1b1e4de"
 dependencies = [
  "idna_adapter",
  "smallvec",
@@ -3790,13 +3790,33 @@ dependencies = [
  "serde_json",
  "serial_test",
  "sha2 0.10.9",
+ "shlex 1.3.0",
  "tempfile",
  "tokio",
+ "tokio-stream",
  "tokio-tungstenite",
  "tokio-util",
  "tracing",
  "uuid",
  "which",
+]
+
+[[package]]
+name = "nori-auth-providers"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "codex-keyring-store",
+ "keyring",
+ "nori-acp-host",
+ "nori-config",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "toml",
+ "tracing",
 ]
 
 [[package]]
@@ -3807,11 +3827,13 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "assert_matches",
+ "chrono",
  "clap",
  "clap_complete",
  "codex-arg0",
  "codex-common",
  "codex-execpolicy",
+ "codex-keyring-store",
  "codex-process-hardening",
  "codex-sandbox",
  "codex-stdio-to-uds",
@@ -3822,8 +3844,8 @@ dependencies = [
  "futures",
  "insta",
  "libc",
+ "nori-auth-providers",
  "nori-config",
- "nori-exec",
  "nori-harness",
  "nori-installed",
  "nori-protocol",
@@ -3839,6 +3861,8 @@ dependencies = [
  "supports-color",
  "tempfile",
  "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
  "toml",
  "tracing",
  "unicode-segmentation",
@@ -3854,28 +3878,16 @@ dependencies = [
  "anyhow",
  "dirs",
  "pretty_assertions",
+ "regex",
  "serde",
+ "serde_json",
  "serial_test",
+ "sha2 0.10.9",
  "tempfile",
  "toml",
  "toml_edit",
+ "url",
  "wildmatch",
-]
-
-[[package]]
-name = "nori-exec"
-version = "0.0.0"
-dependencies = [
- "agent-client-protocol",
- "anyhow",
- "futures",
- "nori-config",
- "nori-harness",
- "nori-installed",
- "nori-protocol",
- "serde_json",
- "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -3897,6 +3909,7 @@ dependencies = [
  "hex",
  "libc",
  "nori-acp-host",
+ "nori-auth-providers",
  "nori-config",
  "nori-protocol",
  "notify-rust",
@@ -3954,8 +3967,25 @@ version = "0.0.0"
 dependencies = [
  "agent-client-protocol-schema",
  "pretty_assertions",
+ "schemars 1.0.4",
+ "semver",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "nori-skillsets"
+version = "0.0.0"
+dependencies = [
+ "pretty_assertions",
+ "semver",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "shlex 1.3.0",
+ "tempfile",
+ "thiserror 2.0.17",
+ "which",
 ]
 
 [[package]]
@@ -3991,10 +4021,12 @@ dependencies = [
  "lazy_static",
  "libc",
  "mcp-types",
+ "nori-auth-providers",
  "nori-config",
  "nori-harness",
  "nori-installed",
  "nori-protocol",
+ "nori-skillsets",
  "nori-tui-components",
  "pathdiff",
  "pretty_assertions",
@@ -4557,9 +4589,9 @@ checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
 
 [[package]]
 name = "percent-encoding"
-version = "2.3.1"
+version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
+checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "pest"
@@ -7399,14 +7431,15 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.5.4"
+version = "2.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32f8b686cadd1473f4bd0117a5d28d36b1ade384ea9b5069a1c40aefed7fda60"
+checksum = "f00cd2407bb42c0ef17be88d4cf020f5cceffd121665bac9b8b9493a369b3b1a"
 dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
  "serde",
+ "serde_derive",
 ]
 
 [[package]]

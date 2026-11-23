@@ -9,6 +9,8 @@ use std::time::Duration;
 use std::time::Instant;
 
 use anyhow::Context;
+use nori_harness::managed_launch::LaunchSpec;
+use nori_harness::managed_launch::reserved_launch_env;
 use nori_harness::remote_agent::ManagedClient;
 use serde_json::Value;
 use serde_json::json;
@@ -38,28 +40,26 @@ pub(super) async fn relay(
                 Err(_) => tokio::time::sleep(Duration::from_millis(25)).await,
             }
         };
-        let mut spec: Value = serde_json::from_slice(
+        let mut spec: LaunchSpec = serde_json::from_slice(
             &std::fs::read(launch).context("reading the launch specification")?,
         )
-        .context("the launch specification is not JSON")?;
+        .context("invalid launch specification")?;
         if inherit_env {
-            let env = spec
-                .as_object_mut()
-                .context("the launch specification must be a JSON object")?
-                .entry("env")
-                .or_insert_with(|| json!({}))
-                .as_object_mut()
-                .context("the launch specification env must be an object")?;
             for (key, value) in std::env::vars_os() {
                 let (Some(key), Some(value)) = (key.to_str(), value.to_str()) else {
                     continue;
                 };
-                // The host assigns the adapter's home variables itself.
-                let reserved = ["HOME", "USERPROFILE", "CODEX_HOME", "NORI_HOME"]
-                    .iter()
-                    .any(|name| key.eq_ignore_ascii_case(name));
-                if !reserved && !key.is_empty() && !key.contains('=') && !value.contains('\0') {
-                    env.entry(key).or_insert_with(|| json!(value));
+                if !reserved_launch_env(key)
+                    && !spec
+                        .env_remove
+                        .iter()
+                        .chain(spec.env.keys())
+                        .any(|name| nori_config::env_names_equal(name, key))
+                    && !key.is_empty()
+                    && !key.contains('=')
+                    && !value.contains('\0')
+                {
+                    spec.env.insert(key.to_owned(), value.to_owned());
                 }
             }
         }

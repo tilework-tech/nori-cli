@@ -8,7 +8,6 @@ members = [
     "common",
     "core",
     "execpolicy",
-    "exec",
     "keyring-store",
     "file-search",
     "linux-sandbox",
@@ -30,9 +29,11 @@ members = [
     "utils/readiness",
     "utils/string",
     "harness",
+    "auth-providers",
     "installed",
     "mock-acp-agent",
     "nori-protocol",
+    "skillsets",
     "tui-pty-e2e",
 ]
 resolver = "2"
@@ -59,6 +60,7 @@ codex-execpolicy = { path = "execpolicy" }
 codex-file-search = { path = "file-search" }
 codex-git = { path = "utils/git" }
 codex-keyring-store = { path = "keyring-store" }
+nori-auth-providers = { path = "auth-providers" }
 codex-linux-sandbox = { path = "linux-sandbox" }
 codex-sandbox = { path = "sandbox" }
 nori-acp-host = { path = "acp-host" }
@@ -68,6 +70,7 @@ codex-process-hardening = { path = "process-hardening" }
 codex-rmcp-client = { path = "rmcp-client" }
 codex-stdio-to-uds = { path = "stdio-to-uds" }
 nori-protocol = { path = "nori-protocol" }
+nori-skillsets = { path = "skillsets" }
 nori-tui = { path = "tui" }
 nori-tui-components = { path = "tui-components" }
 codex-utils-cache = { path = "utils/cache" }
@@ -80,7 +83,6 @@ codex-windows-sandbox = { path = "windows-sandbox-rs" }
 core_test_support = { path = "core/tests/common" }
 mcp-types = { path = "mcp-types" }
 nori-harness = { path = "harness" }
-nori-exec = { path = "exec" }
 nori-installed = { path = "installed" }
 
 # External
@@ -161,6 +163,7 @@ rmcp = { version = "3.10.0", default-features = false }
 schemars = "0.8.22"
 seccompiler = "0.5.0"
 sentry = "0.34.0"
+semver = "1"
 serde = "1"
 serde_json = "1"
 serde_with = "3.16"

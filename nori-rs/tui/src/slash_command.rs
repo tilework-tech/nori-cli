@@ -1,5 +1,3 @@
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use strum::IntoEnumIterator;
 use strum_macros::AsRefStr;
 use strum_macros::EnumIter;
@@ -48,12 +46,12 @@ pub enum SlashCommand {
     Mention,
     Status,
     Context,
-    RemoteControl,
     Memory,
     FirstPrompt,
     Mcp,
     Login,
     Logout,
+    ApiKey,
     Quit,
     Exit,
     SwitchSkillset,
@@ -81,7 +79,6 @@ impl SlashCommand {
             SlashCommand::Mention => "mention a file",
             SlashCommand::Status => "show current session configuration and context window usage",
             SlashCommand::Context => "visualize context usage and inspect local instructions",
-            SlashCommand::RemoteControl => "manage remote ACP access to this running session",
             SlashCommand::Memory => "show the contents of all active instruction files",
             SlashCommand::FirstPrompt => "show the first prompt from this session",
             SlashCommand::Model => "choose what model and reasoning effort to use",
@@ -93,6 +90,9 @@ impl SlashCommand {
             SlashCommand::Mcp => "manage MCP server connections",
             SlashCommand::Login => "log in to the current agent",
             SlashCommand::Logout => "show logout instructions",
+            SlashCommand::ApiKey => {
+                "choose whether the agent uses its own login or a saved API key"
+            }
             SlashCommand::SwitchSkillset => "switch between available skillsets",
             SlashCommand::Fork => "rewind conversation to a previous message",
             SlashCommand::Browser => "open a Chrome browser the agent can control via CDP",
@@ -123,6 +123,7 @@ impl SlashCommand {
             | SlashCommand::Mcp
             | SlashCommand::Login
             | SlashCommand::Logout
+            | SlashCommand::ApiKey
             | SlashCommand::SwitchSkillset
             | SlashCommand::Fork
             | SlashCommand::Close
@@ -134,7 +135,6 @@ impl SlashCommand {
             | SlashCommand::Mention
             | SlashCommand::Status
             | SlashCommand::Context
-            | SlashCommand::RemoteControl
             | SlashCommand::Memory
             | SlashCommand::FirstPrompt
             | SlashCommand::Goal
@@ -152,6 +152,7 @@ impl SlashCommand {
             SlashCommand::SwitchSkillset
             | SlashCommand::Browse
             | SlashCommand::Diff
+            | SlashCommand::ApiKey
             | SlashCommand::Browser => CommandScope::LocalOnly,
             SlashCommand::Agent
             | SlashCommand::Model
@@ -171,7 +172,6 @@ impl SlashCommand {
             | SlashCommand::Mention
             | SlashCommand::Status
             | SlashCommand::Context
-            | SlashCommand::RemoteControl
             | SlashCommand::Memory
             | SlashCommand::FirstPrompt
             | SlashCommand::Mcp
@@ -187,20 +187,9 @@ impl SlashCommand {
         match self {
             #[cfg(not(feature = "login"))]
             SlashCommand::Logout => false,
-            SlashCommand::Sessions | SlashCommand::Delegate => {
-                MULTI_SESSION_COMMANDS.load(Ordering::Relaxed)
-            }
             _ => true,
         }
     }
-}
-
-/// Whether commands that exist only with `[features] multi_session` are
-/// offered. Set once when the App starts; the flag needs a restart to change.
-static MULTI_SESSION_COMMANDS: AtomicBool = AtomicBool::new(false);
-
-pub(crate) fn set_multi_session_commands(enabled: bool) {
-    MULTI_SESSION_COMMANDS.store(enabled, Ordering::Relaxed);
 }
 
 /// Return all built-in commands in a Vec paired with their command string.

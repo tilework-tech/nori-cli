@@ -36,6 +36,20 @@ pub(super) struct HostService {
     /// The host's command-line settings, reapplied to each session folder.
     pub overrides: NoriConfigOverrides,
     pub stop: Notify,
+    /// Per-connection state of the standard ACP face.
+    pub acp: super::acp::AcpFace,
+    /// Mode and options clients chose, reapplied on resume.
+    pub settings: super::acp::config::SettingsStore,
+    /// The host instance ID clients see on upgrades and in `initialize`.
+    pub instance: String,
+    /// Sessions a client deleted during this host's lifetime.
+    pub deleted: std::sync::Mutex<std::collections::HashSet<ConversationId>>,
+    /// Serializes restarting, replacing and deleting sessions, so two
+    /// clients cannot start one session twice or revive a deleted one.
+    pub restarts: tokio::sync::Mutex<()>,
+    /// Serializes permission mode changes, so the adapter's mode and the
+    /// mode the host reports change together.
+    pub mode_changes: tokio::sync::Mutex<()>,
 }
 
 #[derive(serde::Deserialize)]
@@ -48,7 +62,7 @@ struct LaunchScope {
 impl HostService {
     /// The host's configuration as it applies in `folder`, so the folder's
     /// own project trust and settings hold for its sessions.
-    async fn config_in(&self, folder: PathBuf) -> anyhow::Result<NoriConfig> {
+    pub(super) async fn config_in(&self, folder: PathBuf) -> anyhow::Result<NoriConfig> {
         let overrides = NoriConfigOverrides {
             cwd: Some(folder),
             ..self.overrides.clone()
@@ -59,7 +73,7 @@ impl HostService {
             .context("could not load configuration for the session folder")
     }
 
-    fn prepare(config: NoriConfig) -> AgentPrepareSpec {
+    pub(super) fn prepare(config: NoriConfig) -> AgentPrepareSpec {
         AgentPrepareSpec {
             config: Arc::new(config),
             cli_version: env!("CARGO_PKG_VERSION").into(),
@@ -79,6 +93,7 @@ impl HostService {
                     "agentCapabilities":{"_meta":{"nori.dev/managedHost":launches.capabilities(),"nori.dev/durableRecovery":{"version":1},"nori.dev/followUp":{"version":1}}},
                     "server_info":{"name":"nori","version":env!("CARGO_PKG_VERSION")}
                 })),
+                "_nori/session/list" => Ok(json!({"sessions": launches.list()?})),
                 "_nori/session/ensure" => recovery.ensure(launches, params.clone()).await,
                 method if method.starts_with("_nori/host/") => {
                     recovery.control(launches, method, params).await
@@ -131,6 +146,10 @@ impl HostService {
                     }
                 });
             }
+            tokio::spawn(super::acp::adapter_modes::apply_when_started(
+                self.manager.clone(),
+                session.conversation_id,
+            ));
             self.managed
                 .set_selected_session(Some(session.conversation_id));
             return Ok(json!({"session_id":session.conversation_id.to_string(),"cwd":cwd}));
@@ -139,10 +158,23 @@ impl HostService {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("session_id is required"))?;
         let id = ConversationId::from_string(id)?;
-        let record = self
-            .manager
-            .get(&id)
-            .ok_or_else(|| anyhow::anyhow!("unknown session id"))?;
+        if self.is_deleted(&id) {
+            anyhow::bail!("unknown session id");
+        }
+        let Some(_) = self.manager.get(&id) else {
+            if method == "_nori/session/resume"
+                && let Some(transcript) =
+                    super::transcripts::load_stored(&self.config.nori_home, &id).await?
+            {
+                self.resume_stored(&id, transcript).await?;
+                tokio::spawn(super::acp::adapter_modes::apply_when_started(
+                    self.manager.clone(),
+                    id,
+                ));
+                return Ok(json!({"session_id": id.to_string()}));
+            }
+            anyhow::bail!("unknown session id");
+        };
         match method {
             "_nori/session/close" => self.manager.close(&id, Duration::ZERO).await?,
             "_nori/session/cancel" => {
@@ -153,9 +185,11 @@ impl HostService {
                     .await?
             }
             "_nori/session/resume" => {
-                let mut config = self.config_in(record.cwd).await?;
-                config.active_agent = record.agent;
-                self.manager.resume(&id, Self::prepare(config)).await?;
+                self.resume_failed(&id).await?;
+                tokio::spawn(super::acp::adapter_modes::apply_when_started(
+                    self.manager.clone(),
+                    id,
+                ));
             }
             _ => anyhow::bail!("unknown host operation"),
         }
@@ -163,7 +197,63 @@ impl HostService {
     }
 }
 
+impl HostService {
+    /// Restart a failed session on a new agent process under its own ID, in
+    /// its folder and with its agent.
+    pub(super) async fn resume_failed(&self, id: &ConversationId) -> anyhow::Result<()> {
+        let record = self
+            .manager
+            .get(id)
+            .ok_or_else(|| anyhow::anyhow!("unknown session id"))?;
+        let mut config = self.config_in(record.cwd).await?;
+        config.active_agent = record.agent;
+        self.restore_settings(id, &mut config);
+        self.manager.resume(id, Self::prepare(config)).await?;
+        Ok(())
+    }
+}
+
 impl ManagedAgent for HostService {
+    fn connection_opened(&self, connection: nori_harness::remote_agent::HostConnection) {
+        if self.launches.is_none() {
+            self.acp.opened(connection);
+        }
+    }
+
+    fn connection_closed(&self, client: i64) {
+        self.acp.closed(client);
+    }
+
+    fn runs_concurrently(&self, method: &str) -> bool {
+        self.launches.is_none() && super::acp::runs_concurrently(method)
+    }
+
+    fn accepts_client_messages(&self) -> bool {
+        self.launches.is_none()
+    }
+
+    fn instance_id(&self) -> Option<String> {
+        self.launches.is_none().then(|| self.instance.clone())
+    }
+
+    async fn message_from(&self, client: i64, message: Value) {
+        if self.launches.is_none() {
+            self.acp_message(client, message).await;
+        }
+    }
+
+    async fn request_from(&self, client: i64, request: Value) -> ManagedReply {
+        let method = request["method"].as_str().unwrap_or_default();
+        if self.launches.is_none() && super::acp::handles(method) {
+            return ManagedReply {
+                delivery_guard: None,
+                response: self.acp_request(client, &request).await,
+                subscription: None,
+            };
+        }
+        self.request(request).await
+    }
+
     fn recovery(&self) -> Option<nori_harness::remote_agent::recovery::SharedRecovery> {
         self.recovery.as_ref().map(|r| r.shared.clone())
     }
@@ -245,6 +335,9 @@ impl ManagedAgent for HostService {
             {
                 sessions["session_cwd"] = json!(true);
                 sessions["follow_up"] = json!(1);
+            }
+            if initialize && let Some(result) = reply.response.get_mut("result") {
+                super::acp::handshake::initialize(result);
             }
             return reply;
         }

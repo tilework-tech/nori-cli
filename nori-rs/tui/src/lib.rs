@@ -70,7 +70,6 @@ mod pager_overlay;
 mod pinned_plan_drawer;
 mod presentation;
 pub mod public_widgets;
-mod remote_control;
 mod render;
 mod resume_picker;
 mod session_log;
@@ -138,12 +137,6 @@ pub async fn run_main(
     _codex_linux_sandbox_exe: Option<PathBuf>,
     analytics: Option<nori_installed::AnalyticsReporter>,
 ) -> std::io::Result<AppExitInfo> {
-    // Pre-warm the ACP agent installation cache in a background thread.
-    // This runs `which` commands early so the agent picker opens quickly.
-    std::thread::spawn(|| {
-        nori_harness::prewarm_installation_cache();
-    });
-
     // Track install/session in background (non-blocking, fire-and-forget)
     // This updates ~/.nori/cli/.nori-install.json with launch metadata
     if let Ok(nori_home) = nori_config::find_nori_home() {
@@ -202,7 +195,13 @@ pub async fn run_main(
     });
     registry_agents.extend(cli.extra_agents.clone());
     if let Err(e) = nori_harness::initialize_registry(registry_agents) {
+        if !config.agent_token_providers.is_empty() {
+            return Err(std::io::Error::other(e));
+        }
         tracing::warn!("Failed to initialize agent registry with custom agents: {e}");
+    }
+    if let Err(e) = nori_harness::set_adapter_launch_overrides(config.acp_adapters.clone()) {
+        return Err(std::io::Error::other(e));
     }
 
     let (pending_worktree_ask, worktree_blocked_reason) = {
@@ -521,12 +520,8 @@ async fn run_ratatui_app(
         config.active_agent = agent.clone();
     }
 
-    let startup_remote_addr = cli
-        .remote
-        .as_deref()
-        .map(|spec| nori_harness::remote_agent::parse_bind_addr(spec, cli.remote_allow_nonloopback))
-        .transpose()
-        .map_err(|error| color_eyre::eyre::eyre!(error.to_string()))?;
+    config.active_agent = nori_harness::resolve_agent_slug(&config.active_agent);
+
     let Cli {
         prompt,
         images,
@@ -546,7 +541,6 @@ async fn run_ratatui_app(
         vertical_footer,
         cloud_mode,
         cloud_onboard,
-        startup_remote_addr,
         analytics.clone(),
     )
     .await;
@@ -569,7 +563,8 @@ fn resume_target_from_metadata(
 ) -> std::result::Result<resume_picker::ResumeTarget, String> {
     if let (Some(requested_agent), Some(recorded_agent)) =
         (requested_agent, metadata.agent.as_deref())
-        && requested_agent != recorded_agent
+        && nori_harness::resolve_agent_slug(requested_agent)
+            != nori_harness::resolve_agent_slug(recorded_agent)
     {
         return Err(format!(
             "Session {} was recorded with agent `{recorded_agent}`, but `--agent {requested_agent}` was requested.",
@@ -670,6 +665,17 @@ mod tests {
         .expect("recorded agent should be accepted");
 
         assert_eq!(target.agent.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn resume_accepts_an_alias_of_the_recorded_agent() {
+        let target = resume_target_from_metadata(
+            PathBuf::from("/synthetic"),
+            session_metadata(Some("gemini")),
+            Some("antigravity"),
+        )
+        .expect("the recorded provider matches the requested alias");
+        assert_eq!(target.agent.as_deref(), Some("gemini"));
     }
 
     #[test]

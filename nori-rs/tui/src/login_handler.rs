@@ -1,26 +1,15 @@
 //! Login handler for /login slash command.
 //!
-//! This module handles authentication flows for ACP agents:
-//! - OAuth browser flow (Codex)
-//! - External CLI passthrough (Gemini, Claude Code)
+//! Codex supports browser login here. Other providers use their native credentials.
 
 use codex_login::ShutdownHandle;
 use nori_harness::AgentKind;
-use nori_harness::list_available_agents;
-use tokio::task::JoinHandle;
 
-/// Method used for authentication
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LoginMethod {
-    /// OAuth browser flow - starts local server, opens browser
+/// Result of looking up authentication for the selected distribution.
+pub enum AgentLoginSupport {
     OAuthBrowser,
-    /// External CLI passthrough - spawns agent CLI with PTY
-    ExternalCli {
-        /// The command to run (e.g., "gemini")
-        command: String,
-        /// Arguments to pass (e.g., ["login"])
-        args: Vec<String>,
-    },
+    NotSupported { instructions: String },
+    Unknown { agent_name: String },
 }
 
 /// State of the login flow
@@ -30,43 +19,18 @@ pub enum LoginFlowState {
     Idle,
     /// OAuth flow in progress - waiting for browser
     AwaitingBrowserAuth,
-    /// External CLI login in progress - spawned PTY process
-    AwaitingExternalCli {
-        /// The agent name for display purposes
-        agent_name: String,
-    },
     /// Login successful
     Success,
     /// Login cancelled by user
     Cancelled,
 }
 
-/// Result of checking agent support for login
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AgentLoginSupport {
-    /// Agent supports in-app login
-    Supported {
-        agent: AgentKind,
-        is_installed: bool,
-        login_method: LoginMethod,
-    },
-    /// Agent doesn't support in-app login yet
-    NotSupported { agent_name: String },
-    /// Unknown agent
-    Unknown { agent_name: String },
-}
-
-/// Handler for the /login command flow.
-///
-/// Manages the OAuth authentication state and provides a shutdown handle
-/// for cancelling the login server.
+/// Tracks browser authentication and allows the user to cancel it.
 pub struct LoginHandler {
     /// Current state of the login flow
     state: LoginFlowState,
     /// Shutdown handle for cancelling OAuth flow
     shutdown_handle: Option<ShutdownHandle>,
-    /// Task handle for cancelling external CLI PTY process
-    pty_task_handle: Option<JoinHandle<()>>,
 }
 
 impl LoginHandler {
@@ -75,46 +39,29 @@ impl LoginHandler {
         Self {
             state: LoginFlowState::Idle,
             shutdown_handle: None,
-            pty_task_handle: None,
         }
     }
 
     /// Check if an agent supports in-app login
     pub fn check_agent_support(agent_name: &str) -> AgentLoginSupport {
-        let normalized = agent_name.to_lowercase();
-
-        // Try to find the agent in the registry
-        let agents = list_available_agents();
-        let agent_info = agents
-            .into_iter()
-            .find(|a| a.agent_name.to_lowercase() == normalized);
-
-        match agent_info {
-            Some(info) => {
-                match info.agent {
-                    // Codex supports in-app login via OAuth browser flow
-                    AgentKind::Codex => AgentLoginSupport::Supported {
-                        agent: AgentKind::Codex,
-                        is_installed: info.is_installed,
-                        login_method: LoginMethod::OAuthBrowser,
-                    },
-                    // Gemini supports in-app login via external CLI passthrough
-                    AgentKind::Gemini => AgentLoginSupport::Supported {
-                        agent: AgentKind::Gemini,
-                        is_installed: info.is_installed,
-                        login_method: LoginMethod::ExternalCli {
-                            command: "gemini".to_string(),
-                            args: vec!["login".to_string()],
-                        },
-                    },
-                    // Other agents don't support in-app login yet
-                    other => AgentLoginSupport::NotSupported {
-                        agent_name: other.display_name().to_string(),
-                    },
-                }
+        match nori_harness::get_agent_config(agent_name) {
+            Ok(config) => {
+                let instructions = match config.builtin_kind {
+                    Some(AgentKind::Gemini) => "Run agy in another terminal and choose your Google sign-in, or set GEMINI_API_KEY.".to_owned(),
+                    Some(AgentKind::GrokBuild) => "Run npx --yes @xai-official/grok@latest login in another terminal, or set XAI_API_KEY.".to_owned(),
+                    Some(AgentKind::ClaudeCode) => "Run claude in another terminal and use /login, or set ANTHROPIC_API_KEY.".to_owned(),
+                    Some(AgentKind::OpenCode) => config.auth_hint,
+                    Some(AgentKind::Hermes) => config.auth_hint,
+                    Some(AgentKind::Codex) => return AgentLoginSupport::OAuthBrowser,
+                    Some(AgentKind::Cursor) => config.auth_hint,
+                    Some(AgentKind::Pi) => "Run npx --yes @earendil-works/pi-coding-agent@latest in another terminal and use /login, or configure a named API connection.".to_owned(),
+                    None if !config.auth_hint.is_empty() => config.auth_hint,
+                    None => format!("Use the authentication method for {}.", config.display_name),
+                };
+                AgentLoginSupport::NotSupported { instructions }
             }
-            None => AgentLoginSupport::Unknown {
-                agent_name: agent_name.to_string(),
+            Err(_) => AgentLoginSupport::Unknown {
+                agent_name: agent_name.to_owned(),
             },
         }
     }
@@ -124,19 +71,9 @@ impl LoginHandler {
         self.state = LoginFlowState::AwaitingBrowserAuth;
     }
 
-    /// Start the external CLI login flow
-    pub fn start_external_cli(&mut self, agent_name: String) {
-        self.state = LoginFlowState::AwaitingExternalCli { agent_name };
-    }
-
     /// Set the shutdown handle for cancellation
     pub fn set_shutdown_handle(&mut self, handle: ShutdownHandle) {
         self.shutdown_handle = Some(handle);
-    }
-
-    /// Set the PTY task handle for cancellation
-    pub fn set_pty_task_handle(&mut self, handle: JoinHandle<()>) {
-        self.pty_task_handle = Some(handle);
     }
 
     /// OAuth login completed successfully
@@ -149,10 +86,6 @@ impl LoginHandler {
         // Shutdown OAuth server if running
         if let Some(handle) = self.shutdown_handle.take() {
             handle.shutdown();
-        }
-        // Abort PTY task if running (this will drop the session and kill the process)
-        if let Some(handle) = self.pty_task_handle.take() {
-            handle.abort();
         }
         self.state = LoginFlowState::Cancelled;
     }
@@ -170,19 +103,10 @@ mod tests {
 
     #[test]
     fn check_agent_support_returns_supported_for_codex_with_oauth() {
-        let support = LoginHandler::check_agent_support("codex");
-
-        match support {
-            AgentLoginSupport::Supported {
-                agent,
-                login_method,
-                ..
-            } => {
-                assert_eq!(agent, AgentKind::Codex);
-                assert_eq!(login_method, LoginMethod::OAuthBrowser);
-            }
-            _ => panic!("Expected Supported variant for codex"),
-        }
+        assert!(matches!(
+            LoginHandler::check_agent_support("codex-acp"),
+            AgentLoginSupport::OAuthBrowser
+        ));
     }
 
     #[test]
@@ -191,48 +115,21 @@ mod tests {
         let support = LoginHandler::check_agent_support("claude-code");
 
         match support {
-            AgentLoginSupport::NotSupported { agent_name } => {
-                assert_eq!(agent_name, "Claude Code");
+            AgentLoginSupport::NotSupported { instructions } => {
+                assert!(instructions.contains("ANTHROPIC_API_KEY"));
             }
             _ => panic!("Expected NotSupported variant for claude-code"),
         }
     }
 
     #[test]
-    fn check_agent_support_returns_supported_for_gemini_with_external_cli() {
-        // Gemini supports in-app login via external CLI passthrough
-        let support = LoginHandler::check_agent_support("gemini");
-
-        match support {
-            AgentLoginSupport::Supported {
-                agent,
-                login_method,
-                ..
-            } => {
-                assert_eq!(agent, AgentKind::Gemini);
-                match login_method {
-                    LoginMethod::ExternalCli { command, args } => {
-                        assert_eq!(command, "gemini");
-                        assert_eq!(args, vec!["login".to_string()]);
-                    }
-                    _ => panic!("Expected ExternalCli login method for gemini"),
-                }
-            }
-            _ => panic!("Expected Supported variant for gemini"),
-        }
-    }
-
-    #[test]
-    fn start_external_cli_transitions_to_awaiting_external_cli() {
-        let mut handler = LoginHandler::new();
-
-        handler.start_external_cli("Gemini".to_string());
-
-        match handler.state {
-            LoginFlowState::AwaitingExternalCli { agent_name } => {
-                assert_eq!(agent_name, "Gemini");
-            }
-            _ => panic!("Expected AwaitingExternalCli state"),
+    fn google_and_xai_login_identify_the_native_provider() {
+        for (agent, key, command) in [
+            ("agy", "GEMINI_API_KEY", "agy"),
+            ("grok", "XAI_API_KEY", "@xai-official/grok@latest login"),
+        ] {
+            assert!(matches!(LoginHandler::check_agent_support(agent),
+                AgentLoginSupport::NotSupported { instructions } if instructions.contains(key) && instructions.contains(command)));
         }
     }
 

@@ -53,7 +53,15 @@ pub struct AgentProcess {
 }
 
 impl AgentProcess {
-    pub fn spawn(mut cmd: tokio::process::Command) -> anyhow::Result<Self> {
+    pub fn spawn(cmd: tokio::process::Command) -> anyhow::Result<Self> {
+        Self::spawn_with_resource(cmd, ())
+    }
+
+    /// Keep launch inputs alive until the supervisor finishes reaping the group.
+    pub(super) fn spawn_with_resource(
+        mut cmd: tokio::process::Command,
+        resource: impl Send + 'static,
+    ) -> anyhow::Result<Self> {
         use anyhow::Context;
         use std::process::Stdio;
         cmd.stdin(Stdio::piped())
@@ -99,7 +107,9 @@ impl AgentProcess {
         let kill = handle.kill.clone();
         let group = handle.group_cleanup_complete.clone();
         tokio::spawn(async move {
-            exit_tx.send_replace(wait_for_child_exit(child, pid, kill, group).await);
+            let status = wait_for_child_exit(child, pid, kill, group).await;
+            drop(resource);
+            exit_tx.send_replace(status);
         });
         Ok(Self {
             stdin,
