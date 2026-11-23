@@ -3825,7 +3825,6 @@ dependencies = [
  "insta",
  "libc",
  "nori-config",
- "nori-exec",
  "nori-harness",
  "nori-installed",
  "nori-protocol",
@@ -3866,18 +3865,6 @@ dependencies = [
  "toml_edit",
  "url",
  "wildmatch",
-]
-
-[[package]]
-name = "nori-exec"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "nori-config",
- "nori-harness",
- "nori-installed",
- "nori-protocol",
- "tokio",
 ]
 
 [[package]]

@@ -13,7 +13,7 @@ types, agent hosting, sandboxing, authentication, and testing.
 The production path is layered downward:
 
 ```text
-nori-cli / nori-tui / nori-exec
+nori-cli / nori-tui
         -> nori-installed -> authenticated analytics ingress
         -> nori-harness
         -> nori-acp-host
@@ -31,9 +31,9 @@ used in production.
 - `cli/` dispatches the `nori` binary and sandbox debug commands. Its
   [host module](cli/src/host/docs.md) owns the detached process, private token,
   and session manager used by `nori host`, whose sessions each work in
-  their own folder.
-- `exec/` projects the harness into a final-answer plaintext command or a
-  bounded standard ACP-over-stdio agent facade.
+  their own folder. One-shot `nori exec "prompt"` is a thin ACP client of
+  that host: it uses the home's running host when it can and an in-process
+  host otherwise.
 - `tui/` renders events and forwards user intent through typed harness methods.
   Its [attach frontend](tui/src/attach/docs.md) instead consumes host-owned
   envelopes and sends managed commands; closing that terminal never ends the

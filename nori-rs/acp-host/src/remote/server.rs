@@ -117,6 +117,21 @@ impl RemoteAcpServer {
         super::host_wire::serve_stdio(managed, instance, stop).await
     }
 
+    /// Serve one in-process host client over channels of JSON-RPC lines,
+    /// with the same methods as stdio, until `input` closes (`None`) or
+    /// `stop` completes (its value).
+    pub async fn serve_host_pipe<M: super::ManagedAgent, T>(
+        managed: Arc<M>,
+        input: tokio::sync::mpsc::Receiver<String>,
+        output: tokio::sync::mpsc::Sender<String>,
+        stop: impl std::future::Future<Output = T>,
+    ) -> anyhow::Result<Option<T>> {
+        let instance = managed
+            .instance_id()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        super::host_wire::serve_pipe(managed, instance, input, output, stop).await
+    }
+
     /// Bind the listener and start serving `/acp`.
     pub async fn bind<H: HostedAgent>(addr: SocketAddr, hosted: Arc<H>) -> anyhow::Result<Self> {
         Self::bind_many([addr], hosted).await

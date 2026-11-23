@@ -167,16 +167,6 @@ pub(super) async fn serve_stdio<M: ManagedAgent, T>(
     instance: String,
     stop: impl std::future::Future<Output = T>,
 ) -> anyhow::Result<Option<T>> {
-    let shutdown = CancellationToken::new();
-    let state = HostState {
-        host,
-        lanes: Default::default(),
-        token: "".into(),
-        instance: instance.into(),
-        control: Default::default(),
-        generation: Arc::new(AtomicI64::new(0)),
-        shutdown: shutdown.clone(),
-    };
     // A pending read on Tokio's stdin keeps the runtime from shutting down,
     // so lines are read on a plain thread that ends with the process.
     let (lines, input) = tokio::sync::mpsc::channel::<std::io::Result<Vec<u8>>>(64);
@@ -190,27 +180,78 @@ pub(super) async fn serve_stdio<M: ManagedAgent, T>(
     });
     let incoming = tokio_stream::wrappers::ReceiverStream::new(input).filter_map(|line| async {
         match line.map(String::from_utf8) {
-            Ok(Ok(line)) if line.trim().is_empty() => None,
-            Ok(Ok(line)) => Some(Ok::<_, axum::Error>(Message::Text(line.into()))),
-            // Not UTF-8, so not JSON either: an empty frame earns the same
-            // parse error as any other line that is not JSON.
-            Ok(Err(_)) => Some(Ok(Message::Text(String::new().into()))),
-            Err(error) => Some(Err(axum::Error::new(error))),
+            Ok(Ok(line)) => Some(Ok(line)),
+            // Not UTF-8, so not JSON either: a replacement character earns
+            // the same parse error as any other line that is not JSON.
+            Ok(Err(_)) => Some(Ok(char::REPLACEMENT_CHARACTER.to_string())),
+            Err(error) => Some(Err(error)),
         }
     });
-    let sink = Box::pin(futures::sink::unfold(
+    let sink = futures::sink::unfold(
         tokio::io::stdout(),
         |mut output, frame: Message| async move {
             use tokio::io::AsyncWriteExt;
-            if let Message::Text(text) = frame {
+            if let Message::Text(line) = frame {
                 output
-                    .write_all(format!("{}\n", text.as_str()).as_bytes())
+                    .write_all(format!("{}\n", line.as_str()).as_bytes())
                     .await?;
                 output.flush().await?;
             }
             Ok::<_, std::io::Error>(output)
         },
-    ));
+    );
+    serve_lines(host, instance, incoming, sink, stop).await
+}
+
+/// Serve one in-process host client over channels of JSON-RPC lines until
+/// `input` closes or `stop` completes.
+pub(super) async fn serve_pipe<M: ManagedAgent, T>(
+    host: Arc<M>,
+    instance: String,
+    input: tokio::sync::mpsc::Receiver<String>,
+    output: tokio::sync::mpsc::Sender<String>,
+    stop: impl std::future::Future<Output = T>,
+) -> anyhow::Result<Option<T>> {
+    let incoming = tokio_stream::wrappers::ReceiverStream::new(input).map(Ok::<_, std::io::Error>);
+    let sink = futures::sink::unfold(output, |output, frame: Message| async move {
+        if let Message::Text(line) = frame {
+            output
+                .send(line.as_str().to_owned())
+                .await
+                .map_err(|_| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
+        }
+        Ok::<_, std::io::Error>(output)
+    });
+    serve_lines(host, instance, incoming, sink, stop).await
+}
+
+/// The client of a line transport always controls; blank lines are skipped
+/// and only text frames are written.
+async fn serve_lines<M: ManagedAgent, T>(
+    host: Arc<M>,
+    instance: String,
+    incoming: impl futures::Stream<Item = std::io::Result<String>> + Send,
+    sink: impl futures::Sink<Message, Error = std::io::Error> + Send,
+    stop: impl std::future::Future<Output = T>,
+) -> anyhow::Result<Option<T>> {
+    let shutdown = CancellationToken::new();
+    let state = HostState {
+        host,
+        lanes: Default::default(),
+        token: "".into(),
+        instance: instance.into(),
+        control: Default::default(),
+        generation: Arc::new(AtomicI64::new(0)),
+        shutdown: shutdown.clone(),
+    };
+    let incoming = incoming.filter_map(|line| async {
+        match line {
+            Ok(line) if line.trim().is_empty() => None,
+            Ok(line) => Some(Ok::<_, axum::Error>(Message::Text(line.into()))),
+            Err(error) => Some(Err(axum::Error::new(error))),
+        }
+    });
+    let sink = Box::pin(sink);
     let cancel = shutdown.child_token();
     let serving = serve_frames(
         sink,
@@ -230,15 +271,15 @@ pub(super) async fn serve_stdio<M: ManagedAgent, T>(
             shutdown.cancel();
             tokio::time::timeout(std::time::Duration::from_secs(5), serving)
                 .await
-                .map_err(|_| anyhow::anyhow!("the stdio client stopped reading"))??;
+                .map_err(|_| anyhow::anyhow!("the client stopped reading"))??;
             Some(stopped)
         }
     };
-    // The host closes a client that falls too far behind; a stdio client
+    // The host closes a client that falls too far behind; a line client
     // cannot reconnect, so that ends the host with an error.
     anyhow::ensure!(
         stopped.is_some() || !cancel.is_cancelled(),
-        "the stdio client fell too far behind and was disconnected"
+        "the client fell too far behind and was disconnected"
     );
     Ok(stopped)
 }

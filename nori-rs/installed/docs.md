@@ -15,7 +15,7 @@ Path: @/nori-rs/installed
 ### How it fits into the larger codebase
 
 ```text
-nori-cli / nori-exec / nori-tui
+     nori-cli / nori-tui
               │ SessionMode + AnalyticsReporter
               v
          nori-installed
@@ -31,10 +31,13 @@ install-state JSON      authenticated v1 envelope
 
 - [`@/nori-rs/cli`](../cli/docs.md) assigns the public session mode:
   `interactive`, `cloud`, `exec`, or `acp`.
-- [`@/nori-rs/exec`](../exec/docs.md) and [`@/nori-rs/tui`](../tui/docs.md)
-  attach the reporter to each launched [`HarnessHandle`](../harness/docs.md).
-  A logical session therefore owns its own one-shot activity boundary even when
-  one TUI process launches more than one agent session.
+- [`@/nori-rs/tui`](../tui/docs.md) attaches the reporter to each launched
+  [`HarnessHandle`](../harness/docs.md). A logical session therefore owns its
+  own one-shot activity boundary even when one TUI process launches more than
+  one agent session. One-shot `nori exec` is a host client that holds no
+  handle, so its [host client](../cli/src/host/docs.md#one-shot-exec) calls
+  `AnalyticsReporter::session_started` itself once the prompt's response
+  arrives.
 - The shared login configuration at `~/.nori-config.json` supplies Firebase
   credentials. Current files use nested `auth.username`, `auth.idToken`,
   `auth.idTokenExpiresAt`, and `auth.refreshToken`. Legacy files with top-level

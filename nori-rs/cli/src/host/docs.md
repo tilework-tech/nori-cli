@@ -17,7 +17,8 @@ Path: @/nori-rs/cli/src/host
   [stdin and stdout](#local-host-on-stdio) without lock or discovery files
   (`nori host --stdio`, aliased by `nori exec --acp`), and a dedicated managed
   machine can serve one launch as plain ACP the
-  [same way](#managed-launch-on-stdio).
+  [same way](#managed-launch-on-stdio). One-shot `nori exec "prompt"` is a
+  [thin ACP client](#one-shot-exec) of a running host or of an in-process one.
 - Owns Unix process lifetime and private host files; protocol framing remains
   in [acp-host](../../../acp-host/docs.md), and session policy remains in the
   [harness](../../../harness/docs.md).
@@ -141,11 +142,15 @@ host ls / stop / new --------------+                   SessionManager
   of the requested folder as `_nori/session/new` does, adds the client's
   stdio and HTTP `mcpServers` (remembered in the session settings so an agent
   change or restart keeps them), starts the agent named in
-  `_meta["nori/agent"]` if any, applies `[host] default_mode` when set, then
+  `_meta["nori/agent"]` if any (an alias such as `hermes-agent` is resolved
+  with `nori_harness::resolve_agent_slug` first), applies `[host] default_mode` when set, then
   attaches the connection from the session's first event and answers once
   the agent has started. A session whose agent never starts is hidden (marked
   deleted) and the agent's own error code is returned, carried up from
-  `nori_harness::runtime::AgentStartFailed`. `session/prompt` attaches the
+  `nori_harness::runtime::AgentStartFailed`. The [forwarder](acp/attach.rs)
+  keeps that code but replaces its message with the harness's explanation from
+  the session's end event when there is one (for example `Authentication
+  required for X.` plus the sign-in or install hint). `session/prompt` attaches the
   connection if needed, rejects a second turn with `-32015`, waits for the
   turn's ACP prompt response, and answers only after this connection's
   forwarder has delivered up to that journal sequence (a delivered-sequence
@@ -577,9 +582,9 @@ here from [CLI dispatch](../main.rs) with the same `--agent`, `-C`, `-c`,
 `--add-dir` and bypass overrides, before any prompt is read from stdin.
 `[host] managed = true` refuses it; that mode needs `--launch`.
 
-- [`serve_stdio`](mod.rs) builds the same `HostService` as `serve` (through
-  the shared `host_service` constructor) but without managed launches or
-  recovery, and hands it to `RemoteAcpServer::serve_host_stdio` in
+- [`serve_stdio`](local_stdio.rs) builds the same `HostService` as `serve`
+  (through `local_host`, over the shared `host_service` constructor) but
+  without managed launches or recovery, and hands it to `RemoteAcpServer::serve_host_stdio` in
   [acp-host](../../../acp-host/docs.md). No port is bound, no token is
   created, no host lock is taken and no `host.json`, `state.json` or `token`
   is written, so it runs beside a detached host of the same `NORI_HOME`
@@ -603,6 +608,55 @@ here from [CLI dispatch](../main.rs) with the same `--agent`, `-C`, `-c`,
 | SIGINT or SIGTERM | Sessions stop and the process exits non-zero. |
 
 See the [stdio host cases](../../tests/host_stdio.rs).
+
+#### One-shot exec
+
+[`oneshot.rs`](oneshot.rs) implements `nori exec "prompt"` and `nori -p` as
+an ACP v1 client of the host (contract §2/§5.3), replacing the deleted
+`nori-exec` crate. [CLI dispatch](../main.rs) resolves the prompt and
+configuration, calls `run`, and keeps ownership of stdout, stderr and the exit
+status, so flags and output are unchanged.
+
+```text
+nori exec "prompt"
+   |
+   +-- running host usable? --yes--> WebSocket (token from host.json)
+   |                                     session runs in that host's process
+   +-- otherwise ------------------> in-process local_host
+                                         RemoteAcpServer::serve_host_pipe
+                                         (in-memory line channels)
+```
+
+- **Host choice.** The running host is used only when its OS lock is held,
+  its `host.json` advertises `contract {acp: 1, nori: CONTRACT}`, it accepts
+  the discovery token within a short timeout, and the `initialize` reply
+  (sent without `observe`) gives this client `control.role = controller`.
+  Exec never takes control from another client; any failed check falls back.
+  A run with `-c` overrides or `--add-dir` (`own_host`) always skips the
+  running host, because that host applies its own configuration. The
+  in-process host takes no lock, publishes no discovery and binds no socket,
+  and its sessions stop (zero grace) when the run ends.
+- **Per run.** `initialize` (pipe only; the socket path already initialized
+  during host choice), `session/new` with the resolved `-C` folder or current
+  folder, empty `mcpServers` and `_meta["nori/agent"]` when `--agent`/`-a` was
+  given, `session/set_mode` `approve-all` under
+  `--dangerously-bypass-approvals-and-sandbox` else `agent`,
+  `session/prompt`, then `session/close` even after a failed prompt. On a
+  running host the closed session stays listed as stored.
+- **Output.** Text `agent_message_chunk` updates for the session are
+  concatenated; the CLI prints them plus a trailing newline. Every
+  `session/request_permission` is answered with its `reject_once` or
+  `reject_always` option, else `cancelled`, and marks the outcome
+  `permission_denied`, which the CLI turns into a non-zero exit with
+  "permission request was rejected during unattended execution". Any other
+  host request gets `-32601`. A JSON-RPC error on any call (an agent that fails
+  to start, a refused prompt) becomes the run's error on stderr, using the
+  host's message.
+- **Analytics.** `AnalyticsReporter::session_started` fires when the prompt's
+  response arrives (event mode stays `exec`), and the reporter is flushed
+  whether or not the run succeeded.
+
+See the [exec host client cases](../../tests/exec_host_client.rs).
 
 #### Managed launch on stdio
 
@@ -778,7 +832,10 @@ Recovering model context never entails submitting an interrupted prompt.
   occupied ports, and explicit stop; the [ACP v1 cases](../../tests/host_lifecycle/acp_v1.rs)
   drive the standard face against the mock agent, and the
   [stdio host cases](../../tests/host_stdio.rs) drive it on stdin and stdout
-  (including `nori exec --acp`). The published wire
+  (including `nori exec --acp`), and the
+  [exec host client cases](../../tests/exec_host_client.rs) cover one-shot
+  exec on a running host, beside a controlling client, and with overrides.
+  The published wire
   schema is pinned by a [drift test](../../tests/host_wire_schema.rs) (see
   [nori-protocol](../../../nori-protocol/docs.md)).
 

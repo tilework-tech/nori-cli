@@ -115,14 +115,19 @@ impl Forwarder {
                 if self.started {
                     return None;
                 }
-                return Some(Err(self.startup_error.take().unwrap_or_else(|| {
-                    AcpError::internal(
-                        ended
-                            .message
-                            .clone()
-                            .unwrap_or_else(|| "the session ended before it started".to_owned()),
-                    )
-                })));
+                // Keep the agent's own error code, with the harness's
+                // explanation of it (the sign-in or install hint) when there
+                // is one.
+                let message = ended.message.clone();
+                return Some(Err(match self.startup_error.take() {
+                    Some(error) => AcpError {
+                        message: message.unwrap_or(error.message),
+                        ..error
+                    },
+                    None => AcpError::internal(
+                        message.unwrap_or_else(|| "the session ended before it started".to_owned()),
+                    ),
+                }));
             }
             SessionEvent::Nori(NoriEvent::RequestResolved(resolved)) => {
                 self.forget(session, &resolved.request_id);
