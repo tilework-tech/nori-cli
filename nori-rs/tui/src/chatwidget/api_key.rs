@@ -24,9 +24,9 @@ impl ChatWidget {
     pub(super) fn open_api_key_preference(&mut self) {
         let slug = nori_harness::resolve_agent_slug(&self.config.active_agent);
         // A custom agent registered under a built-in alias is not built in.
-        let Some(agent) = nori_providers::AgentKind::from_slug(&slug)
-            .filter(|agent| agent.slug() == slug && !nori_providers::key_routes(*agent).is_empty())
-        else {
+        let Some(agent) = nori_auth_providers::AgentKind::from_slug(&slug).filter(|agent| {
+            agent.slug() == slug && !nori_auth_providers::key_routes(*agent).is_empty()
+        }) else {
             let name = nori_harness::get_agent_display_name(&self.config.active_agent);
             self.add_info_message(
                 format!("{name} signs in through its own login only; it takes no saved API key."),
@@ -41,7 +41,7 @@ impl ChatWidget {
             let detected = dirs::home_dir()
                 .ok_or_else(|| anyhow::anyhow!("could not find the home directory"))
                 .and_then(|home| {
-                    nori_providers::detect_local_agent(
+                    nori_auth_providers::detect_local_agent(
                         agent,
                         &home,
                         &nori_home,

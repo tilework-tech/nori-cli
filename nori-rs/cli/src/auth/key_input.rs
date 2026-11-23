@@ -35,7 +35,7 @@ pub(super) fn read_key(provider: &str) -> anyhow::Result<String> {
     let mut key = String::new();
     loop {
         crossterm::queue!(out, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
-        write!(out, "Key: {}", nori_providers::masked_key(&key))?;
+        write!(out, "Key: {}", nori_auth_providers::masked_key(&key))?;
         out.flush()?;
         match crossterm::event::read()? {
             Event::Paste(text) => key.extend(text.chars().filter(|c| !c.is_control())),

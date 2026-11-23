@@ -57,7 +57,7 @@
 - The **session manager** runs inside a client process; the **session broker** is a separate service.
 - **Transport**, **client connection**, and **session** mean channel, relationship, and conversation respectively.
 - A **session broker** has no single ACP role; its role depends on the connection boundary.
-- The `nori auth` command reports each **agent's** sign-in, and its `set-key` / `remove-key` manage API keys saved per **provider** (for example `openai`). Only an **agent** that calls that provider and is opted in with `nori auth prefer-api-key` (`[auth.<agent>] prefer_api_key`) receives the key; otherwise the **agent's** own login wins. A saved provider key is not a **token provider**: it configures no endpoint and is never applied to an agent bound to a token provider. The crate behind the command stays `nori-providers`, named for the **provider** domain.
+- The `nori auth` command reports each **agent's** sign-in, and its `set-key` / `remove-key` manage API keys saved per **provider** (for example `openai`). Only an **agent** that calls that provider and is opted in with `nori auth prefer-api-key` (`[auth.<agent>] prefer_api_key`) receives the key; otherwise the **agent's** own login wins. A saved provider key is not a **token provider**: it configures no endpoint and is never applied to an agent bound to a token provider. The crate behind the command is `nori-auth-providers`.
 
 ## Turns and Ownership
 

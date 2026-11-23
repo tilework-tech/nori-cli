@@ -1,5 +1,5 @@
 [package]
-name = "nori-providers"
+name = "nori-auth-providers"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,7 +7,7 @@ description = "Sign-in detection for built-in ACP agents and API keys saved per 
 
 [lib]
 doctest = false
-name = "nori_providers"
+name = "nori_auth_providers"
 path = "src/lib.rs"
 
 [lints]

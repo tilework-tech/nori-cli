@@ -1,6 +1,6 @@
-# Noridoc: nori-providers
+# Noridoc: nori-auth-providers
 
-Path: @/nori-rs/providers
+Path: @/nori-rs/auth-providers
 
 ### Overview
 
@@ -25,13 +25,13 @@ TUI /api-key                                         |
    detect_all / detect_local_agent /
    CredentialStore / masked_key
             \                                         /
-             +------------- nori-providers -----------+
+             +------------- nori-auth-providers -----------+
                      |                       |
           codex-keyring-store          nori-acp-host::registry
           (@/nori-rs/keyring-store)    (AgentKind, AcpAgentConfig)
 ```
 
-- The CLI's `nori auth` subcommand ([`auth.rs`](../cli/src/auth.rs)) is the stable interface for the Nori Native app: the app runs the bundled `nori` binary as a subprocess and uses `nori auth --json`, `set-key <provider>` (key on stdin, never argv), `remove-key <provider>`, and `prefer-api-key <agent> --json` / `prefer-login <agent> --json`. There is no ACP `authMethods` mapping and no custom ACP wire method for providers; the JSON output is the contract. The crate keeps the `nori-providers` name because its domain is model providers and sign-in detection; only the CLI surface is called `auth`.
+- The CLI's `nori auth` subcommand ([`auth.rs`](../cli/src/auth.rs)) is the stable interface for the Nori Native app: the app runs the bundled `nori` binary as a subprocess and uses `nori auth --json`, `set-key <provider>` (key on stdin, never argv), `remove-key <provider>`, and `prefer-api-key <agent> --json` / `prefer-login <agent> --json`. There is no ACP `authMethods` mapping and no custom ACP wire method for providers; the JSON output is the contract.
 - The per-agent opt-in lives in `config.toml` as `[auth.<agent>]` (`AgentAuthPreference` in [`nori-config`](../nori-config/docs.md)). This crate never reads config itself: callers resolve the preference and pass it in, as `DetectContext.prefer_api_key` for detection and as the `prefer_api_key` argument of `inject_saved_keys` / `apply_saved_keys` / `detect_local_agent`.
 - The harness calls `inject_saved_keys` during agent preparation ([`prepared.rs`](../harness/src/backend/prepared.rs)) with `AcpBackendConfig.prefer_api_key`, so the TUI, `nori exec`, local host sessions, and delegated children receive saved keys only for agents that prefer them. See [`nori-harness`](../harness/docs.md).
 - The TUI's `/api-key` picker ([`api_key.rs`](../tui/src/chatwidget/api_key.rs)) and `nori auth prefer-api-key` both call `detect_local_agent` to find a subscription before asking the user to confirm the billing change.
