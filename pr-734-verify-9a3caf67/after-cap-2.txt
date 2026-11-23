@@ -1,0 +1,40 @@
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/v734/run/q-c2/orbit-demo · Agent approvals
+  Agent        Synthetic Agent
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+
+› go
+
+
+• Ran cargo test -p orbit-demo
+  └ ┄ 11 lines hidden
+    cmd line 12 of 12
+
+• Tool [completed]: Fetch release notes (fetch)
+  └ ┄ 8 lines hidden
+    fetched row 08
+
+• Edited /tmp/v734/run/q-c2/orbit-demo/orbit.rs (+3 -3)
+    1 -let v1 = 1;
+    2 -let v2 = 2;
+    3 -let v3 = 3;
+    1 +let v1 = 10;
+    2 +let v2 = 20;
+    3 +let v3 = 30;
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+
+• Synthetic turn finished.
+
+
+› ! for shell commands
+

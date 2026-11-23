@@ -1,0 +1,40 @@
+/ T R A N S C R I P T / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+  System       /tmp/v734/run/q-ct/orbit-demo · Agent approvals
+  Agent        Synthetic Agent
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+
+
+› go
+
+
+• Ran cargo test -p orbit-demo
+  └ cmd line 01 of 30
+    cmd line 02 of 30
+    cmd line 03 of 30
+    cmd line 04 of 30
+    cmd line 05 of 30
+    cmd line 06 of 30
+    cmd line 07 of 30
+    cmd line 08 of 30
+    cmd line 09 of 30
+    cmd line 10 of 30
+    cmd line 11 of 30
+    cmd line 12 of 30
+    cmd line 13 of 30
+    cmd line 14 of 30
+    cmd line 15 of 30
+    cmd line 16 of 30
+    cmd line 17 of 30
+    cmd line 18 of 30
+┄ 12 more lines
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+
+• Synthetic turn finished.
+───────────────────────────────────────────────────────────────────────────────────────────── 100% ─
+ ↑/↓ to scroll   pgup/pgdn to page   home/end to jump
+ q to quit   esc to edit prev
+

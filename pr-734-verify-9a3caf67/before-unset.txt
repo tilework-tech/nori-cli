@@ -1,0 +1,40 @@
+• Ran cargo test -p orbit-demo
+  └ cmd line 01 of 12
+    cmd line 02 of 12
+    cmd line 03 of 12
+    cmd line 04 of 12
+    cmd line 05 of 12
+    cmd line 06 of 12
+    cmd line 07 of 12
+    cmd line 08 of 12
+    cmd line 09 of 12
+    cmd line 10 of 12
+    cmd line 11 of 12
+    cmd line 12 of 12
+
+• Tool [completed]: Fetch release notes (fetch)
+  └ Tool: Fetch release notes {"url":"https://example.test/notes"}
+    fetched row 01
+    fetched row 02
+    fetched row 03
+    fetched row 04
+    fetched row 05
+    fetched row 06
+    fetched row 07
+    fetched row 08
+
+• Edited /tmp/v734/run/q-none/orbit-demo/orbit.rs (+3 -3)
+    1 -let v1 = 1;
+    2 -let v2 = 2;
+    3 -let v3 = 3;
+    1 +let v1 = 10;
+    2 +let v2 = 20;
+    3 +let v3 = 30;
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────
+
+• Synthetic turn finished.
+
+
+› @ for file mentions
+
