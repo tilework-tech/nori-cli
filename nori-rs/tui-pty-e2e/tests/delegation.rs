@@ -6,23 +6,22 @@ use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
-fn config(enabled: bool) -> SessionConfig {
+fn config() -> SessionConfig {
     SessionConfig::new()
-        .with_extra_config_toml(format!("[features]\nmulti_session = {enabled}\n"))
         .with_agent_env("MOCK_AGENT_RESPONSE_MOCK_MODEL", "parent final answer")
         .with_agent_env("MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT", "child final answer")
 }
 
 fn spawn_fresh(rows: u16, cols: u16) -> TuiSession {
-    let mut session = TuiSession::spawn_with_config(rows, cols, config(true)).unwrap();
+    let mut session = TuiSession::spawn_with_config(rows, cols, config()).unwrap();
     session
         .wait_for_text("Mock Default Model", TIMEOUT)
         .unwrap();
     session
 }
 
-fn spawn(enabled: bool) -> TuiSession {
-    let mut session = TuiSession::spawn_with_config(40, 130, config(enabled)).unwrap();
+fn spawn() -> TuiSession {
+    let mut session = TuiSession::spawn_with_config(40, 130, config()).unwrap();
     session
         .wait_for_text("Mock Default Model", TIMEOUT)
         .unwrap();
@@ -35,7 +34,7 @@ fn spawn(enabled: bool) -> TuiSession {
 
 #[test]
 fn same_kind_child_starts_and_returns_without_approval_or_exiting_terminal() {
-    let mut session = spawn(true);
+    let mut session = spawn();
     session
         .submit_input("/delegate mock-model inspect the parser")
         .unwrap();
@@ -94,7 +93,7 @@ fn same_kind_child_starts_and_returns_without_approval_or_exiting_terminal() {
 
 #[test]
 fn different_kind_child_needs_start_and_its_permission_stays_in_child() {
-    let mut session = spawn(true);
+    let mut session = spawn();
     session
         .submit_input("/delegate mock-model-alt mock:request-permission:write-child-file")
         .unwrap();
@@ -150,7 +149,7 @@ fn different_kind_child_needs_start_and_its_permission_stays_in_child() {
 
 #[test]
 fn declining_different_kind_does_not_start_child() {
-    let mut session = spawn(true);
+    let mut session = spawn();
     session
         .submit_input("/delegate mock-model-alt inspect parser without starting a child")
         .unwrap();
@@ -180,24 +179,8 @@ fn declining_different_kind_does_not_start_child() {
 }
 
 #[test]
-fn delegation_is_unavailable_without_multi_session() {
-    let mut session = spawn(false);
-    session
-        .submit_input("/delegate mock-model-alt should not run")
-        .unwrap();
-    session
-        .wait_for_text("Unrecognized command '/delegate'", TIMEOUT)
-        .unwrap();
-    assert!(
-        !session
-            .screen_contents()
-            .contains("start a session with mock-model-alt")
-    );
-}
-
-#[test]
 fn delegation_reads_clearly_from_request_to_result() {
-    let mut session = spawn(true);
+    let mut session = spawn();
     session
         .submit_input("/delegate mock-model-alt mock:request-permission:write-child-file")
         .unwrap();
@@ -313,7 +296,7 @@ fn start_waiting_child(session: &mut TuiSession) {
 
 #[test]
 fn alt_down_reaches_a_waiting_child_even_with_a_draft_in_the_parent() {
-    let mut session = spawn(true);
+    let mut session = spawn();
     start_waiting_child(&mut session);
     session.type_input("my unsent draft").unwrap();
     session
@@ -359,7 +342,7 @@ fn alt_down_reaches_a_waiting_child_even_with_a_draft_in_the_parent() {
 
 #[test]
 fn alt_up_in_a_top_level_session_leaves_the_prompt_alone() {
-    let mut session = spawn(true);
+    let mut session = spawn();
     session.settle(Duration::from_millis(300));
     let before = session.screen_contents();
     session.send_key(Key::AltUp).unwrap();

@@ -441,9 +441,7 @@ fn picker_choice_supersedes_an_alias_override_in_the_next_session() {
     let config = SessionConfig::new()
         .with_agent("antigravity".into())
         .with_extra_path(bin.path().to_owned())
-        .with_extra_config_toml(
-            "[features]\nmulti_session = true\n[default_models]\ngemini = 'mock-model-fast'",
-        )
+        .with_extra_config_toml("[default_models]\ngemini = 'mock-model-fast'")
         .with_arg("-c")
         .with_arg("default_models.agy=mock-model-default");
 

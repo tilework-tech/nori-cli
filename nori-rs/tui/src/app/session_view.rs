@@ -54,9 +54,9 @@ impl App {
     }
 
     /// Make `widget` the active session. A session let go of with
-    /// `shutdown_current_conversation` under `[features] multi_session` is
-    /// parked and the screen starts clean for the new one; otherwise the new
-    /// widget takes the old one's place in the navigation order.
+    /// `shutdown_current_conversation` while live is parked and the screen
+    /// starts clean for the new one; otherwise the new widget takes the old
+    /// one's place in the navigation order.
     pub(crate) fn install_active_widget(&mut self, widget: ChatWidget) {
         let previous = self.chat_widget.session_generation();
         let next = widget.session_generation();

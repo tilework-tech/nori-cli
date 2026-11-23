@@ -167,11 +167,10 @@ impl ChatWidget {
         }
         // With several sessions, starting another one leaves the busy one
         // running in the background.
-        let starts_beside = self.config.multi_session
-            && matches!(
-                cmd,
-                SlashCommand::New | SlashCommand::Agent | SlashCommand::Resume
-            );
+        let starts_beside = matches!(
+            cmd,
+            SlashCommand::New | SlashCommand::Agent | SlashCommand::Resume
+        );
         if !cmd.available_during_task() && !starts_beside && self.bottom_pane.is_task_running() {
             let message = format!(
                 "'/{}' is disabled while a task is in progress.",
@@ -224,7 +223,7 @@ impl ChatWidget {
                 self.open_viewonly_session_picker();
             }
             SlashCommand::Close => {
-                if self.config.multi_session && !self.cloud_mode {
+                if !self.cloud_mode {
                     self.app_event_tx.send(AppEvent::CloseSession {
                         generation: self.session_generation,
                     });

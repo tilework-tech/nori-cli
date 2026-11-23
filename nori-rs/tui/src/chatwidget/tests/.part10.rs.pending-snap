@@ -1,0 +1,27 @@
+{"run_id":"1795395128-24818251","line":739,"new":{"module_name":"nori_tui__chatwidget__tests__part10","snapshot_name":"nori_connection_status_updates_render_clear_messages","metadata":{"source":"tui/src/chatwidget/tests/part10.rs","assertion_line":739,"expression":"rendered"},"snapshot":""},"old":{"module_name":"nori_tui__chatwidget__tests__part10","metadata":{},"snapshot":"• Cloud connection lost. Reconnecting…\n\n• Cloud connection restored."}}
+{"run_id":"1795395128-24818251","line":1114,"new":{"module_name":"nori_tui__chatwidget__tests__part10","snapshot_name":"proactive_turn_status_bounds_unowned_output_and_owned_prompt_broadcast_renders_once","metadata":{"source":"tui/src/chatwidget/tests/part10.rs","assertion_line":1114,"expression":"observer_history"},"snapshot":""},"old":{"module_name":"nori_tui__chatwidget__tests__part10","metadata":{},"snapshot":"› what's the status here so far?\n\n\n• No implementation work has started."}}
+{"run_id":"1795395128-24818251","line":691,"new":{"module_name":"nori_tui__chatwidget__tests__part10","snapshot_name":"stable_builds_still_report_agent_errors","metadata":{"source":"tui/src/chatwidget/tests/part10.rs","assertion_line":691,"expression":"history_text(&mut rx)"},"snapshot":""},"old":{"module_name":"nori_tui__chatwidget__tests__part10","metadata":{},"snapshot":"• Codex ACP 1.1.4 session updated:\n  error.message=temporary overload, error.will_retry=true"}}
+{"run_id":"1795395260-488376701","line":248,"new":null,"old":null}
+{"run_id":"1795395260-488376701","line":739,"new":null,"old":null}
+{"run_id":"1795395260-488376701","line":1114,"new":null,"old":null}
+{"run_id":"1795395260-488376701","line":1160,"new":null,"old":null}
+{"run_id":"1795395260-488376701","line":1350,"new":null,"old":null}
+{"run_id":"1795395260-488376701","line":691,"new":null,"old":null}
+{"run_id":"1795395346-155633658","line":248,"new":null,"old":null}
+{"run_id":"1795395346-155633658","line":722,"new":null,"old":null}
+{"run_id":"1795395346-155633658","line":1097,"new":null,"old":null}
+{"run_id":"1795395346-155633658","line":1143,"new":null,"old":null}
+{"run_id":"1795395346-155633658","line":1333,"new":null,"old":null}
+{"run_id":"1795395346-155633658","line":674,"new":null,"old":null}
+{"run_id":"1795395439-190339464","line":248,"new":null,"old":null}
+{"run_id":"1795395439-190339464","line":722,"new":null,"old":null}
+{"run_id":"1795395439-190339464","line":1097,"new":null,"old":null}
+{"run_id":"1795395439-190339464","line":1143,"new":null,"old":null}
+{"run_id":"1795395439-190339464","line":1333,"new":null,"old":null}
+{"run_id":"1795395439-190339464","line":674,"new":null,"old":null}
+{"run_id":"1795395910-896544436","line":248,"new":null,"old":null}
+{"run_id":"1795395910-896544436","line":722,"new":null,"old":null}
+{"run_id":"1795395910-896544436","line":1097,"new":null,"old":null}
+{"run_id":"1795395910-896544436","line":1143,"new":null,"old":null}
+{"run_id":"1795395910-896544436","line":1333,"new":null,"old":null}
+{"run_id":"1795395910-896544436","line":674,"new":null,"old":null}

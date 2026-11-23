@@ -1,5 +1,4 @@
-//! Closing sessions, the session cap, and loop iterations, with
-//! `[features] multi_session`.
+//! Closing sessions, the session cap, and loop iterations.
 //!
 //! A closed session stays in the session list, marked closed, until the user
 //! removes it, so it is clear what happened to it. Loop iterations replace
@@ -20,7 +19,7 @@ impl App {
     /// With several sessions, refuse to start another one at the cap and say
     /// how to make room. Returns true when the start was refused.
     pub(super) fn refuse_at_session_cap(&mut self) -> bool {
-        if !self.config.multi_session || self.session_manager.free_slots() > 0 {
+        if self.session_manager.free_slots() > 0 {
             return false;
         }
         let limit = self.session_manager.max_sessions();
@@ -131,19 +130,19 @@ impl App {
         generation: SessionGeneration,
     ) -> Result<bool> {
         let active = self.chat_widget.session_generation();
-        if self.config.multi_session {
-            if generation != active {
-                return Ok(true);
-            }
-            if let Some(next) = self.next_open_session(generation) {
-                self.show_session(next);
-                tui.frame_requester().schedule_frame();
-                return Ok(true);
-            }
+        if generation != active {
+            return Ok(true);
+        }
+        if let Some(next) = self.next_open_session(generation) {
+            self.show_session(next);
+            tui.frame_requester().schedule_frame();
+            return Ok(true);
+        }
+        // A released cloud session keeps its history and the release
+        // confirmation on screen above the picker.
+        if !self.cloud_mode {
             self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
             self.session_reprint_pending = true;
-        } else if generation != active {
-            return Ok(true);
         }
         self.cancel_primary_agent_preparation();
         self.discard_candidate();

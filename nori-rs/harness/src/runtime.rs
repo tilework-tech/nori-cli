@@ -914,7 +914,6 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
     AcpBackendConfig {
         agent_token_providers: Arc::new(config.agent_token_providers.clone()),
         agent,
-        multi_session: config.multi_session,
         delegation_context: None,
         cwd: config.cwd.clone(),
         approval_policy: config.approval_policy,

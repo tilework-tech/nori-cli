@@ -509,23 +509,6 @@ fn cloud_mode_disables_local_commands_when_load_session_is_supported() {
 }
 
 #[test]
-fn local_mode_rejects_cloud_close_even_when_the_agent_supports_it() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
-    let generation = chat.session_generation;
-
-    chat.handle_session_event(generation, initialize_agent_with_session_close());
-
-    assert!(
-        !chat.ensure_builtin_command_enabled(crate::slash_command::SlashCommand::Close),
-        "session/close support must not turn a local launch into a cloud session"
-    );
-    assert!(
-        history_text(&mut rx).contains("/close is available only in cloud sessions."),
-        "the command error should explain the explicit cloud boundary"
-    );
-}
-
-#[test]
 fn cloud_quit_remains_a_detach_when_load_session_is_supported() {
     let (mut chat, mut rx, _op_rx) = make_cloud_chatwidget_manual();
     let generation = chat.session_generation;

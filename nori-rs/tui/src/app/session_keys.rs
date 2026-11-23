@@ -1,4 +1,4 @@
-//! Keys that move between sessions, active with `[features] multi_session`.
+//! Keys that move between sessions.
 
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -20,7 +20,7 @@ impl App {
     /// Moves work over an open view, so the user can leave a session that is
     /// showing a request; opening the list needs the composer in front.
     pub(super) fn handle_session_hotkey(&mut self, tui: &mut tui::Tui, key: &KeyEvent) -> bool {
-        if !self.config.multi_session || self.session_setup_pending() {
+        if self.session_setup_pending() {
             return false;
         }
         let pressed = |action| matches_binding(self.hotkey_config.binding_for(action), key);

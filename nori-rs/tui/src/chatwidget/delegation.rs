@@ -7,10 +7,6 @@ impl ChatWidget {
         let Some(command) = crate::delegation::parse_command(text) else {
             return false;
         };
-        if !self.config.multi_session {
-            self.add_error_message("Delegation requires [features] multi_session = true.".into());
-            return true;
-        }
         if text.trim() == "/delegate" && self.show_delegation_approval() {
             return true;
         }

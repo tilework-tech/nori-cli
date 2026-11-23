@@ -44,7 +44,7 @@ impl Host {
         std::fs::write(
             home.path().join("config.toml"),
             format!(
-                "agent = \"mock-model\"\n[features]\nmulti_session = true\n\
+                "agent = \"mock-model\"\n\
                  [projects.{quoted_cwd}]\ntrust_level = \"trusted\"\n"
             ),
         )
@@ -64,7 +64,7 @@ impl Host {
     }
 
     fn args(args: &[&str]) -> Vec<String> {
-        ["-c", "features.multi_session=true", "--agent", "mock-model"]
+        ["--agent", "mock-model"]
             .into_iter()
             .chain(args.iter().copied())
             .map(str::to_owned)

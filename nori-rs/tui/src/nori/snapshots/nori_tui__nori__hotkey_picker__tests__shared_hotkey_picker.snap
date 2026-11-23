@@ -21,4 +21,9 @@ expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
      Kill to Line Start              ctrl + u
      Yank                            ctrl + y
      History Search                  ctrl + r
+     Toggle Plan Drawer              alt + p
+     Previous Session                alt + ,
+     Next Session                    alt + .
+     Next Waiting Session            alt + down
+     Open Session List               alt + s
   ↑↓/j/k move  enter rebind  r reset  esc close

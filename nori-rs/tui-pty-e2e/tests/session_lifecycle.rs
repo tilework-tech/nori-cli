@@ -1,5 +1,4 @@
-//! Starting, closing and looping sessions beside each other, behind
-//! `[features] multi_session`.
+//! Starting, closing and looping sessions beside each other.
 
 use std::net::TcpListener;
 use std::time::Duration;
@@ -20,7 +19,7 @@ const STREAM: &str = "streaming work mock:stream-until-cancel";
 
 fn config(extra_toml: &str) -> SessionConfig {
     SessionConfig::new()
-        .with_extra_config_toml(format!("[features]\nmulti_session = true\n{extra_toml}"))
+        .with_extra_config_toml(extra_toml.to_string())
         .with_agent_env("MOCK_AGENT_RESPONSE_MOCK_MODEL", ANSWER)
         .with_agent_env("MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT", "beta agent answer")
 }
@@ -871,34 +870,6 @@ fn legacy_remote_control_follows_the_session_on_screen() {
             .history_contents()
             .contains("remote selected-session marker")
     );
-}
-
-#[test]
-#[cfg(target_os = "linux")]
-fn managed_remote_endpoint_requires_multi_session() {
-    for multi_session in [false, true] {
-        let port = reserve_loopback_port();
-        let settings = if multi_session {
-            config("")
-        } else {
-            SessionConfig::new()
-        };
-        let mut session = spawn_with(
-            settings
-                .with_arg("--remote")
-                .with_arg(port.to_string())
-                .with_excluded_binary("tailscale"),
-        );
-        session
-            .wait_for_text("ACP URLs:", TIMEOUT)
-            .expect("listener enabled");
-        let connected = connect(format!("ws://127.0.0.1:{port}/sessions").as_str());
-        assert_eq!(
-            connected.is_ok(),
-            multi_session,
-            "endpoint exposure follows the feature flag"
-        );
-    }
 }
 
 #[test]

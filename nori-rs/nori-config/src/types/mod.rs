@@ -497,8 +497,6 @@ pub struct SandboxWorkspaceWrite {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct FeaturesToml {
     pub enable_experimental_windows_sandbox: Option<bool>,
-    /// Run several sessions in one TUI and move between them.
-    pub multi_session: Option<bool>,
 }
 
 /// Persisted safety notice acknowledgements.
@@ -1112,34 +1110,6 @@ impl HotkeyAction {
             Self::OpenSessionList,
             Self::ParentSession,
         ]
-    }
-
-    /// Whether the action moves between sessions, which only exists when
-    /// `[features] multi_session` is on.
-    pub fn is_multi_session(&self) -> bool {
-        match self {
-            Self::PreviousSession
-            | Self::NextSession
-            | Self::NextWaitingSession
-            | Self::OpenSessionList
-            | Self::ParentSession => true,
-            Self::OpenTranscript
-            | Self::OpenEditor
-            | Self::MoveBackwardChar
-            | Self::MoveForwardChar
-            | Self::MoveBeginningOfLine
-            | Self::MoveEndOfLine
-            | Self::MoveBackwardWord
-            | Self::MoveForwardWord
-            | Self::DeleteBackwardChar
-            | Self::DeleteForwardChar
-            | Self::DeleteBackwardWord
-            | Self::KillToEndOfLine
-            | Self::KillToBeginningOfLine
-            | Self::Yank
-            | Self::HistorySearch
-            | Self::TogglePlanDrawer => false,
-        }
     }
 }
 
@@ -2182,7 +2152,7 @@ pub struct TuiConfigToml {
     /// `None` or absent means disabled.
     pub loop_count: Option<i32>,
 
-    /// Most sessions that may run at once with `[features] multi_session`.
+    /// Most sessions that may run at once.
     pub max_sessions: Option<i32>,
 
     /// Automatically create a git worktree at session start.
@@ -2366,8 +2336,6 @@ pub struct NoriConfig {
 
     /// Whether the experimental Windows sandbox is enabled in user config.
     pub windows_sandbox_enabled: bool,
-    /// Several sessions in one TUI (`[features] multi_session`).
-    pub multi_session: bool,
 
     /// Environment inherited by sandboxed commands.
     pub shell_environment_policy: ShellEnvironmentPolicy,
@@ -2427,7 +2395,7 @@ pub struct NoriConfig {
     /// `None` means disabled (default).
     pub loop_count: Option<i32>,
 
-    /// Most sessions that may run at once with `[features] multi_session`.
+    /// Most sessions that may run at once.
     pub max_sessions: i32,
 
     /// Automatically create a git worktree at session start.
@@ -2550,7 +2518,6 @@ impl Default for NoriConfig {
             has_explicit_approval_or_sandbox_policy: false,
             forced_auto_mode_downgraded_on_windows: false,
             windows_sandbox_enabled: false,
-            multi_session: false,
             shell_environment_policy: ShellEnvironmentPolicy::default(),
             active_project: ProjectConfig::default(),
             notices: Notice::default(),

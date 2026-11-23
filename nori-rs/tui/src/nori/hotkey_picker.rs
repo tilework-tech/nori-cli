@@ -47,17 +47,10 @@ pub(crate) struct HotkeyPickerView {
 }
 
 impl HotkeyPickerView {
-    /// `include_session_moves` lists the session-move hotkeys, which exist
-    /// only with `[features] multi_session`.
-    pub fn new(
-        config: &HotkeyConfig,
-        include_session_moves: bool,
-        app_event_tx: AppEventSender,
-    ) -> Self {
+    pub fn new(config: &HotkeyConfig, app_event_tx: AppEventSender) -> Self {
         let entries: Vec<(HotkeyAction, HotkeyBinding)> = config
             .all_bindings()
             .into_iter()
-            .filter(|(action, _)| include_session_moves || !action.is_multi_session())
             .map(|(action, binding)| (action, binding.clone()))
             .collect();
 
@@ -328,7 +321,7 @@ mod tests {
         let (tx_raw, rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = HotkeyConfig::default();
-        let picker = HotkeyPickerView::new(&config, false, tx);
+        let picker = HotkeyPickerView::new(&config, tx);
         (picker, rx)
     }
 
@@ -337,20 +330,26 @@ mod tests {
     }
 
     #[test]
-    fn session_move_hotkeys_are_listed_only_with_multi_session() {
+    fn session_move_hotkeys_are_listed() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let config = HotkeyConfig::default();
-        let listed = |include| {
-            HotkeyPickerView::new(&config, include, AppEventSender::new(tx_raw.clone()))
-                .entries()
-                .iter()
-                .filter(|(action, _)| action.is_multi_session())
-                .map(|(action, binding)| (*action, binding.as_str().to_string()))
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(listed(false), Vec::new());
+        let listed = HotkeyPickerView::new(&config, AppEventSender::new(tx_raw))
+            .entries()
+            .iter()
+            .map(|(action, binding)| (*action, binding.as_str().to_string()))
+            .filter(|(action, _)| {
+                matches!(
+                    action,
+                    HotkeyAction::PreviousSession
+                        | HotkeyAction::NextSession
+                        | HotkeyAction::NextWaitingSession
+                        | HotkeyAction::OpenSessionList
+                        | HotkeyAction::ParentSession
+                )
+            })
+            .collect::<Vec<_>>();
         assert_eq!(
-            listed(true),
+            listed,
             vec![
                 (HotkeyAction::PreviousSession, "alt+,".to_string()),
                 (HotkeyAction::NextSession, "alt+.".to_string()),
@@ -364,7 +363,7 @@ mod tests {
     #[test]
     fn picker_starts_with_default_bindings() {
         let (picker, _rx) = make_picker();
-        assert_eq!(picker.entries().len(), 16);
+        assert_eq!(picker.entries().len(), 21);
         assert_eq!(picker.entries()[0].0, HotkeyAction::OpenTranscript);
         assert_eq!(picker.entries()[0].1, HotkeyBinding::from_str("ctrl+t"));
         assert_eq!(picker.entries()[1].0, HotkeyAction::OpenEditor);

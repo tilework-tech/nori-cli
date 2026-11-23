@@ -177,10 +177,6 @@ pub(crate) struct AttachCommand {
 }
 
 pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        config.multi_session,
-        "nori attach requires [features] multi_session = true"
-    );
     let mut refresh_local_token = None;
     let (endpoint, token) = if let Some(endpoint) = command.host {
         let path = command.token_file.context("--token-file is required")?;

@@ -5,7 +5,6 @@
 fn test_cloud_sessions_share_the_session_list() {
     let fake = FakeHandroll::new();
     let config = cloud_session_config(&fake)
-        .with_extra_config_toml("[features]\nmulti_session = true\n")
         .with_mock_response("cloud answer");
     let mut session =
         TuiSession::spawn_with_config(30, 110, config).expect("Failed to spawn nori cloud");
@@ -65,7 +64,6 @@ fn test_cloud_sessions_share_the_session_list() {
 fn test_cloud_close_beside_another_session_lists_it_as_closed() {
     let fake = FakeHandroll::new();
     let config = cloud_lifecycle_config(&fake)
-        .with_extra_config_toml("[features]\nmulti_session = true\n")
         .with_mock_response("cloud answer");
     let mut session =
         TuiSession::spawn_with_config(30, 110, config).expect("Failed to spawn nori cloud");

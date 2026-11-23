@@ -1,5 +1,3 @@
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use strum::IntoEnumIterator;
 use strum_macros::AsRefStr;
 use strum_macros::EnumIter;
@@ -187,20 +185,9 @@ impl SlashCommand {
         match self {
             #[cfg(not(feature = "login"))]
             SlashCommand::Logout => false,
-            SlashCommand::Sessions | SlashCommand::Delegate => {
-                MULTI_SESSION_COMMANDS.load(Ordering::Relaxed)
-            }
             _ => true,
         }
     }
-}
-
-/// Whether commands that exist only with `[features] multi_session` are
-/// offered. Set once when the App starts; the flag needs a restart to change.
-static MULTI_SESSION_COMMANDS: AtomicBool = AtomicBool::new(false);
-
-pub(crate) fn set_multi_session_commands(enabled: bool) {
-    MULTI_SESSION_COMMANDS.store(enabled, Ordering::Relaxed);
 }
 
 /// Return all built-in commands in a Vec paired with their command string.

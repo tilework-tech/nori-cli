@@ -194,7 +194,7 @@ pub(crate) enum AppEvent {
 
     InsertHistoryCell(Box<dyn HistoryCell>),
 
-    /// Open the list of sessions (`[features] multi_session`).
+    /// Open the list of sessions.
     OpenSessionList,
 
     ResolveDelegation {

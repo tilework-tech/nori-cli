@@ -268,17 +268,6 @@ impl App {
 
                 self.pending_session_activation = Some(PendingSessionActivation::New);
                 self.deferred_spawn_pending = false;
-                // With several sessions the previous one keeps running, so
-                // there is nothing to resume later.
-                let summary = (!self.config.multi_session)
-                    .then(|| {
-                        session_summary(
-                            self.chat_widget.token_usage(),
-                            self.chat_widget.conversation_id(),
-                            self.chat_widget.session_stats().has_activity(),
-                        )
-                    })
-                    .flatten();
                 let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
                 self.shutdown_current_conversation();
                 let init = self.chat_widget_init(
@@ -292,17 +281,6 @@ impl App {
                 self.install_active_widget(ChatWidget::new(init));
                 self.configure_new_chat_widget();
                 self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
-                if let Some(summary) = summary {
-                    let mut lines: Vec<Line<'static>> = Vec::new();
-                    if let Some(usage_line) = summary.usage_line {
-                        lines.push(usage_line.into());
-                    }
-                    if let Some(command) = summary.resume_command {
-                        lines.push(RESUME_HINT_LEAD.into());
-                        lines.push(command.cyan().into());
-                    }
-                    self.chat_widget.add_plain_history_lines(lines);
-                }
                 tui.frame_requester().schedule_frame();
             }
             AppEvent::SessionCloseFailed { message } => {
@@ -756,9 +734,7 @@ impl App {
                 self.tick_all_sessions();
             }
             AppEvent::SessionEvent { generation, event } => {
-                if self.config.multi_session {
-                    self.session_previews.observe(generation, &event);
-                }
+                self.session_previews.observe(generation, &event);
                 let candidate_matches = matches!(
                     &self.candidate_agent,
                     Some(CandidateAgent::Activating { widget, .. })

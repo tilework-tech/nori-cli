@@ -219,7 +219,6 @@ impl NoriConfig {
                 .features
                 .enable_experimental_windows_sandbox
                 .unwrap_or(false),
-            multi_session: toml.features.multi_session.unwrap_or(false),
             shell_environment_policy: toml.shell_environment_policy.into(),
             active_project,
             notices: toml.notice,

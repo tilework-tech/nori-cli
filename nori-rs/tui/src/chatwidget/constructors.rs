@@ -85,11 +85,7 @@ impl ChatWidget {
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
         .to_string();
         let session_generation = next_session_generation();
-        let app_event_tx = if config.multi_session {
-            app_event_tx.for_session(session_generation)
-        } else {
-            app_event_tx
-        };
+        let app_event_tx = app_event_tx.for_session(session_generation);
         let spawn_result = if let Some(agent) = prepared_agent {
             super::agent::launch_prepared_agent(
                 &session_manager,
@@ -280,11 +276,7 @@ impl ChatWidget {
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
         .to_string();
         let session_generation = next_session_generation();
-        let app_event_tx = if config.multi_session {
-            app_event_tx.for_session(session_generation)
-        } else {
-            app_event_tx
-        };
+        let app_event_tx = app_event_tx.for_session(session_generation);
         let spawn_result = if let Some(agent) = prepared_agent {
             super::agent::launch_prepared_agent(
                 &session_manager,

@@ -124,10 +124,10 @@ fn make_chatwidget_manual_for_mode(
     let (event_tx, event_rx) = unbounded_channel();
     let app_event_tx = AppEventSender::new(event_tx);
     let config = test_config();
-    let widget = ChatWidget::new(ChatWidgetInit {
+    let mut widget = ChatWidget::new(ChatWidgetInit {
         config,
         frame_requester: FrameRequester::test_dummy(),
-        app_event_tx,
+        app_event_tx: app_event_tx.clone(),
         initial_prompt: None,
         initial_images: Vec::new(),
         enhanced_keys_supported: false,
@@ -145,6 +145,9 @@ fn make_chatwidget_manual_for_mode(
         ),
         clock,
     });
+    // Every widget tags its history with its session; these tests read the
+    // untagged events, as the active session's are once the app routes them.
+    widget.app_event_tx = app_event_tx;
     let (_unused_tx, unused_rx) = unbounded_channel();
     (widget, event_rx, unused_rx)
 }

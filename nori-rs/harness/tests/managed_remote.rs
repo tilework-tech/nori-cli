@@ -52,7 +52,6 @@ impl Fixture {
                 .start(StartSession {
                     agent: SessionAgent::Prepare(AgentPrepareSpec {
                         config: Arc::new(NoriConfig {
-                            multi_session: true,
                             active_agent: if index == 0 {
                                 "mock-model"
                             } else {

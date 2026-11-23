@@ -158,13 +158,6 @@ impl App {
             .set_login_agent_override(Some(agent_name.clone()));
         let generation = crate::chatwidget::agent::next_session_generation();
         let config = self.config_for_agent(&agent_name);
-        // With several sessions the session lines say this instead, so the
-        // session on screen keeps no line about another session.
-        if !self.config.multi_session {
-            self.chat_widget
-                .add_info_message(format!("Preparing {display_name}…"), None);
-        }
-
         let spec = crate::chatwidget::agent::agent_prepare_spec(config, None);
         let tx = self.app_event_tx.clone();
         let prepared_agent_name = agent_name.clone();
@@ -248,12 +241,11 @@ impl App {
     }
 
     /// Let go of the active session before another widget takes its place.
-    /// With `[features] multi_session` a live session keeps running and is
-    /// parked when the next widget is installed; otherwise it shuts down.
+    /// A live session keeps running and is parked when the next widget is
+    /// installed; a session without one shuts down.
     pub(crate) fn shutdown_current_conversation(&mut self) {
-        if self.config.multi_session
-            && (self.chat_widget.has_harness_session()
-                || self.chat_widget.managed_conversation_id().is_some())
+        if self.chat_widget.has_harness_session()
+            || self.chat_widget.managed_conversation_id().is_some()
         {
             self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
         } else {
