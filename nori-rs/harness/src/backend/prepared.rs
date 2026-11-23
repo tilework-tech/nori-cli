@@ -91,9 +91,12 @@ impl PreparedAgent {
             let nori_home = config.nori_home.clone();
             let mut with_saved_key = agent_config.clone();
             let lookup = tokio::task::spawn_blocking(move || {
-                nori_providers::inject_saved_keys(&mut with_saved_key, &nori_home, true, &|key| {
-                    std::env::var(key).ok()
-                });
+                nori_auth_providers::inject_saved_keys(
+                    &mut with_saved_key,
+                    &nori_home,
+                    true,
+                    &|key| std::env::var(key).ok(),
+                );
                 with_saved_key
             });
             match tokio::time::timeout(SAVED_KEY_TIMEOUT, lookup).await {

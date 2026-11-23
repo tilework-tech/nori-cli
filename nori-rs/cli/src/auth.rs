@@ -11,17 +11,17 @@ use std::sync::Arc;
 use anyhow::Context;
 use clap::Parser;
 use codex_keyring_store::DefaultKeyringStore;
+use nori_auth_providers::AgentKind;
+use nori_auth_providers::AuthReport;
+use nori_auth_providers::Credential;
+use nori_auth_providers::CredentialStore;
+use nori_auth_providers::DetectContext;
+use nori_auth_providers::Platform;
+use nori_auth_providers::Provider;
+use nori_auth_providers::SavedIndex;
+use nori_auth_providers::StoreBackend;
+use nori_auth_providers::SystemKeychain;
 use nori_config::NoriConfig;
-use nori_providers::AgentKind;
-use nori_providers::AuthReport;
-use nori_providers::Credential;
-use nori_providers::CredentialStore;
-use nori_providers::DetectContext;
-use nori_providers::Platform;
-use nori_providers::Provider;
-use nori_providers::SavedIndex;
-use nori_providers::StoreBackend;
-use nori_providers::SystemKeychain;
 use serde_json::json;
 
 #[derive(Debug, Parser)]
@@ -96,7 +96,7 @@ pub(crate) fn run(command: AuthCommand) -> anyhow::Result<()> {
             let key = key_input::read_key(provider.display_name())?;
             let credential = Credential::api_key(&key)?;
             let key = key.trim();
-            let (prefix, issuer) = nori_providers::key_prefix(key).unwrap_or(("", ""));
+            let (prefix, issuer) = nori_auth_providers::key_prefix(key).unwrap_or(("", ""));
             if !issuer.is_empty() && !provider.display_name().starts_with(issuer) {
                 let article = if issuer.starts_with(['A', 'E', 'I', 'O', 'U', 'x']) {
                     "an"
@@ -152,7 +152,7 @@ pub(crate) fn run(command: AuthCommand) -> anyhow::Result<()> {
             let config = load_config(&nori_home)?;
             let home = dirs::home_dir().context("could not find the home directory")?;
             let prefer = config.auth_preference(agent.slug()).prefer_api_key;
-            let local = nori_providers::detect_local_agent(agent, &home, &nori_home, prefer)?;
+            let local = nori_auth_providers::detect_local_agent(agent, &home, &nori_home, prefer)?;
             prefer::prefer_api_key(&nori_home, &config, &local, yes, json)?;
         }
         Some(AuthAction::PreferLogin { agent, json }) => {
@@ -178,7 +178,7 @@ fn report(nori_home: &Path, store: &CredentialStore) -> anyhow::Result<AuthRepor
     };
     let env = |key: &str| std::env::var(key).ok();
     let prefer = |agent: AgentKind| config.auth_preference(agent.slug()).prefer_api_key;
-    let mut report = nori_providers::detect_all(&DetectContext {
+    let mut report = nori_auth_providers::detect_all(&DetectContext {
         home: &home,
         env: &env,
         platform: Platform::current(),

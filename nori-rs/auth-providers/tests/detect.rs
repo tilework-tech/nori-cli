@@ -6,16 +6,16 @@ use std::path::PathBuf;
 
 use common::Fixture;
 use nori_acp_host::registry::AgentKind;
-use nori_providers::AuthStatus;
-use nori_providers::CredentialKind;
-use nori_providers::CredentialSource;
-use nori_providers::DetectContext;
-use nori_providers::DetectedCredential;
-use nori_providers::Notice;
-use nori_providers::Platform;
-use nori_providers::Provider;
-use nori_providers::StoreBackend;
-use nori_providers::detect_all;
+use nori_auth_providers::AuthStatus;
+use nori_auth_providers::CredentialKind;
+use nori_auth_providers::CredentialSource;
+use nori_auth_providers::DetectContext;
+use nori_auth_providers::DetectedCredential;
+use nori_auth_providers::Notice;
+use nori_auth_providers::Platform;
+use nori_auth_providers::Provider;
+use nori_auth_providers::StoreBackend;
+use nori_auth_providers::detect_all;
 use pretty_assertions::assert_eq;
 
 const CLAUDE_OAUTH: &str = r#"{"claudeAiOauth":{"accessToken":"sk-ant-oat01-SECRET","refreshToken":"sk-ant-ort01-SECRET","expiresAt":1999999999000,"scopes":["user:inference"],"subscriptionType":"max"}}"#;

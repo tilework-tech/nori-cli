@@ -7,18 +7,18 @@ use std::io::Write;
 use std::path::Path;
 
 use crossterm::style::Stylize;
+use nori_auth_providers::AgentKind;
+use nori_auth_providers::LocalAgentAuth;
+use nori_auth_providers::Provider;
 use nori_config::NoriConfig;
 use nori_config::NoriConfigEdits;
-use nori_providers::AgentKind;
-use nori_providers::LocalAgentAuth;
-use nori_providers::Provider;
 use serde_json::json;
 
 /// Parse an agent slug, pointing provider names at the agents that use them.
 /// Agent names win, since `cursor` is both an agent and a provider.
 pub(super) fn parse_agent(name: &str) -> anyhow::Result<AgentKind> {
     if let Some(agent) = AgentKind::from_slug(name) {
-        if nori_providers::key_routes(agent).is_empty() {
+        if nori_auth_providers::key_routes(agent).is_empty() {
             anyhow::bail!(
                 "{} signs in through its own login only; it takes no saved API key",
                 agent.display_name()
@@ -39,7 +39,7 @@ pub(super) fn parse_agent(name: &str) -> anyhow::Result<AgentKind> {
     }
     let accepting: Vec<_> = AgentKind::all()
         .iter()
-        .filter(|agent| !nori_providers::key_routes(**agent).is_empty())
+        .filter(|agent| !nori_auth_providers::key_routes(**agent).is_empty())
         .map(AgentKind::slug)
         .collect();
     anyhow::bail!("unknown agent; use one of {}", accepting.join(", "))

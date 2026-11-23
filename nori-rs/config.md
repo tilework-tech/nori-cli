@@ -199,7 +199,7 @@ the agent's variable is in `launch.env_remove`; agents bound to a named token
 provider receive no saved keys. Broker-managed sessions never use saved keys.
 Keys saved per agent by earlier development builds (`saved-keys.json`) are
 rejected with instructions to delete them and save again.
-[Details](providers/docs.md)
+[Details](auth-providers/docs.md)
 
 ## Custom agents: `[[agents]]`
 

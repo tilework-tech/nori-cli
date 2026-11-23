@@ -10,16 +10,16 @@ use codex_keyring_store::CredentialStoreError;
 use codex_keyring_store::KeyringStore;
 use codex_keyring_store::tests::MockKeyringStore;
 use nori_acp_host::registry::AgentKind;
-use nori_providers::AgentAuthStatus;
-use nori_providers::Credential;
-use nori_providers::CredentialStore;
-use nori_providers::DetectContext;
-use nori_providers::KeychainProbe;
-use nori_providers::Platform;
-use nori_providers::Provider;
-use nori_providers::SavedIndex;
-use nori_providers::StoreBackend;
-use nori_providers::detect_agent;
+use nori_auth_providers::AgentAuthStatus;
+use nori_auth_providers::Credential;
+use nori_auth_providers::CredentialStore;
+use nori_auth_providers::DetectContext;
+use nori_auth_providers::KeychainProbe;
+use nori_auth_providers::Platform;
+use nori_auth_providers::Provider;
+use nori_auth_providers::SavedIndex;
+use nori_auth_providers::StoreBackend;
+use nori_auth_providers::detect_agent;
 
 /// A keychain that only knows the listed services.
 #[derive(Default)]

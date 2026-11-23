@@ -7,14 +7,14 @@ use std::collections::HashMap;
 use common::file_store;
 use nori_acp_host::registry::get_agent_config;
 use nori_acp_host::registry::get_agent_launch_config;
+use nori_auth_providers::Credential;
+use nori_auth_providers::CredentialStore;
+use nori_auth_providers::Provider;
+use nori_auth_providers::apply_saved_keys;
+use nori_auth_providers::inject_saved_keys;
 use nori_config::token_providers::Preset;
 use nori_config::token_providers::Protocol;
 use nori_config::token_providers::TokenProvider;
-use nori_providers::Credential;
-use nori_providers::CredentialStore;
-use nori_providers::Provider;
-use nori_providers::apply_saved_keys;
-use nori_providers::inject_saved_keys;
 use pretty_assertions::assert_eq;
 
 fn store_with(saved: &[(Provider, &str)]) -> (tempfile::TempDir, CredentialStore) {

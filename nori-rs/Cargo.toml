@@ -29,7 +29,7 @@ members = [
     "utils/readiness",
     "utils/string",
     "harness",
-    "providers",
+    "auth-providers",
     "installed",
     "mock-acp-agent",
     "nori-protocol",
@@ -59,7 +59,7 @@ codex-execpolicy = { path = "execpolicy" }
 codex-file-search = { path = "file-search" }
 codex-git = { path = "utils/git" }
 codex-keyring-store = { path = "keyring-store" }
-nori-providers = { path = "providers" }
+nori-auth-providers = { path = "auth-providers" }
 codex-linux-sandbox = { path = "linux-sandbox" }
 codex-sandbox = { path = "sandbox" }
 nori-acp-host = { path = "acp-host" }

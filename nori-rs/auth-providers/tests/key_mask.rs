@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
-use nori_providers::masked_key;
+use nori_auth_providers::masked_key;
 use pretty_assertions::assert_eq;
 
 #[test]

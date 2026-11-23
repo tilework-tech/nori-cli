@@ -517,7 +517,7 @@ so cloud mode rejects it (managed launches never use saved keys).
 
 - An agent with no saved-key routes (for example Hermes or a custom agent)
   gets an info message instead of a picker.
-- Otherwise `nori_providers::detect_local_agent` runs on a blocking task (it
+- Otherwise `nori_auth_providers::detect_local_agent` runs on a blocking task (it
   may touch the OS keyring) and posts `AppEvent::OpenApiKeyPreference` with an
   `ApiKeyPreference`: the current `[auth.<agent>]` values, the providers with a
   saved key, and the `api_key_billing_warning()` message when a subscription is

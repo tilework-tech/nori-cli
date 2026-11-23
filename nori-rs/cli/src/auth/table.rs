@@ -1,8 +1,8 @@
-use nori_providers::AuthStatus;
-use nori_providers::CredentialKind;
-use nori_providers::CredentialSource;
+use nori_auth_providers::AuthStatus;
+use nori_auth_providers::CredentialKind;
+use nori_auth_providers::CredentialSource;
 
-pub(super) fn print_table(report: &nori_providers::AuthReport) {
+pub(super) fn print_table(report: &nori_auth_providers::AuthReport) {
     let rows: Vec<[String; 4]> = report
         .agents
         .iter()

@@ -32,7 +32,7 @@ The crate owns:
   agent slug and read through `NoriConfig::auth_preference(slug)`, which
   returns the defaults for an absent agent. The harness turns this into
   `AcpBackendConfig.prefer_api_key`, which gates saved-key injection in
-  [`nori-providers`](../providers/docs.md); `nori auth prefer-api-key` and the
+  [`nori-auth-providers`](../auth-providers/docs.md); `nori auth prefer-api-key` and the
   TUI's `/api-key` write it with `NoriConfigEdits`;
 - `AskForApproval`, `SandboxPolicy`, `SandboxMode`, and `TrustLevel`;
 - `McpServerConfig` and MCP transport configuration;
