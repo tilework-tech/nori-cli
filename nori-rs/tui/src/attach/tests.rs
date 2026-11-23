@@ -279,11 +279,14 @@ fn failed_session_resume_hotkey_keeps_the_selected_host_identity() {
     runtime.state.connected = true;
     runtime.state.role_changed("controller");
     runtime.state.list_open = true;
-    runtime.state.replace_sessions(json!({"sessions":[{"session_id":"one","agent":"mock-model","status":"failed","title":"Recover this"}]})).unwrap();
+    runtime.state.replace_sessions(json!({"sessions":[{"session_id":"one","agent":"mock-model","status":"failed","title":"Recover this","cwd":"/work/one"}]})).unwrap();
     runtime.key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
     let request = rx.try_recv().expect("Ctrl+R sends a host resume request");
-    assert_eq!(request["method"], "_nori/session/resume");
-    assert_eq!(request["params"]["session_id"], "one");
+    assert_eq!(request["method"], "session/resume");
+    assert_eq!(
+        request["params"],
+        json!({"sessionId": "one", "cwd": "/work/one", "mcpServers": []})
+    );
     runtime.state.list_open = false;
     runtime.key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
     assert!(
@@ -449,6 +452,7 @@ include!("tests_requests.rs");
 include!("tests_list.rs");
 
 include!("tests_folders.rs");
+include!("tests_acp.rs");
 
 fn working_runtime() -> (
     super::runtime::Runtime,
