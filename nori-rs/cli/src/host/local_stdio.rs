@@ -1,6 +1,10 @@
-//! A local host served to one client on this process's stdin and stdout.
+//! A stdio client of a host: relayed to the home's running host when it can
+//! share it, and otherwise served by a host of its own on this process's
+//! stdin and stdout.
 
 use std::sync::Arc;
+
+use futures::StreamExt;
 use std::time::Duration;
 
 use nori_config::NoriConfig;
@@ -30,9 +34,13 @@ pub(super) fn local_host(
     Ok(super::host_service(config, overrides, manager, None, None))
 }
 
-/// Serve a local host whose one client speaks ACP on stdin and stdout. It
-/// takes no host lock and publishes no discovery, so it runs beside a
-/// background host of the same home, and its sessions end with it.
+/// Serve a client that speaks ACP on stdin and stdout.
+///
+/// A client without configuration of its own joins the home's running host
+/// when that host gives it control, and shares that host's sessions, which
+/// outlive the client. Otherwise it gets a local host that takes no host
+/// lock and publishes no discovery, so it runs beside a background host of
+/// the same home, and its sessions end with it.
 pub(crate) async fn serve(
     (config, overrides): (NoriConfig, NoriConfigOverrides),
 ) -> anyhow::Result<()> {
@@ -40,6 +48,24 @@ pub(crate) async fn serve(
         !config.host.managed,
         "this home sets [host] managed = true; a managed host serves stdio only with `nori host --stdio --launch FILE`"
     );
+    let mut lines = RemoteAcpServer::stdin_lines();
+    // A running host applies its own configuration, so a client that brings
+    // configuration needs a host of its own.
+    let shares = overrides.agent.is_none()
+        && overrides.raw_overrides.is_empty()
+        && overrides.additional_writable_roots.is_empty()
+        && overrides.approval_policy.is_none()
+        && overrides.sandbox_mode.is_none();
+    let first = if shares {
+        match super::join::relay(&config.nori_home, &mut lines).await? {
+            super::join::Joined::Relayed => return Ok(()),
+            super::join::Joined::Declined(first) => first,
+        }
+    } else {
+        None
+    };
+    let lines = futures::stream::iter(first.map(Ok))
+        .chain(tokio_stream::wrappers::ReceiverStream::new(lines));
     let host = local_host(config, overrides)?;
     #[cfg(unix)]
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -57,7 +83,7 @@ pub(crate) async fn serve(
         };
         stop
     };
-    let served = RemoteAcpServer::serve_host_stdio(host.clone(), stop).await;
+    let served = RemoteAcpServer::serve_host_stdio_lines(host.clone(), lines, stop).await;
     let report = host.manager.shutdown(Duration::ZERO).await;
     match served? {
         None | Some(Stop::Requested) => {}

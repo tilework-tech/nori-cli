@@ -39,6 +39,7 @@ pub use types::AutoWorktree;
 pub use types::BrowserProfileMode;
 pub use types::CloudConfigToml;
 pub use types::DEFAULT_AGENT;
+pub use types::DEFAULT_MAX_CLIENTS;
 pub use types::DedicatedRoots;
 pub use types::FeaturesToml;
 pub use types::FileManager;

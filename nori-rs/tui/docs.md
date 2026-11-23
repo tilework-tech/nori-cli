@@ -1392,8 +1392,9 @@ for command behavior.
 The interactive TUI serves no remote endpoint. The earlier `--remote` /
 `--remote-allow-nonloopback` flags, the `/remote-control` command, the
 TUI-owned listener lifecycle, and the unauthenticated `/acp` endpoint it
-exposed were retired in favor of the background host: remote and multi-client
-access goes through `nori host` and its [attached frontend](src/attach/docs.md)
+exposed were removed in favor of the background host: remote and multi-client
+access goes through `nori host` and its [attached frontend](src/attach/docs.md),
+and `/acp` is now that host's authenticated endpoint
 (see `@/docs/remote-control.md`). Prepared agents are no longer inspected for
 the old `nori.remoteControl` initialize marker, so every startup follows the
 ordinary picker or activation path.

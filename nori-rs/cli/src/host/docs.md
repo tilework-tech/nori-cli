@@ -6,16 +6,18 @@ Path: @/nori-rs/cli/src/host
 
 - Implements `nori host`, its administrative commands (`ls`, `stop`, `new`),
   and `nori attach` discovery so agent sessions can outlive every terminal.
-- A local host's client contract is standard ACP v1 on `/sessions` (any
-  number of sessions per connection) plus the `_nori/*` extension; the
+- A local host's client contract is standard ACP v1 over the ACP remote
+  transport's WebSocket profile on `/acp` (alias `/sessions`; any number of
+  clients up to `[host] max_clients`, any number of sessions per connection) plus the `_nori/*` extension; the
   older `_nori/session/*` methods remain as aliases that `nori attach` and
   the administrative commands still use.
 - Local sessions use the host's start folder or a folder supplied by the client.
   A machine can enable [managed launch admission](#managed-launch-control-v1)
   to run each binding's pinned adapter in its provisioned workspace and home.
-  The same local host can also serve one client on its own
-  [stdin and stdout](#local-host-on-stdio) without lock or discovery files
-  (`nori host --stdio`, aliased by `nori exec --acp`), and a dedicated managed
+  A stdio client (`nori host --stdio`, aliased by `nori exec --acp`)
+  [joins the running host](#local-host-on-stdio) and shares its sessions when
+  it can, and otherwise gets a private host without lock or discovery files;
+  a dedicated managed
   machine can serve one launch as plain ACP the
   [same way](#managed-launch-on-stdio). One-shot `nori exec "prompt"` is a
   [thin ACP client](#one-shot-exec) of a running host or of an in-process one.
@@ -41,12 +43,12 @@ Path: @/nori-rs/cli/src/host
   process termination. Ending the last session never ends the host.
 
 ```text
-host command -> detached host -> authenticated /sessions -> HostService
-                                   ^                         |
-attach TUI ------------------------+                         v
-host ls / stop / new --------------+                   SessionManager
-                                                             |
-                                                       agent processes
+host command -> detached host -> authenticated /acp -----> HostService
+                                   ^  (alias /sessions)          |
+attach TUI ------------------------+                             v
+host ls / stop / new --------------+                       SessionManager
+stdio client (joined) -------------+                             |
+remote ACP client (via TLS front) -+                       agent processes
 ```
 
 ### Core Implementation
@@ -121,7 +123,13 @@ host ls / stop / new --------------+                   SessionManager
   listed; no match fails with a pointer to `nori host ls | cat` (full IDs) and
   to `nori attach` without an ID. The host itself only knows full IDs.
 - In local mode the host's client contract is standard ACP v1, served by the
-  [ACP face](acp/mod.rs) on `/sessions` beside the `_nori/*` extension.
+  [ACP face](acp/mod.rs) on `/acp` (and its alias `/sessions`) beside the
+  `_nori/*` extension. [Startup](mod.rs) publishes `ws://127.0.0.1:<port>/acp`
+  in `host.json` and `state.json`; a managed host publishes `/sessions`
+  instead. The listener is bound with `bind_host_with_limit` and
+  `[host] max_clients`, so one client past the limit gets HTTP 503. A
+  client's disconnect never ends sessions; it reconnects with a new
+  `initialize` and `session/load` or `session/resume`.
   Managed mode (`[host] managed = true`) does not serve these methods and
   keeps its supervisor wire unchanged. The socket loop in
   [acp-host](../../../acp-host/src/remote/host_wire.rs) hands each
@@ -236,7 +244,7 @@ An external client calls `_nori/session/follow_up` with a fresh JSON-RPC request
 
 | Transport | Session and turn identifiers | Authenticated sender in receipt |
 | --- | --- | --- |
-| Local host `/sessions` | Initialize with the host bearer and acquire the controller role. Check `result.capabilities.nori_sessions.follow_up == 1`. Use the conversation's `session_id` and the harness `request_id` from prompt admission or its prompting event. | `host-controller`. Observers receive the read-only error. |
+| Local host `/acp` | Initialize with the host bearer and acquire the controller role. Check `result.capabilities.nori_sessions.follow_up == 1`. Use the conversation's `session_id` and the harness `request_id` from prompt admission or its prompting event. | `host-controller`. Observers receive the read-only error. |
 | Machine host `/managed` | Discover `nori.dev/followUp.version == 1` in the control initialize result’s `agentCapabilities._meta`. After ensure and ACP initialization, wrap the request in the same `{bindingId,generation,message}` envelope as the original prompt. Use the regular ACP session ID and that prompt's JSON-RPC ID, retaining its string or integer type. Allocate unique prompt IDs throughout the logical session. | `machine-client`, authenticated by the machine bearer and scoped to the admitted generation. |
 
 Send exactly the fields shown. Choose `steer` or `queue` for `intent`, supply nonempty ACP content and assign a stable, nonblank `message_id` of at most 256 bytes per submission. The host supplies the sender from the authorized path. It identifies the calling principal at this transport boundary. The response is a delivery receipt such as `{"message_id":"correction-1","sender":"host-controller","status":"injected"}`.
@@ -574,16 +582,32 @@ adopting ancestor reaps them. See [process supervision](../../../acp-host/src/co
 
 #### Local host on stdio
 
-`nori host --stdio` without `--launch` runs a headless local host in the
-foreground whose one client speaks the [ACP face](#local-host-and-attach) on
-stdin and stdout, one JSON-RPC message per line. `nori exec --acp` dispatches
-here from [CLI dispatch](../main.rs) with the same `--agent`, `-C`, `-c`,
-`--add-dir` and bypass overrides, before any prompt is read from stdin.
-`[host] managed = true` refuses it; that mode needs `--launch`.
+`nori host --stdio` without `--launch` serves one client that speaks the
+[ACP face](#local-host-and-attach) on stdin and stdout, one JSON-RPC message
+per line. `nori exec --acp` dispatches here from [CLI dispatch](../main.rs)
+with the same `--agent`, `-C`, `-c`, `--add-dir` and bypass overrides, before
+any prompt is read from stdin. `[host] managed = true` refuses it; that mode
+needs `--launch`.
 
-- [`serve_stdio`](local_stdio.rs) builds the same `HostService` as `serve`
+- **Joining the running host.** [`join.rs`](join.rs) relays the client to
+  the home's running background host when all of these hold: the command
+  carries no configuration of its own (no agent, `-c`, `--add-dir`, approval
+  or sandbox override), `host.json` advertises a compatible contract
+  (`compatible_discovery`, which one-shot exec shares), the client's first
+  non-blank line is an `initialize`, and the running host answers it within
+  a short timeout with `control.role: "controller"`. The process then copies
+  stdin lines to `/acp` as text frames and the host's frames to stdout. The
+  client shares the host's sessions with every other client and they outlive
+  it: stdin EOF closes only this connection and exits 0; SIGINT or SIGTERM
+  closes it and exits non-zero. A watcher reply or an unreachable host closes
+  that connection, and the already-read `initialize` line is replayed to a
+  private host instead. A stdio client never takes control from another.
+- **Private host.** Otherwise [`serve`](local_stdio.rs) builds the same
+  `HostService` as the background host
   (through `local_host`, over the shared `host_service` constructor) but
-  without managed launches or recovery, and hands it to `RemoteAcpServer::serve_host_stdio` in
+  without managed launches or recovery, and hands it with the stdin lines
+  (prefixed by any replayed `initialize`) to
+  `RemoteAcpServer::serve_host_stdio_lines` in
   [acp-host](../../../acp-host/docs.md). No port is bound, no token is
   created, no host lock is taken and no `host.json`, `state.json` or `token`
   is written, so it runs beside a detached host of the same `NORI_HOME`
@@ -598,6 +622,8 @@ here from [CLI dispatch](../main.rs) with the same `--agent`, `-C`, `-c`,
   instead of closing the stream.
 - Blank lines are ignored; a non-JSON line gets a `-32700` error with a null
   `id`. stdout carries only ACP lines; logs go to stderr.
+
+On a private host:
 
 | Event | Outcome |
 | --- | --- |
@@ -807,8 +833,9 @@ Recovering model context never entails submitting an interrupted prompt.
   file validation after a reconnect authentication failure. Explicit endpoints
   require `--host` together with `--token-file` and receive no local credential
   rediscovery callback. Token contents never appear in startup output.
-- The authenticated listener serves `/sessions` and adds `/managed` when
-  managed launches are enabled. For the local attach protocol, see the
+- The authenticated listener serves `/acp` and its alias `/sessions`; with
+  managed launches enabled it serves `/sessions` and `/managed` instead, with
+  no `/acp` and no client limit. For the local attach protocol, see the
   [wire contract](../../../../docs/remote-control.md#11-background-host-and-attached-terminals).
 - Delegation requests pass through `ManagedRemoteHost` to the same manager
   used by local sessions. Child sessions consume the ordinary session cap
@@ -828,7 +855,10 @@ Recovering model context never entails submitting an interrupted prompt.
 - [Lifecycle tests](../../tests/host_lifecycle.rs) use isolated homes and
   bounded process waits to cover detached startup, privacy, lock ownership,
   occupied ports, and explicit stop; the [ACP v1 cases](../../tests/host_lifecycle/acp_v1.rs)
-  drive the standard face against the mock agent, and the
+  drive the standard face against the mock agent, the
+  [remote transport cases](../../tests/host_lifecycle/remote_transport.rs)
+  cover `/acp` and its alias, `Acp-Connection-Id`, refusals, binary frames,
+  the client limit, and sessions outliving their client, the
   [stdio host cases](../../tests/host_stdio.rs) drive it on stdin and stdout
   (including `nori exec --acp`), and the
   [exec host client cases](../../tests/exec_host_client.rs) cover one-shot

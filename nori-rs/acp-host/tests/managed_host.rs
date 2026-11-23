@@ -99,12 +99,19 @@ async fn initialized(server: &RemoteAcpServer, observe: bool) -> (Socket, Value)
 }
 
 #[tokio::test]
-async fn loopback_requires_token_and_host_does_not_expose_an_acp_bypass() {
+async fn loopback_requires_the_token_on_acp_and_sessions() {
     let server = start().await;
-    assert!(connect(&server, None, "/sessions").await.is_err());
-    assert!(connect(&server, Some("wrong"), "/sessions").await.is_err());
-    assert!(connect(&server, Some("secret"), "/acp").await.is_err());
-    assert!(connect(&server, Some("secret"), "/sessions").await.is_ok());
+    for path in ["/acp", "/sessions"] {
+        assert!(connect(&server, None, path).await.is_err(), "{path}");
+        assert!(
+            connect(&server, Some("wrong"), path).await.is_err(),
+            "{path}"
+        );
+        assert!(
+            connect(&server, Some("secret"), path).await.is_ok(),
+            "{path}"
+        );
+    }
     server.shutdown().await;
     assert!(
         RemoteAcpServer::bind_host(

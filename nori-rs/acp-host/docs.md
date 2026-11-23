@@ -12,17 +12,19 @@ session-product state.
 It also owns the remote ACP transport (`remote/`) that the background host
 (`nori host`) serves: a WebSocket server implementing the WebSocket profile of
 the upstream ACP "Streamable HTTP & WebSocket Transport" RFD. Its authenticated
-`/sessions` route carries standard ACP, the `_nori/session/*` commands, and
-full manager envelopes with controller/watcher ownership (see
-[the wire contract](../../docs/remote-control.md)); the same face is also
-served over stdio and in-memory pipes. Managed launches also expose a scoped
-ACP transport for machine adapters on `/managed`. The earlier unauthenticated
-`/acp` endpoint, which served one interactive TUI session, is retired.
+`/acp` route (with `/sessions` as an alias) carries standard ACP, the
+`_nori/session/*` commands, and full manager envelopes with controller/watcher
+ownership (see [the wire contract](../../docs/remote-control.md)); the same
+face is also served over stdio and in-memory pipes. Managed launches serve no
+`/acp`; they keep `/sessions` and expose a scoped ACP transport for machine
+adapters on `/managed`. An earlier, unrelated unauthenticated `/acp` endpoint,
+which served one interactive TUI session, was removed; the path now belongs to
+the background host.
 
 ### How it fits into the larger codebase
 
 ```text
-remote client -- authenticated WebSocket /sessions, stdio, or pipe
+remote client -- authenticated WebSocket /acp (alias /sessions), stdio, or pipe
       |
       v
 remote::RemoteAcpServer (this crate)
@@ -97,11 +99,16 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   harness asks the user to retry that session after the turn ends, even when
   a local transcript is available for replay. Code `-32012` identifies a
   session the agent cannot resume.
-- `RemoteAcpServer` has exactly three entry points: `bind_host` (the
-  authenticated WebSocket listener), `serve_host_stdio`, and `serve_host_pipe`.
+- `RemoteAcpServer`'s entry points are the authenticated WebSocket listener
+  (`bind_host`, or `bind_host_with_limit` with an explicit client limit;
+  `bind_host` uses `nori_config::DEFAULT_MAX_CLIENTS`), the stdio server
+  (`serve_host_stdio`, or `stdin_lines` plus `serve_host_stdio_lines` for a
+  caller that must read the first lines itself), and `serve_host_pipe`.
   [`managed_wire.rs`](src/remote/managed_wire.rs) now holds only the shared
   WebSocket frame-send helper.
-- `bind_host` serves the authenticated attach and control endpoint `/sessions` using
+- `bind_host` serves the authenticated attach and control endpoint `/acp`
+  and its alias `/sessions` (only `/sessions` plus `/managed` when the
+  `ManagedAgent` reports `standard_acp_enabled`, i.e. a managed host) using
   [`host_wire.rs`](src/remote/host_wire.rs) and
   [`host_control.rs`](src/remote/host_control.rs). The first interactive
   initializer controls; other clients watch until an explicit takeover.
@@ -118,18 +125,26 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   controller's role watch reads `controller` from registration, and the
   initialize reply reports that role, so no `_nori/control/changed` is sent
   for the initial role.
+  Each request is checked in this order: bearer token (401), WebSocket
+  upgrade (426 with `Upgrade: websocket`), then the client limit (503 with a
+  message naming the limit). The limit is a `ClientSlot` claimed from a
+  shared counter in the upgrade handler and released by `Drop` when the
+  connection ends or the upgrade never completes; it covers `/acp` and
+  `/sessions` together and does not apply to a managed host or `/managed`.
+  Binary frames are ignored, as the ACP remote transport requires.
   Successful authenticated upgrades include `x-nori-host-instance`, a UUID
   that identifies the running host independently of the bearer token. A
   `ManagedAgent` can choose it through `instance_id` (the local host does, so
   the same value appears in its `initialize` result and discovery file);
   otherwise a managed host uses the journal’s producing incarnation and other
-  hosts a fresh UUID.
+  hosts a fresh UUID. Every upgrade also gets a fresh `Acp-Connection-Id`
+  UUID header, per the RFD's WebSocket profile.
 - `RemoteAcpServer::serve_host_stdio` serves one host client on the process's
   own stdin and stdout (the CLI's `nori host --stdio` without `--launch`, and
   `nori exec --acp`). `host_wire.rs` runs one frame loop (`serve_frames`)
   over any sink and stream of WebSocket `Message`s; stdio lines are adapted
   into text messages, so the stdio client gets exactly the methods and
-  control policy of an authenticated `/sessions` connection. A `Transport`
+  control policy of an authenticated `/acp` connection. A `Transport`
   value carries the only differences: on stdio there is no bearer token, the
   client always registers as controller (`observe` is ignored), and a
   managed subscription that falls behind is reported in band with
@@ -138,6 +153,9 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   pending Tokio stdin read would keep the runtime from shutting down; blank
   lines are dropped and only text frames are written to stdout. The loop ends
   at stdin EOF or when the connection's close token is cancelled.
+  `serve_host_stdio_lines` takes the line stream explicitly so the CLI can
+  read a client's first `initialize`, try to relay it to a running host, and
+  replay it here when it falls back.
 - `RemoteAcpServer::serve_host_pipe` serves one in-process host client the
   same way over in-memory channels of JSON-RPC lines (used by one-shot
   `nori exec`, see [its host client](../cli/src/host/docs.md#one-shot-exec)).
@@ -145,7 +163,7 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   policy, blank-line skipping and the stop/lag handling; stdio only adds the
   stdin thread and maps non-UTF-8 lines to a parse error.
 - `ManagedAgent` also has per-connection hooks that let the CLI serve standard
-  ACP on `/sessions`. After a connection's first successful initialize,
+  ACP on `/acp` and `/sessions`. After a connection's first successful initialize,
   `connection_opened` hands over a `HostConnection`: the connection's bounded
   outbound queue (a client that cannot keep up is closed), its close token,
   and a watch of its role. `connection_closed` follows disconnect. Requests
@@ -158,6 +176,10 @@ execs or exits; a writer still holding it after that is refused. The dependency 
 - [`ManagedClient`](src/remote/client.rs) authenticates the upgrade and exposes
   the optional host-instance UUID and HTTP 401/403 authentication classification,
   alongside streaming send/receive for frontends that retain notifications.
+  An HTTP refusal is reported with its status and body text as context over
+  the original tungstenite error, so `is_authentication_error` still
+  downcasts it. `send_text`, `recv_text` and `close` move raw text frames
+  without reinterpreting them, for the CLI's stdio relay.
   Its sequential request helper intentionally ignores intervening notifications and is used by
   short-lived administrative commands. Reconnect policy and cursor state belong
   to the frontend, not this socket wrapper.
@@ -212,8 +234,8 @@ port for ACP traffic. Both upgrades require `Authorization: Bearer <token>`
 using the private `$NORI_HOME/host/token` file. The `x-nori-host-instance`
 response header on both routes identifies the host incarnation that stamps new
 journal records. With `[host] managed = false`,
-`nori attach` uses its local `_nori/session/*` protocol on `/sessions`, and
-`/managed` is absent. [Host lifecycle and discovery](../cli/src/host/docs.md)
+`nori attach` uses its local `_nori/session/*` protocol on the published
+`/acp` endpoint (`/sessions` is an alias), and `/managed` is absent. [Host lifecycle and discovery](../cli/src/host/docs.md)
 
 1. On `/sessions`, send `initialize` and require
    `result.agentCapabilities._meta["nori.dev/managedHost"].standardAcp == 1`.
@@ -574,13 +596,16 @@ following for the binding generation and the lifetime of every active side.
   shutdown therefore cannot register a late connection. `Drop` applies the
   same cancellation boundary and aborts the tasks when an async wait is
   unavailable. Neither path owns or stops the `ManagedAgent` or its sessions.
-- A disconnect from `/sessions` detaches the client and leaves the host's
-  sessions running. `/sessions` sends full
+- A disconnect from `/acp` or `/sessions` detaches the client and leaves the
+  host's sessions running (the RFD's v1 durability rule); a client reconnects
+  with a new `initialize` and `session/load` or `session/resume`. The
+  `_nori/session/*` face sends full
   `SessionEnvelope` values through `_nori/session/event` and delegates cursor
   validation and replay to the harness. It preserves pending permissions on
   disconnect so a reconnecting client can answer them.
-- `nori exec --acp` has no separate stdio implementation: it is the
-  background host served through `serve_host_stdio`
+- `nori exec --acp` has no separate stdio implementation: the CLI either
+  relays it to the running host over `/acp` or serves a private host through
+  `serve_host_stdio_lines`
   ([Local host on stdio](../cli/src/host/docs.md#local-host-on-stdio)).
 - The `agent-client-protocol` SDK is built with the `unstable` feature so the
   host can call `session/fork` (branch-at-head). See `fork_session` in

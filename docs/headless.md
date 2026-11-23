@@ -57,16 +57,24 @@ Use `--dangerously-bypass-approvals-and-sandbox` only for explicitly trusted una
 nori exec --acp
 ```
 
-`nori exec --acp` is an alias for `nori host --stdio`: a headless local
-background host whose one client speaks newline-delimited JSON-RPC ACP v1 on
-stdin and stdout. It serves exactly the methods of an authenticated
-`/sessions` connection to `nori host` — `session/new`, `list`, `load`,
+`nori exec --acp` is an alias for `nori host --stdio`: one client that
+speaks newline-delimited JSON-RPC ACP v1 on stdin and stdout to a `nori host`.
+It gets exactly the methods of an authenticated `/acp` connection to
+`nori host` — `session/new`, `list`, `load`,
 `resume`, `prompt`, `cancel`, `close`, `delete`, `set_mode` and
 `set_config_option`, plus the `_nori/*` extension (control, subscribe,
 follow-up, delegation, host stop). See
 [remote-control.md §12](remote-control.md#12-standard-acp-v1-on-the-background-host)
 for the wire contract.
 
+- **Joins the running host** when this `NORI_HOME`'s background host is
+  running and compatible, no `--agent`, `-c`, `--add-dir` or bypass flag is
+  given, and the host answers the client's first `initialize` with
+  `control.role: "controller"`. The process relays the client to it over
+  `/acp`; sessions are shared with every other client of that host and
+  outlive this one. stdin EOF only disconnects (exit 0); SIGINT or SIGTERM
+  disconnects with a non-zero exit. A stdio client never takes control from
+  another; otherwise it falls back to a private host, described below.
 - `initialize` answers with `agentInfo.name = "nori-host"` and the host's
   standard `sessionCapabilities`.
 - One stream can run any number of sessions and any number of prompts per
@@ -74,18 +82,20 @@ for the wire contract.
   them, then answer with the agent's `stopReason`.
 - `session/new` takes an absolute `cwd`, whose project configuration applies,
   and accepts stdio and HTTP `mcpServers`.
-- The stdio client always holds control, so it receives every
+- On a private host the stdio client always holds control, so it receives every
   `session/request_permission`; `observe: true` on `initialize` is ignored.
   There is no bearer token.
 - `--agent`, `-C`, `-c`, `--add-dir` and
-  `--dangerously-bypass-approvals-and-sandbox` set the host's configuration
-  exactly as they do for `nori host`.
-- The process takes no host lock and publishes no discovery files, so it runs
+  `--dangerously-bypass-approvals-and-sandbox` set the private host's
+  configuration exactly as they do for `nori host`.
+- A private host takes no host lock and publishes no discovery files, so it runs
   beside a detached `nori host` using the same `NORI_HOME`. Its sessions end
   with the process; their transcripts remain and `session/load` or
   `session/resume` restarts them later. Neither host sees the
   other's live sessions: each lists the other's as stored (`live: false`), and
   loading or resuming one there runs it twice on one transcript. Do not.
+
+On a private host:
 
 | Event | Outcome |
 | --- | --- |

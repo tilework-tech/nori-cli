@@ -1,7 +1,8 @@
 //! Listener for the remote ACP transport.
 //!
-//! Background hosts use authenticated `/sessions` listeners with separate
-//! controller and watcher connections.
+//! Background hosts serve authenticated WebSocket clients at `/acp` (the
+//! ACP remote transport) and `/sessions`, with separate controller and
+//! watcher connections.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -20,14 +21,26 @@ pub struct RemoteAcpServer {
 }
 
 impl RemoteAcpServer {
-    /// Bind an authenticated background host. Every connection requires the
-    /// token.
+    /// Bind an authenticated background host with the default client limit.
+    /// Every connection requires the token.
     pub async fn bind_host<M: super::ManagedAgent>(
         addr: SocketAddr,
         managed: Arc<M>,
         token: String,
     ) -> anyhow::Result<Self> {
+        Self::bind_host_with_limit(addr, managed, token, nori_config::DEFAULT_MAX_CLIENTS).await
+    }
+
+    /// Bind an authenticated background host that serves at most
+    /// `max_clients` WebSocket clients at once and refuses more with `503`.
+    pub async fn bind_host_with_limit<M: super::ManagedAgent>(
+        addr: SocketAddr,
+        managed: Arc<M>,
+        token: String,
+        max_clients: i32,
+    ) -> anyhow::Result<Self> {
         anyhow::ensure!(!token.trim().is_empty(), "host token must not be empty");
+        anyhow::ensure!(max_clients >= 1, "the host must allow at least one client");
         let listener = tokio::net::TcpListener::bind(addr).await?;
         let local_addr = listener.local_addr()?;
         let shutdown = CancellationToken::new();
@@ -43,8 +56,14 @@ impl RemoteAcpServer {
             }
             (None, None) => uuid::Uuid::new_v4().to_string(),
         };
-        let router =
-            super::host_wire::router(managed, token, instance, control.clone(), shutdown.clone());
+        let router = super::host_wire::router(
+            managed,
+            token,
+            instance,
+            control.clone(),
+            max_clients,
+            shutdown.clone(),
+        );
         let task = tokio::spawn(async move {
             if let Err(error) = axum::serve(listener, router).await {
                 tracing::warn!(%error, "managed host listener exited");
@@ -66,10 +85,27 @@ impl RemoteAcpServer {
         managed: Arc<M>,
         stop: impl std::future::Future<Output = T>,
     ) -> anyhow::Result<Option<T>> {
+        let lines = tokio_stream::wrappers::ReceiverStream::new(Self::stdin_lines());
+        Self::serve_host_stdio_lines(managed, lines, stop).await
+    }
+
+    /// This process's stdin as lines without their newlines, read on a
+    /// thread of its own so a pending read never holds the runtime open.
+    pub fn stdin_lines() -> tokio::sync::mpsc::Receiver<std::io::Result<Vec<u8>>> {
+        super::host_wire::stdin_lines()
+    }
+
+    /// [`Self::serve_host_stdio`] for a client whose lines were already read
+    /// from stdin, so a caller can look at them first.
+    pub async fn serve_host_stdio_lines<M: super::ManagedAgent, T>(
+        managed: Arc<M>,
+        lines: impl futures::Stream<Item = std::io::Result<Vec<u8>>> + Send,
+        stop: impl std::future::Future<Output = T>,
+    ) -> anyhow::Result<Option<T>> {
         let instance = managed
             .instance_id()
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        super::host_wire::serve_stdio(managed, instance, stop).await
+        super::host_wire::serve_stdio(managed, instance, lines, stop).await
     }
 
     /// Serve one in-process host client over channels of JSON-RPC lines,

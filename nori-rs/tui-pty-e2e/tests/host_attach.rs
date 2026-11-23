@@ -749,7 +749,9 @@ fn same_port_host_restart_stops_reconnecting_and_explains_session_loss() {
         .as_str()
         .unwrap()
         .trim_start_matches("ws://")
-        .trim_end_matches("/sessions")
+        .split('/')
+        .next()
+        .unwrap()
         .parse()
         .unwrap();
     let old_token = std::fs::read(host.home.path().join("host/token")).unwrap();

@@ -1,6 +1,7 @@
 //! Background session host commands and local discovery.
 
 mod acp;
+mod join;
 mod local_stdio;
 mod oneshot;
 mod recovery_control;
@@ -442,14 +443,23 @@ async fn serve(
     } else {
         None
     };
+    let max_clients = config.host.max_clients;
     let host = host_service(config, overrides, manager, launches, recovery);
-    let server = RemoteAcpServer::bind_host(
+    let server = RemoteAcpServer::bind_host_with_limit(
         format!("127.0.0.1:{port}").parse()?,
         host.clone(),
         token.clone(),
+        max_clients,
     )
     .await?;
-    let endpoint = format!("ws://{}/sessions", server.local_addr());
+    // A managed host keeps its legacy `/sessions` wire; every other host
+    // publishes the ACP remote transport path.
+    let path = if host.launches.is_some() {
+        "sessions"
+    } else {
+        "acp"
+    };
+    let endpoint = format!("ws://{}/{path}", server.local_addr());
     let pid = i64::from(std::process::id());
     // `state.json` is what `nori host` waits for, so `host.json` must exist
     // before it does.

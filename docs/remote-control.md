@@ -6,9 +6,11 @@
 
 Nori exposes sessions to remote and multi-client frontends only through the
 background host, `nori host`. The host owns its sessions in a
-`SessionManager` without a terminal and serves them on an authenticated
-`/sessions` WebSocket (section 11), on stdio (`nori host --stdio`, aliased as
-`nori exec --acp`), and to terminals through `nori attach`. Its standard ACP
+`SessionManager` without a terminal and serves them to any number of clients
+at once, all reaching the same sessions: over the ACP remote transport, an
+authenticated WebSocket at `/acp` with `/sessions` as an alias (section 3),
+over stdio (`nori host --stdio`, aliased as `nori exec --acp`, which joins the
+running host when it can), and to terminals through `nori attach`. Its standard ACP
 face is described in section 12; the `_nori/session/*` extension that the
 host and `nori attach` share is described in section 10.
 
@@ -29,28 +31,61 @@ Zed or another ACP client
                                                             └─ stdio ACP ─► Codex or another agent
 
 terminal user ─► `nori attach` ─► the same `nori host`
-local ACP client ─ stdio ─► `nori host --stdio` (headless host for that one client)
+local ACP client ─ stdio ─► `nori host --stdio` ─ relays to ─► the same `nori host`
+remote ACP client ─► TLS front (reverse proxy, tunnel) ─► `wss://…/acp` ─► the same `nori host`
 ```
 
 The local Handroll process lists and flattens sessions across Nori hosts.
 WebSocket ACP traffic terminates directly in the Nori host process. A
 terminal is one more client of the host; detaching it does not stop sessions.
 
-## 3. Retired: `/acp`, `--remote`, and `/remote-control`
+## 3. ACP remote transport
 
-An earlier design served the interactive TUI's own harness as an ACP Agent on
-an unauthenticated `/acp` WebSocket endpoint, enabled with `nori --remote
-<PORT|IP:PORT>` (plus `--remote-allow-nonloopback`) or the `/remote-control`
-slash command, with one last-connect-wins controller and a TUI-side
-`/sessions` endpoint beside it. Phase B3 of the host contract
-(`docs/specs/nori-native/host-contract.md` §2, C10, in the workspace monorepo)
-retired that whole surface in favor of `nori host`: the endpoint, the flags,
-the slash command, the TUI listener lifecycle, the harness-side hosted agent,
-and the client-side recognition of the `nori.remoteControl` initialize marker
-are gone. The interactive TUI no longer opens any listener. Its known gaps
-(unauthenticated, one controller, no protocol negotiation, updates before
-attach) are what the background host's authenticated controller/watcher model
-and standard ACP face (sections 11 and 12) replace.
+The background host serves its standard ACP face (section 12) over the
+WebSocket profile of the ACP remote transport RFD:
+
+- Accepted RFD, "Streamable HTTP & WebSocket Transport" (Draft; merged in
+  [agent-client-protocol#721](https://github.com/agentclientprotocol/agent-client-protocol/pull/721)):
+  <https://agentclientprotocol.com/rfds/streamable-http-websocket-transport>
+- Open RFD on reconnect, resume and connection resiliency, "Durable &
+  resumable HTTP/WS transport":
+  [agent-client-protocol#2208](https://github.com/agentclientprotocol/agent-client-protocol/pull/2208)
+
+| RFD requirement | `nori host` |
+| --- | --- |
+| One endpoint, `/acp` | Served. `/sessions` is an alias with the same behavior. `host.json` and `state.json` publish `ws://127.0.0.1:<port>/acp`. A managed host (`[host] managed = true`) serves no `/acp` and keeps publishing `/sessions` (legacy wire, unchanged). |
+| WebSocket profile: `GET /acp` with `Upgrade: websocket`, `101` with `Acp-Connection-Id` | Served. Every upgrade gets a new `Acp-Connection-Id` UUID, beside `x-nori-host-instance`. |
+| `initialize` is the first message | Enforced: anything else first gets `-32001` and the connection closes. |
+| One JSON-RPC message per text frame; binary frames ignored | Served. |
+| No batches: a JSON array gets one `-32600` error with `id: null` | Served; the connection stays open. |
+| Streamable HTTP profile (`POST`/`GET` SSE/`DELETE`, `Acp-Session-Id`, HTTP/2) | **Not served.** The RFD lets servers support WebSocket only, and requires every client to support WebSocket. A non-upgrade request gets `426` with `Upgrade: websocket`. |
+| Authentication is layered on top (headers, query, or subprotocol) | `Authorization: Bearer <token>` before the upgrade, on loopback too; the token is the one in `host.json`. Missing or wrong: `401`. No query or subprotocol token (a browser renderer goes through a supervisor that adds the header). |
+| Sessions survive disconnects; reconnect with `session/load` | Served. Closing one connection only detaches it: sessions, turns and pending permission requests keep running for the host and other clients. A new connection re-`initialize`s, then `session/load` (history, then live) or `session/resume` (live only, standard ACP v1). Pending permission requests are asked again of the controller. |
+| In-flight messages are not replayed | Same. Notifications sent while no connection was attached are recovered only through `session/load`'s history replay, not by message. |
+| Cookies for sticky routing | Not needed: one host process. The host sets none. |
+| Connection and session limits | Not defined by the RFD. `[host] max_clients` (default 16) bounds clients across `/acp` and `/sessions`; one more gets `503` with a message naming the limit. Authentication is checked first. `max_sessions` still bounds sessions (`-32017`). |
+| TLS, Origin, bind address | Not defined by the RFD. The host binds `127.0.0.1` only and speaks plain `ws://`. To cross a network boundary, put a TLS-terminating front in front of it (reverse proxy, SSH or Tailscale tunnel) and use `wss://`. Never expose the plain port: the bearer token would travel in clear text. A browser page cannot add the `Authorization` header, so it cannot reach the loopback port. |
+
+The accepted RFD conflicts with itself on disconnects: its WebSocket section
+says the server cleans up a connection's sessions on disconnect, its v1
+durability section says sessions survive disconnects. The host follows the
+second, which is also the host contract's rule that the host outlives every
+client.
+
+Deferred to the durable-sessions design (from the open RFD and the
+accepted RFD's v2 list): stream cursors (`_meta["acp/cursor"]`, SSE `id:`),
+`Last-Event-ID` and WebSocket `stream/resume` replay of missed messages, the
+`capabilities.transport.resumable` capability, negotiated keepalive, the
+post-resume turn state (`state_update`, `_meta["acp/turnState"]`), a
+reconnect grace period, `Acp-Protocol-Version`, and the Streamable HTTP
+profile. None of these is on the wire today; the host adds no `_nori` method
+or `_meta` key for them.
+
+An earlier, unrelated surface also used `/acp`: the interactive TUI served
+its own harness there without authentication, enabled with `nori --remote`
+or `/remote-control`, with one last-connect-wins controller. That surface,
+its flags and slash command, and the TUI's listener are gone. The TUI opens
+no listener; `/acp` is now the background host's authenticated endpoint.
 
 Sections 4–9 described that surface and were removed with it; the numbers
 are left unused so that links to sections 10–12 stay stable.
@@ -62,7 +97,8 @@ Managed mode (`[host] managed = true`, `/managed`, `_nori/host/*`, and
 ## 10. Managed session wire
 
 The background host serves these `_nori/session/*` commands on its
-authenticated `/sessions` endpoint and on its stdio transport (sections 11 and
+authenticated `/acp` endpoint and its `/sessions` alias (only `/sessions` on a
+managed host) and on its stdio transport (sections 11 and
 12); `nori attach` and `nori host ls` are their main clients. The interactive
 TUI serves no listener. `ManagedAgent` in
 [`acp-host`](../nori-rs/acp-host/src/remote/managed.rs) defines the transport
@@ -287,11 +323,13 @@ commands read that token automatically; startup prints its path, never its
 value. Background hosting is refused on platforms without the implemented Unix
 permission checks.
 
-`RemoteAcpServer::bind_host` serves `/sessions`. A host configured with
-`[host] managed = true` also serves the [scoped ACP transport](../nori-rs/acp-host/docs.md#managed-machine-connection) on `/managed`. A valid `Authorization: Bearer <token>` header is required before the
+`RemoteAcpServer::bind_host_with_limit` serves `/acp` and its alias
+`/sessions` (section 3). A host configured with `[host] managed = true` serves
+`/sessions` and the [scoped ACP transport](../nori-rs/acp-host/docs.md#managed-machine-connection) on `/managed` instead, with no `/acp` and no client limit. A valid `Authorization: Bearer <token>` header is required before the
 WebSocket upgrade, including on loopback; a missing or wrong token returns
-HTTP 401. The host is the only listener Nori serves; the unauthenticated
-`/acp` surface is retired (section 3).
+HTTP 401. Past `[host] max_clients` (default 16) concurrent connections the
+upgrade returns HTTP 503 with the limit in the body. The host is the only
+listener Nori serves.
 
 Successful authenticated upgrades include `x-nori-host-instance`, a UUID
 generated for that router lifetime independently of the bearer token. It stays
@@ -309,7 +347,7 @@ has no width limit; control characters are sanitized in either mode.
 ```text
 attached controller -- commands --+
                                  v
-attached watchers --------> authenticated /sessions --> HostService
+attached watchers --------> authenticated /acp ------> HostService
        ^                         |                         |
        |                         +-- role changes          v
        +---------- ordered replay/live events ------ SessionManager
@@ -439,8 +477,8 @@ with Ctrl+D and rerun `nori attach` to connect afresh.
 The normative contract for `nori host` is
 `docs/specs/nori-native/host-contract.md` in the workspace monorepo. This
 section records what the CLI implements. Standard ACP v1 methods share the
-authenticated `/sessions` socket with the `_nori/*` extension, and the same
-face is also served on stdio (see [Stdio transport](#stdio-transport)). A
+authenticated `/acp` socket (and its `/sessions` alias) with the `_nori/*`
+extension, and the same face is also served on stdio (see [Stdio transport](#stdio-transport)). A
 connection can work with any number of sessions. Managed mode (`[host] managed = true`)
 does not serve these methods: its supervisor wire (`_nori/session/ensure`,
 `_nori/session/status`, `_nori/host/*`, `/managed`, `--stdio --launch`) is
@@ -562,20 +600,38 @@ closed; reconnect and load again.
 
 ### Stdio transport
 
-`nori host --stdio` without `--launch`, and its alias `nori exec --acp`, run
-a headless local host whose one client speaks this face as newline-delimited
-JSON-RPC on stdin and stdout. It is refused when `[host] managed = true`;
-managed hosts still need `--launch`.
+`nori host --stdio` without `--launch`, and its alias `nori exec --acp`,
+serve one client that speaks this face as newline-delimited JSON-RPC on stdin
+and stdout. It is refused when `[host] managed = true`; managed hosts still
+need `--launch`. The client either joins the home's running host or gets a
+host of its own:
+
+- **Joined.** When the home's `host.json` advertises `contract {acp: 1,
+  nori: 1}`, the command has no configuration of its own (no `--agent`,
+  `-c`, `--add-dir` or bypass flag), and the client's first line is an
+  `initialize` that the running host answers with `control.role:
+  "controller"`, the process relays the client to that host over `/acp` with
+  the discovery token. The client then shares the host's sessions with every
+  other client, and they outlive it: stdin EOF only disconnects this client
+  and exits 0. SIGINT or SIGTERM disconnects it and exits non-zero.
+  `_nori/host/stop` stops the shared host. A stdio client never takes control
+  from another client: when the running host answers as a watcher, or cannot
+  be reached, the process closes that connection and falls back to a host of
+  its own, replaying the same `initialize` to it.
+- **Own host.** Otherwise the process runs a headless local host for this one
+  client. It takes no host lock and writes no `host.json`, `state.json` or
+  `token`, so it runs beside a detached `nori host` of the same `NORI_HOME`.
+  Its sessions end with it; their transcripts remain as stored sessions.
+  Neither host sees the other's live sessions: each lists the other's as
+  stored (`live: false`), and loading or resuming one there runs it twice on
+  one transcript. Do not.
+
+On its own host:
 
 - Every method above and every `_nori/*` method is served exactly as on an
-  authenticated `/sessions` connection, any number of sessions on one stream.
+  authenticated `/acp` connection, any number of sessions on one stream.
 - There is no bearer token. The stdio client is always the controller; an
   `observe: true` on `initialize` is ignored.
-- The process takes no host lock and writes no `host.json`, `state.json` or
-  `token`, so it runs beside a detached `nori host` of the same `NORI_HOME`.
-  Its sessions end with it; their transcripts remain as stored sessions. Neither host sees the
-  other's live sessions: each lists the other's as stored (`live: false`), and
-  loading or resuming one there runs it twice on one transcript. Do not.
 - stdin EOF or `_nori/host/stop` stops the sessions and exits 0; SIGINT or
   SIGTERM stops them and exits non-zero. A client the face disconnects (for
   example one more than 1024 events behind) cannot reconnect, so the host
@@ -591,7 +647,7 @@ managed hosts still need `--launch`.
 `nori exec "prompt"` and `nori -p` use only this face. When the home's host
 holds its lock, `host.json` advertises `contract {acp: 1, nori: 1}`, and
 `initialize` (without `observe`) returns `control.role: "controller"`, the
-prompt runs on that host over `/sessions` with the discovery token; exec never
+prompt runs on that host over `/acp` with the discovery token; exec never
 takes control from another client. Otherwise, and always with `-c` or
 `--add-dir`, it runs an in-process host with the same face over in-memory
 lines. Each run sends `session/new` (`mcpServers: []`, `_meta["nori/agent"]`
@@ -644,7 +700,10 @@ adapter options.
 
 - Durable sessions: checkpoints, acknowledgements, durable replay,
   incremental reconnect cursors on ACP updates, import/release, command-ID
-  idempotency and generation fencing. Managed mode keeps its current wire.
+  idempotency and generation fencing, and the remote-transport items listed
+  in section 3 (cursors, `Last-Event-ID` / `stream/resume`, resumable
+  capability, keepalive, turn state, Streamable HTTP). Managed mode keeps its
+  current wire.
 - `authenticate` / `logout` forwarding and aggregated `authMethods`.
 - `ask` behaving differently from `agent` (adapter strictest modes).
 - Follow-up (`steer`/`queue`) through `session/prompt`.

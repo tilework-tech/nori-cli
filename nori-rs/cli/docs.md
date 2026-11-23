@@ -56,7 +56,7 @@ session list or a supplied conversation ID. Explicit `--host` and
 Nori configuration without entering the local process-owning TUI `App`.
 Administrative list, new, and stop use host discovery directly, so a later malformed
 configuration file cannot prevent shutdown.
-Without `--launch`, `host --stdio` runs a headless local host for one client on stdin and stdout; see [local host on stdio](src/host/docs.md#local-host-on-stdio).
+Without `--launch`, `host --stdio` serves one client on stdin and stdout, relaying it to the home's running host when that host is compatible, the command has no config overrides, and the host grants it control, and otherwise running a private headless host; see [local host on stdio](src/host/docs.md#local-host-on-stdio).
 On a dedicated managed machine, `host --stdio --launch <FILE> [--inherit-env]`
 runs the host in the foreground and serves one pinned adapter as plain ACP on
 stdin and stdout until stdin closes; see [managed launch on stdio](src/host/docs.md#managed-launch-on-stdio).
@@ -64,7 +64,7 @@ See [the command and wire contract](../../docs/remote-control.md#11-background-h
 
 **ExecCommand**: Provides two terminal-independent execution surfaces:
 - `nori exec [PROMPT]` runs one prompt through the selected ACP agent and writes only the complete assistant text to stdout. The prompt may come from the positional argument, from piped stdin, or from both (see **Prompt Sources**). Diagnostics and failures remain on stderr so the answer can be piped or redirected directly. It is an ACP v1 client of `nori host`: `run_exec` resolves the prompt and configuration, then calls the host's [one-shot client](src/host/docs.md#one-shot-exec), which uses the home's running host when it can and an in-process host otherwise. A run with `-c` overrides or `--add-dir` always gets its own host, because a running host applies its own configuration.
-- `nori exec --acp` is an alias for `nori host --stdio`: a headless local host serving the host's standard ACP face (any number of sessions, plus `_nori/*`) to one client on stdin and stdout, with no lock or discovery files. Dispatch loads configuration with the exec overrides and calls the host's `serve_stdio`; see [Local host on stdio](src/host/docs.md#local-host-on-stdio).
+- `nori exec --acp` is an alias for `nori host --stdio`: one client of the host's standard ACP face (any number of sessions, plus `_nori/*`) on stdin and stdout, either relayed to the running host (sharing its sessions) or served by a private host with no lock or discovery files. Dispatch loads configuration with the exec overrides and calls the host's `serve_stdio`; see [Local host on stdio](src/host/docs.md#local-host-on-stdio).
 - `nori -p` / `--print` is a top-level boolean flag rather than a subcommand, matching the flag other agent CLIs use to select non-interactive output. It synthesizes an `ExecCommand` from the already-parsed interactive flags and routes into the same plaintext path, so it is an alias in behavior and not a second implementation. It cannot serve ACP on stdio; that stays behind the explicit `exec --acp`.
 - Both modes use the same resolved configuration and `nori-harness` session manager (through the host) as the TUI. `--agent`, `--cwd`, and raw `-c` overrides remain available without initializing Ratatui.
 - The explicit `--dangerously-bypass-approvals-and-sandbox` flag is the only unattended auto-approval path and applies only to permission boundaries visible through ACP.

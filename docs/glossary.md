@@ -143,6 +143,7 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 | **Active session**   | The one **session** the TUI shows; the prompt, terminal title, and scrollback belong to it.        | Current tab        |
 | **Parked session**   | A live **session** the TUI holds off screen with its own transcript, input, and pending requests. | Hidden, paused     |
 | **Session cap**      | The most managed **sessions** that may run at once, set by `[tui] max_sessions`.                  | Limit, quota       |
+| **Client limit**     | The most clients a background `nori host` serves at once over `/acp` and `/sessions`, set by `[host] max_clients`. | Connection cap     |
 | **Delegated child**  | A **session** the **session manager** starts for a parent through `/delegate` or the MCP `delegate` tool; named by the first line of its task. | Subagent, worker   |
 | **Delegation origin** | Who asked for a **delegated child**: the parent's agent (`agent`) or the user (`user`).          | Requester, source  |
 

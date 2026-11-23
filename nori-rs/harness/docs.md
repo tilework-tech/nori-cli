@@ -24,7 +24,7 @@ coarse `SessionStatus` for each session and each session family.
 ### How it fits into the larger codebase
 
 ```text
-                nori-tui       nori host client (/sessions, stdio, pipe)
+                nori-tui       nori host client (/acp, stdio, pipe)
                     |               |
                     |               v
                     |     RemoteAcpServer (nori-acp-host::remote)
@@ -63,7 +63,8 @@ re-exports that host with the transport types so frontends need not import
 `nori-harness -> nori-acp-host`. Remote mutations pass through the same typed
 handles as local ones, so hooks, transcripts, goals, and permission policy all
 still apply. The earlier `HarnessRemoteHost`, which served one TUI session on
-the unauthenticated `/acp` endpoint, is retired.
+an unauthenticated `/acp` endpoint, was removed; `/acp` is now the background
+host's authenticated endpoint.
 
 ### Core Implementation
 
@@ -345,7 +346,7 @@ pauses whatever is still queued.
 #### Managed remote hosting
 
 [`ManagedRemoteHost`](src/managed_remote.rs) shares one command boundary
-between the WebSocket `/sessions` adapter and managed ACP stdio. It lists
+between the WebSocket `/acp` (alias `/sessions`) adapter and managed ACP stdio. It lists
 manager records and journal cursors (each row also carries `family_status`,
 the record's `SessionManager::family_status`, else its own status, plus the
 additive display fields `reply_preview`, `waiting_request`, `idle_seconds`,

@@ -232,6 +232,22 @@ default. The question is skipped only when a saved `[tui] tool_output =
 Directories that are already trusted never see the trust
 screen, so they keep full output unless you set the key yourself.
 
+## Background host: `[host]`
+
+```toml
+[host]
+max_clients = 16
+```
+
+`[host] max_clients` (default 16) is the most clients a background `nori host`
+serves at once over its WebSocket endpoints, `/acp` and its alias `/sessions`,
+counting `nori attach` terminals, `nori host --stdio` clients that joined the
+host, and remote ACP clients alike. One more connection gets HTTP 503 with a
+message naming the limit; a missing or wrong bearer token gets 401 first.
+Values below 1 stop the host from starting. A managed host (`[host] managed =
+true`) is not limited. Sessions are bounded separately by `[tui]
+max_sessions`. See [the ACP remote transport](../docs/remote-control.md#3-acp-remote-transport).
+
 ## Several sessions in one TUI
 
 ```toml

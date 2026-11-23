@@ -1,5 +1,5 @@
 #![cfg(unix)]
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod standard_acp;
 
@@ -541,3 +541,6 @@ fn machine_transport_authenticates_before_upgrade() {
         );
     }
 }
+
+#[path = "host_lifecycle/remote_transport.rs"]
+mod remote_transport;

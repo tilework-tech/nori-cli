@@ -89,10 +89,13 @@ canonical identity and organization fanout.
   without a session and consumes it exactly once to build a session-bound
   backend.
 - Remote and multi-client access goes only through the background host,
-  `nori host`: its authenticated `/sessions` WebSocket, `nori attach`, and
-  its stdio face (`nori host --stdio`, aliased as `nori exec --acp`). The
-  interactive TUI opens no listener; the earlier unauthenticated `/acp`
-  surface (`--remote`, `/remote-control`) is retired. See
+  `nori host`, which serves any number of clients that all reach the same
+  sessions: its authenticated WebSocket at `/acp` (the ACP remote transport's
+  WebSocket profile, `/sessions` as an alias), `nori attach`, and stdio
+  (`nori host --stdio`, aliased as `nori exec --acp`, which joins the running
+  host when it can). The interactive TUI opens no listener; the earlier,
+  unrelated unauthenticated TUI `/acp` surface (`--remote`,
+  `/remote-control`) was removed. See
   `@/docs/remote-control.md` and `@/docs/headless.md`.
 
 Created and maintained by Nori.

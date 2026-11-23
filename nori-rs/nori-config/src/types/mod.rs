@@ -372,6 +372,9 @@ pub struct HostConfig {
     pub side_sessions: bool,
     pub side_confinement: SideConfinement,
     pub max_sessions: i32,
+    /// Clients the background host serves at once over its WebSocket
+    /// endpoints (`/acp` and `/sessions`).
+    pub max_clients: i32,
     pub bindings_root: Option<PathBuf>,
     pub dedicated_roots: Option<DedicatedRoots>,
 }
@@ -384,6 +387,7 @@ impl Default for HostConfig {
             side_sessions: false,
             side_confinement: SideConfinement::default(),
             max_sessions: DEFAULT_MAX_SESSIONS,
+            max_clients: DEFAULT_MAX_CLIENTS,
             bindings_root: None,
             dedicated_roots: None,
         }
@@ -2307,6 +2311,10 @@ pub struct ProjectConfig {
 
 /// Sessions allowed at once when `[tui] max_sessions` is not set.
 pub const DEFAULT_MAX_SESSIONS: i32 = 8;
+
+/// Clients a background host serves at once when `[host] max_clients` is
+/// not set.
+pub const DEFAULT_MAX_CLIENTS: i32 = 16;
 
 /// Resolved configuration with defaults applied
 #[derive(Debug, Clone)]

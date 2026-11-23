@@ -96,17 +96,7 @@ async fn run_on_a_host(
 /// A client of the home's running host, initialized as its controller, when
 /// that host speaks this contract and no other client controls it.
 async fn running_host(home: &Path) -> Option<ManagedClient> {
-    // Read discovery without touching the host lock; connecting proves the
-    // host is alive.
-    let path = home.join("host").join("host.json");
-    if !path.exists() {
-        return None;
-    }
-    let discovery: nori_protocol::HostDiscovery =
-        serde_json::from_reader(super::state::private_open(&path, false).ok()?).ok()?;
-    if discovery.contract.acp != 1 || discovery.contract.nori != super::acp::handshake::CONTRACT {
-        return None;
-    }
+    let discovery = super::join::compatible_discovery(home)?;
     tokio::time::timeout(Duration::from_secs(3), async {
         let mut client = ManagedClient::connect(&discovery.endpoint, &discovery.token)
             .await

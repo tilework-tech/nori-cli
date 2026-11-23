@@ -30,9 +30,29 @@ impl ManagedClient {
         authorization.set_sensitive(true);
         request.headers_mut().insert("Authorization", authorization);
         let (socket, response) =
-            tokio::time::timeout(Duration::from_secs(10), connect_async(request))
+            match tokio::time::timeout(Duration::from_secs(10), connect_async(request))
                 .await
-                .map_err(|_| anyhow::anyhow!("host connection timed out"))??;
+                .map_err(|_| anyhow::anyhow!("host connection timed out"))?
+            {
+                Ok(connected) => connected,
+                Err(tokio_tungstenite::tungstenite::Error::Http(refusal)) => {
+                    let status = refusal.status();
+                    let reason = refusal
+                        .body()
+                        .as_deref()
+                        .map(String::from_utf8_lossy)
+                        .unwrap_or_default()
+                        .trim()
+                        .to_owned();
+                    return Err(
+                        anyhow::Error::from(tokio_tungstenite::tungstenite::Error::Http(refusal))
+                            .context(format!(
+                                "the host refused the connection ({status}): {reason}"
+                            )),
+                    );
+                }
+                Err(error) => return Err(error.into()),
+            };
         let host_instance = response
             .headers()
             .get("x-nori-host-instance")
@@ -65,6 +85,38 @@ impl ManagedClient {
         .await
         .map_err(|_| anyhow::anyhow!("host write timed out"))??;
         Ok(())
+    }
+
+    /// Send one text frame as is, for relays that must not reinterpret it.
+    pub async fn send_text(&mut self, text: String) -> anyhow::Result<()> {
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            self.socket.send(Message::Text(text.into())),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("host write timed out"))??;
+        Ok(())
+    }
+
+    /// The next text frame as is, or `None` once the host closes the
+    /// connection.
+    pub async fn recv_text(&mut self) -> anyhow::Result<Option<String>> {
+        loop {
+            let Some(message) = self.socket.next().await else {
+                return Ok(None);
+            };
+            match message? {
+                Message::Text(text) => return Ok(Some(text.as_str().to_owned())),
+                Message::Ping(bytes) => self.socket.send(Message::Pong(bytes)).await?,
+                Message::Pong(_) | Message::Frame(_) | Message::Binary(_) => {}
+                Message::Close(_) => return Ok(None),
+            }
+        }
+    }
+
+    /// Close the connection, telling the host this client is leaving.
+    pub async fn close(mut self) {
+        let _ = self.socket.close(None).await;
     }
 
     pub async fn recv(&mut self) -> anyhow::Result<Value> {
