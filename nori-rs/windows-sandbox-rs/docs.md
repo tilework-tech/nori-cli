@@ -39,10 +39,10 @@ Used by `@/nori-rs/sandbox/` (the `codex-sandbox` exec engine) as the sandbox ex
 ### Things to Know
 
 - On non-Windows platforms, stub implementations return errors
-- Capability SIDs are persisted to `~/.codex/cap-sids.json`
+- Capability SIDs are persisted as JSON to `<base>/cap_sid` (`cap.rs`), where `<base>` is the home directory the caller passes in; `nori sandbox windows` passes the Nori home
 - `WorkspaceWrite` mode persists ACEs; `ReadOnly` revokes them after execution
 - Command line arguments are properly quoted for Windows
 - Timeout support with process termination
-- Logging to `~/.codex/` for debugging sandbox issues
+- Each run appends to `<base>/sandbox_commands.rust.log` (`logging.rs`) for debugging sandbox issues
 
 Created and maintained by Nori.

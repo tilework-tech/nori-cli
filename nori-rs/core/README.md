@@ -1,19 +1,19 @@
 # codex-core
 
-This crate implements the business logic for Codex. It is designed to be used by the various Codex UIs written in Rust.
+Inherited from the Codex fork. It now holds authentication and compatibility code used behind `codex-login`; it is not the Nori config boundary and runs no sessions. See [docs.md](docs.md).
 
 ## Dependencies
 
-Note that `codex-core` makes some assumptions about certain helper utilities being available in the environment. Currently, this support matrix is:
+Core itself runs no sandboxed commands. Sandboxed execution lives in `codex-sandbox`, which expects these helpers from the `nori` binary. The `nori sandbox` subcommands use the same paths.
 
 ### macOS
 
-Expects `/usr/bin/sandbox-exec` to be present.
+Expects `/usr/bin/sandbox-exec` to be present (`nori sandbox macos`, alias `seatbelt`).
 
 ### Linux
 
-Expects the binary containing `codex-core` to run the equivalent of `codex sandbox linux` (legacy alias: `codex debug landlock`) when `arg0` is `codex-linux-sandbox`. See the `codex-arg0` crate for details.
+Expects the binary to run the Landlock and seccomp helper when `arg0` is `codex-linux-sandbox` (`nori sandbox linux`, alias `landlock`). See the `codex-arg0` crate for details.
 
 ### All Platforms
 
-Expects the binary containing `codex-core` to simulate the virtual `apply_patch` CLI when `arg1` is `--codex-run-as-apply-patch`. See the `codex-arg0` crate for details.
+Expects the binary to simulate the virtual `apply_patch` CLI when `arg1` is `--codex-run-as-apply-patch`. See the `codex-arg0` crate for details.

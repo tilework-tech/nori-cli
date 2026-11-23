@@ -108,5 +108,8 @@ product crates.
   otherwise runs a private one); its sessions outlive every client.
 - Rust 2024 and strict workspace lints apply. Add only the derive traits a
   public boundary type actually needs.
+- Per-crate docs are listed in [README.md](README.md#crate-documentation); CLI docs
+  across repos, with status, are in the
+  [cross-repo index](https://github.com/tilework-tech/nori-monorepo/blob/main/docs/cli-docs-index.md).
 
 Created and maintained by Nori.

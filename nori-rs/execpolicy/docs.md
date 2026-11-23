@@ -8,47 +8,33 @@ The execpolicy crate provides parsing and evaluation of execution policies for c
 
 ### How it fits into the larger codebase
 
-Its only remaining consumer is the `nori execpolicycheck` debug subcommand in `@/nori-rs/cli/src/main.rs`, which checks policy files against a command. The former runtime consumer -- `codex-core`'s `command_safety/` auto-approval module -- was deleted, so this crate is no longer on the live approval path.
+Its only consumer is the hidden `nori execpolicy check` subcommand in `@/nori-rs/cli/src/main.rs`, which checks policy files against a command and prints the result as JSON. `codex-core` still lists the crate as a dependency but does not use it. No runtime approval path calls this crate.
 
 ### Core Implementation
 
-**Policy Format** (`lib.rs`): Policies are defined as TOML:
+**Policy format** (`parser.rs`): Policies are Starlark files that call `prefix_rule`:
 
-```toml
-[[rules]]
-program = "git"
-args = ["status", "log", "diff"]  # allowed subcommands
-
-[[rules]]
-program = "ls"
-# no args restriction = all args allowed
+```starlark
+prefix_rule(
+    pattern = ["git", ["status", "log", "diff"]],  # ordered tokens; a list is a set of alternatives
+    decision = "allow",                            # allow | prompt | forbidden; defaults to allow
+    match = ["git status"],                        # examples that must match
+    not_match = ["git push"],                      # examples that must not match
+)
 ```
 
-**Evaluation** (`lib.rs`): The `ExecPolicy::evaluate()` method checks:
-1. Program name matches a rule
-2. Arguments match allowed patterns (if specified)
-3. Returns `Allow` or `RequiresApproval`
+`PolicyParser::parse` evaluates one file and adds its rules; call it once per file, then `build()` returns a `Policy`. The `match` and `not_match` examples are checked at load time, so a wrong rule fails to load.
 
-**Pattern Matching**: Supports:
-- Exact matches
-- Glob patterns (via `wildmatch`)
-- Argument prefixes
+**Rules** (`rule.rs`): A `PrefixRule` holds a `PrefixPattern` (first token plus the remaining `PatternToken`s) and a `Decision`. A rule matches when the command starts with the pattern.
 
-**Argument Types** (`arg_type.rs`, `arg_matcher.rs`):
+**Evaluation** (`policy.rs`): `Policy::check(cmd)` looks up rules by the command's first token and returns `Evaluation::Match` with every matching rule, or `Evaluation::NoMatch`. The effective decision is the strictest match (`forbidden` > `prompt` > `allow`, see `decision.rs`). `Policy::check_multiple` merges matches across several commands.
 
-- Literal values
-- File paths with constraints
-- Optional arguments
-- Variadic arguments
-
-**Special Commands:**
-
-`sed_command.rs` provides special handling for sed commands due to their complex argument patterns.
+**CLI** (`execpolicycheck.rs`, `main.rs`): `ExecPolicyCheckCommand` takes repeatable `--policy` paths, an optional `--pretty`, and the command tokens. It is shared by `nori execpolicy check` and the standalone `codex-execpolicy` dev binary.
 
 ### Things to Know
 
-- Default policies are embedded for common safe commands (git status, ls, etc.)
-- Custom policies can be specified in project configuration
-- The policy is evaluated per-command, not per-session
+- No policies are embedded; every policy file is passed with `--policy`. `examples/example.codexpolicy` is a sample.
+- Evaluation is per command; the crate keeps no session state.
+- Tests live in `tests/basic.rs`. `README.md` documents the JSON output shapes.
 
 Created and maintained by Nori.

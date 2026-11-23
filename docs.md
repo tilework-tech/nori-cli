@@ -79,7 +79,8 @@ canonical identity and organization fanout.
   flush. Launch, help, version, and resume without a transported prompt are not
   meaningful activity.
 - Crate dependencies point down only: `nori-cli` → `nori-tui` →
-  `nori-harness` → `nori-acp-host` → `nori-config` → `nori-protocol`. Support
+  `nori-harness` → `nori-acp-host`, which depends on both `nori-config` and
+  `nori-protocol`; those two are independent of each other. Support
   crates (sandbox, login, git, PTY) never depend upward. `nori-tui` never
   imports `nori-acp-host` directly; nothing below the frontends depends on
   ratatui or renders terminal presentation; no cargo feature changes which

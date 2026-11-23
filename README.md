@@ -86,7 +86,7 @@ Select the registered server in `/agent`, run `nori --agent elizacp exec "hello"
 | [ElizACP](https://github.com/agentclientprotocol/symposium-acp)           | `cargo install --locked elizacp`                        | Minimal Eliza chatbot, useful for testing.                                         |
 | [Kimi](https://github.com/nicepkg/kimi-cli)                               | No install needed — uses `uvx`                          | First-time auth: run `uvx --python 3.13 kimi-cli`, then `/login`.                  |
 
-Want your AI agent to configure this automatically? Point it at the raw skill file: https://github.com/tilework-tech/nori-cli/blob/main/.claude/skills/registering-custom-acp-agent/SKILL.md
+Want your AI agent to configure this automatically? Point it at [Custom agents](nori-rs/config.md#custom-agents-agents). An agent running inside Nori can also use the built-in `register_custom_acp_agent` prompt, which reads the `nori://help/custom-acp-agent` resource.
 
 ## Features
 
