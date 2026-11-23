@@ -54,6 +54,7 @@ impl HostControl {
             entry.insert(changes.clone());
             if !observe && self.controller.is_none() {
                 self.controller = Some(client);
+                changes.send_replace("controller");
             }
         }
         self.status(client)
@@ -91,6 +92,7 @@ impl HostControl {
             | "_nori/session/subscribe"
             | "_nori/session/new"
             | "_nori/host/stop"
+            | "session/new"
             | "session/list"
             | "session/load"
             | "session/resume" => HostRequest::Forward(request),

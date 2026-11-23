@@ -207,6 +207,43 @@ enum HarnessCommand {
 #[error("{0}")]
 struct HarnessTransportClosed(&'static str);
 
+/// The agent never started, so a command waiting for it cannot run. Carries
+/// the agent's ACP error code when it refused with one, for example
+/// `-32000` (authentication required).
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("{message}")]
+pub struct AgentStartFailed {
+    pub message: String,
+    pub code: Option<i32>,
+}
+
+impl AgentStartFailed {
+    fn new(message: String, error: Option<&anyhow::Error>) -> Self {
+        let code = error.and_then(|error| {
+            error
+                .chain()
+                .find_map(|cause| cause.downcast_ref::<acp::v1::Error>())
+                .map(|error| i32::from(error.code))
+        });
+        Self { message, code }
+    }
+
+    /// Answer commands that arrived while the agent was starting.
+    fn fail_waiting(&self, commands: VecDeque<HarnessCommand>) {
+        for command in commands {
+            match command {
+                HarnessCommand::Prompt { response_tx, .. } => {
+                    let _ = response_tx.send(Err(anyhow::Error::new(self.clone())));
+                }
+                HarnessCommand::FollowUp { response_tx, .. } => {
+                    let _ = response_tx.send(Err(anyhow::Error::new(self.clone())));
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 /// Typed handle for controlling one Nori harness session.
 #[derive(Clone)]
 pub struct HarnessHandle {
@@ -1067,6 +1104,8 @@ pub(crate) fn launch_session_from(
                                 },
                             )));
                         }
+                        AgentStartFailed::new(message.clone(), Some(&e))
+                            .fail_waiting(std::mem::take(&mut pending_commands));
                         let _ = event_tx.send(SessionEvent::Nori(NoriEvent::SessionEnded(
                             SessionEnded {
                                 reason: SessionEndReason::SpawnFailed,
@@ -1114,6 +1153,8 @@ pub(crate) fn launch_session_from(
                         kind: RequestFailureKind::Retryable,
                     },
                 )));
+                AgentStartFailed::new(message.clone(), None)
+                    .fail_waiting(std::mem::take(&mut pending_commands));
                 let _ = event_tx.send(SessionEvent::Nori(NoriEvent::SessionEnded(
                     SessionEnded {
                         reason: SessionEndReason::TimedOut,

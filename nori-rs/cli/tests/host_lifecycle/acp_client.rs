@@ -84,7 +84,10 @@ impl Acp {
             }
         })
         .await
-        .unwrap_or_else(|_| panic!("the expected frame never arrived"))
+        .unwrap_or_else(|_| {
+            let recent = &self.log[self.log.len().saturating_sub(8)..];
+            panic!("the expected frame never arrived; last frames: {recent:#?}")
+        })
     }
 
     /// Collect frames for `duration` without waiting for any one of them.

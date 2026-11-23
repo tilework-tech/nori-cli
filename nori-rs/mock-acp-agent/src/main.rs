@@ -1876,6 +1876,20 @@ fn mock_agent() -> impl ConnectTo<Client> {
                     if std::env::var_os("MOCK_AGENT_NEW_SESSION_REQUIRE_AUTH").is_some() {
                         return responder.respond_with_error(acp::Error::auth_required());
                     }
+                    if let Some(path) = std::env::var_os("MOCK_AGENT_MCP_LOG") {
+                        let names = arguments
+                            .mcp_servers
+                            .iter()
+                            .map(|server| match server {
+                                acp::McpServer::Http(server) => server.name.clone(),
+                                acp::McpServer::Sse(server) => server.name.clone(),
+                                acp::McpServer::Stdio(server) => server.name.clone(),
+                                _ => String::new(),
+                            })
+                            .map(|name| format!("{name}\n"))
+                            .collect::<String>();
+                        let _ = std::fs::write(path, names);
+                    }
                     if std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_JSON").is_ok() {
                         eprintln!("Mock agent: simulating structured new_session failure");
                         return responder.respond_with_error(

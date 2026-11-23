@@ -75,7 +75,9 @@ impl HostService {
         if let Cursor::Live(start) = cursor {
             let live = records
                 .iter()
-                .filter(|record| in_folder(&record.cwd))
+                .filter(|record| {
+                    in_folder(&record.cwd) && !self.is_deleted(&record.conversation_id)
+                })
                 .collect::<Vec<_>>();
             for record in live.iter().skip(start) {
                 if rows.len() == PAGE {
@@ -94,6 +96,9 @@ impl HostService {
                     "cwd": record.cwd,
                     "title": replay.as_ref().and_then(|info| info.title.clone()),
                     "updatedAt": updated.map(rfc3339),
+                    "_meta": nori_protocol::ListedSessionMeta {
+                        agent: Some(record.agent.clone()),
+                    },
                 }));
             }
             live_end = Some(start.max(live.len()));
@@ -119,6 +124,12 @@ impl HostService {
                 transcripts::nanos(session.updated_at),
                 session.session_id.clone(),
             );
+            let deleted = nori_harness::ConversationId::from_string(&session.session_id)
+                .ok()
+                .is_some_and(|id| self.is_deleted(&id));
+            if deleted {
+                continue;
+            }
             let Some(row) = transcripts::stored_row(&session).await else {
                 continue;
             };

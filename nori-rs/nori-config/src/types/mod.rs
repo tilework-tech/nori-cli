@@ -352,10 +352,23 @@ pub enum SideConfinement {
     Required,
 }
 
+/// The permission mode a host gives sessions that clients start through ACP
+/// `session/new`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HostDefaultMode {
+    Ask,
+    #[default]
+    Agent,
+    ApproveAll,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HostConfig {
     pub managed: bool,
+    /// Unset keeps each folder's own `approval_policy`.
+    pub default_mode: Option<HostDefaultMode>,
     pub side_sessions: bool,
     pub side_confinement: SideConfinement,
     pub max_sessions: i32,
@@ -367,6 +380,7 @@ impl Default for HostConfig {
     fn default() -> Self {
         Self {
             managed: false,
+            default_mode: None,
             side_sessions: false,
             side_confinement: SideConfinement::default(),
             max_sessions: DEFAULT_MAX_SESSIONS,

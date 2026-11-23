@@ -589,6 +589,12 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Let a closed session start again under its own ID through
+    /// [`resume`](Self::resume), as a failed one can.
+    pub fn reopen(&self, conversation_id: &ConversationId) {
+        self.shared.state().registry.allow_restart(conversation_id);
+    }
+
     /// Stop a top-level session's agent process and start `spec`'s agent as a
     /// new session under the same conversation ID. The caller ensures the
     /// session has no conversation yet; its transcript starts over.

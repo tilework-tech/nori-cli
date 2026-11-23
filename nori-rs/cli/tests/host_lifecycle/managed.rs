@@ -598,3 +598,23 @@ fn unusable_dedicated_layout_fails_before_discovery() {
     failure(host.run(&["host", "--port", "0"]));
     assert!(!host.0.path().join("host/state.json").exists());
 }
+
+/// Managed mode keeps its legacy supervisor wire: unlike the local host's
+/// ACP face, its `/sessions` takes no notifications and answers a frame
+/// without a request ID as an invalid request.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_managed_host_rejects_notifications() {
+    let host = start(2, true);
+    let mut client = tokio::task::block_in_place(|| host.client());
+
+    client
+        .send(json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"x"}}))
+        .await
+        .unwrap();
+    let reply = tokio::time::timeout(Duration::from_secs(10), client.recv())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(reply["error"]["code"], -32600, "{reply}");
+}

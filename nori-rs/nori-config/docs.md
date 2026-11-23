@@ -71,7 +71,11 @@ from `HotkeyAction::default_binding`. The session-move actions
 `open_session_list`, `parent_session`) always resolve, but `HotkeyAction::is_multi_session`
 marks them so frontends ignore and hide them unless `multi_session` is on.
 
-`[host]` configures the managed machine listener. `managed` and `side_sessions`
+`[host]` configures the background host. `default_mode` (`ask`, `agent` or
+`approve-all`, as `HostDefaultMode`) is the permission mode a local host gives
+sessions that clients start with ACP `session/new`; unset keeps each folder's
+own `approval_policy`. The other keys configure the managed machine listener.
+`managed` and `side_sessions`
 default to false. For both shared and dedicated layouts, `max_sessions` defaults
 to eight process slots and must be positive. A dedicated binding can use
 spare slots for several rebuilt side sessions beside its parent.

@@ -137,7 +137,7 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
 
 /// Outbound messages one connection may have queued before it counts as
 /// too slow and is closed.
-const OUTBOUND_CAPACITY: usize = 4096;
+const OUTBOUND_CAPACITY: usize = 16384;
 
 async fn serve<M: ManagedAgent>(
     socket: WebSocket,
@@ -180,13 +180,15 @@ async fn serve<M: ManagedAgent>(
                             // Notifications and answers to the host's own
                             // requests carry no reply.
                             if initialized
+                                && state.host.accepts_client_messages()
                                 && request["jsonrpc"] == "2.0"
                                 && ((request["method"].is_string() && request.get("id").is_none())
                                     || (request.get("method").is_none()
                                         && id_valid
                                         && (request.get("result").is_some() || request.get("error").is_some())))
                             {
-                                state.host.message_from(client, request);
+                                let host = state.host.clone();
+                                tokio::spawn(async move { host.message_from(client, request).await });
                                 continue;
                             }
                             let valid = request["jsonrpc"] == "2.0"
@@ -207,6 +209,9 @@ async fn serve<M: ManagedAgent>(
                                 let mut reply = state.host.request_from(client, request).await;
                                 if reply.response.get("error").is_none() {
                                     reply.response["result"]["control"] = state.control.lock().await.register(client, &changes, observe);
+                                    // The client learns its first role from this reply,
+                                    // not from a change notification.
+                                    roles.borrow_and_update();
                                     if !initialized {
                                         state.host.connection_opened(super::managed::HostConnection {
                                             client,

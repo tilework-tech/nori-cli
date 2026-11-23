@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -8,7 +9,7 @@ use crate::acp;
 use crate::acp::v1::RequestId;
 
 /// An event emitted by one Nori harness session.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "source", content = "event", rename_all = "snake_case")]
 // Keep the approved schema-shaped API unboxed; consumers should not inherit a
 // Nori-specific indirection solely because ACP's response aggregate is large.
@@ -21,7 +22,7 @@ pub enum SessionEvent {
 }
 
 /// Raw ACP traffic emitted by the agent toward its client.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "message_type", rename_all = "snake_case")]
 #[allow(clippy::large_enum_variant)]
 pub enum AcpEvent {
@@ -37,7 +38,7 @@ pub enum AcpEvent {
 }
 
 /// Notifications owned by the Nori harness rather than ACP.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "event_type", content = "event", rename_all = "snake_case")]
 pub enum NoriEvent {
     SessionStarted(SessionStarted),
@@ -61,7 +62,7 @@ pub enum NoriEvent {
 }
 
 /// Persistent and agent-side identities established for a harness session.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct SessionStarted {
     pub transcript_id: Option<String>,
     pub acp_session_id: acp::v1::SessionId,
@@ -77,7 +78,7 @@ pub struct SessionStarted {
 }
 
 /// The harness-owned phase of the active streaming operation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "phase", rename_all = "snake_case")]
 pub enum SessionPhase {
     Idle,
@@ -86,13 +87,13 @@ pub enum SessionPhase {
     Cancelling { request_id: RequestId },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct SessionEnded {
     pub reason: SessionEndReason,
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionEndReason {
     Shutdown,
@@ -102,7 +103,7 @@ pub enum SessionEndReason {
     TimedOut,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct QueueSnapshot {
     /// Display text of each queued user prompt, oldest first.
     pub prompts: Vec<String>,
@@ -117,7 +118,7 @@ pub struct QueueSnapshot {
 }
 
 /// Why the queue stopped sending on its own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueuePause {
     /// The turn before the queued prompts was interrupted.
@@ -127,7 +128,7 @@ pub enum QueuePause {
 }
 
 /// One queued user prompt, in delivery order.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct QueueEntry {
     /// The prompt's submission event ID; unique within the session.
     pub id: String,
@@ -138,19 +139,19 @@ pub struct QueueEntry {
     pub editable: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ReplayStarted {
     pub source: ReplaySource,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ReplaySource {
     Transcript,
     Agent,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ContextCompactedEvent {
     pub summary: Option<String>,
 }
@@ -158,7 +159,7 @@ pub struct ContextCompactedEvent {
 /// Emitted when branch-at-head `/fork` forks the transcript: the previous
 /// conversation is frozen and a fresh conversation is seeded from it and made
 /// active.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct SessionForked {
     pub previous_conversation_id: String,
     pub new_conversation_id: String,
@@ -166,21 +167,21 @@ pub struct SessionForked {
 }
 
 /// Capabilities implemented by Nori around the ACP agent.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 pub struct NoriCapabilities {
     pub goal_management: bool,
     pub builtin_commands: HashMap<String, CommandAvailability>,
 }
 
 /// Availability of a harness-owned command in the active session.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct CommandAvailability {
     pub enabled: bool,
     pub reason: Option<String>,
 }
 
 /// Persistent goal state owned by the Nori harness.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ThreadGoal {
     pub objective: String,
     pub status: ThreadGoalStatus,
@@ -190,7 +191,7 @@ pub struct ThreadGoal {
     pub updated_at: i64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum ThreadGoalStatus {
     Active,
@@ -201,7 +202,7 @@ pub enum ThreadGoalStatus {
     Complete,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum UndoEvent {
     Started {
@@ -215,7 +216,7 @@ pub enum UndoEvent {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum UserShellEvent {
     Started {
@@ -234,20 +235,20 @@ pub enum UserShellEvent {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum UserShellStream {
     Stdout,
     Stderr,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct HookOutput {
     pub message: String,
     pub level: HookOutputLevel,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HookOutputLevel {
     Info,
@@ -255,12 +256,12 @@ pub enum HookOutputLevel {
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct PromptSummary {
     pub summary: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Notice {
     pub message: String,
 }
@@ -270,7 +271,7 @@ pub struct Notice {
 /// The session manager emits this on the session's envelope stream, so every
 /// client that follows the session learns that the request no longer waits
 /// on the user, whichever client answered it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct RequestResolved {
     /// The ID of the agent request that was answered.
     pub request_id: acp::v1::RequestId,
@@ -279,14 +280,14 @@ pub struct RequestResolved {
     pub answered_by: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct RequestFailure {
     pub request_id: Option<RequestId>,
     pub message: String,
     pub kind: RequestFailureKind,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RequestFailureKind {
     Retryable,
@@ -294,7 +295,7 @@ pub enum RequestFailureKind {
 }
 
 /// Manager-owned delegation state, attributed to both participating sessions.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Delegation {
     pub request_id: String,
     pub parent_id: String,
@@ -310,7 +311,7 @@ pub struct Delegation {
     pub origin: DelegationOrigin,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DelegationOrigin {
     /// The parent agent called the `delegate` tool.
@@ -320,7 +321,7 @@ pub enum DelegationOrigin {
     User,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DelegationStatus {
     AwaitingApproval,

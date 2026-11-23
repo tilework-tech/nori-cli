@@ -78,13 +78,14 @@ impl RemoteAcpServer {
         let control = Arc::new(tokio::sync::Mutex::new(
             super::host_control::HostControl::default(),
         ));
-        let instance = match managed.recovery() {
-            Some(recovery) => {
+        let instance = match (managed.instance_id(), managed.recovery()) {
+            (Some(instance), _) => instance,
+            (None, Some(recovery)) => {
                 recovery
                     .run(|r| Ok(r.journal.incarnation().to_owned()))
                     .await?
             }
-            None => uuid::Uuid::new_v4().to_string(),
+            (None, None) => uuid::Uuid::new_v4().to_string(),
         };
         let router =
             super::host_wire::router(managed, token, instance, control.clone(), shutdown.clone());

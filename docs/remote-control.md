@@ -300,6 +300,14 @@ v1 transport:
 - An initialized socket receives live session updates before it explicitly
   attaches to the session through `session/load` or `session/resume`.
 
+These gaps belong to the legacy `/acp` surface, which Phase B of the host
+contract retires. The background host's own ACP face (section 12) has none
+of them: it negotiates the protocol version, applies `cwd` and paging on
+`session/list`, checks `cwd` and accepts `mcpServers` on load and resume,
+delivers updates only after a connection attaches, sends permission requests
+only to the controller and keeps the first answer, and answers close only
+after the session has ended.
+
 The legacy `--remote` surface remains unauthenticated. The background host
 requires a token and supports same-machine discovery (section 11). TLS
 termination, broker routing, Handroll federation, capability aggregation across
@@ -699,7 +707,96 @@ The normative contract for `nori host` is
 section records what the CLI implements. Standard ACP v1 methods share the
 authenticated `/sessions` socket with the `_nori/*` extension. A connection
 can work with any number of sessions. Managed mode (`[host] managed = true`)
-does not serve these methods.
+does not serve these methods: its supervisor wire (`_nori/session/ensure`,
+`_nori/session/status`, `_nori/host/*`, `/managed`, `--stdio --launch`) is
+unchanged and stays as legacy until durable sessions get their own design.
+
+### Handshake and discovery
+
+`initialize` answers with:
+
+- `protocolVersion: 1`, whatever the client asked for (the host speaks only
+  ACP v1; a client that cannot speak it disconnects);
+- `agentInfo` `{name: "nori-host", version}`;
+- `agentCapabilities`: `loadSession: true`,
+  `sessionCapabilities` with `list`, `resume`, `close` and `delete`, and the
+  ACP baseline for prompts and MCP servers (no image, audio, embedded context,
+  HTTP or SSE promises, because those depend on each session's adapter);
+- `authMethods: []` (see deferred items below);
+- no Nori `_meta` key. The contract version is in `host.json`; a client
+  without it derives the version from `agentInfo.version`.
+
+The host's only new `_meta` key is `nori/agent` (registry prefix `nori/<camelCase>`, clifford 2026-11-22) (on `session/new` params
+and `session/list` rows); see the extension registry
+(`docs/acp-extensions.md` in the workspace monorepo).
+The `_nori/*` methods are unchanged, including `_nori/session/follow_up`
+and `_nori/session/subscribe`.
+
+The existing keys (`capabilities.nori_sessions`, `server_info`, `control`)
+stay in the same result because `nori attach` reads them. `params.observe =
+true` keeps a client from taking control, as before.
+
+After binding, the host writes `$NORI_HOME/host/host.json` (mode `0600`,
+written to a temporary file and renamed) beside the existing `state.json`
+and `token`, and removes it on stop:
+`{endpoint, token, pid, instanceId, version, contract: {acp: 1, nori: 1}, startedBy}`.
+`startedBy` is `NORI_HOST_STARTED_BY` when set, else `nori-cli`. Managed hosts
+do not write it.
+
+### Sessions and turns
+
+| Method | Who may call | Behavior |
+| --- | --- | --- |
+| `session/new` | Any initialized client | `cwd` must be an absolute, existing folder (`-32602` otherwise). The folder's configuration applies. `mcpServers` (stdio and HTTP) are added to the session's MCP servers, and are kept when the client later changes the agent or the session restarts; SSE fails with `-32602`. Optional `_meta["nori/agent"]` starts that agent instead of the folder's default (an unknown agent fails with `-32602`); otherwise clients switch with the `agent` config option. `[host] default_mode` (`ask`, `agent`, `approve-all`), when set, replaces the folder's approval policy. The response waits until the agent has started and carries `sessionId`, `configOptions` and `modes`; the connection is attached. Capacity fails with `-32017`. An agent that refuses to start fails with its own ACP error, so an adapter needing sign-in returns `-32000` `Authentication required`; the session is then left out of `session/list`. |
+| `session/prompt` | Controller | Runs one turn and answers with the agent's `PromptResponse` (`stopReason`). The connection receives the turn's updates before the response. A prompt while a turn runs fails with `-32015`; it is never queued. A connection that is not attached to the session is attached (as by `session/resume`) first. |
+| `session/cancel` | Controller (notification) | Cancels the session's turn; the prompt answers with `stopReason: "cancelled"`. Ignored from watchers. |
+| `session/close` | Controller | Stops the session's agent and frees its slot. It stays in `session/list` as `stored` (status `closed`), and `session/load` or `session/resume` restarts it under its ID. |
+| `session/delete` | Controller | Closes the session if it runs, removes its transcript under `$NORI_HOME`, and leaves it out of `session/list` and load for the rest of this host's life. Nothing outside `$NORI_HOME` is touched. |
+
+The connection that controls the host receives `session/request_permission`
+requests for every session it is attached to, with `sessionId` set to the
+conversation ID and a host-chosen string ID. Watchers never receive them.
+Requests in replayed history are not asked: a controller that attaches
+later, or takes control with `_nori/control/take`, is asked only about
+requests the session still waits on. Only the current controller's answer is
+used; the first answer (including one through the legacy
+`_nori/session/respond`) wins and later ones are ignored. An error response
+counts as `cancelled`. Under the
+`approve-all` mode the host answers itself and no client is asked.
+
+### Errors from the agent
+
+When the agent fails to start, every command waiting for it (a queued prompt
+or follow-up) is answered with that failure and the agent's ACP error code
+instead of being dropped. `session/new` and the legacy `_nori/session/prompt`
+therefore report `-32000 … Authentication required` for an adapter that needs
+sign-in, not `ACP agent did not accept the prompt`.
+
+### Schema and TypeScript types
+
+`nori-rs/nori-protocol/schema/host-wire.schema.json` (JSON Schema 2020-12)
+covers the ACP v1 messages above, the `nori/agent`
+`_meta` object, the `host.json` file, and the `_nori/*` extension (control, subscribe with its
+`SessionEnvelope`, host stop, delegation). `nori-protocol/typescript/host-wire.ts`
+is generated from it by a pinned `json-schema-to-typescript`. Regenerate both
+with `scripts/generate-host-wire-types.sh`; `cargo test -p nori-cli --test
+host_wire_schema` fails when either drifts (the TypeScript half is skipped
+without Node.js).
+
+### The `_nori/*` extension on the background host
+
+| Family | Methods |
+| --- | --- |
+| `subscribe` | `_nori/session/subscribe` and its `_nori/session/event` envelopes, unchanged (section 10) |
+| `control` | `_nori/control/status`, `_nori/control/take`, `_nori/control/changed` |
+| `host` | `_nori/host/stop` |
+| `delegation` | `_nori/session/delegate`, `_nori/session/delegation/resolve` |
+
+`_nori/session/list`, `new`, `prompt`, `respond`, `cancel`, `close`,
+`resume` and `follow_up` remain as aliases for one release, because
+`nori attach`, `nori host ls`, `nori host new` and the attach ID lookup still
+use them; Phase B moves those clients onto ACP. `_nori/agents/list` and
+`_nori/session/set_approval_policy` were never released and do not exist.
 
 ### Sessions on the host
 
@@ -711,7 +808,7 @@ ID, continuing the same transcript file.
 
 | Method | Who may call | Behavior |
 | --- | --- | --- |
-| `session/list` | Any initialized client | Live sessions first, then stored sessions, most recently written first. Optional `cwd` (absolute) keeps the sessions working in that folder. Optional `cursor` takes a previous `nextCursor`, which is opaque and absent on the last page. Pages hold 50 rows. Each row is a standard ACP `SessionInfo` (`sessionId`, `cwd`, `title`, `updatedAt` in RFC 3339) with no Nori `_meta`; which agent a row runs and whether it is live are open in the host contract (C12). A bad cursor or relative `cwd` fails with `-32602`. Unreadable transcripts, and transcripts whose metadata names another session, are left out. |
+| `session/list` | Any initialized client | Live sessions first, then stored sessions, most recently written first. Optional `cwd` (absolute) keeps the sessions working in that folder. Optional `cursor` takes a previous `nextCursor`, which is opaque and absent on the last page. Pages hold 50 rows. Each row is a standard ACP `SessionInfo` (`sessionId`, `cwd`, `title`, `updatedAt` in RFC 3339). Its `_meta` carries `nori/agent` (the agent slug, when known). A closed, failed or stored session restarts when loaded or resumed; whether a row is live is not reported yet (pending a decision on reusing the broker's `nori.dev/session` row object). A bad cursor or relative `cwd` fails with `-32602`. Unreadable transcripts, and transcripts whose metadata names another session, are left out. |
 | `session/load` | Any initialized client | Attaches the connection to the session. Its history arrives as `session/update` notifications **before** the response, then live updates follow. A live session replays from the manager journal (sequence 1 onward) with no gap before live delivery. If the journal has evicted the session's start, the transcript is replayed instead and live delivery starts at the journal's latest event, so updates in that interval can be missed. A stored session replays its transcript, then restarts on a new agent process in its recorded folder with its recorded agent; the response waits until the session has started. A failed live session restarts the same way. |
 | `session/resume` | Any initialized client | Like `session/load` without history: only updates after the response arrive. History the harness replays to the restarted agent is not forwarded. |
 
@@ -759,10 +856,21 @@ An adapter's own `config_option_update` reaches clients as the complete list,
 host options included. Its own `current_mode_update` is not forwarded.
 Watchers get `-32016` from both methods.
 
-The mode and every adapter option a client sets are kept in
-`$NORI_HOME/host/session-settings.json`. When a failed or stored session
+The mode, every adapter option a client sets, and the `mcpServers` a
+session was created with are kept in `$NORI_HOME/host/session-settings.json`
+(mode `0600`). Restarting, changing the agent of, and deleting a session are
+serialized, so two clients loading one stored session start it once. When a failed or stored session
 restarts, its mode becomes the starting approval policy, its `model` value
 becomes the adapter's starting model, and the other options are set again
 once the adapter has started. Changing the agent clears the remembered
 adapter options.
 
+### Deferred
+
+- Durable sessions: checkpoints, acknowledgements, durable replay,
+  incremental reconnect cursors on ACP updates, import/release, command-ID
+  idempotency and generation fencing. Managed mode keeps its current wire.
+- `authenticate` / `logout` forwarding and aggregated `authMethods`.
+- `ask` behaving differently from `agent` (adapter strictest modes).
+- Follow-up (`steer`/`queue`) through `session/prompt`.
+- `nori host --stdio` without `--launch`.

@@ -6,6 +6,10 @@ Path: @/nori-rs/cli/src/host
 
 - Implements `nori host`, its administrative commands (`ls`, `stop`, `new`),
   and `nori attach` discovery so agent sessions can outlive every terminal.
+- A local host's client contract is standard ACP v1 on `/sessions` (any
+  number of sessions per connection) plus the `_nori/*` extension; the
+  older `_nori/session/*` methods remain as aliases that `nori attach` and
+  the administrative commands still use.
 - Local sessions use the host's start folder or a folder supplied by the client.
   A machine can enable [managed launch admission](#managed-launch-control-v1)
   to run each binding's pinned adapter in its provisioned workspace and home.
@@ -54,6 +58,12 @@ host ls / stop / new --------------+                   SessionManager
   owner-only permissions. It validates ownership, rejects file symlinks and
   nonregular files, and holds an OS file lock for the entire host lifetime.
   Discovery state contains the endpoint and PID; the lock decides liveness.
+  A local (non-managed) host also publishes `host.json`, the host contract's
+  single discovery file (`nori_protocol::HostDiscovery`: endpoint, token, PID,
+  instance ID, version, contract versions, and `startedBy` from
+  `NORI_HOST_STARTED_BY`, else `nori-cli`), written privately to a temporary
+  file and renamed into place after binding, and removed on stop. `state.json`
+  and `token` stay for existing clients.
 - Each start generates a token and binds loopback before publishing discovery
   state. Administrative clients initialize with `observe: true`, so list and
   stop do not claim the controller slot. [List formatting](table.rs)
@@ -107,20 +117,63 @@ host ls / stop / new --------------+                   SessionManager
   exact ID wins; several matches fail with the candidates (ID, agent, title)
   listed; no match fails with a pointer to `nori host ls | cat` (full IDs) and
   to `nori attach` without an ID. The host itself only knows full IDs.
-- The [standard ACP face](acp/mod.rs) answers `session/list`,
-  `session/load` and `session/resume` on `/sessions` in local mode. The
-  socket loop in [acp-host](../../../acp-host/src/remote/host_wire.rs) hands
-  each initialized connection to `HostService` as a `HostConnection` (an
-  outbound queue, its role, and a close token), and runs load and resume
-  concurrently so a slow agent start does not stall the connection.
-  [Listing](acp/list.rs) merges manager records with
+- In local mode the host's client contract is standard ACP v1, served by the
+  [ACP face](acp/mod.rs) on `/sessions` beside the `_nori/*` extension.
+  Managed mode (`[host] managed = true`) does not serve these methods and
+  keeps its supervisor wire unchanged. The socket loop in
+  [acp-host](../../../acp-host/src/remote/host_wire.rs) hands each
+  initialized connection to `HostService` as a `HostConnection` (an outbound
+  queue, its role watch, and a close token), runs the slow methods (new,
+  load, resume, prompt, close, delete, config changes) concurrently, and
+  passes client notifications (`session/cancel`) and permission answers to
+  `message_from`.
+  [The handshake](acp/handshake.rs) adds `protocolVersion: 1`, `agentInfo`,
+  ACP `agentCapabilities` (load, list, resume, close, delete; only the
+  baseline prompt and MCP capabilities, because the rest depend on each
+  session's adapter) and empty `authMethods` to the `initialize` reply, with
+  no Nori `_meta`; the reply still carries the managed-session keys `nori
+  attach` reads. The host picks its instance ID at startup and announces the
+  same value on upgrades and in `host.json`.
+- [Session lifecycle](acp/session.rs): `session/new` loads the configuration
+  of the requested folder as `_nori/session/new` does, adds the client's
+  stdio and HTTP `mcpServers` (remembered in the session settings so an agent
+  change or restart keeps them), starts the agent named in
+  `_meta["nori/agent"]` if any, applies `[host] default_mode` when set, then
+  attaches the connection from the session's first event and answers once
+  the agent has started. A session whose agent never starts is hidden (marked
+  deleted) and the agent's own error code is returned, carried up from
+  `nori_harness::runtime::AgentStartFailed`. `session/prompt` attaches the
+  connection if needed, rejects a second turn with `-32015`, waits for the
+  turn's ACP prompt response, and answers only after this connection's
+  forwarder has delivered up to that journal sequence (a delivered-sequence
+  watch, bounded wait), so clients see the turn's updates before its
+  `stopReason`. `session/close` closes the manager session (it stays listed
+  and restarts through `SessionManager::reopen` on load or resume);
+  `session/delete` closes it, removes its transcript only when it lies under
+  `NORI_HOME`, clears remembered settings, and records the ID in
+  `HostService.deleted`, which hides it from list, load and prompt for the
+  rest of the host's life.
+- Permission requests reach only the controller. Each connection's
+  forwarder tracks open `session/request_permission` requests per session,
+  sends them under host-chosen JSON-RPC IDs, and re-asks what is still open
+  when the connection attaches later or its role watch turns to controller.
+  Only the current controller's answer is used, routed through the managed
+  respond path, so the first answer (including `_nori/session/respond`) wins;
+  an error answer counts as `cancelled`.
+- [Listing](acp/list.rs) merges manager records with
   [stored sessions](transcripts.rs) (transcripts the host is not running,
   read through `TranscriptLoader::list_stored_sessions`); its cursor is
   `live:<index>` or a keyset over file modification time and ID, so new
-  transcripts do not shift later pages. [Attaching](acp/attach.rs) forwards
-  one session's journal events to one connection as `session/update`
+  transcripts do not shift later pages. Rows are ACP `SessionInfo` with
+  `_meta` `nori/agent` (`nori_protocol::ListedSessionMeta`); loading a
+  closed, failed or done record restarts it. Deleted IDs are
+  skipped. [Attaching](acp/attach.rs) forwards
+  one connection's attached sessions' journal events as `session/update`
   notifications under the conversation ID. Stored sessions restart through
-  `SessionManager::resume_stored`. `_nori/session/resume` keeps accepting
+  `SessionManager::resume_stored`; closed live records are first made
+  restartable with `SessionManager::reopen`, then restart as failed ones do.
+  A startup refusal reported by the agent (an ACP error response before
+  session start) becomes the load or new error. `_nori/session/resume` keeps accepting
   stored IDs as an alias. [Session configuration](acp/config.rs) composes the
   host-owned `agent` and `mode` options around the adapter's options, maps
   modes onto the harness approval policy through
@@ -672,10 +725,17 @@ Recovering model context never entails submitting an interrupted prompt.
 - The host has no persistent manager snapshot. Transcripts survive normally,
   but in-memory registry state and reconnect replay belong to the current host
   process. After a restart, earlier sessions, including finished delegated
-  children, are not listed; `/resume` on a child's transcript reopens it as a
-  live top-level `ready` session without its parent link. The token rotates when that process starts again.
+  children, are missing from `_nori/session/list` (and so from `nori host ls`
+  and `nori attach`); ACP `session/list` still shows them as `stored` from
+  their transcripts. Resuming a child's transcript reopens it as a live
+  top-level `ready` session without its parent link. The set of deleted
+  session IDs is in memory only; deletion is durable because the transcript
+  file is removed. The token rotates when that process starts again.
 - [Lifecycle tests](../../tests/host_lifecycle.rs) use isolated homes and
   bounded process waits to cover detached startup, privacy, lock ownership,
-  occupied ports, and explicit stop.
+  occupied ports, and explicit stop; the [ACP v1 cases](../../tests/host_lifecycle/acp_v1.rs)
+  drive the standard face against the mock agent. The published wire
+  schema is pinned by a [drift test](../../tests/host_wire_schema.rs) (see
+  [nori-protocol](../../../nori-protocol/docs.md)).
 
 Created and maintained by Nori.

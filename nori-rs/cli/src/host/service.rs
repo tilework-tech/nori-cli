@@ -40,6 +40,13 @@ pub(super) struct HostService {
     pub acp: super::acp::AcpFace,
     /// Mode and options clients chose, reapplied on resume.
     pub settings: super::acp::config::SettingsStore,
+    /// The host instance ID clients see on upgrades and in `initialize`.
+    pub instance: String,
+    /// Sessions a client deleted during this host's lifetime.
+    pub deleted: std::sync::Mutex<std::collections::HashSet<ConversationId>>,
+    /// Serializes restarting, replacing and deleting sessions, so two
+    /// clients cannot start one session twice or revive a deleted one.
+    pub restarts: tokio::sync::Mutex<()>,
 }
 
 #[derive(serde::Deserialize)]
@@ -144,6 +151,9 @@ impl HostService {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("session_id is required"))?;
         let id = ConversationId::from_string(id)?;
+        if self.is_deleted(&id) {
+            anyhow::bail!("unknown session id");
+        }
         let Some(_) = self.manager.get(&id) else {
             if method == "_nori/session/resume"
                 && let Some(transcript) =
@@ -199,6 +209,20 @@ impl ManagedAgent for HostService {
 
     fn runs_concurrently(&self, method: &str) -> bool {
         self.launches.is_none() && super::acp::runs_concurrently(method)
+    }
+
+    fn accepts_client_messages(&self) -> bool {
+        self.launches.is_none()
+    }
+
+    fn instance_id(&self) -> Option<String> {
+        self.launches.is_none().then(|| self.instance.clone())
+    }
+
+    async fn message_from(&self, client: i64, message: Value) {
+        if self.launches.is_none() {
+            self.acp_message(client, message).await;
+        }
     }
 
     async fn request_from(&self, client: i64, request: Value) -> ManagedReply {
@@ -294,6 +318,9 @@ impl ManagedAgent for HostService {
             {
                 sessions["session_cwd"] = json!(true);
                 sessions["follow_up"] = json!(1);
+            }
+            if initialize && let Some(result) = reply.response.get_mut("result") {
+                super::acp::handshake::initialize(result);
             }
             return reply;
         }

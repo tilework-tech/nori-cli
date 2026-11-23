@@ -46,6 +46,9 @@ count, image count, image MIME type, and image data through the
 `MOCK_AGENT_EXPECT_*` prompt variables. A mismatch returns a structured prompt
 error, allowing PTY lifecycle tests to verify that deferred positional or typed
 input reaches ACP exactly once without transforming text or attachments.
+`MOCK_AGENT_MCP_LOG=<path>` writes the name of every MCP server a
+`session/new` request carried to that file, one per line.
+
 `MOCK_AGENT_PROMPT_LOG=<path>` appends each delivered prompt's last text block
 to that file as one JSON string per line, so tests can assert on exactly which
 prompts reached the agent and how many times (for example, that a reclaimed
