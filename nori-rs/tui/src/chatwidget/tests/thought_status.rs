@@ -327,7 +327,7 @@ fn a_heading_streamed_in_pieces_inside_a_block_replaces_the_line_once_closed() {
 
     send(
         &mut chat,
-        vec![thought("Checking the loader."), thought("**Plann")],
+        vec![thought("Checking the loader."), thought("\n\n**Plann")],
     );
     assert_eq!(
         header_of(&working_indicator(&mut chat)),
@@ -338,5 +338,109 @@ fn a_heading_streamed_in_pieces_inside_a_block_replaces_the_line_once_closed() {
     assert_eq!(
         header_of(&working_indicator(&mut chat)),
         "Planning the change"
+    );
+}
+
+fn thought_tokens(tokens: &[&str]) -> Vec<nori_protocol::SessionEvent> {
+    tokens.iter().map(|token| thought(token)).collect()
+}
+
+#[test]
+fn inline_emphasis_streamed_token_by_token_keeps_the_whole_sentence() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    start_prompt(&mut chat);
+
+    send(
+        &mut chat,
+        thought_tokens(&[
+            "I should check the synthetic ",
+            "**",
+            "loader",
+            ".toml",
+            "**",
+            " before changing the default.",
+        ]),
+    );
+
+    assert_eq!(
+        header_of(&working_indicator(&mut chat)),
+        "I should check the synthetic loader.toml before changing the default."
+    );
+}
+
+#[test]
+fn successive_headings_streamed_token_by_token_follow_the_latest() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    start_prompt(&mut chat);
+
+    send(
+        &mut chat,
+        thought_tokens(&[
+            "**",
+            "Reading",
+            " the config",
+            " loader",
+            "**",
+            "\n\n",
+            "The loader",
+            " merges three sources.",
+        ]),
+    );
+    assert_eq!(
+        header_of(&working_indicator(&mut chat)),
+        "Reading the config loader"
+    );
+
+    send(
+        &mut chat,
+        thought_tokens(&[
+            "\n\n",
+            "**",
+            "Planning",
+            " the default",
+            " change",
+            "**",
+            "\n\n",
+            "Flip it in one place.",
+        ]),
+    );
+    assert_eq!(
+        header_of(&working_indicator(&mut chat)),
+        "Planning the default change"
+    );
+}
+
+#[test]
+fn a_whole_heading_thought_after_plain_text_starts_a_new_heading() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    start_prompt(&mut chat);
+
+    send(
+        &mut chat,
+        vec![
+            thought("Looking at the loader first."),
+            thought("**Planning the change**\nFlip the default in one place."),
+        ],
+    );
+
+    assert_eq!(
+        header_of(&working_indicator(&mut chat)),
+        "Planning the change"
+    );
+}
+
+#[test]
+fn a_bold_chunk_without_a_description_does_not_start_a_heading() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    start_prompt(&mut chat);
+
+    send(
+        &mut chat,
+        thought_tokens(&["Checking ", "**loader.toml**", " before the change."]),
+    );
+
+    assert_eq!(
+        header_of(&working_indicator(&mut chat)),
+        "Checking loader.toml before the change."
     );
 }

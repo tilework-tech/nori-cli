@@ -170,8 +170,11 @@ The application event loop matches `SessionEvent::Acp` and
 - Live thought text sets the working indicator, not history. The indicator
   shows the current thought block's latest complete `**heading**` that starts
   a line, as Codex (`**Title**\n\nbody`) and Gemini (`**subject**\ndescription`)
-  write them. Gemini sends each whole thought as one chunk with no separator,
-  so a thought chunk that opens with `**` starts a new line. While a
+  write them. The thought text is kept exactly as the agent sent it. Gemini
+  sends each whole thought as one chunk with no separator, so the indicator's
+  own copy breaks the line before a chunk that is exactly one complete
+  heading alone on its line followed by a description. Token-streamed `**`
+  markers never break a line. While a
   line-initial heading is still streaming, the indicator keeps its previous
   text. Without headings it shows the first non-empty line with inline `**`
   markers removed, so emphasis inside a plain sentence keeps the sentence.

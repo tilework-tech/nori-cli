@@ -154,6 +154,8 @@ pub(crate) struct ChatWidget {
     replay_message: Option<ReplayMessage>,
     // Accumulates the current reasoning block text to extract a header
     reasoning_buffer: String,
+    /// The current thought block as the working indicator reads it.
+    thought_status_text: String,
     // Accumulates full reasoning content for transcript-only recording
     full_reasoning_buffer: String,
     // Current status header shown in the status indicator.
@@ -397,6 +399,24 @@ fn truncate_for_log(s: &str, max_len: usize) -> String {
     } else {
         format!("{}...", s[..max_len].replace('\n', "\\n"))
     }
+}
+
+/// Whether `delta` is one whole `**subject**\ndescription` thought, the form
+/// Gemini sends: a complete heading alone on its line, then a description.
+fn is_whole_heading_thought(delta: &str) -> bool {
+    let Some(after_open) = delta.strip_prefix("**") else {
+        return false;
+    };
+    let Some((heading, rest)) = after_open.split_once("**") else {
+        return false;
+    };
+    let Some((heading_line_rest, description)) = rest.split_once('\n') else {
+        return false;
+    };
+    !heading.trim().is_empty()
+        && !heading.contains('\n')
+        && heading_line_rest.trim().is_empty()
+        && !description.trim().is_empty()
 }
 
 /// The working-indicator header for the thought block in progress: its latest
