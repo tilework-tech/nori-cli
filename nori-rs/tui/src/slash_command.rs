@@ -51,6 +51,7 @@ pub enum SlashCommand {
     Mcp,
     Login,
     Logout,
+    ApiKey,
     Quit,
     Exit,
     SwitchSkillset,
@@ -89,6 +90,9 @@ impl SlashCommand {
             SlashCommand::Mcp => "manage MCP server connections",
             SlashCommand::Login => "log in to the current agent",
             SlashCommand::Logout => "show logout instructions",
+            SlashCommand::ApiKey => {
+                "choose whether the agent uses its own login or a saved API key"
+            }
             SlashCommand::SwitchSkillset => "switch between available skillsets",
             SlashCommand::Fork => "rewind conversation to a previous message",
             SlashCommand::Browser => "open a Chrome browser the agent can control via CDP",
@@ -119,6 +123,7 @@ impl SlashCommand {
             | SlashCommand::Mcp
             | SlashCommand::Login
             | SlashCommand::Logout
+            | SlashCommand::ApiKey
             | SlashCommand::SwitchSkillset
             | SlashCommand::Fork
             | SlashCommand::Close
@@ -147,6 +152,7 @@ impl SlashCommand {
             SlashCommand::SwitchSkillset
             | SlashCommand::Browse
             | SlashCommand::Diff
+            | SlashCommand::ApiKey
             | SlashCommand::Browser => CommandScope::LocalOnly,
             SlashCommand::Agent
             | SlashCommand::Model

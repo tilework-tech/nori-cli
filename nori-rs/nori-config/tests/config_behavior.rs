@@ -1,3 +1,4 @@
+use nori_config::AgentAuthPreference;
 use nori_config::AskForApproval;
 use nori_config::NoriConfig;
 use nori_config::NoriConfigEdits;
@@ -615,4 +616,49 @@ fn project_opt_in_keeps_an_inline_project_entry_tidy() {
         )),
         "{contents}"
     );
+}
+
+#[test]
+fn per_agent_auth_preferences_load_and_default_to_the_agents_own_login() {
+    let home = TempDir::new().expect("create config home");
+    let config_path = home.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        r#"[auth.claude-code]
+prefer_api_key = true
+api_billing_confirmed = true
+
+[auth.codex]
+api_billing_confirmed = true
+"#,
+    )
+    .expect("write config");
+
+    let config = NoriConfig::load_from_path(&config_path).expect("load config");
+
+    assert_eq!(
+        ["claude-code", "codex", "pi"].map(|agent| config.auth_preference(agent)),
+        [
+            AgentAuthPreference {
+                prefer_api_key: true,
+                api_billing_confirmed: true
+            },
+            AgentAuthPreference {
+                prefer_api_key: false,
+                api_billing_confirmed: true
+            },
+            AgentAuthPreference::default(),
+        ]
+    );
+}
+
+#[test]
+fn unknown_auth_settings_are_rejected() {
+    let home = TempDir::new().expect("create config home");
+    let config_path = home.path().join("config.toml");
+    std::fs::write(&config_path, "[auth.codex]\nprefer_apikey = true\n").expect("write config");
+
+    let error = NoriConfig::load_from_path(&config_path).expect_err("typo must fail");
+
+    assert!(format!("{error:#}").contains("prefer_apikey"), "{error:#}");
 }

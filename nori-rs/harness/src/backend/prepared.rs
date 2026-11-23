@@ -13,6 +13,8 @@ use crate::connection::ConnectionEvent;
 use crate::connection::acp_connection::AcpConnection;
 use crate::registry::get_agent_launch_config;
 
+const SAVED_KEY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// A prepared connection owns no remote session that needs the active-session
 /// detach grace. Allow a brief EOF cleanup, then reap it promptly.
 const PRE_SESSION_SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_millis(250);
@@ -83,6 +85,31 @@ impl PreparedAgent {
             &mut agent_config,
             config.default_model.as_deref(),
         );
+        // Saved keys reach only agents the user set to prefer them. A keychain
+        // that prompts or hangs must not hold up the launch.
+        if config.prefer_api_key {
+            let nori_home = config.nori_home.clone();
+            let mut with_saved_key = agent_config.clone();
+            let lookup = tokio::task::spawn_blocking(move || {
+                nori_auth_providers::inject_saved_keys(
+                    &mut with_saved_key,
+                    &nori_home,
+                    true,
+                    &|key| std::env::var(key).ok(),
+                );
+                with_saved_key
+            });
+            match tokio::time::timeout(SAVED_KEY_TIMEOUT, lookup).await {
+                Ok(joined) => {
+                    agent_config = joined
+                        .map_err(|error| AgentPrepareFailure::new(error.into(), Vec::new()))?;
+                }
+                Err(_) => tracing::warn!(
+                    "launching {} without saved API keys: the keyring did not answer within {SAVED_KEY_TIMEOUT:?}",
+                    agent_config.display_name
+                ),
+            }
+        }
         let (initialize_event_tx, mut initialize_event_rx) = mpsc::channel(1);
         let connection_result = AcpConnection::spawn_with_initialize_event_sender(
             &agent_config,

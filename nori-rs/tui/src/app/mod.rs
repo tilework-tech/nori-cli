@@ -215,6 +215,7 @@ struct SystemInfoRefreshRequest {
     first_message: Option<String>,
 }
 
+mod auth_preference;
 mod config_persistence;
 mod delegation;
 mod event_handling;

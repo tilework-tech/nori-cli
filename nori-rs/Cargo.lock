@@ -3802,6 +3802,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "nori-auth-providers"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "codex-keyring-store",
+ "keyring",
+ "nori-acp-host",
+ "nori-config",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "nori-cli"
 version = "0.0.0"
 dependencies = [
@@ -3815,6 +3833,7 @@ dependencies = [
  "codex-arg0",
  "codex-common",
  "codex-execpolicy",
+ "codex-keyring-store",
  "codex-process-hardening",
  "codex-sandbox",
  "codex-stdio-to-uds",
@@ -3825,6 +3844,7 @@ dependencies = [
  "futures",
  "insta",
  "libc",
+ "nori-auth-providers",
  "nori-config",
  "nori-harness",
  "nori-installed",
@@ -3889,6 +3909,7 @@ dependencies = [
  "hex",
  "libc",
  "nori-acp-host",
+ "nori-auth-providers",
  "nori-config",
  "nori-protocol",
  "notify-rust",
@@ -3984,6 +4005,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "mcp-types",
+ "nori-auth-providers",
  "nori-config",
  "nori-harness",
  "nori-installed",

@@ -24,6 +24,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use supports_color::Stream;
 
+mod auth;
 mod host;
 mod stdin_prompt;
 #[cfg(not(windows))]
@@ -74,6 +75,9 @@ enum Subcommand {
 
     /// Manage skillsets. An alias for `npx nori-skillsets` or `bunx nori-skillsets`.
     Skillsets(SkillsetsCommand),
+
+    /// Show which agents are signed in, manage saved API keys, and choose when agents use them.
+    Auth(auth::AuthCommand),
 
     /// Execpolicy tooling.
     #[clap(hide = true)]
@@ -546,6 +550,9 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         }
         Some(Subcommand::Exec(cmd)) => {
             run_exec(cmd, interactive, root_config_overrides).await?;
+        }
+        Some(Subcommand::Auth(cmd)) => {
+            tokio::task::spawn_blocking(move || auth::run(cmd)).await??;
         }
         Some(Subcommand::Completions(cmd)) => {
             clap_complete::generate(

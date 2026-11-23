@@ -221,6 +221,9 @@ pub struct AcpBackendConfig {
     pub default_model: Option<String>,
     pub agent_token_providers:
         std::sync::Arc<HashMap<String, nori_config::token_providers::TokenProvider>>,
+    /// The user set `[auth.<agent>] prefer_api_key`, so keys saved through
+    /// `nori auth set-key` are passed to the agent at launch.
+    pub prefer_api_key: bool,
     /// Optional initial context to inject into the first prompt.
     /// Used by fork to provide conversation history as context to the new session.
     pub initial_context: Option<String>,

@@ -38,6 +38,7 @@ chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive"] }
 nori-harness = { workspace = true }
 nori-config = { workspace = true }
+nori-auth-providers = { workspace = true }
 codex-ansi-escape = { workspace = true }
 codex-arg0 = { workspace = true }
 codex-common = { workspace = true, features = [

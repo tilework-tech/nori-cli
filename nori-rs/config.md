@@ -5,8 +5,8 @@ Nori reads one TOML file at `$NORI_HOME/config.toml` (default
 at startup. The resolution architecture and the full set of runtime-policy types
 live in [`nori-config/docs.md`](nori-config/docs.md); this file documents the
 agent, adapter launch, and model configuration surface, which is the most commonly
-hand-edited part of the file, plus tool call display and running several sessions
-in one TUI.
+hand-edited part of the file, plus saved API keys, tool call display, and running
+several sessions in one TUI.
 
 ## Choosing an agent
 
@@ -145,6 +145,61 @@ protocol, model and key reference determine the private Pi profile. The model
 ID on ACP is `lab-pi/demo-model`. Remove the `pi` binding to return to Pi's
 native settings. Each launch owns its generated profile until the child exits. The next local launch removes abandoned profiles. Pi session history remains in the connection’s existing sessions directory. Nori also reads earlier Pi provider tables, preserving their
 selected route, endpoint and key variable.
+
+## Saved API keys
+
+An agent's own login (for example a Claude.ai or ChatGPT subscription) always
+wins by default. A key saved through Nori is passed to an agent only after you
+opt that agent in under `[auth.<agent>]`, keyed by canonical agent slug like
+`[agent_token_providers]`:
+
+```toml
+[auth.claude-code]
+prefer_api_key = true          # pass saved keys to this agent at launch (default false)
+api_billing_confirmed = true   # you accepted the billing change once; remembered
+```
+
+Unknown fields in an `[auth.<agent>]` table are rejected. Set the preference
+with `nori auth prefer-api-key <agent>` / `nori auth prefer-login <agent>` or
+the TUI's `/api-key` picker rather than by hand: when the agent is signed in
+with a subscription, both warn that usage will be billed to the API account
+and ask once, then write `api_billing_confirmed = true` so later opt-ins do not
+ask again. `nori auth prefer-api-key` fails without a terminal (or with
+`--json`, printing a `confirmation_required` error) unless `--yes` is passed.
+OpenCode and Pi never warn, because their own login still wins per provider.
+A change applies the next time the agent starts (`/new` in the TUI).
+
+`nori auth set-key <provider>` saves an API key for a model provider
+(`anthropic`, `openai`, `google`, `xai`, or `cursor`) outside `config.toml`.
+At a terminal the key is read hidden, echoing only its public prefix and `*`
+for the rest; piped input is read silently. One saved key reaches every
+built-in agent that talks to that provider and prefers API keys, in the agent's
+own variable: for example, a saved `openai` key reaches Codex, OpenCode, and Pi
+as `OPENAI_API_KEY`, and a saved `google` key reaches Antigravity and Pi as
+`GEMINI_API_KEY` but OpenCode as `GOOGLE_GENERATIVE_AI_API_KEY`. Hermes takes
+none. Passing an agent name instead of a provider is an error that names the
+provider to use. `nori auth remove-key <provider>` forgets it. `nori auth`
+shows each agent's credential, and flags agents that have a saved key they do
+not use.
+
+`NORI_CREDENTIALS_STORE` selects where saved credentials live, with no fallback
+between the two:
+
+- `file` (default, also unset): the owner-only file `$NORI_HOME/credentials.json`.
+- `keyring`: one OS keyring item (service `Nori Credentials`) holding the same
+  JSON document; no file is written. Every launch of an agent that prefers API
+  keys then reads the keyring, which may prompt on macOS.
+
+For an agent that prefers API keys, a provider's key is still skipped at launch
+when any credential variable the agent honours for that provider is already set
+(in the environment or the agent's config `env`), when the provider's base-URL
+variable (`ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `GOOGLE_GEMINI_BASE_URL`) is
+set non-blank there, so a real key is never sent to a gateway or proxy, or when
+the agent's variable is in `launch.env_remove`; agents bound to a named token
+provider receive no saved keys. Broker-managed sessions never use saved keys.
+Keys saved per agent by earlier development builds (`saved-keys.json`) are
+rejected with instructions to delete them and save again.
+[Details](auth-providers/docs.md)
 
 ## Custom agents: `[[agents]]`
 

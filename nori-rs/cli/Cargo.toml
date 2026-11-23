@@ -32,8 +32,10 @@ codex-stdio-to-uds = { workspace = true }
 nori-tui = { workspace = true }
 nori-tui-components = { workspace = true }
 nori-protocol = { workspace = true }
+nori-auth-providers = { workspace = true }
+codex-keyring-store = { workspace = true }
 ctor = { workspace = true }
-crossterm = { workspace = true }
+crossterm = { workspace = true, features = ["bracketed-paste"] }
 unicode-segmentation = { workspace = true }
 unicode-width = { workspace = true }
 libc = { workspace = true }

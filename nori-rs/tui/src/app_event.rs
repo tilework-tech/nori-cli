@@ -277,6 +277,20 @@ pub(crate) enum AppEvent {
     /// Update whether the full access warning prompt has been acknowledged.
     UpdateFullAccessWarningAcknowledged(bool),
 
+    /// Open the `/api-key` picker with the agent's detected sign-in.
+    OpenApiKeyPreference(crate::chatwidget::api_key::ApiKeyPreference),
+
+    /// Warn that preferring the saved API key bills the API account instead
+    /// of the agent's subscription, and ask once.
+    OpenApiKeyBillingConfirmation(crate::chatwidget::api_key::ApiKeyPreference),
+
+    /// Save `[auth.<agent>]` in config.toml.
+    PersistApiKeyPreference {
+        agent: String,
+        prefer_api_key: bool,
+        api_billing_confirmed: bool,
+    },
+
     /// Update whether the world-writable directories warning has been acknowledged.
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     UpdateWorldWritableWarningAcknowledged(bool),
