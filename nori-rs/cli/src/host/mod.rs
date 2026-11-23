@@ -392,6 +392,7 @@ async fn serve(
         )?)
     } else {
         nori_harness::initialize_registry(config.agents.clone())?;
+        nori_harness::set_adapter_launch_overrides(config.acp_adapters.clone())?;
         None
     };
     let manager = SessionManager::new(SessionManagerConfig {

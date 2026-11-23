@@ -29,6 +29,8 @@ use std::sync::RwLock;
 use std::time::Duration;
 
 use nori_config::AgentConfigToml;
+
+pub use crate::adapter_launch::set_adapter_launch_overrides;
 use nori_config::ResolvedDistribution;
 
 /// Default idle timeout for ACP streaming (5 minutes)
@@ -698,6 +700,9 @@ pub struct AcpAgentConfig {
     pub install_hint: String,
     /// How to force a model on this agent at spawn time.
     pub model_injection: ModelInjection,
+    /// Status line announcing that the launcher is about to download the
+    /// adapter package (npx/bunx cache miss). `None` when nothing is fetched.
+    pub download_notice: Option<String>,
 }
 
 impl AcpAgentConfig {
@@ -884,13 +889,40 @@ pub fn get_agent_launch_config(
     })
 }
 
+/// Resolve the launch command, then apply `NORI_ACP_COMMAND_<SLUG>` /
+/// `[acp_adapters]` overrides (see `crate::adapter_launch`).
 fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentConfig> {
-    // Normalize agent name: lowercase
-    let normalized = resolve_agent_slug(agent_name);
+    let slug = resolve_agent_slug(agent_name);
+    let command_override = crate::adapter_launch::command_override(&slug)?;
+    let pin = if command_override.is_some() {
+        None
+    } else {
+        crate::adapter_launch::version_pin(&slug)
+    };
+    let mut config = default_agent_command(&slug, use_native_config, pin.as_deref())?;
+    if let Some((command, args)) = command_override {
+        config.install_hint = format!("ensure '{command}' is in your PATH");
+        config.command = command;
+        config.args = args;
+        config.download_notice = None;
+    }
+    Ok(config)
+}
+
+fn default_agent_command(
+    normalized: &str,
+    use_native_config: bool,
+    pin: Option<&str>,
+) -> Result<AcpAgentConfig> {
+    let pin_error = |display: &str| {
+        anyhow::anyhow!(
+            "acp_adapters.{normalized}.version is set, but {display} is not launched from an npm package Nori resolves; remove the version or set acp_adapters.{normalized}.command"
+        )
+    };
 
     // Try mock agents first (only available in debug builds)
     #[cfg(debug_assertions)]
-    if let Some(config) = get_mock_agent_config(&normalized) {
+    if let Some(config) = get_mock_agent_config(normalized) {
         return Ok(config);
     }
 
@@ -899,6 +931,9 @@ fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentCo
     if let Some(registered) = registry.iter().find(|a| a.slug == normalized)
         && let Some(ref dist) = registered.distribution
     {
+        if pin.is_some() {
+            return Err(pin_error(&registered.name));
+        }
         // Custom distribution: use the resolved distribution directly
         let (command, args, env, launch) = match dist {
             ResolvedDistribution::Local {
@@ -985,31 +1020,45 @@ fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentCo
             display_name: registered.name.clone(),
             install_hint,
             model_injection: registered.model_injection.clone(),
+            download_notice: None,
         });
     }
 
     // Try to parse as a built-in AgentKind (auto-detection path)
-    if let Some(agent) = AgentKind::from_slug(&normalized) {
+    if let Some(agent) = AgentKind::from_slug(normalized) {
         let package = match agent {
-            AgentKind::ClaudeCode => Some("@agentclientprotocol/claude-agent-acp@latest"),
-            AgentKind::Codex => Some("@agentclientprotocol/codex-acp@latest"),
-            AgentKind::GrokBuild => Some("@xai-official/grok@latest"),
-            AgentKind::Gemini
-            | AgentKind::OpenCode
-            | AgentKind::Cursor
-            | AgentKind::Hermes
-            | AgentKind::Pi => None,
+            AgentKind::ClaudeCode => Some("@agentclientprotocol/claude-agent-acp"),
+            AgentKind::Codex => Some("@agentclientprotocol/codex-acp"),
+            AgentKind::GrokBuild => Some("@xai-official/grok"),
+            AgentKind::Pi => Some("pi-acp"),
+            AgentKind::Gemini | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Hermes => None,
         };
+        let package = match (package, pin) {
+            (Some(package), pin) => Some(format!("{package}@{}", pin.unwrap_or("latest"))),
+            (None, Some(_)) => return Err(pin_error(agent.display_name())),
+            (None, None) => None,
+        };
+        let mut download_notice = None;
         let (command, args, install_hint) = if agent == AgentKind::Pi {
+            let specs = [
+                format!("pi-acp@{}", pin.unwrap_or("latest")),
+                "@earendil-works/pi-coding-agent@latest".to_string(),
+            ];
+            download_notice = crate::adapter_launch::download_notice(PackageManager::Npm, &specs);
+            let [adapter, coding_agent] = specs;
+            let mut args = vec!["--yes".to_string()];
+            if pin.is_some() {
+                args.push("--prefer-offline".to_string());
+            }
             // pi-acp runs `pi` from PATH; npx puts both packages' binaries there.
+            args.extend([
+                format!("--package={adapter}"),
+                format!("--package={coding_agent}"),
+                "pi-acp".to_string(),
+            ]);
             (
                 PackageManager::Npm.command(),
-                vec![
-                    "--yes".to_string(),
-                    "--package=pi-acp@latest".to_string(),
-                    "--package=@earendil-works/pi-coding-agent@latest".to_string(),
-                    "pi-acp".to_string(),
-                ],
+                args,
                 "install npm and make `npx` available on PATH".to_string(),
             )
         } else if let Some(package) = package {
@@ -1023,8 +1072,13 @@ fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentCo
             let mut args = Vec::new();
             if manager == PackageManager::Npm {
                 args.push("--yes".to_string());
+                if pin.is_some() {
+                    args.push("--prefer-offline".to_string());
+                }
             }
-            args.push(package.to_string());
+            download_notice =
+                crate::adapter_launch::download_notice(manager, std::slice::from_ref(&package));
+            args.push(package);
             if agent == AgentKind::GrokBuild {
                 args.extend(["agent".to_string(), "stdio".to_string()]);
             }
@@ -1087,10 +1141,11 @@ fn agent_command(agent_name: &str, use_native_config: bool) -> Result<AcpAgentCo
             display_name: agent.display_name().to_string(),
             install_hint,
             model_injection: agent.model_injection(),
+            download_notice,
         });
     }
 
-    anyhow::bail!("Unknown ACP agent: {agent_name}")
+    anyhow::bail!("Unknown ACP agent: {normalized}")
 }
 
 /// Get the display name for an agent by agent name.
@@ -1190,6 +1245,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                 model_injection: ModelInjection::Env {
                     var: "MOCK_AGENT_INJECTED_MODEL".to_string(),
                 },
+                download_notice: None,
             })
         }
         "mock-model-alt" => {
@@ -1245,6 +1301,7 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                 model_injection: ModelInjection::Env {
                     var: "MOCK_AGENT_INJECTED_MODEL".to_string(),
                 },
+                download_notice: None,
             })
         }
         _ => None,

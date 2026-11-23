@@ -87,6 +87,10 @@ remain unrestricted. Host-handled requests do not leak duplicate public
   respectively.
 - The connection uses `ProtocolVersion::LATEST` while enforcing ACP v1 as the
   minimum supported version.
+- Before spawning, the connection logs the launch config's `download_notice`
+  (an npx/bunx first-fetch announcement from the
+  [registry](../registry.rs)) at info level. It is a log line only; no ACP
+  notification or `_meta` carries it.
 - Spawn strips `CODEX_HOME` (`.env_remove("CODEX_HOME")`), so a natively authenticated Codex
   subprocess resolves its home to `$HOME/.codex` and reads credentials from
   `~/.codex/auth.json`. Anything writing those credentials (notably the TUI's

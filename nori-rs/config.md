@@ -4,8 +4,9 @@ Nori reads one TOML file at `$NORI_HOME/config.toml` (default
 `~/.nori/cli/config.toml`). Launch flags and dotted overrides are layered on top
 at startup. The resolution architecture and the full set of runtime-policy types
 live in [`nori-config/docs.md`](nori-config/docs.md); this file documents the
-agent and model configuration surface, which is the most commonly hand-edited
-part of the file, plus tool call display and running several sessions in one TUI.
+agent, adapter launch, and model configuration surface, which is the most commonly
+hand-edited part of the file, plus tool call display and running several sessions
+in one TUI.
 
 ## Choosing an agent
 
@@ -15,6 +16,42 @@ agent = "claude-code"
 ```
 
 Built-in IDs are `claude-code`, `codex`, `gemini` (Antigravity), `grok-build`, `opencode`, `cursor` (Cursor Agent), `hermes` (Hermes Agent), and `pi`. An explicitly configured agent with the requested slug takes precedence over a built-in or alias.
+
+## Adapter launch: `[acp_adapters]`
+
+Claude Code, Codex, Grok Build, and Pi fetch their ACP adapter from npm at
+launch (`@latest` by default). Pin a version or replace the launch command per
+agent:
+
+```toml
+[acp_adapters.claude-code]
+version = "0.109.0"            # replaces @latest; ranges and dist-tags also work
+
+[acp_adapters.codex]
+command = "/opt/nori/adapters/codex-acp --verbose"   # shell-split, no package runner
+```
+
+| Key | Effect |
+| --- | --- |
+| `command` | Replaces the launch command and arguments. Works for built-in and `[[agents]]` slugs. A built-in keeps its own model and credential handling. |
+| `version` | Replaces `@latest` on the adapter package: `@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp`, `@xai-official/grok`, or `pi-acp` (Pi's coding agent stays `@latest`). npx launches also get `--prefer-offline`. |
+
+Table keys accept aliases (`[acp_adapters.claude]`); the canonical key wins
+when both are set. `command` wins over
+`version`. Setting `version` on an agent Nori does not launch from npm
+(Antigravity, OpenCode, Cursor, Hermes, or a custom agent) makes its launch
+fail; use `command` instead. Unknown keys are a config error.
+
+The environment variable `NORI_ACP_COMMAND_<SLUG>` (slug uppercased, `-` as
+`_`, e.g. `NORI_ACP_COMMAND_GROK_BUILD`) overrides both keys for that agent.
+An empty value or unbalanced quotes is a launch error naming the variable.
+
+The package runner is unchanged: `NORI_MANAGED_BY_BUN` selects `bunx`,
+`NORI_MANAGED_BY_NPM` selects `npx`, otherwise `bunx` when it is on `PATH`,
+else `npx`. Grok Build and Pi always use `npx`. When the runner's cache
+appears to lack the package, Nori logs a `Downloading <package>@<version>…`
+line before spawning. These overrides apply to the TUI, `nori exec`, and a
+local `nori host`; a managed host uses its machine-supplied launch.
 
 ## Default models: `[default_models]`
 

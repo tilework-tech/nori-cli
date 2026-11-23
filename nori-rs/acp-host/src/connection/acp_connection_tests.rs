@@ -842,6 +842,7 @@ fn script_agent_config(dir: &std::path::Path, body: &str) -> crate::registry::Ac
         display_name: "Script Agent".to_string(),
         install_hint: "none".to_string(),
         model_injection: crate::registry::ModelInjection::None,
+        download_notice: None,
     }
 }
 

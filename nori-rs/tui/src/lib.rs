@@ -200,6 +200,9 @@ pub async fn run_main(
         }
         tracing::warn!("Failed to initialize agent registry with custom agents: {e}");
     }
+    if let Err(e) = nori_harness::set_adapter_launch_overrides(config.acp_adapters.clone()) {
+        return Err(std::io::Error::other(e));
+    }
 
     let (pending_worktree_ask, worktree_blocked_reason) = {
         use nori_config::AutoWorktree;

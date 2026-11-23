@@ -31,6 +31,7 @@ pub use policy::AskForApproval;
 pub use policy::SandboxPolicy;
 pub use policy::WritableRoot;
 pub use types::AGENT_RUNTIME_ENV;
+pub use types::AcpAdapterToml;
 pub use types::AcpProxyConfig;
 pub use types::AcpProxyConfigToml;
 pub use types::AgentConfigToml;
