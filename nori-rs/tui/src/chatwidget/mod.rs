@@ -399,32 +399,36 @@ fn truncate_for_log(s: &str, max_len: usize) -> String {
     }
 }
 
-fn extract_first_bold(s: &str) -> Option<String> {
-    let bytes = s.as_bytes();
-    let mut i = 0usize;
-    while i + 1 < bytes.len() {
-        if bytes[i] == b'*' && bytes[i + 1] == b'*' {
-            let start = i + 2;
-            let mut j = start;
-            while j + 1 < bytes.len() {
-                if bytes[j] == b'*' && bytes[j + 1] == b'*' {
-                    // Found closing **
-                    let inner = &s[start..j];
-                    let trimmed = inner.trim();
-                    if !trimmed.is_empty() {
-                        return Some(trimmed.to_string());
-                    } else {
-                        return None;
-                    }
-                }
-                j += 1;
-            }
-            // No closing; stop searching (wait for more deltas)
-            return None;
+/// The working-indicator header for the thought block in progress: its latest
+/// complete single-line `**bold**` header when the agent writes them, otherwise its first
+/// non-empty line, which grows as the agent streams it.
+fn thought_status_header(block: &str) -> Option<String> {
+    let mut latest_bold = None;
+    let mut rest = block;
+    while let Some(open) = rest.find("**") {
+        let after_open = &rest[open + 2..];
+        let Some(close) = after_open.find("**") else {
+            break;
+        };
+        let inner = &after_open[..close];
+        if inner.contains('\n') {
+            rest = after_open;
+            continue;
         }
-        i += 1;
+        let inner = inner.trim();
+        if !inner.is_empty() {
+            latest_bold = Some(inner.to_string());
+        }
+        rest = &after_open[close + 2..];
     }
-    None
+    if latest_bold.is_some() || block.trim_start().starts_with("**") {
+        return latest_bold;
+    }
+    block
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_string)
 }
 
 #[cfg(test)]

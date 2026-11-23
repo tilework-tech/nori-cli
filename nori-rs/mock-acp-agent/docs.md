@@ -149,6 +149,9 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   use this to prove which subprocess produced a visible response.
 - `MOCK_AGENT_SEND_PLAN` sends a two-step plan update before the reply, so
   PTY tests can drive the plan drawer and plan-dependent keys.
+- `MOCK_AGENT_THOUGHT=<text>` sends `<text>` as one thought chunk before the
+  reply. `MOCK_AGENT_THOUGHT_DELAY_MS` then pauses, so PTY tests can read the
+  working indicator while the thought is current.
 - `MOCK_AGENT_SEND_COMMAND_OUTPUT` runs one synthetic `cargo test` command
   with five output lines before the reply, so PTY tests can tell full tool
   output from compact output.

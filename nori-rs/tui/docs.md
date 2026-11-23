@@ -167,6 +167,16 @@ The application event loop matches `SessionEvent::Acp` and
 
 - ACP notifications drive private message, thought, plan, tool, usage, mode,
   live config, capability, and available-command presentation.
+- Live thought text sets the working indicator, not history. The indicator
+  shows the current thought block's latest complete single-line `**bold**`
+  header, or its first non-empty line when the agent writes no headers. A
+  half-streamed `**header` waits for its closing marker. Answer text or a tool
+  update ends the block, so the next thought replaces the indicator text. The
+  indicator shortens a long header with `...` so the elapsed time and
+  interrupt hint stay visible, unless fewer than 20 columns would remain for
+  the header; then the row clips at the terminal edge. The header rule is `thought_status_header` in
+  [`chatwidget/mod.rs`](src/chatwidget/mod.rs); block boundaries are in
+  [`event_handlers.rs`](src/chatwidget/event_handlers.rs).
 - User input is rendered from the harness's canonical ACP
   `user_message_chunk` notifications, not inserted by the submitting widget.
   Chunks with one message id are accumulated into one user history cell, and

@@ -1171,6 +1171,21 @@ impl MockAgent {
             }
         }
 
+        if let Ok(thought) = std::env::var("MOCK_AGENT_THOUGHT") {
+            self.send_update(
+                session_id.clone(),
+                acp::SessionUpdate::AgentThoughtChunk(acp::ContentChunk::new(
+                    acp::ContentBlock::Text(acp::TextContent::new(thought)),
+                )),
+            )
+            .await?;
+            if let Ok(delay) = std::env::var("MOCK_AGENT_THOUGHT_DELAY_MS")
+                && let Ok(delay) = delay.parse::<u64>()
+            {
+                sleep(Duration::from_millis(delay)).await;
+            }
+        }
+
         if std::env::var("MOCK_AGENT_SEND_PLAN").is_ok() {
             self.send_update(
                 session_id.clone(),
