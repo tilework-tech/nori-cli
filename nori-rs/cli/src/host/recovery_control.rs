@@ -3,7 +3,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::time::Duration;
 use tokio::sync::Mutex;
+use tokio::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
@@ -278,22 +280,34 @@ impl RecoveryControl {
 
     async fn export(&self, scope: &Scope, binding: &Binding) -> Result<Value> {
         let first = self.scoped(scope, Recovery::freeze).await?;
-        let writers = binding.writers.checkpoint().await;
-        self.scoped(scope, move |r, s| r.recorder_barrier(s, writers))
-            .await?;
         let stable = first
             .journal
             .conversation_id()
             .context("missing stable identity")?;
-        let history = binding.history.lock().await.clone();
-        let history = history.export(stable).await?;
-        let checkpoint = self.scoped(scope, |r, s| r.checkpoint(s)).await?;
-        let watermarks = checkpoint.journal.watermarks();
-        ensure!(
-            watermarks == first.journal.watermarks(),
-            "output advanced during checkpoint"
-        );
-        Ok(json!({"watermarks":watermarks,"checkpoint":Export { checkpoint, history }}))
+        let mut expected = first.journal.watermarks();
+        // A loaded adapter can still publish status while admission is frozen.
+        // Reflush and re-export history for the new watermark before returning it.
+        let retry_until = Instant::now() + Duration::from_secs(2);
+        loop {
+            let writers = binding.writers.checkpoint().await;
+            self.scoped(scope, move |r, s| r.recorder_barrier(s, writers))
+                .await?;
+            let history = binding.history.lock().await.clone();
+            let history = history.export(stable).await?;
+            let checkpoint = self.scoped(scope, |r, s| r.checkpoint(s)).await?;
+            let watermarks = checkpoint.journal.watermarks();
+            if watermarks == expected {
+                return Ok(
+                    json!({"watermarks":watermarks,"checkpoint":Export { checkpoint, history }}),
+                );
+            }
+            ensure!(
+                Instant::now() < retry_until,
+                "output advanced during checkpoint"
+            );
+            expected = watermarks;
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
     }
 
     async fn import(
@@ -582,6 +596,59 @@ mod tests {
             }
             launches.shutdown().await?;
         }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn checkpoint_includes_output_arriving_after_session_load() -> Result<()> {
+        let home = tempfile::tempdir()?;
+        let control = RecoveryControl::open(home.path())?;
+        let params = json!({"bindingId":"fixture-binding","generation":2});
+        let scope = Scope::deserialize(&params)?;
+        control.scoped(&scope, |r, s| {
+            r.journal.register_identity(&s.binding_id, s.generation, &uuid::Uuid::new_v4().to_string(), None)?;
+            r.attach(s);
+            r.incoming(s, &json!({"jsonrpc":"2.0","id":1,"method":"session/load","params":{"sessionId":"resumed"}}), None)?;
+            r.outgoing(s, &json!({"jsonrpc":"2.0","id":1,"result":{}}))?;
+            Ok(())
+        }).await?;
+
+        // Hold history export until a late ACP notification is in the journal.
+        let binding = control.binding(&scope).await;
+        let history = binding.history.lock().await;
+        let update = json!({"jsonrpc":"2.0","method":"session/update","params":{
+            "sessionId":"resumed","update":{"sessionUpdate":"available_commands_update","availableCommands":[]}
+        }});
+        let late_update = async {
+            loop {
+                let message = update.clone();
+                let source = control.scoped(&scope, move |r, s| {
+                    let cancel = json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"resumed"}});
+                    match r.incoming(s, &cancel, None) {
+                        Ok(_) => Ok(None),
+                        Err(e) if e.to_string() == "binding is checkpointing" => {
+                            r.outgoing(s, &message)?.context("update was not journaled").map(Some)
+                        }
+                        Err(e) => Err(e),
+                    }
+                }).await?;
+                if let Some(source) = source {
+                    drop(history);
+                    return Ok::<_, anyhow::Error>(source);
+                }
+            }
+        };
+        let (checkpoint, source) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(control.checkpoint(&params), late_update)
+        })
+        .await?;
+        let (export, _delivery) = checkpoint?;
+        let source = source?;
+        pretty_assertions::assert_eq!(export["watermarks"], json!([source]));
+        pretty_assertions::assert_eq!(
+            export["checkpoint"]["journal"]["streams"][0]["pending"],
+            json!([{"source":source,"sessionId":"resumed","message":update}])
+        );
         Ok(())
     }
 

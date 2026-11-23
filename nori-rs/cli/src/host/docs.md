@@ -797,9 +797,16 @@ prompt waiting for permission can remain open during its parent’s checkpoint. 
 stops the binding's processes and waits for its rebuilt sides and parent relay
 to finish before exporting the final checkpoint.
 
-When `spec.additions.recording` is enabled, checkpoint flushes and syncs each
-binding-owned recorder through its open file handle, then verifies that the
-output watermarks still match. On checkpoint or release error, read
+During export, the host freezes command admission while the adapter can still
+emit output, including status updates after `session/load`. The host syncs
+each enabled recorder through its open file handle and exports session
+history. If the journal advances during that work, the host repeats it on the
+same binding generation without resending the prompt. It returns a checkpoint
+once the output watermarks hold steady across a pass. Continued output can
+exhaust the bounded retry and return `output advanced during checkpoint`.
+Storage failures return immediately. [Checkpoint implementation](recovery_control.rs)
+
+On checkpoint or release error, read
 `error.data.savedThrough` when present. Its source cursors identify the last
 durable output the host could verify. A known storage failure closes admission
 with `-32020` before a fresh command enters the ledger. A failure during the
