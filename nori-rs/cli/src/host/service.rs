@@ -36,6 +36,8 @@ pub(super) struct HostService {
     /// The host's command-line settings, reapplied to each session folder.
     pub overrides: NoriConfigOverrides,
     pub stop: Notify,
+    /// Per-connection state of the standard ACP face.
+    pub acp: super::acp::AcpFace,
 }
 
 #[derive(serde::Deserialize)]
@@ -48,7 +50,7 @@ struct LaunchScope {
 impl HostService {
     /// The host's configuration as it applies in `folder`, so the folder's
     /// own project trust and settings hold for its sessions.
-    async fn config_in(&self, folder: PathBuf) -> anyhow::Result<NoriConfig> {
+    pub(super) async fn config_in(&self, folder: PathBuf) -> anyhow::Result<NoriConfig> {
         let overrides = NoriConfigOverrides {
             cwd: Some(folder),
             ..self.overrides.clone()
@@ -59,7 +61,7 @@ impl HostService {
             .context("could not load configuration for the session folder")
     }
 
-    fn prepare(config: NoriConfig) -> AgentPrepareSpec {
+    pub(super) fn prepare(config: NoriConfig) -> AgentPrepareSpec {
         AgentPrepareSpec {
             config: Arc::new(config),
             cli_version: env!("CARGO_PKG_VERSION").into(),
@@ -140,10 +142,16 @@ impl HostService {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("session_id is required"))?;
         let id = ConversationId::from_string(id)?;
-        let record = self
-            .manager
-            .get(&id)
-            .ok_or_else(|| anyhow::anyhow!("unknown session id"))?;
+        let Some(_) = self.manager.get(&id) else {
+            if method == "_nori/session/resume"
+                && let Some(transcript) =
+                    super::transcripts::load_stored(&self.config.nori_home, &id).await?
+            {
+                self.resume_stored(&id, transcript).await?;
+                return Ok(json!({"session_id": id.to_string()}));
+            }
+            anyhow::bail!("unknown session id");
+        };
         match method {
             "_nori/session/close" => self.manager.close(&id, Duration::ZERO).await?,
             "_nori/session/cancel" => {
@@ -153,18 +161,55 @@ impl HostService {
                     .cancel()
                     .await?
             }
-            "_nori/session/resume" => {
-                let mut config = self.config_in(record.cwd).await?;
-                config.active_agent = record.agent;
-                self.manager.resume(&id, Self::prepare(config)).await?;
-            }
+            "_nori/session/resume" => self.resume_failed(&id).await?,
             _ => anyhow::bail!("unknown host operation"),
         }
         Ok(json!({"session_id":id.to_string()}))
     }
 }
 
+impl HostService {
+    /// Restart a failed session on a new agent process under its own ID, in
+    /// its folder and with its agent.
+    pub(super) async fn resume_failed(&self, id: &ConversationId) -> anyhow::Result<()> {
+        let record = self
+            .manager
+            .get(id)
+            .ok_or_else(|| anyhow::anyhow!("unknown session id"))?;
+        let mut config = self.config_in(record.cwd).await?;
+        config.active_agent = record.agent;
+        self.manager.resume(id, Self::prepare(config)).await?;
+        Ok(())
+    }
+}
+
 impl ManagedAgent for HostService {
+    fn connection_opened(&self, connection: nori_harness::remote_agent::HostConnection) {
+        if self.launches.is_none() {
+            self.acp.opened(connection);
+        }
+    }
+
+    fn connection_closed(&self, client: i64) {
+        self.acp.closed(client);
+    }
+
+    fn runs_concurrently(&self, method: &str) -> bool {
+        self.launches.is_none() && super::acp::runs_concurrently(method)
+    }
+
+    async fn request_from(&self, client: i64, request: Value) -> ManagedReply {
+        let method = request["method"].as_str().unwrap_or_default();
+        if self.launches.is_none() && super::acp::handles(method) {
+            return ManagedReply {
+                delivery_guard: None,
+                response: self.acp_request(client, &request).await,
+                subscription: None,
+            };
+        }
+        self.request(request).await
+    }
+
     fn recovery(&self) -> Option<nori_harness::remote_agent::recovery::SharedRecovery> {
         self.recovery.as_ref().map(|r| r.shared.clone())
     }

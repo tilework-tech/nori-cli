@@ -19,6 +19,7 @@ mod loader;
 mod project;
 mod recorder;
 mod session_event;
+mod stored;
 mod sync_retry;
 mod types;
 
@@ -42,6 +43,7 @@ pub(crate) use loader::read_seed_entries;
 pub use project::ProjectId;
 pub use project::compute_project_id;
 pub use recorder::TranscriptRecorder;
+pub use stored::StoredSession;
 pub use types::Attachment;
 pub(crate) use types::ContentBlock;
 pub use types::GitInfo;

@@ -1,5 +1,6 @@
 //! Background session host commands and local discovery.
 
+mod acp;
 mod recovery_control;
 mod recovery_history;
 mod service;
@@ -7,6 +8,7 @@ mod session_lookup;
 mod state;
 mod stdio;
 mod table;
+mod transcripts;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -443,6 +445,7 @@ async fn serve(
         config: Arc::new(config),
         overrides,
         stop: tokio::sync::Notify::new(),
+        acp: acp::AcpFace::default(),
     });
     let server =
         RemoteAcpServer::bind_host(format!("127.0.0.1:{port}").parse()?, host.clone(), token)

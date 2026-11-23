@@ -43,6 +43,7 @@ use crate::runtime::SessionResume;
 use crate::runtime::SessionStart;
 use crate::runtime::build_backend_config;
 use crate::runtime::launch_session_from;
+use crate::transcript::Transcript;
 use crate::transcript::load_transcript_from_path;
 
 /// How a session came to exist. A user-started session, a fork and a session
@@ -496,6 +497,45 @@ impl SessionManager {
                 error => ResumeError::Start(error),
             })?;
         Ok(resumed)
+    }
+
+    /// Resume a session this manager has not run, from its transcript on disk.
+    ///
+    /// The session keeps the transcript's conversation ID, so it continues
+    /// the same transcript file. The harness picks native `session/load`,
+    /// live `session/resume`, or client-side replay as for any resume. The
+    /// manager journal starts at sequence 1 for it.
+    pub fn resume_stored(
+        &self,
+        id: ConversationId,
+        transcript: Transcript,
+        spec: AgentPrepareSpec,
+    ) -> Result<ManagedSession, ResumeError> {
+        if transcript.meta.session_id != id.to_string() {
+            return Err(ResumeError::Transcript {
+                id,
+                source: std::io::Error::other(format!(
+                    "the transcript records session {}",
+                    transcript.meta.session_id
+                )),
+            });
+        }
+        self.start_session(
+            StartSession {
+                agent: SessionAgent::Prepare(spec),
+                start: SessionStart::Resume(SessionResume {
+                    acp_session_id: transcript.meta.acp_session_id.clone(),
+                    transcript: Some(transcript),
+                }),
+                parent: None,
+                source: SessionSource::User,
+            },
+            Some(id),
+        )
+        .map_err(|error| match error {
+            StartError::NotFailed(id) => ResumeError::NotFailed(id),
+            error => ResumeError::Start(error),
+        })
     }
 
     pub fn get(&self, conversation_id: &ConversationId) -> Option<SessionRecord> {

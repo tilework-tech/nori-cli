@@ -93,6 +93,15 @@ impl Host {
     }
 
     fn client(&self) -> nori_harness::remote_agent::ManagedClient {
+        self.connect(serde_json::json!({}))
+    }
+
+    /// A client that initializes as an observer and never takes control.
+    fn observer(&self) -> nori_harness::remote_agent::ManagedClient {
+        self.connect(serde_json::json!({"observe": true}))
+    }
+
+    fn connect(&self, initialize: serde_json::Value) -> nori_harness::remote_agent::ManagedClient {
         let state: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(self.0.path().join("host/state.json")).unwrap(),
         )
@@ -106,10 +115,7 @@ impl Host {
             )
             .await
             .unwrap();
-            client
-                .request("initialize", serde_json::json!({}))
-                .await
-                .unwrap();
+            client.request("initialize", initialize).await.unwrap();
             client
         })
     }
@@ -496,6 +502,12 @@ async fn a_delegated_child_works_in_its_parents_folder() {
 
 #[path = "host_lifecycle/managed.rs"]
 mod managed;
+
+#[path = "host_lifecycle/acp_client.rs"]
+mod acp_client;
+
+#[path = "host_lifecycle/transcripts.rs"]
+mod transcripts;
 
 #[test]
 fn machine_transport_authenticates_before_upgrade() {

@@ -182,7 +182,7 @@ impl TranscriptLoader {
     }
 
     /// Get the base path for transcripts.
-    fn transcripts_base(&self) -> PathBuf {
+    pub(super) fn transcripts_base(&self) -> PathBuf {
         self.nori_home.join(TRANSCRIPTS_DIR).join(BY_PROJECT_DIR)
     }
 
@@ -635,7 +635,10 @@ async fn load_session_info(path: &Path, project_id: &str) -> io::Result<SessionI
     })
 }
 
-async fn load_session_metadata(path: &Path, project_id: &str) -> io::Result<SessionMetadata> {
+pub(super) async fn load_session_metadata(
+    path: &Path,
+    project_id: &str,
+) -> io::Result<SessionMetadata> {
     let meta = load_session_meta_from_path(path).await?;
     Ok(SessionMetadata {
         session_id: meta.session_id,
@@ -675,7 +678,7 @@ struct TranscriptLineKind {
 
 const FIRST_USER_PREVIEW_MAX_BYTES: usize = 1024 * 1024;
 
-async fn load_first_user_preview_from_path(path: &Path) -> io::Result<Option<String>> {
+pub(super) async fn load_first_user_preview_from_path(path: &Path) -> io::Result<Option<String>> {
     let started = Instant::now();
     let file = tokio::fs::File::open(path).await?;
     let reader = tokio::io::BufReader::new(file);

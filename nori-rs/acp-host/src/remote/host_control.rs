@@ -90,7 +90,10 @@ impl HostControl {
             | "_nori/session/status"
             | "_nori/session/subscribe"
             | "_nori/session/new"
-            | "_nori/host/stop" => HostRequest::Forward(request),
+            | "_nori/host/stop"
+            | "session/list"
+            | "session/load"
+            | "session/resume" => HostRequest::Forward(request),
             _ if self.controller == Some(client) => HostRequest::Forward(request),
             _ => HostRequest::Reply(failure(
                 id,

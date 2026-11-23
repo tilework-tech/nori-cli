@@ -107,6 +107,22 @@ host ls / stop / new --------------+                   SessionManager
   exact ID wins; several matches fail with the candidates (ID, agent, title)
   listed; no match fails with a pointer to `nori host ls | cat` (full IDs) and
   to `nori attach` without an ID. The host itself only knows full IDs.
+- The [standard ACP face](acp/mod.rs) answers `session/list`,
+  `session/load` and `session/resume` on `/sessions` in local mode. The
+  socket loop in [acp-host](../../../acp-host/src/remote/host_wire.rs) hands
+  each initialized connection to `HostService` as a `HostConnection` (an
+  outbound queue, its role, and a close token), and runs load and resume
+  concurrently so a slow agent start does not stall the connection.
+  [Listing](acp/list.rs) merges manager records with
+  [stored sessions](transcripts.rs) (transcripts the host is not running,
+  read through `TranscriptLoader::list_stored_sessions`); its cursor is
+  `live:<index>` or a keyset over file modification time and ID, so new
+  transcripts do not shift later pages. [Attaching](acp/attach.rs) forwards
+  one session's journal events to one connection as `session/update`
+  notifications under the conversation ID. Stored sessions restart through
+  `SessionManager::resume_stored`. `_nori/session/resume` keeps accepting
+  stored IDs as an alias. Wire details:
+  [remote-control.md §12](../../../../docs/remote-control.md#12-standard-acp-v1-on-the-background-host).
 - Lifecycle requests prepare agents using the host's configuration.
   `_nori/session/new` takes optional `cwd`, `agent`, and `prompt` strings and
   replies `{session_id, cwd}`. A `cwd` must be absolute; [HostService](service.rs)
