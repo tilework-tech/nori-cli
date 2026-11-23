@@ -1,6 +1,6 @@
 # We only care about the ACP backend
 
-We only care about the ACP backend and the code that compiles into the nori bin. We do not care about the default codex backend or the code that compiles into the codex bin. Make sure all changes and responses are aligned to this critical fact. For example, if I ask 'add notifications to the cli', you should assume I mean 'add notification support to the ACP backend for the nori cli'.
+We only care about the ACP backend and the code that compiles into the nori bin. The inherited Codex engine and its `codex` bin have been removed; every agent, Codex included, runs as an external ACP subprocess. Make sure all changes and responses are aligned to this critical fact. For example, if I ask 'add notifications to the cli', you should assume I mean 'add notification support to the ACP backend for the nori cli'.
 
 # Rust/nori-rs
 
@@ -25,15 +25,15 @@ In the nori-rs folder where the rust code lives:
   - Prefer adding new modules instead of growing existing ones.
   - Target Rust modules under 500 LoC, excluding tests.
   - If a file exceeds roughly 800 LoC, add new functionality in a new module instead of extending the existing file unless there is a strong documented reason not to.
-  - This rule applies especially to high-touch files such as `nori-rs/tui/src/app.rs`, `nori-rs/tui/src/bottom_pane/chat_composer.rs`, `nori-rs/tui/src/bottom_pane/footer.rs`, `nori-rs/tui/src/chatwidget.rs`, `nori-rs/tui/src/bottom_pane/mod.rs`, and similarly central orchestration modules.
+  - This rule applies especially to high-touch files such as `nori-rs/tui/src/app/mod.rs`, `nori-rs/tui/src/bottom_pane/chat_composer/`, `nori-rs/tui/src/bottom_pane/footer.rs`, `nori-rs/tui/src/chatwidget/mod.rs`, `nori-rs/tui/src/bottom_pane/mod.rs`, and similarly central orchestration modules.
   - When extracting code from a large module, move the related tests and module/type docs toward the new implementation so the invariants stay close to the code that owns them.
 - When running Rust commands (e.g. `just fix` or `cargo test`) be patient and never try to kill them using the PID. Rust lock contention can make execution slow; this is expected.
 
 Run `just fmt` (in `nori-rs` directory) automatically after you have finished making Rust code changes; do not ask for approval to run it. Additionally, run the tests:
 
 1. Run the test for the specific project that was changed. For example, if changes were made in `nori-rs/tui`, run `cargo test -p nori-tui`.
-2. Once those pass, if any changes were made in common, core, or protocol, run the complete test suite with `cargo test`. Avoid `--all-features` for routine local runs because it expands the build matrix and can significantly increase `target/` disk usage; use it only when you specifically need full feature coverage.
-3. If any changes were made in tui, cli, or acp, run `cargo build --bin nori && cargo test -p tui-pty-e2e`. The E2E tests require the `nori` binary (from the `cli` crate), not `nori-tui`.
+2. Once those pass, if any changes were made in shared crates such as `common`, `core`, `nori-config`, or `nori-protocol`, run the complete test suite with `cargo test`. Avoid `--all-features` for routine local runs because it expands the build matrix and can significantly increase `target/` disk usage; use it only when you specifically need full feature coverage.
+3. If any changes were made in `tui`, `cli`, `harness`, or `acp-host`, run `cargo build --bin nori && cargo test -p tui-pty-e2e`. The E2E tests require the `nori` binary (from the `cli` crate), not `nori-tui`.
 
 Before finalizing a change to `nori-rs`, run `just fix -p <project>` (in `nori-rs` directory) to fix any linter issues in the code. Prefer scoping with `-p` to avoid slow workspace‑wide Clippy builds; only run `just fix` without `-p` if you changed shared crates. Do not re-run tests after running `fix` or `fmt`.
 
@@ -83,30 +83,8 @@ Snapshot workflow (`cargo install cargo-insta` if missing):
 
 ### Integration tests (core)
 
-- Prefer the utilities in `core_test_support::responses` when writing end-to-end tests.
-
-- All `mount_sse*` helpers return a `ResponseMock`; hold onto it so you can assert against outbound `/responses` POST bodies.
-- Use `ResponseMock::single_request()` when a test should only issue one POST, or `ResponseMock::requests()` to inspect every captured `ResponsesRequest`.
-- `ResponsesRequest` exposes helpers (`body_json`, `input`, `function_call_output`, `custom_tool_call_output`, `call_output`, `header`, `path`, `query_param`) so assertions can target structured payloads instead of manual JSON digging.
-- Build SSE payloads with the provided `ev_*` constructors and the `sse(...)`.
-- Prefer `wait_for_event` over `wait_for_event_with_timeout`.
-- Prefer `mount_sse_once` over `mount_sse_once_match` or `mount_sse_sequence`.
-
-- Typical pattern:
-
-  ```rust
-  let mock = responses::mount_sse_once(&server, responses::sse(vec![
-      responses::ev_response_created("resp-1"),
-      responses::ev_function_call(call_id, "shell", &serde_json::to_string(&args)?),
-      responses::ev_completed("resp-1"),
-  ])).await;
-
-  codex.submit(Op::UserTurn { ... }).await?;
-
-  // Assert request body if needed.
-  let request = mock.single_request();
-  // assert using request.function_call_output(call_id) or request.json_body() or other helpers.
-  ```
+- `core_test_support` (`nori-rs/core/tests/common`) provides `skip_if_no_network!`, `skip_if_sandbox!`, `load_default_config_for_test`, and `fs_wait` helpers. Use the skip macros instead of checking the sandbox environment variables by hand.
+- End-to-end ACP behavior is tested against `mock-acp-agent`, a deterministic ACP agent driven by scenario environment variables (see `nori-rs/mock-acp-agent/docs.md`). `tui-pty-e2e` runs the real `nori` binary against it in a pseudo-terminal (see `nori-rs/tui-pty-e2e/docs.md`).
 
 ## Critical: How to Close the Loop
 
@@ -116,7 +94,7 @@ below. Choose the option that matches the area of the codebase you changed.
 
 ### Option 1: Build and Drive the TUI
 
-**When to use:** Any change to `nori-rs/tui/`, `nori-rs/cli/`, or `nori-rs/acp/` crates. Also consider running this for changes to shared crates (`core/`, `common/`, `protocol/`) that affect TUI behavior.
+**When to use:** Any change to `nori-rs/tui/`, `nori-rs/cli/`, `nori-rs/harness/`, or `nori-rs/acp-host/`. Also consider running this for changes to shared crates (`core/`, `common/`, `nori-config/`, `nori-protocol/`) that affect TUI behavior.
 
 **Skill:** `tui-puppeteering-with-tmux`
 

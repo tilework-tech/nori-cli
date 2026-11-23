@@ -18,7 +18,7 @@ Used by `@/nori-rs/sandbox/` (the `codex-sandbox` exec engine) as the sandbox ex
 - Network access restrictions (optional)
 
 **Main Entry** (`linux_run_main.rs`): The `run_main()` function:
-1. Parses sandbox configuration from environment or arguments
+1. Parses the clap arguments `--sandbox-policy-cwd <DIR>` and `--sandbox-policy <POLICY>`, followed by `--` and the command to run (`LandlockCommand`)
 2. Sets up Landlock ruleset
 3. Exec's the target command with restrictions applied
 
@@ -33,7 +33,7 @@ Landlock requires Linux kernel 5.13+ with LSM enabled. Falls back gracefully on 
 **Environment Variables:**
 
 - `CODEX_SANDBOX`: Set on sandboxed child processes (`seatbelt` on macOS, indicates active sandboxing)
-- Configuration is passed via serialized environment variables to avoid complex arg parsing
+- The sandbox policy is passed as a serialized `--sandbox-policy` argument, built by `create_linux_sandbox_command_args` in `@/nori-rs/sandbox/src/landlock.rs`
 - Landlock applies restrictions directly to the current thread via LSM
 
 **Seccomp Filters:**

@@ -8,7 +8,7 @@ The arg0 crate implements the "argv[0] trick" for multi-binary dispatch. It allo
 
 ### How it fits into the larger codebase
 
-Used as the entry point wrapper for `@/nori-rs/tui/` (the `nori` binary). Before the TUI starts, this crate checks if the binary was invoked as `codex-linux-sandbox` or `apply_patch` and dispatches accordingly.
+Wraps `main()` in `@/nori-rs/cli/` (the `nori` binary) and in the standalone `nori-tui` binary of `@/nori-rs/tui/`. Before the app starts, this crate checks if the binary was invoked as `codex-linux-sandbox` or `apply_patch` and dispatches accordingly.
 
 ### Core Implementation
 
@@ -21,7 +21,7 @@ Used as the entry point wrapper for `@/nori-rs/tui/` (the `nori` binary). Before
 
 **PATH Setup** (`prepend_path_entry_for_codex_aliases()`): Creates a temp directory with symlinks (Unix) or batch scripts (Windows) for `apply_patch` and adds it to PATH, making the tool available to child processes.
 
-**Dotenv Loading** (`load_dotenv()`): Loads environment variables from `~/.codex/.env`, filtering out any `CODEX_` prefixed variables for security.
+**Dotenv Loading** (`load_dotenv()`): Loads environment variables from `.env` in the Nori home (`$NORI_HOME`, else `~/.nori/cli`, via `nori_config::find_nori_home`), filtering out any `CODEX_` prefixed variables for security.
 
 ### Things to Know
 

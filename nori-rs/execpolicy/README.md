@@ -6,7 +6,6 @@
 - Tokens are matched in order; any `pattern` element may be a list to denote alternatives. `decision` defaults to `allow`; valid values: `allow`, `prompt`, `forbidden`.
 - `match` / `not_match` supply example invocations that are validated at load time (think of them as unit tests); examples can be token arrays or strings (strings are tokenized with `shlex`).
 - The CLI always prints the JSON serialization of the evaluation result.
-- The legacy rule matcher lives in `codex-execpolicy-legacy`.
 
 ## Policy shapes
 - Prefix rules use Starlark syntax:
@@ -20,9 +19,9 @@ prefix_rule(
 ```
 
 ## CLI
-- From the Codex CLI, run `codex execpolicy check` subcommand with one or more policy files (for example `src/default.codexpolicy`) to check a command:
+- Run the hidden `nori execpolicy check` subcommand with one or more policy files (for example `examples/example.codexpolicy`) to check a command:
 ```bash
-codex execpolicy check --policy path/to/policy.codexpolicy git status
+nori execpolicy check --policy path/to/policy.codexpolicy git status
 ```
 - Pass multiple `--policy` flags to merge rules, evaluated in the order provided, and use `--pretty` for formatted JSON.
 - You can also run the standalone dev binary directly during development:
