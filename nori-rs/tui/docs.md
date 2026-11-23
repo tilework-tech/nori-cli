@@ -213,23 +213,19 @@ The application event loop matches `SessionEvent::Acp` and
   tool-call, or tool-update content starts or confirms unowned
   presentation. Without a status hint, a later locally owned prompt or load
   start flushes and separates that output without inventing completion.
-- The chat widget tracks local prompt ownership as
-  `owned_prompt_request_id` and keeps a separate private
-  `proactive_turn_active` presentation bit. The legacy identifier groups
-  unowned presentation or presentation of an agent-owned turn, plus statistics
-  and explicit-idle notifications. It does not set the bottom pane's
-  operational task-running flag, so Ctrl-C cancellation, interrupt hints, and
-  in-task command gating remain tied to locally owned requests. It never drives
-  queue, cancel, loop, ACP phase, or request state.
-- Ordinary metadata does not imply a turn. The Nori Sessions broker's optional
-  `_meta.nori.status` extension establishes an agent-owned turn only when no
-  locally owned prompt or load is active: exact `working` starts or confirms
-  the turn and exact `idle` ends it. The status affects presentation only;
-  unknown values remain ordinary session metadata. Known status-only frames
-  are hidden; a known status combined with `title` or `updated_at` still
-  displays those fields. This distinction lives in
-  [`event_handlers.rs`](src/chatwidget/event_handlers.rs) and
-  [`presentation/mod.rs`](src/presentation/mod.rs).
+- The chat widget uses `owned_prompt_request_id` for local prompt controls and
+  `proactive_turn_active` to group unowned output. For live agent-started work,
+  the harness supplies an observation ID through `ExternalTurnChanged`. A
+  controller can interrupt that turn with Esc or Ctrl-C. Follow-only attachments
+  can watch its progress. Queue controls and loop completion still follow the
+  local prompt. See [external cancellation](src/chatwidget/external_cancel.rs).
+- The working indicator shows **Cancel requested** until the harness reports
+  an outcome. A matching cancelled stop reason confirms cancellation. An idle
+  report alone ends the indicator and leaves cancellation unconfirmed. A new
+  turn or a lost connection also releases the previous turn’s interrupt control.
+- Recognized status-only `_meta.nori.status` frames are hidden. A status
+  combined with `title` or `updated_at` still displays those fields.
+  See [session event handling](src/chatwidget/event_handlers.rs).
 - Handroll's `_meta.nori.connection.status` extension is also presentation
   only. Exact `reconnecting` and `connected` status-only frames render as
   “Cloud connection lost. Reconnecting…” and “Cloud connection restored.”

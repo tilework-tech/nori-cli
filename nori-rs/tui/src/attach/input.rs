@@ -165,7 +165,7 @@ impl Runtime {
             .selected
             .as_ref()
             .and_then(|id| self.state.conversations.get(id))
-            .and_then(|conversation| conversation.active_turn.clone());
+            .and_then(|conversation| conversation.active_prompt().cloned());
         use crate::bottom_pane::InputResult;
         let result = self.composer.attachment_input(key, active_turn.is_some());
         match result {
@@ -397,7 +397,32 @@ impl Runtime {
                 Pending::Mutation { draft: None },
             );
         } else if command == "/cancel" {
-            self.notify("session/cancel", json!({"sessionId": id}));
+            let conversation = self.state.conversations.get(&id);
+            let external =
+                conversation.and_then(|conversation| conversation.external_turn.as_ref());
+            if conversation.is_some_and(super::state::Conversation::cancelling_prompt)
+                || external
+                    .is_some_and(|turn| crate::external_cancel::pending_label(turn.state).is_some())
+            {
+                return true;
+            }
+            if external.is_some()
+                || conversation.is_some_and(|c| c.active_prompt().is_some() || c.submitted_prompt)
+            {
+                if self.notify("session/cancel", json!({"sessionId": id}))
+                    && let Some(turn) = self
+                        .state
+                        .conversations
+                        .get_mut(&id)
+                        .and_then(|c| c.external_turn.as_mut())
+                {
+                    // The notification has no receipt. Only a host envelope can
+                    // establish that the request reached the active session.
+                    turn.state = nori_protocol::ExternalTurnState::Unconfirmed;
+                }
+            } else {
+                self.state.show_notice("No active turn to cancel.");
+            }
         } else if command == "/resume" {
             self.resume(&id);
         } else if let Some(expected_turn) = active_turn {
@@ -414,11 +439,21 @@ impl Runtime {
             );
         } else {
             match self.state.prompt(&id, &text) {
-                Ok(params) => self.send(
-                    "_nori/session/prompt",
-                    params,
-                    Pending::Mutation { draft: Some(text) },
-                ),
+                Ok(params) => {
+                    self.state
+                        .conversations
+                        .entry(id.clone())
+                        .or_default()
+                        .submitted_prompt = true;
+                    self.send(
+                        "_nori/session/prompt",
+                        params,
+                        Pending::Prompt {
+                            session_id: id,
+                            draft: text,
+                        },
+                    );
+                }
                 Err(error) => {
                     self.composer.handle_paste(text);
                     self.state.show_notice(error.to_string());
