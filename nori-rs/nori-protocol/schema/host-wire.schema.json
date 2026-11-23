@@ -2621,8 +2621,32 @@
             "string",
             "null"
           ]
+        },
+        "nori/session": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListedSessionState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Whether the host is running the session now."
         }
       },
+      "type": "object"
+    },
+    "ListedSessionState": {
+      "description": "`_meta[\"nori/session\"]` on a `session/list` row.",
+      "properties": {
+        "live": {
+          "description": "`true` while the host runs the session's agent; `false` for a closed,\nfailed, or finished session and for a stored transcript, which\n`session/load` or `session/resume` restarts.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "live"
+      ],
       "type": "object"
     },
     "LlmProtocol": {

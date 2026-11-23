@@ -9,6 +9,8 @@ use chrono::SecondsFormat;
 use serde_json::Value;
 use serde_json::json;
 
+use nori_protocol::SessionStatus;
+
 use super::AcpError;
 use crate::host::service::HostService;
 use crate::host::transcripts;
@@ -98,6 +100,17 @@ impl HostService {
                     "updatedAt": updated.map(rfc3339),
                     "_meta": nori_protocol::ListedSessionMeta {
                         agent: Some(record.agent.clone()),
+                        session: Some(nori_protocol::ListedSessionState {
+                            live: match record.status {
+                                SessionStatus::Starting
+                                | SessionStatus::Working
+                                | SessionStatus::WaitingOnYou
+                                | SessionStatus::Ready => true,
+                                SessionStatus::Failed
+                                | SessionStatus::Closed
+                                | SessionStatus::Done => false,
+                            },
+                        }),
                     },
                 }));
             }

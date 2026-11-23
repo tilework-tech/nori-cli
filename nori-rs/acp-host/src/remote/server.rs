@@ -103,6 +103,20 @@ impl RemoteAcpServer {
         })
     }
 
+    /// Serve one host client on this process's stdin and stdout, with the
+    /// same methods as an authenticated `/sessions` connection, until stdin
+    /// closes (`None`) or `stop` completes (its value). The client always
+    /// holds control.
+    pub async fn serve_host_stdio<M: super::ManagedAgent, T>(
+        managed: Arc<M>,
+        stop: impl std::future::Future<Output = T>,
+    ) -> anyhow::Result<Option<T>> {
+        let instance = managed
+            .instance_id()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        super::host_wire::serve_stdio(managed, instance, stop).await
+    }
+
     /// Bind the listener and start serving `/acp`.
     pub async fn bind<H: HostedAgent>(addr: SocketAddr, hosted: Arc<H>) -> anyhow::Result<Self> {
         Self::bind_many([addr], hosted).await

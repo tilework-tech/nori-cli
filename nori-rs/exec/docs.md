@@ -4,92 +4,30 @@ Path: @/nori-rs/exec
 
 ### Overview
 
-- `nori-exec` is the terminal-independent frontend for finite and script-controlled Nori sessions.
-- It offers a one-prompt plaintext runner and an ACP-over-stdio facade; the runtime `multi_session` flag adds manager envelopes and session-addressed commands to that facade.
-- Both surfaces execute through the same ACP harness used by the interactive TUI.
+- `nori-exec` is the terminal-independent runner for one finite plaintext prompt (`nori exec "..."` and its `-p` / `--print` alias).
+- It executes through the same ACP harness used by the interactive TUI, then projects the turn's assistant text into one final answer.
+- It no longer serves ACP. `nori exec --acp` is dispatched by `nori-cli` to the headless background host (`nori host --stdio`) in [cli/src/host](../cli/src/host/docs.md#local-host-on-stdio); this crate is not involved in that path.
 
 ### How it fits into the larger codebase
 
-- `nori-cli` resolves configuration, selects the mode (`nori exec` or its `-p` / `--print` alias), and owns process stdin, stdout, stderr, and exit status.
+- `nori-cli` resolves configuration, selects the mode, and owns process stdin, stdout, stderr, and exit status. It takes the `--acp` branch into the host before it reads any prompt from stdin, so the host keeps exclusive ownership of the JSON-RPC stream.
 - Prompt ingestion is entirely a `nori-cli` concern: it composes the argument prompt and any piped stdin into one string and hands `run_plaintext` a fully resolved prompt. `nori-exec` never reads a prompt from the process itself.
-- `nori-exec` prepares and activates sessions through `nori-harness`; it does not spawn agents or reduce ACP state independently.
-- `nori-harness` supplies the ordered `SessionEvent` stream and preserves exact ACP request IDs used for prompt and permission correlation.
-- `nori-installed` supplies the optional authenticated activity reporter. Both
-  execution surfaces attach it to the downstream harness handle, so capture uses
-  the same first-prompt-on-ACP boundary as the interactive frontend.
-- Plaintext mode projects text `agent_message_chunk` updates into one final answer.
-- ACP mode uses the upstream ACP SDK to present an agent endpoint while acting as a client of the configured downstream ACP agent.
+- `nori-exec` prepares and activates its session through `nori-harness` (`prepare_agent`, then `launch_session`); it does not spawn agents or reduce ACP state independently.
+- `nori-installed` supplies the optional authenticated activity reporter, attached to the downstream harness handle so capture uses the same first-prompt-on-ACP boundary as the interactive frontend.
 
 ### Core Implementation
 
-- [`run_plaintext`](src/lib.rs) prepares the agent, activates a new session and
-  submits one prompt. If startup fails before the harness accepts the prompt,
-  the CLI reports the startup diagnostic on stderr. On success it collects text
-  chunks until the matching prompt response and shuts down the session. When supplied, its reporter emits `nori_agent_session_started` with
-  `session_mode = exec` after that prompt receives a downstream wire request ID,
-  then performs a bounded final flush without changing the plaintext outcome.
+- [`run_plaintext`](src/lib.rs) prepares the agent, activates a new session and submits one prompt. It collects text `agent_message_chunk` updates until the response correlated with that prompt's request ID, then shuts down the session.
+- When supplied, the reporter emits `nori_agent_session_started` with `session_mode = exec` after the prompt receives a downstream wire request ID, then performs a bounded final flush without changing the plaintext outcome.
 - If the agent fails during startup, `run_plaintext` briefly waits for the terminal `SessionEnded` event so stderr can name the cause, such as a missing key variable. On timeout it returns the prompt-submission error.
-- Unattended permission requests are rejected immediately using a schema-provided reject option, with cancellation as the safe fallback.
-- With `multi_session` disabled, `run_acp` handles standard `initialize`, `session/new`,
-  `session/set_config_option`, `session/prompt`, and `session/cancel` traffic
-  over line-delimited JSON-RPC stdio. Its downstream `session/new` also uses
-  `prepare_and_launch_session` with the explicit New choice. The facade assigns
-  `session_mode = acp`; initialization and `session/new` alone are silent, and
-  the attached reporter fires only after the facade's accepted `session/prompt`
-  reaches the downstream ACP transport.
-- The flag-off ACP facade exposes the downstream session ID and effective configuration options, then emits one complete `agent_message_chunk` before the correlated prompt response.
-- Delegated permission requests are forwarded to the upstream ACP caller and their responses are returned to the downstream agent under the original downstream request ID.
-- With `[features] multi_session`, [`managed.rs`](src/managed.rs) owns a
-  [`SessionManager`](../harness/src/session_manager/mod.rs). Standard
-  `session/new` creates independent sessions with stable Nori conversation IDs;
-  prompts and configuration requests address those IDs. Each session can accept
-  another prompt after its preceding turn completes. Each standard prompt
-  subscribes to the harness immediately before admission, so output from a
-  preceding extension-driven turn cannot leak into its text projection. The
-  manager independently retains the original envelopes for extension replay.
-  A separate session-filtered manager observer supplies `RequestResolved`
-  signals while prompt content remains on the raw harness subscription. If a
-  managed extension answers a forwarded permission, the collector stops
-  awaiting the standard ACP answer and continues the original prompt; a later
-  reply to that abandoned wait is not forwarded downstream.
-- Managed extension requests are dispatched to the same
-  [`ManagedRemoteHost`](../harness/src/managed_remote.rs) used by WebSocket
-  clients. Subscription notifications carry the original `SessionEnvelope`,
-  including agent, conversation ID, sequence, and ACP or Nori event. The
-  standard ACP prompt projection remains a complete assistant-text update and
-  correlated response. See the [wire contract](../../docs/remote-control.md)
-  for method names, cursor recovery, and retention limits.
-- A bounded managed subscription that ends drains its buffered envelopes, then
-  emits `_nori/session/subscription_ended` with reason `replay_required`.
-  The stdio connection remains open for a new subscription from the client's
-  last processed cursors; the WebSocket adapter instead closes its connection.
-  Encoding or writer failure stops forwarding without promising an end marker.
-- The SDK owns stdout for both standard ACP responses and managed envelope
-  notifications. EOF stops forwarding and shuts down every managed session;
-  this remains a process-owned stdio frontend, not a persistent host daemon.
+- Unattended permission requests are rejected immediately using a schema-provided reject option, with cancellation as the safe fallback; the outcome then reports `permission_denied` so the CLI exits unsuccessfully. Any other agent-to-client request is answered with `method_not_found`.
+- `SessionEnded` or `RequestFailed` before the prompt response fails the run with the harness's message.
 
 ### Things to Know
 
-- With `multi_session` disabled, the facade remains bounded to one downstream
-  session and one prompt per process. Plaintext mode is unchanged by the flag.
-- Analytics is optional at this crate boundary. The binary selects the mode and
-  constructs the reporter; embedders that pass `None` retain identical session
-  behavior without capture.
-- Plaintext awaits `prepare_agent` before activating the connection with
-  `launch_session`. The flag-off ACP facade uses `prepare_and_launch_session`,
-  and managed ACP uses the manager’s preparation and launch path. Each path
-  retains the same downstream subprocess across preparation and activation.
-- The combined harness path returns its handle immediately and keeps
-  preparation inside the runtime's connect lifecycle: commands queue until the
-  backend is ready, shutdown can win the race, the runtime emits a warning
-  event after eight seconds, and an unresponsive connection is aborted after
-  another thirty.
-- Caller-provided MCP servers and additional directories are rejected in the first version because Nori cannot merge those inputs into an already resolved client configuration safely.
-- Standard ACP methods are a facade projection. Managed subscribers explicitly
-  opt into the complete manager stream rather than receiving only that
-  projection.
-- Only assistant text is projected into the final facade update. The prompt response retains the downstream ACP stop reason.
-- ACP mode owns process stdin exclusively, in both directions of the contract: stdin EOF cancels active work and shuts down the downstream harness, and machine-readable stdout is owned exclusively by the ACP connection writer. The caller must therefore not consume stdin before dispatching into the facade -- any eager read (piped-prompt ingestion, in particular) belongs strictly after the ACP branch is ruled out, or the JSON-RPC stream is silently corrupted.
+- Analytics is optional at this crate boundary. The binary constructs the reporter; embedders that pass `None` retain identical session behavior without capture.
+- Plaintext awaits `prepare_agent` before activating the connection with `launch_session`, retaining the same downstream subprocess across preparation and activation.
 - The dangerous approval bypass can govern only permission requests that cross an ACP boundary; it cannot constrain or approve provider-internal tools.
+- The earlier bounded single-session ACP facade and its `multi_session` manager variant (which advertised `_meta["nori/multiSession"]`) were removed in favour of the host, so there is one ACP server implementation for stdio and WebSocket clients.
 
 Created and maintained by Nori.

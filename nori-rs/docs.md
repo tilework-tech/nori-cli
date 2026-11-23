@@ -86,13 +86,15 @@ product crates.
 - ACP capabilities describe an agent facade's operations, not whether the
   deployment is local or cloud. The top-level `nori cloud` launch carries that
   identity explicitly into the TUI.
-- Product analytics distinguishes `interactive`, `cloud`, `exec`, and `acp`
-  session modes. Resume is not a mode or event; a resumed interactive session
+- Product analytics distinguishes `interactive`, `cloud`, and `exec` session
+  modes; the `acp` mode value still exists but nothing sends it since
+  `nori exec --acp` became the headless host. Resume is not a mode or event; a resumed interactive session
   reports only if a new prompt reaches the transport.
-- The outward ACP surfaces are `nori exec --acp` and the interactive remote
-  WebSocket projection. With `multi_session`, exec also exposes managed-session
-  commands. The background host serves authenticated managed envelopes without
-  a legacy ACP projection; its lifetime is independent of connected terminals.
+- The outward ACP surfaces are the background host's standard ACP face and
+  the interactive remote WebSocket projection. The host serves its face on an
+  authenticated `/sessions` WebSocket and, for one client, on stdio
+  (`nori host --stdio`, aliased by `nori exec --acp`); its lifetime is
+  independent of connected terminals.
 - Rust 2024 and strict workspace lints apply. Add only the derive traits a
   public boundary type actually needs.
 

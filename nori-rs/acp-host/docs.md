@@ -132,6 +132,20 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   the same value appears in its `initialize` result and discovery file);
   otherwise a managed host uses the journal’s producing incarnation and other
   hosts a fresh UUID.
+- `RemoteAcpServer::serve_host_stdio` serves one host client on the process's
+  own stdin and stdout (the CLI's `nori host --stdio` without `--launch`, and
+  `nori exec --acp`). `host_wire.rs` runs one frame loop (`serve_frames`)
+  over any sink and stream of WebSocket `Message`s; stdio lines are adapted
+  into text messages, so the stdio client gets exactly the methods and
+  control policy of an authenticated `/sessions` connection. A `Transport`
+  value carries the only differences: on stdio there is no bearer token, the
+  client always registers as controller (`observe` is ignored), and a
+  managed subscription that falls behind is reported in band with
+  `_nori/session/subscription_ended` `{"reason":"replay_required"}` rather
+  than by closing the stream. stdin is read on a plain thread because a
+  pending Tokio stdin read would keep the runtime from shutting down; blank
+  lines are dropped and only text frames are written to stdout. The loop ends
+  at stdin EOF or when the connection's close token is cancelled.
 - `ManagedAgent` also has per-connection hooks that let the CLI serve standard
   ACP on `/sessions`. After a connection's first successful initialize,
   `connection_opened` hands over a `HostConnection`: the connection's bounded
@@ -625,10 +639,9 @@ following for the binding generation and the lifetime of every active side.
   registered. Its ordering lock covers only the correlation boundary; the
   hosted harness remains responsible for deciding whether the controller owns
   the target turn.
-- [`nori exec --acp`](../exec/docs.md) owns a separate stdio lifecycle. Its
-  flag-on path reuses `ManagedAgent` for extension requests and manager
-  envelopes; its standard ACP projection and flag-off bounded facade remain
-  separate from the WebSocket adapter.
+- `nori exec --acp` has no separate stdio implementation: it is the
+  background host served through `serve_host_stdio`
+  ([Local host on stdio](../cli/src/host/docs.md#local-host-on-stdio)).
 - The `agent-client-protocol` SDK is built with the `unstable` feature so the
   host can call `session/fork` (branch-at-head). See `fork_session` in
   `@/nori-rs/acp-host/src/connection/docs.md`.

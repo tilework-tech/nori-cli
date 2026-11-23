@@ -3792,6 +3792,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "tokio-stream",
  "tokio-tungstenite",
  "tokio-util",
  "tracing",
@@ -3871,16 +3872,12 @@ dependencies = [
 name = "nori-exec"
 version = "0.0.0"
 dependencies = [
- "agent-client-protocol",
  "anyhow",
- "futures",
  "nori-config",
  "nori-harness",
  "nori-installed",
  "nori-protocol",
- "serde_json",
  "tokio",
- "tokio-util",
 ]
 
 [[package]]

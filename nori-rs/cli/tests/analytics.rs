@@ -1,15 +1,9 @@
 #![allow(clippy::expect_used)]
 
-use std::io::BufRead;
-use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
 use std::net::TcpListener;
 use std::net::TcpStream;
-use std::process::Child;
-use std::process::ChildStdin;
-use std::process::Command as StdCommand;
-use std::process::Stdio;
 use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
@@ -270,122 +264,4 @@ fn unavailable_analytics_never_changes_exec_output_or_exit() {
         "meaningful work\n"
     );
     assert!(started.elapsed() < Duration::from_secs(2));
-}
-
-struct AcpProcess {
-    child: Child,
-    stdin: ChildStdin,
-    messages: mpsc::Receiver<Value>,
-}
-
-impl AcpProcess {
-    fn spawn(home: &TempDir, analytics_url: &str) -> Self {
-        let mut child = StdCommand::new(assert_cmd::cargo::cargo_bin("nori"))
-            .env("HOME", home.path())
-            .env("NORI_HOME", home.path().join(".nori/cli"))
-            .env("NORI_ANALYTICS_URL", analytics_url)
-            .env(
-                "MOCK_ACP_AGENT_BIN",
-                std::env::var("MOCK_ACP_AGENT_BIN").expect("MOCK_ACP_AGENT_BIN"),
-            )
-            .args(["--agent", "mock-model", "exec", "--acp"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("spawn ACP facade");
-        let stdin = child.stdin.take().expect("ACP stdin");
-        let stdout = child.stdout.take().expect("ACP stdout");
-        let (message_tx, messages) = mpsc::channel();
-        std::thread::spawn(move || {
-            for line in BufReader::new(stdout).lines() {
-                let value = line
-                    .ok()
-                    .and_then(|line| serde_json::from_str(&line).ok())
-                    .expect("ACP JSON response");
-                if message_tx.send(value).is_err() {
-                    break;
-                }
-            }
-        });
-        Self {
-            child,
-            stdin,
-            messages,
-        }
-    }
-
-    fn send(&mut self, value: Value) {
-        serde_json::to_writer(&mut self.stdin, &value).expect("write ACP request");
-        self.stdin.write_all(b"\n").expect("terminate ACP request");
-        self.stdin.flush().expect("flush ACP request");
-    }
-
-    fn response(&self, id: i64) -> Value {
-        loop {
-            let message = self
-                .messages
-                .recv_timeout(Duration::from_secs(10))
-                .expect("ACP response");
-            if message.get("id") == Some(&Value::from(id)) {
-                return message;
-            }
-        }
-    }
-}
-
-impl Drop for AcpProcess {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-#[test]
-fn acp_facade_reports_activity_only_after_its_prompt_reaches_the_agent() {
-    let home = home_with_auth(Some("human@example.com"));
-    let (analytics_url, requests) = analytics_server();
-    let mut acp = AcpProcess::spawn(&home, &analytics_url);
-    acp.send(serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": 1,
-            "clientCapabilities": {},
-            "clientInfo": {"name": "analytics-test", "version": "1"}
-        }
-    }));
-    assert_eq!(acp.response(1)["result"]["protocolVersion"], 1);
-    acp.send(serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 2,
-        "method": "session/new",
-        "params": {"cwd": std::env::current_dir().expect("cwd"), "mcpServers": []}
-    }));
-    let session = acp.response(2);
-    let session_id = session["result"]["sessionId"]
-        .as_str()
-        .expect("session id")
-        .to_string();
-    assert!(requests.recv_timeout(Duration::from_millis(300)).is_err());
-
-    acp.send(serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 3,
-        "method": "session/prompt",
-        "params": {
-            "sessionId": session_id,
-            "prompt": [{"type": "text", "text": "meaningful work"}]
-        }
-    }));
-    assert_eq!(acp.response(3)["result"]["stopReason"], "end_turn");
-    let request = requests
-        .recv_timeout(Duration::from_secs(3))
-        .expect("ACP analytics request");
-    assert_eq!(
-        request.body["properties"],
-        serde_json::json!({"session_mode": "acp"})
-    );
-    assert!(requests.recv_timeout(Duration::from_millis(400)).is_err());
 }

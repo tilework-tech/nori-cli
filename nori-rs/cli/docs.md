@@ -18,8 +18,8 @@ This crate is the primary entry point that ties together the core crates:
   [attached frontend](../tui/src/attach/docs.md) owns only terminal state.
 - Maps each agent-bearing entrypoint to the stable product analytics modes in
   [`nori-installed`](../installed/docs.md): ordinary and resumed TUI sessions
-  are `interactive`, `nori cloud` is `cloud`, plaintext execution is `exec`, and
-  the stdio facade is `acp`.
+  are `interactive`, `nori cloud` is `cloud`, and plaintext execution is `exec`.
+  `nori exec --acp` runs the headless host, which reports no analytics yet.
 
 ### Core Implementation
 
@@ -57,6 +57,7 @@ session list or a supplied conversation ID. Explicit `--host` and
 Nori configuration without entering the local process-owning TUI `App`.
 Administrative list, new, and stop use host discovery directly, so a later malformed
 configuration file cannot prevent shutdown.
+Without `--launch`, `host --stdio` runs a headless local host for one client on stdin and stdout; see [local host on stdio](src/host/docs.md#local-host-on-stdio).
 On a dedicated managed machine, `host --stdio --launch <FILE> [--inherit-env]`
 runs the host in the foreground and serves one pinned adapter as plain ACP on
 stdin and stdout until stdin closes; see [managed launch on stdio](src/host/docs.md#managed-launch-on-stdio).
@@ -64,8 +65,8 @@ See [the command and wire contract](../../docs/remote-control.md#11-background-h
 
 **ExecCommand**: Provides two terminal-independent execution surfaces:
 - `nori exec [PROMPT]` runs one prompt through the selected ACP agent and writes only the complete assistant text to stdout. The prompt may come from the positional argument, from piped stdin, or from both (see **Prompt Sources**). Diagnostics and failures remain on stderr so the answer can be piped or redirected directly.
-- `nori exec --acp` serves Nori itself as a bounded ACP agent over stdio. The caller uses standard ACP JSON-RPC methods and notifications; Nori does not add a JSONL envelope or a second event schema.
-- `nori -p` / `--print` is a top-level boolean flag rather than a subcommand, matching the flag other agent CLIs use to select non-interactive output. It synthesizes an `ExecCommand` from the already-parsed interactive flags and routes into the same plaintext path, so it is an alias in behavior and not a second implementation. It cannot reach the ACP facade; that stays behind the explicit `exec --acp`.
+- `nori exec --acp` is an alias for `nori host --stdio`: a headless local host serving the host's standard ACP face (any number of sessions, plus `_nori/*`) to one client on stdin and stdout, with no lock or discovery files. Dispatch loads configuration with the exec overrides and calls the host's `serve_stdio`; see [Local host on stdio](src/host/docs.md#local-host-on-stdio).
+- `nori -p` / `--print` is a top-level boolean flag rather than a subcommand, matching the flag other agent CLIs use to select non-interactive output. It synthesizes an `ExecCommand` from the already-parsed interactive flags and routes into the same plaintext path, so it is an alias in behavior and not a second implementation. It cannot reach the headless host; that stays behind the explicit `exec --acp`.
 - Both modes use the same resolved configuration and `nori-harness` runtime as the TUI. `--agent`, `--cwd`, and raw `-c` overrides remain available without initializing Ratatui.
 - The explicit `--dangerously-bypass-approvals-and-sandbox` flag is the only unattended auto-approval path and applies only to permission boundaries visible through ACP.
 
@@ -75,7 +76,7 @@ See [the command and wire contract](../../docs/remote-control.md#11-background-h
 - The interactive path re-points file descriptor 0 at the controlling terminal once it has drained a pipe. Children the TUI spawns with inherited stdin (`$EDITOR`, the file browser) would otherwise receive an EOF'd pipe and exit immediately; repairing the descriptor once covers all of them.
 - `-p` selects a mode, so it is rejected alongside a subcommand or `--image` rather than silently ignoring either.
 - The two modes differ only in what "no prompt from any source" means. `exec` (and `-p`) requires one and fails otherwise; interactive treats it as an ordinary empty session.
-- **Stdin is read only after `exec --acp` has taken its early return into the facade.** The ACP stdio facade speaks JSON-RPC over stdin and must keep exclusive ownership of it, so the CLI must never ingest stdin during dispatch or anywhere upstream of the mode decision. This ordering is the load-bearing constraint of the piped-prompt path; violating it silently corrupts the ACP protocol rather than failing loudly.
+- **Stdin is read only after `exec --acp` has taken its early return into the host.** The stdio host speaks JSON-RPC over stdin and must keep exclusive ownership of it, so the CLI must never ingest stdin during dispatch or anywhere upstream of the mode decision. This ordering is the load-bearing constraint of the piped-prompt path; violating it silently corrupts the ACP protocol rather than failing loudly.
 - Piping into bare `nori` does not select headless behavior. The piped text seeds the first turn and the TUI starts normally, which requires only that a controlling terminal is reachable for key input (see `@/nori-rs/tui/docs.md`). Environments with no terminal at all must use `exec` or `-p`.
 
 **CloudCommand** (`cloud.rs`): Runs a TUI session backed by Nori Sessions by delegating everything cloud-related to the external `nori-handroll` binary. The cloud route contains no broker client, OAuth flow, or cloud WebSocket transport; it only translates the broker configuration passed to Handroll:

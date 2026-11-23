@@ -52,8 +52,9 @@ inventing a second public event vocabulary.
 `nori-tui` starts every session through one app-owned `SessionManager`. The
 manager calls the same launch internals as `launch_session`, so a managed
 session behaves exactly like a directly launched one. With the runtime
-`multi_session` flag, `nori-exec --acp` and the remote `/sessions` endpoint also
-use that manager. Plaintext, flag-off exec, and the public
+`multi_session` flag, the remote `/sessions` endpoint also uses that manager,
+and the background host (including its stdio form, `nori exec --acp`) owns
+its own manager. Plaintext exec and the public
 `launch_session`/`prepare_and_launch_session` entry points retain their direct
 per-session runtime paths.
 
