@@ -12,6 +12,7 @@ name = sys.argv[1]
 ids = itertools.count()
 permissions = itertools.count(40)
 pending = {}
+cancels = 0
 leases = []
 sessions = set()
 mode_file = Path("fixture-modes")
@@ -91,6 +92,12 @@ for line in sys.stdin:
                         "availableModels": [{"modelId": name, "name": name}]},
              "configOptions": options(), "_meta": {"mcpServers": params["mcpServers"]}})
     elif method == "session/cancel":
+        if name == "external-turn":
+            assert rid is None and sid in sessions
+            cancels += 1
+            send(method="session/update", params={"sessionId": sid, "update": {
+                "sessionUpdate": "session_info_update", "title": f"Received cancel {cancels}"}})
+
         for permission, (prompt, session, _) in list(pending.items()):
             if session == sid:
                 del pending[permission]
@@ -116,6 +123,10 @@ for line in sys.stdin:
                        else {"sessionUpdate": "config_option_update", "configOptions": session_options(sid)})
             send(method="session/update", params={"sessionId": sid, "update": changed})
             send(id=rid, result={"stopReason": "end_turn"})
+            continue
+        if name == "external-turn":
+            pending[next(permissions)] = (rid, sid, params.get("_meta"))
+            update(sid, "agent_message_chunk", "Awaiting interrupt")
             continue
         if text == "inspect-argv":
             send(id=rid, result={"stopReason": "end_turn", "_meta": {"argv": sys.argv[1:]}})
@@ -174,6 +185,12 @@ for line in sys.stdin:
         sessions.add(child)
         send(id=rid, result={"sessionId": child, "_meta": {"parent": sid}})
     elif method == "session/set_config_option":
+        if name == "external-turn" and params["configId"] == "speed":
+            status = "working" if params["value"] == "fast" else "idle"
+            send(method="session/update", params={"sessionId": sid, "update": {
+                "sessionUpdate": "session_info_update", "_meta": {"nori": {"status": status}},
+                "title": f"{status} with {cancels} cancels"}})
+
         if config_only:
             key, value = params["configId"], params["value"]
             if key == "permission" and value in mode_ids:

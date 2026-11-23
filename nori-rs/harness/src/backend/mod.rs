@@ -30,6 +30,9 @@ use crate::transcript::ContentBlock;
 use crate::transcript::TranscriptRecorder;
 use crate::undo::GhostSnapshotStack;
 
+mod external_turn;
+pub(crate) use external_turn::CancelAdmission;
+pub(crate) use external_turn::CancelTarget;
 mod follow_up;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

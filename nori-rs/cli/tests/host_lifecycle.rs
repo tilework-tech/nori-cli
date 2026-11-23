@@ -578,6 +578,9 @@ mod modes;
 #[path = "host_lifecycle/ask_mode.rs"]
 mod ask_mode;
 
+#[path = "host_lifecycle/external_cancel.rs"]
+mod external_cancel;
+
 #[path = "host_lifecycle/acp_v1.rs"]
 mod acp_v1;
 

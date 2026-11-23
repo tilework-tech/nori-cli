@@ -288,7 +288,7 @@ impl ChatWidget {
     /// no modal overlay (e.g. approvals or status indicator), and no composer popups.
     /// In this state Esc-Esc backtracking is enabled.
     pub(crate) fn is_normal_backtrack_mode(&self) -> bool {
-        self.bottom_pane.is_normal_backtrack_mode()
+        !self.can_control_external_turn() && self.bottom_pane.is_normal_backtrack_mode()
     }
 
     pub(crate) fn insert_str(&mut self, text: &str) {
@@ -327,6 +327,11 @@ impl ChatWidget {
     }
 
     pub(crate) fn submit_harness_action(&self, action: crate::app_event::HarnessAction) {
+        if let crate::app_event::HarnessAction::CancelExternal { generation, .. } = &action
+            && (*generation != self.session_generation || self.follow_only_attachment)
+        {
+            return;
+        }
         let Some(handle) = self.harness_handle.clone() else {
             if matches!(action, crate::app_event::HarnessAction::Shutdown { .. }) {
                 self.app_event_tx.send(AppEvent::ExitRequest);
@@ -343,6 +348,7 @@ impl ChatWidget {
             use crate::app_event::HarnessAction;
             let result = match action {
                 HarnessAction::Cancel => handle.cancel().await,
+                HarnessAction::CancelExternal { id, .. } => handle.cancel_external_turn(id).await,
                 HarnessAction::ResumeQueue => handle.resume_queue().await,
                 HarnessAction::ReclaimQueuedPrompt { event_id, action } => {
                     use crate::app_event::ReclaimOutcome;

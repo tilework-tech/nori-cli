@@ -64,6 +64,7 @@ mod context;
 mod delegation;
 pub(crate) use context::ContextSnapshot;
 mod event_handlers;
+mod external_cancel;
 mod goal;
 mod helpers;
 mod key_handling;
@@ -147,6 +148,7 @@ pub(crate) struct ChatWidget {
     session_generation: crate::app_event::SessionGeneration,
     owned_prompt_request_id: Option<nori_protocol::acp::v1::RequestId>,
     proactive_turn_active: bool,
+    external_turn: Option<nori_protocol::ExternalTurn>,
     unpaired_prompt_error_ids: HashSet<nori_protocol::acp::v1::RequestId>,
     completed_client_tool_calls: HashSet<String>,
     client_event_normalizer: crate::presentation::ClientEventNormalizer,
