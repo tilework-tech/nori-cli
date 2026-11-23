@@ -1910,3 +1910,25 @@ fn follow_only_external_activity_has_no_cancel_control() {
             .all(|event| !matches!(event, AppEvent::HarnessAction(_)))
     );
 }
+
+#[test]
+fn disconnected_external_turn_releases_the_interrupt_control() {
+    use nori_protocol::ExternalTurnState as State;
+
+    let (mut chat, mut rx, _) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.handle_session_event(generation, external_state("turn-a", State::Working));
+    chat.handle_session_event(generation, external_state("turn-a", State::CancelRequested));
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
+            nori_protocol::SessionEnded {
+                reason: nori_protocol::SessionEndReason::ConnectionLost,
+                message: None,
+            },
+        )),
+    );
+    assert!(history_text(&mut rx).contains("Session ended. Cancellation was not confirmed."));
+    assert!(chat.is_normal_backtrack_mode());
+    assert!(!render_bottom_pane(&mut chat, 80).contains("Cancel requested"));
+}

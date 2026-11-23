@@ -90,7 +90,10 @@ pub(super) struct Permission {
 #[derive(Default)]
 pub(super) struct Conversation {
     pub parts: Vec<Part>,
-    pub active_turn: Option<acp::RequestId>,
+    pub phase: Option<nori_protocol::SessionPhase>,
+    pub external_turn: Option<nori_protocol::ExternalTurn>,
+    /// A prompt sent by this terminal can be cancelled before its first phase arrives.
+    pub submitted_prompt: bool,
     pub permissions: Vec<Permission>,
     pub delegations: Vec<nori_protocol::Delegation>,
     pub cwd: std::path::PathBuf,
@@ -476,7 +479,15 @@ impl AttachState {
                     .retain(|permission| permission.request_id != resolved.request_id);
             }
             SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
-                conversation.active_turn = None;
+                if let Some(turn) = conversation.external_turn.take()
+                    && crate::external_cancel::pending_label(turn.state).is_some()
+                {
+                    conversation.parts.push(Part::Notice(
+                        "Session ended. Cancellation was not confirmed.".into(),
+                    ));
+                }
+                conversation.submitted_prompt = false;
+                conversation.phase = None;
                 conversation.parts.push(Part::Ended(ended.message));
                 conversation.permissions.clear();
                 conversation.message_boundary = true;
@@ -488,13 +499,11 @@ impl AttachState {
                 conversation.parts.push(Part::Notice(failed.message));
                 conversation.message_boundary = true;
             }
+            SessionEvent::Nori(NoriEvent::ExternalTurnChanged(turn)) => {
+                conversation.apply_external_turn(turn);
+            }
             SessionEvent::Nori(NoriEvent::SessionPhaseChanged(phase)) => {
-                conversation.active_turn = match &phase {
-                    nori_protocol::SessionPhase::Prompting { request_id } => {
-                        Some(request_id.clone())
-                    }
-                    _ => None,
-                };
+                conversation.submitted_prompt = false;
                 if matches!(
                     phase,
                     nori_protocol::SessionPhase::Idle
@@ -502,6 +511,7 @@ impl AttachState {
                 ) {
                     conversation.permissions.clear();
                 }
+                conversation.phase = Some(phase);
                 conversation.message_boundary = true;
             }
             SessionEvent::Nori(NoriEvent::ReplayStarted(_)) => {
@@ -523,6 +533,44 @@ impl AttachState {
 }
 
 impl Conversation {
+    pub fn active_prompt(&self) -> Option<&acp::RequestId> {
+        match &self.phase {
+            Some(nori_protocol::SessionPhase::Prompting { request_id }) => Some(request_id),
+            _ => None,
+        }
+    }
+
+    pub fn cancelling_prompt(&self) -> bool {
+        matches!(
+            self.phase,
+            Some(nori_protocol::SessionPhase::Cancelling { .. })
+        )
+    }
+
+    fn apply_external_turn(&mut self, turn: nori_protocol::ExternalTurn) {
+        use nori_protocol::ExternalTurnState::*;
+        if turn.state == Working {
+            self.external_turn = Some(turn);
+            return;
+        }
+        let Some(current) = &self.external_turn else {
+            return;
+        };
+        if current.id != turn.id {
+            return;
+        }
+        if matches!(turn.state, CancelRequested | Unconfirmed) {
+            self.external_turn = Some(turn);
+        } else {
+            let pending = crate::external_cancel::pending_label(current.state).is_some();
+            if let Some(message) = crate::external_cancel::terminal_message(turn.state, pending) {
+                self.parts.push(Part::Notice(message.into()));
+            }
+            self.external_turn = None;
+            self.message_boundary = true;
+        }
+    }
+
     fn apply_presentation(&mut self, event: ClientEvent) {
         match event {
             ClientEvent::MessageDelta(delta) => {

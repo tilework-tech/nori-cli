@@ -71,9 +71,10 @@ that predate it never send it.
 `NoriEvent` carries harness-owned lifecycle and product behavior that has no
 ACP event of its own. A `session/update` received without a locally owned
 request remains a schema-native, unowned update; no synthetic request ID or
-source attribution is added. Presentation of unowned updates or an agent-owned
-turn has no public Nori completion event; client-owned prompt turns complete
-through their correlated raw ACP prompt response. The source-owned event
+source attribution is added. The harness reports live agent-started work and its
+cancellation through `ExternalTurnChanged`, keyed by a harness observation ID.
+A matching terminal update can confirm cancellation. Client-owned prompts
+complete through their correlated raw ACP prompt response. The source-owned event
 boundary is defined in
 [`session_event.rs`](src/session_event.rs).
 

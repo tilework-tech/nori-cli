@@ -10,16 +10,13 @@ impl AcpBackend {
         Ok(())
     }
 
-    pub(crate) async fn cancel(&self, target: CancelTarget) -> Result<()> {
-        let (response_tx, response_rx) = oneshot::channel();
+    pub(crate) async fn cancel(&self) -> Result<()> {
         self.session_event_tx
-            .send(session_runtime_driver::SessionRuntimeInput::Cancel {
-                target,
-                response_tx,
-            })
+            .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                session_reducer::InboundEvent::CancelSubmit,
+            ))
             .await
-            .map_err(|_| anyhow::anyhow!("session runtime closed"))?;
-        response_rx.await?
+            .map_err(|_| anyhow::anyhow!("session runtime closed"))
     }
 
     pub(crate) async fn shutdown(&self, child_grace: std::time::Duration) -> Result<()> {

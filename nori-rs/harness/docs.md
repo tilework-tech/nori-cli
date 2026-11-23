@@ -484,13 +484,19 @@ default tool call rather than discarded. This logic lives in
 [`session_reducer.rs`](src/backend/session_reducer.rs) and
 [`session_runtime_driver.rs`](src/backend/session_runtime_driver.rs).
 
-Raw ACP session metadata remains public. The harness recognizes only the
-optional `_meta.nori.status` values needed to bound observer activity when no
-local request is active, and also publishes those hints around turns it
-admits. Status metadata does not complete a prompt, return a stop reason, end
-cancellation, or change local request state; the ACP prompt response remains
-the sole completion authority for the initiator. Presentation behavior is
-described in [`nori-tui`](../tui/docs.md).
+The harness publishes raw ACP metadata and emits `_meta.nori.status` hints
+around its own prompts. For live work observed outside a local request, it
+tracks an observation ID and serializes cancellation with turn activity.
+Repeated cancels for the same observation send one `session/cancel`.
+A local TUI action carries the observation ID. A bare ACP cancel carries only
+the session ID and targets whichever turn is active when the host admits it.
+
+A matching broker `nori/turnId`, idle `nori/turnState` and cancelled
+`nori/stopReason` confirm that the observed turn was cancelled. An unqualified
+idle report closes the observation with its cancellation outcome unconfirmed.
+If the agent keeps working, a timeout marks the request unconfirmed and leaves
+the agent running. A locally admitted prompt still completes through its own
+ACP response. See [external turn tracking](src/backend/external_turn.rs).
 
 Session end reasons are:
 
