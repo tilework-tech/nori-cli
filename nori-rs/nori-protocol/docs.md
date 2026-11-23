@@ -188,10 +188,20 @@ face that ACP itself does not define: the host's `_meta` keys
 (`ListedSessionMeta` on list rows, carrying `nori/agent` and `nori/session`
 `{live}` as `ListedSessionState`; `NewSessionMeta` with `nori/agent` on
 `session/new`), the `host.json`
-discovery file (`HostDiscovery`), and the params and results of the `_nori/*`
+discovery file (`HostDiscovery`), the host contract, and the params and results of the `_nori/*`
 extension (control, subscribe, host stop, delegation). The
 [host face](../cli/src/host/docs.md) serializes these types rather than
 building ad hoc JSON, so the published schema matches what is sent.
+
+`HOST_CONTRACT` is the semver of the host wire contract a build serves and
+speaks as a client; `HostDiscovery.contract` publishes it as a string, so the
+schema and the TypeScript type carry `contract: string`. `version` is the
+`nori` version and is informational. `host_serves_contract(host, client)`
+decides compatibility with the semver caret rule `^client` (same major and a
+host no older than the client for `1.x`, same minor for `0.y`; build metadata
+ignored; unparsable means incompatible). `nori host` and `nori exec` both use
+it before reusing a running host; the bump rules are in
+[remote-control.md §12](../../docs/remote-control.md#handshake-and-discovery).
 
 `host_wire_schema()` publishes one JSON Schema (draft 2020-12) covering the
 ACP v1 request, response and notification types the host serves plus every

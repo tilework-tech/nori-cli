@@ -65,10 +65,16 @@ remote ACP client (via TLS front) -+                       agent processes
   Discovery state contains the endpoint and PID; the lock decides liveness.
   A local (non-managed) host also publishes `host.json`, the host contract's
   single discovery file (`nori_protocol::HostDiscovery`: endpoint, token, PID,
-  instance ID, version, contract versions, and `startedBy` from
+  instance ID, version, the semver host contract `nori_protocol::HOST_CONTRACT`, and `startedBy` from
   `NORI_HOST_STARTED_BY`, else `nori-cli`), written privately to a temporary
   file and renamed into place after binding, and removed on stop. `state.json`
-  and `token` stay for existing clients.
+  and `token` stay for existing clients. `HostFiles::read_discovery` reads
+  `host.json` without touching the lock. When `nori host` finds a host
+  already answering in its home, it reuses it only if
+  `nori_protocol::host_serves_contract` accepts that host's contract;
+  otherwise it exits non-zero naming both contracts, `nori host stop`, and
+  `NORI_HOME=<dir> nori host` (a host in another home shares none of these
+  files). See [choosing a host](../../../../docs/remote-control.md#choosing-a-host-for-clients).
 - Each start generates a token and binds loopback before publishing discovery
   state. Administrative clients initialize with `observe: true`, so list and
   stop do not claim the controller slot. [List formatting](table.rs)
@@ -142,7 +148,8 @@ remote ACP client (via TLS front) -+                       agent processes
   load, resume, prompt, close, delete, config changes) concurrently, and
   passes client notifications (`session/cancel`) and permission answers to
   `message_from`.
-  [The handshake](acp/handshake.rs) adds `protocolVersion: 1`, `agentInfo`,
+  [The handshake](acp/handshake.rs) adds `protocolVersion: 1`, `agentInfo`
+  (version `<nori version>+contract.<HOST_CONTRACT>`),
   ACP `agentCapabilities` (load, list, resume, close, delete; only the
   baseline prompt and MCP capabilities, because the rest depend on each
   session's adapter) and empty `authMethods` to the `initialize` reply, with
@@ -668,7 +675,8 @@ nori exec "prompt"
 ```
 
 - **Host choice.** The running host is used only when its OS lock is held,
-  its `host.json` advertises `contract {acp: 1, nori: CONTRACT}`, it accepts
+  `nori_protocol::host_serves_contract(host.json contract, HOST_CONTRACT)`
+  holds (so a newer `1.x` host is used and a `2.x` one is not), it accepts
   the discovery token within a short timeout, and the `initialize` reply
   (sent without `observe`) gives this client `control.role = controller`.
   Exec never takes control from another client; any failed check falls back.
