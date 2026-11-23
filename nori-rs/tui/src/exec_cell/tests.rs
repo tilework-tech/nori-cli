@@ -637,6 +637,7 @@ fn diffs_are_never_capped() {
         raw_input: None,
         raw_output: None,
         owner_request_id: None,
+        details: Default::default(),
     };
     assert_eq!(
         text(&full_capped(edit.clone(), Some(3)).display_lines(100), 100),
