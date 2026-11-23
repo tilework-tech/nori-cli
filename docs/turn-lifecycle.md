@@ -293,7 +293,8 @@ running turn:
   handled locally. Enter sends any other draft, including `!` text and other
   slash text, as a steer follow-up. Tab does not queue slash or `!` drafts,
   but it does queue a bare `exit` or `quit`.
-- In direct `nori`, the running turn must be in `Prompting`. While the turn is
+- In direct `nori`, the running turn must be one this client started, and it
+  must be in `Prompting`. While the turn is
   cancelling, or in cloud mode, Enter submits an ordinary prompt (queued if
   busy) and Tab does not queue. A follow-only attachment keeps the draft and
   submits nothing.
@@ -352,9 +353,9 @@ result without a Nori release. Pin an allowlisted version with
   stored receipt. Any difference (content, intent, expected turn, sender, or
   origin) under the same ID is an error.
 - The TUI reports each outcome as a notice. Direct `nori` does not restore
-  the draft on `rejected` or `unknown`. `nori attach` puts the draft back in
-  an empty composer on a `rejected` receipt or an error response, but not on
-  `unknown`.
+  the draft on `rejected` or `unknown`. `nori attach` puts the draft back on a
+  `rejected` receipt or an error response, but not on `unknown`, and only if
+  that session is still selected and the composer is empty.
 
 ### Steer timeout
 

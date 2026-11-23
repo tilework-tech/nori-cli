@@ -156,7 +156,8 @@ The process relays the client to this `NORI_HOME`'s background host over
 - the host is running and serves this `nori`'s host contract;
 - no `--agent`, `-c`, `--add-dir`, or bypass flag is given;
 - the host answers the client's first `initialize` with
-  `control.role: "controller"`.
+  `control.role: "controller"`, or that `initialize` sets `observe: true`
+  (the client then joins as a watcher).
 
 Sessions are then shared with every other client of that host and outlive
 this process. stdin EOF only disconnects (exit 0); SIGINT or SIGTERM

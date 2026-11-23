@@ -95,7 +95,7 @@ repeat the goal-control rules (`NORI_GOAL_CONTROL_INSTRUCTIONS` in
 
 ### Background host relay
 
-The background host's standard-ACP relay can inject its own `nori-client` on
+The managed host's `/managed` relay can inject its own `nori-client` on
 `session/new`, `session/load`, `session/resume`, and `session/fork`. This
 needs a managed launch (`[host] managed = true`) whose additions enable
 `clientMcp`, and an agent that advertises HTTP MCP. A caller-supplied server

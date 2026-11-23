@@ -12,7 +12,8 @@ authenticated WebSocket at `/acp` with `/sessions` as an alias (section 3),
 over stdio (`nori host --stdio`, aliased as `nori exec --acp`, which joins the
 running host when it can), and to terminals through `nori attach`. Its standard ACP
 face is described in section 12; the `_nori/session/*` extension that the
-host and `nori attach` share is described in section 10.
+host and `nori attach` share is described in section 10. Section numbers 4
+to 9 are unused.
 
 The transport server lives in `nori-acp-host`, which already owns the ACP SDK,
 subprocess connection, and wire lifecycle. `nori-acp-host` must not depend on
@@ -44,7 +45,7 @@ terminal is one more client of the host; detaching it does not stop sessions.
 The background host serves its standard ACP face (section 12) over the
 WebSocket profile of the ACP remote transport RFD:
 
-- Accepted RFD, "Streamable HTTP & WebSocket Transport" (Draft; merged in
+- Draft RFD, "Streamable HTTP & WebSocket Transport" (merged in
   [agent-client-protocol#721](https://github.com/agentclientprotocol/agent-client-protocol/pull/721)):
   <https://agentclientprotocol.com/rfds/streamable-http-websocket-transport>
 - Open RFD on reconnect, resume and connection resiliency, "Durable &
@@ -66,14 +67,14 @@ WebSocket profile of the ACP remote transport RFD:
 | Connection and session limits | Not defined by the RFD. `[host] max_clients` (default 16) bounds clients across `/acp` and `/sessions`; one more gets `503` with a message naming the limit. Authentication is checked first. `[tui] max_sessions` (default 8) bounds the sessions the host runs at once, delegated children included; `session/new` past it fails with `-32017`. `[host] max_sessions` bounds only managed launches. |
 | TLS, Origin, bind address | Not defined by the RFD. The host binds `127.0.0.1` only and speaks plain `ws://`. To cross a network boundary, put a TLS-terminating front in front of it (reverse proxy, SSH or Tailscale tunnel) and use `wss://`. Never expose the plain port: the bearer token would travel in clear text. A browser page cannot add the `Authorization` header, so it cannot reach the loopback port. |
 
-The accepted RFD conflicts with itself on disconnects: its WebSocket section
+The draft transport RFD conflicts with itself on disconnects: its WebSocket section
 says the server cleans up a connection's sessions on disconnect, its v1
 durability section says sessions survive disconnects. The host follows the
 second, which is also the host contract's rule that the host outlives every
 client.
 
 Deferred to the durable-sessions design (from the open RFD and the
-accepted RFD's v2 list): stream cursors (`_meta["acp/cursor"]`, SSE `id:`),
+draft transport RFD's v2 list): stream cursors (`_meta["acp/cursor"]`, SSE `id:`),
 `Last-Event-ID` and WebSocket `stream/resume` replay of missed messages, the
 `capabilities.transport.resumable` capability, negotiated keepalive, the
 post-resume turn state (`state_update`, `_meta["acp/turnState"]`), a
@@ -381,7 +382,7 @@ per-session folders. Clients send `cwd` only when it is advertised.
 | `_nori/control/status` | Return this connection's role and whether a controller is connected. |
 | `_nori/control/take` | Transfer control to the caller without closing another connection. |
 | `_nori/session/new` | Start a session; any authenticated initialized client may call it, since it changes no existing session; the new session becomes the host's selected session. Optional `cwd` (absolute; canonicalized, and refused when relative, missing, or not a directory) loads the host's configuration in that folder with the host's command-line overrides, so the folder's own project trust and approval settings apply; without it the host's start configuration is used. Optional `agent` selects the agent; optional `prompt` is sent as the first prompt after the session starts, without delaying the reply. Replies `{session_id, cwd}`. Resume reloads configuration from the record's cwd the same way. |
-| `_nori/session/close`, `_nori/session/cancel`, `_nori/session/resume` | Apply the operation to the required `session_id`; resume retains the Nori conversation ID. Resume also accepts the ID of a [stored session](#12-standard-acp-v1-on-the-background-host) and restarts it from its transcript. On the background host, `_nori/session/list` and `_nori/session/resume` are aliases kept for `nori attach` and `nori host ls`; new clients use `session/list` and `session/resume`. |
+| `_nori/session/close`, `_nori/session/cancel`, `_nori/session/resume` | Apply the operation to the required `session_id`; resume retains the Nori conversation ID. Resume also accepts the ID of a [stored session](#12-standard-acp-v1-on-the-background-host) and restarts it from its transcript. On the background host these methods are marked deprecated in favour of `session/list` and `session/resume`; `nori attach` and `nori host ls` still call `_nori/session/list`, and `nori attach` falls back to `_nori/session/resume`. |
 | `_nori/host/stop` | Request host shutdown; any authenticated initialized client may call it. |
 
 `_nori/session/close`, `_nori/session/cancel`, and `_nori/session/resume` on an
@@ -394,9 +395,11 @@ then releases before awaiting the backend. An already-admitted operation may
 finish after control moves; new mutations from the previous controller are
 refused. A slow operation on one connection does not hold up another client's
 initialization, list, takeover, or stop. Watchers can list, subscribe, start new
-sessions, stop the host, and take control (on a managed host also
+sessions, call `session/load`, `session/resume`, and `session/list`, stop the
+host, and take control (on a managed host also
 `_nori/session/ensure` and `_nori/session/status`); other session mutations, including prompts and permission answers, fail with
-`-32016` and a read-only error. When the controller disconnects, existing
+`-32016` and a read-only error. A watcher that loads or resumes a failed,
+closed, or stored session restarts it. When the controller disconnects, existing
 watchers are not automatically promoted. They may take control explicitly, or
 a new interactive initializer may claim the empty slot.
 
@@ -425,7 +428,8 @@ other than the attach commands (`/new`, `/close`, `/cancel`, `/resume`,
 starting with `!` or `/`; Tab does not queue a draft that starts with `!` or
 is a slash command. Delivery notices match the local TUI. When a follow-up
 gets a `rejected` receipt or an error response, attach puts the draft back
-into an empty composer.
+into the composer if that session is still selected and the composer is
+empty.
 Session commands address the host; they do not launch local agents.
 `/new [DIR] [AGENT]` (the terminal requires control for it) starts a
 session in the attaching terminal's directory (the host's own folder for a `--host` host), or in `DIR`, made absolute
@@ -597,7 +601,7 @@ its own contract, and the way out (`nori host stop`, or
 | `session/new` | Any initialized client | `cwd` must be an absolute, existing folder (`-32602` otherwise). The folder's configuration applies. `mcpServers` (stdio and HTTP) are added to the session's MCP servers, and are kept when the client later changes the agent or the session restarts; SSE fails with `-32602`. Optional `_meta["nori/agent"]` starts that agent instead of the folder's default; agent aliases are accepted (an unknown agent fails with `-32602`); otherwise clients switch with the `agent` config option. `[host] default_mode` (`ask`, `agent`, `approve-all`), when set, replaces the folder's approval policy. The response waits until the agent has started and carries `sessionId`, `configOptions` and `modes`; the connection is attached. Capacity fails with `-32017`. An agent that refuses to start fails with its own ACP error code and Nori's explanation as the message, so an adapter needing sign-in returns `-32000` `Authentication required for <agent>.` with the sign-in hint; the session is then left out of `session/list`. |
 | `session/prompt` | Controller | Runs one turn and answers with the agent's `PromptResponse` (`stopReason`). The connection receives the turn's updates before the response. A prompt while a turn runs fails with `-32015`; it is never queued. A connection that is not attached to the session is attached (as by `session/resume`) first. |
 | `session/cancel` | Controller (notification) | Cancels the session's turn; the prompt answers with `stopReason: "cancelled"`. Ignored from watchers. |
-| `session/close` | Controller | Stops the session's agent and frees its slot. It stays in `session/list` as `stored` (status `closed`), and `session/load` or `session/resume` restarts it under its ID. |
+| `session/close` | Controller | Stops the session's agent and frees its slot. It stays in `session/list` among the live rows with `nori/session` `live: false` (status `closed`), and `session/load` or `session/resume` restarts it under its ID. |
 | `session/delete` | Controller | Closes the session if it runs, removes its transcript under `$NORI_HOME`, and leaves it out of `session/list` and load for the rest of this host's life. Nothing outside `$NORI_HOME` is touched. |
 
 The connection that controls the host receives `session/request_permission`
@@ -640,8 +644,11 @@ without Node.js).
 | `delegation` | `_nori/session/delegate`, `_nori/session/delegation/resolve` |
 
 `_nori/session/list`, `new`, `prompt`, `respond`, `cancel`, `close` and
-`resume` are deprecated aliases, kept for one more release.
-`_nori/session/follow_up` is not an alias: it stays (contract C11). `nori
+`resume` are marked deprecated in favour of the standard methods.
+`_nori/session/close`, `cancel` and `resume` duplicate `session/close`,
+`session/cancel` and `session/resume`; `list`, `new`, `prompt` and `respond`
+carry fields the standard methods lack, and `nori attach`, `nori host ls` and
+`nori host new` use them. `_nori/session/follow_up` is not deprecated: it stays (contract C11). `nori
 attach` sends `session/close`, the `session/cancel` notification and
 `session/resume` (with the row's folder; an older host that does not report
 the folder gets `_nori/session/resume`). It uses `_nori/session/list`,
@@ -663,7 +670,7 @@ ID, continuing the same transcript file.
 | Method | Who may call | Behavior |
 | --- | --- | --- |
 | `session/list` | Any initialized client | Live sessions first, then stored sessions, most recently written first. Optional `cwd` (absolute) keeps the sessions working in that folder. Optional `cursor` takes a previous `nextCursor`, which is opaque and absent on the last page. Pages hold 50 rows. Each row is a standard ACP `SessionInfo` (`sessionId`, `cwd`, `title`, `updatedAt` in RFC 3339). Its `_meta` carries `nori/agent` (the agent slug, when known) and `nori/session` `{live}`: `true` while the host runs the session's agent (status starting, working, waiting on you or ready), `false` for a closed, failed or done record and for every stored session. A row with `live: false` restarts when loaded or resumed. A bad cursor or relative `cwd` fails with `-32602`. Unreadable transcripts, and transcripts whose metadata names another session, are left out. |
-| `session/load` | Any initialized client | Attaches the connection to the session. Its history arrives as `session/update` notifications **before** the response, then live updates follow. A live session replays from the manager journal (sequence 1 onward) with no gap before live delivery. If the journal has evicted the session's start, the transcript is replayed instead and live delivery starts at the journal's latest event, so updates in that interval can be missed. A stored session replays its transcript, then restarts on a new agent process in its recorded folder with its recorded agent; the response waits until the session has started. A failed live session restarts the same way. |
+| `session/load` | Any initialized client | Attaches the connection to the session. Its history arrives as `session/update` notifications **before** the response, then live updates follow. A live session replays from the manager journal (sequence 1 onward) with no gap before live delivery. If the journal has evicted the session's start, the transcript is replayed instead and live delivery starts at the journal's latest event, so updates in that interval can be missed. A stored session replays its transcript, then restarts on a new agent process in its recorded folder with its recorded agent; the response waits until the session has started. A failed, closed or done live session restarts the same way. |
 | `session/resume` | Any initialized client | Like `session/load` without history: only updates after the response arrive. History the harness replays to the restarted agent is not forwarded. |
 
 `sessionId` is the Nori conversation ID. A `sessionId` that is neither live
@@ -686,11 +693,11 @@ and stdout. It is refused when `[host] managed = true`; managed hosts
 need `--launch`. The client either joins the home's running host or gets a
 host of its own:
 
-- **Joined.** When the home's `host.json` advertises `contract {acp: 1,
-  nori: 1}`, the command has no configuration of its own (no `--agent`,
+- **Joined.** When the home's `host.json` names a contract that serves this
+  CLI's (`host_serves_contract`, above), the command has no configuration of its own (no `--agent`,
   `-c`, `--add-dir` or bypass flag), and the client's first line is an
   `initialize` that the running host answers with `control.role:
-  "controller"`, the process relays the client to that host over `/acp` with
+  "controller"` (or that sets `observe: true`), the process relays the client to that host over `/acp` with
   the discovery token. The client then shares the host's sessions with every
   other client, and they outlive it. At stdin EOF the process still copies the
   replies to the requests it already forwarded, then disconnects and exits 0
@@ -730,8 +737,8 @@ On its own host:
 
 ### One-shot exec as a client
 
-`nori exec "prompt"` and `nori -p` use only this face. When the home's host
-holds its lock, its `host.json` contract serves this CLI's
+`nori exec "prompt"` and `nori -p` use only this face. When `host.json` names
+a reachable host whose contract serves this CLI's
 (`host_serves_contract`, above), and
 `initialize` (without `observe`) returns `control.role: "controller"`, the
 prompt runs on that host over `/acp` with the discovery token; exec never

@@ -155,7 +155,7 @@ term names.
 | --- | --- | --- |
 | **[Attach](remote-control.md#attached-frontend-and-recovery)** | `nori attach`: a terminal frontend connected to a **host**'s published endpoint (`/acp`, alias `/sessions`) instead of owning agent processes. | Connect, resume, remote control |
 | **[Controller](remote-control.md#control-and-lifecycle-requests)** | The one client of a **host** that may prompt, send **follow-ups**, answer requests, and delegate. The first interactive client claims the empty role; another client takes it with `_nori/control/take`. | Owner, primary |
-| **[Watcher](remote-control.md#control-and-lifecycle-requests)** | A client of a **host** without the **controller** role: it receives the same events but must take control before changing a session. A client that initializes with `observe: true` never claims control. | Observer, viewer, spectator |
+| **[Watcher](remote-control.md#control-and-lifecycle-requests)** | A client of a **host** without the **controller** role: it receives the same events and may call ACP **New**, **List**, **Load**, and **Resume** (loading or resuming a failed, closed, or stored session restarts it), but must take control before any other change to a session. A client that initializes with `observe: true` never claims control. | Observer, viewer, spectator |
 | **[Managed launch](../nori-rs/cli/src/host/docs.md#managed-launch-control-v1)** | A host session run for a provisioned **binding** over the host's `/managed` endpoint, enabled by `[host] managed = true` (default false). A managed host serves `/sessions` and `/managed` and no `/acp`. | Hosted session, managed session |
 | **[Binding](../nori-rs/cli/src/host/docs.md#managed-launch-control-v1)** | A provisioned workspace and home with a pinned adapter that a **managed launch** runs in, identified by binding ID and generation. | Workspace, sandbox |
 | **[Side session](../nori-rs/cli/src/host/docs.md#managed-launch-control-v1)** | A secondary ACP session opened beside a parent session on the same **binding**, rebuilt or forked. A managed-host protocol for an external client, enabled by `[host] managed` and `[host] side_sessions`; Nori's own terminals cannot open one. | Subsession, child session |
@@ -180,7 +180,7 @@ term names.
 | **[Transcript](transcripts.md)** | Nori's versioned local JSONL record of metadata, user input, and ordered events. | Conversation history, ACP log |
 | **[Replay](transcripts.md)** | Historical ACP notifications re-emitted between replay markers without re-executing requests or side effects. | Resume, rerun, transcript |
 | **[Fork](transcripts.md)** | Unstable ACP `session/fork` creates a child from existing session context. | Rewind, Git branch |
-| **[Branch at head](transcripts.md)** | Nori forks the active ACP session and transcript, activates the child, and closes the parent. | Rewind, undo |
+| **[Branch at head](transcripts.md)** | Nori forks the active ACP session and transcript, activates the child, and marks the parent closed (no ACP **Close** is sent). | Rewind, undo |
 | **[Rewind to message](transcripts.md)** | Nori's older-message `/fork` path starts fresh from a display summary and prefills that message. | ACP fork, undo |
 | **[Compaction](transcripts.md)** | Nori reduces model context through agent-native compaction or summary-and-session-swap. | History deletion, replay |
 | **[Undo](transcripts.md)** | Nori restores a Git ghost snapshot and appends an `Undo` event to the transcript, without changing agent context or rewriting earlier lines. | Rewind, rollback conversation |
@@ -200,7 +200,7 @@ term names.
   envelope sequence across the new agent process, so subscriptions and replay
   cursors keep using that ID.
 - `/fork` exposes **branch at head** (which uses ACP **fork**) and **rewind to
-  message** (which does not). Branch at head closes the parent; rewind to
+  message** (which does not). Branch at head marks the parent closed (no ACP **Close** is sent); rewind to
   message starts a new agent process. Both add the child to the parent's
   **session family**.
 - **Undo** changes files, not conversation state; **rewind to message**
