@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/pr730-fixtures/proj · Agent approvals
+  Agent        Synth
+
+
+› emoji
+
+
+• 設定ローダーを読んでから既定値を変更します🧪次にテストを更新して👩💻確認します🚀優先順位も比較しま
+
+
+› / for slash command menu
+
+                                                                                            ⎇ master

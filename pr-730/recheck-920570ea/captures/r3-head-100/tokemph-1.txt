@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/pr730-fixtures/proj · Agent approvals
+  Agent        Synth
+
+
+› tokemph
+
+
+• loader.toml (1s • esc to interrupt)
+
+
+› ! for shell commands
+
+                                                                                            ⎇ master

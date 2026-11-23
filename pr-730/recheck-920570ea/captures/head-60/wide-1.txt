@@ -1,0 +1,24 @@
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/…/pr730-fixtures/proj · Agent
+approvals
+  Agent        Synth
+
+
+› long
+
+
+• Long scenario answered.
+
+
+› wide
+
+
+• 合成設定ファイルを読み込んで既定値を比較し、移行で別名がす
+
+
+› $ for skill listing
+
+                                                    ⎇ master

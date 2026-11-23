@@ -1,0 +1,30 @@
+  • Read fixtures/profile.toml
+
+─ Worked for 4s ────────────────────────────────────────────────────────────────────────────────────
+
+• Intermediate note from the agent.
+
+• Multi scenario answered.
+
+
+› long
+
+
+• Long scenario answered.
+
+
+› wide
+
+
+• Wide scenario answered.
+
+
+› inline
+
+
+• loader.toml (1s • esc to interrupt)
+
+
+› $ for skill listing
+
+                                                                                            ⎇ master

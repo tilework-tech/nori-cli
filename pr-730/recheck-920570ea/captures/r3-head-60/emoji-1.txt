@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/…/pr730-fixtures/proj · Agent
+approvals
+  Agent        Synth
+
+
+› emoji
+
+
+• 設定ローダーを読んでから既定値を変更します🧪次にテストを更
+
+
+› ? for shortcuts
+
+                                                    ⎇ master

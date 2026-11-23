@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/…/pr730-fixtures/proj · Agent
+approvals
+  Agent        Synth
+
+
+› emoji
+
+
+• Emoji scenario answered.
+
+
+› wide
+
+
+• 合成設定ファイルを読み込んで既... (1s • esc to interrupt)
+
+
+› ! for shell commands
+
+                                                    ⎇ master
