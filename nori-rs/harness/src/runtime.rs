@@ -101,7 +101,6 @@ enum HarnessCommand {
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
     Cancel {
-        target: CancelTarget,
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
     /// Let a paused queue send again.
@@ -528,33 +527,30 @@ impl HarnessHandle {
     }
 
     pub async fn cancel(&self) -> anyhow::Result<()> {
-        self.cancel_target(CancelTarget::Owned).await
+        self.request(|response_tx| HarnessCommand::Cancel { response_tx })
+            .await
     }
 
     /// Cancel the current turn on a session-scoped ACP notification.
     pub async fn cancel_current_turn(&self) -> anyhow::Result<()> {
-        self.submit_cancel_current_turn().await
+        self.submit_cancel_current_turn().await?.await
     }
 
     /// Enqueue a controller's session-scoped cancel before its socket accepts another frame.
-    pub fn submit_cancel_current_turn(
+    pub async fn submit_cancel_current_turn(
         &self,
-    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send + 'static {
-        let admitted = self.cancel_admission.submit();
-        async move { admitted?.await? }
+    ) -> anyhow::Result<impl std::future::Future<Output = anyhow::Result<()>> + Send + 'static>
+    {
+        let reply = self.cancel_admission.submit(CancelTarget::Current).await?;
+        Ok(async move { reply.await? })
     }
 
     /// Cancel only the external activity identified by a live ExternalTurnChanged event.
     pub async fn cancel_external_turn(&self, id: String) -> anyhow::Result<()> {
-        self.cancel_target(CancelTarget::External(id)).await
-    }
-
-    async fn cancel_target(&self, target: CancelTarget) -> anyhow::Result<()> {
-        self.request(|response_tx| HarnessCommand::Cancel {
-            target,
-            response_tx,
-        })
-        .await
+        self.cancel_admission
+            .submit(CancelTarget::External(id))
+            .await?
+            .await?
     }
 
     /// Let a queue paused by an interrupted or failed turn send again. The
@@ -1067,10 +1063,10 @@ pub(crate) fn launch_session_from(
             };
             let result = match start {
                 SessionStart::New => {
-                    AcpBackend::spawn(agent, backend_event_tx, cancel_admission).await
+                    AcpBackend::spawn_with_cancel(agent, backend_event_tx, cancel_admission).await
                 }
                 SessionStart::Resume(resume) => {
-                    AcpBackend::resume_session(
+                    AcpBackend::resume_with_cancel(
                         agent,
                         resume.acp_session_id.as_deref(),
                         resume.transcript.as_ref(),
@@ -1264,11 +1260,8 @@ pub(crate) fn launch_session_from(
                             .await;
                         let _ = response_tx.send(result);
                     }
-                    HarnessCommand::Cancel {
-                        target,
-                        response_tx,
-                    } => {
-                        let _ = response_tx.send(backend_for_agent.cancel(target).await);
+                    HarnessCommand::Cancel { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.cancel().await);
                     }
                     HarnessCommand::ResumeQueue { response_tx } => {
                         let _ = response_tx.send(backend_for_agent.resume_queue().await);

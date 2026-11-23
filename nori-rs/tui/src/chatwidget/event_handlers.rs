@@ -244,6 +244,17 @@ impl ChatWidget {
                 self.handle_delegation_changed(delegation);
             }
             nori_protocol::NoriEvent::SessionEnded(ended) => {
+                let pending = self.external_cancel_status().is_some();
+                if self.external_turn.take().is_some() {
+                    self.separate_proactive_turn();
+                    self.bottom_pane.hide_status_indicator();
+                    if pending {
+                        self.add_info_message(
+                            "Session ended. Cancellation was not confirmed.".to_owned(),
+                            None,
+                        );
+                    }
+                }
                 if !self.session_configured_received {
                     self.bottom_pane.hide_status_indicator();
                 }
