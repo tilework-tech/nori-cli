@@ -255,29 +255,7 @@ impl HostService {
                 "unknown mode {mode_id}; use ask, agent or approve-all"
             ))
         })?;
-        self.enter_adapter_mode(id, mode).await?;
-        self.manager
-            .set_approval_policy(id, mode.approval_policy())
-            .await?;
-        self.settings
-            .update(id, |settings| settings.mode = Some(mode.id().to_owned()));
-        let session = id.to_string();
-        self.acp.broadcast(
-            id,
-            update(
-                &session,
-                json!({"sessionUpdate":"current_mode_update","currentModeId":mode.id()}),
-            ),
-        );
-        let (options, _) = self.session_configuration(id).await?;
-        self.acp.broadcast(
-            id,
-            update(
-                &session,
-                json!({"sessionUpdate":"config_option_update","configOptions":options}),
-            ),
-        );
-        Ok(())
+        self.change_mode(id, mode).await
     }
 
     pub(super) async fn set_config_option(

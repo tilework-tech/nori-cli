@@ -522,6 +522,7 @@ fn host_service(
         instance: uuid::Uuid::new_v4().to_string(),
         deleted: Default::default(),
         restarts: tokio::sync::Mutex::new(()),
+        mode_changes: tokio::sync::Mutex::new(()),
     })
 }
 

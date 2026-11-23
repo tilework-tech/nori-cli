@@ -47,6 +47,9 @@ pub(super) struct HostService {
     /// Serializes restarting, replacing and deleting sessions, so two
     /// clients cannot start one session twice or revive a deleted one.
     pub restarts: tokio::sync::Mutex<()>,
+    /// Serializes permission mode changes, so the adapter's mode and the
+    /// mode the host reports change together.
+    pub mode_changes: tokio::sync::Mutex<()>,
 }
 
 #[derive(serde::Deserialize)]
@@ -143,6 +146,10 @@ impl HostService {
                     }
                 });
             }
+            tokio::spawn(super::acp::adapter_modes::apply_when_started(
+                self.manager.clone(),
+                session.conversation_id,
+            ));
             self.managed
                 .set_selected_session(Some(session.conversation_id));
             return Ok(json!({"session_id":session.conversation_id.to_string(),"cwd":cwd}));
@@ -160,6 +167,10 @@ impl HostService {
                     super::transcripts::load_stored(&self.config.nori_home, &id).await?
             {
                 self.resume_stored(&id, transcript).await?;
+                tokio::spawn(super::acp::adapter_modes::apply_when_started(
+                    self.manager.clone(),
+                    id,
+                ));
                 return Ok(json!({"session_id": id.to_string()}));
             }
             anyhow::bail!("unknown session id");
@@ -173,7 +184,13 @@ impl HostService {
                     .cancel()
                     .await?
             }
-            "_nori/session/resume" => self.resume_failed(&id).await?,
+            "_nori/session/resume" => {
+                self.resume_failed(&id).await?;
+                tokio::spawn(super::acp::adapter_modes::apply_when_started(
+                    self.manager.clone(),
+                    id,
+                ));
+            }
             _ => anyhow::bail!("unknown host operation"),
         }
         Ok(json!({"session_id":id.to_string()}))

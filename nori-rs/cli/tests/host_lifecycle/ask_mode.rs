@@ -4,7 +4,9 @@
 //!
 //! The mock stands in for each built-in adapter under its slug and
 //! advertises that adapter's real mode ids; it asks before every tool call
-//! only in the modes named by `MOCK_AGENT_ASKING_MODES`.
+//! only in the modes named by `MOCK_AGENT_ASKING_MODES`. Unless a test says
+//! otherwise each mock starts in its asking mode, so a turn that does not ask
+//! shows the host moved the adapter out of it.
 
 use super::acp_client::Acp;
 use super::*;
@@ -41,26 +43,31 @@ MOCK_AGENT_ASKING_MODES = "{asking}"
     )
 }
 
+const CLAUDE_MODES: &str = "default,auto,acceptEdits,plan";
+const CODEX_MODES: &str = "read-only,agent,workspace-write,agent-full-access";
+
 /// A running host offering Claude Code, Codex and OpenCode, starting
 /// `agent` by default, with `extra` added to its top-level configuration.
 fn host_with(agent: &str, extra: &str) -> Host {
-    host_with_claude_modes(agent, extra, "auto,default,acceptEdits,plan")
+    host_with_modes(
+        agent,
+        &format!("approval_policy = \"on-request\"\n{extra}"),
+        CLAUDE_MODES,
+        CODEX_MODES,
+    )
 }
 
-/// As `host_with`, with Claude Code advertising `claude_modes`.
-fn host_with_claude_modes(agent: &str, extra: &str, claude_modes: &str) -> Host {
+/// A running host with `top` as its top-level configuration and Claude Code
+/// and Codex advertising `claude_modes` and `codex_modes`.
+fn host_with_modes(agent: &str, top: &str, claude_modes: &str, codex_modes: &str) -> Host {
     let host = Host::new();
     std::fs::write(
         host.0.path().join("config.toml"),
         format!(
-            "agent = \"{agent}\"\napproval_policy = \"on-request\"\n{extra}\n{}{}{}",
+            "agent = \"{agent}\"\n{top}\n{}{}{}",
             adapter("Claude Code", "claude-code", claude_modes, "default"),
-            adapter(
-                "Codex",
-                "codex",
-                "agent,read-only,workspace-write,agent-full-access",
-                "read-only"
-            ),
+            adapter("Codex", "codex", codex_modes, "read-only"),
+            // OpenCode's modes change behavior; none of them asks every time.
             adapter("OpenCode", "opencode", "build,plan", ""),
         ),
     )
@@ -131,8 +138,8 @@ async fn set_mode(
 async fn turn_asks(acp: &mut Acp, id: &str, text: &str) -> bool {
     let is_end = |frame: &Value| frame["id"] == text && frame.get("method").is_none();
     let ended = |frame: &Value| {
-        assert!(
-            frame["result"]["stopReason"].is_string(),
+        assert_eq!(
+            frame["result"]["stopReason"], "end_turn",
             "the turn did not run: {frame}"
         );
     };
@@ -231,7 +238,13 @@ async fn a_host_default_of_ask_makes_new_sessions_ask() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn ask_still_asks_after_a_host_restart() {
-    let host = host_with("claude-code", "");
+    // Codex starts again in its own default, which does not ask.
+    let host = host_with_modes(
+        "claude-code",
+        "approval_policy = \"on-request\"",
+        CLAUDE_MODES,
+        "agent,read-only,workspace-write,agent-full-access",
+    );
     let folder = TempDir::new().unwrap();
     let mut acp = controller(&host);
     let id = new_session(&mut acp, folder.path(), "codex").await;
@@ -242,13 +255,7 @@ async fn ask_still_asks_after_a_host_restart() {
     success(host.run(&["host", "--port", "0"]));
 
     let mut acp = controller(&host);
-    let resumed = acp
-        .call(
-            "session/resume",
-            json!({"sessionId": id, "cwd": canonical(folder.path())}),
-        )
-        .await
-        .unwrap();
+    let resumed = configuration(&mut acp, &id, folder.path()).await;
 
     assert_eq!(resumed["modes"]["currentModeId"], "ask");
     assert!(turn_asks(&mut acp, &id, "after").await, "asks after");
@@ -274,7 +281,7 @@ async fn an_adapter_with_no_mode_that_asks_every_time_is_not_offered_ask() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_default_of_ask_is_agent_for_an_adapter_that_cannot_ask() {
+async fn a_default_of_ask_is_agent_for_an_adapter_that_cannot_ask_and_stays_agent() {
     let host = host_with("opencode", "\n[host]\ndefault_mode = \"ask\"\n");
     let folder = TempDir::new().unwrap();
     let mut acp = controller(&host);
@@ -294,7 +301,12 @@ async fn a_default_of_ask_is_agent_for_an_adapter_that_cannot_ask() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn an_adapter_version_without_its_strict_mode_is_not_offered_ask() {
-    let host = host_with_claude_modes("claude-code", "", "auto,acceptEdits,plan");
+    let host = host_with_modes(
+        "claude-code",
+        "approval_policy = \"on-request\"",
+        "auto,acceptEdits,plan",
+        CODEX_MODES,
+    );
     let folder = TempDir::new().unwrap();
     let mut acp = controller(&host);
     let id = new_session(&mut acp, folder.path(), "claude-code").await;
@@ -303,7 +315,12 @@ async fn an_adapter_version_without_its_strict_mode_is_not_offered_ask() {
     let after = configuration(&mut acp, &id, folder.path()).await;
 
     assert_eq!(refused.code, -32602, "{refused:?}");
+    assert_eq!(after["modes"]["currentModeId"], "agent");
     assert_eq!(mode_ids(&after["modes"]), ["agent", "approve-all"]);
+    assert_eq!(
+        mode_values(&after["configOptions"]),
+        ["agent", "approve-all"]
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -335,12 +352,20 @@ async fn switching_agent_in_ask_to_an_adapter_that_cannot_ask_continues_in_agent
     let mut acp = controller(&host);
     let id = new_session(&mut acp, folder.path(), "claude-code").await;
     set_mode(&mut acp, &id, "ask").await.unwrap();
+    let mut watching = Acp::new(tokio::task::block_in_place(|| host.observer()));
+    configuration(&mut watching, &id, folder.path()).await;
 
     switch_agent(&mut acp, &id, "opencode").await.unwrap();
     let after = configuration(&mut acp, &id, folder.path()).await;
 
     assert_eq!(after["modes"]["currentModeId"], "agent");
     assert_eq!(mode_ids(&after["modes"]), ["agent", "approve-all"]);
+    watching
+        .until(|frame| {
+            frame["params"]["update"]["sessionUpdate"] == "current_mode_update"
+                && frame["params"]["update"]["currentModeId"] == "agent"
+        })
+        .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -363,6 +388,46 @@ async fn a_claude_code_session_offers_all_three_modes() {
             ],
         })
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_started_without_an_acp_client_gets_its_adapter_mode() {
+    // Claude Code starts in a mode that does not ask; the folder's policy is
+    // ask.
+    let host = host_with_modes(
+        "claude-code",
+        "approval_policy = \"untrusted\"",
+        "auto,default,acceptEdits,plan",
+        CODEX_MODES,
+    );
+    let folder = TempDir::new().unwrap();
+    let mut observer = tokio::task::block_in_place(|| host.observer());
+    observer
+        .request("_nori/session/subscribe", json!({"session_id": "*"}))
+        .await
+        .unwrap();
+
+    let id = success(host.run(&["host", "new", "--cwd", folder.path().to_str().unwrap()]))
+        .trim()
+        .to_owned();
+    let mut prompter = controller(&host);
+    prompter.prompt_alias(&id, "first").await;
+
+    let asked = tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            let frame = observer.recv().await.unwrap();
+            let event = &frame["params"]["event"];
+            if frame["method"] == "_nori/session/event"
+                && event["source"] == "acp"
+                && event["event"]["message_type"] == "request"
+                && event["event"]["request"]["toolCall"].is_object()
+            {
+                return;
+            }
+        }
+    })
+    .await;
+    assert!(asked.is_ok(), "the turn did not ask");
 }
 
 /// Against the real adapters, fetched by the host as usual: each built-in
