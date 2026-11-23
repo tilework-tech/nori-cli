@@ -229,6 +229,7 @@ mod session_overview;
 mod session_resume;
 mod session_setup;
 mod session_view;
+mod thought_setting;
 #[cfg(test)]
 pub(crate) use session_view::route_session_history_event;
 

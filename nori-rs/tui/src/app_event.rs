@@ -472,6 +472,9 @@ pub(crate) enum AppEvent {
     /// Set the TUI pinned plan drawer config setting.
     SetConfigPinnedPlanDrawer(bool),
 
+    /// Show agent thought text in history, or only in the working indicator.
+    SetConfigThoughtsInHistory(bool),
+
     /// Set width-resize transcript reflow.
     SetConfigResizeReflow(bool),
 

@@ -2199,6 +2199,10 @@ pub struct TuiConfigToml {
     /// Pin plan updates to a drawer in the viewport instead of history cells.
     pub pinned_plan_drawer: Option<bool>,
 
+    /// Show agent thought text as its own history block. When `false`,
+    /// thoughts appear only in the working indicator.
+    pub thoughts_in_history: Option<bool>,
+
     /// Show rotating custom messages while the agent is working.
     pub custom_working_messages: Option<bool>,
 
@@ -2452,6 +2456,10 @@ pub struct NoriConfig {
     /// Pin plan updates to a drawer in the viewport instead of history cells.
     pub pinned_plan_drawer: bool,
 
+    /// Show agent thought text as its own history block. When `false`,
+    /// thoughts appear only in the working indicator.
+    pub thoughts_in_history: bool,
+
     /// Show rotating custom messages while the agent is working.
     pub custom_working_messages: bool,
 
@@ -2588,6 +2596,7 @@ impl Default for NoriConfig {
             skillset_per_session: false,
             file_manager: None,
             pinned_plan_drawer: false,
+            thoughts_in_history: true,
             tool_output: ToolOutput::default(),
             tool_output_from_command_line: false,
             custom_working_messages: true,

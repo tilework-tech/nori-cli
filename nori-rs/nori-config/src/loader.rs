@@ -262,6 +262,7 @@ impl NoriConfig {
             tool_output,
             tool_output_from_command_line,
             pinned_plan_drawer: toml.tui.pinned_plan_drawer.unwrap_or(false),
+            thoughts_in_history: toml.tui.thoughts_in_history.unwrap_or(true),
             custom_working_messages: toml.tui.custom_working_messages.unwrap_or(true),
             custom_working_message_list: toml
                 .tui

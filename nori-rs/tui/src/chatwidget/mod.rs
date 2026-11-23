@@ -156,7 +156,7 @@ pub(crate) struct ChatWidget {
     reasoning_buffer: String,
     /// The current thought block as the working indicator reads it.
     thought_status_text: String,
-    // Accumulates full reasoning content for transcript-only recording
+    // The thought block that goes to history when other output ends it.
     full_reasoning_buffer: String,
     // Current status header shown in the status indicator.
     current_status_header: String,

@@ -167,9 +167,8 @@ The application event loop matches `SessionEvent::Acp` and
 
 - ACP notifications drive private message, thought, plan, tool, usage, mode,
   live config, capability, and available-command presentation.
-- Live thought text sets the working indicator, not history. The indicator
-  shows the current thought block's latest complete `**heading**` that starts
-  a line, as Codex (`**Title**\n\nbody`) and Gemini (`**subject**\ndescription`)
+- While a thought block streams, the working indicator shows its latest
+  complete `**heading**` that starts a line, as Codex (`**Title**\n\nbody`) and Gemini (`**subject**\ndescription`)
   write them. The thought text is kept exactly as the agent sent it. Gemini
   sends each whole thought as one chunk with no separator, so the indicator's
   own copy breaks the line before a chunk that is exactly one complete
@@ -184,8 +183,22 @@ The application event loop matches `SessionEvent::Acp` and
   stay visible, unless fewer than 20 columns would remain for the header; then
   the row clips at the terminal edge. The shimmer styles one grapheme cluster
   per span, so emoji sequences render whole. The header rule is
-  `thought_status_header` in [`chatwidget/mod.rs`](src/chatwidget/mod.rs);
-  block boundaries are in [`event_handlers.rs`](src/chatwidget/event_handlers.rs).
+  `thought_status_header` in [`chatwidget/mod.rs`](src/chatwidget/mod.rs).
+- A thought block is a run of consecutive thought chunks, whatever their
+  message ids. Answer text, a tool or plan update, a user message, any other
+  history cell, or the end of the turn ends it for history. A block that
+  ends goes to history once as a [`ThoughtCell`](src/history_cell/thought.rs): the supplied chunks joined
+  exactly as sent, rendered as dim italic Markdown behind a `│` gutter so it
+  reads as an aside rather than as the answer. Nothing is inserted between
+  chunks, so the stored text matches what the agent server sent. Replay joins
+  consecutive replayed thought deltas and per-chunk `ReasoningMessage`
+  entries the same way, so live, replay, the Ctrl+T transcript, and
+  `nori attach` show the same blocks. `[tui] thoughts_in_history = false`
+  (the "Thoughts in History" row in `/settings`) keeps thought text in the
+  working indicator only: no history block, no transcript entry, and no block
+  in `nori attach`. Changing it affects thoughts that arrive afterwards.
+  Block boundaries are in
+  [`event_handlers.rs`](src/chatwidget/event_handlers.rs).
 - User input is rendered from the harness's canonical ACP
   `user_message_chunk` notifications, not inserted by the submitting widget.
   Chunks with one message id are accumulated into one user history cell, and
@@ -637,7 +650,7 @@ assistant cell when the message finishes; user, tool, event, and assistant
 cells otherwise keep their semantic order.
 
 Assistant Markdown (live streaming, finalized-cell reflow, attach, and
-reasoning summaries) renders through
+thought blocks) renders through
 [`markdown_render`](src/markdown_render.rs), which splits the source into prose
 and GFM table segments ([`table_segments`](src/markdown_render/table_segments.rs)).
 Tables go through the shared `nori_tui_components::Markdown` renderer and prose
