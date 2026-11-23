@@ -495,6 +495,14 @@ impl ChatWidget {
         // Thought text is not streamed to history. The working indicator shows
         // the current thought block's header; any other agent output ends the
         // block, so the next thought replaces it.
+        // Gemini sends each whole thought as one `**subject**\ndescription`
+        // chunk with no separator, so a chunk opening with `**` starts a line.
+        if delta.starts_with("**")
+            && !self.reasoning_buffer.is_empty()
+            && !self.reasoning_buffer.ends_with('\n')
+        {
+            self.reasoning_buffer.push('\n');
+        }
         self.reasoning_buffer.push_str(&delta);
 
         if let Some(header) = thought_status_header(&self.reasoning_buffer) {

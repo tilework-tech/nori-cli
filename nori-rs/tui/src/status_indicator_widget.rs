@@ -228,7 +228,7 @@ impl Renderable for StatusIndicatorWidget {
         // Below this width the header is worth more than the hint, so the row
         // clips at the terminal edge instead.
         let header = if header_room >= MIN_HEADER_ROOM {
-            crate::text_formatting::truncate_text(&self.header, header_room)
+            crate::text_formatting::truncate_to_width(&self.header, header_room)
         } else {
             self.header.clone()
         };
@@ -399,6 +399,37 @@ mod tests {
             .draw(|f| w.render(f.area(), f.buffer_mut()))
             .expect("draw");
         insta::assert_snapshot!(terminal.backend());
+    }
+
+    fn render_wide_header(width: u16) -> Terminal<TestBackend> {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut w = StatusIndicatorWidget::new(
+            tx,
+            crate::tui::FrameRequester::test_dummy(),
+            true,
+            true,
+            Vec::new(),
+        );
+        w.update_header(
+            "設定ローダーを読んでから既定値を変更します🧪次にテストを更新して👩‍💻確認します🚀優先順位も比較します"
+                .to_string(),
+        );
+        let mut terminal = Terminal::new(TestBackend::new(width, 1)).expect("terminal");
+        terminal
+            .draw(|f| w.render(f.area(), f.buffer_mut()))
+            .expect("draw");
+        terminal
+    }
+
+    #[test]
+    fn renders_wide_header_shortened_at_60_columns() {
+        insta::assert_snapshot!(render_wide_header(60).backend());
+    }
+
+    #[test]
+    fn renders_wide_header_shortened_at_100_columns() {
+        insta::assert_snapshot!(render_wide_header(100).backend());
     }
 
     #[test]

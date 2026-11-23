@@ -400,35 +400,34 @@ fn truncate_for_log(s: &str, max_len: usize) -> String {
 }
 
 /// The working-indicator header for the thought block in progress: its latest
-/// complete single-line `**bold**` header when the agent writes them, otherwise its first
-/// non-empty line, which grows as the agent streams it.
+/// complete `**heading**` that starts a line, as Codex and Gemini write them.
+/// While a line-initial heading is still streaming, the indicator keeps its
+/// previous text. Without headings it is the first non-empty line with inline
+/// `**` emphasis markers removed.
 fn thought_status_header(block: &str) -> Option<String> {
-    let mut latest_bold = None;
-    let mut rest = block;
-    while let Some(open) = rest.find("**") {
-        let after_open = &rest[open + 2..];
-        let Some(close) = after_open.find("**") else {
-            break;
-        };
-        let inner = &after_open[..close];
-        if inner.contains('\n') {
-            rest = after_open;
-            continue;
+    let mut heading = None;
+    for line in block.lines() {
+        if let Some(after_open) = line.trim_start().strip_prefix("**")
+            && let Some(close) = after_open.find("**")
+        {
+            let inner = after_open[..close].trim();
+            if !inner.is_empty() {
+                heading = Some(inner.to_string());
+            }
         }
-        let inner = inner.trim();
-        if !inner.is_empty() {
-            latest_bold = Some(inner.to_string());
-        }
-        rest = &after_open[close + 2..];
     }
-    if latest_bold.is_some() || block.trim_start().starts_with("**") {
-        return latest_bold;
+    let heading_streaming = block.lines().last().is_some_and(|line| {
+        line.trim_start()
+            .strip_prefix("**")
+            .is_some_and(|after_open| !after_open.contains("**"))
+    });
+    if heading.is_some() || heading_streaming {
+        return heading;
     }
     block
         .lines()
-        .map(str::trim)
+        .map(|line| line.replace("**", "").trim().to_string())
         .find(|line| !line.is_empty())
-        .map(str::to_string)
 }
 
 #[cfg(test)]

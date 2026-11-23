@@ -29,6 +29,28 @@ pub(crate) fn truncate_text(text: &str, max_graphemes: usize) -> String {
     }
 }
 
+/// Shorten `text` to at most `max_width` terminal columns, ending in `...`
+/// when shortened. Cuts only between grapheme clusters, so wide characters,
+/// combining marks and emoji sequences are never split.
+pub(crate) fn truncate_to_width(text: &str, max_width: usize) -> String {
+    if text.width() <= max_width {
+        return text.to_string();
+    }
+    let budget = max_width.saturating_sub(3);
+    let mut used = 0;
+    let mut end = 0;
+    for (index, grapheme) in text.grapheme_indices(true) {
+        let grapheme_width = grapheme.width();
+        if used + grapheme_width > budget {
+            break;
+        }
+        used += grapheme_width;
+        end = index + grapheme.len();
+    }
+    let ellipsis = if max_width >= 3 { "..." } else { "" };
+    format!("{}{ellipsis}", &text[..end])
+}
+
 /// Truncate a path-like string to the given display width, keeping leading and trailing segments
 /// where possible and inserting a single Unicode ellipsis between them. If an individual segment
 /// cannot fit, it is front-truncated with an ellipsis.
@@ -252,6 +274,24 @@ mod tests {
         let text = "Hello, world!";
         let truncated = truncate_text(text, 8);
         assert_eq!(truncated, "Hello...");
+    }
+
+    #[test]
+    fn truncate_to_width_counts_display_columns() {
+        assert_eq!(truncate_to_width("設定ローダーを読む", 9), "設定ロ...");
+        assert_eq!(truncate_to_width("短い", 9), "短い");
+    }
+
+    #[test]
+    fn truncate_to_width_keeps_grapheme_clusters_whole() {
+        assert_eq!(
+            truncate_to_width("cafe\u{301} au lait", 7),
+            "cafe\u{301}..."
+        );
+        assert_eq!(
+            truncate_to_width("ab👩\u{200d}💻cdef", 7),
+            "ab👩\u{200d}💻..."
+        );
     }
 
     #[test]

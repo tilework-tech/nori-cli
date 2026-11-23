@@ -6,6 +6,7 @@ use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Span;
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::color::blend;
 use crate::terminal_palette::default_bg;
@@ -19,13 +20,15 @@ fn elapsed_since_start() -> Duration {
 }
 
 pub(crate) fn shimmer_spans(text: &str) -> Vec<Span<'static>> {
-    let chars: Vec<char> = text.chars().collect();
-    if chars.is_empty() {
+    // One span per grapheme cluster keeps emoji sequences and combining marks
+    // whole, so the row is as wide as the text it shows.
+    let graphemes: Vec<&str> = text.graphemes(true).collect();
+    if graphemes.is_empty() {
         return Vec::new();
     }
     // Use time-based sweep synchronized to process start.
     let padding = 10usize;
-    let period = chars.len() + padding * 2;
+    let period = graphemes.len() + padding * 2;
     let sweep_seconds = 2.0f32;
     let pos_f =
         (elapsed_since_start().as_secs_f32() % sweep_seconds) / sweep_seconds * (period as f32);
@@ -35,10 +38,10 @@ pub(crate) fn shimmer_spans(text: &str) -> Vec<Span<'static>> {
         .unwrap_or(false);
     let band_half_width = 5.0;
 
-    let mut spans: Vec<Span<'static>> = Vec::with_capacity(chars.len());
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(graphemes.len());
     let base_color = default_fg().unwrap_or((128, 128, 128));
     let highlight_color = default_bg().unwrap_or((255, 255, 255));
-    for (i, ch) in chars.iter().enumerate() {
+    for (i, grapheme) in graphemes.iter().enumerate() {
         let i_pos = i as isize + padding as isize;
         let pos = pos as isize;
         let dist = (i_pos - pos).abs() as f32;
@@ -63,7 +66,7 @@ pub(crate) fn shimmer_spans(text: &str) -> Vec<Span<'static>> {
         } else {
             color_for_level(t)
         };
-        spans.push(Span::styled(ch.to_string(), style));
+        spans.push(Span::styled(grapheme.to_string(), style));
     }
     spans
 }

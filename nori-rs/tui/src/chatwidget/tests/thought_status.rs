@@ -52,21 +52,28 @@ fn send(chat: &mut ChatWidget, events: Vec<nori_protocol::SessionEvent>) {
     }
 }
 
-/// The working indicator's first row, which carries the status header.
+/// The working indicator's row, which carries the status header.
 fn working_indicator(chat: &mut ChatWidget) -> String {
+    working_indicator_at(chat, 100)
+}
+
+fn working_indicator_at(chat: &mut ChatWidget, width: u16) -> String {
     use crate::render::renderable::Renderable;
 
-    let width = 100;
     let area = ratatui::layout::Rect::new(0, 0, width, chat.bottom_pane.desired_height(width));
     let mut buffer = ratatui::buffer::Buffer::empty(area);
     chat.bottom_pane.render(area, &mut buffer);
     (0..area.height)
         .map(|y| {
-            (0..area.width)
-                .map(|x| buffer[(x, y)].symbol().chars().next().unwrap_or(' '))
-                .collect::<String>()
-                .trim()
-                .to_string()
+            let mut row = String::new();
+            let mut x = 0;
+            while x < area.width {
+                let symbol = buffer[(x, y)].symbol();
+                row.push_str(symbol);
+                x += u16::try_from(unicode_width::UnicodeWidthStr::width(symbol).max(1))
+                    .unwrap_or(1);
+            }
+            row.trim().to_string()
         })
         .find(|row| row.contains("esc to interrupt"))
         .expect("working indicator row")
@@ -212,6 +219,122 @@ fn a_stray_double_asterisk_in_prose_does_not_hide_the_real_header() {
         )],
     );
 
+    assert_eq!(
+        header_of(&working_indicator(&mut chat)),
+        "Planning the change"
+    );
+}
+
+#[test]
+fn inline_emphasis_in_a_plain_sentence_keeps_the_whole_sentence() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    start_prompt(&mut chat);
+
+    send(
+        &mut chat,
+        vec![thought(
+            "I should check **loader.toml** before changing the default.",
+        )],
+    );
+
+    assert_eq!(
+        header_of(&working_indicator(&mut chat)),
+        "I should check loader.toml before changing the default."
+    );
+}
+
+#[test]
+fn inline_emphasis_after_a_heading_does_not_replace_the_heading() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    start_prompt(&mut chat);
+
+    send(
+        &mut chat,
+        vec![thought(
+            "**Reading the config loader**\n\nThe **loader** merges three sources.",
+        )],
+    );
+
+    assert_eq!(
+        header_of(&working_indicator(&mut chat)),
+        "Reading the config loader"
+    );
+}
+
+#[test]
+fn a_heading_followed_by_text_on_the_same_line_is_still_a_heading() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    start_prompt(&mut chat);
+
+    send(
+        &mut chat,
+        vec![thought(
+            "**Analyzing the loader** I am reading how it merges sources.",
+        )],
+    );
+
+    assert_eq!(
+        header_of(&working_indicator(&mut chat)),
+        "Analyzing the loader"
+    );
+}
+
+#[test]
+fn each_whole_thought_chunk_that_opens_with_a_heading_replaces_the_last() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    start_prompt(&mut chat);
+
+    send(
+        &mut chat,
+        vec![
+            thought("**Inspecting the loader**\nI am reading the loader."),
+            thought("**Planning the change**\nFlip the default in one place."),
+        ],
+    );
+
+    assert_eq!(
+        header_of(&working_indicator(&mut chat)),
+        "Planning the change"
+    );
+}
+
+#[test]
+fn a_wide_character_thought_keeps_the_timer_and_interrupt_hint_visible() {
+    let wide = "設定ローダーを読んでから既定値を変更します🧪次にテストを更新して👩‍💻確認します🚀優先順位も比較します";
+    for width in [60, 100] {
+        let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+        start_prompt(&mut chat);
+        send(&mut chat, vec![thought(wide)]);
+
+        let row = working_indicator_at(&mut chat, width);
+        assert!(
+            row.contains("s • esc to interrupt)"),
+            "width {width}: {row}"
+        );
+        let header = header_of(&row);
+        assert!(header.ends_with("..."), "width {width}: {row}");
+        assert!(
+            wide.starts_with(header.trim_end_matches("...")),
+            "width {width}: {row}"
+        );
+    }
+}
+
+#[test]
+fn a_heading_streamed_in_pieces_inside_a_block_replaces_the_line_once_closed() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    start_prompt(&mut chat);
+
+    send(
+        &mut chat,
+        vec![thought("Checking the loader."), thought("**Plann")],
+    );
+    assert_eq!(
+        header_of(&working_indicator(&mut chat)),
+        "Checking the loader."
+    );
+
+    send(&mut chat, vec![thought("ing the change**\nOne place.")]);
     assert_eq!(
         header_of(&working_indicator(&mut chat)),
         "Planning the change"
