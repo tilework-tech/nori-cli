@@ -2209,6 +2209,9 @@ fn mock_agent() -> impl ConnectTo<Client> {
                             responder: Responder<acp::SetSessionModeResponse>,
                             _cx: ConnectionTo<Client>| {
                     let mode = arguments.mode_id.to_string();
+                    if modes::starting_mode().is_some() && !modes::is_advertised(&mode) {
+                        return responder.respond_with_error(acp::Error::invalid_params());
+                    }
                     if modes::is_advertised(&mode) {
                         state
                             .session_configs

@@ -717,11 +717,23 @@ still stop it asking about later calls of that kind; clients wanting `ask` to
 hold should offer the allow-once option.
 
 A session's mode starts from the `approval_policy` its folder's configuration
-sets (`on-failure` reads as `agent`). The adapter's mode is set on ACP
-`session/new`, `session/load` and `session/resume` (including the restart
-they may trigger) and on an agent change, so a session started or resumed
-through `_nori/session/new` or `_nori/session/resume` gets its adapter mode
-when an ACP client first attaches.
+sets (`on-failure` reads as `agent`). The adapter's mode is set whenever its
+process starts: on ACP `session/new`, `session/load` and `session/resume`
+(including the restart they may trigger), on an agent change, and once the
+process is up after `_nori/session/new` or `_nori/session/resume`. Mode
+changes are serialized, so the adapter's mode and the reported mode change
+together. When a session falls back from `ask` to `agent`, attached clients
+receive `current_mode_update` and `config_option_update`.
+
+`agent` sets the adapter's mode even when the user's own adapter settings
+choose another default (for example Claude Code's `defaultMode` or Codex's
+`sandbox_mode`). Because `nori exec` runs in `agent`, Claude Code there
+accepts edits and Codex works in the workspace without asking.
+
+Known gap: an adapter can leave its `ask` mode by itself. Claude Code's
+plan-mode exit offers options that switch it to `acceptEdits` or further.
+The host does not forward the adapter's own mode changes, and it puts the
+adapter back only the next time the session starts or a client loads it.
 
 | Method | Who may call | Behavior |
 | --- | --- | --- |

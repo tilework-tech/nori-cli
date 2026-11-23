@@ -12,7 +12,9 @@
 use nori_harness::AgentKind;
 use nori_harness::ConversationId;
 use nori_harness::permission_mode::PermissionMode;
+use nori_harness::session_manager::SessionManager;
 use nori_protocol::acp::v1 as acp;
+use serde_json::json;
 
 use super::AcpError;
 use crate::host::service::HostService;
@@ -51,7 +53,9 @@ fn adapter_modes(agent: &str) -> Option<AdapterModes> {
 }
 
 /// The adapter's mode option: its ID, current value and offered values.
-fn mode_option(options: &[acp::SessionConfigOption]) -> Option<(String, String, Vec<String>)> {
+fn adapter_mode_select(
+    options: &[acp::SessionConfigOption],
+) -> Option<(String, String, Vec<String>)> {
     options.iter().find_map(|option| {
         let is_mode = option.id.0.as_ref() == "mode"
             || option.category == Some(acp::SessionConfigOptionCategory::Mode);
@@ -84,9 +88,9 @@ fn mode_option(options: &[acp::SessionConfigOption]) -> Option<(String, String, 
 /// Whether `agent`'s adapter, with these options, has a mode that asks
 /// before every edit and command.
 pub(super) fn offers_ask(agent: &str, options: &[acp::SessionConfigOption]) -> bool {
-    match (adapter_modes(agent), mode_option(options)) {
+    match (adapter_modes(agent), adapter_mode_select(options)) {
         (Some(modes), Some((_, _, values))) => values.iter().any(|value| value == modes.ask),
-        _ => false,
+        (None, _) | (_, None) => false,
     }
 }
 
@@ -98,13 +102,30 @@ pub(super) fn change(
     options: &[acp::SessionConfigOption],
 ) -> Option<(String, String)> {
     let modes = adapter_modes(agent)?;
-    let (option, current, values) = mode_option(options)?;
+    let (option, current, values) = adapter_mode_select(options)?;
     let wanted = match mode {
         PermissionMode::Ask => modes.ask,
         PermissionMode::Agent | PermissionMode::ApproveAll => modes.agent,
     };
     (current != wanted && values.iter().any(|value| value == wanted))
         .then(|| (option, wanted.to_owned()))
+}
+
+/// Put the adapter of a session that no ACP client started or restarted
+/// in the mode behind its permission mode, once its process is up.
+pub(crate) async fn apply_when_started(manager: SessionManager, id: ConversationId) {
+    let (Some(record), Some(handle)) = (manager.get(&id), manager.handle(&id)) else {
+        return;
+    };
+    let Some(adapter) = handle.get_session_config().await else {
+        return;
+    };
+    let mode = PermissionMode::from_approval_policy(record.approval_policy);
+    if let Some((option, value)) = change(&record.agent, mode, &adapter)
+        && let Err(error) = handle.set_session_config_option(option, value).await
+    {
+        tracing::warn!(%error, agent = record.agent, "could not set the adapter's mode");
+    }
 }
 
 impl HostService {
@@ -120,8 +141,10 @@ impl HostService {
 
     /// Put a session's adapter in the mode behind its permission mode, once
     /// it has started or restarted. A session in `ask` whose adapter cannot
-    /// ask before every edit and command continues in `agent`.
+    /// ask before every edit and command continues in `agent`, and attached
+    /// clients are told.
     pub(super) async fn settle_adapter_mode(&self, id: &ConversationId) -> Result<(), AcpError> {
+        let _changing = self.mode_changes.lock().await;
         let record = self
             .manager
             .get(id)
@@ -129,8 +152,11 @@ impl HostService {
         let Some(handle) = self.manager.handle(id) else {
             return Ok(());
         };
+        // A session whose process is gone is settled when it restarts.
+        let Some(adapter) = handle.get_session_config().await else {
+            return Ok(());
+        };
         let mode = PermissionMode::from_approval_policy(record.approval_policy);
-        let adapter = handle.get_session_config().await.unwrap_or_default();
         let entered = if mode == PermissionMode::Ask && !offers_ask(&record.agent, &adapter) {
             Err(anyhow::anyhow!(
                 "the adapter has no mode that asks every time"
@@ -143,51 +169,83 @@ impl HostService {
         } else {
             Ok(())
         };
-        if let Err(error) = entered {
-            tracing::warn!(%error, agent = record.agent, "the session continues in agent mode");
-            let agent = PermissionMode::Agent;
-            self.manager
-                .set_approval_policy(id, agent.approval_policy())
-                .await?;
-            self.settings
-                .update(id, |settings| settings.mode = Some(agent.id().to_owned()));
-            if let Some((option, value)) = change(&record.agent, agent, &adapter)
-                && let Err(error) = handle.set_session_config_option(option, value).await
-            {
-                tracing::warn!(%error, "could not set the adapter's mode");
+        match entered {
+            Ok(()) => Ok(()),
+            Err(error) if mode == PermissionMode::Ask => {
+                tracing::warn!(%error, agent = record.agent, "the session continues in agent mode");
+                let agent = PermissionMode::Agent;
+                if let Some((option, value)) = change(&record.agent, agent, &adapter)
+                    && let Err(error) = handle.set_session_config_option(option, value).await
+                {
+                    tracing::warn!(%error, "could not set the adapter's mode");
+                }
+                self.record_mode(id, agent).await
+            }
+            Err(error) => {
+                tracing::warn!(%error, agent = record.agent, "could not set the adapter's mode");
+                Ok(())
             }
         }
-        Ok(())
     }
 
-    /// Switch a running session's adapter to the mode behind `mode`, as a
-    /// client asked. `ask` fails when the adapter cannot ask every time.
-    pub(super) async fn enter_adapter_mode(
+    /// Switch the session to `mode` as a client asked: the adapter's mode
+    /// first, then the host's. `ask` fails when the adapter cannot ask
+    /// every time, and a refused adapter mode changes nothing.
+    pub(super) async fn change_mode(
         &self,
         id: &ConversationId,
         mode: PermissionMode,
     ) -> Result<(), AcpError> {
+        let _changing = self.mode_changes.lock().await;
         let record = self
             .manager
             .get(id)
             .ok_or_else(|| AcpError::not_found("unknown session"))?;
-        let adapter = self.adapter_options(id).await;
-        if mode == PermissionMode::Ask && !offers_ask(&record.agent, &adapter) {
-            return Err(AcpError::invalid_params(format!(
-                "{} has no mode that asks before every edit and command",
-                record.agent
-            )));
-        }
-        if let Some((option, value)) = change(&record.agent, mode, &adapter) {
-            let handle = self
-                .manager
-                .handle(id)
-                .ok_or_else(|| AcpError::invalid_params("the session is not running"))?;
-            handle
-                .set_session_config_option(option, value)
+        if let Some(handle) = self.manager.handle(id) {
+            let adapter = handle
+                .get_session_config()
                 .await
-                .map_err(|error| AcpError::invalid_params(format!("{error:#}")))?;
+                .ok_or_else(|| AcpError::invalid_params("the session is not running"))?;
+            if mode == PermissionMode::Ask && !offers_ask(&record.agent, &adapter) {
+                return Err(AcpError::invalid_params(format!(
+                    "{} has no mode that asks before every edit and command",
+                    record.agent
+                )));
+            }
+            if let Some((option, value)) = change(&record.agent, mode, &adapter) {
+                handle
+                    .set_session_config_option(option, value)
+                    .await
+                    .map_err(|error| AcpError::invalid_params(format!("{error:#}")))?;
+            }
         }
+        self.record_mode(id, mode).await
+    }
+
+    /// Make `mode` the session's permission mode, remember it, and send
+    /// attached clients the new mode and options.
+    async fn record_mode(&self, id: &ConversationId, mode: PermissionMode) -> Result<(), AcpError> {
+        self.manager
+            .set_approval_policy(id, mode.approval_policy())
+            .await?;
+        self.settings
+            .update(id, |settings| settings.mode = Some(mode.id().to_owned()));
+        let session = id.to_string();
+        self.acp.broadcast(
+            id,
+            super::config::update(
+                &session,
+                json!({"sessionUpdate":"current_mode_update","currentModeId":mode.id()}),
+            ),
+        );
+        let (options, _) = self.session_configuration(id).await?;
+        self.acp.broadcast(
+            id,
+            super::config::update(
+                &session,
+                json!({"sessionUpdate":"config_option_update","configOptions":options}),
+            ),
+        );
         Ok(())
     }
 }
