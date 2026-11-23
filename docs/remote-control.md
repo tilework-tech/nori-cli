@@ -608,23 +608,52 @@ rejected.
 | --- | --- | --- |
 | `agent` | `_nori_agent` | Every agent the host can start (built-in and `[[agents]]`). Each value's `description` is `Installed` when its adapter command resolves on the host, else says the adapter is not installed and how to install it. |
 | the adapter's options | as the adapter reports them | Passed through, including its `model` select. Adapter options with ID `agent` or `mode`, or with category `mode`, are left out: the host owns those. |
-| `mode` | `mode` | `ask`, `agent`, `approve-all` |
+| `mode` | `mode` | `ask`, `agent`, `approve-all`; `ask` only where the adapter can ask every time (below) |
 
 Permission modes are also the ACP session modes (`currentModeId`,
 `availableModes`) and stay in sync with the `mode` option:
 
-| Mode | Label | `approval_policy` | Behavior today |
+| Mode | Label | `approval_policy` | Behavior |
 | --- | --- | --- | --- |
-| `ask` | Ask | `untrusted` | As `agent`: Nori only sees the permission requests an adapter sends. Mapping onto the adapter's strictest mode is planned (contract Phase C). |
-| `agent` | Agent | `on-request` | Permission requests go to clients. |
-| `approve-all` | Approve all | `never` | Nori answers every permission request with its first allow option. |
+| `ask` | Ask | `untrusted` | The adapter is put in its strictest mode, so it asks before every edit and every command that can change anything. Permission requests go to clients. |
+| `agent` | Agent | `on-request` | The adapter is put in a mode where it decides what to ask about. Permission requests go to clients. |
+| `approve-all` | Approve all | `never` | The adapter is in the same mode as under `agent`, and Nori answers every permission request with its first allow option. |
+
+Nori can only stop a tool call that the adapter asks about: ACP gives a
+client no way to hold a tool call the adapter did not ask about. So the host
+sets the adapter's own `mode` config option for each mode:
+
+| Agent | `ask` | `agent` and `approve-all` | Not asked about under `ask` |
+| --- | --- | --- | --- |
+| Claude Code (`claude-agent-acp`) | `default` | `acceptEdits` | Reads, searches, and Bash commands Claude Code classes as read-only |
+| Codex (`codex-acp`) | `read-only` | `workspace-write` | Commands that run in the read-only sandbox |
+| Antigravity, Grok Build, OpenCode, Cursor Agent, Hermes Agent, Pi, and `[[agents]]` | not offered | the adapter's own mode | — |
+
+The adapters without an `ask` mapping have no mode that asks before every edit
+and command. Their modes change behavior (OpenCode, Cursor, Grok Build), their
+prompts depend on settings ACP cannot reach (OpenCode, Grok Build, Cursor),
+they ask only about commands they judge dangerous (Hermes), or they have no
+permission prompts (Pi). A custom agent's slug selects a built-in's mapping
+when it overrides that built-in.
+
+`ask` is offered only when the session's adapter has a mapping and lists its
+`ask` mode in its options (or the session is already in `ask`). Picking `ask` elsewhere fails with `-32602` and changes nothing. A
+session that would be in `ask` (from `[host] default_mode`, a resume, or an
+agent change) but whose adapter cannot ask continues in `agent`, and that is
+what the host saves and reports. An adapter's "always allow" answer can
+still stop it asking about later calls of that kind; clients wanting `ask` to
+hold should offer the allow-once option.
 
 A session's mode starts from the `approval_policy` its folder's configuration
-sets (`on-failure` reads as `agent`).
+sets (`on-failure` reads as `agent`). The adapter's mode is set on ACP
+`session/new`, `session/load` and `session/resume` (including the restart
+they may trigger) and on an agent change, so a session started or resumed
+through `_nori/session/new` or `_nori/session/resume` gets its adapter mode
+when an ACP client first attaches.
 
 | Method | Who may call | Behavior |
 | --- | --- | --- |
-| `session/set_mode` | Controller | Sets the mode. Attached connections receive `current_mode_update` and a `config_option_update` with the complete list. An unknown mode fails with `-32602` and changes nothing. |
+| `session/set_mode` | Controller | Sets the mode, first switching the adapter's own mode (an adapter that refuses fails with `-32602` and changes nothing). Attached connections receive `current_mode_update` and a `config_option_update` with the complete list. An unknown mode fails with `-32602` and changes nothing. |
 | `session/set_config_option` | Controller | `mode` acts as `session/set_mode`. `agent` replaces the adapter process under the same session ID while the session has had no prompt; afterwards, or for an unknown agent, it fails with `-32602`. Any other ID goes to the adapter; a refused value fails with `-32602`. Replies `{configOptions}` with the complete list, and attached connections receive the same list as `config_option_update`. |
 
 An adapter's own `config_option_update` reaches clients as the complete list,
@@ -646,7 +675,6 @@ adapter options.
   incremental reconnect cursors on ACP updates, import/release, command-ID
   idempotency and generation fencing. Managed mode keeps its current wire.
 - `authenticate` / `logout` forwarding and aggregated `authMethods`.
-- `ask` behaving differently from `agent` (adapter strictest modes).
 - Follow-up (`steer`/`queue`) through `session/prompt`.
 - Analytics for the headless host (`nori exec --acp` no longer sends the exec
   `session_mode = acp` event).

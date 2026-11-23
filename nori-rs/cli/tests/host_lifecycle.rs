@@ -497,6 +497,9 @@ mod transcripts;
 #[path = "host_lifecycle/modes.rs"]
 mod modes;
 
+#[path = "host_lifecycle/ask_mode.rs"]
+mod ask_mode;
+
 #[path = "host_lifecycle/acp_v1.rs"]
 mod acp_v1;
 
