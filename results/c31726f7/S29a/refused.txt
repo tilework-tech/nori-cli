@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-m2/S29a/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+■ Failed to close the session: Failed to close ACP session: close declined by claude-code
+
+                                                                                                         [ acceptEdits ]
+› @ for file mentions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

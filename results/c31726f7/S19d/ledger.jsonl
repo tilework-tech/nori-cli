@@ -1,0 +1,10 @@
+{"t": 1795523696.1723607, "adapter": "claude-code", "pid": 81708, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-m0/S19d/roots/alpha/app", "argv": []}
+{"t": 1795523696.172455, "adapter": "claude-code", "pid": 81708, "kind": "request", "method": "initialize"}
+{"t": 1795523696.17358, "adapter": "claude-code", "pid": 81708, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-m0/S19d/roots/alpha/app"}
+{"t": 1795523696.1744475, "adapter": "claude-code", "pid": 81708, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-m0/S19d/roots/alpha/app"}
+{"t": 1795523696.1783915, "adapter": "claude-code", "pid": 81708, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795523697.934317, "adapter": "claude-code", "pid": 81708, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "bulky rows"}
+{"t": 1795523697.9351625, "adapter": "claude-code", "pid": 81708, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795523699.0127995, "adapter": "claude-code", "pid": 81708, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "patch the buoys"}
+{"t": 1795523699.013008, "adapter": "claude-code", "pid": 81708, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795523699.9529345, "adapter": "claude-code", "pid": 81708, "kind": "stdin_eof"}

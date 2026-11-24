@@ -1,0 +1,13 @@
+{"t": 1795523886.833638, "adapter": "claude-code", "pid": 89628, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-m0/S34i/roots/alpha/app", "argv": []}
+{"t": 1795523886.833704, "adapter": "claude-code", "pid": 89628, "kind": "request", "method": "initialize"}
+{"t": 1795523886.8344278, "adapter": "claude-code", "pid": 89628, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-m0/S34i/roots/alpha/app"}
+{"t": 1795523886.835797, "adapter": "claude-code", "pid": 89628, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-m0/S34i/roots/alpha/app"}
+{"t": 1795523886.8359244, "adapter": "claude-code", "pid": 89628, "kind": "new_refused", "cwd": "/tmp/nori-host-tui-acceptance-m0/S34i/roots/alpha/app"}
+{"t": 1795523891.1802585, "adapter": "claude-code", "pid": 89772, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-m0/S34i/roots/alpha/app", "argv": []}
+{"t": 1795523891.180318, "adapter": "claude-code", "pid": 89772, "kind": "request", "method": "initialize"}
+{"t": 1795523891.181209, "adapter": "claude-code", "pid": 89772, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-m0/S34i/roots/alpha/app"}
+{"t": 1795523891.1826735, "adapter": "claude-code", "pid": 89772, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-m0/S34i/roots/alpha/app"}
+{"t": 1795523891.1855307, "adapter": "claude-code", "pid": 89772, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795523896.546669, "adapter": "claude-code", "pid": 89772, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nstartup lantern word"}
+{"t": 1795523896.5468755, "adapter": "claude-code", "pid": 89772, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795523899.3247023, "adapter": "claude-code", "pid": 89772, "kind": "stdin_eof"}

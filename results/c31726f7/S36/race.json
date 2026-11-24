@@ -1,0 +1,182 @@
+[
+  {
+    "rep": 0,
+    "offset": -0.3,
+    "enter_minus_reply": 0.1257,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": false,
+    "echoed": false,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": -0.05,
+    "enter_minus_reply": 0.1274,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.0,
+    "enter_minus_reply": 0.126,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.01,
+    "enter_minus_reply": 0.1314,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.02,
+    "enter_minus_reply": 0.1418,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.04,
+    "enter_minus_reply": 0.1615,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.08,
+    "enter_minus_reply": 0.2017,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.15,
+    "enter_minus_reply": 0.272,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.3,
+    "enter_minus_reply": 0.4221,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": -0.3,
+    "enter_minus_reply": 0.1273,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": false,
+    "echoed": false,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": -0.05,
+    "enter_minus_reply": 0.1267,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.0,
+    "enter_minus_reply": 0.1263,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.01,
+    "enter_minus_reply": 0.1315,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.02,
+    "enter_minus_reply": 0.1419,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.04,
+    "enter_minus_reply": 0.1614,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.08,
+    "enter_minus_reply": 0.2019,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.15,
+    "enter_minus_reply": 0.2722,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.3,
+    "enter_minus_reply": 0.4222,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  }
+]

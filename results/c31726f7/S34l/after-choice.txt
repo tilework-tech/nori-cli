@@ -1,0 +1,36 @@
+shell$ PATH=/tmp/nori-host-tui-acceptance-m0/S34l/skillsets-bin:$PATH RUST_LOG=nori_host_runtime=debug,nori_harness=debu
+g nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-m0/S34l/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+                                                                                                         [ acceptEdits ]
+› ? for shortcuts
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

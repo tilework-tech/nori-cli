@@ -1,0 +1,10 @@
+{"t": 1795523878.3386707, "adapter": "claude-code", "pid": 89309, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-m2/S34e/roots/alpha/app", "argv": []}
+{"t": 1795523878.3387296, "adapter": "claude-code", "pid": 89309, "kind": "request", "method": "initialize"}
+{"t": 1795523878.3387918, "adapter": "claude-code", "pid": 89309, "kind": "init_delay_start", "seconds": 6.0}
+{"t": 1795523884.338883, "adapter": "claude-code", "pid": 89309, "kind": "init_delay_end"}
+{"t": 1795523884.3400726, "adapter": "claude-code", "pid": 89309, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-m2/S34e/roots/alpha/app"}
+{"t": 1795523884.3417423, "adapter": "claude-code", "pid": 89309, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-m2/S34e/roots/alpha/app"}
+{"t": 1795523884.3442986, "adapter": "claude-code", "pid": 89309, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795523884.3481028, "adapter": "claude-code", "pid": 89309, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nsummarize the piped lantern\n\norchard context line"}
+{"t": 1795523884.3482785, "adapter": "claude-code", "pid": 89309, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795523888.561524, "adapter": "claude-code", "pid": 89309, "kind": "stdin_eof"}

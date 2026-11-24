@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-m0/S05/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+                                                                                                         [ acceptEdits ]
+/
+
+  /agent            switch between available ACP agents (current: Lantern Claude) (○ rec off)
+  /model            choose what model and reasoning effort to use (current: Lantern Claude)
+  /config           configure ACP agent settings (if exposed by the agent)
+  /approvals        choose what Nori can do without approval (current: Agent)
+  /settings         configure Nori CLI settings (theme, hotkeys, layout, …)
+  /vim              configure Vim mode and Enter key behavior
+  /goal             The active agent advertises neither HTTP MCP support nor the goal extension, so /goal is
+                    unavailable.
+  /new              start a new chat during a conversation
+  /sessions         list sessions and move between them
+  /delegate         delegate a task: /delegate <agent> <task>
+
+
+
+
+
+
+
+
+
+
+
+
+
+

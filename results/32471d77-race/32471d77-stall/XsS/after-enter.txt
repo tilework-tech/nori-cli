@@ -1,0 +1,36 @@
+shell$ exec env RUST_LOG=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-p/XsS/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› stall lantern word
+
+
+• claude-code heard: stall lantern word
+
+                                                                                                         [ acceptEdits ]
+› / for slash command menu
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

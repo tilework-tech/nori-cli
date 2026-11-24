@@ -1,0 +1,36 @@
+ Nori host  WATCHING · read-only · alt+t take control
+ claude-code · new session · app · ready
+
+ Ready. Send a prompt to begin.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/ approvals
+
+  /approvals  not available in nori attach yet

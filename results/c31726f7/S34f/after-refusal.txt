@@ -1,0 +1,36 @@
+shell$ RUST_LOG=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-m0/S34f/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+■ Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is
+available from claude-code
+
+
+› startup lantern word
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

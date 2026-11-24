@@ -14,7 +14,9 @@ Environment:
                    `load-refuse` does the same for session/load and session/resume,
                    `new-refuse` for session/new; `init-delay` holds seconds the next
                    server to start waits before answering initialize; `new-delay` and
-                   `close-delay` do the same for the next session/new and session/close
+                   `close-delay` do the same for the next session/new and session/close;
+                   while `agent-commands` exists, every new session advertises the
+                   agent commands /review and /lanternize
 
 Prompt words (first word of the prompt text):
   hold     stream a tick every 200 ms until cancelled (records ticks)
@@ -254,6 +256,11 @@ def main():
             next_session[0] += 1
             sessions[sid] = {"cwd": params.get("cwd"), "mode": MODES[0] if MODES else None}
             send(id=rid, result={"sessionId": sid, **mode_state(sid)})
+            if CONTROL and os.path.exists(os.path.join(CONTROL, "agent-commands")):
+                update(sid, {"sessionUpdate": "available_commands_update", "availableCommands": [
+                    {"name": "review", "description": "Review the synthetic change",
+                     "input": {"hint": "what to review"}},
+                    {"name": "lanternize", "description": "Light every synthetic lantern"}]})
         elif method == "session/list":
             send(id=rid, result={"sessions": saved_sessions()})
         elif method in ("session/load", "session/resume") and take_switch("load-refuse"):

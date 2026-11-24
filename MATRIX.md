@@ -266,3 +266,14 @@ a `/new` session must follow its head fork and show a delegated child's result.
 Native macOS: the author's pinned run 45373745120 omits `host_startup` and the #747-#749 host suites. Verifier
 run 45379653626 (`verify/pr-750-32471d77-native-startup`, checkout pinned to `32471d77`) adds `host_startup` 8/8,
 `host_new_session` 2/2, `host_session_picker` 5/5, `host_agent_switch` 4/4 and `delegation` 9/9; all green.
+
+### #750 reopened and #751 shared commands (2026-11-24)
+
+| PR | Head | Run | Result |
+|---|---|---|---|
+| #750 | `32471d77` | native trace repeat (45394564103, `verify/pr-750-32471d77-native-trace`) | `startup_activates…` failed 1/8: the composer kept `whoami` and Enter became a burst newline; no `session/prompt` left the terminal (`results/32471d77-race/NOTE.md`) |
+| #750 | `32471d77` | Linux: 40 repo runs (incl. 32 busy workers), S36 18 trials, S36b 9 trials, SIGSTOP stall 4 trials | all delivered once; not reproducible on Linux |
+| #750 | `32471d77` | S35a-h | 32/57 (attach has no `/` menu yet) |
+| #751 | `c31726f7` | S35a-h + S36 | 56/59; Escape on an open `/` menu neither closes it nor cancels (plain on both heads, attach new in #751); bare `/review` opens `/resume-viewonly` in plain (both heads) |
+| #751 | `c31726f7` | full matrix | 400/430, no regressions vs `32471d77` (394/430); S05 slash discovery and S10 not-sent now pass |
+| #751 | `c31726f7` | native trace repeat (45394569051) | startup suites 8/8; its full native run 45384170358 failed the same startup test twice |

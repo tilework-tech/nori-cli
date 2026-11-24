@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · first light · app · ready
+
+ /compact
+
+ claude-code heard: /compact
+
+ › You
+ /agent
+
+ claude-code heard: /agent
+
+ › You
+ /review the parser
+
+ claude-code heard: /review the parser
+
+ › You
+ /review
+
+ claude-code heard: /review
+
+ › You
+ /lanternize
+
+ claude-code heard: /lanternize
+
+ › You
+ quit
+
+ claude-code heard: quit
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

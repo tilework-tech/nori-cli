@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-m2/S31b/roots/alpha/app · Agent approvals
+  Agent        Codex · agent
+
+• Started new conversation with agent: Lantern Codex
+
+
+› an earlier synthetic question
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• an earlier synthetic answer
+
+  2 ready
+
+                                                                                                     [ workspace-write ]
+› @ for file mentions
+

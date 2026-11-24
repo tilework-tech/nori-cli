@@ -1,0 +1,36 @@
+ Nori host  WATCHING · read-only · alt+t take control
+ claude-code · first light · app · ready
+
+ › You
+ first light
+
+ claude-code heard: first light
+
+ Control moved to another terminal. You are now watching; alt+t takes control.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Control moved to another terminal. You are now watching; alt+t takes control.
+
+/
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

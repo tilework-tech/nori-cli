@@ -1,0 +1,356 @@
+[
+  {
+    "scenario": "S35a",
+    "check": "plain.menu_lists_builtins",
+    "passed": true,
+    "detail": "missing []"
+  },
+  {
+    "scenario": "S35a",
+    "check": "plain.no_attach_reasons_in_plain_menu",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35a",
+    "check": "plain.agent_command_listed",
+    "passed": true,
+    "detail": "    Review the synthetic change"
+  },
+  {
+    "scenario": "S35a",
+    "check": "plain.tab_completes_builtin",
+    "passed": true,
+    "detail": "/approvals"
+  },
+  {
+    "scenario": "S35a",
+    "check": "plain.builtin_dispatched_locally",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35a",
+    "check": "plain.agent_command_review_args_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['<context>\\nSource: this message is from Nori CLI.\\n\\nYou are operating over ACP.\\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\\n</context>\\n\\nfirst light', '/review the parser']}"
+  },
+  {
+    "scenario": "S35a",
+    "check": "plain.agent_command_review_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['<context>\\nSource: this message is from Nori CLI.\\n\\nYou are operating over ACP.\\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\\n</context>\\n\\nfirst light', '/review the parser', '/review']}"
+  },
+  {
+    "scenario": "S35a",
+    "check": "plain.agent_command_lanternize_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['<context>\\nSource: this message is from Nori CLI.\\n\\nYou are operating over ACP.\\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\\n</context>\\n\\nfirst light', '/review the parser', '/review', '/lanternize']}"
+  },
+  {
+    "scenario": "S35a",
+    "check": "plain.bare_review_not_captured_by_loose_match",
+    "passed": false,
+    "detail": "{'requests': [], 'last': '  \u2191\u2193/j/k move  / search  enter select  esc close'}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.host_route_reason",
+    "passed": true,
+    "detail": "/compact  not available on this host yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.attach_screen_reason",
+    "passed": true,
+    "detail": "/agent  not available in nori attach yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.host_commands_enabled",
+    "passed": true,
+    "detail": "['/new  start a new chat during a conversation', '/sessions  list sessions and move between them']"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.quit_enabled",
+    "passed": true,
+    "detail": "/quit  exit Nori"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.tab_completes_builtin",
+    "passed": true,
+    "detail": "/sessions"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_refused_with_reason",
+    "passed": true,
+    "detail": "  /compact  not available on this host yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_refusal_count",
+    "passed": true,
+    "detail": "shown 2 time(s)"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_draft_kept",
+    "passed": true,
+    "detail": "/compact"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_refused_with_reason",
+    "passed": true,
+    "detail": "  /agent  not available in nori attach yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_refusal_count",
+    "passed": true,
+    "detail": "shown 2 time(s)"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_draft_kept",
+    "passed": true,
+    "detail": "/agent"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_review_args_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/review the parser']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_review_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/review the parser', '/review']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_lanternize_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/review the parser', '/review', '/lanternize']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.leading_space_quit_is_a_prompt",
+    "passed": true,
+    "detail": "['/review', '/lanternize', 'quit']"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.bare_quit_detaches",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.detach_keeps_session",
+    "passed": true,
+    "detail": "['36d53cb6-b3a9-411f-ae49-942eaae52e0e']"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.control_commands_greyed",
+    "passed": true,
+    "detail": "{'/new': '/new  watching \u00b7 Alt+T to take control', '/close': '/close  watching \u00b7 Alt+T to take control', '/resume': '/resume           watching \u00b7 Alt+T to take control', '/delegate': '/delegate  watching \u00b7 Alt+T to take control', '/sessions': '/sessions  list sessions and move between them'}"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.sessions_enabled",
+    "passed": true,
+    "detail": "/sessions  list sessions and move between them"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_refused_with_reason",
+    "passed": true,
+    "detail": "  /new  watching \u00b7 Alt+T to take control"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_draft_kept",
+    "passed": true,
+    "detail": "/new"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.controller_menu_enabled_before",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.open_menu_regreys",
+    "passed": true,
+    "detail": "/new              watching \u00b7 Alt+T to take control"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.new_controller_menu_enabled",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.demoted_new_refused",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.promoted_new_runs_once",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S35d",
+    "check": "esc.menu_open_during_turn",
+    "passed": true,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35d",
+    "check": "esc.first_escape_closes_menu",
+    "passed": false,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35d",
+    "check": "esc.first_escape_does_not_cancel",
+    "passed": true,
+    "detail": "{'cancels': 0, 'ticks': [8, 16]}"
+  },
+  {
+    "scenario": "S35d",
+    "check": "esc.cancelled_exactly_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.menu_open_during_turn",
+    "passed": true,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.first_escape_closes_menu",
+    "passed": false,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.first_escape_does_not_cancel",
+    "passed": true,
+    "detail": "{'cancels': 0, 'ticks': [8, 16]}"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.refused_command_mid_turn_not_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.cancelled_exactly_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35f",
+    "check": "paste.single_line_dispatched_like_typed",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35f",
+    "check": "paste.multiline_sent_once_or_refused",
+    "passed": true,
+    "detail": "{'sent': ['/diff the harbor notes\\nsecond synthetic line'], 'refused': False, 'requests': ['session/prompt']}"
+  },
+  {
+    "scenario": "S35g",
+    "check": "paste.single_line_refused_like_typed",
+    "passed": true,
+    "detail": "{'sent': [], 'last': '  /compact  not available on this host yet'}"
+  },
+  {
+    "scenario": "S35g",
+    "check": "paste.multiline_sent_once_or_refused",
+    "passed": true,
+    "detail": "{'sent': [], 'refused': True, 'requests': []}"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.open_menu_shows_reason",
+    "passed": true,
+    "detail": "/new              reconnecting"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_refused_with_reason",
+    "passed": true,
+    "detail": "['Reconnecting. Your draft is preserved; send it after the connection is restored.', 'Reconnecting. Your draft is preserved; send it after the connection is restored.', '/new  reconnecting']"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.draft_kept",
+    "passed": true,
+    "detail": "/new"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.nothing_sent_while_down",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.menu_enabled_after",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_runs_once_after",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S36",
+    "check": "race.every_enter_delivered_once",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S36",
+    "check": "race.trials",
+    "passed": true,
+    "detail": "18 trials, 0 not delivered once"
+  }
+]

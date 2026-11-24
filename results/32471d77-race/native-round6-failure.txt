@@ -1,0 +1,76 @@
+=================================
+
+
+---- startup_activates_its_session_through_the_owned_host stdout ----
+
+thread 'startup_activates_its_session_through_the_owned_host' panicked at tui-pty-e2e/tests/host_startup.rs:37:10:
+called `Result::unwrap()` on an `Err` value: "waiting for \"amber is answering (1).\": Timed out after 10.043799333s (174 polls, 11.34433425s since spawn, 2423 PTY bytes, first output Some(53.025584ms), pid Some(39835), status Ok(None))"
+
+=== TUI Screen State at Panic ===
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+      › Nori CLI v0.0.0
+    
+      System       ~/_work/nori-cli/nori-cli/homes/round-6/.tmpgR3Xjv · Agent approvals
+      Agent        Amber
+    
+    
+      Run 'npx nori-skillsets init' to set up Nori AI enhancements
+    
+    • Amber options: Speed=Slow (/config to change)
+    
+    
+    › whoami
+    
+    
+                                                                                  ⎇ verify/pr-750-32471d77-nati...
+PTY output tail (escaped): 26l\x1b[?2026h\x1b[24;30r\x1b[24;1H\x1bM\x1bM\x1b[r\x1b[1;25r\x1b[23;1H\r\n\x1b[m\x1b[m\x1b[K\x1b[m\x1b[m\x1b[0m\r\n\x1b[m\x1b[m\x1b[K\x1b[2m\xe2\x80\xa2 \x1b[22mAmber options: Speed=\x1b[1m\x1b[m\x1b[mSlow\x1b[22m\x1b[2m\x1b[2m\x1b[m\x1b[m (/config to change)\x1b[m\x1b[m\x1b[0m\x1b[r\x1b[26;3H\x1b[26;2H\x1b[0m\x1b[m\x1b[K\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;27H\x1b[0m\x1b[m\x1b[K\x1b[29;2H\x1b[0m\x1b[m\x1b[K\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[28;3H\x1b[?2026l\x1b[?2026h\x1b[1;25r\x1b[1S\x1b[r\x1b[26;1H\x1b[J\x1b[25;2H\x1b[0m\x1b[m\x1b[K\x1b[26;2H\x1b[0m\x1b[m\x1b[K\x1b[27;9H\x1b[0m\x1b[m\x1b[K\x1b[28;2H\x1b[0m\x1b[m\x1b[K\x1b[29;2H\x1b[0m\x1b[m\x1b[K\x1b[27;1H\x1b[1m\xe2\x80\xba\x1b[27;3H\x1b[22mwhoami\x1b[30;79H\x1b[;m\xe2\x8e\x87 verify/pr-750-32471d77-nati...\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[28;3H\x1b[?2026l
+
+=== ACP Tracing Subscriber    ===
+    2026-11-24T12:35:58.909886Z DEBUG nori_acp_host::registry: Mock ACP agent path from MOCK_ACP_AGENT_BIN: /Users/runner/_work/nori-cli/nori-cli/nori-rs/target/mock-acp-out/mock_acp_agent
+    2026-11-24T12:35:58.910049Z DEBUG nori_acp_host::registry: Mock ACP agent path from MOCK_ACP_AGENT_BIN: /Users/runner/_work/nori-cli/nori-cli/nori-rs/target/mock-acp-out/mock_acp_agent
+    2026-11-24T12:35:58.950074Z DEBUG nori_host_runtime::host::acp: host ACP request client=0 method=_nori/host/prepare_agent
+    2026-11-24T12:35:58.950762Z DEBUG nori_acp_host::connection::acp_connection: Spawning ACP agent: python3 ["/Users/runner/_work/nori-cli/nori-cli/nori-rs/tui-pty-e2e/../cli/tests/standard_acp/fixture.py", "amber", "/Users/runner/_work/nori-cli/nori-cli/homes/round-6/.tmpgR3Xjv"] in /Users/runner/_work/nori-cli/nori-cli/homes/round-6/.tmpgR3Xjv
+    2026-11-24T12:35:58.951876Z DEBUG nori_acp_host::connection::acp_connection: ACP agent spawned (pid: Some(39957))
+    2026-11-24T12:35:58.972888Z DEBUG nori_acp_host::connection::acp_connection: ACP connection established, agent: Some(Implementation { name: "amber", title: None, version: "1", meta: None })
+    2026-11-24T12:35:59.003117Z DEBUG nori_host_runtime::host::acp: host ACP request client=0 method=session/list
+    2026-11-24T12:35:59.003917Z DEBUG nori_host_runtime::host::acp: host ACP request client=0 method=session/new
+    2026-11-24T12:35:59.004128Z DEBUG nori_harness::backend::spawn_and_relay: Activating prepared ACP backend for agent: amber
+    2026-11-24T12:35:59.005058Z DEBUG nori_harness::backend::spawn_and_relay: ACP session created: SessionId("0")
+    2026-11-24T12:35:59.019067Z DEBUG nori_acp_host::registry: Mock ACP agent path from MOCK_ACP_AGENT_BIN: /Users/runner/_work/nori-cli/nori-cli/nori-rs/target/mock-acp-out/mock_acp_agent
+    2026-11-24T12:35:59.019138Z DEBUG nori_acp_host::registry: Mock ACP agent path from MOCK_ACP_AGENT_BIN: /Users/runner/_work/nori-cli/nori-cli/nori-rs/target/mock-acp-out/mock_acp_agent
+    2026-11-24T12:35:59.056459Z DEBUG nori_tui::chatwidget::event_handlers: received 0 custom prompts
+    2026-11-24T12:35:59.978718Z TRACE nori_tui::bottom_pane::chat_composer::paste_handling: ERR: No such file or directory (os error 2)
+=================================
+
+
+
+failures:
+    a_positional_prompt_start_writes_one_welcome_card
+    startup_activates_its_session_through_the_owned_host
+
+test result: FAILED. 6 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.65s
+
+[1m[31merror[0m[1m:[0m test failed, to rerun pass `-p tui-pty-e2e --test host_startup`
+[1m[31merror[0m[1m:[0m 1 target failed:
+    `-p tui-pty-e2e --test host_startup`
+[1m[32m    Finished[0m `ci-test` profile [unoptimized + debuginfo] target(s) in 0.08s
+[1m[32m     Running[0m tests/host_new_session.rs (target/aarch64-apple-darwin/ci-test/deps/host_new_session-6a8a535d00f20683)
+
+running 2 tests
+test input_typed_right_after_new_goes_to_the_new_session ... ok
+test a_refused_new_session_returns_the_held_input_without_sending_it ... ok
+

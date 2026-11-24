@@ -1,0 +1,36 @@
+ Nori host  RECONNECTING · sessions continue on the host
+ claude-code · first light · app · ready
+
+ › You
+ first light
+
+ claude-code heard: first light
+
+ Connection lost. Reconnecting… WebSocket protocol error: Connection reset without closing handshake
+
+ Reconnecting. Your draft is preserved; send it after the connection is restored.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Reconnecting. Your draft is preserved; send it after the connection is restored.
+
+/ new
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

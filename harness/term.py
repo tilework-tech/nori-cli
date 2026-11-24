@@ -45,6 +45,12 @@ class Term:
             tmux("send-keys", "-t", self.name, key)
             time.sleep(0.12)
 
+    def paste(self, text):
+        """Bracketed paste, as a terminal delivers a clipboard paste."""
+        tmux("set-buffer", "-b", "acc-paste", text)
+        tmux("paste-buffer", "-p", "-d", "-b", "acc-paste", "-t", self.name)
+        time.sleep(0.3)
+
     def run(self, command):
         self.type(command)
         self.keys("Enter")

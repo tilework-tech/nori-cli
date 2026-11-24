@@ -2206,6 +2206,406 @@ def s34_resume_id_control(ctx):
     quit_fg(t)
 
 
+
+# ---------------------------------------------------------------------------
+# S35: one slash-command table for plain nori and nori attach (#751)
+# ---------------------------------------------------------------------------
+REASON_HOST = "not available on this host yet"
+REASON_ATTACH = "not available in nori attach yet"
+REASON_WATCH = "watching"
+
+
+def menu_row(screen, cmd):
+    """The `/` menu row whose first word is exactly `cmd`."""
+    for line in screen.splitlines():
+        words = line.strip().split()
+        if words and words[0] == cmd:
+            return line.strip()
+    return ""
+
+
+def composer_text(screen):
+    """The composer row: `› text`, or `/ text` while the `/` menu styles it (not a `› You` transcript block)."""
+    rows = [l for l in screen.splitlines() if (l.startswith("/") or l.startswith("› ")) and l.strip() != "› You"]
+    return rows[-1].replace("/ ", "/", 1).strip() if rows else ""
+
+
+def filtered_row(t, cmd):
+    screen = open_menu(t, cmd)
+    t.keys("C-u")
+    return menu_row(screen, cmd)
+
+
+def agent_commands_on(ctx):
+    (ctx.fx["control"] / "agent-commands").write_text("1")
+
+
+def prompt_texts(ctx):
+    return [r.get("text", "") for r in ctx.ledger("request", "session/prompt")]
+
+
+def requests_since(ctx, n):
+    return [r.get("method") for r in ctx.ledger("request")[n:]]
+
+
+def open_menu(t, text="/", settle=1.0):
+    t.keys("C-u")
+    t.type(text)
+    time.sleep(settle)
+    return t.screen()
+
+
+def run_typed(t, text, settle=1.5):
+    """Type a command and press Enter once, after the paste-burst pause."""
+    t.keys("C-u")
+    t.type(text)
+    time.sleep(1.0)
+    t.keys("Enter")
+    time.sleep(settle)
+    return t.screen()
+
+
+def check_agent_command_passthrough(ctx, t, label, prefix=""):
+    for text in ["/review the parser", "/review", "/lanternize"]:
+        before = prompt_texts(ctx).count(text)
+        run_typed(t, "/" + prefix + text[1:], settle=0.5)
+        wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and r.get("text") == text, timeout=10)
+        time.sleep(1.5)
+        sent = prompt_texts(ctx).count(text) - before
+        ctx.check(f"{label}.agent_command_{text.split()[0][1:]}{'_args' if ' ' in text else ''}_sent_once",
+                  sent == 1, {"sent": sent, "prompts": prompt_texts(ctx)[-4:]})
+
+
+def s35_plain_shared_commands(ctx):
+    """Plain nori: the `/` menu, Tab completion, dispatch, and agent commands through the shared table."""
+    agent_commands_on(ctx)
+    t = start_fg(ctx)
+    submit(t, "first light")
+    t.wait_for("heard: first light", 20)
+    menu = open_menu(t)
+    t.capture("menu")
+    missing = [c for c in ["/new", "/resume", "/agent", "/approvals", "/model"] if not filtered_row(t, c)]
+    ctx.check("plain.menu_lists_builtins", not missing, f"missing {missing}")
+    greyed = [l for l in menu.splitlines() if REASON_HOST in l or REASON_ATTACH in l or REASON_WATCH in l]
+    ctx.check("plain.no_attach_reasons_in_plain_menu", not greyed, greyed)
+    review = open_menu(t, "/revi")
+    t.capture("menu-agent-command")
+    ctx.check("plain.agent_command_listed", bool(menu_row(review, "/claude-code:review")), last_nonblank(review))
+    open_menu(t, "/appro")
+    t.keys("Tab")
+    time.sleep(0.8)
+    line = composer_text(t.screen())
+    ctx.check("plain.tab_completes_builtin", line.startswith("/approvals"), line)
+    n = len(ctx.ledger("request"))
+    run_typed(t, "/approvals")
+    shown = t.screen()
+    t.capture("approvals-dispatched")
+    ctx.check("plain.builtin_dispatched_locally", re.search(r"(Ask|Approve|Agent)", shown) is not None
+              and "session/prompt" not in requests_since(ctx, n), requests_since(ctx, n))
+    t.keys("Escape")
+    time.sleep(0.5)
+    check_agent_command_passthrough(ctx, t, "plain", prefix="claude-code:")
+    n = len(ctx.ledger("request"))
+    screen = run_typed(t, "/review", settle=1.5)
+    t.capture("bare-review-in-plain")
+    ctx.check("plain.bare_review_not_captured_by_loose_match", "View previous session" not in screen,
+              {"requests": requests_since(ctx, n), "last": last_nonblank(screen)})
+    t.keys("Escape")
+    t.keys("C-u")
+    t.capture("agent-commands-sent")
+    quit_fg(t)
+
+
+def s35_attach_controller_commands(ctx):
+    """nori attach controller: reasons for unavailable routes, refusals that keep the draft, Tab, agent commands, quit."""
+    agent_commands_on(ctx)
+    ctx.start_host()
+    t = start_attach(ctx, "controller")
+    submit(t, "first light")
+    t.wait_for("heard: first light", 20)
+    menu = open_menu(t)
+    t.capture("menu")
+    rows = {c: filtered_row(t, c) for c in ["/compact", "/agent", "/approvals", "/new", "/sessions", "/quit"]}
+    (ctx.dir / "menu-rows.json").write_text(json.dumps(rows, indent=2))
+    ctx.check("ctl.host_route_reason", REASON_HOST in rows["/compact"], rows["/compact"])
+    ctx.check("ctl.attach_screen_reason", REASON_ATTACH in rows["/agent"], rows["/agent"])
+    ctx.check("ctl.host_commands_enabled", all(rows[c] and "not available" not in rows[c] and REASON_WATCH not in rows[c]
+                                               for c in ["/new", "/sessions"]), [rows["/new"], rows["/sessions"]])
+    scrolled = open_menu(t, "/q")
+    ctx.check("ctl.quit_enabled", bool(menu_row(scrolled, "/quit")) and "not available" not in menu_row(scrolled, "/quit"),
+              menu_row(scrolled, "/quit"))
+    open_menu(t, "/sess")
+    t.keys("Tab")
+    time.sleep(0.8)
+    line = composer_text(t.screen())
+    ctx.check("ctl.tab_completes_builtin", line.startswith("/sessions"), line)
+    for cmd, reason in [("/compact", REASON_HOST), ("/agent", REASON_ATTACH)]:
+        n = len(ctx.ledger("request"))
+        screen = run_typed(t, cmd)
+        t.capture(f"refused-{cmd[1:]}")
+        shown = screen.count(f"{cmd}: {reason}")
+        ctx.check(f"ctl.{cmd[1:]}_refused_with_reason", shown >= 1, last_nonblank(screen))
+        ctx.check(f"ctl.{cmd[1:]}_refusal_count", True, f"shown {shown} time(s)")
+        ctx.check(f"ctl.{cmd[1:]}_draft_kept", composer_text(screen).startswith(cmd), composer_text(screen))
+        ctx.check(f"ctl.{cmd[1:]}_nothing_sent", not requests_since(ctx, n), requests_since(ctx, n))
+    t.keys("C-u")
+    check_agent_command_passthrough(ctx, t, "ctl")
+    run_typed(t, " quit", settle=0.5)
+    wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and r.get("text", "").strip() == "quit", timeout=10)
+    ctx.check("ctl.leading_space_quit_is_a_prompt", any(p.strip() == "quit" for p in prompt_texts(ctx)), prompt_texts(ctx)[-3:])
+    time.sleep(1.5)
+    t.capture("agent-commands-sent")
+    obs = ctx.observer()
+    run_typed(t, "quit", settle=2.0)
+    deadline = time.time() + 8
+    while time.time() < deadline and not t.at_shell():
+        time.sleep(0.3)
+    sessions = obs.sessions()
+    ctx.check("ctl.bare_quit_detaches", t.at_shell(), last_nonblank(t.screen()))
+    ctx.check("ctl.detach_keeps_session", len(sessions) == 1, [s.get("sessionId") for s in sessions])
+    obs.close()
+
+
+def s35_watcher_and_transfer(ctx):
+    """Two attached terminals: watcher reasons and refusals, and an open menu that re-greys when control moves."""
+    ctx.start_host()
+    a = start_attach(ctx, "controller")
+    submit(a, "first light")
+    a.wait_for("heard: first light", 20)
+    obs = ctx.observer()
+    sid = obs.sessions()[0]["sessionId"]
+    b = ctx.term("watcher")
+    b.run(f"{NORI} attach {sid[:8]}")
+    b.wait_for(r"(WATCHING|watching|take control)", 20, regex=True)
+    time.sleep(1)
+    menu = open_menu(b)
+    b.capture("watcher-menu")
+    rows = {c: filtered_row(b, c) for c in ["/new", "/close", "/resume", "/delegate", "/sessions"]}
+    (ctx.dir / "watcher-rows.json").write_text(json.dumps(rows, indent=2))
+    ctx.check("watch.control_commands_greyed", all(REASON_WATCH in rows[c] and "alt+t" in rows[c].lower()
+                                                   for c in ["/new", "/close", "/resume", "/delegate"]), rows)
+    ctx.check("watch.sessions_enabled", bool(rows["/sessions"]) and REASON_WATCH not in rows["/sessions"], rows["/sessions"])
+    news = len(ctx.ledger("request", "session/new"))
+    n = len(ctx.ledger("request"))
+    screen = run_typed(b, "/new")
+    b.capture("watcher-refused-new")
+    ctx.check("watch.new_refused_with_reason", "/new: watching" in screen, last_nonblank(screen))
+    ctx.check("watch.new_nothing_sent", not requests_since(ctx, n) and len(ctx.ledger("request", "session/new")) == news,
+              requests_since(ctx, n))
+    ctx.check("watch.new_draft_kept", composer_text(screen).startswith("/new"), composer_text(screen))
+    b.keys("C-u")
+    menu_a = open_menu(a)
+    ctx.check("transfer.controller_menu_enabled_before", REASON_WATCH not in menu_row(menu_a, "/new"), menu_row(menu_a, "/new"))
+    b.keys("M-t")
+    b.wait_for(r"CONTROLLING", 10, regex=True)
+    time.sleep(1.5)
+    after_a = a.screen()
+    a.capture("open-menu-after-losing-control")
+    ctx.check("transfer.open_menu_regreys", REASON_WATCH in menu_row(after_a, "/new"), menu_row(after_a, "/new"))
+    menu_b = open_menu(b)
+    b.capture("new-controller-menu")
+    ctx.check("transfer.new_controller_menu_enabled", bool(menu_row(menu_b, "/new")) and REASON_WATCH not in menu_row(menu_b, "/new"),
+              menu_row(menu_b, "/new"))
+    run_typed(a, "/new")
+    ctx.check("transfer.demoted_new_refused", len(ctx.ledger("request", "session/new")) == news, len(ctx.ledger("request", "session/new")))
+    a.keys("C-u")
+    run_typed(b, "/new", settle=3.0)
+    wait_ledger(ctx, lambda r: r.get("method") == "session/new" and len(ctx.ledger("request", "session/new")) > news, timeout=10)
+    ctx.check("transfer.promoted_new_runs_once", len(ctx.ledger("request", "session/new")) == news + 1,
+              len(ctx.ledger("request", "session/new")))
+    b.capture("promoted-new")
+    obs.close()
+
+
+def s35_escape_mid_turn(ctx, mode):
+    """Escape with the `/` menu open during a turn closes the menu only; the next Escape cancels once."""
+    if mode == "fg":
+        t = start_fg(ctx)
+    else:
+        ctx.start_host()
+        t = start_attach(ctx, "attach")
+    submit(t, "hold the lamp")
+    wait_ticks(ctx, 3)
+    t.type("/")
+    time.sleep(0.8)
+    t.capture("menu-during-turn")
+    ctx.check("esc.menu_open_during_turn", bool(menu_row(t.screen(), "/sessions")), last_nonblank(t.screen()))
+    t.keys("Escape")
+    ticks = ctx.ticks()
+    time.sleep(1.5)
+    screen = t.screen()
+    t.capture("after-first-escape")
+    ctx.check("esc.first_escape_closes_menu", not menu_row(screen, "/sessions"), last_nonblank(screen))
+    ctx.check("esc.first_escape_does_not_cancel", not ctx.ledger("request", "session/cancel") and ctx.ticks() > ticks,
+              {"cancels": len(ctx.ledger("request", "session/cancel")), "ticks": [ticks, ctx.ticks()]})
+    n = len(ctx.ledger("request"))
+    screen = run_typed(t, "/compact" if mode == "attach" else "/review now", settle=1.5)
+    t.capture("command-during-turn")
+    if mode == "attach":
+        ctx.check("esc.refused_command_mid_turn_not_sent", not [m for m in requests_since(ctx, n) if m != "session/cancel"]
+                  and "/compact: " + REASON_HOST in screen, requests_since(ctx, n))
+    t.keys("C-u")
+    time.sleep(0.3)
+    t.keys("Escape")
+    if mode == "fg":
+        t.keys("Escape")
+    wait_ledger(ctx, lambda r: r["kind"] == "turn_end" and r.get("stopReason") == "cancelled")
+    time.sleep(1.0)
+    t.capture("cancelled")
+    ctx.check("esc.cancelled_exactly_once", len(ctx.ledger("request", "session/cancel")) == 1,
+              len(ctx.ledger("request", "session/cancel")))
+    if mode == "fg":
+        quit_fg(t)
+
+
+def s35_paste(ctx, mode):
+    """A pasted slash command follows the same table as a typed one; a multi-line paste is never run as a command."""
+    if mode == "fg":
+        t = start_fg(ctx)
+    else:
+        ctx.start_host()
+        t = start_attach(ctx, "attach")
+    submit(t, "first light")
+    t.wait_for("heard: first light", 20)
+    n = len(ctx.ledger("request"))
+    t.keys("C-u")
+    t.paste("/compact" if mode == "attach" else "/approvals")
+    time.sleep(1.0)
+    t.keys("Enter")
+    time.sleep(1.5)
+    screen = t.screen()
+    t.capture("pasted-command")
+    if mode == "attach":
+        ctx.check("paste.single_line_refused_like_typed", ("/compact: " + REASON_HOST) in screen and not requests_since(ctx, n),
+                  {"sent": requests_since(ctx, n), "last": last_nonblank(screen)})
+    else:
+        ctx.check("paste.single_line_dispatched_like_typed", re.search(r"(Ask|Approve|Agent)", screen) is not None
+                  and "session/prompt" not in requests_since(ctx, n), requests_since(ctx, n))
+        t.keys("Escape")
+    t.keys("C-u")
+    body = "/diff the harbor notes\nsecond synthetic line"
+    n = len(ctx.ledger("request"))
+    t.paste(body)
+    time.sleep(1.0)
+    t.keys("Enter")
+    time.sleep(2.5)
+    screen = t.screen()
+    t.capture("pasted-multiline")
+    sent = [p for p in prompt_texts(ctx) if "second synthetic line" in p]
+    refused = "/diff: " in screen
+    ctx.check("paste.multiline_sent_once_or_refused", (len(sent) == 1 and "/diff the harbor notes" in sent[0]) or (not sent and refused),
+              {"sent": sent, "refused": refused, "requests": requests_since(ctx, n)})
+    if mode == "fg":
+        quit_fg(t)
+
+
+def s35_reconnect(ctx):
+    """While reconnecting, host commands read `reconnecting` and refuse without sending; after reconnect they run."""
+    endpoint, _ = ctx.start_host()
+    proxy = Proxy(endpoint)
+    t = ctx.term("controller")
+    attach_via(ctx, t, proxy)
+    attach_new_session(t)
+    submit(t, "first light")
+    t.wait_for("heard: first light", 20)
+    open_menu(t)
+    news = len(ctx.ledger("request", "session/new"))
+    proxy.drop_all(hold=6.0)
+    t.wait_for(r"(RECONNECTING|reconnecting)", 15, regex=True)
+    time.sleep(0.8)
+    menu = t.screen()
+    t.capture("menu-while-reconnecting")
+    ctx.check("reconnect.open_menu_shows_reason", "reconnecting" in menu_row(menu, "/new"), menu_row(menu, "/new"))
+    screen = run_typed(t, "/new", settle=1.0)
+    t.capture("refused-while-reconnecting")
+    ctx.check("reconnect.new_refused_with_reason", "/new: reconnecting" in screen or "Your draft is preserved" in screen,
+              [l.strip() for l in screen.splitlines() if "econnect" in l][-3:])
+    ctx.check("reconnect.draft_kept", composer_text(screen).startswith("/new"), composer_text(screen))
+    t.wait_gone("RECONNECTING", 25)
+    time.sleep(1.5)
+    ctx.check("reconnect.nothing_sent_while_down", len(ctx.ledger("request", "session/new")) == news,
+              len(ctx.ledger("request", "session/new")))
+    menu = open_menu(t)
+    ctx.check("reconnect.menu_enabled_after", bool(menu_row(menu, "/new")) and "reconnecting" not in menu_row(menu, "/new"),
+              menu_row(menu, "/new"))
+    t.capture("menu-after-reconnect")
+    run_typed(t, "/new", settle=3.0)
+    ctx.check("reconnect.new_runs_once_after", len(ctx.ledger("request", "session/new")) == news + 1,
+              len(ctx.ledger("request", "session/new")))
+    proxy.close()
+
+
+# ---------------------------------------------------------------------------
+# S36: startup activation window (native finding on #750), swept by Enter time
+# ---------------------------------------------------------------------------
+RACE_WORD = "race lantern word"
+RACE_OFFSETS = [float(x) for x in os.environ.get("ACC_RACE_OFFSETS", "-0.3,-0.05,0,0.01,0.02,0.04,0.08,0.15,0.3").split(",")]
+def tmux_send(t, text):
+    term.tmux("send-keys", "-t", t.name, "-l", text)
+
+
+RACE_LOG_ENV = "RUST_LOG=nori_host_runtime=debug,nori_harness=debug,nori_tui=debug"
+
+
+def tui_to_host_prompts(ctx):
+    return [m for m in host_requests(ctx) if m == "session/prompt"]
+
+
+def s36_startup_race(ctx, burst_at_reply=False):
+    """Type before the startup session/new reply (or, with burst_at_reply, type the burst at swept offsets after it), then press Enter; record screen echo and adapter delivery separately."""
+    rows = []
+    for rep in range(int(os.environ.get("ACC_RACE_REPS", "2"))):
+        for off in RACE_OFFSETS:
+            for f in ctx.fx["ledger"].parent.glob(ctx.fx["ledger"].name):
+                f.write_text("")
+            shutil.rmtree(ctx.fx["homes"]["host"] / "log", ignore_errors=True)
+            (ctx.fx["control"] / "new-delay").write_text("1.0")
+            name = f"r{rep}-{str(off).replace('-', 'm').replace('.', 'p')}"
+            t = ctx.term(name)
+            t.run(f"{RACE_LOG_ENV} {NORI} --skip-trust-directory")
+            started = wait_ledger(ctx, lambda r: r.get("kind") == "new_delay_start", timeout=20)
+            if not burst_at_reply:
+                t.type(RACE_WORD)
+            end = None
+            deadline = time.time() + 5
+            while time.time() < deadline and end is None:
+                hit = [r for r in fixtures.read_ledger(ctx.fx["ledger"]) if r["kind"] == "new_delay_end"]
+                end = hit[0]["t"] if hit else None
+                time.sleep(0.003)
+            if end is not None:
+                time.sleep(max(0.0, end + off - time.time()))
+            if burst_at_reply:
+                typed = time.time()
+                tmux_send(t, RACE_WORD)
+                time.sleep(0.9)
+            t.keys("Enter")
+            pressed = time.time()
+            time.sleep(4.0)
+            screen = t.screen()
+            sent = prompts_with(ctx, RACE_WORD)
+            row = {"rep": rep, "offset": off, "enter_minus_reply": round(pressed - end, 4) if end else None,
+                   "typed_minus_reply": round(typed - end, 4) if burst_at_reply and end else None,
+                   "tui_to_host_prompts": len(tui_to_host_prompts(ctx)), "adapter_prompts": len(sent),
+                   "answered": f"heard: {RACE_WORD}" in " ".join(screen.split()),
+                   "echoed": RACE_WORD in screen, "started": bool(started)}
+            rows.append(row)
+            print("RACE", row, flush=True)
+            if row["adapter_prompts"] != 1:
+                t.capture(f"{name}-lost")
+                logs = ctx.fx["homes"]["host"] / "log"
+                if logs.exists():
+                    shutil.copytree(logs, ctx.dir / f"{name}-log", dirs_exist_ok=True)
+                shutil.copy(ctx.fx["ledger"], ctx.dir / f"{name}-ledger.jsonl")
+            slash(t, "/quit", settle=1.0)
+            t.close()
+            ctx.terms.remove(t)
+            time.sleep(0.5)
+    (ctx.dir / "race.json").write_text(json.dumps(rows, indent=2))
+    bad = [r for r in rows if r["adapter_prompts"] != 1]
+    ctx.check("race.every_enter_delivered_once", not bad, bad[:6])
+    ctx.check("race.trials", True, f"{len(rows)} trials, {len(bad)} not delivered once")
+
+
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
     "S02": ("foreground quit stops a running turn", s02_foreground_quit_stops_turn),
@@ -2284,6 +2684,16 @@ SCENARIOS = {
     "S34k": ("skillset choice then startup through the host", lambda c: s34_deferred_skillset(c, "apply")),
     "S34l": ("skillset picker dismissed then startup through the host", lambda c: s34_deferred_skillset(c, "dismiss")),
     "S34m": ("control: `nori resume --last` stays in-process", s34_resume_id_control),
+    "S35a": ("shared / menu, Tab and dispatch in plain nori", s35_plain_shared_commands),
+    "S35b": ("attach controller: reasons, refusals, agent commands, quit", s35_attach_controller_commands),
+    "S35c": ("two attached terminals: watcher refusals and control transfer", s35_watcher_and_transfer),
+    "S35d": ("Escape with the menu open mid-turn (plain)", lambda c: s35_escape_mid_turn(c, "fg")),
+    "S35e": ("Escape with the menu open mid-turn (attach)", lambda c: s35_escape_mid_turn(c, "attach")),
+    "S35f": ("pasted slash commands (plain)", lambda c: s35_paste(c, "fg")),
+    "S35g": ("pasted slash commands (attach)", lambda c: s35_paste(c, "attach")),
+    "S35h": ("commands while reconnecting and after", s35_reconnect),
+    "S36": ("startup activation window swept by Enter time", s36_startup_race),
+    "S36b": ("startup activation window swept by typing time", lambda c: s36_startup_race(c, burst_at_reply=True)),
 }
 
 

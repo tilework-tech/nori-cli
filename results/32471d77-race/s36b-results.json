@@ -1,0 +1,14 @@
+[
+  {
+    "scenario": "S36b",
+    "check": "race.every_enter_delivered_once",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S36b",
+    "check": "race.trials",
+    "passed": true,
+    "detail": "9 trials, 0 not delivered once"
+  }
+]

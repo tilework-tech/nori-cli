@@ -1,0 +1,36 @@
+ Nori host  RECONNECTING · sessions continue on the host
+ claude-code · first light · app · ready
+
+ › You
+ first light
+
+ claude-code heard: first light
+
+ Connection lost. Reconnecting… WebSocket protocol error: Connection reset without closing handshake
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Connection lost. Reconnecting… WebSocket protocol error: Connection reset without closing handshake
+
+/
+
+  /agent            not available in nori attach yet
+  /model            not available in nori attach yet
+  /config           not available in nori attach yet
+  /approvals        not available in nori attach yet
+  /settings         not available in nori attach yet
+  /vim              not available in nori attach yet
+  /goal             not available on this host yet
+  /new              reconnecting
+  /sessions         list sessions and move between them
+  /delegate         reconnecting
