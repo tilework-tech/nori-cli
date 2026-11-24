@@ -191,6 +191,7 @@ impl App {
                     return Ok(true);
                 }
 
+                tracing::info!(candidate = ?self.candidate_agent.as_ref().map(std::mem::discriminant), holds = self.host_start_holds_input(), has_session = self.chat_widget.has_harness_session(), "DBG NewSession event");
                 if self.new_session_return.is_some() || self.host_start_holds_input() {
                     // The pending screen holds this prompt for the session
                     // the host is starting.
@@ -683,6 +684,7 @@ impl App {
                         };
                         let (initial_prompt, initial_images) =
                             self.chat_widget.take_initial_input();
+                        tracing::info!(?initial_prompt, ?purpose, "DBG candidate SessionStarted install");
                         let carried = purpose.starts_new().then(|| {
                             (
                                 self.chat_widget.take_composer_draft(),

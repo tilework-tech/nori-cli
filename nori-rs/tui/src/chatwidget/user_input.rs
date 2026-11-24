@@ -87,6 +87,7 @@ impl ChatWidget {
             return;
         }
         let UserMessage { text, image_paths } = user_message;
+        tracing::info!(text = %text, harness = self.harness_handle.is_some(), managed = ?self.managed_conversation_id, gen = ?self.session_generation, "DBG submit_composed_message");
         if text.is_empty() && image_paths.is_empty() {
             return;
         }

@@ -435,6 +435,7 @@ impl ChatWidget {
     }
 
     pub(crate) fn submit_prompt(&mut self, content: Vec<nori_protocol::acp::v1::ContentBlock>) {
+        tracing::info!(harness = self.harness_handle.is_some(), "DBG submit_prompt");
         let Some(handle) = self.harness_handle.clone() else {
             self.app_event_tx.send(AppEvent::HarnessActionFailed(
                 "No active harness session".to_string(),
@@ -450,7 +451,9 @@ impl ChatWidget {
             crate::host_client::PromptInterrupt::track_first(&mut self.submitted_prompt, pending);
         }
         tokio::spawn(async move {
-            match handle.prompt(content).await {
+            let result = handle.prompt(content).await;
+            tracing::info!(result = ?result.as_ref().map_err(|e| e.to_string()), "DBG submit_prompt result");
+            match result {
                 Ok(nori_protocol::acp::v1::RequestId::Str(id)) => {
                     if let Some(call) = interrupt.and_then(|pending| pending.admitted_id(Some(&id)))
                     {
