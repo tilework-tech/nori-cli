@@ -1897,20 +1897,146 @@
   },
   {
     "scenario": "S33c",
-    "check": "new.early_prompt_delivered_once",
+    "check": "early.typed_during_init",
+    "passed": true,
+    "detail": "{'start': 1795508125.356028, 'typed': 1795508126.8834329, 'end': 1795508131.3561633, 'pid': 51258}"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(51258, 1795508131.372349)]"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.reaches_the_new_session",
+    "passed": true,
+    "detail": "[(51258, 51258, 51172)]"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.sent_after_the_new_session_exists",
+    "passed": true,
+    "detail": "{'prompt': 1795508131.372349, 'session_new': 1795508131.3603477}"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.previous_session_gets_only_its_own_prompt",
+    "passed": true,
+    "detail": "51172"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a ? for shortcuts"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.typed_during_new",
+    "passed": true,
+    "detail": "{'start': 1795508161.1003344, 'typed': 1795508162.6243136, 'end': 1795508167.1004524, 'pid': 51960}"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(51960, 1795508167.112705)]"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.reaches_the_new_session",
+    "passed": true,
+    "detail": "[(51960, 51960, 51901)]"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.sent_after_the_new_session_exists",
+    "passed": true,
+    "detail": "{'prompt': 1795508167.112705, 'session_new': 1795508161.100228}"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.previous_session_gets_only_its_own_prompt",
+    "passed": true,
+    "detail": "51901"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a / for slash command menu"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.typed_during_init",
+    "passed": true,
+    "detail": "{'start': 1795508446.3989847, 'typed': 1795508447.926376, 'end': 1795508452.3990808, 'pid': 63850}"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.refusal_recorded_by_adapter",
     "passed": true,
     "detail": "1"
   },
   {
-    "scenario": "S33c",
-    "check": "new.early_prompt_reaches_new_session",
+    "scenario": "S33d",
+    "check": "early.refused_input_stays_unsent",
     "passed": true,
-    "detail": "[(946, 867)]"
+    "detail": "[]"
   },
   {
-    "scenario": "S33c",
-    "check": "new.early_prompt_answered_on_screen",
+    "scenario": "S33d",
+    "check": "early.refusal_message_shown",
     "passed": true,
-    "detail": "\u203a @ for file mentions"
+    "detail": "['\u2022 claude-code heard: hello lantern', \"\u25a0 Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is\", '\u203a early lantern word']"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.refused_input_back_in_composer",
+    "passed": true,
+    "detail": "['\u203a early lantern word']"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.enter_sends_held_input_once_to_previous_session",
+    "passed": true,
+    "detail": "[(63741, 63741)]"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.typed_during_new",
+    "passed": true,
+    "detail": "{'start': 1795508465.3330362, 'typed': 1795508466.856287, 'end': 1795508471.3331385, 'pid': 64467}"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refusal_recorded_by_adapter",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refused_input_stays_unsent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refusal_message_shown",
+    "passed": true,
+    "detail": "['\u2022 claude-code heard: hello lantern', \"\u25a0 Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is\", '\u203a early lantern word']"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refused_input_back_in_composer",
+    "passed": true,
+    "detail": "['\u203a early lantern word']"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.enter_sends_held_input_once_to_previous_session",
+    "passed": true,
+    "detail": "[(64357, 64357)]"
   }
 ]

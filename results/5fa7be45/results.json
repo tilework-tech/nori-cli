@@ -1894,5 +1894,149 @@
     "check": "dismiss.current_session_keeps_working",
     "passed": true,
     "detail": "\u203a / for slash command menu"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.typed_during_init",
+    "passed": true,
+    "detail": "{'start': 1795508053.7021136, 'typed': 1795508055.224695, 'end': 1795508059.7022598, 'pid': 47553}"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(46309, 1795508055.107252)]"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.reaches_the_new_session",
+    "passed": false,
+    "detail": "[(46309, 47553, 46309)]"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.sent_after_the_new_session_exists",
+    "passed": false,
+    "detail": "{'prompt': 1795508055.107252, 'session_new': 1795508059.7058878}"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.previous_session_gets_only_its_own_prompt",
+    "passed": false,
+    "detail": "46309"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.answered_on_screen",
+    "passed": false,
+    "detail": "\u203a @ for file mentions"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.typed_during_new",
+    "passed": true,
+    "detail": "{'start': 1795508089.5670185, 'typed': 1795508091.0910246, 'end': 1795508095.5671654, 'pid': 50527}"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(50437, 1795508090.974371)]"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.reaches_the_new_session",
+    "passed": false,
+    "detail": "[(50437, 50527, 50437)]"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.sent_after_the_new_session_exists",
+    "passed": true,
+    "detail": "{'prompt': 1795508090.974371, 'session_new': 1795508089.5669138}"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.previous_session_gets_only_its_own_prompt",
+    "passed": false,
+    "detail": "50437"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.answered_on_screen",
+    "passed": false,
+    "detail": "\u203a ? for shortcuts"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.typed_during_init",
+    "passed": true,
+    "detail": "{'start': 1795508408.4865596, 'typed': 1795508410.0157347, 'end': 1795508414.4866786, 'pid': 62432}"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.refusal_recorded_by_adapter",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.refused_input_stays_unsent",
+    "passed": false,
+    "detail": "[(62330, 1795508409.8987722)]"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.refusal_message_shown",
+    "passed": true,
+    "detail": "['\u203a early lantern word', '\u2022 claude-code heard: early lantern word', \"\u25a0 Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is\"]"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.refused_input_back_in_composer",
+    "passed": false,
+    "detail": "['\u203a $ for skill listing']"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.enter_sends_held_input_once_to_previous_session",
+    "passed": true,
+    "detail": "[(62330, 62330)]"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.typed_during_new",
+    "passed": true,
+    "detail": "{'start': 1795508427.4191272, 'typed': 1795508428.9450314, 'end': 1795508433.419258, 'pid': 63090}"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refusal_recorded_by_adapter",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refused_input_stays_unsent",
+    "passed": false,
+    "detail": "[(62945, 1795508428.827971)]"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refusal_message_shown",
+    "passed": true,
+    "detail": "['\u203a early lantern word', '\u2022 claude-code heard: early lantern word', \"\u25a0 Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is\"]"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refused_input_back_in_composer",
+    "passed": false,
+    "detail": "['\u203a ! for shell commands']"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.enter_sends_held_input_once_to_previous_session",
+    "passed": true,
+    "detail": "[(62945, 62945)]"
   }
 ]

@@ -178,3 +178,25 @@ goes through the host or in-process is only visible through S31d's message and t
 
 `new.uses_foreground_session_folder` is recorded only when the foreground session is in a different folder
 from the launch folder; plain `nori` cannot reach that state until `/new DIR` works, so it is not yet evaluated.
+### Added 2026-11-24 (#749 early input, #746 repair)
+
+The synthetic server takes one-shot delays from its control directory: `init-delay` holds the next
+server's `initialize` reply and `new-delay` holds the next `session/new` reply, each for 6 s. The scenario
+types into the terminal only after the adapter records the start of the delay and checks that the Enter
+landed inside it, so the race is exercised on every run instead of depending on timing.
+
+| Requirement | Scenario / check | Observed by | #749 `5fa7be45` | #749 `3b2010d4` |
+|---|---|---|---|---|
+| Input typed while the `/new` server initializes reaches only the new session, once, after its `session/new` | S33c early.* | adapter (pid, timestamps), screen | FAIL (sent to the previous session before the new one existed) | pass |
+| Same, while `session/new` is pending | S33e early.* | adapter, screen | FAIL (sent to the previous session) | pass |
+| Refused `/new` during initialize: input stays unsent, returns to the composer, Enter sends it once to the previous session | S33d early.* | adapter, screen | FAIL (sent at once; composer empty) | pass |
+| Same, refused while `session/new` is pending | S33f early.* | adapter, screen | FAIL (sent at once; composer empty) | pass |
+
+| Requirement | Scenario / check | Observed by | #746 `c94867b1` | #746 `36947010` |
+|---|---|---|---|---|
+| Refused `/close` shown once (attach) | S29b close_refusal.shown_once | screen | FAIL (three lines) | pass |
+| Two attached terminals, controller's `/close` refused: one `session/close` and one refusal at the adapter; controller shows it once, watcher at most once; session keeps answering in both | S29c close_refusal2.* | adapter, wire, screen | FAIL (controller three lines) | pass |
+
+Observation, not a finding: the watcher shows the adapter's bare stream error (`close declined by …`) without the
+`Failed to close the session:` prefix, because only the terminal that sent the close knows it is a close refusal.
+

@@ -1544,6 +1544,47 @@ def s29_close_refusal(ctx, mode):
         quit_fg(t)
 
 
+def s29c_close_refusal_two_clients(ctx):
+    """A refused /close from one of two attached terminals reaches the adapter once and shows at most once in each."""
+    (ctx.fx["control"] / "close-refuse").write_text("1")
+    ctx.start_host()
+    a = start_attach(ctx, "controller")
+    submit(a, "first light")
+    a.wait_for("heard: first light", 20)
+    obs = ctx.observer()
+    sid = obs.sessions()[0]["sessionId"]
+    b = ctx.term("watcher")
+    b.run(f"{NORI} attach {sid[:8]}")
+    b.wait_for(r"(WATCHING|watching|Watching)", 20, regex=True)
+    time.sleep(1.0)
+    slash(a, "/close", settle=3.0)
+    time.sleep(1.0)
+    a.capture("controller-refused")
+    b.capture("watcher-refused")
+    declined = lambda t: [l.strip() for l in t.screen().splitlines() if "declined" in l]
+    ctx.check("close_refusal2.adapter_got_one_close", len(ctx.ledger("request", "session/close")) == 1,
+              len(ctx.ledger("request", "session/close")))
+    ctx.check("close_refusal2.adapter_refused_once", len(ctx.ledger("close_refused")) == 1, len(ctx.ledger("close_refused")))
+    ctx.check("close_refusal2.controller_shows_once", len(re.findall(r"close declined by", a.screen())) == 1, declined(a))
+    ctx.check("close_refusal2.watcher_shows_at_most_once", len(re.findall(r"close declined by", b.screen())) <= 1, declined(b))
+    live = [s for s in obs.sessions() if (s.get("_meta") or {}).get("nori/session", {}).get("live")]
+    ctx.check("close_refusal2.session_still_live_on_host", len(live) == 1, len(live))
+    submit(a, "still lit")
+    try:
+        a.wait_for("heard: still lit", 20)
+        b.wait_for("heard: still lit", 10)
+        ok = True
+    except TimeoutError:
+        ok = False
+    ctx.check("close_refusal2.session_keeps_working_in_both", ok, (last_nonblank(a.screen()), last_nonblank(b.screen())))
+    ctx.check("close_refusal2.counts_unchanged_after_next_turn",
+              len(re.findall(r"close declined by", a.screen())) == 1 and len(re.findall(r"close declined by", b.screen())) <= 1,
+              (declined(a), declined(b)))
+    a.capture("controller-final")
+    b.capture("watcher-final")
+    obs.close()
+
+
 def s30_prepared_agent(ctx):
     """A host client prepares an agent server, lists its saved sessions, and activates one on that connection."""
     ctx.start_host()
@@ -1741,27 +1782,73 @@ def s33_new_through_host(ctx, refuse=False):
     ctx.check("new.all_servers_stopped_on_quit", not [p for p in pids if running(p)], sorted(pids))
 
 
-def s33c_typed_right_after_new(ctx):
-    """A prompt typed while /new is still preparing reaches the new session exactly once."""
+EARLY = "early lantern word"
+STAGE_DELAY = 6.0
+
+
+def s33_early_input(ctx, refuse=False, stage="init"):
+    """Input typed while the /new server is still in `stage` (initialize or session/new) goes only to the new session; on refusal it stays unsent."""
     t = start_fg(ctx)
     submit(t, "hello lantern")
     t.wait_for("heard: hello lantern", 20)
     first_pid = ctx.ledger("spawn")[0]["pid"]
+    (ctx.fx["control"] / f"{stage}-delay").write_text(str(STAGE_DELAY))
+    if refuse:
+        (ctx.fx["control"] / "new-refuse").write_text("1")
     t.type("/new")
     time.sleep(1.0)
     t.keys("Enter")
     time.sleep(0.15)
     if re.search(r"^\s*›?\s*/new\s*$", t.screen(), re.M):
         t.keys("Enter")
-    time.sleep(0.2)
-    submit(t, "early lantern word")
-    rows = wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and "early lantern word" in r.get("text", ""), timeout=20)
-    time.sleep(3)
-    t.capture("early-word")
-    rows = [r for r in ctx.ledger("request", "session/prompt") if "early lantern word" in r.get("text", "")]
-    ctx.check("new.early_prompt_delivered_once", len(rows) == 1, len(rows))
-    ctx.check("new.early_prompt_reaches_new_session", rows and rows[0]["pid"] != first_pid, [(r["pid"], first_pid) for r in rows])
-    ctx.check("new.early_prompt_answered_on_screen", "heard: early lantern word" in t.screen(), last_nonblank(t.screen()))
+    wait_ledger(ctx, lambda r: r.get("kind") == f"{stage}_delay_start", timeout=10)
+    t.type(EARLY)
+    time.sleep(1.0)
+    t.keys("Enter")
+    typed_at = time.time()
+    t.capture("typed-during-init")
+    starts = ctx.ledger(f"{stage}_delay_start")
+    delayed_pid = starts[0]["pid"] if starts else None
+    wait_ledger(ctx, lambda r: r.get("kind") == f"{stage}_delay_end", timeout=STAGE_DELAY + 5)
+    ends = ctx.ledger(f"{stage}_delay_end")
+    ctx.check(f"early.typed_during_{stage}",
+              bool(starts and ends and starts[0]["t"] < typed_at < ends[0]["t"] and delayed_pid != first_pid),
+              {"start": starts and starts[0]["t"], "typed": typed_at, "end": ends and ends[0]["t"], "pid": delayed_pid})
+    early = lambda: [r for r in ctx.ledger("request", "session/prompt") if r.get("text", "").endswith(EARLY)]
+    if refuse:
+        wait_ledger(ctx, lambda r: r.get("kind") == "new_refused", timeout=10)
+        time.sleep(4)
+        t.capture("after-refusal")
+        screen = t.screen()
+        ctx.check("early.refusal_recorded_by_adapter", bool(ctx.ledger("new_refused")), len(ctx.ledger("new_refused")))
+        ctx.check("early.refused_input_stays_unsent", not early(), [(r["pid"], r["t"]) for r in early()])
+        ctx.check("early.refusal_message_shown", "no fresh lantern is available" in " ".join(screen.split()),
+                  [l.strip() for l in screen.splitlines() if "lantern" in l][-3:])
+        composer = [l.strip() for l in screen.splitlines() if l.strip().startswith("›")][-1:]
+        ctx.check("early.refused_input_back_in_composer", composer == [f"› {EARLY}"], composer)
+        time.sleep(1.0)
+        t.keys("Enter")
+        try:
+            t.wait_for(f"heard: {EARLY}", 15)
+        except TimeoutError:
+            pass
+        rows = early()
+        ctx.check("early.enter_sends_held_input_once_to_previous_session",
+                  len(rows) == 1 and rows[0]["pid"] == first_pid, [(r["pid"], first_pid) for r in rows])
+    else:
+        wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and r.get("text", "").endswith(EARLY), timeout=20)
+        time.sleep(3)
+        rows = early()
+        news = [r for r in ctx.ledger("request", "session/new") if r["pid"] == delayed_pid]
+        ctx.check("early.delivered_once", len(rows) == 1, [(r["pid"], r["t"]) for r in rows])
+        ctx.check("early.reaches_the_new_session", bool(rows) and rows[0]["pid"] == delayed_pid,
+                  [(r["pid"], delayed_pid, first_pid) for r in rows])
+        ctx.check("early.sent_after_the_new_session_exists", bool(rows and news) and rows[0]["t"] > news[0]["t"],
+                  {"prompt": rows and rows[0]["t"], "session_new": news and news[0]["t"]})
+        ctx.check("early.previous_session_gets_only_its_own_prompt",
+                  len([r for r in ctx.ledger("request", "session/prompt") if r["pid"] == first_pid]) == 1, first_pid)
+        ctx.check("early.answered_on_screen", f"heard: {EARLY}" in t.screen(), last_nonblank(t.screen()))
+    t.capture("final")
     quit_fg(t)
 
 
@@ -1813,6 +1900,7 @@ SCENARIOS = {
     "S28b": ("Escape cancels once (attach)", lambda c: s28_escape_cancel(c, "attach")),
     "S29a": ("refused /close (plain)", lambda c: s29_close_refusal(c, "fg")),
     "S29b": ("refused /close (attach)", lambda c: s29_close_refusal(c, "attach")),
+    "S29c": ("refused /close with two attached terminals", s29c_close_refusal_two_clients),
     "S30": ("prepared agent connection over the wire", s30_prepared_agent),
     "S31a": ("/resume restores an agent server's saved row via the host", lambda c: s31_restore_through_host(c, "/resume")),
     "S31b": ("/agent restores another server's saved row via the host", lambda c: s31_restore_through_host(c, "/agent")),
@@ -1820,7 +1908,12 @@ SCENARIOS = {
     "S31d": ("refused /agent restore keeps the current session", lambda c: s31_restore_through_host(c, "/agent", refuse=True)),
     "S33a": ("/new through the owned host in the session folder", s33_new_through_host),
     "S33b": ("refused /new keeps the current session", lambda c: s33_new_through_host(c, refuse=True)),
-    "S33c": ("prompt typed right after /new reaches the new session once", s33c_typed_right_after_new),
+    "S33c": ("input typed while the /new server initializes reaches only the new session", s33_early_input),
+    "S33d": ("input typed while a refused /new initializes stays unsent", lambda c: s33_early_input(c, refuse=True)),
+    "S33e": ("input typed while session/new is pending reaches only the new session",
+             lambda c: s33_early_input(c, stage="new")),
+    "S33f": ("input typed while a refused session/new is pending stays unsent",
+             lambda c: s33_early_input(c, refuse=True, stage="new")),
     "S32a": ("Esc on /resume rows reaps the prepared server", lambda c: s32_dismiss_reaps_prepared(c, "/resume")),
     "S32b": ("Esc on /agent rows reaps the prepared server", lambda c: s32_dismiss_reaps_prepared(c, "/agent")),
 }

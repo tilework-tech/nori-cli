@@ -12,7 +12,9 @@ Environment:
   LANTERN_CONTROL  directory of run-time switches; `close-refuse` holds how many
                    upcoming session/close requests to refuse ("close declined by <name>");
                    `load-refuse` does the same for session/load and session/resume,
-                   `new-refuse` for session/new
+                   `new-refuse` for session/new; `init-delay` holds seconds the next
+                   server to start waits before answering initialize, and `new-delay`
+                   seconds before answering the next session/new (one use each)
 
 Prompt words (first word of the prompt text):
   hold     stream a tick every 200 ms until cancelled (records ticks)
@@ -196,6 +198,20 @@ def agent_started_turn(sid):
     ledger("agent_turn_end", sessionId=sid, turnId=turn, stopReason=stop, ticks=ticks)
 
 
+def take_delay(name):
+    """Consume a one-shot delay switch, in seconds; 0 when none is set."""
+    if not CONTROL:
+        return 0.0
+    path = os.path.join(CONTROL, name)
+    with lock:
+        try:
+            seconds = float(open(path).read().strip() or 0)
+        except (FileNotFoundError, ValueError):
+            return 0.0
+        os.remove(path)
+    return seconds
+
+
 def main():
     ledger("spawn", cwd=os.getcwd(), argv=sys.argv[1:])
     for line in sys.stdin:
@@ -215,7 +231,18 @@ def main():
         if method == "session/prompt":
             summary["text"] = "".join(b.get("text", "") for b in params.get("prompt", []) if b.get("type") == "text")
         ledger("request", method=method, **summary)
+        if method == "session/new":
+            delay = take_delay("new-delay")
+            if delay:
+                ledger("new_delay_start", seconds=delay)
+                time.sleep(delay)
+                ledger("new_delay_end")
         if method == "initialize":
+            delay = take_delay("init-delay")
+            if delay:
+                ledger("init_delay_start", seconds=delay)
+                time.sleep(delay)
+                ledger("init_delay_end")
             send(id=rid, result={"protocolVersion": 1, "agentInfo": {"name": NAME, "version": "0.0.1"},
                                  "agentCapabilities": {"loadSession": True,
                                                        "sessionCapabilities": {"close": {}, "resume": {}, "list": {}}}})

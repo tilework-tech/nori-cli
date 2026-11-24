@@ -1518,96 +1518,6 @@
     "detail": "1"
   },
   {
-    "scenario": "S29a",
-    "check": "close_refusal.adapter_refused",
-    "passed": true,
-    "detail": ""
-  },
-  {
-    "scenario": "S29a",
-    "check": "close_refusal.shown_once",
-    "passed": true,
-    "detail": "['\u25a0 Failed to close the session: Failed to close ACP session: close declined by claude-code']"
-  },
-  {
-    "scenario": "S29a",
-    "check": "close_refusal.session_keeps_working",
-    "passed": true,
-    "detail": "\u203a ! for shell commands"
-  },
-  {
-    "scenario": "S29a",
-    "check": "close_refusal.retry_reaches_adapter",
-    "passed": true,
-    "detail": "2"
-  },
-  {
-    "scenario": "S29a",
-    "check": "close_refusal.no_cancel_sent",
-    "passed": true,
-    "detail": ""
-  },
-  {
-    "scenario": "S29a",
-    "check": "close_refusal.retry_leaves_terminal_open",
-    "passed": true,
-    "detail": "  \u2191\u2193/j/k move  / search  enter select  esc close"
-  },
-  {
-    "scenario": "S29a",
-    "check": "close_refusal.shown_once_after_retry",
-    "passed": true,
-    "detail": "[]"
-  },
-  {
-    "scenario": "S29b",
-    "check": "close_refusal.adapter_refused",
-    "passed": true,
-    "detail": ""
-  },
-  {
-    "scenario": "S29b",
-    "check": "close_refusal.shown_once",
-    "passed": false,
-    "detail": "['Failed to close ACP session: close declined by claude-code', 'close declined by claude-code', 'Failed to close ACP session: close declined by claude-code']"
-  },
-  {
-    "scenario": "S29b",
-    "check": "close_refusal.session_still_live_on_host",
-    "passed": true,
-    "detail": "[{'sessionId': 'd9be99d3-5729-4711-9d1e-17adfcb73b9d', 'cwd': '/tmp/nori-host-tui-acceptance-L3/S29b/roots/alpha/app', 'title': 'first light', 'updatedAt': '2026-11-24T06:44:50.817Z', '_meta': {'nori/agent': 'claude-code', 'nori/session': {'live': True}}}]"
-  },
-  {
-    "scenario": "S29b",
-    "check": "close_refusal.session_keeps_working",
-    "passed": true,
-    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
-  },
-  {
-    "scenario": "S29b",
-    "check": "close_refusal.retry_reaches_adapter",
-    "passed": true,
-    "detail": "2"
-  },
-  {
-    "scenario": "S29b",
-    "check": "close_refusal.no_cancel_sent",
-    "passed": true,
-    "detail": ""
-  },
-  {
-    "scenario": "S29b",
-    "check": "close_refusal.retry_ends_session_on_host",
-    "passed": true,
-    "detail": "[{'sessionId': 'd9be99d3-5729-4711-9d1e-17adfcb73b9d', 'cwd': '/tmp/nori-host-tui-acceptance-L3/S29b/roots/alpha/app', 'title': 'first light', 'updatedAt': '2026-11-24T06:44:56.479Z', '_meta': {'nori/agent': 'claude-code', 'nori/session': {'live': False}}}]"
-  },
-  {
-    "scenario": "S29b",
-    "check": "close_refusal.client_still_attached",
-    "passed": true,
-    "detail": ""
-  },
-  {
     "scenario": "S30",
     "check": "prepared.capability_advertised",
     "passed": true,
@@ -1834,5 +1744,137 @@
     "check": "restore.all_servers_stopped_on_quit",
     "passed": true,
     "detail": "[185347, 185561]"
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.adapter_refused",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.shown_once",
+    "passed": true,
+    "detail": "['\u25a0 Failed to close the session: Failed to close ACP session: close declined by claude-code']"
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.session_keeps_working",
+    "passed": true,
+    "detail": "\u203a ! for shell commands"
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.retry_reaches_adapter",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.no_cancel_sent",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.retry_leaves_terminal_open",
+    "passed": true,
+    "detail": "  \u2191\u2193/j/k move  / search  enter select  esc close"
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.shown_once_after_retry",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.adapter_refused",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.shown_once",
+    "passed": false,
+    "detail": "['Failed to close ACP session: close declined by claude-code', 'close declined by claude-code', 'Failed to close ACP session: close declined by claude-code']"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.session_still_live_on_host",
+    "passed": true,
+    "detail": "[{'sessionId': 'ea935756-6661-49a0-8375-0bb6e3a2c258', 'cwd': '/tmp/nori-host-tui-acceptance/S29b/roots/alpha/app', 'title': 'first light', 'updatedAt': '2026-11-24T08:17:09.039Z', '_meta': {'nori/agent': 'claude-code', 'nori/session': {'live': True}}}]"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.session_keeps_working",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.retry_reaches_adapter",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.no_cancel_sent",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.retry_ends_session_on_host",
+    "passed": true,
+    "detail": "[{'sessionId': 'ea935756-6661-49a0-8375-0bb6e3a2c258', 'cwd': '/tmp/nori-host-tui-acceptance/S29b/roots/alpha/app', 'title': 'first light', 'updatedAt': '2026-11-24T08:17:14.705Z', '_meta': {'nori/agent': 'claude-code', 'nori/session': {'live': False}}}]"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.client_still_attached",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.adapter_got_one_close",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.adapter_refused_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.controller_shows_once",
+    "passed": false,
+    "detail": "['Failed to close ACP session: close declined by claude-code', 'close declined by claude-code', 'Failed to close ACP session: close declined by claude-code']"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.watcher_shows_at_most_once",
+    "passed": true,
+    "detail": "['close declined by claude-code']"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.session_still_live_on_host",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.session_keeps_working_in_both",
+    "passed": true,
+    "detail": "('   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task')"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.counts_unchanged_after_next_turn",
+    "passed": false,
+    "detail": "(['Failed to close ACP session: close declined by claude-code', 'close declined by claude-code'], ['close declined by claude-code'])"
   }
 ]
