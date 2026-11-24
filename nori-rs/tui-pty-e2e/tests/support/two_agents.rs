@@ -21,7 +21,16 @@ pub fn terminal(gates: &[&str]) -> (tempfile::TempDir, TuiSession) {
 
 /// Plain `nori` with `args` after it, once its composer is on screen.
 pub fn launch(gates: &[&str], args: &[&str]) -> (tempfile::TempDir, TuiSession) {
-    let home = tempfile::tempdir().unwrap();
+    // Verifier trace run: keep every home (logs, adapter traffic) for upload.
+    let home = match std::env::var_os("PTY_KEEP_HOMES") {
+        Some(dir) => {
+            fs::create_dir_all(&dir).unwrap();
+            let mut home = tempfile::tempdir_in(dir).unwrap();
+            home.disable_cleanup(true);
+            home
+        }
+        None => tempfile::tempdir().unwrap(),
+    };
     let folder = home.path().canonicalize().unwrap();
     for gate in ["fixture-traffic-amber", "fixture-traffic-birch"]
         .iter()
