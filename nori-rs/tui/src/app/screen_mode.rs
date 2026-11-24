@@ -100,6 +100,12 @@ impl App {
         self.screen.set_full_screen(false);
         if tui.leave_alt_screen_entirely() {
             tui.terminal.clear()?;
+            // No later draw runs the reprint deferred while full-screen.
+            if self.transcript_reflow.has_pending_reflow() || self.session_reprint_pending {
+                self.session_reprint_pending = false;
+                self.screen.discard_held();
+                return self.reprint_active_transcript(tui);
+            }
         }
         self.release_held_history(tui);
         Ok(())
