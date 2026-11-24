@@ -16,6 +16,11 @@ Prompt words (first word of the prompt text):
   scan     send a read tool call with a line range and a search with hits
   bulky    send a tool call whose output has 60 numbered lines
   perm     ask for permission before replying
+  ponder   stream three thoughts over ~4 s (two headed, one plain), then reply
+  patch    send an edit tool call whose diff changes 40 lines
+  wake     reply, then start an agent-started turn (broker-style
+           nori/turnId) that ticks until session/cancel, then reports
+           idle with stopReason cancelled for the same turn id
   anything else: reply "<name> heard: <text>"
 """
 import json
@@ -91,6 +96,31 @@ def run_prompt(rid, sid, text):
         ledger("turn_end", sessionId=sid, stopReason="cancelled", ticks=ticks)
         send(id=rid, result={"stopReason": "cancelled"})
         return
+    if word == "ponder":
+        chunk(sid, "agent_thought_chunk", "**Charting the breakwater**\nCounting the pilings first.")
+        ledger("thought", sessionId=sid, n=1)
+        time.sleep(2.0)
+        chunk(sid, "agent_thought_chunk", "\n\n**Sorting the buoy colours**\nRed to port.")
+        ledger("thought", sessionId=sid, n=2)
+        time.sleep(2.0)
+        chunk(sid, "agent_message_chunk", "Midway note. ")
+        chunk(sid, "agent_thought_chunk", "Listening for the foghorn cadence")
+        ledger("thought", sessionId=sid, n=3)
+        time.sleep(2.0)
+    if word == "patch":
+        old = "".join(f"buoy {n:02d} = red\n" for n in range(1, 41))
+        new = "".join(f"buoy {n:02d} = green\n" for n in range(1, 41))
+        cwd = sessions.get(sid, {}).get("cwd") or os.getcwd()
+        update(sid, {"sessionUpdate": "tool_call", "toolCallId": "patch-1", "kind": "edit",
+                     "title": "Edit harbor/buoys.txt", "status": "completed",
+                     "content": [{"type": "diff", "path": os.path.join(cwd, "harbor/buoys.txt"),
+                                  "oldText": old, "newText": new}]})
+    if word == "wake":
+        chunk(sid, "agent_message_chunk", f"{NAME} heard: {text}")
+        ledger("turn_end", sessionId=sid, stopReason="end_turn")
+        send(id=rid, result={"stopReason": "end_turn"})
+        threading.Thread(target=agent_started_turn, args=(sid,), daemon=True).start()
+        return
     if word == "think":
         chunk(sid, "agent_thought_chunk", "**Weighing the lighthouse log** before answering.")
         time.sleep(0.3)
@@ -122,6 +152,26 @@ def run_prompt(rid, sid, text):
     chunk(sid, "agent_message_chunk", f"{NAME} heard: {text}")
     ledger("turn_end", sessionId=sid, stopReason="end_turn")
     send(id=rid, result={"stopReason": "end_turn"})
+
+
+def agent_started_turn(sid):
+    time.sleep(1.0)
+    turn = f"{NAME}-wake-{int(time.time() * 1000) % 100000}"
+    ledger("agent_turn_start", sessionId=sid, turnId=turn)
+    update(sid, {"sessionUpdate": "session_info_update",
+                 "_meta": {"nori": {"status": "working"}, "nori/turnId": turn, "nori/turnState": "active"}})
+    ticks = 0
+    while sid not in cancelled and ticks < 300:
+        ticks += 1
+        chunk(sid, "agent_message_chunk", f"wake {ticks} ")
+        ledger("tick", sessionId=sid, n=ticks, turnId=turn)
+        time.sleep(0.2)
+    stop = "cancelled" if sid in cancelled else "end_turn"
+    cancelled.discard(sid)
+    update(sid, {"sessionUpdate": "session_info_update",
+                 "_meta": {"nori": {"status": "idle"}, "nori/turnId": turn, "nori/turnState": "idle",
+                           "nori/stopReason": stop}})
+    ledger("agent_turn_end", sessionId=sid, turnId=turn, stopReason=stop, ticks=ticks)
 
 
 def main():

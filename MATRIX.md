@@ -60,6 +60,23 @@ At main (`f9eedcac`) a `FAIL` usually means the feature has not been built yet; 
 | Read Only migrates to Ask | S15b | screen, config | 4 | FAIL |
 | Read Only migrates to Agent without Ask | S15c | screen, config | 4 | FAIL |
 
+### Added 2026-11-24 (gap closure)
+
+Columns: main `f9eedcac`, #738 `8ea6650e`.
+
+| Requirement | Scenario / check | Observed by | Layer | f9eedcac | 8ea6650e |
+|---|---|---|---|---|---|
+| Watcher reconnect keeps its unsent draft and stays a watcher | S16 watcher_reconnect.* | screen, adapter | 1/3 | pass | pass |
+| Controller keeps its role after a hard drop | S09 reconnect.controller_role_restored | screen | 1 | pass | pass |
+| Silent loss (no FIN/RST) is noticed, reconnects, keeps draft and live turn | S17 silent.* | screen, adapter | 1 | pass (noticed at 10.1 s) | pass |
+| Working indicator shows the current thought (plain) | S18a indicator.* | screen, adapter | regression | pass | pass |
+| Working indicator shows the current thought (attach) | S18b indicator.thought_*_on_working_row | screen | 2/6 | FAIL (no indicator; thoughts stream inline) | FAIL (same) |
+| `[tui] tool_output_max_lines` caps head/tail, diffs whole, transcript full (plain) | S19a cap.* | screen | regression | pass | pass |
+| Same cap in attach | S19b cap.total_rows_at_most_cap, hidden_marker | screen | 2/6 | FAIL (cap ignored) | FAIL (same) |
+| Tool output stays full by default | S19c (plain), S19d (attach) | screen | regression | pass | pass |
+| Cancel an agent-started turn: one cancel, same broker turn id, cancelled stop, idle (plain, Esc) | S20a agent_turn.* | adapter, screen | regression | pass | pass |
+| Same in attach (Ctrl+C); watcher cannot cancel; draft kept; watcher sees idle | S20b agent_turn.* | adapter, screen | regression | pass | pass |
+
 ## Pre-existing findings at main (`f9eedcac`)
 
 1. `[host] default_mode` is ignored by `/new` from attach: the host sets the
@@ -69,6 +86,14 @@ At main (`f9eedcac`) a `FAIL` usually means the feature has not been built yet; 
 3. In attach, `@` opens a file popup that stays on `loading...` (S07), and `/new DIR` Tab completes from the client's folder, not the session's (S06).
 4. In attach, `/approvals`, `/diff` and other slash text are sent to the agent as prompts (S05, S10).
 5. The attach terminal title is not set from the agent (S11b; the pane keeps the shell's title).
+7. Attach has no working indicator: thought text streams inline as a `│` block, so the
+   current-thought indicator (#730) exists only in plain `nori` (S18b).
+8. Attach ignores `[tui] tool_output_max_lines`: all 60 rows render with the cap at 10 (S19b).
+   Plain `nori` caps correctly (4 head + 5 tail + `┄ 51 lines hidden`), leaves a 40-line diff whole,
+   and keeps the Ctrl+T transcript uncapped (S19a).
+9. In attach, a CONTROLLING terminal's hint row still offers `alt+t take control` (S09, S17 captures).
+10. Pressing Ctrl+C a second time after an agent-started turn is already idle clears the
+   attach draft (ordinary idle Ctrl+C). Recorded as information, not a failure (S20b).
 6. Linux CI is green; native macOS on the main push fails only
    `requests_piped_before_stdin_closes_are_all_answered_by_the_joined_host`
    (`cli/tests/host_stdio.rs:424`), the pre-existing failure tracked by nori-cli #737
@@ -76,11 +101,15 @@ At main (`f9eedcac`) a `FAIL` usually means the feature has not been built yet; 
 
 ## Not covered by this harness (honest gaps)
 
-- Cancel of agent-started turns (#732) and current-thought working indicator (#730):
-  covered by repository tests `tui-pty-e2e --test attached_external_cancel` and the
-  #730/#733 proof sets on `nori/pr-proofs`; re-run those suites per head instead.
-- Tool-output line cap (#734) is not driven here.
-- Watcher-role reconnect and blackhole (silent) drops: only a controller hard drop is driven.
+- Delayed-cancel rejection (a cancel bound to an older agent-started turn is refused once a
+  new turn starts) is covered only by the repository test
+  `tui-pty-e2e --test attached_external_cancel` (`delayed_cancel_for_amber_does_not_interrupt_blue`),
+  which drives turn activity through a fixture option rather than a real agent-started turn.
+  S20 covers the end-to-end path with a real agent-started turn and broker-style
+  `nori/turnId` / `nori/turnState` / `nori/stopReason`.
+- Silent loss (S17) blackholes only the controller's link. A blackholed watcher, and a host
+  that keeps the dead controller socket for longer than the client's 10 s liveness window,
+  are not driven separately; S17 shows the reconnecting client regains CONTROLLING.
 - A race that types `@` within milliseconds of a session switch is not forced;
   S07 types after the switch settles.
 - Screen checks for menus and selections (S12-S15) match on visible labels

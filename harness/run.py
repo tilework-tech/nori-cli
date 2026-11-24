@@ -490,6 +490,7 @@ def s09_reconnect_keeps_drafts(ctx):
     a.wait_gone("RECONNECTING", 20)
     time.sleep(1)
     ctx.check("reconnect.controller_draft_kept", "half-written controller draft" in a.screen())
+    ctx.check("reconnect.controller_role_restored", role_of(a.screen()) == "controlling", role_of(a.screen()))
     a.capture("reconnected")
     proxy.close()
 
@@ -712,6 +713,296 @@ def s15_legacy_approval_migration(ctx, preset):
     ctx.check("migration.runs_once", config.read_text() == migrated)
 
 
+def attach_via(ctx, t, proxy, sid=None):
+    token_file = ctx.fx["homes"]["host"] / "host" / "token"
+    t.run(f"{NORI} attach --host {proxy.url} --token-file {token_file}" + (f" {sid[:8]}" if sid else ""))
+
+
+def role_of(screen):
+    """The role in the attach header row (`Nori host  CONTROLLING` / `WATCHING ...`)."""
+    header = next((l for l in screen.splitlines() if "Nori host" in l), "")
+    for role in ("CONTROLLING", "WATCHING", "RECONNECTING"):
+        if role in header:
+            return role.lower()
+    return f"unknown: {header.strip()!r}"
+
+
+def s16_watcher_reconnect_keeps_draft(ctx):
+    """A watcher whose link drops keeps its unsent draft, stays a watcher, and still cannot send."""
+    endpoint, _ = ctx.start_host()
+    a = ctx.term("controller")
+    a.run(f"{NORI} attach")
+    attach_new_session(a)
+    a.type("first light")
+    a.keys("Enter")
+    a.wait_for("heard: first light", 20)
+    obs = ctx.observer()
+    sid = obs.sessions()[0]["sessionId"]
+    obs.close()
+    proxy = Proxy(endpoint)
+    b = ctx.term("watcher")
+    attach_via(ctx, b, proxy, sid)
+    b.wait_for(r"(WATCHING|watching|Watching|take control)", 20, regex=True)
+    draft = "watcher draft across the gap"
+    b.type(draft)
+    proxy.drop_all(hold=3.0)
+    try:
+        b.wait_for(r"(RECONNECTING|reconnecting|Reconnecting)", 15, regex=True)
+        saw = True
+    except TimeoutError:
+        saw = False
+    b.capture("watcher-reconnecting")
+    ctx.check("watcher_reconnect.shows_reconnecting", saw)
+    ctx.check("watcher_reconnect.draft_kept_while_down", draft in b.screen())
+    b.wait_gone("RECONNECTING", 25)
+    time.sleep(1.5)
+    b_screen = b.screen()
+    b.capture("watcher-reconnected")
+    ctx.check("watcher_reconnect.draft_kept_after", draft in b_screen)
+    ctx.check("watcher_reconnect.still_watching", role_of(b_screen) == "watching", role_of(b_screen))
+    ctx.check("watcher_reconnect.controller_unchanged", role_of(a.screen()) == "controlling", role_of(a.screen()))
+    a.type("second light")
+    a.keys("Enter")
+    try:
+        b.wait_for("heard: second light", 15)
+        live = True
+    except TimeoutError:
+        live = False
+    ctx.check("watcher_reconnect.sees_new_turns", live)
+    b.keys("Enter")
+    time.sleep(1.2)
+    prompts = [r.get("text", "") for r in ctx.ledger("request", "session/prompt")]
+    ctx.check("watcher_reconnect.enter_still_not_delivered", not any(draft in p for p in prompts), prompts)
+    ctx.check("watcher_reconnect.draft_kept_after_enter", draft in b.screen())
+    b.capture("watcher-enter-after-reconnect")
+    b.keys("C-u")
+    proxy.close()
+
+
+def s17_silent_loss(ctx):
+    """A blackholed link (no FIN/RST) is noticed, reconnects, keeps the draft and the live turn."""
+    endpoint, _ = ctx.start_host()
+    proxy = Proxy(endpoint)
+    a = ctx.term("controller")
+    attach_via(ctx, a, proxy)
+    attach_new_session(a)
+    a.type("hold the lamp")
+    a.keys("Enter")
+    a.wait_for("tick 3", 20)
+    draft = "draft through the silence"
+    a.type(draft)
+    t0 = time.time()
+    n = proxy.silence_all()
+    try:
+        a.wait_for(r"(RECONNECTING|reconnecting|Reconnecting|stopped responding)", 30, regex=True)
+        noticed = time.time() - t0
+    except TimeoutError:
+        noticed = None
+    a.capture("silent-noticed")
+    ctx.check("silent.client_notices_without_fin", noticed is not None and noticed <= 20,
+              f"links silenced={n} noticed_after={noticed and round(noticed, 1)}s")
+    ctx.check("silent.draft_kept_while_down", draft in a.screen())
+    a.wait_gone("RECONNECTING", 30)
+    time.sleep(2)
+    screen = a.screen()
+    a.capture("silent-reconnected")
+    ctx.check("silent.draft_kept_after", draft in screen)
+    before = ctx.ticks()
+    time.sleep(1.5)
+    ctx.check("silent.turn_kept_running", ctx.ticks() > before, f"{before}->{ctx.ticks()}")
+    n1 = max(map(int, re.findall(r"tick (\d+)", a.screen())) or [0])
+    time.sleep(1.2)
+    n2 = max(map(int, re.findall(r"tick (\d+)", a.screen())) or [0])
+    ctx.check("silent.live_stream_resumes_on_screen", n2 > n1 > 0, f"{n1}->{n2}")
+    role = role_of(screen)
+    ctx.check("silent.role_after_reconnect_recorded", True, role)
+    if role == "watching":
+        a.keys("M-t")
+        time.sleep(1.5)
+    ctx.check("silent.can_control_after_reconnect", role_of(a.screen()) == "controlling", role_of(a.screen()))
+    a.keys("C-u")
+    a.keys("C-c")
+    time.sleep(2)
+    cancels = ctx.ledger("request", "session/cancel")
+    ends = [r for r in ctx.ledger("turn_end") if r.get("stopReason") == "cancelled"]
+    ctx.check("silent.cancel_after_reconnect_reaches_adapter", bool(cancels) and bool(ends),
+              {"cancels": len(cancels), "ends": ends[-1:]})
+    a.capture("silent-after-cancel")
+    proxy.close()
+
+
+def indicator_lines(screen, needle):
+    return [l for l in screen.splitlines() if needle in l]
+
+
+def s18_thought_indicator(ctx, mode):
+    """The working indicator follows the agent's current thought, heading or plain text."""
+    if mode == "attach":
+        ctx.start_host()
+        t = ctx.term("attach")
+        t.run(f"{NORI} attach")
+        attach_new_session(t)
+    else:
+        t = ctx.term("fg")
+        t.run(f"{NORI} --skip-trust-directory")
+        wait_composer(t)
+    t.type("ponder the harbor")
+    t.keys("Enter")
+    expected = {1: "Charting the breakwater", 2: "Sorting the buoy colours", 3: "Listening for the foghorn cadence"}
+    seen = {}
+    for n, text in expected.items():
+        deadline = time.time() + 15
+        while time.time() < deadline and not [r for r in ctx.ledger("thought") if r.get("n") == n]:
+            time.sleep(0.1)
+        time.sleep(0.8)
+        screen = t.screen()
+        seen[n] = screen
+        t.capture(f"indicator-thought-{n}")
+        rows = indicator_lines(screen, text)
+        working = [l for l in screen.splitlines() if re.search(r"(esc to interrupt|\(\d+s|Working)", l)]
+        ctx.check(f"indicator.thought_{n}_shown", bool(rows), {"rows": rows, "working": working})
+        ctx.check(f"indicator.thought_{n}_on_working_row", any(r in working for r in rows), {"rows": rows, "working": working})
+    ctx.check("indicator.second_heading_replaces_first",
+              not [l for l in indicator_lines(seen[2], expected[1]) if re.search(r"(esc to interrupt|\(\d+s)", l)])
+    ctx.check("indicator.plain_thought_replaces_heading",
+              not [l for l in indicator_lines(seen[3], expected[2]) if re.search(r"(esc to interrupt|\(\d+s)", l)])
+    t.wait_for("heard: ponder the harbor", 20)
+    time.sleep(0.8)
+    done = t.history() if mode == "fg" else t.screen()
+    t.capture("indicator-done")
+    ctx.check("indicator.cleared_after_turn",
+              not [l for l in t.screen().splitlines() if "foghorn" in l and re.search(r"(esc to interrupt|\(\d+s)", l)])
+    ctx.check("indicator.thoughts_in_history", all(x in done for x in expected.values()),
+              [x for x in expected.values() if x not in done])
+
+
+def s19_tool_output_cap(ctx, mode, capped):
+    """[tui] tool_output_max_lines caps tool text head/tail; diffs stay whole; default stays full."""
+    if mode == "attach":
+        ctx.start_host()
+        t = ctx.term("attach", rows=70)
+        t.run(f"{NORI} attach")
+        attach_new_session(t)
+    else:
+        t = ctx.term("fg", rows=70)
+        t.run(f"{NORI} --skip-trust-directory")
+        wait_composer(t)
+    t.type("bulky rows")
+    t.keys("Enter")
+    t.wait_for("heard: bulky rows", 20)
+    time.sleep(0.8)
+    text = t.history() if mode == "fg" else t.screen()
+    t.capture("bulky")
+    (ctx.dir / "bulky-history.txt").write_text(text)
+    shown = sorted({int(m) for m in re.findall(r"row (\d\d) of the synthetic ledger", text)})
+    hidden = re.findall(r"(\d+) lines? hidden", text)
+    if capped:
+        ctx.check("cap.head_and_tail_kept", shown[:1] == [1] and shown[-1:] == [60], shown)
+        ctx.check("cap.total_rows_at_most_cap", 0 < len(shown) <= 10, f"{len(shown)} rows: {shown}")
+        ctx.check("cap.hidden_marker_counts_the_rest", hidden == [str(60 - len(shown))], hidden)
+    else:
+        ctx.check("cap.default_shows_all_rows", shown == list(range(1, 61)), f"{len(shown)} rows")
+        ctx.check("cap.default_has_no_hidden_marker", not hidden, hidden)
+    t.type("patch the buoys")
+    t.keys("Enter")
+    t.wait_for("heard: patch the buoys", 20)
+    time.sleep(0.8)
+    text = t.history() if mode == "fg" else t.screen()
+    t.capture("patch")
+    greens = sorted({int(m) for m in re.findall(r"buoy (\d\d) = green", text)})
+    ctx.check("cap.diff_left_whole", greens == list(range(1, 41)), f"{len(greens)} added lines")
+    if capped and mode == "fg":
+        t.keys("C-t")
+        time.sleep(1.2)
+        t.capture("transcript")
+        tr = t.screen()
+        t.keys("q")
+        rows = sorted({int(m) for m in re.findall(r"row (\d\d) of the synthetic ledger", tr)})
+        ctx.check("cap.transcript_overlay_is_uncapped", rows[:12] == list(range(1, 13))
+                  and not re.search(r"\d+ lines hidden", tr), f"contiguous rows on first page: {rows[:14]}")
+
+
+def s20_agent_started_cancel(ctx, mode):
+    """A controller interrupts a turn the agent started; the adapter sees one cancel; the host reports it."""
+    if mode == "attach":
+        ctx.start_host()
+        t = ctx.term("attach")
+        t.run(f"{NORI} attach")
+        attach_new_session(t)
+    else:
+        t = ctx.term("fg")
+        t.run(f"{NORI} --skip-trust-directory")
+        wait_composer(t)
+    t.type("wake the keeper")
+    t.keys("Enter")
+    t.wait_for("heard: wake the keeper", 20)
+    deadline = time.time() + 15
+    while time.time() < deadline and len([r for r in ctx.ledger("tick") if r.get("turnId")]) < 4:
+        time.sleep(0.2)
+    started = ctx.ledger("agent_turn_start")
+    ctx.check("agent_turn.started_without_prompt", bool(started)
+              and len(ctx.ledger("request", "session/prompt")) == 1, started)
+    t.capture("agent-turn-working")
+    working = t.screen()
+    ctx.check("agent_turn.tui_shows_working", re.search(r"(esc to interrupt|Working|working|\(\d+s)", working) is not None,
+              last_nonblank(working))
+    b = None
+    if mode == "attach":
+        obs = ctx.observer()
+        sid = obs.sessions()[0]["sessionId"]
+        obs.close()
+        b = ctx.term("watcher")
+        b.run(f"{NORI} attach {sid[:8]}")
+        b.wait_for(r"(WATCHING|watching|take control)", 20, regex=True)
+        b.keys("C-c")
+        time.sleep(1.2)
+        ctx.check("agent_turn.watcher_cannot_cancel", not ctx.ledger("request", "session/cancel"),
+                  len(ctx.ledger("request", "session/cancel")))
+        b.capture("watcher-ctrl-c")
+    draft = "note for after the keeper"
+    if mode == "attach":
+        t.type(draft)
+        t.keys("C-c")
+    else:
+        t.keys("Escape")
+    deadline = time.time() + 10
+    while time.time() < deadline and not ctx.ledger("agent_turn_end"):
+        time.sleep(0.2)
+    time.sleep(1.5)
+    cancels = ctx.ledger("request", "session/cancel")
+    end = ctx.ledger("agent_turn_end")
+    ctx.check("agent_turn.adapter_received_one_cancel", len(cancels) == 1, len(cancels))
+    ctx.check("agent_turn.adapter_reports_cancelled_same_turn", bool(end) and end[-1]["stopReason"] == "cancelled"
+              and started and end[-1]["turnId"] == started[-1]["turnId"], end)
+    before = ctx.ticks()
+    time.sleep(1.0)
+    ctx.check("agent_turn.ticks_stopped", ctx.ticks() == before)
+    screen = t.screen()
+    t.capture("agent-turn-cancelled")
+    ctx.check("agent_turn.tui_back_to_idle", not re.search(r"(esc to interrupt|Cancel requested)", screen),
+              [l for l in screen.splitlines() if re.search(r"(interrupt|Cancel|cancel|idle|ready)", l)])
+    ctx.check("agent_turn.no_unconfirmed_warning", not re.search(r"unconfirmed", screen, re.I))
+    if mode == "attach":
+        ctx.check("agent_turn.draft_kept", draft in screen)
+        time.sleep(0.5)
+        b.capture("watcher-after-cancel")
+        ctx.check("agent_turn.watcher_sees_idle", not re.search(r"(esc to interrupt|Cancel requested)", b.screen()))
+        t.keys("C-c")
+        time.sleep(0.6)
+        ctx.check("agent_turn.info_second_ctrl_c_when_idle", True,
+                  "draft kept" if draft in t.screen() else "draft cleared (idle Ctrl+C clears the composer)")
+        t.capture("second-ctrl-c-idle")
+    t.keys("C-u")
+    t.type("after the keeper")
+    t.keys("Enter")
+    try:
+        t.wait_for("heard: after the keeper", 15)
+        ok = True
+    except TimeoutError:
+        ok = False
+    ctx.check("agent_turn.next_prompt_works", ok)
+
+
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
     "S02": ("foreground quit stops a running turn", s02_foreground_quit_stops_turn),
@@ -734,10 +1025,21 @@ SCENARIOS = {
     "S15b": ("legacy Read Only migrates to Ask", lambda c: s15_legacy_approval_migration(c, "read-only")),
     "S15c": ("legacy Read Only without Ask migrates to Agent",
              lambda c: s15_legacy_approval_migration(c, "read-only-no-ask")),
+    "S16": ("watcher reconnect keeps an unsent draft", s16_watcher_reconnect_keeps_draft),
+    "S17": ("silent connection loss", s17_silent_loss),
+    "S18a": ("thought text in the working indicator (plain)", lambda c: s18_thought_indicator(c, "fg")),
+    "S18b": ("thought text in the working indicator (attach)", lambda c: s18_thought_indicator(c, "attach")),
+    "S19a": ("tool-output cap (plain)", lambda c: s19_tool_output_cap(c, "fg", True)),
+    "S19b": ("tool-output cap (attach)", lambda c: s19_tool_output_cap(c, "attach", True)),
+    "S19c": ("tool output full by default (plain)", lambda c: s19_tool_output_cap(c, "fg", False)),
+    "S19d": ("tool output full by default (attach)", lambda c: s19_tool_output_cap(c, "attach", False)),
+    "S20a": ("cancel an agent-started turn (plain, Esc)", lambda c: s20_agent_started_cancel(c, "fg")),
+    "S20b": ("cancel an agent-started turn (attach, Ctrl+C)", lambda c: s20_agent_started_cancel(c, "attach")),
 }
 
 
-FIXTURE_ARGS = {"S12": {"host_extra": 'default_mode = "ask"'}}
+CAP = "[tui]\ntool_output_max_lines = 10"
+FIXTURE_ARGS = {"S12": {"host_extra": 'default_mode = "ask"'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}
 
 
 def main():

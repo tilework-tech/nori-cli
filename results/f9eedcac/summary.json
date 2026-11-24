@@ -1,8 +1,6 @@
 {
-  "commit": "f9eedcac7a1d473a4d0bb264d81d9a095aebe7cd",
-  "tree": "tilework-tech/nori-cli main",
-  "binary": "cargo build --bin nori (debug)",
-  "passed": 79,
-  "failed": 28,
-  "checks": 107
+  "nori": "nori-f9eedcac",
+  "passed": 146,
+  "failed": 33,
+  "checks": 179
 }

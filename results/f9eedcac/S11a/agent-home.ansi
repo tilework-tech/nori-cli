@@ -29,7 +29,7 @@ shell$ nori --skip-trust-directory
 • [0m[39m[49mclaude-code heard: scan the harbor
 
                                                                                                                 [2m[ auto ]
-[0;1m[39m[49m›[0m[39m[49m [2m@ for file mentions
+[0;1m[39m[49m›[0m[39m[49m [2m! for shell commands
 
 
 

@@ -10,12 +10,12 @@ that stands in for Claude Code, Codex and OpenCode under their slugs.
 
 ```
 MATRIX.md                 requirements -> scenario checks -> status per commit
-harness/run.py            scenario runner (S01-S15)
+harness/run.py            scenario runner (S01-S20)
 harness/lantern_adapter.py  synthetic ACP agent server with a frame ledger
 harness/fixtures.py       synthetic homes, roots and [[agents]] config
 harness/term.py           tmux PTY driver (private socket, raw byte log)
 harness/wire.py           independent observer connection to the host
-harness/proxy.py          TCP relay that can drop attach connections
+harness/proxy.py          TCP relay that can drop (hard) or blackhole (silent) attach connections
 harness/render.sh         renders .ansi captures to PNG with Ghostty Web
 results/<sha8>/           results.json, summary.json, per-scenario captures and ledgers
 ```
