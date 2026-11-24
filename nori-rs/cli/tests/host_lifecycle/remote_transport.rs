@@ -499,7 +499,10 @@ async fn stop_completes_for_its_instance_while_a_replacement_serves_the_same_hom
         if result.status.success() && discovery(&host)["instanceId"] != first["instanceId"] {
             break;
         }
-        assert!(Instant::now() < deadline, "replacement never started: {result:?}");
+        assert!(
+            Instant::now() < deadline,
+            "replacement never started: {result:?}"
+        );
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     let replacement = discovery(&host);
