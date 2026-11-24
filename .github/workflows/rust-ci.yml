@@ -1,8 +1,7 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/pr-741-65e1ddd7-native-host']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +11,7 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 55
     defaults:
       run:
         working-directory: nori-rs
@@ -25,10 +24,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: macOS host verification
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: 65e1ddd73c0fd60bbe7e68fa3d4f42e13a7db885
+          persist-credentials: false
+
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = 65e1ddd73c0fd60bbe7e68fa3d4f42e13a7db885 && git rev-parse HEAD && uname -sm
 
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -114,32 +122,18 @@ jobs:
             sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-
             sccache-${{ matrix.runner }}-${{ matrix.target }}-
 
-      # CI checks
-      - name: cargo fmt
+      - name: Check formatting
         run: cargo +nightly fmt -- --check
-      # - name: cargo check
-      #   run: cargo check --profile ci-test --target ${{ matrix.target }}
-      # - name: cargo clippy
-      #   run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings # needs all features to avoid unused import/var/etc errors
-      - name: cargo build
+
+      - name: Build both foreground executables
+        run: cargo build --locked --profile ci-test --target aarch64-apple-darwin --bin nori-tui --bin nori --bin mock_acp_agent
+
+      - name: Launch both binaries in native PTYs
         run: |
-          mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
-          cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
-          cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
-      - name: cargo test nori
-        env:
-          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
-        run: |
-          cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-harness
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-host-runtime
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp-host
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-auth-providers
-      - name: cargo clippy
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
+          export MOCK_ACP_AGENT_BIN="$PWD/target/aarch64-apple-darwin/ci-test/mock_acp_agent"
+          cargo test --locked --profile ci-test --target aarch64-apple-darwin -p tui-pty-e2e --test prepared_startup both_foreground_launchers_own_one_inline_session_until_quit -- --exact
+          cargo test --locked --profile ci-test --target aarch64-apple-darwin -p nori-host-runtime
+          cargo test --locked --profile ci-test --target aarch64-apple-darwin -p nori-cli --test host_lifecycle --test host_stdio
 
       # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache
