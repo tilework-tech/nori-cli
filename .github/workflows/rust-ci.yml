@@ -145,7 +145,7 @@ jobs:
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
-          for round in 1 2 3 4 5 6; do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --test host_startup startup_activates -- --nocapture 2>&1 | grep -E "DBG|^test .* (ok|FAILED)$" | cut -c1-600 | sed "s/^/round $round: /"; done | tee results.txt; ! grep -q FAILED results.txt
+          for round in 1 2 3 4 5 6; do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --test host_startup --test host_new_session -- --nocapture 2>&1 | grep -E "DBG|^test .* (ok|FAILED)$" | cut -c1-600 | sed "s/^/round $round: /"; done | tee results.txt; ! grep -q FAILED results.txt
       # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache
         if: always() && !cancelled() && steps.cache_cargo_home_restore.outputs.cache-hit != 'true'
