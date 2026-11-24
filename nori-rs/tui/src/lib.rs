@@ -58,6 +58,7 @@ mod frames;
 mod get_git_diff;
 mod git_marker;
 mod history_cell;
+mod host_client;
 pub mod insert_history;
 mod key_hint;
 pub mod live_wrap;

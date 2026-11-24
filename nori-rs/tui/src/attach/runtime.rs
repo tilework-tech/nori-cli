@@ -3,12 +3,14 @@
 use std::collections::HashMap;
 
 use serde_json::Value;
-use serde_json::json;
 use tokio::sync::mpsc;
 
-use super::connection::ConnectionEvent;
 use super::state::AttachState;
 use super::state::CancelDelivery;
+use crate::host_client::ConnectionEvent;
+use crate::host_client::HostCall;
+use crate::host_client::HostEvent;
+use crate::host_client::HostSessionClient;
 
 pub(super) enum Pending {
     Initialize,
@@ -39,9 +41,7 @@ pub(super) enum Pending {
 pub(super) struct Runtime {
     pub state: AttachState,
     pub composer: crate::ComposerInput,
-    requests: mpsc::UnboundedSender<Value>,
-    pending: HashMap<i64, Pending>,
-    next_id: i64,
+    client: HostSessionClient<Pending>,
     uncertain_delivery: bool,
     pub session_list_binding: nori_config::HotkeyBinding,
     pub next_waiting_binding: nori_config::HotkeyBinding,
@@ -109,9 +109,7 @@ impl Runtime {
                 ..Default::default()
             },
             composer,
-            requests,
-            pending: HashMap::new(),
-            next_id: 0,
+            client: HostSessionClient::new(requests),
             uncertain_delivery: false,
             session_list_binding: nori_config::HotkeyConfig::default().open_session_list,
             next_waiting_binding: nori_config::HotkeyConfig::default().next_waiting_session,
@@ -158,39 +156,39 @@ impl Runtime {
         self.note_request_on_screen();
     }
 
-    pub fn send(&mut self, method: &str, params: Value, pending: Pending) {
+    pub fn send(&mut self, call: HostCall, pending: Pending) {
         if self.state.stopped.is_some() {
             return;
         }
-        self.next_id += 1;
-        let id = self.next_id;
-        if self
-            .requests
-            .send(json!({"jsonrpc":"2.0", "id":id, "method":method, "params":params}))
-            .is_err()
-        {
+        let awaiting_cancel = match &pending {
+            Pending::CancelObserved { session_id, .. } => Some(session_id.clone()),
+            Pending::Initialize
+            | Pending::List
+            | Pending::Subscribe { .. }
+            | Pending::New
+            | Pending::TakeControl
+            | Pending::Prompt { .. }
+            | Pending::Mutation { .. }
+            | Pending::FollowUp { .. } => None,
+        };
+        if self.client.request(call, pending).is_err() {
             self.state
                 .show_notice("Host connection worker stopped. Detach and try again.");
             return;
         }
-        if let Pending::CancelObserved { session_id, .. } = &pending
-            && let Some(conversation) = self.state.conversations.get_mut(session_id)
+        if let Some(session_id) = awaiting_cancel
+            && let Some(conversation) = self.state.conversations.get_mut(&session_id)
         {
             conversation.cancel_delivery = CancelDelivery::AwaitingHost;
         }
-        self.pending.insert(id, pending);
     }
 
     /// Send a JSON-RPC notification, which has no reply.
-    pub fn notify(&mut self, method: &str, params: Value) {
+    pub fn notify(&mut self, call: HostCall) {
         if self.state.stopped.is_some() {
             return;
         }
-        if self
-            .requests
-            .send(json!({"jsonrpc":"2.0", "method":method, "params":params}))
-            .is_err()
-        {
+        if self.client.notify(call).is_err() {
             self.state
                 .show_notice("Host connection worker stopped. Detach and try again.");
         }
@@ -205,28 +203,22 @@ impl Runtime {
             .iter()
             .find(|row| row.session_id == id)
             .and_then(|row| row.cwd.clone());
-        match cwd {
-            Some(cwd) => self.send(
-                "session/resume",
-                json!({"sessionId": id, "cwd": cwd, "mcpServers": []}),
-                Pending::Mutation { draft: None },
-            ),
-            None => self.send(
-                "_nori/session/resume",
-                json!({"session_id": id}),
-                Pending::Mutation { draft: None },
-            ),
-        }
+        self.send(
+            HostCall::Resume {
+                session_id: id.to_owned(),
+                cwd,
+            },
+            Pending::Mutation { draft: None },
+        );
     }
 
     pub fn refresh_list(&mut self) {
         if self.state.connected
             && !self
-                .pending
-                .values()
-                .any(|pending| matches!(pending, Pending::List))
+                .client
+                .has_pending(|pending| matches!(pending, Pending::List))
         {
-            self.send("_nori/session/list", json!({}), Pending::List);
+            self.send(HostCall::List, Pending::List);
         }
     }
 
@@ -234,25 +226,26 @@ impl Runtime {
         if let Some(id) = self.state.selected.clone() {
             let cursor = self.state.cursors.get(&id).copied().unwrap_or(0);
             self.send(
-                "_nori/session/subscribe",
-                json!({"session_id":id, "cursors":{id.clone():cursor}}),
+                HostCall::Subscribe {
+                    session_id: id.clone(),
+                    cursor,
+                },
                 Pending::Subscribe { session_id: id },
             );
         }
     }
 
     pub fn connection_event(&mut self, event: ConnectionEvent) -> anyhow::Result<()> {
-        match event {
-            ConnectionEvent::Stopped(reason) => {
+        match self.client.incoming(event) {
+            HostEvent::Stopped(reason) => {
                 self.state.connected = false;
                 self.next_waiting_after_refresh = false;
                 self.state.stopped = Some(reason);
-                self.pending.clear();
             }
-            ConnectionEvent::Connected => {
-                self.send("initialize", json!({}), Pending::Initialize);
+            HostEvent::Connected => {
+                self.send(HostCall::Initialize, Pending::Initialize);
             }
-            ConnectionEvent::Disconnected(reason) => {
+            HostEvent::Disconnected { reason, unanswered } => {
                 for conversation in self.state.conversations.values_mut() {
                     conversation.submitted_prompt = false;
                     if conversation.cancel_delivery == CancelDelivery::AwaitingHost {
@@ -266,7 +259,7 @@ impl Runtime {
                 }
                 self.state.connected = false;
                 self.next_waiting_after_refresh = false;
-                let uncertain = self.pending.values().any(|pending| {
+                let uncertain = unanswered.iter().any(|pending| {
                     matches!(
                         pending,
                         Pending::New
@@ -277,7 +270,7 @@ impl Runtime {
                     )
                 });
                 self.uncertain_delivery |= uncertain;
-                for pending in std::mem::take(&mut self.pending).into_values() {
+                for pending in unanswered {
                     if let Pending::FollowUp {
                         session_id,
                         message_id,
@@ -300,8 +293,11 @@ impl Runtime {
                     format!("Connection lost. Reconnecting… {reason}")
                 });
             }
-            ConnectionEvent::Message(message) => {
-                let handled = self.message(message);
+            event @ (HostEvent::Session(_)
+            | HostEvent::RoleChanged(_)
+            | HostEvent::Reply { .. }
+            | HostEvent::Ignored) => {
+                let handled = self.message(event);
                 self.note_request_on_screen();
                 return handled;
             }
@@ -319,21 +315,18 @@ impl Runtime {
             .push(super::state::Part::Notice(text));
     }
 
-    fn message(&mut self, message: Value) -> anyhow::Result<()> {
-        match message["method"].as_str() {
-            Some("_nori/session/event") => {
+    fn message(&mut self, event: HostEvent<Pending>) -> anyhow::Result<()> {
+        let (pending, outcome) = match event {
+            HostEvent::Session(params) => {
                 if self.state.replay_error.is_none()
-                    && let Err(error) = self
-                        .state
-                        .apply(serde_json::from_value(message["params"].clone())?)
+                    && let Err(error) = self.state.apply(serde_json::from_value(params)?)
                 {
                     self.state.replay_error = Some(error.to_string());
                 }
                 return Ok(());
             }
-            Some("_nori/control/changed") => {
-                let role = message["params"]["role"].as_str().unwrap_or("watcher");
-                self.state.role_changed(role);
+            HostEvent::RoleChanged(role) => {
+                self.state.role_changed(&role);
                 self.state.show_notice(if self.state.watching {
                     "Control moved to another terminal. You are now watching; alt+t takes control."
                 } else {
@@ -341,104 +334,42 @@ impl Runtime {
                 });
                 return Ok(());
             }
-            _ => {}
-        }
-        // Requests from the host (a session this connection resumed asks
-        // for permission) share the id space with replies; only replies
-        // settle a pending command. Permission choices come from the
-        // subscription.
-        if message.get("method").is_some() {
-            return Ok(());
-        }
-        let Some(id) = message["id"].as_i64() else {
-            return Ok(());
+            HostEvent::Reply { tag, result } => (tag, result),
+            HostEvent::Connected
+            | HostEvent::Disconnected { .. }
+            | HostEvent::Stopped(_)
+            | HostEvent::Ignored => return Ok(()),
         };
-        let Some(pending) = self.pending.remove(&id) else {
-            return Ok(());
-        };
-        if let Some(error) = message.get("error")
-            && !matches!(pending, Pending::CancelObserved { .. })
-        {
-            if matches!(pending, Pending::List) {
-                self.next_waiting_after_refresh = false;
-            }
-            let text = error["message"]
-                .as_str()
-                .unwrap_or("Host request failed")
-                .to_string();
-            if matches!(pending, Pending::Initialize) {
-                self.state.connected = false;
-                self.next_waiting_after_refresh = false;
-                self.state.stopped = Some(format!(
-                    "Host initialization failed: {text}. Re-run nori attach."
-                ));
-                self.pending.clear();
-            }
-            if let Pending::Subscribe { session_id } = &pending {
-                if self.state.selected.as_ref() != Some(session_id) {
-                    return Ok(());
-                }
-                self.state.replay_error = Some(format!(
-                    "Replay unavailable: {text}. Existing conversation retained."
-                ));
-            }
-            if let Pending::FollowUp {
-                session_id,
-                message_id,
-                draft,
-            } = &pending
-            {
-                if self.state.selected.as_ref() == Some(session_id) && self.composer.is_empty() {
-                    self.composer.set_text(draft.clone());
-                }
-                self.follow_up_notice(session_id, format!("{text} [{message_id}] {draft}"));
+        let result = match (outcome, pending) {
+            (Ok(result), pending) => (result, pending),
+            (
+                Err(error),
+                Pending::CancelObserved {
+                    session_id,
+                    observed_turn_id,
+                },
+            ) => {
+                let reason = error
+                    .message
+                    .unwrap_or_else(|| "Host rejected the request".into());
+                self.cancel_observed_reply(&session_id, &observed_turn_id, Err(reason));
                 return Ok(());
             }
-            if let Pending::Prompt { session_id, .. } = &pending
-                && let Some(conversation) = self.state.conversations.get_mut(session_id)
-            {
-                conversation.submitted_prompt = false;
+            (Err(error), pending) => {
+                let text = error
+                    .message
+                    .unwrap_or_else(|| "Host request failed".into());
+                self.reply_failed(pending, text);
+                return Ok(());
             }
-            if let Pending::Mutation { draft: Some(draft) } | Pending::Prompt { draft, .. } =
-                &pending
-                && self.composer.is_empty()
-            {
-                self.composer.handle_paste(draft.clone());
-            }
-            self.state.show_notice(text);
-            return Ok(());
-        }
-        let result = &message["result"];
+        };
+        let (result, pending) = result;
+        let result = &result;
         match pending {
             Pending::CancelObserved {
                 session_id,
                 observed_turn_id,
-            } => {
-                let Some(conversation) = self.state.conversations.get_mut(&session_id) else {
-                    return Ok(());
-                };
-                if let Some(turn) = &mut conversation.external_turn
-                    && turn.id == observed_turn_id
-                    && conversation.cancel_delivery == CancelDelivery::AwaitingHost
-                {
-                    conversation.cancel_delivery = CancelDelivery::Unsent;
-                    if let Some(error) = message.get("error") {
-                        let reason = error["message"]
-                            .as_str()
-                            .unwrap_or("Host rejected the request");
-                        conversation.parts.push(super::state::Part::Notice(format!(
-                            "Cancel request failed: {reason}"
-                        )));
-                    } else if result["sessionId"].as_str() == Some(session_id.as_str()) {
-                        turn.state = nori_protocol::ExternalTurnState::CancelRequested;
-                    } else {
-                        conversation.cancel_delivery = CancelDelivery::Unknown;
-                        conversation.parts.push(super::state::Part::Notice(
-                            "The host did not confirm receipt of the cancel request.".into(),
-                        ));
-                    }
-                }
-            }
+            } => self.cancel_observed_reply(&session_id, &observed_turn_id, Ok(result)),
             Pending::Initialize => {
                 self.session_folders =
                     result["capabilities"]["nori_sessions"]["session_cwd"] == true;
@@ -503,5 +434,81 @@ impl Runtime {
             }
         }
         Ok(())
+    }
+
+    fn reply_failed(&mut self, pending: Pending, text: String) {
+        if matches!(pending, Pending::List) {
+            self.next_waiting_after_refresh = false;
+        }
+        if matches!(pending, Pending::Initialize) {
+            self.state.connected = false;
+            self.next_waiting_after_refresh = false;
+            self.state.stopped = Some(format!(
+                "Host initialization failed: {text}. Re-run nori attach."
+            ));
+            self.client.stop();
+        }
+        if let Pending::Subscribe { session_id } = &pending {
+            if self.state.selected.as_ref() != Some(session_id) {
+                return;
+            }
+            self.state.replay_error = Some(format!(
+                "Replay unavailable: {text}. Existing conversation retained."
+            ));
+        }
+        if let Pending::FollowUp {
+            session_id,
+            message_id,
+            draft,
+        } = &pending
+        {
+            if self.state.selected.as_ref() == Some(session_id) && self.composer.is_empty() {
+                self.composer.set_text(draft.clone());
+            }
+            self.follow_up_notice(session_id, format!("{text} [{message_id}] {draft}"));
+            return;
+        }
+        if let Pending::Prompt { session_id, .. } = &pending
+            && let Some(conversation) = self.state.conversations.get_mut(session_id)
+        {
+            conversation.submitted_prompt = false;
+        }
+        if let Pending::Mutation { draft: Some(draft) } | Pending::Prompt { draft, .. } = &pending
+            && self.composer.is_empty()
+        {
+            self.composer.handle_paste(draft.clone());
+        }
+        self.state.show_notice(text);
+    }
+
+    fn cancel_observed_reply(
+        &mut self,
+        session_id: &str,
+        observed_turn_id: &str,
+        reply: Result<&Value, String>,
+    ) {
+        let Some(conversation) = self.state.conversations.get_mut(session_id) else {
+            return;
+        };
+        if let Some(turn) = &mut conversation.external_turn
+            && turn.id == observed_turn_id
+            && conversation.cancel_delivery == CancelDelivery::AwaitingHost
+        {
+            conversation.cancel_delivery = CancelDelivery::Unsent;
+            match reply {
+                Err(reason) => conversation.parts.push(super::state::Part::Notice(format!(
+                    "Cancel request failed: {reason}"
+                ))),
+                Ok(result) if result["sessionId"].as_str() == Some(session_id) => {
+                    turn.state = nori_protocol::ExternalTurnState::CancelRequested;
+                }
+                Ok(_) => {
+                    conversation.cancel_delivery = CancelDelivery::Unknown;
+                    conversation.parts.push(super::state::Part::Notice(
+                        "The host did not confirm receipt of the cancel request.".into(),
+                    ));
+                }
+            }
+        }
     }
 }

@@ -343,7 +343,7 @@ fn old_subscription_failure_does_not_block_the_new_selection() {
     runtime.state.selected = Some("healthy".into());
     runtime.subscribe_selected();
     runtime
-        .connection_event(super::connection::ConnectionEvent::Message(json!({
+        .connection_event(crate::host_client::ConnectionEvent::Message(json!({
             "jsonrpc":"2.0", "id":old["id"], "error":{"code":-32000,"message":"Replay expired"}
         })))
         .unwrap();
@@ -393,8 +393,8 @@ fn the_current_session_row_is_marked() {
 
 #[test]
 fn terminal_connection_failure_remains_visible_and_blocks_requests() {
-    use super::connection::ConnectionEvent;
     use super::runtime::Runtime;
+    use crate::host_client::ConnectionEvent;
     use crossterm::event::KeyEvent;
     let (requests, mut received) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime = Runtime::new(Some("one".into()), requests);
@@ -495,7 +495,7 @@ fn busy_submissions_bind_each_intent_to_the_observed_turn_and_a_distinct_message
         assert_eq!(wire["params"]["expected_turn"], "original-turn");
         assert_eq!(wire["params"]["intent"], intent);
         let message_id = wire["params"]["message_id"].as_str().unwrap().to_owned();
-        runtime.connection_event(super::connection::ConnectionEvent::Message(json!({
+        runtime.connection_event(crate::host_client::ConnectionEvent::Message(json!({
             "jsonrpc": "2.0", "id": wire["id"],
             "result":{"message_id":message_id,"sender":"controller", "status":if intent == "queue" {"queued"} else {"injected"}}
         }))).unwrap();
@@ -507,7 +507,7 @@ fn busy_submissions_bind_each_intent_to_the_observed_turn_and_a_distinct_message
 
 #[test]
 fn disconnect_retains_uncertain_follow_up_with_its_originating_session() {
-    use super::connection::ConnectionEvent;
+    use crate::host_client::ConnectionEvent;
     use crossterm::event::KeyEvent;
     let (mut runtime, mut rx) = working_runtime();
     runtime.composer.handle_paste("Sketch the wetlands".into());
