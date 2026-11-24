@@ -827,6 +827,20 @@ fn script_agent_config(dir: &std::path::Path, body: &str) -> crate::registry::Ac
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
             .expect("chmod script agent");
     }
+    // Run the shebang's interpreter rather than the script itself: exec'ing a
+    // file written moments ago can fail with ETXTBSY while another test
+    // thread forks with it still open.
+    let mut interpreter = body
+        .lines()
+        .next()
+        .and_then(|line| line.strip_prefix("#!"))
+        .expect("script agents start with a shebang")
+        .split_whitespace()
+        .map(str::to_string);
+    let command = interpreter.next().expect("shebang names an interpreter");
+    let args = interpreter
+        .chain([script.to_string_lossy().to_string()])
+        .collect();
     crate::registry::AcpAgentConfig {
         owned_runtime: None,
         launch: Default::default(),
@@ -834,8 +848,8 @@ fn script_agent_config(dir: &std::path::Path, body: &str) -> crate::registry::Ac
         agent: crate::registry::AgentKind::ClaudeCode, // placeholder, like custom agents
         builtin_kind: None,
         provider_slug: "script-agent".to_string(),
-        command: script.to_string_lossy().to_string(),
-        args: vec![],
+        command,
+        args,
         env: std::collections::HashMap::new(),
         provider_info: crate::registry::AcpProviderInfo::default(),
         auth_hint: "run: script-agent login".to_string(),
@@ -901,6 +915,10 @@ async fn test_cancelled_spawn_reaps_child_during_initialization() {
 
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         while !pidfile.exists() {
+            assert!(
+                !spawn.is_finished(),
+                "spawn ended before the script agent started"
+            );
             tokio::time::sleep(std::time::Duration::from_millis(25)).await;
         }
     })
