@@ -1,0 +1,46 @@
+== S38a mixed versions: client joins, another terminal changes the mode
+PASS S38a/join.client_running {'running': True, 'mode_label': 'agent', 'error_lines': [], 'tail': [' claude-code · first errand · app · ready · Approvals: Agent', ' › You', ' first errand', 
+PASS S38a/join.shows_conversation [' claude-code · first errand · app · ready · Approvals: Agent', ' › You', ' first errand', ' claude-code heard: first errand', '› Send a prompt', '   alt+s ses
+PASS S38a/join.no_error []
+PASS S38a/change.host_now_ask {'start': 'agent', 'now': 'ask'}
+PASS S38a/change.client_running {'running': True, 'mode_label': 'ask', 'error_lines': [], 'tail': [' first errand', ' claude-code heard: first errand', ' Control moved to another terminal. You
+PASS S38a/change.no_error []
+PASS S38a/change.client_label_matches_host {'ui': 'ask', 'host': 'ask'}
+PASS S38a/follow.prompt_reached_adapter_once 1
+PASS S38a/follow.client_shows_reply [' › You', ' after the change', ' claude-code heard: after the change', ' Control moved to another terminal. You are now watching; alt+t takes control.', '› Sen
+== S38b mixed versions: client starts a session with /new and prompts
+PASS S38b/new.client_running {'running': True, 'mode_label': 'agent', 'error_lines': [], 'tail': [' Nori host  CONTROLLING', ' claude-code · new session · app · ready · Approvals: Agent', '
+PASS S38b/new.no_error []
+PASS S38b/new.prompt_reached_adapter_once 1
+PASS S38b/new.client_shows_reply [' claude-code · fresh errand · app · ready · Approvals: Agent', ' › You', ' fresh errand', ' claude-code heard: fresh errand', '› Send a prompt', '   alt+s ses
+PASS S38b/new.client_label_matches_host {'ui': 'agent', 'host': 'agent'}
+== S38c mixed versions: client joins and changes the mode itself
+PASS S38c/join.client_running {'running': True, 'mode_label': 'agent', 'error_lines': [], 'tail': [' claude-code · first errand · app · ready · Approvals: Agent', ' › You', ' first errand', 
+PASS S38c/join.shows_conversation [' claude-code · first errand · app · ready · Approvals: Agent', ' › You', ' first errand', ' claude-code heard: first errand', '› Send a prompt', '   alt+s ses
+PASS S38c/join.no_error []
+PASS S38c/change.host_now_ask {'start': 'agent', 'now': 'ask'}
+PASS S38c/change.client_running {'running': True, 'mode_label': 'ask', 'error_lines': [], 'tail': [' claude-code · first errand · app · ready · Approvals: Ask', ' › You', ' first errand', ' cl
+PASS S38c/change.no_error []
+PASS S38c/change.client_label_matches_host {'ui': 'ask', 'host': 'ask'}
+PASS S38c/change.menu_marks_host_mode_current › Ask (current)          Ask before every edit and command.
+PASS S38c/follow.prompt_reached_adapter_once 1
+PASS S38c/follow.client_shows_reply [' claude-code heard: first errand', ' › You', ' after the change', ' claude-code heard: after the change', '› Send a prompt', '   alt+s sessions    alt+down ne
+== S39a agent without Ask: host list vs attach menu, then Ask
+PASS S39a/host.opencode_list_has_no_ask {'3b6d7324-3ea5-402d-b47a-01890157c5ab': {'availableModes': ['agent', 'approve-all'], 'mode_option': ['agent', 'approve-all'], 'current': 'agent'}, '4665388b-6f
+PASS S39a/host.claude_list_has_ask {'3b6d7324-3ea5-402d-b47a-01890157c5ab': {'availableModes': ['agent', 'approve-all'], 'mode_option': ['agent', 'approve-all'], 'current': 'agent'}, '4665388b-6f
+PASS S39a/menu.matches_host_list {'menu': ['agent', 'approve-all'], 'host': ['agent', 'approve-all']}
+PASS S39a/menu.ask_shown_disabled ['Ask                    Not available: this agent has no mode that asks before every edit and command.']
+PASS S39a/ask.not_applied {'picked': True, 'host': 'agent'}
+PASS S39a/ask.reason_shown_or_not_offered ['/approvals: this agent has no mode that asks before every edit and command', '/approvals: this agent has no mode that asks before every edit and command', 'al
+PASS S39a/ask.no_adapter_mode_change []
+PASS S39a/ask.client_sent_no_mode_request {'before': [], 'after': [], 'host_log_requests': 8}
+== S39b agent without Ask: host list vs plain menu, then Ask
+PASS S39b/host.opencode_list_has_no_ask {'bdde430d-1774-4db6-9742-3c66ed0c32e4': {'availableModes': ['agent', 'approve-all'], 'mode_option': ['agent', 'approve-all'], 'current': 'agent'}, '59c382cf-9f
+PASS S39b/host.claude_list_has_ask {'bdde430d-1774-4db6-9742-3c66ed0c32e4': {'availableModes': ['agent', 'approve-all'], 'mode_option': ['agent', 'approve-all'], 'current': 'agent'}, '59c382cf-9f
+PASS S39b/menu.matches_host_list {'menu': ['agent', 'approve-all'], 'host': ['agent', 'approve-all']}
+PASS S39b/menu.ask_shown_disabled ['1. Ask (not available)']
+PASS S39b/ask.not_applied {'picked': True, 'host': 'n/a (private host)'}
+PASS S39b/ask.reason_shown_or_not_offered ['■ /approvals: Lantern Opencode has no mode that asks before every edit and command.']
+PASS S39b/ask.no_adapter_mode_change []
+PASS S39b/ask.client_sent_no_mode_request {'before': [], 'after': [], 'host_log_requests': 10}
+{"nori": "nori-d4c1353e", "passed": 40, "failed": 0, "checks": 40}

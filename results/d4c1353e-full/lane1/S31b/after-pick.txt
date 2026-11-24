@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-full1/S31b/roots/alpha/app · Approvals: Agent
+  Agent        Codex · workspace-write
+
+• Started new conversation with agent: Lantern Codex
+
+
+› an earlier synthetic question
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• an earlier synthetic answer
+
+  2 ready
+
+                                                                                                     [ workspace-write ]
+› / for slash command menu
+

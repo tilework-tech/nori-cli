@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · first errand · app · ready
+
+ Approvals: Agent
+
+ › You
+ first errand
+
+ claude-code heard: first errand
+
+ /approvals: not available in nori attach yet
+
+ /approvals: not available in nori attach yet
+
+ › You
+ after the change
+
+ claude-code heard: after the change
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

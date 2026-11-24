@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · new session · app · ready · Approvals: Agent
+
+ Ready. Send a prompt to begin.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/
+
+  /agent            not available in nori attach yet
+  /model            not available in nori attach yet
+  /config           not available in nori attach yet
+  /approvals        set how this session asks for approval
+  /settings         not available in nori attach yet
+  /vim              not available in nori attach yet
+  /goal             not available on this host yet
+  /new              start a new chat during a conversation
+  /sessions         list sessions and move between them
+  /delegate         delegate a task: /delegate <agent> <task>

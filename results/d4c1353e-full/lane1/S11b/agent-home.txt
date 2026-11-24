@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · think about the tide · app · working · Approvals: Agent
+
+ › You
+ think about the tide
+
+ │ Weighing the lighthouse log before answering.
+
+ claude-code heard: think about the tide
+
+ › You
+ scan the harbor
+
+ • Explored 1 read
+   • Read harbor/tides.md · lines 12–19
+
+ • Explored 1 search
+   • Search beacon · 3 matches in 2 files
+
+ claude-code heard: scan the harbor
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

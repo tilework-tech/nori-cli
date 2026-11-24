@@ -1,0 +1,45 @@
+{
+  "session": "785c34dc-7cab-480a-9ef6-53fe35747d7c",
+  "start_mode": "agent",
+  "mode_after": "agent",
+  "joined": {
+    "running": true,
+    "mode_label": "agent",
+    "error_lines": [],
+    "tail": [
+      " Approvals: Agent",
+      " \u203a You",
+      " first errand",
+      " claude-code heard: first errand",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "after_change": {
+    "running": true,
+    "mode_label": "agent",
+    "error_lines": [],
+    "tail": [
+      " first errand",
+      " claude-code heard: first errand",
+      " /approvals: not available in nori attach yet",
+      " /approvals: not available in nori attach yet",
+      "/ approvals",
+      "  /approvals  not available in nori attach yet"
+    ]
+  },
+  "after_prompt": {
+    "running": true,
+    "mode_label": "agent",
+    "error_lines": [],
+    "tail": [
+      " /approvals: not available in nori attach yet",
+      " \u203a You",
+      " after the change",
+      " claude-code heard: after the change",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "mode_envelopes_on_wire": 0
+}

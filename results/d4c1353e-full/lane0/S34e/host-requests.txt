@@ -1,0 +1,3 @@
+_nori/host/prepare_agent
+session/list
+session/new

@@ -1,0 +1,5 @@
+36455 initialize - ''
+36455 session/list - ''
+36455 session/new - ''
+36455 session/set_config_option claude-code-0 ''
+36455 session/prompt claude-code-0 ' the piped lantern\n\norchard context line'

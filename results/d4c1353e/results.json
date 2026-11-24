@@ -1,0 +1,260 @@
+[
+  {
+    "scenario": "S10",
+    "check": "approvals.offers_host_modes",
+    "passed": true,
+    "detail": " Nori host  CONTROLLING\n claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent\n\n Ready. Send a prompt to begin.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n Approvals for this session\n New sessions start in the host default. The sandbox is set separately.\n\n   Ask                    Ask before every edit and command.\n \u203a Agent (current)        The agent asks when it judges it needs to.\n   Approve all            Nori approves every permission request.\n\n \u2191\u2193 move \u00b7 enter choose \u00b7 esc close\n\n\n\n\n"
+  },
+  {
+    "scenario": "S10",
+    "check": "approvals.no_legacy_presets",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S10",
+    "check": "approvals.not_sent_as_prompt",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S12",
+    "check": "default.first_new_uses_host_default",
+    "passed": true,
+    "detail": "[('claude-code-0', 'default')]"
+  },
+  {
+    "scenario": "S12",
+    "check": "approvals.controller_can_pick_approve_all",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  },
+  {
+    "scenario": "S12",
+    "check": "default.second_new_does_not_copy_foreground",
+    "passed": true,
+    "detail": "{'session/new': 2, 'mode sets': [('claude-code-0', 'default'), ('claude-code-0', 'acceptEdits'), ('claude-code-0', 'default')]}"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.ask_unavailable_for_adapter_without_ask",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n Approvals for this session\n New sessions start in the host default. The sandbox is set separately.\n\n   Ask                    Not available: this agent has no mode that asks before every edit and command.\n \u203a Agent (current)        The agent asks when it judges it needs to.\n   Approve all            Nori approves every permission request.\n\n \u2191\u2193 move \u00b7 enter choose \u00b7 esc close\n\n\n\n\n"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.change_reaches_only_foreground",
+    "passed": true,
+    "detail": "[('claude-code-0', 'acceptEdits')]"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.footer_shows_foreground_mode",
+    "passed": true,
+    "detail": "[' opencode \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Approve all']"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.watcher_sees_greyed_with_take_control",
+    "passed": true,
+    "detail": "  /approvals  watching \u00b7 Alt+T to take control"
+  },
+  {
+    "scenario": "S15a",
+    "check": "migration.full-access_maps_to_approve-all",
+    "passed": true,
+    "detail": "['  \u258f3. Approve all (current)                                                                                          \u2595']"
+  },
+  {
+    "scenario": "S15a",
+    "check": "migration.sandbox_setting_unchanged",
+    "passed": true,
+    "detail": "sandbox_mode = \"danger-full-access\""
+  },
+  {
+    "scenario": "S15a",
+    "check": "migration.runs_once",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S15b",
+    "check": "migration.read-only_maps_to_ask",
+    "passed": true,
+    "detail": "['  \u258f1. Ask (current)                                                                                                  \u2595']"
+  },
+  {
+    "scenario": "S15b",
+    "check": "migration.sandbox_setting_unchanged",
+    "passed": true,
+    "detail": "sandbox_mode = \"read-only\""
+  },
+  {
+    "scenario": "S15b",
+    "check": "migration.runs_once",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S15c",
+    "check": "migration.read-only-no-ask_maps_to_agent",
+    "passed": true,
+    "detail": "['  \u258f2. Agent (current)                                                                                                \u2595']"
+  },
+  {
+    "scenario": "S15c",
+    "check": "migration.sandbox_setting_unchanged",
+    "passed": true,
+    "detail": "sandbox_mode = \"read-only\""
+  },
+  {
+    "scenario": "S15c",
+    "check": "migration.runs_once",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S37a",
+    "check": "handoff.controller_sets_ask_on_host",
+    "passed": true,
+    "detail": "{'s1': 'ask', 's2': 'agent'}"
+  },
+  {
+    "scenario": "S37a",
+    "check": "handoff.other_session_unchanged_on_host",
+    "passed": true,
+    "detail": "{'start': {'s1': 'agent', 's2': 'agent'}, 'now': {'s1': 'ask', 's2': 'agent'}}"
+  },
+  {
+    "scenario": "S37a",
+    "check": "handoff.adapter_mode_sent_only_to_foreground",
+    "passed": true,
+    "detail": "[('claude-code-0', 'default')]"
+  },
+  {
+    "scenario": "S37a",
+    "check": "handoff.controller_footer_matches_host",
+    "passed": true,
+    "detail": "{'ui': {'a': 'ask', 'b': 'ask', 'c': 'agent'}, 'host': {'s1': 'ask', 's2': 'agent'}}"
+  },
+  {
+    "scenario": "S37a",
+    "check": "handoff.watcher_footer_matches_host",
+    "passed": true,
+    "detail": "{'ui': {'a': 'ask', 'b': 'ask', 'c': 'agent'}, 'host': {'s1': 'ask', 's2': 'agent'}}"
+  },
+  {
+    "scenario": "S37a",
+    "check": "handoff.second_session_footer_matches_host",
+    "passed": true,
+    "detail": "{'ui': {'a': 'ask', 'b': 'ask', 'c': 'agent'}, 'host': {'s1': 'ask', 's2': 'agent'}}"
+  },
+  {
+    "scenario": "S37a",
+    "check": "handoff.watcher_cannot_change_mode",
+    "passed": true,
+    "detail": "{'host': 'ask', 'requests': []}"
+  },
+  {
+    "scenario": "S37a",
+    "check": "handoff.new_controller_sets_mode_on_host",
+    "passed": true,
+    "detail": "{'s1': 'approve-all', 's2': 'agent'}"
+  },
+  {
+    "scenario": "S37a",
+    "check": "handoff.both_terminals_show_host_mode",
+    "passed": true,
+    "detail": "{'ui': {'a': 'approve-all', 'b': 'approve-all', 'c': 'agent'}, 'host': {'s1': 'approve-all', 's2': 'agent'}}"
+  },
+  {
+    "scenario": "S37a",
+    "check": "handoff.other_session_still_unchanged",
+    "passed": true,
+    "detail": "{'ui': {'a': 'approve-all', 'b': 'approve-all', 'c': 'agent'}, 'host': {'s1': 'approve-all', 's2': 'agent'}}"
+  },
+  {
+    "scenario": "S37a",
+    "check": "handoff.demoted_controller_cannot_change_mode",
+    "passed": true,
+    "detail": "{'host': 'approve-all', 'sets': []}"
+  },
+  {
+    "scenario": "S37b",
+    "check": "repeat.launch1_session_starts_at_host_default",
+    "passed": true,
+    "detail": "[('claude-code-0', 'default')]"
+  },
+  {
+    "scenario": "S37b",
+    "check": "repeat.launch1_footer_shows_host_default",
+    "passed": true,
+    "detail": "['', '', '', '']"
+  },
+  {
+    "scenario": "S37b",
+    "check": "repeat.launch1_config_unchanged",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S37b",
+    "check": "repeat.launch2_session_starts_at_host_default",
+    "passed": true,
+    "detail": "[('claude-code-0', 'default'), ('claude-code-0', 'default')]"
+  },
+  {
+    "scenario": "S37b",
+    "check": "repeat.launch2_footer_shows_host_default",
+    "passed": true,
+    "detail": "['', '', '', '']"
+  },
+  {
+    "scenario": "S37b",
+    "check": "repeat.launch2_config_unchanged",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S37b",
+    "check": "repeat.mode_change_keeps_sandbox_settings",
+    "passed": true,
+    "detail": "['sandbox_mode = \"workspace-write\"', '[sandbox_workspace_write]', 'network_access = true']"
+  },
+  {
+    "scenario": "S37c",
+    "check": "plain2.first_session_ask",
+    "passed": true,
+    "detail": "{'ui': 'ask', 'sets': [('claude-code-0', 'acceptEdits'), ('claude-code-0', 'default')]}"
+  },
+  {
+    "scenario": "S37c",
+    "check": "plain2.new_session_not_copying_ask",
+    "passed": true,
+    "detail": "{'ui': 'agent', 'sets': [('claude-code-0', 'default'), ('claude-code-0', 'acceptEdits')]}"
+  },
+  {
+    "scenario": "S37c",
+    "check": "plain2.switch_back_shows_ask",
+    "passed": true,
+    "detail": "ask"
+  },
+  {
+    "scenario": "S37c",
+    "check": "plain2.switch_sends_no_mode_change",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S37d",
+    "check": "approveall.host_reports_mode",
+    "passed": true,
+    "detail": "approve-all"
+  },
+  {
+    "scenario": "S37d",
+    "check": "approveall.permission_answered_without_prompt",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  }
+]

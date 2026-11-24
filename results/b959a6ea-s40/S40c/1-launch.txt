@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+• Approval preset Read Only is now `[host] default_mode = "ask"`: new sessions start in Ask. sandbox_mode stays "read-
+only"; /approvals no longer changes it.
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-s40o/S40c/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+                                                                                                             [ default ]
+› ? for shortcuts
+
+  Approvals: Ask
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

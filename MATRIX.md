@@ -331,3 +331,23 @@ plain `nori` with two sessions; Approve all enforced by the host.
 | `5cb13fcd` ← `b959a6ea` | 20/24 | works; Ask applied on host, but no label and menu highlights Agent |
 
 See `results/mixed/NOTE.md`.
+
+## #752 repaired head `d4c1353e`, 2026-11-24
+
+S40a–c (new) check plain `nori`'s `[ … ]` badge against the agent server's mode
+and the startup card against the host mode. S39 now also checks that Ask is shown
+as not available and that the host log records no mode request.
+
+| Check | `b959a6ea` | `d4c1353e` |
+|---|---|---|
+| Approvals scenarios (S10, S12, S13, S15a–c, S37a–d) | 42/43 | 43/43 |
+| S40a–c badge and card | 6/11 | 11/11 |
+| Mixed: new host ← old client | 8/24 | 22/24 (failures = old client lacks `/approvals`) |
+| Mixed: old host ← new client | 20/24 | 20/24 |
+| Mixed: new ← new (S38 + S39) | 34/36 | 40/40 |
+| Full matrix | — | 511/531 vs 510/531 at `e4728d92`, no regressions |
+| macOS load loop vs #751 baseline | — | same 3 inherited `host_attach` failures (0/10, 0/10, 8/10 vs 0/10, 0/10, 7/10) |
+| Verdict | changes requested | pass. See `results/d4c1353e/VERDICT.md` |
+
+S41a/b (cwd-aware `@` and `/new DIR`, separate client home and folder, two
+sessions, watcher) are written and wait for the file-search PR.

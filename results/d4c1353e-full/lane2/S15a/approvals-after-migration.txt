@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+• Approval preset Full Access is now `[host] default_mode = "approve-all"`: new sessions start in Approve all.
+sandbox_mode stays "danger-full-access"; /approvals no longer changes it.
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-full2/S15a/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+  Approvals for this session
+  New sessions start in the host default. The sandbox is set separately.
+
+   1. Ask
+      Ask before every edit and command.
+   2. Agent
+      The agent asks when it judges it needs to.
+  ▏3. Approve all (current)                                                                                          ▕
+  ▏   Nori approves every permission request.                                                                        ▕
+  ↑↓/j/k move  enter select  esc close
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

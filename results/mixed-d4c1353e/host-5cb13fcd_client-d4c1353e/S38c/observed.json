@@ -1,0 +1,45 @@
+{
+  "session": "c40e08e2-0621-45ea-987f-f5b3b04e24ca",
+  "start_mode": "agent",
+  "mode_after": "ask",
+  "joined": {
+    "running": true,
+    "mode_label": "none",
+    "error_lines": [],
+    "tail": [
+      " claude-code \u00b7 first errand \u00b7 app \u00b7 ready",
+      " \u203a You",
+      " first errand",
+      " claude-code heard: first errand",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "after_change": {
+    "running": true,
+    "mode_label": "none",
+    "error_lines": [],
+    "tail": [
+      " claude-code \u00b7 first errand \u00b7 app \u00b7 ready",
+      " \u203a You",
+      " first errand",
+      " claude-code heard: first errand",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "after_prompt": {
+    "running": true,
+    "mode_label": "none",
+    "error_lines": [],
+    "tail": [
+      " claude-code heard: first errand",
+      " \u203a You",
+      " after the change",
+      " claude-code heard: after the change",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "mode_envelopes_on_wire": 0
+}

@@ -1,0 +1,35 @@
+shell$ nori --skip-trust-directory
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/nori-host-tui-acceptance-full2/S28a/roots/alpha/app
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude
+
+[2m[39m• [0m[39m[49mLantern Claude options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mhold the lamp
+
+
+[2m• [0m[39m[49mtick 1 tick 2 tick 3
+
+[38;5;1m■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+
+
+[1;2m[39m› [0m[39m[49mfresh after escape
+
+
+[2m• [0m[39m[49mclaude-code heard: fresh after escape
+
+                                                                                                         [38;5;6m[ acceptEdits ]
+[1m[39m›[0m[39m[49m [2m? for shortcuts
+
+
+
+
+
+
+
+
+
+

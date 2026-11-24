@@ -1,0 +1,26 @@
+{
+  "bdde430d-1774-4db6-9742-3c66ed0c32e4": {
+    "availableModes": [
+      "agent",
+      "approve-all"
+    ],
+    "mode_option": [
+      "agent",
+      "approve-all"
+    ],
+    "current": "agent"
+  },
+  "59c382cf-9f00-4569-a8cc-4c6f05319164": {
+    "availableModes": [
+      "ask",
+      "agent",
+      "approve-all"
+    ],
+    "mode_option": [
+      "ask",
+      "agent",
+      "approve-all"
+    ],
+    "current": "agent"
+  }
+}

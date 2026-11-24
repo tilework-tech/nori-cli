@@ -1,0 +1,36 @@
+• Lantern Claude options: Mode=auto (/config to change)
+
+╭───────────────────────────────────────────────╮
+│ Goodbye! Thanks for using Nori.               │
+│                                               │
+│ Session: 0acf018d-84a0-49ae-9e36-50c98ed9d2db │
+│                                               │
+│ Messages      User: 0  Assistant: 0  Total: 0 │
+│ Tool Calls    (none)                          │
+│                                               │
+│ Skills Used                                   │
+│   (none)                                      │
+│                                               │
+│ Subagents Used                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-full1/S37b/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+                                                                                                         [ acceptEdits ]
+› @ for file mentions
+
+  Approvals: Approve all
+
+
+
+
+
+
+
+

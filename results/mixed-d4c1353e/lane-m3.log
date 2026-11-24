@@ -1,0 +1,31 @@
+== S38a mixed versions: client joins, another terminal changes the mode
+PASS S38a/join.client_running {'running': True, 'mode_label': 'none', 'error_lines': [], 'tail': [' claude-code · first errand · app · ready', ' › You', ' first errand', ' claude-code heard:
+PASS S38a/join.shows_conversation [' claude-code · first errand · app · ready', ' › You', ' first errand', ' claude-code heard: first errand', '› Send a prompt', '   alt+s sessions    alt+down n
+PASS S38a/join.no_error []
+FAIL S38a/change.host_now_ask {'start': 'agent', 'now': 'agent'}
+PASS S38a/change.client_running {'running': True, 'mode_label': 'none', 'error_lines': [], 'tail': [' first errand', ' claude-code heard: first errand', ' Control moved to another terminal. Yo
+PASS S38a/change.no_error []
+FAIL S38a/change.client_label_matches_host {'ui': 'none', 'host': 'agent'}
+PASS S38a/follow.prompt_reached_adapter_once 1
+PASS S38a/follow.client_shows_reply [' › You', ' after the change', ' claude-code heard: after the change', ' Control moved to another terminal. You are now watching; alt+t takes control.', '› Sen
+== S38b mixed versions: client starts a session with /new and prompts
+PASS S38b/new.client_running {'running': True, 'mode_label': 'none', 'error_lines': [], 'tail': [' Nori host  CONTROLLING', ' claude-code · new session · app · ready', ' Ready. Send a promp
+PASS S38b/new.no_error []
+PASS S38b/new.prompt_reached_adapter_once 1
+PASS S38b/new.client_shows_reply [' claude-code · fresh errand · app · ready', ' › You', ' fresh errand', ' claude-code heard: fresh errand', '› Send a prompt', '   alt+s sessions    alt+down n
+PASS S38b/new.client_label_matches_host {'ui': 'none', 'host': 'agent'}
+== S38c mixed versions: client joins and changes the mode itself
+PASS S38c/join.client_running {'running': True, 'mode_label': 'none', 'error_lines': [], 'tail': [' claude-code · first errand · app · ready', ' › You', ' first errand', ' claude-code heard:
+PASS S38c/join.shows_conversation [' claude-code · first errand · app · ready', ' › You', ' first errand', ' claude-code heard: first errand', '› Send a prompt', '   alt+s sessions    alt+down n
+PASS S38c/join.no_error []
+PASS S38c/change.host_now_ask {'start': 'agent', 'now': 'ask'}
+PASS S38c/change.client_running {'running': True, 'mode_label': 'none', 'error_lines': [], 'tail': [' claude-code · first errand · app · ready', ' › You', ' first errand', ' claude-code heard:
+PASS S38c/change.no_error []
+FAIL S38c/change.client_label_matches_host {'ui': 'none', 'host': 'ask'}
+FAIL S38c/change.menu_marks_host_mode_current ons start in the host default. The sandbox is set separately.
+
+   Ask                    Ask before every edit and command.
+ › Agent                  The agent 
+PASS S38c/follow.prompt_reached_adapter_once 1
+PASS S38c/follow.client_shows_reply [' claude-code heard: first errand', ' › You', ' after the change', ' claude-code heard: after the change', '› Send a prompt', '   alt+s sessions    alt+down ne
+{"nori": "nori-5cb13fcd", "passed": 20, "failed": 4, "checks": 24}

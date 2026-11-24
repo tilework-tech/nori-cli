@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · ponder the harbor · app · working · Approvals: Agent
+
+ › You
+ ponder the harbor
+
+ │ Charting the breakwater
+ │ Counting the pilings first.
+ │
+ │ Sorting the buoy colours
+ │ Red to port.
+
+ Midway note.
+
+ │ Listening for the foghorn cadence
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

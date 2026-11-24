@@ -80,8 +80,14 @@ class Ctx:
         return subprocess.run([str(BIN / "nori"), *args], env=self.env(home), cwd=cwd or self.fx["roots"]["alpha"],
                               capture_output=True, text=True, timeout=60)
 
-    def start_host(self, cwd="alpha"):
-        out = self.nori("host", "--port", "0", cwd=self.fx["roots"][cwd])
+    def start_host(self, cwd="alpha", log=False):
+        if log:
+            env = self.env("host")
+            env["RUST_LOG"] = "nori_host_runtime=debug,nori_harness=debug"
+            out = subprocess.run([str(BIN / "nori"), "host", "--port", "0"], env=env, cwd=self.fx["roots"][cwd],
+                                 capture_output=True, text=True, timeout=60)
+        else:
+            out = self.nori("host", "--port", "0", cwd=self.fx["roots"][cwd])
         (self.dir / "host-start.txt").parent.mkdir(parents=True, exist_ok=True)
         (self.dir / "host-start.txt").write_text(out.stdout + out.stderr)
         self.host_up = True
@@ -639,8 +645,10 @@ def s13_approvals_per_session(ctx):
     time.sleep(1.2)
     menu = a.screen()
     a.capture("approvals-opencode")
-    ctx.check("approvals.ask_hidden_for_adapter_without_ask",
-              "Approve all" in menu and not re.search(r"^\s*(›\s*)?\d?\.?\s*Ask\b", menu, re.M), menu[-400:])
+    # Coordinator default (2026-11-24): Ask stays listed but marked not available, with the reason.
+    ask_rows = re.findall(r"^\s*(?:›\s*)?\d?\.?\s*Ask\b.*$", menu, re.M)
+    ctx.check("approvals.ask_unavailable_for_adapter_without_ask",
+              "Approve all" in menu and all(re.search(r"not available", l, re.I) for l in ask_rows), menu[-400:])
     before = mode_sets(ctx)
     picked = choose(a, "Approve all")
     time.sleep(1)
@@ -2937,7 +2945,7 @@ def take_control(t):
 def s38_join_then_mode_change(ctx, changer):
     """The client under test joins an existing session; a mode change follows, made by a terminal on the
     host's own build (`other`) or by the client under test (`self`). Records connection and display."""
-    ctx.start_host()
+    ctx.start_host(log=True)
     obs = ctx.observer()
     out = ctx.nori("host", "new", "--prompt", "first errand")
     (ctx.dir / "host-new.txt").write_text(out.stdout + out.stderr)
@@ -3000,6 +3008,7 @@ def s38_join_then_mode_change(ctx, changer):
     (ctx.dir / "observed.json").write_text(json.dumps({"session": s1, "start_mode": start_mode, "mode_after": now,
         "joined": joined, "after_change": after, "after_prompt": follow,
         "mode_envelopes_on_wire": len(mode_envelopes(ctx))}, indent=2))
+    (ctx.dir / "host-requests.txt").write_text("\n".join(host_requests(ctx)) + "\n")
     obs.close()
 
 
@@ -3042,17 +3051,24 @@ def advertised(obs, sid):
 
 
 def menu_modes(screen):
+    """Modes the /approvals menu offers, leaving out rows marked as not available."""
+    return menu_rows(screen)["offered"]
+
+
+def menu_rows(screen):
     rows = [l for l in screen.splitlines() if re.search(r"\b(Ask|Agent|Approve all)\b", l)]
-    shown = []
+    offered, disabled = [], []
     for label, mode in (("Approve all", "approve-all"), ("Agent", "agent"), ("Ask", "ask")):
-        if any(re.match(rf"^\s*(›|>)?\s*(\d\.\s*)?{label}\b", l) for l in rows):
-            shown.append(mode)
-    return sorted(shown)
+        hit = [l for l in rows if re.match(rf"^\s*(›|>)?\s*(\d\.\s*)?{label}\b", l)]
+        if not hit:
+            continue
+        (disabled if any(re.search(r"not available|unavailable", l, re.I) for l in hit) else offered).append(mode)
+    return {"offered": sorted(offered), "disabled": sorted(disabled)}
 
 
 def s39_mode_list_without_ask(ctx, where):
     """Compare the modes the host advertises for an opencode session with the /approvals menu, then try Ask."""
-    ctx.start_host()
+    ctx.start_host(log=True)
     obs = ctx.observer()
     for agent in ("opencode", "claude-code"):
         ctx.nori("host", "new", "--agent", agent)
@@ -3079,13 +3095,17 @@ def s39_mode_list_without_ask(ctx, where):
         t.wait_for("›", 20)
         take_control(t)
     else:
-        t = start_fg(ctx, cmd=f"{NORI} --skip-trust-directory --agent opencode")
+        t = start_fg(ctx, cmd=f"{HOST_LOG_ENV} {NORI} --skip-trust-directory --agent opencode")
         time.sleep(3)
     run_typed(t, "/approvals", settle=1.2)
     menu = t.capture("1-approvals-opencode")
-    shown = menu_modes(t.screen())
+    rows = menu_rows(t.screen())
+    shown = rows["offered"]
     ctx.check("menu.matches_host_list", shown == host_list, {"menu": shown, "host": host_list})
+    ask_rows = [l.strip() for l in t.screen().splitlines() if re.match(r"^\s*(›|>)?\s*(\d\.\s*)?Ask\b", l)]
+    ctx.check("menu.ask_shown_disabled", rows["disabled"] == ["ask"], ask_rows)
     n = len(mode_sets(ctx))
+    sets_before = [m for m in host_requests(ctx) if m in ("session/set_mode", "session/set_config_option")]
     picked = choose(t, "Ask")
     time.sleep(1.5)
     t.capture("2-after-choosing-ask")
@@ -3096,11 +3116,212 @@ def s39_mode_list_without_ask(ctx, where):
     ctx.check("ask.not_applied", where != "attach" or mode != "ask", {"picked": picked, "host": mode})
     ctx.check("ask.reason_shown_or_not_offered", not picked or bool(reason), reason)
     ctx.check("ask.no_adapter_mode_change", len(mode_sets(ctx)) == n, mode_sets(ctx)[n:])
-    (ctx.dir / "observed.json").write_text(json.dumps({"host_list": host_list, "menu": shown, "picked_ask": picked,
+    sets_after = [m for m in host_requests(ctx) if m in ("session/set_mode", "session/set_config_option")]
+    ctx.check("ask.client_sent_no_mode_request", bool(host_requests(ctx)) and sets_after == sets_before,
+              {"before": sets_before, "after": sets_after, "host_log_requests": len(host_requests(ctx))})
+    (ctx.dir / "host-requests.txt").write_text("\n".join(host_requests(ctx)) + "\n")
+    (ctx.dir / "observed.json").write_text(json.dumps({"host_list": host_list, "menu": shown, "menu_rows": rows, "ask_rows": ask_rows, "picked_ask": picked,
                                                        "host_mode_after": mode, "reason_lines": reason}, indent=2))
     t.keys("Escape")
     obs.close()
 
+
+
+# ---------------------------------------------------------------------------
+# S40: plain nori's agent-mode badge and startup card against the host's mode.
+# ---------------------------------------------------------------------------
+
+def badge(screen):
+    """The last `[ mode ]` badge drawn, or "none"."""
+    found = re.findall(r"\[\s*([A-Za-z-]+)\s*\]\s*$", screen, re.M)
+    return found[-1] if found else "none"
+
+
+def card_modes(screen):
+    """Approval wording on startup-card `System` rows."""
+    rows = [l.strip() for l in screen.splitlines() if re.search(r"^\s*System\b", l)]
+    return {"rows": rows, "stale": [l for l in rows if re.search(r"(Agent|Approve all|Ask) approvals", l)],
+            "labels": [m for l in rows for m in re.findall(r"Approvals:\s*(Approve all|Ask|Agent)", l)]}
+
+
+def last_set(ctx):
+    sets = mode_sets(ctx)
+    return sets[-1][1] if sets else "none"
+
+
+def s40_badge_follows_mode_and_session(ctx):
+    t = start_fg(ctx)
+    submit(t, "first light")
+    t.wait_for("heard: first light", 20)
+    time.sleep(1)
+    t.capture("1-start")
+    ctx.check("badge.start_matches_adapter", badge(t.screen()) == last_set(ctx) == "acceptEdits",
+              {"badge": badge(t.screen()), "adapter": last_set(ctx)})
+    card = card_modes(t.screen())
+    ctx.check("card.no_guessed_mode", not card["stale"] and all(l == "Agent" for l in card["labels"]), card)
+    pick_mode(t, "Ask")
+    t.capture("2-ask")
+    ctx.check("badge.follows_ask", badge(t.screen()) == last_set(ctx) == "default",
+              {"badge": badge(t.screen()), "adapter": last_set(ctx), "footer": footer_mode(t.screen())})
+    news = len(ctx.ledger("request", "session/new"))
+    run_typed(t, "/new", settle=3.0)
+    wait_ledger(ctx, lambda r: r.get("method") == "session/new" and len(ctx.ledger("request", "session/new")) > news, timeout=10)
+    time.sleep(1.5)
+    t.capture("3-new")
+    ctx.check("badge.new_session_at_default", badge(t.screen()) == last_set(ctx) == "acceptEdits",
+              {"badge": badge(t.screen()), "adapter": last_set(ctx)})
+    n = len(mode_sets(ctx))
+    t.keys("M-,")
+    time.sleep(2)
+    t.capture("4-back")
+    ctx.check("badge.switch_back_shows_first_session", badge(t.screen()) == "default" and len(mode_sets(ctx)) == n,
+              {"badge": badge(t.screen()), "sets_since": mode_sets(ctx)[n:]})
+    quit_fg(t)
+
+
+def s40_card_and_badge_at_launch(ctx, legacy):
+    if legacy:
+        ctx.fx = fixtures.build(ctx.run_dir, default_agent="claude-code",
+                                top_extra='approval_policy = "on-request"\nsandbox_mode = "read-only"')
+    t = start_fg(ctx)
+    time.sleep(2)
+    t.capture("1-launch")
+    screen = t.screen()
+    card = card_modes(screen)
+    ctx.check("card.never_says_agent", not card["stale"] and "Agent" not in card["labels"], card)
+    ctx.check("footer.ask", footer_mode(screen) == "ask", footer_mode(screen))
+    submit(t, "first light")
+    t.wait_for("heard: first light", 20)
+    time.sleep(1)
+    t.capture("2-after-prompt")
+    ctx.check("badge.matches_adapter_ask", badge(t.screen()) == last_set(ctx) == "default",
+              {"badge": badge(t.screen()), "adapter": last_set(ctx), "sets": mode_sets(ctx)})
+    quit_fg(t)
+
+
+# ---------------------------------------------------------------------------
+# S41: `@` and `/new DIR` from each session's own folder on the host, with the
+# client's home and folder deliberately different from the host's.
+# ---------------------------------------------------------------------------
+
+def spool_dirs(ctx):
+    """`~/spool/app` exists under both homes with different files, so `~` expansion shows whose home was used."""
+    made = {}
+    for name, leaf in (("host", "spool_thread.rs"), ("laptop", "decoy_spool.rs")):
+        d = ctx.fx["homes"][name] / "spool" / "app"
+        (d / "src").mkdir(parents=True, exist_ok=True)
+        (d / "src" / leaf).write_text(f"synthetic {name} spool file\n")
+        made[name] = d.resolve()
+    return made
+
+
+def at_rows(t, query, settle=2.0):
+    t.keys("C-u")
+    t.type(query)
+    time.sleep(settle)
+    screen = t.screen()
+    t.keys("C-u")
+    return screen
+
+
+def last_new_cwd(ctx):
+    news = ctx.ledger("request", "session/new")
+    return news[-1].get("cwd") if news else None
+
+
+def s41_attach_two_sessions_and_watcher(ctx):
+    spool = spool_dirs(ctx)
+    ctx.start_host(cwd="alpha", log=True)
+    obs = ctx.observer()
+    endpoint, _ = wire.host_endpoint(ctx.fx["homes"]["host"])
+    token_file = ctx.fx["homes"]["host"] / "host" / "token"
+    c = ctx.term("controller", cwd="laptop", home="laptop")
+    c.run(f"{NORI} attach --host {endpoint} --token-file {token_file}")
+    attach_new_session(c, str(ctx.fx["roots"]["alpha"]))
+    ctx.check("a.session_one_in_alpha", last_new_cwd(ctx) == str(ctx.fx["roots"]["alpha"]), last_new_cwd(ctx))
+    screen = at_rows(c, "@lan")
+    c_alpha = screen
+    ctx.check("a.controller_at_offers_alpha", "lantern_wick" in screen and "decoy_laptop" not in screen, screen[-400:])
+
+    news = len(ctx.ledger("request", "session/new"))
+    c.type("/new ~/spool/app")
+    c.keys("Enter")
+    time.sleep(0.8)
+    if re.search(r"^\s*/new\b", c.screen(), re.M):
+        c.keys("Enter")
+    wait_ledger(ctx, lambda r: len(ctx.ledger("request", "session/new")) > news, 15)
+    time.sleep(1.5)
+    c.capture("1-new-tilde")
+    ctx.check("b.tilde_expands_with_host_home", last_new_cwd(ctx) == str(spool["host"]),
+              {"cwd": last_new_cwd(ctx), "host_home": str(spool["host"]), "client_home": str(spool["laptop"])})
+    screen = at_rows(c, "@spool")
+    c.capture("2-at-spool")
+    ctx.check("b.controller_at_follows_new_session", "spool_thread" in screen and "decoy_spool" not in screen
+              and "lantern_" not in screen, screen[-400:])
+
+    sessions = {x["sessionId"]: x.get("cwd") for x in obs.sessions()}
+    (ctx.dir / "host-sessions.json").write_text(json.dumps(sessions, indent=2))
+    first = next((sid for sid, cwd in sessions.items() if cwd == str(ctx.fx["roots"]["alpha"])), None)
+    ctx.check("host.session_cwds", first is not None and str(spool["host"]) in sessions.values(), sessions)
+
+    w = ctx.term("watcher", cwd="laptop", home="laptop")
+    w.run(f"{NORI} attach --host {endpoint} --token-file {token_file} {first[:8] if first else ''}".strip())
+    w.wait_for(r"(WATCHING|watching)", 20, regex=True)
+    time.sleep(1.5)
+    screen = at_rows(w, "@lan")
+    w.capture("3-watcher-at-alpha")
+    ctx.check("w.watcher_at_offers_its_session_folder", "lantern_wick" in screen and "decoy_laptop" not in screen
+              and "spool_thread" not in screen, screen[-400:])
+    reqs = host_requests(ctx)
+    ctx.check("w.find_paths_answered_for_watcher", "_nori/session/find_paths" in reqs,
+              sorted(set(reqs)))
+
+    news = len(ctx.ledger("request", "session/new"))
+    c.type("/new")
+    c.keys("Enter")
+    time.sleep(0.8)
+    if re.search(r"^\s*/new\b", c.screen(), re.M):
+        c.keys("Enter")
+    wait_ledger(ctx, lambda r: len(ctx.ledger("request", "session/new")) > news, 15)
+    time.sleep(1.5)
+    ctx.check("c.plain_new_inherits_foreground_folder", last_new_cwd(ctx) == str(spool["host"]), last_new_cwd(ctx))
+
+    c.type("/new ~/spo")
+    c.keys("Tab")
+    time.sleep(1.2)
+    rows = [l.strip() for l in c.screen().splitlines() if "spo" in l]
+    c.capture("4-tab-tilde")
+    ctx.check("c.tab_completes_from_host", any("spool" in l for l in rows), rows)
+    c.keys("C-u")
+    (ctx.dir / "host-requests.txt").write_text("\n".join(host_requests(ctx)) + "\n")
+    obs.close()
+
+
+def s41_plain_new_dir_and_at(ctx):
+    t = start_fg(ctx)
+    screen = at_rows(t, "@lan")
+    ctx.check("p.at_offers_launch_folder", "lantern_wick" in screen, screen[-400:])
+    news = len(ctx.ledger("request", "session/new"))
+    run_typed(t, f"/new {ctx.fx['roots']['beta']}", settle=3.0)
+    wait_ledger(ctx, lambda r: len(ctx.ledger("request", "session/new")) > news, 15)
+    time.sleep(1)
+    t.capture("1-new-beta")
+    ctx.check("p.new_dir_starts_in_dir", last_new_cwd(ctx) == str(ctx.fx["roots"]["beta"]), last_new_cwd(ctx))
+    screen = at_rows(t, "@harb")
+    t.capture("2-at-beta")
+    ctx.check("p.at_follows_new_session", "harbor_tide" in screen and "lantern_" not in screen, screen[-400:])
+    news = len(ctx.ledger("request", "session/new"))
+    run_typed(t, "/new", settle=3.0)
+    wait_ledger(ctx, lambda r: len(ctx.ledger("request", "session/new")) > news, 15)
+    ctx.check("p.plain_new_inherits", last_new_cwd(ctx) == str(ctx.fx["roots"]["beta"]), last_new_cwd(ctx))
+    t.keys("M-,")
+    time.sleep(1.5)
+    t.keys("M-,")
+    time.sleep(1.5)
+    screen = at_rows(t, "@lan")
+    t.capture("3-back-at-alpha")
+    ctx.check("p.switch_back_at_alpha", "lantern_wick" in screen and "harbor_" not in screen, screen[-400:])
+    quit_fg(t)
 
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
@@ -3199,13 +3420,18 @@ SCENARIOS = {
     "S38c": ("mixed versions: client joins and changes the mode itself", lambda c: s38_join_then_mode_change(c, "self")),
     "S39a": ("agent without Ask: host list vs attach menu, then Ask", lambda c: s39_mode_list_without_ask(c, "attach")),
     "S39b": ("agent without Ask: host list vs plain menu, then Ask", lambda c: s39_mode_list_without_ask(c, "fg")),
+    "S40a": ("plain nori: badge follows the mode and the session on screen", s40_badge_follows_mode_and_session),
+    "S40b": ("plain nori: host default Ask; card and badge at launch", lambda c: s40_card_and_badge_at_launch(c, False)),
+    "S40c": ("plain nori: migrated Read Only; card and badge at launch", lambda c: s40_card_and_badge_at_launch(c, True)),
+    "S41a": ("cwd: attach, separate client home/folder, two sessions, watcher; @, /new ~, /new, Tab", s41_attach_two_sessions_and_watcher),
+    "S41b": ("cwd: plain nori /new DIR, @ follows the session on screen", s41_plain_new_dir_and_at),
     "S36": ("startup activation window swept by Enter time", s36_startup_race),
     "S36b": ("startup activation window swept by typing time", lambda c: s36_startup_race(c, burst_at_reply=True)),
 }
 
 
 CAP = "[tui]\ntool_output_max_lines = 10"
-FIXTURE_ARGS = {"S12": {"host_extra": 'default_mode = "ask"'},
+FIXTURE_ARGS = {"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
                 "S37b": {"host_extra": 'default_mode = "ask"', "top_extra": 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}
 
 

@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · fresh errand · app · ready · Approvals: Agent
+
+ › You
+ fresh errand
+
+ claude-code heard: fresh errand
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

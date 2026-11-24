@@ -1,0 +1,8 @@
+{"t": 1795536714.7783473, "adapter": "claude-code", "pid": 11078, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-m4/S38b/roots/alpha/app", "argv": []}
+{"t": 1795536714.778442, "adapter": "claude-code", "pid": 11078, "kind": "request", "method": "initialize"}
+{"t": 1795536714.779309, "adapter": "claude-code", "pid": 11078, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-m4/S38b/roots/alpha/app"}
+{"t": 1795536714.7800162, "adapter": "claude-code", "pid": 11078, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-m4/S38b/roots/alpha/app"}
+{"t": 1795536714.7835557, "adapter": "claude-code", "pid": 11078, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795536721.0484774, "adapter": "claude-code", "pid": 11078, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "fresh errand"}
+{"t": 1795536721.048707, "adapter": "claude-code", "pid": 11078, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795536725.741944, "adapter": "claude-code", "pid": 11078, "kind": "stdin_eof"}

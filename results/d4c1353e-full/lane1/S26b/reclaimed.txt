@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-full1/S26b/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hold the lamp
+
+
+• Steering unavailable. Added to the next-turn queue.
+
+• Refactoring the refactoring (5s • esc to interrupt)
+
+                                                                                                         [ acceptEdits ]
+› reclaim the lamp
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

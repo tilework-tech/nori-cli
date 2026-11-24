@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-full2/S31c/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hello lantern
+
+
+• claude-code heard: hello lantern
+
+• Listing Lantern Claude sessions…
+
+■ Couldn't activate Lantern Claude: Failed to resume ACP session: Failed to load ACP session: the orchard ledger is
+sealed by claude-code
+
+
+› still here
+
+
+• claude-code heard: still here
+
+                                                                                                         [ acceptEdits ]
+› ? for shortcuts
+
+
+
+
+
+
+
+
+

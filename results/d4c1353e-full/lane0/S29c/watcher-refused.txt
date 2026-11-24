@@ -1,0 +1,36 @@
+ Nori host  WATCHING · read-only · alt+t take control
+ claude-code · first light · app · ready · Approvals: Agent
+
+ › You
+ first light
+
+ claude-code heard: first light
+
+ close declined by claude-code
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

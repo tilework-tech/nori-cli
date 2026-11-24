@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ opencode · new session · app · ready · Approvals: Agent
+
+ Ready. Send a prompt to begin.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Approve every request in this session?
+ Nori will say yes to every edit, command and tool call the agent asks about.
+ The sandbox setting still applies; nothing else stops a harmful request.
+
+ enter approve all · esc go back
+
+
+
+

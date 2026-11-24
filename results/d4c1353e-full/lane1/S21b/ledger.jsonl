@@ -1,0 +1,13 @@
+{"t": 1795537245.6156967, "adapter": "claude-code", "pid": 28363, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-full1/S21b/roots/alpha/app", "argv": []}
+{"t": 1795537245.6157923, "adapter": "claude-code", "pid": 28363, "kind": "request", "method": "initialize"}
+{"t": 1795537245.616975, "adapter": "claude-code", "pid": 28363, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-full1/S21b/roots/alpha/app"}
+{"t": 1795537245.6189504, "adapter": "claude-code", "pid": 28363, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-full1/S21b/roots/alpha/app"}
+{"t": 1795537245.6218367, "adapter": "claude-code", "pid": 28363, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795537245.861202, "adapter": "claude-code", "pid": 28363, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nhold the lamp"}
+{"t": 1795537245.8616016, "adapter": "claude-code", "pid": 28363, "kind": "tick", "sessionId": "claude-code-0", "n": 1}
+{"t": 1795537246.0617385, "adapter": "claude-code", "pid": 28363, "kind": "tick", "sessionId": "claude-code-0", "n": 2}
+{"t": 1795537246.2619033, "adapter": "claude-code", "pid": 28363, "kind": "tick", "sessionId": "claude-code-0", "n": 3}
+{"t": 1795537246.4621625, "adapter": "claude-code", "pid": 28363, "kind": "tick", "sessionId": "claude-code-0", "n": 4}
+{"t": 1795537246.66238, "adapter": "claude-code", "pid": 28363, "kind": "tick", "sessionId": "claude-code-0", "n": 5}
+{"t": 1795537246.8624737, "adapter": "claude-code", "pid": 28363, "kind": "tick", "sessionId": "claude-code-0", "n": 6}
+{"t": 1795537247.0625472, "adapter": "claude-code", "pid": 28363, "kind": "tick", "sessionId": "claude-code-0", "n": 7}

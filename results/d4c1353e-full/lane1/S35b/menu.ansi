@@ -1,0 +1,36 @@
+[1m Nori host  [0m[38;5;2m[49mCONTROLLING[39m
+ [2mclaude-code · [0;1m[39m[49mfirst light[0;2m[39m[49m · app · ready · Approvals: Agent[0m[39m[49m
+
+ [1m› You[0m[39m[49m
+ first light
+
+ claude-code heard: first light
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[38;5;2m/
+
+[39m  [2m/agent            not available in nori attach yet
+[0m[39m[49m  [2m/model            not available in nori attach yet
+[0m[39m[49m  [2m/config           not available in nori attach yet
+[0m[39m[49m  /approvals        [2mset how this session asks for approval
+[0m[39m[49m  [2m/settings         not available in nori attach yet
+[0m[39m[49m  [2m/vim              not available in nori attach yet
+[0m[39m[49m  [2m/goal             not available on this host yet
+[0m[39m[49m  /new              [2mstart a new chat during a conversation
+[0m[39m[49m  /sessions         [2mlist sessions and move between them
+[0m[39m[49m  /delegate         [2mdelegate a task: /delegate <agent> <task>[0m[39m[49m

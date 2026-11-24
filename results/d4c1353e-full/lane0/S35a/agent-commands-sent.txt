@@ -1,0 +1,36 @@
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+
+› /review the parser
+
+
+• claude-code heard: /review the parser
+
+
+› /review
+
+
+• claude-code heard: /review
+
+
+› /lanternize
+
+
+• claude-code heard: /lanternize
+
+                                                                                                         [ acceptEdits ]
+› $ for skill listing
+
+
+
+
+
+
+

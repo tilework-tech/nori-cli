@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-full1/S33e/roots/alpha/app · Approvals: Agent
+  Agent        Claude · acceptEdits
+
+
+› early lantern word
+
+
+• claude-code heard: early lantern word
+
+  2 ready
+
+                                                                                                         [ acceptEdits ]
+› @ for file mentions
+

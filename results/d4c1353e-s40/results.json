@@ -1,0 +1,68 @@
+[
+  {
+    "scenario": "S40a",
+    "check": "badge.start_matches_adapter",
+    "passed": true,
+    "detail": "{'badge': 'acceptEdits', 'adapter': 'acceptEdits'}"
+  },
+  {
+    "scenario": "S40a",
+    "check": "card.no_guessed_mode",
+    "passed": true,
+    "detail": "{'rows': ['System       /tmp/nori-host-tui-acceptance-s40n/S40a/roots/alpha/app'], 'stale': [], 'labels': []}"
+  },
+  {
+    "scenario": "S40a",
+    "check": "badge.follows_ask",
+    "passed": true,
+    "detail": "{'badge': 'default', 'adapter': 'default', 'footer': 'ask'}"
+  },
+  {
+    "scenario": "S40a",
+    "check": "badge.new_session_at_default",
+    "passed": true,
+    "detail": "{'badge': 'acceptEdits', 'adapter': 'acceptEdits'}"
+  },
+  {
+    "scenario": "S40a",
+    "check": "badge.switch_back_shows_first_session",
+    "passed": true,
+    "detail": "{'badge': 'default', 'sets_since': []}"
+  },
+  {
+    "scenario": "S40b",
+    "check": "card.never_says_agent",
+    "passed": true,
+    "detail": "{'rows': ['System       /tmp/nori-host-tui-acceptance-s40n/S40b/roots/alpha/app'], 'stale': [], 'labels': []}"
+  },
+  {
+    "scenario": "S40b",
+    "check": "footer.ask",
+    "passed": true,
+    "detail": "ask"
+  },
+  {
+    "scenario": "S40b",
+    "check": "badge.matches_adapter_ask",
+    "passed": true,
+    "detail": "{'badge': 'default', 'adapter': 'default', 'sets': [('claude-code-0', 'default')]}"
+  },
+  {
+    "scenario": "S40c",
+    "check": "card.never_says_agent",
+    "passed": true,
+    "detail": "{'rows': ['System       /tmp/nori-host-tui-acceptance-s40n/S40c/roots/alpha/app'], 'stale': [], 'labels': []}"
+  },
+  {
+    "scenario": "S40c",
+    "check": "footer.ask",
+    "passed": true,
+    "detail": "ask"
+  },
+  {
+    "scenario": "S40c",
+    "check": "badge.matches_adapter_ask",
+    "passed": true,
+    "detail": "{'badge': 'default', 'adapter': 'default', 'sets': [('claude-code-0', 'default')]}"
+  }
+]

@@ -1,0 +1,14 @@
+{"t": 1795537325.8282564, "adapter": "claude-code", "pid": 32105, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-full2/S28b/roots/alpha/app", "argv": []}
+{"t": 1795537325.8283348, "adapter": "claude-code", "pid": 32105, "kind": "request", "method": "initialize"}
+{"t": 1795537325.8297145, "adapter": "claude-code", "pid": 32105, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-full2/S28b/roots/alpha/app"}
+{"t": 1795537325.8306649, "adapter": "claude-code", "pid": 32105, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-full2/S28b/roots/alpha/app"}
+{"t": 1795537325.8347323, "adapter": "claude-code", "pid": 32105, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795537328.5937152, "adapter": "claude-code", "pid": 32105, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "hold the lamp"}
+{"t": 1795537328.59419, "adapter": "claude-code", "pid": 32105, "kind": "tick", "sessionId": "claude-code-0", "n": 1}
+{"t": 1795537328.7943351, "adapter": "claude-code", "pid": 32105, "kind": "tick", "sessionId": "claude-code-0", "n": 2}
+{"t": 1795537328.9944386, "adapter": "claude-code", "pid": 32105, "kind": "tick", "sessionId": "claude-code-0", "n": 3}
+{"t": 1795537329.1143682, "adapter": "claude-code", "pid": 32105, "kind": "request", "method": "session/cancel", "sessionId": "claude-code-0"}
+{"t": 1795537329.1945233, "adapter": "claude-code", "pid": 32105, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "cancelled", "ticks": 3}
+{"t": 1795537331.515351, "adapter": "claude-code", "pid": 32105, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "fresh after escape"}
+{"t": 1795537331.515755, "adapter": "claude-code", "pid": 32105, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795537332.6547463, "adapter": "claude-code", "pid": 32105, "kind": "stdin_eof"}
