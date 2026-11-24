@@ -49,7 +49,8 @@ App (HostLink) ──HostCall + tag──▶ HostSessionClient ──JSON──�
   [host contract](../../../../docs/remote-control.md#11-background-host-and-attached-terminals).
   Calls cover initialize, session list, subscribe, take control, new, prompt,
   follow-up, observed-turn cancel, close, resume, permission response,
-  delegate, and delegation resolve.
+  delegate, delegation resolve, and the prepared-agent picker used by `/agent`
+  switching.
 
 ### Core Implementation
 
@@ -75,6 +76,14 @@ App (HostLink) ──HostCall + tag──▶ HostSessionClient ──JSON──�
 - `Resume` carries the session row's folder when the host reported one and
   becomes ACP `session/resume`; without a folder (an older host) it becomes
   `_nori/session/resume`.
+- The prepared-agent calls map to the host picker requests:
+  `PrepareAgent` is `_nori/host/prepare_agent`, `DiscardPrepared` is
+  `_nori/host/discard_agent`, and `ListPrepared` and `ActivatePrepared` are
+  plain ACP `session/list` and `session/new` scoped by
+  `_meta["nori/preparedAgent"]` (the exported `PREPARED_AGENT` key) with the
+  selection ID, plus `savedSessionId` when activating an adapter's saved
+  session. The scope makes `session/list` return the adapter's catalog rather
+  than host conversations.
 - [Connection driving](connection.rs) owns the socket and reconnects. Every
   received message renews a liveness deadline. Reads and sends share it, so a
   silent stall, not only a TCP error, ends the connection. The failed socket
