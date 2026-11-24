@@ -161,7 +161,11 @@ plain nori TUI --pipe (controller)--> owned HostService --> its own SessionManag
   Capability metadata advertises the [prepared-agent selection](../../../host-runtime/src/host/acp/picker.rs).
   The capability includes the agent select option with its choices and current
   default, so an empty host can populate the picker. Each connection can
-  hold one unused adapter. The
+  hold one unused adapter. `_nori/host/prepare_agent` builds on the host's
+  launch configuration, except on a connection with foreground origin, which
+  uses the owning terminal's latest configuration when it has set one (see
+  [Owned TUI host](#owned-tui-host)); a `cwd` outside the base folder reloads
+  that folder's configuration with the host's overrides either way. The
   [picker protocol](../../../../docs/remote-control.md#picking-a-saved-session-from-an-acp-agent-server)
   consumes it through the same manager and attachment path as ordinary
   session creation. The reply still carries the managed-session keys
@@ -738,6 +742,13 @@ registry the TUI already loaded, including agents supplied by `nori cloud`.
   sessions reachable. Permission answers carry the host session ID captured
   by the overlay. Only this launcher builds an `OwnedHost`, so
   `nori attach` never holds the in-process half.
+- **Live configuration.** `OwnedHost` also carries a `ForegroundConfig`
+  handle. The TUI sets its current configuration through it before each host
+  prepare, and the host stores the latest one beside its launch
+  configuration. Only agents prepared over the foreground pipe use it, so
+  settings the person changed mid-session (a `/model` default, for example)
+  reach sessions they start through the host, while independent clients and
+  watchers keep the launch configuration.
 - **Private.** Like the in-process exec host, it binds no socket, writes no
   token or discovery files, and takes no lock. It and a background host in
   the same `NORI_HOME` never see each other's live sessions.

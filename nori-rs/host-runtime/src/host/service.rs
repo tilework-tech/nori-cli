@@ -34,6 +34,10 @@ pub struct HostService {
     pub manager: SessionManager,
     pub(super) managed: ManagedRemoteHost,
     pub(super) config: Arc<NoriConfig>,
+    /// The owning terminal's current configuration. Only its own foreground
+    /// pipe prepares agents with it, so settings the person changed since
+    /// launch apply there and nowhere else.
+    pub(super) foreground_config: std::sync::Mutex<Option<Arc<NoriConfig>>>,
     /// The host's command-line settings, reapplied to each session folder.
     pub(super) overrides: NoriConfigOverrides,
     pub stop: Notify,
@@ -95,6 +99,7 @@ impl HostService {
             managed: ManagedRemoteHost::authenticated_host(manager.clone()),
             manager,
             config: Arc::new(config),
+            foreground_config: std::sync::Mutex::new(None),
             overrides,
             stop: tokio::sync::Notify::new(),
             acp: super::acp::AcpFace::default(),

@@ -35,6 +35,24 @@ pub struct OwnedHost {
     pub from_host: mpsc::Receiver<String>,
     /// Stops serving the pipe and ends every session the host owns.
     pub stop: StopHost,
+    /// The terminal's current configuration for agents its pipe prepares.
+    pub foreground_config: ForegroundConfig,
+}
+
+/// Hands the terminal's live configuration to its own host. Agents the
+/// foreground pipe prepares use the latest one; other connections keep the
+/// host's launch configuration.
+#[derive(Clone)]
+pub struct ForegroundConfig(Arc<HostService>);
+
+impl ForegroundConfig {
+    pub fn set(&self, config: NoriConfig) {
+        *self
+            .0
+            .foreground_config
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::new(config));
+    }
 }
 
 /// Stops an owned host; resolves once its sessions have ended.
@@ -71,6 +89,7 @@ fn serve(host: Arc<HostService>) -> OwnedHost {
     ));
     OwnedHost {
         manager: host.manager.clone(),
+        foreground_config: ForegroundConfig(host.clone()),
         to_host,
         from_host,
         stop: Box::new(move || {
