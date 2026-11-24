@@ -4,10 +4,6 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[[bin]]
-name = "nori-tui"
-path = "src/main.rs"
-
 [lib]
 name = "nori_tui"
 path = "src/lib.rs"

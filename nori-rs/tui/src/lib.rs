@@ -68,6 +68,9 @@ mod markdown_render;
 mod markdown_stream;
 mod nori;
 mod overlay_menu;
+mod owned_host;
+pub use owned_host::HostLauncher;
+pub use owned_host::OwnedHost;
 mod pager_overlay;
 mod pinned_plan_drawer;
 mod presentation;
@@ -134,10 +137,13 @@ use std::io::Write as _;
 
 // (tests access modules directly within the crate)
 
+/// Runs the interactive TUI on a host built by `launch_host`, which the TUI
+/// owns until it quits.
 pub async fn run_main(
     cli: Cli,
     _codex_linux_sandbox_exe: Option<PathBuf>,
     analytics: Option<nori_installed::AnalyticsReporter>,
+    launch_host: HostLauncher,
 ) -> std::io::Result<AppExitInfo> {
     // Track install/session in background (non-blocking, fire-and-forget)
     // This updates ~/.nori/cli/.nori-install.json with launch metadata
@@ -313,6 +319,7 @@ pub async fn run_main(
         pending_worktree_ask,
         worktree_blocked_reason,
         analytics,
+        launch_host,
     )
     .await
     .map_err(|err| std::io::Error::other(err.to_string()))
@@ -326,6 +333,7 @@ async fn run_ratatui_app(
     pending_worktree_ask: bool,
     worktree_blocked_reason: Option<String>,
     analytics: Option<nori_installed::AnalyticsReporter>,
+    launch_host: HostLauncher,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -375,7 +383,7 @@ async fn run_ratatui_app(
         && (should_show_trust_screen
             || (!cli.skip_welcome && nori::onboarding::is_first_launch(&initial_config.nori_home)));
 
-    let (config, overrides) = if should_show_onboarding {
+    let (config, mut overrides) = if should_show_onboarding {
         // Use Nori-branded onboarding flow
         let onboarding_result = run_nori_onboarding_app(
             NoriOnboardingScreenArgs {
@@ -422,9 +430,8 @@ async fn run_ratatui_app(
             match nori_harness::auto_worktree::setup_auto_worktree(&effective_cwd) {
                 Ok(worktree_path) => {
                     tracing::info!("Auto-worktree created at {}", worktree_path.display());
-                    let mut new_overrides = overrides;
-                    new_overrides.cwd = Some(worktree_path);
-                    load_config_or_exit(new_overrides)
+                    overrides.cwd = Some(worktree_path);
+                    load_config_or_exit(overrides.clone())
                 }
                 Err(e) => {
                     tracing::warn!("Auto-worktree setup skipped: {e}");
@@ -532,6 +539,13 @@ async fn run_ratatui_app(
         ..
     } = cli;
     let vertical_footer = config.vertical_footer;
+    let host = match launch_host(&config, &overrides) {
+        Ok(host) => host,
+        Err(error) => {
+            restore();
+            return Err(color_eyre::eyre::eyre!(error));
+        }
+    };
 
     let app_result = App::run(
         &mut tui,
@@ -544,6 +558,7 @@ async fn run_ratatui_app(
         cloud_mode,
         cloud_onboard,
         analytics.clone(),
+        host,
     )
     .await;
 

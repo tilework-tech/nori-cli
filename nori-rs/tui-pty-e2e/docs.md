@@ -15,7 +15,7 @@ Tests launch `nori` with `mock-acp-agent`, send keyboard input, and observe
 screen output and process lifecycle. The path under test is:
 
 ```text
-PTY -> nori-tui -> nori-harness -> nori-acp-host -> mock ACP agent
+PTY -> nori (nori-tui on its owned host) -> nori-harness -> nori-acp-host -> mock ACP agent
 ```
 
 ### Core Implementation

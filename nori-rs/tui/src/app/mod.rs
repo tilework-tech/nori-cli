@@ -221,6 +221,7 @@ mod auth_preference;
 mod config_persistence;
 mod delegation;
 mod event_handling;
+mod host_link;
 mod resize_reflow;
 mod session_deck;
 mod session_keys;
@@ -246,6 +247,7 @@ impl App {
         cloud_mode: bool,
         cloud_onboard: bool,
         analytics: Option<nori_installed::AnalyticsReporter>,
+        host: crate::OwnedHost,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -258,12 +260,8 @@ impl App {
         // a later user/session decision, after any per-session skillset setup.
         let needs_deferred_spawn = true;
         let mut pending_session_activation = None;
-        let session_manager = nori_harness::session_manager::SessionManager::new(
-            nori_harness::session_manager::SessionManagerConfig {
-                max_sessions: config.max_sessions,
-                ..nori_harness::session_manager::SessionManagerConfig::default()
-            },
-        );
+        // Sessions belong to the host the CLI built for this run.
+        let (session_manager, mut host) = host_link::HostLink::start(host);
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -480,14 +478,22 @@ impl App {
 
         tui.frame_requester().schedule_frame();
 
-        while select! {
-            Some(event) = app_event_rx.recv() => {
-                app.handle_event(tui, event).await?
-            }
-            Some(event) = tui_events.next() => {
-                app.handle_tui_event(tui, event).await?
-            }
-        } {}
+        let ran = async {
+            while select! {
+                Some(event) = app_event_rx.recv() => {
+                    app.handle_event(tui, event).await?
+                }
+                Some(event) = tui_events.next() => {
+                    app.handle_tui_event(tui, event).await?
+                }
+                Some(event) = host.next() => {
+                    host.handle(event).map_err(|error| color_eyre::eyre::eyre!(error))?;
+                    true
+                }
+            } {}
+            Ok::<(), color_eyre::eyre::Report>(())
+        }
+        .await;
 
         app.cancel_primary_agent_preparation();
         if let Some(agent) = app.prepared_agent.take() {
@@ -495,6 +501,10 @@ impl App {
         }
         app.prepared_agent_initial_context = None;
         app.discard_candidate();
+        // The host lives exactly as long as this terminal, as before.
+        let stopped = host.stop().await;
+        ran?;
+        stopped.map_err(|error| color_eyre::eyre::eyre!(error))?;
 
         // Don't clear terminal to allow exit message to remain visible
         // tui.terminal.clear()?;

@@ -14,7 +14,8 @@ Path: @/nori-rs/tui/src/attach
 - [CLI host dispatch](../../../cli/src/host/docs.md) supplies a resolved endpoint and token, plus the attaching terminal's
   configuration, whose `cwd` (the attaching directory, or `-C`) is where
   `/new` starts sessions. This frontend is separate from the
-  local TUI `App`, whose shutdown owns its local sessions.
+  local TUI `App`, which owns an in-process host and stops it, with its
+  sessions, when it quits.
 - All wire traffic goes through the [host session client](../host_client/docs.md):
   connection driving, reconnect, JSON-RPC ids, and reply matching live there.
   The host retains mutation policy and broadcasts complete manager envelopes

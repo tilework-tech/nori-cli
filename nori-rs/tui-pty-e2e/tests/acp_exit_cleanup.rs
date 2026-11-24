@@ -283,3 +283,40 @@ fn test_acp_agent_cleanup_on_quit_command() {
         agent_pid
     );
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn quitting_during_a_turn_ends_the_owned_hosts_session() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_STREAM_UNTIL_CANCEL", "1");
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.submit_input("tidy the parser module").unwrap();
+    std::thread::sleep(Duration::from_secs(1));
+
+    let log_path = session.acp_log_path().expect("Should have log path");
+    let pids = extract_mock_agent_pids_from_log(&log_path);
+    assert!(!pids.is_empty(), "Should have spawned mock agent");
+    assert!(
+        pids.iter().any(|pid| process_exists_and_not_zombie(*pid)),
+        "the agent should still be streaming its turn"
+    );
+
+    session.submit_input("/quit").unwrap();
+    assert!(
+        session.wait_for_process_exit(Duration::from_secs(10)),
+        "nori should exit on its own while a turn is running: {}",
+        session.screen_contents()
+    );
+    std::thread::sleep(Duration::from_millis(500));
+    for pid in pids {
+        assert!(
+            !process_exists_and_not_zombie(pid),
+            "agent {pid} outlived the host that plain nori owned"
+        );
+    }
+}

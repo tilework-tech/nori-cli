@@ -185,7 +185,9 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   replay it here when it falls back.
 - `RemoteAcpServer::serve_host_pipe` serves one in-process host client the
   same way over in-memory channels of JSON-RPC lines (used by one-shot
-  `nori exec`, see [its host client](../cli/src/host/docs.md#one-shot-exec)).
+  `nori exec`, see [its host client](../cli/src/host/docs.md#one-shot-exec),
+  and by the host the interactive TUI owns, see
+  [owned TUI host](../cli/src/host/docs.md#owned-tui-host)).
   Stdio and pipe share `serve_lines`, which owns the client-always-controls
   policy, blank-line skipping and the stop/lag handling; stdio only adds the
   stdin thread and maps non-UTF-8 lines to a parse error.

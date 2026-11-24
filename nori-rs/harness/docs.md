@@ -43,7 +43,9 @@ changing ACP semantics, and adds the small Nori-owned event branch. Stateful
 ACP reduction remains private because it supports harness behavior; widget and
 display projection remains private to the TUI.
 
-`nori-tui` starts every session through one app-owned `SessionManager`. The
+`nori-tui` starts every session through the `SessionManager` of the host it
+owns: `nori-cli` builds that host for each TUI run and stops it when the TUI
+quits (see [the owned TUI host](../cli/src/host/docs.md#owned-tui-host)). The
 manager calls the same launch internals as `launch_session`, so a managed
 session behaves exactly like a directly launched one. The TUI serves no
 remote listener; the background host (including its stdio form,
