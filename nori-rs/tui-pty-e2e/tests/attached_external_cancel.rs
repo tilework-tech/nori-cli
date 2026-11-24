@@ -166,6 +166,9 @@ impl Attach {
                 Err(e) => panic!("accepting attached client: {e}"),
             }
         };
+        // macOS hands out accepted sockets with the listener's non-blocking
+        // flag, which would interrupt the handshake.
+        stream.set_nonblocking(false).unwrap();
         let from_tui = tungstenite::accept(stream).unwrap();
         for socket in [&from_tui, &to_host] {
             socket.get_ref().set_nonblocking(true).unwrap();

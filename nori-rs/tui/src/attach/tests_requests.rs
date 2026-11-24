@@ -56,7 +56,7 @@ fn runtime_with_fresh_request(
 
 fn host_event(runtime: &mut super::runtime::Runtime, event: SessionEnvelope) {
     runtime
-        .connection_event(super::connection::ConnectionEvent::Message(json!({
+        .connection_event(crate::host_client::ConnectionEvent::Message(json!({
             "jsonrpc":"2.0", "method":"_nori/session/event",
             "params":serde_json::to_value(event).unwrap()
         })))

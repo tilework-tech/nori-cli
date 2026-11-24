@@ -12,6 +12,7 @@ use serde_json::json;
 use super::runtime::Pending;
 use super::runtime::Runtime;
 use super::state::CancelDelivery;
+use crate::host_client::HostCall;
 
 impl Runtime {
     /// False means detach. It never requests host or session shutdown.
@@ -64,7 +65,7 @@ impl Runtime {
         }
         if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('t') {
             if self.state.connected {
-                self.send("_nori/control/take", json!({}), Pending::TakeControl);
+                self.send(HostCall::TakeControl, Pending::TakeControl);
             } else {
                 self.state
                     .show_notice("Reconnecting. Take control after the connection is restored.");
@@ -240,8 +241,11 @@ impl Runtime {
             return true;
         }
         self.send(
-            "_nori/session/delegation/resolve",
-            json!({"session_id":id,"request_id":delegation.request_id,"approved":approved}),
+            HostCall::ResolveDelegation {
+                session_id: id,
+                request_id: json!(delegation.request_id),
+                approved,
+            },
             Pending::Mutation { draft: None },
         );
         true
@@ -317,8 +321,11 @@ impl Runtime {
         }
         let response = acp::RequestPermissionResponse::new(outcome);
         self.send(
-            "_nori/session/respond",
-            json!({"session_id":id, "request_id":request_id, "response":response}),
+            HostCall::Respond {
+                session_id: id,
+                request_id: json!(request_id),
+                response,
+            },
             Pending::Mutation { draft: None },
         );
         true
@@ -363,8 +370,10 @@ impl Runtime {
             {
                 let observed_turn_id = turn.id.clone();
                 self.send(
-                    "_nori/session/cancel_observed",
-                    json!({"sessionId":id, "observedTurnId":observed_turn_id}),
+                    HostCall::CancelObserved {
+                        session_id: id.clone(),
+                        observed_turn_id: observed_turn_id.clone(),
+                    },
                     Pending::CancelObserved {
                         session_id: id,
                         observed_turn_id,
@@ -372,7 +381,7 @@ impl Runtime {
                 );
             }
         } else if conversation.is_some_and(|c| c.active_prompt().is_some() || c.submitted_prompt) {
-            self.notify("session/cancel", json!({"sessionId": id}));
+            self.notify(HostCall::Cancel { session_id: id });
         } else if !conversation.is_some_and(super::state::Conversation::cancelling_prompt) {
             self.state.show_notice("No active turn to cancel.");
         }
@@ -411,7 +420,7 @@ impl Runtime {
             .filter(|args| args.is_empty() || args.starts_with(' '))
         {
             match super::new_session::params(args, &self.cwd, self.session_folders, self.remote) {
-                Ok(params) => self.send("_nori/session/new", params, Pending::New),
+                Ok(params) => self.send(HostCall::NewSession(params), Pending::New),
                 Err(message) => {
                     self.composer.handle_paste(text);
                     self.state.show_notice(message);
@@ -428,8 +437,11 @@ impl Runtime {
         if let Some(command) = crate::delegation::parse_command(command) {
             match command {
                 Ok((agent, task)) => self.send(
-                    "_nori/session/delegate",
-                    json!({"session_id":id,"agent":agent,"task":task}),
+                    HostCall::Delegate {
+                        session_id: id,
+                        agent,
+                        task,
+                    },
                     Pending::Mutation { draft: Some(text) },
                 ),
                 Err(message) => self.state.show_notice(message),
@@ -438,8 +450,7 @@ impl Runtime {
         }
         if command == "/close" {
             self.send(
-                "session/close",
-                json!({"sessionId": id}),
+                HostCall::Close { session_id: id },
                 Pending::Mutation { draft: None },
             );
         } else if command == "/resume" {
@@ -447,9 +458,13 @@ impl Runtime {
         } else if let Some(expected_turn) = active_turn {
             let message_id = uuid::Uuid::new_v4().to_string();
             self.send(
-                "_nori/session/follow_up",
-                json!({"session_id":id, "expected_turn":expected_turn, "message_id":message_id,
-                    "intent":intent,"prompt":[{"type":"text","text":text}]}),
+                HostCall::FollowUp {
+                    session_id: id.clone(),
+                    expected_turn,
+                    message_id: message_id.clone(),
+                    intent,
+                    text: text.clone(),
+                },
                 Pending::FollowUp {
                     session_id: id,
                     message_id,
@@ -465,8 +480,7 @@ impl Runtime {
                         .or_default()
                         .submitted_prompt = true;
                     self.send(
-                        "_nori/session/prompt",
-                        params,
+                        HostCall::Prompt(params),
                         Pending::Prompt {
                             session_id: id,
                             draft: text,

@@ -1,11 +1,9 @@
 //! A terminal attachment observes host-owned sessions without owning their lifetime.
 
-mod connection;
-#[cfg(test)]
-mod connection_tests;
 mod input;
 mod new_session;
 mod render;
+mod replies;
 mod runtime;
 mod state;
 #[cfg(test)]
@@ -62,7 +60,14 @@ async fn run(
     runtime.set_session_list_binding(hotkeys.open_session_list);
     runtime.set_next_waiting_binding(hotkeys.next_waiting_session);
     runtime.state.parent_binding = hotkeys.parent_session;
-    let connection = tokio::spawn(connection::drive(options, initial, request_rx, event_tx));
+    let endpoint = crate::host_client::HostEndpoint {
+        endpoint: options.endpoint,
+        token: options.token,
+        refresh_local_token: options.refresh_local_token,
+    };
+    let connection = tokio::spawn(crate::host_client::drive(
+        endpoint, initial, request_rx, event_tx,
+    ));
     let mut events = tui.event_stream();
     let mut refresh = tokio::time::interval(std::time::Duration::from_secs(1));
     let result = async {

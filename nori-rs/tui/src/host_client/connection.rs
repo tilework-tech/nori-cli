@@ -9,9 +9,9 @@ use tokio::time::Instant;
 // Session-list replies arrive every second, including when no session is active.
 const LIVENESS_TIMEOUT: Duration = Duration::from_secs(10);
 
-use super::AttachOptions;
+use super::HostEndpoint;
 
-pub(super) enum ConnectionEvent {
+pub(crate) enum ConnectionEvent {
     Connected,
     Message(Value),
     Disconnected(String),
@@ -19,8 +19,8 @@ pub(super) enum ConnectionEvent {
 }
 
 /// Requests are never replayed. Only event subscriptions resume from a cursor.
-pub(super) async fn drive(
-    mut options: AttachOptions,
+pub(crate) async fn drive(
+    mut options: HostEndpoint,
     initial: ManagedClient,
     mut requests: mpsc::UnboundedReceiver<Value>,
     events: mpsc::UnboundedSender<ConnectionEvent>,

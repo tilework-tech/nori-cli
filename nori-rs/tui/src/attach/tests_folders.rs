@@ -7,7 +7,7 @@ fn connected_runtime(
     super::runtime::Runtime,
     tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>,
 ) {
-    use super::connection::ConnectionEvent;
+    use crate::host_client::ConnectionEvent;
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime = super::runtime::Runtime::new(None, tx);
     runtime.cwd = cwd.to_path_buf();

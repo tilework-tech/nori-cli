@@ -1501,7 +1501,9 @@ acknowledged a result turn. See the [manager lifecycle](../harness/docs.md#deleg
 
 [`attach`](src/attach/docs.md) is the dedicated frontend for `nori attach`.
 It consumes host-owned manager envelopes
-through the harness's `ManagedClient` re-export. It does not construct the
+through the [host session client](src/host_client/docs.md), which owns the
+connection, reconnect, and reply matching over the harness's `ManagedClient`
+re-export and is meant to serve other host frontends too. It does not construct the
 local process-owning `App`, launch agents, or shut down sessions when its
 terminal closes. Its session list and selected conversation are terminal-local;
 the host remains authoritative for session lifecycle and controller ownership.
