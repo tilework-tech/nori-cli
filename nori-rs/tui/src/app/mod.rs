@@ -540,10 +540,25 @@ impl App {
         let ran = async {
             while select! {
                 Some(event) = app_event_rx.recv() => {
-                    app.handle_event(tui, event, host).await?
+                    let name = format!("{event:?}").chars().take(60).collect::<String>();
+                    let started = std::time::Instant::now();
+                    let r = app.handle_event(tui, event, host).await?;
+                    let took = started.elapsed();
+                    if took > std::time::Duration::from_millis(40) {
+                        tracing::info!(?took, %name, "DBG slow app event");
+                    }
+                    r
                 }
                 Some(event) = tui_events.next() => {
-                    app.handle_tui_event(tui, event).await?
+                    let name = format!("{event:?}").chars().take(60).collect::<String>();
+                    if name.starts_with("Key") { tracing::info!(%name, "DBG key arrives"); }
+                    let started = std::time::Instant::now();
+                    let r = app.handle_tui_event(tui, event).await?;
+                    let took = started.elapsed();
+                    if took > std::time::Duration::from_millis(40) {
+                        tracing::info!(?took, %name, "DBG slow tui event");
+                    }
+                    r
                 }
                 Some(event) = host.next() => {
                     host.handle(event).map_err(|error| color_eyre::eyre::eyre!(error))?;
