@@ -17,7 +17,7 @@ use crate::slash_command::SlashCommand;
 
 /// Folders a host lists for one Tab, the most it returns. A list this long
 /// may have been cut short, so Tab then only lists it.
-pub(super) const FOLDER_MATCHES: usize = 50;
+pub(super) const FOLDER_MATCHES: i32 = 50;
 
 impl Runtime {
     /// False means detach. It never requests host or session shutdown.
@@ -201,7 +201,7 @@ impl Runtime {
                         session_id: self.state.selected.clone(),
                         query,
                         kind: nori_protocol::PathKind::Folders,
-                        limit: FOLDER_MATCHES as i32,
+                        limit: FOLDER_MATCHES,
                     },
                     Pending::CompleteFolder { text },
                 );
