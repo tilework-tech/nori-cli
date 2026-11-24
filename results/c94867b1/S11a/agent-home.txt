@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-L3/S11a/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› think about the tide
+
+
+│ Weighing the lighthouse log before answering.
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• claude-code heard: think about the tide
+
+
+› scan the harbor
+
+
+• Explored 1 read · 1 search
+  • Read harbor/tides.md · lines 12–19
+  • Search beacon · 3 matches in 2 files
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• claude-code heard: scan the harbor
+
+                                                                                                                [ auto ]
+› ? for shortcuts
+
+
+
+

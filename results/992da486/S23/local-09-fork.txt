@@ -1,0 +1,40 @@
+• hello lantern
+
+• No active instruction files found.
+
+  Context
+  Lantern Claude · 1 user turn · /context
+
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Not reported / unknown tokens
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Waiting for context usage
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Current turn  1 · ended
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Turn tokens   unknown
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    ▨ Usage not reported
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Each cell = 0.5% of the window
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+
+  Current · usage not reported
+
+  Turn checkpoints
+  Turn   Start             End             Change      Reading
+  T1     unknown           unknown         unknown     not reported
+  Starts carry the latest prior observation.
+
+  Local instructions · estimated tokens                         Skills observed              Subagents observed
+  No local instruction files found for this agent.              None observed                None observed
+
+
+  Fork conversation
+  Select a message to rewind to
+
+  ▏1. hello lantern                                                                                                  ▕
+
+
+  ↑↓/j/k move  enter select  esc close
+
+
+
+

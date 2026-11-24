@@ -117,3 +117,39 @@ Columns: main `f9eedcac`, #738 `8ea6650e`.
   implemented copy at layer 3/4 without weakening what they assert.
 - Native macOS PTY runs of this harness are not available; macOS evidence comes
   from the exact-commit `verify/pr-<N>-<sha8>-native-host` CI runs.
+
+### Added 2026-11-24 (stack #739-#746)
+
+Columns: main `f9eedcac` (`results/f9eedcac-ext`), then the first head where the check passes.
+Every head from #739 to #746 also re-ran S01-S20 with no regression against its base.
+
+| Requirement | Scenario / check | Observed by | main | First green |
+|---|---|---|---|---|
+| Plain `nori` owns a private host: no socket, discovery file or `host ls` entry; adapters are its children | S21a/b owned.* | process, adapter | pass | main (kept through #746) |
+| Hangup and SIGTERM end every session and restore the terminal | S21a/b owned.nori_exits, no_adapter_outlives_nori, turn_stopped, terminal_restored_after_sigterm | process, adapter, screen | pass | kept |
+| A background host never sees plain `nori`'s live session and survives its quit | S21c | wire | pass | kept |
+| `/agent` switches agent servers in the same folder; old server gets no prompt; all stop on quit | S22 agent.* | adapter, screen | pass | kept |
+| Client-local commands work and never reach the agent | S23 local.* | screen, adapter | pass except `!` | kept |
+| `!cmd` shows its output | S23 local.echo_works | screen | FAIL | not yet (baseline gap) |
+| `nori resume` shows its picker before any session; Esc starts one in the launch folder | S24 picker_first.* | adapter, process | pass | kept |
+| Permission answered once with the chosen option; repeat request answered separately (plain) | S25a perm.* | adapter | pass | kept |
+| Watcher Enter cannot answer; controller answer reaches the adapter once; watcher sees outcome | S25b perm.* | adapter, screen | pass | kept |
+| Queued follow-up delivered exactly once after the turn | S26a queue.* | adapter, screen | pass | kept |
+| Reclaimed follow-up (Up, Enter) returns to the composer and is never sent | S26b queue.* | adapter, screen | pass | kept |
+| Interrupted queue pauses; Enter resumes and delivers exactly once | S26c queue.* | adapter, screen | pass | kept |
+| Standalone `nori-tui` binary: inline, one session, private host, clean exit | S27 standalone.* | screen, pty, adapter | absent | #741 |
+| Escape cancels the observed turn once; the next turn is not cancelled (plain) | S28a cancel.* | adapter | pass | kept |
+| Same in attach | S28b cancel.* | adapter | FAIL | #743 |
+| Refused `/close` keeps the session working; retry closes; no cancel | S29a/b close_refusal.* | adapter, wire | FAIL | #744 |
+| Refused `/close` shown once (plain) | S29a close_refusal.shown_once | screen | FAIL | #746 |
+| Refused `/close` shown once (attach) | S29b close_refusal.shown_once | screen | FAIL | **still FAIL at #746** (three lines) |
+| Prepared agent: capability, catalog rows, activation on the same adapter process, single use, discard and disconnect stop unused adapters | S30 prepared.* | wire, adapter, process | FAIL | #745 |
+
+Further pre-existing findings:
+
+11. `!cmd` runs but nothing is shown: the TUI drops `NoriEvent::UserShell` (`tui/src/chatwidget/event_handlers.rs`), at main and every head.
+12. `nori resume` lists no saved rows for the synthetic agent server at main and every head (information; the picker-first UI layer is expected to use #745).
+
+Not covered: Escape pressed before host admission returns (#743) is covered only by the repository PTY test with its admission hook.
+
+Run several commits at once with `ACC_LANE=<name>` (own work dir and tmux socket); re-run part of a commit with `--merge --only ...`.

@@ -10,6 +10,7 @@ adapter ledger, then records checks in results.json. Screens are saved as
 """
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -28,10 +29,12 @@ P = argparse.ArgumentParser()
 P.add_argument("--nori", required=True)
 P.add_argument("--out", required=True)
 P.add_argument("--only", default="")
+P.add_argument("--merge", action="store_true", help="keep results.json rows of scenarios not re-run")
 ARGS = P.parse_args()
 # Terminals run `nori` from a synthetic bin directory so captures and logs
 # show only synthetic paths.
-WORK = Path("/tmp/nori-host-tui-acceptance")
+# ACC_LANE runs several commits side by side, each with its own work dir and tmux socket.
+WORK = Path("/tmp/nori-host-tui-acceptance" + (f"-{os.environ['ACC_LANE']}" if os.environ.get("ACC_LANE") else ""))
 BIN = WORK / "bin"
 BIN.mkdir(parents=True, exist_ok=True)
 (BIN / "nori").unlink(missing_ok=True)
@@ -40,6 +43,9 @@ NORI = "nori"
 OUT = Path(ARGS.out).resolve()
 OUT.mkdir(parents=True, exist_ok=True)
 RESULTS = []
+if ARGS.merge and (OUT / "results.json").exists():
+    rerun = {x for x in ARGS.only.split(",") if x}
+    RESULTS = [r for r in json.loads((OUT / "results.json").read_text()) if r["scenario"] not in rerun]
 HINT_TOKENS = re.compile(r"(alt\+t|alt\+s|alt\+↑|alt\+↓|alt\+up|alt\+down|ctrl\+d)", re.I)
 
 
@@ -100,6 +106,7 @@ class Ctx:
             t.close()
         if self.host_up:
             self.nori("host", "stop")
+        self.dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(self.fx["ledger"], self.dir / "ledger.jsonl")
 
 
@@ -559,7 +566,7 @@ HOST_MODE_FOR = {"default": "ask", "read-only": "ask", "acceptEdits": "agent", "
 def choose(t, label, limit=12):
     """Move a list selection onto the row containing `label`, then press Enter."""
     for _ in range(limit):
-        row = next((l for l in t.screen().splitlines() if re.match(r"^\s*(›|>|▶)", l) and label in l), None)
+        row = next((l for l in t.screen().splitlines() if re.match(r"^\s*(›|>|▶|▏)", l) and label in l), None)
         if row:
             t.keys("Enter")
             return True
@@ -1003,6 +1010,601 @@ def s20_agent_started_cancel(ctx, mode):
     ctx.check("agent_turn.next_prompt_works", ok)
 
 
+def child_pids(pid):
+    out = subprocess.run(["pgrep", "-P", str(pid)], capture_output=True, text=True).stdout.split()
+    return [int(p) for p in out]
+
+
+def descendants(pid):
+    found, todo = [], [int(pid)]
+    while todo:
+        kids = child_pids(todo.pop())
+        found += kids
+        todo += kids
+    return found
+
+
+def nori_pid(t):
+    kids = child_pids(t.fmt("#{pane_pid}"))
+    return next((k for k in kids if "nori" in Path(f"/proc/{k}/cmdline").read_bytes().decode(errors="replace")), None)
+
+
+def listening_ports(pid):
+    """TCP ports a process listens on, from /proc (no ss needed)."""
+    inodes = set()
+    for fd in Path(f"/proc/{pid}/fd").iterdir():
+        try:
+            target = fd.readlink().as_posix()
+        except OSError:
+            continue
+        if target.startswith("socket:["):
+            inodes.add(target[8:-1])
+    ports = []
+    for table in ("tcp", "tcp6"):
+        for line in Path(f"/proc/net/{table}").read_text().splitlines()[1:]:
+            cols = line.split()
+            if cols[3] == "0A" and cols[9] in inodes:
+                ports.append(int(cols[1].split(":")[1], 16))
+    return ports
+
+
+def s21_foreground_owns_host(ctx, how):
+    """Plain nori runs a private host: no listener or discovery files; every exit path ends every session."""
+    t = ctx.term("fg")
+    t.run(f"{NORI} --skip-trust-directory")
+    wait_composer(t)
+    pid = nori_pid(t)
+    host_dir = ctx.fx["homes"]["host"] / "host"
+    ctx.check("owned.no_discovery_files", not (host_dir / "state.json").exists() and not (host_dir / "token").exists(),
+              sorted(p.name for p in host_dir.iterdir()) if host_dir.exists() else "no host dir")
+    ctx.check("owned.no_listening_socket", pid and not listening_ports(pid), pid and listening_ports(pid))
+    ls = ctx.nori("host", "ls")
+    ctx.check("owned.not_visible_to_host_ls", "claude" not in ls.stdout, (ls.stdout + ls.stderr)[-200:])
+    t.type("hold the lamp")
+    t.keys("Enter")
+    wait_ticks(ctx, 3)
+    t.type("/new")
+    time.sleep(0.4)
+    adapters = sorted({r["pid"] for r in ctx.ledger("spawn")})
+    agent_tree = descendants(pid)
+    ctx.check("owned.adapters_are_children_of_nori", adapters and all(a in agent_tree for a in adapters),
+              {"adapters": adapters, "tree": agent_tree})
+    t.keys("C-u")
+    t.capture("owned-working")
+    if how == "hangup":
+        t.close()
+    elif how == "sigterm":
+        subprocess.run(["kill", "-TERM", str(pid)])
+    deadline = time.time() + 10
+    while time.time() < deadline and running(pid):
+        time.sleep(0.2)
+    ctx.check("owned.nori_exits", not running(pid), how)
+    if how == "sigterm":
+        deadline = time.time() + 5
+        while time.time() < deadline and not t.at_shell():
+            time.sleep(0.2)
+        t.capture("after-sigterm")
+        ctx.check("owned.terminal_restored_after_sigterm", t.at_shell() and not t.alt_screen() and t.cursor_visible(),
+                  last_nonblank(t.screen()))
+    time.sleep(1.0)
+    alive = [a for a in adapters if running(a)]
+    ctx.check("owned.no_adapter_outlives_nori", not alive, alive)
+    before = ctx.ticks()
+    time.sleep(1.2)
+    ctx.check("owned.turn_stopped", ctx.ticks() == before, f"{before}->{ctx.ticks()}")
+
+
+def s21c_private_beside_background_host(ctx):
+    """A background host in the same NORI_HOME and plain nori never see each other's sessions."""
+    ctx.start_host()
+    obs = ctx.observer()
+    t = ctx.term("fg")
+    t.run(f"{NORI} --skip-trust-directory")
+    wait_composer(t)
+    t.type("hello lantern")
+    t.keys("Enter")
+    t.wait_for("heard: hello lantern", 20)
+    live = [s for s in obs.sessions() if (s.get("_meta") or {}).get("nori/session", {}).get("live")]
+    ctx.check("owned.background_host_lists_no_live_foreground_session", live == [], obs.sessions())
+    t.type("/quit")
+    t.keys("Enter")
+    time.sleep(1.5)
+    if not t.at_shell():
+        t.keys("Enter")
+    ls = ctx.nori("host", "ls")
+    ctx.check("owned.background_host_survives_foreground_quit", ls.returncode == 0, (ls.stdout + ls.stderr)[-200:])
+    obs.close()
+
+
+def s22_switch_agents(ctx):
+    """/agent switches the foreground session to another agent server on the owned host."""
+    t = ctx.term("fg")
+    t.run(f"{NORI} --skip-trust-directory")
+    wait_composer(t)
+    t.type("hello lantern")
+    t.keys("Enter")
+    t.wait_for("claude-code heard: hello lantern", 20)
+    t.type("/agent")
+    t.keys("Enter")
+    time.sleep(1.5)
+    t.capture("agent-picker")
+    picker = t.screen()
+    ctx.check("agent.picker_lists_configured_servers", all(n in picker for n in ("Lantern Claude", "Lantern Codex")),
+              [l for l in picker.splitlines() if "Lantern" in l])
+    picked = choose(t, "Lantern Codex")
+    time.sleep(2.0)
+    if "Start a new session" in t.screen():
+        t.capture("agent-session-choice")
+        choose(t, "Start a new session")
+    time.sleep(2.5)
+    t.capture("after-switch")
+    codex_new = [r for r in ctx.ledger("request", "session/new") if r["adapter"] == "codex"]
+    ctx.check("agent.switch_starts_codex_session", picked and bool(codex_new), codex_new)
+    ctx.check("agent.switch_keeps_folder", bool(codex_new) and codex_new[-1].get("cwd") == str(ctx.fx["roots"]["alpha"]),
+              codex_new[-1:])
+    t.type("hello again")
+    t.keys("Enter")
+    try:
+        t.wait_for("codex heard: hello again", 20)
+        ok = True
+    except TimeoutError:
+        ok = False
+    ctx.check("agent.prompt_reaches_new_server", ok, last_nonblank(t.screen()))
+    claude_after = [r for r in ctx.ledger("request", "session/prompt") if r["adapter"] == "claude-code"]
+    ctx.check("agent.old_server_gets_no_new_prompt", len(claude_after) == 1, len(claude_after))
+    t.capture("codex-reply")
+    pid = nori_pid(t)
+    t.type("/quit")
+    t.keys("Enter")
+    time.sleep(1.5)
+    if not t.at_shell():
+        t.keys("Enter")
+    time.sleep(1)
+    adapters = sorted({r["pid"] for r in ctx.ledger("spawn")})
+    ctx.check("agent.all_servers_stopped_on_quit", not [a for a in adapters if running(a)], adapters)
+
+
+LOCAL_STEPS = [
+    ("/status", "Escape", r"Session ID"),
+    ("/diff", "q", r"lantern_wick\.rs"),
+    ("/first-prompt", None, r"hello lantern"),
+    ("/memory", None, r"(Lighthouse rule 7|instruction files)"),
+    ("/context", "Escape", r"(?i)context"),
+    ("/model", "Escape", r"(?i)(model|Mode)"),
+    ("/config", "Escape", r"Mode"),
+    ("/approvals", "Escape", r"Agent"),
+    ("!echo shell-local-ok", None, r"shell-local-ok"),
+    ("/fork", "Escape", r"hello lantern"),
+    ("/sessions", "Escape", r"(?i)session"),
+    ("/resume", "Escape", r"Saved orchard survey"),
+]
+VOLATILE = [(re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"), "<uuid>"),
+            (re.compile(r"\(\d+s"), "(Ns"), (re.compile(r"\b\d+(\.\d+)?\s?(ms|s)\b"), "<dur>"),
+            (re.compile(r"\b\d{1,2}:\d{2}(:\d{2})?\s?(AM|PM|am|pm)?\b"), "<time>"),
+            (re.compile(r"(just now|\d+ (seconds?|minutes?) ago)"), "<ago>"),
+            (re.compile(r"/tmp/nori-host-tui-acceptance(-\w+)?/[A-Za-z0-9]+/"), "<run>/"),
+            (re.compile(r"index [0-9a-f]+\.\.[0-9a-f]+"), "index <h>..<h>")]
+
+
+def normalize(text):
+    for pattern, repl in VOLATILE:
+        text = pattern.sub(repl, text)
+    return "\n".join(l.rstrip() for l in text.splitlines() if l.strip() and not HINT_TOKENS.search(l))
+
+
+def s23_local_commands(ctx):
+    """Client-local commands keep working in plain nori and never reach the agent as prompts."""
+    root = ctx.fx["roots"]["alpha"]
+    (root / "AGENTS.md").write_text("Lighthouse rule 7: keep the lamp trimmed.\n")
+    subprocess.run("git init -q && git add -A && git -c user.name=Synthetic -c user.email=synthetic@example.invalid "
+                   "-c commit.gpgsign=false commit -qm seed && echo changed >> src/lantern_wick.rs",
+                   shell=True, cwd=root, check=True,
+                   env={"PATH": "/usr/bin:/bin", "HOME": str(ctx.fx["homes"]["host"]), "GIT_CONFIG_NOSYSTEM": "1"})
+    t = ctx.term("fg", rows=40)
+    t.run(f"{NORI} --skip-trust-directory")
+    wait_composer(t)
+    t.type("hello lantern")
+    t.keys("Enter")
+    t.wait_for("heard: hello lantern", 20)
+    time.sleep(0.5)
+    norm = {}
+    for i, (cmd, leave, expect) in enumerate(LOCAL_STEPS):
+        t.type(cmd)
+        time.sleep(0.5)
+        t.keys("Enter")
+        time.sleep(0.5)
+        if cmd.startswith("/") and re.search(rf"^\s*{re.escape(cmd)}\s*$", t.screen(), re.M):
+            t.keys("Enter")
+        time.sleep(1.5)
+        label = f"local-{i:02d}-{re.sub(r'[^a-z]+', '-', cmd.lower()).strip('-')}"
+        t.capture(label)
+        screen = t.screen()
+        norm[cmd] = normalize(screen)
+        (ctx.dir / f"{label}.norm.txt").write_text(norm[cmd])
+        ctx.check(f"local.{cmd.split()[0].lstrip('/!') or 'shell'}_works", re.search(expect, screen) is not None,
+                  last_nonblank(screen))
+        if leave:
+            t.keys(leave)
+            time.sleep(0.8)
+        t.keys("C-u")
+    prompts = [r.get("text", "") for r in ctx.ledger("request", "session/prompt")]
+    leaked = [c for c, _, _ in LOCAL_STEPS if any(p.strip().splitlines()[-1].startswith(c) for p in prompts if p.strip())]
+    ctx.check("local.none_sent_to_agent_as_prompt", len(prompts) == 1 and not leaked, {"prompts": len(prompts), "leaked": leaked})
+    news = ctx.ledger("request", "session/new")
+    ctx.check("local.no_extra_sessions_started", len(news) == 1, [(r["adapter"], r.get("cwd")) for r in news])
+    (ctx.dir / "local-normalized.json").write_text(json.dumps(norm, indent=1))
+
+
+def slash(t, cmd, settle=1.5):
+    """Type a slash command, pause so Enter is not taken as paste, submit it."""
+    t.type(cmd)
+    time.sleep(1.0)
+    t.keys("Enter")
+    time.sleep(0.6)
+    if re.search(rf"^\s*›?\s*{re.escape(cmd)}\s*$", t.screen(), re.M):
+        t.keys("Enter")
+    time.sleep(settle)
+
+
+def submit(t, text):
+    t.type(text)
+    time.sleep(1.0)
+    t.keys("Enter")
+
+
+def start_fg(ctx, name="fg", cmd=None, rows=36):
+    t = ctx.term(name, rows=rows)
+    t.run(cmd or f"{NORI} --skip-trust-directory")
+    wait_composer(t)
+    return t
+
+
+def start_attach(ctx, name, cwd="alpha", sid=None):
+    t = ctx.term(name, cwd=cwd)
+    t.run(f"{NORI} attach" + (f" {sid}" if sid else ""))
+    if sid:
+        t.wait_for("›", 20)
+    else:
+        attach_new_session(t)
+    return t
+
+
+def wait_ledger(ctx, pred, timeout=15):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        rows = [r for r in ctx.ledger() if pred(r)]
+        if rows:
+            return rows
+        time.sleep(0.2)
+    return []
+
+
+def quit_fg(t):
+    slash(t, "/quit", settle=1.0)
+    deadline = time.time() + 8
+    while time.time() < deadline and not t.at_shell():
+        time.sleep(0.3)
+
+
+def perm_responses(ctx):
+    return [r for r in ctx.ledger("response") if isinstance(r.get("id"), int) and r["id"] >= 9000]
+
+
+def s24_picker_first_resume(ctx):
+    """`nori resume` shows its picker before any session; Esc starts a fresh session on the owned host."""
+    first = ctx.term("first", cwd="beta")
+    first.run(f"{NORI} --skip-trust-directory")
+    wait_composer(first)
+    submit(first, "chart the orchard")
+    first.wait_for("heard: chart the orchard", 20)
+    quit_fg(first)
+    mark = len(ctx.ledger())
+    later = lambda: ctx.ledger()[mark:]
+    t = ctx.term("fg", cwd="beta")
+    t.run(f"{NORI} resume --skip-trust-directory")
+    t.wait_for("Resume a previous session", 20)
+    time.sleep(1.5)
+    t.capture("resume-first")
+    # Information: rows listed for the earlier session (none at main for this adapter either).
+    (ctx.dir / "resume-rows.txt").write_text("\n".join(l for l in t.screen().splitlines() if l.strip()))
+    ctx.check("picker_first.picker_before_any_session",
+              not [r for r in later() if r.get("method") in ("session/new", "session/load", "session/resume")],
+              [r.get("method") or r["kind"] for r in later()])
+    pid = nori_pid(t)
+    ctx.check("picker_first.no_listening_socket", pid and not listening_ports(pid), pid and listening_ports(pid))
+    t.keys("Escape")
+    wait_composer(t)
+    time.sleep(1.0)
+    submit(t, "after the orchard")
+    try:
+        t.wait_for("heard: after the orchard", 20)
+        ok = True
+    except TimeoutError:
+        ok = False
+    t.capture("fresh-reply")
+    news = [r for r in later() if r.get("method") == "session/new"]
+    ctx.check("picker_first.esc_starts_one_session_in_launch_folder",
+              ok and len(news) == 1 and news[0].get("cwd") == str(ctx.fx["roots"]["beta"]), news)
+    pids = {r["pid"] for r in ctx.ledger("spawn")}
+    quit_fg(t)
+    time.sleep(1)
+    ctx.check("picker_first.adapters_stopped_on_quit", not [p for p in pids if running(p)], sorted(pids))
+
+
+def s25_permission_attribution(ctx, mode):
+    """A permission request is answered once by the terminal that sees it; a watcher cannot answer."""
+    if mode == "fg":
+        t = start_fg(ctx)
+        submit(t, "perm the boathouse")
+        t.wait_for("Paint the boathouse", 20)
+        time.sleep(1.0)
+        t.capture("perm-overlay")
+        choose(t, "Allow once")
+        try:
+            t.wait_for("permission:", 15)
+            ok = True
+        except TimeoutError:
+            ok = False
+        t.capture("perm-answered")
+        answers = perm_responses(ctx)
+        ctx.check("perm.adapter_gets_selected_option", ok and answers
+                  and (answers[0].get("body") or {}).get("outcome", {}).get("optionId") == "allow",
+                  [a.get("body") for a in answers])
+        time.sleep(1.5)
+        ctx.check("perm.answered_exactly_once", len(perm_responses(ctx)) == 1, len(perm_responses(ctx)))
+        submit(t, "perm again")
+        t.wait_for(r"Paint the boathouse", 20)
+        time.sleep(1.0)
+        choose(t, "Reject")
+        time.sleep(2.0)
+        t.capture("perm-second")
+        answers = perm_responses(ctx)
+        ctx.check("perm.second_request_answered_separately",
+                  len(answers) == 2 and (answers[1].get("body") or {}).get("outcome", {}).get("optionId") == "reject",
+                  [a.get("body") for a in answers])
+        quit_fg(t)
+        return
+    ctx.start_host()
+    a = start_attach(ctx, "controller")
+    sid = ctx.observer().sessions()[0]["sessionId"]
+    w = start_attach(ctx, "watcher", sid=sid)
+    time.sleep(1.5)
+    submit(a, "perm the boathouse")
+    a.wait_for("Paint the boathouse", 20)
+    time.sleep(1.5)
+    w.capture("watcher-sees-request")
+    w.keys("Enter")
+    time.sleep(1.5)
+    ctx.check("perm.watcher_enter_does_not_answer", not perm_responses(ctx), [a.get("body") for a in perm_responses(ctx)])
+    a.capture("controller-overlay")
+    choose(a, "Allow once")
+    time.sleep(2.5)
+    answers = perm_responses(ctx)
+    ctx.check("perm.controller_answer_reaches_adapter_once", len(answers) == 1
+              and (answers[0].get("body") or {}).get("outcome", {}).get("optionId") == "allow",
+              [x.get("body") for x in answers])
+    w.capture("watcher-after-answer")
+    ctx.check("perm.watcher_sees_outcome", "permission:" in w.screen() and "Paint the boathouse" not in
+              "\n".join(w.screen().splitlines()[-8:]), last_nonblank(w.screen()))
+
+
+def s26_queued_followup(ctx, how):
+    """A follow-up typed during a turn is delivered exactly once, reclaimed and never sent, or resumed once."""
+    t = start_fg(ctx)
+    submit(t, "ponder the tide" if how == "deliver" else "hold the lamp")
+    wait_ledger(ctx, lambda r: r["kind"] in ("thought", "tick"))
+    word = {"deliver": "after the tide", "reclaim": "reclaim the lamp", "resume": "resume the lamp"}[how]
+    submit(t, word)
+    time.sleep(1.5)
+    t.capture("queued")
+    ctx.check("queue.not_sent_while_turn_runs",
+              not [r for r in ctx.ledger("request", "session/prompt") if word in r.get("text", "")])
+    sent = lambda: [r for r in ctx.ledger("request", "session/prompt") if word in r.get("text", "")]
+    if how == "deliver":
+        wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and word in r.get("text", ""), timeout=20)
+        t.wait_for(f"heard: {word}", 15)
+        time.sleep(2.0)
+        t.capture("delivered")
+        ctx.check("queue.delivered_exactly_once", len(sent()) == 1, len(sent()))
+        ctx.check("queue.reply_shown", f"heard: {word}" in t.screen(), last_nonblank(t.screen()))
+    elif how == "reclaim":
+        t.keys("Up")
+        time.sleep(1.0)
+        t.keys("Enter")
+        time.sleep(1.2)
+        t.capture("reclaimed")
+        composer = [l for l in t.screen().splitlines() if l.lstrip().startswith("›")]
+        ctx.check("queue.reclaimed_into_composer", any(word in l for l in composer[-1:]), composer[-2:])
+        t.keys("C-u")
+        t.keys("Escape")
+        time.sleep(3)
+        t.capture("after-turn")
+        ctx.check("queue.reclaimed_never_sent", not sent(), len(sent()))
+    else:
+        t.keys("Escape")
+        time.sleep(2.0)
+        t.capture("paused")
+        ctx.check("queue.paused_after_interrupt", re.search(r"(?i)paused", t.screen()) is not None and not sent(),
+                  [l for l in t.screen().splitlines() if "queued" in l])
+        t.keys("Enter")
+        wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and word in r.get("text", ""), timeout=15)
+        time.sleep(3.0)
+        t.capture("resumed")
+        ctx.check("queue.resume_delivers_exactly_once", len(sent()) == 1, len(sent()))
+        ctx.check("queue.resumed_reply_shown", f"heard: {word}" in t.screen(), last_nonblank(t.screen()))
+    quit_fg(t)
+
+
+def s27_standalone_nori_tui(ctx):
+    """The standalone nori-tui binary opens the inline TUI on a private host and cleans up on /quit."""
+    resolved = Path(ARGS.nori).resolve()
+    tui = resolved.parent / resolved.name.replace("nori", "nori-tui", 1)
+    if not tui.exists():
+        ctx.check("standalone.binary_built", False, f"missing {tui}")
+        return
+    (BIN / "nori-tui").unlink(missing_ok=True)
+    (BIN / "nori-tui").symlink_to(tui)
+    t = start_fg(ctx, cmd="nori-tui --skip-trust-directory")
+    pid = next((k for k in child_pids(t.fmt("#{pane_pid}"))), None)
+    submit(t, "hello from the standalone")
+    try:
+        t.wait_for("heard: hello from the standalone", 20)
+        ok = True
+    except TimeoutError:
+        ok = False
+    t.capture("standalone-reply")
+    ctx.check("standalone.reply_shown", ok, last_nonblank(t.screen()))
+    ctx.check("standalone.inline", not t.alt_screen())
+    ctx.check("standalone.one_session", len(ctx.ledger("request", "session/new")) == 1, len(ctx.ledger("request", "session/new")))
+    ctx.check("standalone.no_listening_socket", pid and not listening_ports(pid), pid and listening_ports(pid))
+    pids = {r["pid"] for r in ctx.ledger("spawn")}
+    quit_fg(t)
+    check_restored(ctx, t, "standalone.exit")
+    time.sleep(1)
+    ctx.check("standalone.adapters_stopped", not [p for p in pids if running(p)], sorted(pids))
+    ctx.check("standalone.process_exits", not (pid and running(pid)), pid)
+
+
+def s28_escape_cancel(ctx, mode):
+    """Escape cancels the turn the terminal saw exactly once; the next turn is not cancelled."""
+    if mode == "fg":
+        t = start_fg(ctx)
+    else:
+        ctx.start_host()
+        t = start_attach(ctx, "attach")
+    submit(t, "hold the lamp")
+    wait_ticks(ctx, 3)
+    t.keys("Escape")
+    t.keys("Escape")
+    wait_ledger(ctx, lambda r: r["kind"] == "turn_end" and r.get("stopReason") == "cancelled")
+    time.sleep(1.0)
+    t.capture("after-escape")
+    ctx.check("cancel.exactly_one_cancel", len(ctx.ledger("request", "session/cancel")) == 1,
+              len(ctx.ledger("request", "session/cancel")))
+    submit(t, "fresh after escape")
+    try:
+        t.wait_for("heard: fresh after escape", 20)
+        ok = True
+    except TimeoutError:
+        ok = False
+    time.sleep(1.0)
+    t.capture("next-turn")
+    ends = [r for r in ctx.ledger("turn_end")]
+    ctx.check("cancel.next_turn_completes", ok and ends and ends[-1].get("stopReason") == "end_turn",
+              [e.get("stopReason") for e in ends])
+    ctx.check("cancel.no_cancel_for_next_turn", len(ctx.ledger("request", "session/cancel")) == 1,
+              len(ctx.ledger("request", "session/cancel")))
+    if mode == "fg":
+        quit_fg(t)
+
+
+def s29_close_refusal(ctx, mode):
+    """A refused /close keeps the session, shows one refusal, and a retry closes it."""
+    (ctx.fx["control"] / "close-refuse").write_text("1")
+    obs = None
+    if mode == "fg":
+        t = start_fg(ctx)
+    else:
+        ctx.start_host()
+        t = start_attach(ctx, "attach")
+        obs = ctx.observer()
+    submit(t, "first light")
+    t.wait_for("heard: first light", 20)
+    slash(t, "/close", settle=2.5)
+    t.capture("refused")
+    screen = t.screen() + "\n".join(t.history().splitlines()[-40:]) if mode == "fg" else t.screen()
+    shown = len(re.findall(r"close declined by", t.screen()))
+    ctx.check("close_refusal.adapter_refused", bool(ctx.ledger("close_refused")))
+    ctx.check("close_refusal.shown_once", shown == 1,
+              [l.strip() for l in t.screen().splitlines() if "declined" in l])
+    if obs:
+        live = [s for s in obs.sessions() if (s.get("_meta") or {}).get("nori/session", {}).get("live")]
+        ctx.check("close_refusal.session_still_live_on_host", len(live) == 1, obs.sessions())
+    submit(t, "still lit")
+    try:
+        t.wait_for("heard: still lit", 20)
+        ok = True
+    except TimeoutError:
+        ok = False
+    ctx.check("close_refusal.session_keeps_working", ok, last_nonblank(t.screen()))
+    slash(t, "/close", settle=2.5)
+    t.capture("retry-closed")
+    closes = ctx.ledger("request", "session/close")
+    ctx.check("close_refusal.retry_reaches_adapter", len(closes) == 2, len(closes))
+    ctx.check("close_refusal.no_cancel_sent", not ctx.ledger("request", "session/cancel"))
+    if obs:
+        live = [s for s in obs.sessions() if (s.get("_meta") or {}).get("nori/session", {}).get("live")]
+        ctx.check("close_refusal.retry_ends_session_on_host", not live, obs.sessions())
+        ctx.check("close_refusal.client_still_attached", t.alt_screen() and not t.at_shell())
+        obs.close()
+    else:
+        ctx.check("close_refusal.retry_leaves_terminal_open", not t.at_shell(), last_nonblank(t.screen()))
+        ctx.check("close_refusal.shown_once_after_retry", len(re.findall(r"close declined by", t.screen())) <= 1,
+                  [l.strip() for l in t.screen().splitlines() if "declined" in l])
+        quit_fg(t)
+
+
+def s30_prepared_agent(ctx):
+    """A host client prepares an agent server, lists its saved sessions, and activates one on that connection."""
+    ctx.start_host()
+    endpoint, token = wire.host_endpoint(ctx.fx["homes"]["host"])
+    c = wire.Wire(endpoint, token, observe=False, log=ctx.dir / "controller-wire.jsonl")
+    cap = ((c.init.get("result") or {}).get("agentCapabilities") or {}).get("_meta", {}).get("nori/preparedAgent")
+    ctx.check("prepared.capability_advertised", bool(cap and cap.get("agentOption")),
+              json.dumps(cap)[:300] if cap else c.init)
+    beta = str(ctx.fx["roots"]["beta"])
+    prep = c.call("_nori/host/prepare_agent", {"agent": "codex", "cwd": beta})
+    choice = prep.get("result") or {}
+    ctx.check("prepared.prepare_returns_selection", choice.get("agent") == "codex" and choice.get("cwd") == beta, prep)
+    if not choice.get("id"):
+        c.close()
+        return
+    spawns = wait_ledger(ctx, lambda r: r["kind"] == "spawn" and r["adapter"] == "codex")
+    listing = c.call("session/list", {"_meta": {"nori/preparedAgent": {"id": choice["id"]}}})
+    rows = (listing.get("result") or {}).get("sessions", [])
+    ctx.check("prepared.lists_adapter_saved_sessions", any(r.get("sessionId") == "saved-orchard" for r in rows),
+              listing)
+    ctx.check("prepared.no_host_conversation_before_activation",
+              not ctx.observer().sessions(), "observer list")
+    act = c.call("session/new", {"cwd": beta, "mcpServers": [],
+                                 "_meta": {"nori/preparedAgent": {"id": choice["id"], "savedSessionId": "saved-orchard"}}},
+                 timeout=30)
+    sid = (act.get("result") or {}).get("sessionId")
+    loads = [r for r in ctx.ledger("request") if r.get("method") in ("session/load", "session/resume")
+             and r.get("sessionId") == "saved-orchard"]
+    codex_spawns = [r for r in ctx.ledger("spawn") if r["adapter"] == "codex"]
+    ctx.check("prepared.activation_resumes_on_same_connection",
+              bool(sid) and loads and len(codex_spawns) == 1 and loads[0]["pid"] == codex_spawns[0]["pid"],
+              {"act": act, "loads": [l.get("method") for l in loads], "spawns": len(codex_spawns)})
+    reuse = c.call("session/new", {"cwd": beta, "mcpServers": [],
+                                   "_meta": {"nori/preparedAgent": {"id": choice["id"]}}})
+    ctx.check("prepared.selection_used_once", "error" in reuse, reuse)
+    if sid:
+        c.call("session/prompt", {"sessionId": sid, "prompt": [{"type": "text", "text": "orchard check"}]}, timeout=20)
+        ctx.check("prepared.prompt_reaches_resumed_session",
+                  any(r.get("sessionId") == "saved-orchard" and "orchard check" in r.get("text", "")
+                      for r in ctx.ledger("request", "session/prompt")))
+    other = c.call("_nori/host/prepare_agent", {"agent": "opencode", "cwd": beta}).get("result") or {}
+    oc = wait_ledger(ctx, lambda r: r["kind"] == "spawn" and r["adapter"] == "opencode")
+    if other.get("id"):
+        c.call("_nori/host/discard_agent", {"id": other["id"]})
+    time.sleep(2.0)
+    ctx.check("prepared.discard_stops_unused_adapter", oc and not running(oc[0]["pid"]),
+              [(r["pid"], running(r["pid"])) for r in oc])
+    third = c.call("_nori/host/prepare_agent", {"agent": "opencode", "cwd": beta}).get("result") or {}
+    oc2 = wait_ledger(ctx, lambda r: r["kind"] == "spawn" and r["adapter"] == "opencode"
+                      and (not oc or r["pid"] != oc[0]["pid"]))
+    c.close()
+    time.sleep(2.5)
+    ctx.check("prepared.disconnect_stops_unused_adapter", third.get("id") and oc2 and not running(oc2[0]["pid"]),
+              [(r["pid"], running(r["pid"])) for r in oc2])
+    obs = ctx.observer()
+    live = [s for s in obs.sessions() if (s.get("_meta") or {}).get("nori/session", {}).get("live")]
+    ctx.check("prepared.activated_session_survives_disconnect", any(s["sessionId"] == sid for s in live) if sid else False,
+              [s["sessionId"] for s in live])
+    obs.close()
+
+
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
     "S02": ("foreground quit stops a running turn", s02_foreground_quit_stops_turn),
@@ -1035,6 +1637,23 @@ SCENARIOS = {
     "S19d": ("tool output full by default (attach)", lambda c: s19_tool_output_cap(c, "attach", False)),
     "S20a": ("cancel an agent-started turn (plain, Esc)", lambda c: s20_agent_started_cancel(c, "fg")),
     "S20b": ("cancel an agent-started turn (attach, Ctrl+C)", lambda c: s20_agent_started_cancel(c, "attach")),
+    "S21a": ("plain nori owns a private host; hangup ends every session", lambda c: s21_foreground_owns_host(c, "hangup")),
+    "S21b": ("plain nori: SIGTERM ends every session and restores the terminal", lambda c: s21_foreground_owns_host(c, "sigterm")),
+    "S21c": ("plain nori beside a background host", s21c_private_beside_background_host),
+    "S22": ("switch agent servers in plain nori", s22_switch_agents),
+    "S23": ("client-local commands in plain nori", s23_local_commands),
+    "S24": ("picker-first `nori resume` on the owned host", s24_picker_first_resume),
+    "S25a": ("permission answered once (plain)", lambda c: s25_permission_attribution(c, "fg")),
+    "S25b": ("permission: controller answers, watcher cannot (attach)", lambda c: s25_permission_attribution(c, "attach")),
+    "S26a": ("queued follow-up delivered once (plain)", lambda c: s26_queued_followup(c, "deliver")),
+    "S26b": ("queued follow-up reclaimed, never sent (plain)", lambda c: s26_queued_followup(c, "reclaim")),
+    "S26c": ("paused queue resumed, delivered once (plain)", lambda c: s26_queued_followup(c, "resume")),
+    "S27": ("standalone nori-tui binary", s27_standalone_nori_tui),
+    "S28a": ("Escape cancels once (plain)", lambda c: s28_escape_cancel(c, "fg")),
+    "S28b": ("Escape cancels once (attach)", lambda c: s28_escape_cancel(c, "attach")),
+    "S29a": ("refused /close (plain)", lambda c: s29_close_refusal(c, "fg")),
+    "S29b": ("refused /close (attach)", lambda c: s29_close_refusal(c, "attach")),
+    "S30": ("prepared agent connection over the wire", s30_prepared_agent),
 }
 
 

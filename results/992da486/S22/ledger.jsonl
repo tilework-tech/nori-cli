@@ -1,0 +1,14 @@
+{"t": 1795501956.9269679, "adapter": "claude-code", "pid": 80696, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-L1/S22/roots/alpha/app", "argv": []}
+{"t": 1795501956.9270577, "adapter": "claude-code", "pid": 80696, "kind": "request", "method": "initialize"}
+{"t": 1795501956.9283924, "adapter": "claude-code", "pid": 80696, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-L1/S22/roots/alpha/app"}
+{"t": 1795501956.9304504, "adapter": "claude-code", "pid": 80696, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-L1/S22/roots/alpha/app"}
+{"t": 1795501957.142781, "adapter": "claude-code", "pid": 80696, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nhello lantern"}
+{"t": 1795501957.1435108, "adapter": "claude-code", "pid": 80696, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795501959.1850243, "adapter": "codex", "pid": 80850, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-L1/S22/roots/alpha/app", "argv": []}
+{"t": 1795501959.1851075, "adapter": "codex", "pid": 80850, "kind": "request", "method": "initialize"}
+{"t": 1795501959.1863046, "adapter": "codex", "pid": 80850, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-L1/S22/roots/alpha/app"}
+{"t": 1795501961.2991664, "adapter": "codex", "pid": 80850, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-L1/S22/roots/alpha/app"}
+{"t": 1795501964.0804164, "adapter": "codex", "pid": 80850, "kind": "request", "method": "session/prompt", "sessionId": "codex-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nhello again"}
+{"t": 1795501964.0809088, "adapter": "codex", "pid": 80850, "kind": "turn_end", "sessionId": "codex-0", "stopReason": "end_turn"}
+{"t": 1795501964.3931112, "adapter": "codex", "pid": 80850, "kind": "stdin_eof"}
+{"t": 1795501964.396455, "adapter": "claude-code", "pid": 80696, "kind": "stdin_eof"}

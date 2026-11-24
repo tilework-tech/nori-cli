@@ -1,0 +1,40 @@
+  Session ID   2b7a7373-e3f1-4519-a7a8-173dea901032
+  Skillset     (none)
+  Approvals    Agent
+  Git          ⎇ master +1 -0
+
+  Agent        Claude
+               Mode  auto
+
+• hello lantern
+
+• No active instruction files found.
+
+  Context
+  Lantern Claude · 1 user turn · /context
+
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Not reported / unknown tokens
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Waiting for context usage
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Current turn  1 · ended
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Turn tokens   unknown
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    ▨ Usage not reported
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Each cell = 0.5% of the window
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+
+  Current · usage not reported
+
+  Turn checkpoints
+  Turn   Start             End             Change      Reading
+  T1     unknown           unknown         unknown     not reported
+  Starts carry the latest prior observation.
+
+  Local instructions · estimated tokens                         Skills observed              Subagents observed
+  No local instruction files found for this agent.              None observed                None observed
+
+                                                                                                                [ auto ]
+› / for slash command menu
+
+                                                                                                                ⎇ master

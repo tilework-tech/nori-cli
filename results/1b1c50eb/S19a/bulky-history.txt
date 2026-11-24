@@ -1,0 +1,70 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-L1/S19a/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› bulky rows
+
+
+• Ran count rows
+  └ row 01 of the synthetic ledger
+    row 02 of the synthetic ledger
+    row 03 of the synthetic ledger
+    row 04 of the synthetic ledger
+    ┄ 51 lines hidden
+    row 56 of the synthetic ledger
+    row 57 of the synthetic ledger
+    row 58 of the synthetic ledger
+    row 59 of the synthetic ledger
+    row 60 of the synthetic ledger
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• claude-code heard: bulky rows
+
+                                                                                                                [ auto ]
+› @ for file mentions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

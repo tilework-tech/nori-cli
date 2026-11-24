@@ -1,0 +1,39 @@
+[2m/ D I F F / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+[0;1m[39m[49mdiff --git a/src/lantern_wick.rs b/src/lantern_wick.rs
+index 6aed7e5..844d895 100644
+--- a/src/lantern_wick.rs
++++ b/src/lantern_wick.rs
+[0m[38;5;6m[49m@@ -1 +1,2 @@
+[39m synthetic alpha file app/src/lantern_wick.rs
+[38;5;2m+changed
+[39m~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+[2m───────────────────────────────────────────────────────────────────────────────────────────────────────────────── 100% ─
+ ↑/↓ to scroll   pgup/pgdn to page   home/end to jump
+ q to quit

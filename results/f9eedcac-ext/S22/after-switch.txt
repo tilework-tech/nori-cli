@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-L3/S22/roots/alpha/app · Agent approvals
+  Agent        Codex · agent
+
+• Started new conversation with agent: Lantern Codex
+
+  2 ready
+
+                                                                                                               [ agent ]
+› @ for file mentions
+

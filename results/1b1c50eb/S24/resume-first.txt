@@ -1,0 +1,36 @@
+
+  Resume a previous session
+  Saved sessions for this working directory
+                                                                                  Details
+     Conversation                             Updated           Branch
+  ▏  3dfecf8a-9520-435c-9912-bf161a335722     6 seconds ago     Not reported▕     Session         3dfecf8a-9520-43…
+                                                                                  Project         6cb6e0f7bd78a51e
+                                                                                  Agent           claude-code
+                                                                                  Working direc…  /tmp/nori-host-t…
+                                                                                  Branch          Not reported
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓/j/k browse  / search  enter resume  esc start new  ctrl+c quit
+

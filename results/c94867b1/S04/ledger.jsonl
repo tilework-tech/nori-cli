@@ -1,0 +1,9 @@
+{"t": 1795502217.5925853, "adapter": "claude-code", "pid": 93848, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-L3/S04/roots/alpha/app", "argv": []}
+{"t": 1795502217.592664, "adapter": "claude-code", "pid": 93848, "kind": "request", "method": "initialize"}
+{"t": 1795502217.5938866, "adapter": "claude-code", "pid": 93848, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-L3/S04/roots/alpha/app"}
+{"t": 1795502217.5947661, "adapter": "claude-code", "pid": 93848, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-L3/S04/roots/alpha/app"}
+{"t": 1795502217.5987823, "adapter": "claude-code", "pid": 93848, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795502219.3556097, "adapter": "claude-code", "pid": 93848, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "first light"}
+{"t": 1795502219.3558288, "adapter": "claude-code", "pid": 93848, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795502219.632892, "adapter": "claude-code", "pid": 93848, "kind": "request", "method": "session/close", "sessionId": "claude-code-0"}
+{"t": 1795502219.6334302, "adapter": "claude-code", "pid": 93848, "kind": "stdin_eof"}

@@ -1,0 +1,36 @@
+{"t": 1795502952.0766244, "adapter": "claude-code", "pid": 135810, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-L2/S20b/roots/alpha/app", "argv": []}
+{"t": 1795502952.0767128, "adapter": "claude-code", "pid": 135810, "kind": "request", "method": "initialize"}
+{"t": 1795502952.0778685, "adapter": "claude-code", "pid": 135810, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-L2/S20b/roots/alpha/app"}
+{"t": 1795502952.078697, "adapter": "claude-code", "pid": 135810, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-L2/S20b/roots/alpha/app"}
+{"t": 1795502952.0836434, "adapter": "claude-code", "pid": 135810, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795502953.8407068, "adapter": "claude-code", "pid": 135810, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "wake the keeper"}
+{"t": 1795502953.8409567, "adapter": "claude-code", "pid": 135810, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795502954.8412263, "adapter": "claude-code", "pid": 135810, "kind": "agent_turn_start", "sessionId": "claude-code-0", "turnId": "claude-code-wake-54841"}
+{"t": 1795502954.841342, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 1, "turnId": "claude-code-wake-54841"}
+{"t": 1795502955.0415344, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 2, "turnId": "claude-code-wake-54841"}
+{"t": 1795502955.2417912, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 3, "turnId": "claude-code-wake-54841"}
+{"t": 1795502955.4420283, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 4, "turnId": "claude-code-wake-54841"}
+{"t": 1795502955.6422486, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 5, "turnId": "claude-code-wake-54841"}
+{"t": 1795502955.84249, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 6, "turnId": "claude-code-wake-54841"}
+{"t": 1795502956.0427494, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 7, "turnId": "claude-code-wake-54841"}
+{"t": 1795502956.242948, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 8, "turnId": "claude-code-wake-54841"}
+{"t": 1795502956.4431448, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 9, "turnId": "claude-code-wake-54841"}
+{"t": 1795502956.6433628, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 10, "turnId": "claude-code-wake-54841"}
+{"t": 1795502956.8435621, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 11, "turnId": "claude-code-wake-54841"}
+{"t": 1795502957.0437875, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 12, "turnId": "claude-code-wake-54841"}
+{"t": 1795502957.2439759, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 13, "turnId": "claude-code-wake-54841"}
+{"t": 1795502957.4441667, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 14, "turnId": "claude-code-wake-54841"}
+{"t": 1795502957.6443975, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 15, "turnId": "claude-code-wake-54841"}
+{"t": 1795502957.844613, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 16, "turnId": "claude-code-wake-54841"}
+{"t": 1795502958.0448463, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 17, "turnId": "claude-code-wake-54841"}
+{"t": 1795502958.2450678, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 18, "turnId": "claude-code-wake-54841"}
+{"t": 1795502958.4452894, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 19, "turnId": "claude-code-wake-54841"}
+{"t": 1795502958.6454945, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 20, "turnId": "claude-code-wake-54841"}
+{"t": 1795502958.8456714, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 21, "turnId": "claude-code-wake-54841"}
+{"t": 1795502959.045859, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 22, "turnId": "claude-code-wake-54841"}
+{"t": 1795502959.2460287, "adapter": "claude-code", "pid": 135810, "kind": "tick", "sessionId": "claude-code-0", "n": 23, "turnId": "claude-code-wake-54841"}
+{"t": 1795502959.3635547, "adapter": "claude-code", "pid": 135810, "kind": "request", "method": "session/cancel", "sessionId": "claude-code-0"}
+{"t": 1795502959.4462352, "adapter": "claude-code", "pid": 135810, "kind": "agent_turn_end", "sessionId": "claude-code-0", "turnId": "claude-code-wake-54841", "stopReason": "cancelled", "ticks": 23}
+{"t": 1795502963.5060575, "adapter": "claude-code", "pid": 135810, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "after the keeper"}
+{"t": 1795502963.506334, "adapter": "claude-code", "pid": 135810, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795502963.6465588, "adapter": "claude-code", "pid": 135810, "kind": "stdin_eof"}

@@ -1,0 +1,36 @@
+ Nori host  WATCHING · read-only · alt+t take control
+ claude-code · wake the keeper · app · Agent working
+
+ › You
+ wake the keeper
+
+ claude-code heard: wake the keeper
+
+ wake 1 wake 2 wake 3 wake 4 wake 5 wake 6 wake 7 wake 8 wake 9 wake 10 wake 11 wake 12 wake 13 wake 14 wake 15 wake 16
+
+ Read-only: take control with alt+t before sending prompts or permission answers.
+
+ wake 17 wake 18 wake 19 wake 20 wake 21 wake 22
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Read-only: take control with alt+t before sending prompts or permission answers.
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

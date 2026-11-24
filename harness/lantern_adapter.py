@@ -9,6 +9,8 @@ Environment:
   LANTERN_LEDGER   path of the JSONL ledger (required)
   LANTERN_MODES    comma-separated mode ids, first is the starting mode
   LANTERN_SAVED    JSON file with a list of saved sessions {sessionId,cwd,title}
+  LANTERN_CONTROL  directory of run-time switches; `close-refuse` holds how many
+                   upcoming session/close requests to refuse ("close declined by <name>")
 
 Prompt words (first word of the prompt text):
   hold     stream a tick every 200 ms until cancelled (records ticks)
@@ -33,6 +35,7 @@ NAME = os.environ.get("LANTERN_NAME", "lantern")
 LEDGER = os.environ["LANTERN_LEDGER"]
 MODES = [m for m in os.environ.get("LANTERN_MODES", "").split(",") if m]
 SAVED_PATH = os.environ.get("LANTERN_SAVED")
+CONTROL = os.environ.get("LANTERN_CONTROL")
 
 lock = threading.Lock()
 sessions = {}
@@ -79,6 +82,23 @@ def saved_sessions():
         return []
     with open(SAVED_PATH) as handle:
         return json.load(handle)
+
+
+def take_switch(name):
+    """Consume one use of a counted control switch; True while uses remain."""
+    if not CONTROL:
+        return False
+    path = os.path.join(CONTROL, name)
+    with lock:
+        try:
+            left = int(open(path).read().strip() or 0)
+        except (FileNotFoundError, ValueError):
+            return False
+        if left <= 0:
+            return False
+        with open(path, "w") as handle:
+            handle.write(str(left - 1))
+        return True
 
 
 def run_prompt(rid, sid, text):
@@ -213,6 +233,10 @@ def main():
                 chunk(sid, "agent_message_chunk", "an earlier synthetic answer")
             send(id=rid, result=mode_state(sid))
         elif method == "session/close":
+            if take_switch("close-refuse"):
+                ledger("close_refused", sessionId=sid)
+                send(id=rid, error={"code": -32000, "message": f"close declined by {NAME}"})
+                continue
             sessions.pop(sid, None)
             send(id=rid, result={})
         elif method == "session/cancel":

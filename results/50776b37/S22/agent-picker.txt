@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-L2/S22/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hello lantern
+
+
+• claude-code heard: hello lantern
+
+
+  Select agent
+  Creates new conversation with selected agent (history not preserved)
+
+   1. Mock ACP
+      Mock agent for testing
+   2. Mock ACP Alt
+      Alternate mock agent for testing
+  ▏3. Lantern Claude (current)                                                                                       ▕
+  ▏   claude-code                                                                                                    ▕
+   4. Lantern Codex
+      codex
+   5. Antigravity
+      Google
+   6. Grok Build
+      xAI
+  ↑↓/j/k move  enter select  shift-tab rec on  esc close
+
+
+
+
+

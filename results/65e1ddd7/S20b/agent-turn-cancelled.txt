@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · wake the keeper · app · ready
+
+ › You
+ wake the keeper
+
+ claude-code heard: wake the keeper
+
+ wake 1 wake 2 wake 3 wake 4 wake 5 wake 6 wake 7 wake 8 wake 9 wake 10 wake 11 wake 12 wake 13 wake 14 wake 15 wake 16
+ wake 17 wake 18 wake 19 wake 20 wake 21 wake 22 wake 23
+
+ Agent confirmed cancellation.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› note for after the keeper
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

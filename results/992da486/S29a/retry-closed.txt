@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-L4/S29a/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+■ This is the only open session. Use /quit to leave Nori.
+
+
+› still lit
+
+
+• claude-code heard: still lit
+
+■ This is the only open session. Use /quit to leave Nori.
+
+                                                                                                                [ auto ]
+› ? for shortcuts
+
+
+
+
+
+
+
+
+
+

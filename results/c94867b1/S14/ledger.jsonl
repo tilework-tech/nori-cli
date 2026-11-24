@@ -1,0 +1,14 @@
+{"t": 1795502324.677742, "adapter": "claude-code", "pid": 100036, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-L3/S14/roots/laptop/app", "argv": []}
+{"t": 1795502324.6778216, "adapter": "claude-code", "pid": 100036, "kind": "request", "method": "initialize"}
+{"t": 1795502324.6788964, "adapter": "claude-code", "pid": 100036, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-L3/S14/roots/laptop/app"}
+{"t": 1795502324.6795435, "adapter": "claude-code", "pid": 100036, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-L3/S14/roots/laptop/app"}
+{"t": 1795502324.6841667, "adapter": "claude-code", "pid": 100036, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795502324.684294, "adapter": "claude-code", "pid": 100036, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "laptop-only errand"}
+{"t": 1795502324.684491, "adapter": "claude-code", "pid": 100036, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795502327.2699244, "adapter": "claude-code", "pid": 100257, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-L3/S14/roots/alpha/app", "argv": []}
+{"t": 1795502327.270001, "adapter": "claude-code", "pid": 100257, "kind": "request", "method": "initialize"}
+{"t": 1795502327.2710965, "adapter": "claude-code", "pid": 100257, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-L3/S14/roots/alpha/app"}
+{"t": 1795502327.2721639, "adapter": "claude-code", "pid": 100257, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-L3/S14/roots/alpha/app"}
+{"t": 1795502327.27696, "adapter": "claude-code", "pid": 100257, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795502333.076268, "adapter": "claude-code", "pid": 100036, "kind": "stdin_eof"}
+{"t": 1795502333.1479402, "adapter": "claude-code", "pid": 100257, "kind": "stdin_eof"}

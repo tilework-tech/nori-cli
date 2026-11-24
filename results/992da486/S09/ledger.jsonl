@@ -1,0 +1,6 @@
+{"t": 1795501746.8693202, "adapter": "claude-code", "pid": 67776, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-L1/S09/roots/alpha/app", "argv": []}
+{"t": 1795501746.8694167, "adapter": "claude-code", "pid": 67776, "kind": "request", "method": "initialize"}
+{"t": 1795501746.8705602, "adapter": "claude-code", "pid": 67776, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-L1/S09/roots/alpha/app"}
+{"t": 1795501746.8713815, "adapter": "claude-code", "pid": 67776, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-L1/S09/roots/alpha/app"}
+{"t": 1795501746.8752177, "adapter": "claude-code", "pid": 67776, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795501752.6961393, "adapter": "claude-code", "pid": 67776, "kind": "stdin_eof"}

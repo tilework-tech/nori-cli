@@ -1,0 +1,30 @@
+• hello lantern
+• No active instruction files found.
+  Context
+  Lantern Claude · 1 user turn · /context
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Not reported / unknown tokens
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Waiting for context usage
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Current turn  1 · ended
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Turn tokens   unknown
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    ▨ Usage not reported
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Each cell = 0.5% of the window
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  Current · usage not reported
+  Turn checkpoints
+  Turn   Start             End             Change      Reading
+  T1     unknown           unknown         unknown     not reported
+  Starts carry the latest prior observation.
+  Local instructions · estimated tokens                         Skills observed              Subagents observed
+  No local instruction files found for this agent.              None observed                None observed
+  Select approval mode
+  Choose what Nori can do without approval
+   1. Read Only
+      Requires approval to edit files and run commands.
+  ▏2. Agent (current)                                                                                                ▕
+  ▏   Read and edit files, and run commands.                                                                         ▕
+   3. Agent (full access)
+      Can edit files outside this workspace and run commands with network access. Exercise caution when using.
+  ↑↓/j/k move  enter select  esc close

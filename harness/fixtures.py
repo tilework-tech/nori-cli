@@ -54,6 +54,8 @@ def build(run_dir: Path, default_agent="claude-code", host_extra="", top_extra="
         roots[root] = (base / "app").resolve()
     ledger = run_dir / "ledger.jsonl"
     ledger.touch()
+    control = run_dir / "control"
+    control.mkdir(exist_ok=True)
     saved = run_dir / "saved-sessions.json"
     saved.write_text(json.dumps([
         {"sessionId": "saved-orchard", "cwd": str(roots["beta"]), "title": "Saved orchard survey"},
@@ -73,10 +75,11 @@ def build(run_dir: Path, default_agent="claude-code", host_extra="", top_extra="
                       f'args = ["-I", "{adapter}"]',
                       "[agents.distribution.local.env]",
                       f'LANTERN_NAME = "{slug}"', f'LANTERN_LEDGER = "{ledger}"',
-                      f'LANTERN_MODES = "{modes}"', f'LANTERN_SAVED = "{saved}"']
+                      f'LANTERN_MODES = "{modes}"', f'LANTERN_SAVED = "{saved}"',
+                      f'LANTERN_CONTROL = "{control}"']
         (home / "config.toml").write_text("\n".join(lines) + "\n")
         homes[name] = home
-    return {"run": run_dir, "roots": roots, "homes": homes, "ledger": ledger}
+    return {"run": run_dir, "roots": roots, "homes": homes, "ledger": ledger, "control": control}
 
 
 def env_for(home: Path, extra=None):

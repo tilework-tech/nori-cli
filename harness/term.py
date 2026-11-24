@@ -6,11 +6,12 @@ All raw PTY output is also logged with pipe-pane for escape-sequence checks.
 """
 import re
 import shlex
+import os
 import subprocess
 import time
 from pathlib import Path
 
-SOCKET = "nori-host-tui-acceptance"
+SOCKET = "nori-host-tui-acceptance" + (f"-{os.environ['ACC_LANE']}" if os.environ.get("ACC_LANE") else "")
 PROMPT = "shell$ "
 
 

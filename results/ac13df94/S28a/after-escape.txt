@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-L3/S28a/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hold the lamp
+
+
+• tick 1 tick 2 tick 3
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+
+                                                                                                                [ auto ]
+› / for slash command menu
+
+  esc again to edit previous message
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

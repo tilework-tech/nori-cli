@@ -1,0 +1,21 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+  System       <run>/roots/alpha/app · Agent approvals
+  Agent        Claude
+• Lantern Claude options: Mode=auto (/config to change)
+› hello lantern
+• claude-code heard: hello lantern
+/status
+  › Nori CLI v0.0.0
+  Directory    <run>/roots/alpha/app
+  Session ID   <uuid>
+  Skillset     (none)
+  Approvals    Agent
+  Git          ⎇ master +1 -0
+  Agent        Claude
+               Mode  auto
+• hello lantern
+• No active instruction files found.
+                                                                                                                [ auto ]
+› ? for shortcuts
+                                                                                                                ⎇ master

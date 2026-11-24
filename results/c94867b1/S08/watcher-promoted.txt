@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · first light · app · ready
+
+ › You
+ first light
+
+ claude-code heard: first light
+
+ Read-only: take control with alt+t before sending prompts or permission answers.
+
+ You now control the host. Other terminals can keep watching.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ You now control the host. Other terminals can keep watching.
+
+› draft from the watcher
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

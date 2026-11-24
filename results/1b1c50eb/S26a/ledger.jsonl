@@ -1,0 +1,12 @@
+{"t": 1795502524.596284, "adapter": "claude-code", "pid": 112143, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-L1/S26a/roots/alpha/app", "argv": []}
+{"t": 1795502524.5964, "adapter": "claude-code", "pid": 112143, "kind": "request", "method": "initialize"}
+{"t": 1795502524.5975692, "adapter": "claude-code", "pid": 112143, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-L1/S26a/roots/alpha/app"}
+{"t": 1795502524.5989487, "adapter": "claude-code", "pid": 112143, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-L1/S26a/roots/alpha/app"}
+{"t": 1795502525.8152297, "adapter": "claude-code", "pid": 112143, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nponder the tide"}
+{"t": 1795502525.8154655, "adapter": "claude-code", "pid": 112143, "kind": "thought", "sessionId": "claude-code-0", "n": 1}
+{"t": 1795502527.815592, "adapter": "claude-code", "pid": 112143, "kind": "thought", "sessionId": "claude-code-0", "n": 2}
+{"t": 1795502529.8157775, "adapter": "claude-code", "pid": 112143, "kind": "thought", "sessionId": "claude-code-0", "n": 3}
+{"t": 1795502531.8159428, "adapter": "claude-code", "pid": 112143, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795502531.8176973, "adapter": "claude-code", "pid": 112143, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "after the tide"}
+{"t": 1795502531.817891, "adapter": "claude-code", "pid": 112143, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795502535.081208, "adapter": "claude-code", "pid": 112143, "kind": "stdin_eof"}

@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · new session · app · ready
+
+ Ready. Send a prompt to begin.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› @src/
+
+  loading...

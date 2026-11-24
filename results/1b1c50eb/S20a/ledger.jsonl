@@ -1,0 +1,15 @@
+{"t": 1795502382.0149179, "adapter": "claude-code", "pid": 103947, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-L1/S20a/roots/alpha/app", "argv": []}
+{"t": 1795502382.0150023, "adapter": "claude-code", "pid": 103947, "kind": "request", "method": "initialize"}
+{"t": 1795502382.0161774, "adapter": "claude-code", "pid": 103947, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-L1/S20a/roots/alpha/app"}
+{"t": 1795502382.0177672, "adapter": "claude-code", "pid": 103947, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-L1/S20a/roots/alpha/app"}
+{"t": 1795502382.2345095, "adapter": "claude-code", "pid": 103947, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nwake the keeper"}
+{"t": 1795502382.2347488, "adapter": "claude-code", "pid": 103947, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795502383.2349546, "adapter": "claude-code", "pid": 103947, "kind": "agent_turn_start", "sessionId": "claude-code-0", "turnId": "claude-code-wake-83234"}
+{"t": 1795502383.235056, "adapter": "claude-code", "pid": 103947, "kind": "tick", "sessionId": "claude-code-0", "n": 1, "turnId": "claude-code-wake-83234"}
+{"t": 1795502383.435221, "adapter": "claude-code", "pid": 103947, "kind": "tick", "sessionId": "claude-code-0", "n": 2, "turnId": "claude-code-wake-83234"}
+{"t": 1795502383.6353815, "adapter": "claude-code", "pid": 103947, "kind": "tick", "sessionId": "claude-code-0", "n": 3, "turnId": "claude-code-wake-83234"}
+{"t": 1795502383.8355548, "adapter": "claude-code", "pid": 103947, "kind": "tick", "sessionId": "claude-code-0", "n": 4, "turnId": "claude-code-wake-83234"}
+{"t": 1795502383.9652107, "adapter": "claude-code", "pid": 103947, "kind": "request", "method": "session/cancel", "sessionId": "claude-code-0"}
+{"t": 1795502384.0357177, "adapter": "claude-code", "pid": 103947, "kind": "agent_turn_end", "sessionId": "claude-code-0", "turnId": "claude-code-wake-83234", "stopReason": "cancelled", "ticks": 4}
+{"t": 1795502386.8719, "adapter": "claude-code", "pid": 103947, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "after the keeper"}
+{"t": 1795502386.8720844, "adapter": "claude-code", "pid": 103947, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
