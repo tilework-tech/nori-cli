@@ -21,7 +21,8 @@ for line in sys.stdin:
     reply = {}
     if method == "initialize":
         result = {"protocolVersion": 1, "agentCapabilities": {
-            "loadSession": name != "list-only", "sessionCapabilities": {"list": {}}}}
+            "loadSession": name not in ("list-only", "resume-only"),
+            "sessionCapabilities": {"list": {}, **({"resume": {}} if name == "resume-only" else {})}}}
     elif method == "session/list":
         if name == "waiting":
             while True:
@@ -33,15 +34,17 @@ for line in sys.stdin:
     elif method == "session/new":
         active = name + "-new"
         result = {"sessionId": active}
-    elif method == "session/load" and sid == saved:
+    elif method in ("session/load", "session/resume") and sid == saved:
         if name == "declines":
             print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "error": {
                 "code": -32041, "message": "restore declined"}}), flush=True)
             continue
         active = sid
-        print(json.dumps({"jsonrpc": "2.0", "method": "session/update", "params": {
-            "sessionId": sid, "update": {"sessionUpdate": "agent_message_chunk",
-                                         "content": {"type": "text", "text": "saved history"}}}}), flush=True)
+        if name not in ("empty", "resume-only"):
+            for index in range(64):
+                print(json.dumps({"jsonrpc": "2.0", "method": "session/update", "params": {
+                    "sessionId": sid, "update": {"sessionUpdate": "agent_message_chunk",
+                        "content": {"type": "text", "text": f"saved history {index}"}}}}), flush=True)
         result = {}
     elif method == "session/prompt" and sid == active:
         result = {"stopReason": "end_turn"}
