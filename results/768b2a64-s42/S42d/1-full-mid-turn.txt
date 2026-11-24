@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-s42/S42d/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› quay line
+
+
+• claude-code heard: quay line
+
+
+› relay 30 moss
+
+
+• - moss row 01
+  - moss row 02
+  - moss row 03
+  - moss row 04
+  - moss row 05
+  - moss row 06
+
+• Counting backwards from infinity (1s • esc to interrupt)
+
+                                                                                                         [ acceptEdits ]
+› / for slash command menu
+

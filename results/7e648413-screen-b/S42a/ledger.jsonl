@@ -1,0 +1,64 @@
+{"t": 1795544091.3401663, "adapter": "claude-code", "pid": 56236, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-l2/S42a/roots/alpha/app", "argv": []}
+{"t": 1795544091.340258, "adapter": "claude-code", "pid": 56236, "kind": "request", "method": "initialize"}
+{"t": 1795544091.3414314, "adapter": "claude-code", "pid": 56236, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-l2/S42a/roots/alpha/app"}
+{"t": 1795544091.3437684, "adapter": "claude-code", "pid": 56236, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-l2/S42a/roots/alpha/app"}
+{"t": 1795544091.3480074, "adapter": "claude-code", "pid": 56236, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795544092.5604794, "adapter": "claude-code", "pid": 56236, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nharbor opening line"}
+{"t": 1795544092.5619829, "adapter": "claude-code", "pid": 56236, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795544094.6366158, "adapter": "claude-code", "pid": 56236, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 40 amber"}
+{"t": 1795544094.636843, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 1}
+{"t": 1795544094.8870447, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 2}
+{"t": 1795544095.1372347, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 3}
+{"t": 1795544095.3874207, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 4}
+{"t": 1795544095.6376097, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 5}
+{"t": 1795544095.8877757, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 6}
+{"t": 1795544096.1379583, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 7}
+{"t": 1795544096.3881197, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 8}
+{"t": 1795544096.6383197, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 9}
+{"t": 1795544096.8885021, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 10}
+{"t": 1795544097.1386988, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 11}
+{"t": 1795544097.3888726, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 12}
+{"t": 1795544097.6390421, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 13}
+{"t": 1795544097.8892047, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 14}
+{"t": 1795544098.1393652, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 15}
+{"t": 1795544098.3895218, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 16}
+{"t": 1795544098.6396809, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 17}
+{"t": 1795544098.889848, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 18}
+{"t": 1795544099.1400476, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 19}
+{"t": 1795544099.3902054, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 20}
+{"t": 1795544099.640365, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 21}
+{"t": 1795544099.8905332, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 22}
+{"t": 1795544100.1406896, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 23}
+{"t": 1795544100.390818, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 24}
+{"t": 1795544100.6409757, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 25}
+{"t": 1795544100.8911119, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 26}
+{"t": 1795544101.141268, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 27}
+{"t": 1795544101.3914344, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 28}
+{"t": 1795544101.64161, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 29}
+{"t": 1795544101.8917804, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 30}
+{"t": 1795544102.1419537, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 31}
+{"t": 1795544102.3921056, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 32}
+{"t": 1795544102.6422856, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 33}
+{"t": 1795544102.8924623, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 34}
+{"t": 1795544103.142634, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 35}
+{"t": 1795544103.3928108, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 36}
+{"t": 1795544103.6429844, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 37}
+{"t": 1795544103.8931181, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 38}
+{"t": 1795544104.1432629, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 39}
+{"t": 1795544104.3934221, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "amber", "n": 40}
+{"t": 1795544104.643584, "adapter": "claude-code", "pid": 56236, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 40}
+{"t": 1795544109.3645005, "adapter": "claude-code", "pid": 56236, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 12 cobalt"}
+{"t": 1795544109.3647084, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 1}
+{"t": 1795544109.6148531, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 2}
+{"t": 1795544109.865031, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 3}
+{"t": 1795544110.1151774, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 4}
+{"t": 1795544110.365332, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 5}
+{"t": 1795544110.6154902, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 6}
+{"t": 1795544110.865646, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 7}
+{"t": 1795544111.1157932, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 8}
+{"t": 1795544111.365965, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 9}
+{"t": 1795544111.616128, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 10}
+{"t": 1795544111.8663027, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 11}
+{"t": 1795544112.1164446, "adapter": "claude-code", "pid": 56236, "kind": "relay", "sessionId": "claude-code-0", "tag": "cobalt", "n": 12}
+{"t": 1795544112.3665931, "adapter": "claude-code", "pid": 56236, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 12}
+{"t": 1795544117.788362, "adapter": "claude-code", "pid": 56236, "kind": "stdin_eof"}

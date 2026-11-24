@@ -1,0 +1,20 @@
+{"t": 1795544158.5111775, "adapter": "claude-code", "pid": 58196, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-l2/S42c/roots/alpha/app", "argv": []}
+{"t": 1795544158.511259, "adapter": "claude-code", "pid": 58196, "kind": "request", "method": "initialize"}
+{"t": 1795544158.5122213, "adapter": "claude-code", "pid": 58196, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-l2/S42c/roots/alpha/app"}
+{"t": 1795544158.513909, "adapter": "claude-code", "pid": 58196, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-l2/S42c/roots/alpha/app"}
+{"t": 1795544158.5175552, "adapter": "claude-code", "pid": 58196, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795544159.7273731, "adapter": "claude-code", "pid": 58196, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\ngull tally"}
+{"t": 1795544159.7276251, "adapter": "claude-code", "pid": 58196, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795544175.8722649, "adapter": "claude-code", "pid": 58196, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 10 slate"}
+{"t": 1795544175.8731186, "adapter": "claude-code", "pid": 58196, "kind": "relay", "sessionId": "claude-code-0", "tag": "slate", "n": 1}
+{"t": 1795544176.1232822, "adapter": "claude-code", "pid": 58196, "kind": "relay", "sessionId": "claude-code-0", "tag": "slate", "n": 2}
+{"t": 1795544176.3734152, "adapter": "claude-code", "pid": 58196, "kind": "relay", "sessionId": "claude-code-0", "tag": "slate", "n": 3}
+{"t": 1795544176.6235478, "adapter": "claude-code", "pid": 58196, "kind": "relay", "sessionId": "claude-code-0", "tag": "slate", "n": 4}
+{"t": 1795544176.8736985, "adapter": "claude-code", "pid": 58196, "kind": "relay", "sessionId": "claude-code-0", "tag": "slate", "n": 5}
+{"t": 1795544177.1238263, "adapter": "claude-code", "pid": 58196, "kind": "relay", "sessionId": "claude-code-0", "tag": "slate", "n": 6}
+{"t": 1795544177.3739822, "adapter": "claude-code", "pid": 58196, "kind": "relay", "sessionId": "claude-code-0", "tag": "slate", "n": 7}
+{"t": 1795544177.62411, "adapter": "claude-code", "pid": 58196, "kind": "relay", "sessionId": "claude-code-0", "tag": "slate", "n": 8}
+{"t": 1795544177.8742478, "adapter": "claude-code", "pid": 58196, "kind": "relay", "sessionId": "claude-code-0", "tag": "slate", "n": 9}
+{"t": 1795544178.124426, "adapter": "claude-code", "pid": 58196, "kind": "relay", "sessionId": "claude-code-0", "tag": "slate", "n": 10}
+{"t": 1795544178.3745813, "adapter": "claude-code", "pid": 58196, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 10}
+{"t": 1795544179.772073, "adapter": "claude-code", "pid": 58196, "kind": "stdin_eof"}

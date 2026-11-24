@@ -1,0 +1,80 @@
+[
+  {
+    "scenario": "S42l",
+    "check": "l.into_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.picked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.answer_stays_on_screen",
+    "passed": false,
+    "detail": "[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.diag_missing_answer",
+    "passed": false,
+    "detail": "{'after_resize_full': True, 'inline_before_next_turn': True, 'full_again': True}"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.resumed_shows_saved_exchange",
+    "passed": false,
+    "detail": "{'alt': True, 'seen_after_s': {}, 'tail': 'i-host-tui-acceptance-l2/S42l/roots/alpha/app \u00b7 Approvals: Agent\\n  Agent        Claude \u00b7 acceptEdits\\n\\n\u2022 Resuming session with Lantern Claude...\\n\\n  2 ready\\n\\n                                                                                                         [ acceptEdits ]\\n\u203a @ for file mentions\\n\\n'}"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.out",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.inline_has_resumed_once",
+    "passed": true,
+    "detail": "{'answer': 1, 'follow': 1}"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.inline_drops_previous_session",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.exit.back_at_shell",
+    "passed": true,
+    "detail": "        \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 909a6122-13fd-4407-94a4-6d8b3f918e92\nshell$\n\n\n\n"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 2, 'alt_off': 2, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 5, 'cursor_show': 49, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  }
+]

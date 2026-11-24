@@ -1,0 +1,356 @@
+[
+  {
+    "scenario": "S42f",
+    "check": "e.overlay_keeps_draft",
+    "passed": true,
+    "detail": "p\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n\n\u203a seed line\n\n\n\u2022 claude-code heard: seed line\n\n                                                                                                         [ acceptEdits ]\n\u203a pier draft nine exact words\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S42f",
+    "check": "e.slash_with_draft_offers_no_switch",
+    "passed": true,
+    "detail": "{'alt': False, 'tail': 'nt        Claude\\n\\n\u2022 Lantern Claude options: Mode=auto (/config to change)\\n\\n\\n\u203a seed line\\n\\n\\n\u2022 claude-code heard: seed line\\n\\n                                                                                                         [ acceptEdits ]\\n\u203a pier draft nine exact words/screen\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n'}"
+  },
+  {
+    "scenario": "S42f",
+    "check": "e.switch_with_draft_in_place",
+    "passed": true,
+    "detail": "{'C-l': True}"
+  },
+  {
+    "scenario": "S42f",
+    "check": "e.draft_still_exact_unsent",
+    "passed": true,
+    "detail": "S42f/roots/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n\n\u203a seed line\n\n\n\u2022 claude-code heard: seed line\n\n                                                                                                         [ acceptEdits ]\n\u203a pier draft nine exact words\n\n"
+  },
+  {
+    "scenario": "S42f",
+    "check": "e.draft_visible_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42f",
+    "check": "e.draft_submits_once_exact",
+    "passed": true,
+    "detail": "['pier draft nine exact words']"
+  },
+  {
+    "scenario": "S42h",
+    "check": "f.attach_screen_greyed_with_reason",
+    "passed": true,
+    "detail": " Nori host  CONTROLLING\n claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent\n\n Ready. Send a prompt to begin.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n/ scr\n\n  /screen  nori attach is always full-screen\n"
+  },
+  {
+    "scenario": "S42h",
+    "check": "f.attach_screen_does_nothing",
+    "passed": true,
+    "detail": " Nori host  CONTROLLING\n claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent\n\n /screen: nori attach is always full-screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n /screen: nori attach is always full-screen\n\n/ screen\n\n  /screen  nori attach is always full-screen\n"
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.draft_typed_inline",
+    "passed": true,
+    "detail": "keel draft eleven exact words, kept"
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.ctrl_l_into_full_with_draft",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.full_shows_draft_exact",
+    "passed": true,
+    "detail": "keel draft eleven exact words, kept"
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.nothing_sent_into",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.ctrl_l_back_inline_with_draft",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.inline_shows_draft_exact",
+    "passed": true,
+    "detail": "keel draft eleven exact words, kept"
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.nothing_sent_back",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.scrollback_once_after_round_trip",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.draft_submits_once_exact",
+    "passed": true,
+    "detail": "['keel draft eleven exact words, kept']"
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.reply_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.exit.back_at_shell",
+    "passed": true,
+    "detail": "          \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 64a2ae5d-0c50-4281-bd96-5a3836c348bb\nshell$\n\n"
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43a",
+    "check": "a.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 2, 'cursor_show': 30, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S43b",
+    "check": "b.into_full_mid_turn",
+    "passed": true,
+    "detail": "10"
+  },
+  {
+    "scenario": "S43b",
+    "check": "b.full_draft_exact",
+    "passed": true,
+    "detail": "mast draft typed while streaming"
+  },
+  {
+    "scenario": "S43b",
+    "check": "b.out_mid_turn",
+    "passed": true,
+    "detail": "27"
+  },
+  {
+    "scenario": "S43b",
+    "check": "b.inline_draft_exact_unsent",
+    "passed": true,
+    "detail": "mast draft typed while streaming"
+  },
+  {
+    "scenario": "S43b",
+    "check": "b.rows_once_in_order",
+    "passed": true,
+    "detail": "{'count': 50, 'dups': []}"
+  },
+  {
+    "scenario": "S43b",
+    "check": "b.draft_sent_once_exact",
+    "passed": true,
+    "detail": "['mast draft typed while streaming']"
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.draft_typed_inline",
+    "passed": true,
+    "detail": "keel draft eleven exact words, kept"
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.ctrl_l_into_full_with_draft",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.full_shows_draft_exact",
+    "passed": true,
+    "detail": "keel draft eleven exact words, kept"
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.nothing_sent_into",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.ctrl_l_back_inline_with_draft",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.inline_shows_draft_exact",
+    "passed": true,
+    "detail": "keel draft eleven exact words, kept"
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.nothing_sent_back",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.scrollback_once_after_round_trip",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.draft_submits_once_exact",
+    "passed": true,
+    "detail": "['keel draft eleven exact words, kept']"
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.reply_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.exit.back_at_shell",
+    "passed": true,
+    "detail": "sed                                   \u2502\n\u2502   (none)                                      \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nshell$\n\n\n\n"
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43f",
+    "check": "a.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 2, 'cursor_show': 27, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S43d",
+    "check": "d.ctrl_l_unbound_after_rebind",
+    "passed": true,
+    "detail": "rebind draft"
+  },
+  {
+    "scenario": "S43d",
+    "check": "d.alt_s_switches",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43d",
+    "check": "d.alt_s_back",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43d",
+    "check": "d.draft_kept",
+    "passed": true,
+    "detail": "rebind draft"
+  },
+  {
+    "scenario": "S43d",
+    "check": "d.shortcuts_show_configured_key",
+    "passed": false,
+    "detail": "['ctrl + l to toggle full screen          ctrl + t to view transcript']"
+  },
+  {
+    "scenario": "S43e",
+    "check": "e.attach_ctrl_l_noop_keeps_draft",
+    "passed": true,
+    "detail": "attach draft stays"
+  },
+  {
+    "scenario": "S43e",
+    "check": "e.attach_hints_do_not_offer_noop_key",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S43c",
+    "check": "c.full_with_two_line_draft",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43c",
+    "check": "c.two_lines_kept_full",
+    "passed": true,
+    "detail": "i-acceptance-l1/S43c/roots/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n                                                                                                         [ acceptEdits ]\n\u203a first line of the buoy note\n  second line of the buoy note\n\n"
+  },
+  {
+    "scenario": "S43c",
+    "check": "c.back_inline",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43c",
+    "check": "c.two_lines_kept_inline",
+    "passed": true,
+    "detail": "ts/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n                                                                                                         [ acceptEdits ]\n\u203a first line of the buoy note\n  second line of the buoy note\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S43c",
+    "check": "c.slash_menu_switch_keeps_typed_text_and_menu",
+    "passed": true,
+    "detail": "{'before': False, 'after': True, 'tail': '                                                                           [ acceptEdits ]\\n/ scr\\n\\n  /screen  switch between the inline and the full-screen view\\n'}"
+  },
+  {
+    "scenario": "S43c",
+    "check": "c.permission_prompt_holds_ctrl_l_unanswered",
+    "passed": true,
+    "detail": "{'before': False, 'after': False, 'responses': 0}"
+  },
+  {
+    "scenario": "S43c",
+    "check": "c.permission_answered_once",
+    "passed": true,
+    "detail": "[{'t': 1795544349.3206022, 'adapter': 'claude-code', 'pid': 62857, 'kind': 'response', 'id': 9000, 'body': {'outcome': {'outcome': 'selected', 'optionId': 'allow'}}}]"
+  },
+  {
+    "scenario": "S43c",
+    "check": "c.permission_turn_once_inline",
+    "passed": true,
+    "detail": "1"
+  }
+]

@@ -1,0 +1,818 @@
+[
+  {
+    "scenario": "S42a",
+    "check": "a.starts_inline",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.into_full_mid_turn",
+    "passed": true,
+    "detail": "15"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.full_shows_transcript",
+    "passed": true,
+    "detail": "tern Claude options: Mode=auto (/config to change)\n\n\n\u203a harbor opening line\n\n\n\u2022 claude-code heard: harbor opening line\n\n\n\u203a relay 40 amber\n\n\n\u2022 - amber row 01\n  - amber row 02\n  - amber row 03\n  - amber row 04\n  - amber row 05\n  - amber row 06\n  - amber row 07\n  - amber row 08\n  - amber row 09\n  - amber row 10\n  - amber row 11\n  - amber row 12\n  - amber row 13\n  - amber row 14\n  - amber row 15\n\n\u2022 Counting backwards from infinity (3s \u2022 esc to interrupt)\n\n                                                                                                         [ acceptEdits ]\n\u203a ! for shell commands\n\n"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.full_keeps_streaming",
+    "passed": true,
+    "detail": "{'entered_at': 15, 'visible': [22, 23, 24, 25, 26]}"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.out_of_full_mid_turn",
+    "passed": true,
+    "detail": "35"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.toggle_out_was_mid_turn",
+    "passed": true,
+    "detail": "35"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.scrollback_rows_once_in_order",
+    "passed": true,
+    "detail": "{'count': 40, 'dups': [], 'head': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'entered': 15, 'left': 35}"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.earlier_exchange_once",
+    "passed": true,
+    "detail": "{'heard': 1, 'all': 2}"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.finish_line_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.into_full_idle",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.out_full_idle",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.full_turn_lands_once",
+    "passed": true,
+    "detail": "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.amber_still_once",
+    "passed": true,
+    "detail": "40"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.prompts_delivered_once",
+    "passed": true,
+    "detail": "{'amber': 1, 'cobalt': 1}"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.exit.back_at_shell",
+    "passed": true,
+    "detail": "          \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume a9956410-25f4-4336-b010-f846d3118732\nshell$\n\n"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42a",
+    "check": "a.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 2, 'alt_off': 2, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 2, 'cursor_show': 472, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.into_full_on_b",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.full_shows_b_only",
+    "passed": true,
+    "detail": "de heard: beta marker\n\n\n\u203a relay 70 beta\n\n\n\u2022 - beta row 01\n  - beta row 02\n  - beta row 03\n  - beta row 04\n  - beta row 05\n  - beta row 06\n  - beta row 07\n  - beta row 08\n  - beta row 09\n  - beta row 10\n  - beta row 11\n  - beta row 12\n  - beta row 13\n  - beta row 14\n\n  1 working \u00b7 1 ready\n\n\u2022 Rearranging deck chairs on the Titanic (3s \u2022 esc to interrupt)\n\n                                                                                                         [ acceptEdits ]\n\u203a @ for file mentions\n\n"
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.full_switch_shows_a_only",
+    "passed": true,
+    "detail": "{'b_rows_meanwhile': 6, 'screen': '\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n  \u203a Nori CLI v0.0.0\\n\\n  System       /tmp/nori-host-tui-acceptance-l2/S42b/roots/alpha/app\\n  Agent        Claude\\n\\n\u2022 Lantern Claude options: Mode=auto (/config to change)\\n\\n\\n\u203a alpha marker\\n\\n\\n\u2022 claude-code heard: alpha marker\\n\\n  1 working \u00b7 1 ready\\n\\n                                                                                                         [ acceptEdits ]\\n\u203a ? for shortcuts\\n\\n'}"
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.still_full_after_switch",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.full_b_kept_streaming",
+    "passed": true,
+    "detail": "{'visible': [27, 28, 29, 30, 31], 'n0': 20}"
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.inline_on_a_mid_b_turn",
+    "passed": true,
+    "detail": "46"
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.inline_a_scrollback_is_a",
+    "passed": true,
+    "detail": "{'alpha': 1, 'beta_rows': 0, 'beta_marker': 0}"
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.inline_b_rows_once_in_order",
+    "passed": true,
+    "detail": "{'count': 70, 'dups': [], 'head': [1, 2, 3, 4, 5, 6, 7, 8]}"
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.inline_b_has_no_a",
+    "passed": true,
+    "detail": "{'alpha': 0, 'beta': 1}"
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.one_prompt_each",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.exit.back_at_shell",
+    "passed": true,
+    "detail": "        \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 8b01283d-4380-485c-a1c4-fdb50e391793\nshell$\n\n\n\n"
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42b",
+    "check": "b.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 2, 'cursor_show': 255, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.into_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.overlay_close_stays_full",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/nori-host-tui-acceptance-l2/S42c/roots/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n\n\u203a gull tally\n\n\n\u2022 claude-code heard: gull tally\n\n                                                                                     [ acceptEdits ]\n\u203a tern draft typed full\n\n"
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.draft_survives_overlay_and_resize",
+    "passed": true,
+    "detail": "-host-tui-acceptance-l2/S42c/roots/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n\n\u203a gull tally\n\n\n\u2022 claude-code heard: gull tally\n\n                                                                                     [ acceptEdits ]\n\u203a tern draft typed full\n\n"
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.full_resize_redraws",
+    "passed": true,
+    "detail": "{'rows': 40, 'tail': '/app\\n  Agent        Claude\\n\\n\u2022 Lantern Claude options: Mode=auto (/config to change)\\n\\n\\n\u203a gull tally\\n\\n\\n\u2022 claude-code heard: gull tally\\n\\n                                                                                                                             [ acceptEdits ]\\n\u203a tern draft typed full\\n\\n'}"
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.draft_unsent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.back_inline_after_resizes",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.scrollback_once_after_resizes",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.inline_resize_ok",
+    "passed": true,
+    "detail": "nfig to change)\n\n\n\u203a gull tally\n\n\n\u2022 claude-code heard: gull tally\n\n                                                                                               [ acceptEdits ]\n\u203a @ for file mentions\n\n"
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.into_full_again",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.exit_overlay.back_at_shell",
+    "passed": true,
+    "detail": "          \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 5557bc80-4463-489f-ba79-fb95e671d8f7\nshell$\n\n"
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.exit_overlay.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.exit_overlay.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.exit_overlay.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.exit_overlay.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 2, 'alt_off': 2, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 6, 'cursor_show': 121, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S42c",
+    "check": "c.held_history_printed_on_exit",
+    "passed": true,
+    "detail": "{'slate': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 'gull': 1}"
+  },
+  {
+    "scenario": "S42d",
+    "check": "d.into_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42d",
+    "check": "d.quit.back_at_shell",
+    "passed": true,
+    "detail": "        \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 114734f4-fd25-4140-b91b-7a69a9072bf9\nshell$\n\n\n\n"
+  },
+  {
+    "scenario": "S42d",
+    "check": "d.quit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42d",
+    "check": "d.quit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42d",
+    "check": "d.quit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42d",
+    "check": "d.quit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 2, 'cursor_show': 104, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S42d",
+    "check": "d.quit.scrollback_once",
+    "passed": true,
+    "detail": "{'quay': 1, 'moss': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}"
+  },
+  {
+    "scenario": "S42e",
+    "check": "d.into_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42e",
+    "check": "d.ctrlc.back_at_shell",
+    "passed": true,
+    "detail": "          \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume eb9873a9-5b7a-4217-9473-563ae83e832f\nshell$\n\n"
+  },
+  {
+    "scenario": "S42e",
+    "check": "d.ctrlc.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42e",
+    "check": "d.ctrlc.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42e",
+    "check": "d.ctrlc.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42e",
+    "check": "d.ctrlc.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 3, 'cursor_show': 78, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S42e",
+    "check": "d.ctrlc.scrollback_once",
+    "passed": true,
+    "detail": "{'quay': 1, 'moss': [1, 2, 3, 4, 5, 6]}"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.starts_inline",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.into_full_mid_turn",
+    "passed": true,
+    "detail": "15"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.full_shows_transcript",
+    "passed": true,
+    "detail": "laude options: Mode=auto (/config to change)\n\n\n\u203a harbor opening line\n\n\n\u2022 claude-code heard: harbor opening line\n\n\n\u203a relay 40 amber\n\n\n\u2022 - amber row 01\n  - amber row 02\n  - amber row 03\n  - amber row 04\n  - amber row 05\n  - amber row 06\n  - amber row 07\n  - amber row 08\n  - amber row 09\n  - amber row 10\n  - amber row 11\n  - amber row 12\n  - amber row 13\n  - amber row 14\n  - amber row 15\n\n\u2022 Negotiating with the garbage collector (3s \u2022 esc to interrupt)\n\n                                                                                                         [ acceptEdits ]\n\u203a ! for shell commands\n\n"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.full_keeps_streaming",
+    "passed": true,
+    "detail": "{'entered_at': 15, 'visible': [22, 23, 24, 25, 26]}"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.out_of_full_mid_turn",
+    "passed": true,
+    "detail": "35"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.toggle_out_was_mid_turn",
+    "passed": true,
+    "detail": "35"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.scrollback_rows_once_in_order",
+    "passed": true,
+    "detail": "{'count': 40, 'dups': [], 'head': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'entered': 15, 'left': 35}"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.earlier_exchange_once",
+    "passed": true,
+    "detail": "{'heard': 1, 'all': 2}"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.finish_line_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.into_full_idle",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.out_full_idle",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.full_turn_lands_once",
+    "passed": true,
+    "detail": "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.amber_still_once",
+    "passed": true,
+    "detail": "40"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.prompts_delivered_once",
+    "passed": true,
+    "detail": "{'amber': 1, 'cobalt': 1}"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.exit.back_at_shell",
+    "passed": true,
+    "detail": "sed                                   \u2502\n\u2502   (none)                                      \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nshell$\n\n\n\n"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42g",
+    "check": "a.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 2, 'alt_off': 2, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 2, 'cursor_show': 471, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S42i",
+    "check": "i.into_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42i",
+    "check": "i.full_redraws_after_resizes",
+    "passed": true,
+    "detail": "\n  - coral row 17\n  - coral row 18\n  - coral row 19\n  - coral row 20\n  - coral row 21\n\n\u2022 Submitting to our robot overlords (5s \u2022 esc to interrupt)\n\n                                                                                                                     [ acceptEdits ]\n\u203a ? for shortcuts\n\n"
+  },
+  {
+    "scenario": "S42i",
+    "check": "i.out_mid_turn",
+    "passed": true,
+    "detail": "30"
+  },
+  {
+    "scenario": "S42i",
+    "check": "i.rows_once_in_order",
+    "passed": true,
+    "detail": "{'count': 40, 'dups': [], 'missing': []}"
+  },
+  {
+    "scenario": "S42i",
+    "check": "i.earlier_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42i",
+    "check": "i.exit.back_at_shell",
+    "passed": true,
+    "detail": "          \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 670a1b38-d8a4-4b92-af1e-3ac3d290384b\nshell$\n\n"
+  },
+  {
+    "scenario": "S42i",
+    "check": "i.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42i",
+    "check": "i.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42i",
+    "check": "i.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42i",
+    "check": "i.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 2, 'cursor_show': 365, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S42j",
+    "check": "j.into_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42j",
+    "check": "j.suspend_shows_shell",
+    "passed": true,
+    "detail": "{'alt': False, 'tail': '                               [ acceptEdits ]\\n/ screen\\n\\n  /screen  switch between the inline and the full-screen view\\n[1]+  Stopped                 nori --skip-trust-directory\\nshell$\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n'}"
+  },
+  {
+    "scenario": "S42j",
+    "check": "j.fg_returns_to_full",
+    "passed": true,
+    "detail": "{'alt': True, 'tail': 'nce-l2/S42j/roots/alpha/app\\n  Agent        Claude\\n\\n\u2022 Lantern Claude options: Mode=auto (/config to change)\\n\\n\\n\u203a dune line\\n\\n\\n\u2022 claude-code heard: dune line\\n\\n                                                                                                         [ acceptEdits ]\\n\u203a ! for shell commands\\n\\n'}"
+  },
+  {
+    "scenario": "S42j",
+    "check": "j.out_after_fg",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42j",
+    "check": "j.scrollback_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42j",
+    "check": "j.exit.back_at_shell",
+    "passed": true,
+    "detail": "          \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume a5313e06-6e75-4ab0-88ce-7ba96b794d97\nshell$\n\n"
+  },
+  {
+    "scenario": "S42j",
+    "check": "j.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42j",
+    "check": "j.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42j",
+    "check": "j.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42j",
+    "check": "j.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 2, 'alt_off': 2, 'paste_on': 5, 'paste_off': 5, 'cursor_hide': 2, 'cursor_show': 34, 'kbd_push': 2, 'kbd_pop': 2, 'focus_on': 2, 'focus_off': 2}"
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.into_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.prompt_visible",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/nori-host-tui-acceptance-l2/S42k/roots/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n\n\u203a perm paint\n\n\n\n  Would you like to allow edit: Paint the boathouse?\n\n  Paint the boathouse\n\n\u203a 1. Allow once (y)\n  2. Reject (esc)\n\n  Press enter to confirm or esc to reject\n"
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.answered_once",
+    "passed": true,
+    "detail": "[{'t': 1795544287.0758905, 'adapter': 'claude-code', 'pid': 61553, 'kind': 'response', 'id': 9000, 'body': {'outcome': {'outcome': 'selected', 'optionId': 'allow'}}}]"
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.screen_rows_present",
+    "passed": true,
+    "detail": "['\u2022 Permission: Allow once Paint the boath', '\u203a perm paint', '\u2022 claude-code permission: {\"outcome\": \"s']"
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.still_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.out",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.scrollback_once",
+    "passed": true,
+    "detail": "{'reply': 1, 'decision': 1}"
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.scrollback_rows_once",
+    "passed": true,
+    "detail": "['\u2022 Permission: Allow once Paint the boath', '\u203a perm paint', '\u2022 claude-code permission: {\"outcome\": \"s']"
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.exit.back_at_shell",
+    "passed": true,
+    "detail": "        \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 276582e8-15fc-4ab6-b41d-1a9c2cfbb8e0\nshell$\n\n\n\n"
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42k",
+    "check": "k.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 14, 'cursor_show': 22, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.prompt_visible",
+    "passed": true,
+    "detail": "shell$ nori --skip-trust-directory\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/nori-host-tui-acceptance-l2/S42m/roots/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n\n\u203a perm paint\n\n\n\n  Would you like to allow edit: Paint the boathouse?\n\n  Paint the boathouse\n\n\u203a 1. Allow once (y)\n  2. Reject (esc)\n\n  Press enter to confirm or esc to reject\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.answered_once",
+    "passed": true,
+    "detail": "[{'t': 1795544299.095503, 'adapter': 'claude-code', 'pid': 61971, 'kind': 'response', 'id': 9000, 'body': {'outcome': {'outcome': 'selected', 'optionId': 'allow'}}}]"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.screen_rows_present",
+    "passed": true,
+    "detail": "['\u2022 Permission: Allow once Paint the boath', '\u203a perm paint', '\u2022 claude-code permission: {\"outcome\": \"s']"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.scrollback_once",
+    "passed": true,
+    "detail": "{'reply': 1, 'decision': 1}"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.scrollback_rows_once",
+    "passed": true,
+    "detail": "['\u2022 Permission: Allow once Paint the boath', '\u203a perm paint', '\u2022 claude-code permission: {\"outcome\": \"s']"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.exit.back_at_shell",
+    "passed": true,
+    "detail": "        \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 7b9d3cd4-3004-4615-b949-01113a89f0a2\nshell$\n\n\n\n"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 0, 'alt_off': 0, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 13, 'cursor_show': 17, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.into_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.picked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.resumed_full_shows_saved",
+    "passed": false,
+    "detail": "{'alt': True, 'tail': 'ri CLI v0.0.0\\n\\n  System       /tmp/nori-host-tui-acceptance-l2/S42l/roots/alpha/app \u00b7 Approvals: Agent\\n  Agent        Claude \u00b7 acceptEdits\\n\\n\u2022 Resuming session with Lantern Claude...\\n\\n\\n\u203a an earlier synthetic question\\n\\n\\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\\n\\n  2 ready\\n\\n                                                                                                         [ acceptEdits ]\\n\u203a / for slash command menu\\n\\n'}"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.out",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.inline_has_resumed_once",
+    "passed": true,
+    "detail": "{'answer': 1, 'follow': 1}"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.inline_drops_previous_session",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.exit.back_at_shell",
+    "passed": true,
+    "detail": "        \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume d681d57c-5b7f-4e9d-ae59-1e3d2dbd572b\nshell$\n\n\n\n"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42l",
+    "check": "l.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 5, 'cursor_show': 41, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  }
+]

@@ -1,0 +1,30 @@
+/ T R A N S C R I P T / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-l2/S42c/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+
+› gull tally
+
+
+• claude-code heard: gull tally
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+───────────────────────────────────────────────────────────────────────────────────────────── 100% ─
+ ↑/↓ to scroll   pgup/pgdn to page   home/end to jump
+ q to quit   esc to edit prev
+

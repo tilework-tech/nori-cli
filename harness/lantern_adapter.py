@@ -29,6 +29,8 @@ Prompt words (first word of the prompt text):
   wake     reply, then start an agent-started turn (broker-style
            nori/turnId) that ticks until session/cancel, then reports
            idle with stopReason cancelled for the same turn id
+  relay N TAG  stream N list rows "TAG row NN" one every 250 ms (records each
+           row), then reply; stops early on cancel
   anything else: reply "<name> heard: <text>"
 """
 import json
@@ -121,6 +123,25 @@ def run_prompt(rid, sid, text):
         cancelled.discard(sid)
         ledger("turn_end", sessionId=sid, stopReason="cancelled", ticks=ticks)
         send(id=rid, result={"stopReason": "cancelled"})
+        return
+    if word == "relay":
+        parts = text.split()
+        count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 30
+        tag = parts[2] if len(parts) > 2 else "relay"
+        sent = 0
+        for n in range(1, count + 1):
+            if sid in cancelled:
+                break
+            chunk(sid, "agent_message_chunk", f"- {tag} row {n:02d}\n")
+            ledger("relay", sessionId=sid, tag=tag, n=n)
+            sent = n
+            time.sleep(0.25)
+        stop = "cancelled" if sid in cancelled else "end_turn"
+        cancelled.discard(sid)
+        if stop == "end_turn":
+            chunk(sid, "agent_message_chunk", f"\n{tag} relay finished.")
+        ledger("turn_end", sessionId=sid, stopReason=stop, rows=sent)
+        send(id=rid, result={"stopReason": stop})
         return
     if word == "ponder":
         chunk(sid, "agent_thought_chunk", "**Charting the breakwater**\nCounting the pilings first.")

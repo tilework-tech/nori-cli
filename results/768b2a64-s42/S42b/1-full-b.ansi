@@ -1,0 +1,35 @@
+
+[2m  System       [0m[39m[49m/tmp/nori-host-tui-acceptance-s42/S42b/roots/alpha/app[2m · [0m[39m[49mApprovals: Agent
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude[2m[39m · [0m[39m[49macceptEdits
+
+
+[1;2m› [0m[39m[49mbeta marker
+
+
+[2m• [0m[39m[49mclaude-code heard: beta marker
+
+
+[1;2m› [0m[39m[49mrelay 70 beta
+
+
+[2m• [0m[39m[49m- beta row 01
+  - beta row 02
+  - beta row 03
+  - beta row 04
+  - beta row 05
+  - beta row 06
+  - beta row 07
+  - beta row 08
+  - beta row 09
+  - beta row 10
+  - beta row 11
+  - beta row 12
+  - beta row 13
+  - beta row 14
+
+  [2m1 working · 1 ready
+
+[0;1m[38;2;138;138;138m[49m•[0m[39m[49m [1m[38;2;128;128;128mBurning VC[38;2;138;138;138m [38;2;167;167;167mc[38;2;202;202;202ma[38;2;231;231;231ms[38;2;242;242;242mh[0m[39m[49m [2m(3s • esc to interrupt)
+
+[0m[39m[49m                                                                                                         [38;5;6m[ acceptEdits ]
+[1m[39m›[0m[39m[49m [2m@ for file mentions

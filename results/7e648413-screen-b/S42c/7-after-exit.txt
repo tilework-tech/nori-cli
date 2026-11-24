@@ -1,0 +1,34 @@
+› relay 10 slate
+
+
+• - slate row 01
+  - slate row 02
+  - slate row 03
+  - slate row 04
+  - slate row 05
+  - slate row 06
+  - slate row 07
+  - slate row 08
+  - slate row 09
+  - slate row 10
+
+  slate relay finished.
+
+╭───────────────────────────────────────────────╮
+│ Goodbye! Thanks for using Nori.               │
+│                                               │
+│ Session: 5557bc80-4463-489f-ba79-fb95e671d8f7 │
+│                                               │
+│ Messages      User: 2  Assistant: 2  Total: 4 │
+│ Tool Calls    (none)                          │
+│                                               │
+│ Skills Used                                   │
+│   (none)                                      │
+│                                               │
+│ Subagents Used                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+To continue this session, run:
+nori resume 5557bc80-4463-489f-ba79-fb95e671d8f7
+shell$
+

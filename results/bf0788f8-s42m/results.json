@@ -1,0 +1,62 @@
+[
+  {
+    "scenario": "S42m",
+    "check": "k.prompt_visible",
+    "passed": true,
+    "detail": "shell$ nori --skip-trust-directory\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/nori-host-tui-acceptance-base/S42m/roots/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n\n\u203a perm paint\n\n\n\n  Would you like to allow edit: Paint the boathouse?\n\n  Paint the boathouse\n\n\u203a 1. Allow once (y)\n  2. Reject (esc)\n\n  Press enter to confirm or esc to reject\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.answered_once",
+    "passed": true,
+    "detail": "[{'t': 1795544070.5041559, 'adapter': 'claude-code', 'pid': 55755, 'kind': 'response', 'id': 9000, 'body': {'outcome': {'outcome': 'selected', 'optionId': 'allow'}}}]"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.screen_rows_present",
+    "passed": true,
+    "detail": "['\u2022 Permission: Allow once Paint the boath', '\u203a perm paint', '\u2022 claude-code permission: {\"outcome\": \"s']"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.scrollback_once",
+    "passed": true,
+    "detail": "{'reply': 1, 'decision': 1}"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.scrollback_rows_once",
+    "passed": true,
+    "detail": "['\u2022 Permission: Allow once Paint the boath', '\u203a perm paint', '\u2022 claude-code permission: {\"outcome\": \"s']"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.exit.back_at_shell",
+    "passed": true,
+    "detail": "        \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 278c6aa6-43eb-4c8d-b632-9d3284456edf\nshell$\n\n\n\n"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42m",
+    "check": "k.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 0, 'alt_off': 0, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 13, 'cursor_show': 17, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  }
+]

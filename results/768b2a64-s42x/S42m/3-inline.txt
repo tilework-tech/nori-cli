@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-s42x/S42m/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+• Permission: Allow once Paint the boathouse
+
+
+› perm paint
+
+
+• claude-code permission: {"outcome": "selected", "optionId": "allow"}
+
+                                                                                                         [ acceptEdits ]
+› / for slash command menu
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

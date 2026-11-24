@@ -1,0 +1,50 @@
+{"t": 1795543710.9041674, "adapter": "claude-code", "pid": 32260, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-s42x/S42i/roots/alpha/app", "argv": []}
+{"t": 1795543710.9042623, "adapter": "claude-code", "pid": 32260, "kind": "request", "method": "initialize"}
+{"t": 1795543710.905416, "adapter": "claude-code", "pid": 32260, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-s42x/S42i/roots/alpha/app"}
+{"t": 1795543710.9076123, "adapter": "claude-code", "pid": 32260, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-s42x/S42i/roots/alpha/app"}
+{"t": 1795543710.9115386, "adapter": "claude-code", "pid": 32260, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795543712.1227655, "adapter": "claude-code", "pid": 32260, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nreef line"}
+{"t": 1795543712.123017, "adapter": "claude-code", "pid": 32260, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795543716.3028386, "adapter": "claude-code", "pid": 32260, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 40 coral"}
+{"t": 1795543716.3030334, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 1}
+{"t": 1795543716.5532067, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 2}
+{"t": 1795543716.8033915, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 3}
+{"t": 1795543717.0536065, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 4}
+{"t": 1795543717.3037784, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 5}
+{"t": 1795543717.5539696, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 6}
+{"t": 1795543717.8041494, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 7}
+{"t": 1795543718.0543416, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 8}
+{"t": 1795543718.3045194, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 9}
+{"t": 1795543718.5546856, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 10}
+{"t": 1795543718.8048806, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 11}
+{"t": 1795543719.0550475, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 12}
+{"t": 1795543719.3052208, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 13}
+{"t": 1795543719.5553868, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 14}
+{"t": 1795543719.8055344, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 15}
+{"t": 1795543720.0556748, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 16}
+{"t": 1795543720.3058312, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 17}
+{"t": 1795543720.5559907, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 18}
+{"t": 1795543720.8061848, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 19}
+{"t": 1795543721.056352, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 20}
+{"t": 1795543721.3065293, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 21}
+{"t": 1795543721.5566895, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 22}
+{"t": 1795543721.806857, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 23}
+{"t": 1795543722.057015, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 24}
+{"t": 1795543722.3071673, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 25}
+{"t": 1795543722.5573254, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 26}
+{"t": 1795543722.8074863, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 27}
+{"t": 1795543723.0576265, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 28}
+{"t": 1795543723.3078122, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 29}
+{"t": 1795543723.5579991, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 30}
+{"t": 1795543723.8081336, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 31}
+{"t": 1795543724.058289, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 32}
+{"t": 1795543724.3084471, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 33}
+{"t": 1795543724.5586085, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 34}
+{"t": 1795543724.8087864, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 35}
+{"t": 1795543725.0589519, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 36}
+{"t": 1795543725.309084, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 37}
+{"t": 1795543725.5592906, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 38}
+{"t": 1795543725.8094487, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 39}
+{"t": 1795543726.059656, "adapter": "claude-code", "pid": 32260, "kind": "relay", "sessionId": "claude-code-0", "tag": "coral", "n": 40}
+{"t": 1795543726.3098185, "adapter": "claude-code", "pid": 32260, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 40}
+{"t": 1795543729.6406431, "adapter": "claude-code", "pid": 32260, "kind": "stdin_eof"}

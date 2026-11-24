@@ -41,6 +41,9 @@ BIN = WORK / "bin"
 BIN.mkdir(parents=True, exist_ok=True)
 (BIN / "nori").unlink(missing_ok=True)
 (BIN / "nori").symlink_to(Path(ARGS.nori).resolve())
+if (Path(ARGS.nori).resolve().parent / "nori-tui").exists():
+    (BIN / "nori-tui").unlink(missing_ok=True)
+    (BIN / "nori-tui").symlink_to(Path(ARGS.nori).resolve().parent / "nori-tui")
 NORI = "nori"
 # S38 runs the attach client under test from its own synthetic directory, so `nori` on PATH stays the host's build.
 CLIENT = NORI
@@ -3558,6 +3561,659 @@ def s41g_wire_contract(ctx):
     obs.close()
 
 
+# ---- S42: /screen in plain nori and nori-tui (#757) -------------------------
+
+def toggle_screen(t, want_alt, timeout=6):
+    """Run /screen from an empty composer and wait for the alternate-screen flag."""
+    run_typed(t, "/screen", settle=0.3)
+    deadline = time.time() + timeout
+    while time.time() < deadline and t.alt_screen() != want_alt:
+        time.sleep(0.15)
+    time.sleep(0.6)
+    return t.alt_screen() == want_alt
+
+
+def resize(t, cols, rows):
+    term.tmux("resize-window", "-t", t.name, "-x", str(cols), "-y", str(rows))
+    time.sleep(1.2)
+
+
+def tag_rows(text, tag):
+    return [int(m) for m in re.findall(rf"\b{re.escape(tag)} row (\d\d)\b", text)]
+
+
+def relay_n(ctx, tag):
+    rows = [r for r in ctx.ledger("relay") if r.get("tag") == tag]
+    return rows[-1]["n"] if rows else 0
+
+
+def relay_done(ctx, tag):
+    return any(r.get("kind") == "turn_end" and r.get("rows") is not None and
+               r.get("sessionId") in {x.get("sessionId") for x in ctx.ledger("relay") if x.get("tag") == tag}
+               for r in ctx.ledger("turn_end"))
+
+
+def wait_relay(ctx, tag, n, timeout=30):
+    deadline = time.time() + timeout
+    while time.time() < deadline and relay_n(ctx, tag) < n:
+        time.sleep(0.1)
+    return relay_n(ctx, tag)
+
+
+def prompts_with(ctx, text):
+    out = []
+    for r in ctx.ledger("request", "session/prompt"):
+        joined = r.get("text") or ""
+        if text in joined:
+            out.append(joined)
+    return out
+
+
+def restored(ctx, t, prefix):
+    """The shell after the TUI exits: normal screen, cursor shown, cooked tty, balanced modes."""
+    deadline = time.time() + 10
+    while time.time() < deadline and not t.at_shell():
+        time.sleep(0.3)
+    ctx.check(f"{prefix}.back_at_shell", t.at_shell(), t.screen()[-300:])
+    ctx.check(f"{prefix}.normal_screen", not t.alt_screen(), t.fmt("#{alternate_on}"))
+    ctx.check(f"{prefix}.cursor_visible", t.cursor_visible(), t.fmt("#{cursor_flag}"))
+    ctx.check(f"{prefix}.tty_cooked", tty_sane(t.tty_modes()))
+    esc = term.escape_counts(t.raw())
+    ctx.check(f"{prefix}.escapes_balanced", esc["alt_on"] == esc["alt_off"] and esc["paste_on"] == esc["paste_off"], esc)
+
+
+def s42a_mid_turn_both_directions(ctx, binary="nori"):
+    t = start_fg(ctx, cmd=f"{binary} --skip-trust-directory")
+    ctx.check("a.starts_inline", not t.alt_screen())
+    submit(t, "harbor opening line")
+    t.wait_for("heard: harbor opening line", 20)
+    time.sleep(0.8)
+    submit(t, "relay 40 amber")
+    wait_relay(ctx, "amber", 6)
+    ctx.check("a.into_full_mid_turn", toggle_screen(t, True), relay_n(ctx, "amber"))
+    at_in = relay_n(ctx, "amber")
+    t.capture("1-full-mid-turn")
+    s = t.screen()
+    ctx.check("a.full_shows_transcript", "harbor opening line" in s and "amber row" in s and "›" in s, s[-600:])
+    wait_relay(ctx, "amber", 24)
+    time.sleep(0.5)
+    t.capture("2-full-streaming")
+    later = tag_rows(t.screen(), "amber")
+    ctx.check("a.full_keeps_streaming", later and max(later) > at_in + 8, {"entered_at": at_in, "visible": later[-5:]})
+    ctx.check("a.out_of_full_mid_turn", toggle_screen(t, False), relay_n(ctx, "amber"))
+    at_out = relay_n(ctx, "amber")
+    ctx.check("a.toggle_out_was_mid_turn", at_out < 40, at_out)
+    t.wait_for("amber relay finished.", 30)
+    time.sleep(1.2)
+    t.capture("3-inline-after")
+    h = t.history()
+    rows = tag_rows(h, "amber")
+    ctx.check("a.scrollback_rows_once_in_order", rows == list(range(1, 41)),
+              {"count": len(rows), "dups": sorted({n for n in rows if rows.count(n) > 1}), "head": rows[:12], "entered": at_in, "left": at_out})
+    ctx.check("a.earlier_exchange_once", h.count("heard: harbor opening line") == 1 and h.count("harbor opening line") == 2,
+              {"heard": h.count("heard: harbor opening line"), "all": h.count("harbor opening line")})
+    ctx.check("a.finish_line_once", h.count("amber relay finished.") == 1, h.count("amber relay finished."))
+    # A whole turn inside the full-screen view lands once on return.
+    ctx.check("a.into_full_idle", toggle_screen(t, True))
+    submit(t, "relay 12 cobalt")
+    t.wait_for("cobalt relay finished.", 30)
+    time.sleep(0.8)
+    t.capture("4-full-whole-turn")
+    ctx.check("a.out_full_idle", toggle_screen(t, False))
+    time.sleep(1.0)
+    h = t.history()
+    rows = tag_rows(h, "cobalt")
+    ctx.check("a.full_turn_lands_once", rows == list(range(1, 13)), rows)
+    ctx.check("a.amber_still_once", tag_rows(h, "amber") == list(range(1, 41)), len(tag_rows(h, "amber")))
+    ctx.check("a.prompts_delivered_once", len(prompts_with(ctx, "relay 40 amber")) == 1 and len(prompts_with(ctx, "relay 12 cobalt")) == 1,
+              {"amber": len(prompts_with(ctx, "relay 40 amber")), "cobalt": len(prompts_with(ctx, "relay 12 cobalt"))})
+    t.capture("5-inline-final")
+    quit_fg(t)
+    restored(ctx, t, "a.exit")
+
+
+def s42b_separate_sessions(ctx):
+    t = start_fg(ctx)
+    submit(t, "alpha marker")
+    t.wait_for("heard: alpha marker", 20)
+    news = len(ctx.ledger("request", "session/new"))
+    run_typed(t, "/new", settle=3.0)
+    wait_ledger(ctx, lambda r: len(ctx.ledger("request", "session/new")) > news, 15)
+    time.sleep(1)
+    submit(t, "beta marker")
+    t.wait_for("heard: beta marker", 20)
+    time.sleep(0.8)
+    submit(t, "relay 70 beta")
+    wait_relay(ctx, "beta", 5)
+    ctx.check("b.into_full_on_b", toggle_screen(t, True))
+    s = t.screen()
+    t.capture("1-full-b")
+    ctx.check("b.full_shows_b_only", "beta marker" in s and "beta row" in s and "alpha marker" not in s, s[-500:])
+    t.keys("M-,")
+    time.sleep(1.5)
+    n0 = relay_n(ctx, "beta")
+    time.sleep(1.5)
+    s = t.screen()
+    t.capture("2-full-a-while-b-streams")
+    ctx.check("b.full_switch_shows_a_only", "alpha marker" in s and "beta marker" not in s and "beta row" not in s,
+              {"b_rows_meanwhile": relay_n(ctx, "beta") - n0, "screen": s[-500:]})
+    ctx.check("b.still_full_after_switch", t.alt_screen())
+    t.keys("M-,")
+    time.sleep(1.2)
+    s = t.screen()
+    t.capture("3-full-back-to-b")
+    vis = tag_rows(s, "beta")
+    ctx.check("b.full_b_kept_streaming", "beta marker" in s or (vis and max(vis) > n0), {"visible": vis[-5:], "n0": n0})
+    t.keys("M-,")
+    time.sleep(1.2)
+    ctx.check("b.inline_on_a_mid_b_turn", toggle_screen(t, False) and relay_n(ctx, "beta") < 70, relay_n(ctx, "beta"))
+    time.sleep(1.5)
+    h = t.history()
+    t.capture("4-inline-a")
+    ctx.check("b.inline_a_scrollback_is_a", h.count("heard: alpha marker") == 1 and "beta row" not in h and "beta marker" not in h,
+              {"alpha": h.count("heard: alpha marker"), "beta_rows": len(tag_rows(h, "beta")), "beta_marker": h.count("beta marker")})
+    deadline = time.time() + 30
+    while time.time() < deadline and relay_n(ctx, "beta") < 70:
+        time.sleep(0.3)
+    time.sleep(1.0)
+    t.keys("M-,")
+    time.sleep(2.5)
+    h = t.history()
+    t.capture("5-inline-b")
+    rows = tag_rows(h, "beta")
+    ctx.check("b.inline_b_rows_once_in_order", rows == list(range(1, 71)),
+              {"count": len(rows), "dups": sorted({n for n in rows if rows.count(n) > 1}), "head": rows[:8]})
+    ctx.check("b.inline_b_has_no_a", "alpha marker" not in h and h.count("heard: beta marker") == 1,
+              {"alpha": h.count("alpha marker"), "beta": h.count("heard: beta marker")})
+    ctx.check("b.one_prompt_each", len(prompts_with(ctx, "relay 70 beta")) == 1)
+    quit_fg(t)
+    restored(ctx, t, "b.exit")
+
+
+def s42c_overlay_resize_exit(ctx):
+    t = start_fg(ctx)
+    submit(t, "gull tally")
+    t.wait_for("heard: gull tally", 20)
+    time.sleep(0.8)
+    ctx.check("c.into_full", toggle_screen(t, True))
+    draft = "tern draft typed full"
+    t.type(draft)
+    time.sleep(0.6)
+    t.keys("C-t")
+    s = t.wait_for("T R A N S C R I P T", 10)
+    t.capture("1-overlay-over-full")
+    resize(t, 100, 30)
+    t.capture("2-overlay-resized")
+    t.keys("q")
+    time.sleep(1.0)
+    s = t.screen()
+    t.capture("3-overlay-closed")
+    ctx.check("c.overlay_close_stays_full", t.alt_screen() and "T R A N S C R I P T" not in s and "heard: gull tally" in s, s[-400:])
+    ctx.check("c.draft_survives_overlay_and_resize", draft in s, s[-300:])
+    resize(t, 140, 40)
+    s = t.screen()
+    t.capture("4-full-resized")
+    ctx.check("c.full_resize_redraws", t.alt_screen() and draft in s and "heard: gull tally" in s and len(s.splitlines()) >= 39,
+              {"rows": len(s.splitlines()), "tail": s[-300:]})
+    ctx.check("c.draft_unsent", not prompts_with(ctx, draft), len(prompts_with(ctx, draft)))
+    t.keys("C-u")
+    time.sleep(0.4)
+    ctx.check("c.back_inline_after_resizes", toggle_screen(t, False))
+    time.sleep(1.0)
+    h = t.history()
+    t.capture("5-inline")
+    ctx.check("c.scrollback_once_after_resizes", h.count("heard: gull tally") == 1, h.count("heard: gull tally"))
+    resize(t, 110, 34)
+    s = t.screen()
+    ctx.check("c.inline_resize_ok", "›" in s and not t.alt_screen(), s[-200:])
+    # Exit from the full-screen view with an overlay open.
+    ctx.check("c.into_full_again", toggle_screen(t, True))
+    submit(t, "relay 10 slate")
+    t.wait_for("slate relay finished.", 20)
+    time.sleep(0.5)
+    t.keys("C-t")
+    t.wait_for("T R A N S C R I P T", 10)
+    t.capture("6-overlay-before-exit")
+    t.keys("C-c")
+    time.sleep(0.6)
+    if not t.at_shell():
+        t.keys("C-c")
+    time.sleep(2.0)
+    t.capture("7-after-exit")
+    restored(ctx, t, "c.exit_overlay")
+    h = t.history()
+    rows = tag_rows(h, "slate")
+    ctx.check("c.held_history_printed_on_exit", rows == list(range(1, 11)) and h.count("heard: gull tally") == 1,
+              {"slate": rows, "gull": h.count("heard: gull tally")})
+
+
+def s42d_exit_from_full(ctx, how):
+    t = start_fg(ctx)
+    submit(t, "quay line")
+    t.wait_for("heard: quay line", 20)
+    time.sleep(0.6)
+    ctx.check("d.into_full", toggle_screen(t, True))
+    submit(t, "relay 30 moss")
+    wait_relay(ctx, "moss", 6)
+    t.capture("1-full-mid-turn")
+    if how == "quit":
+        slash(t, "/quit", settle=1.0)
+    else:
+        t.keys("C-c")
+        time.sleep(0.6)
+        if not t.at_shell():
+            t.keys("C-c")
+    time.sleep(2.0)
+    t.capture("2-after-exit")
+    restored(ctx, t, f"d.{how}")
+    h = t.history()
+    ctx.check(f"d.{how}.scrollback_once", h.count("heard: quay line") == 1 and len(set(tag_rows(h, "moss"))) == len(tag_rows(h, "moss")),
+              {"quay": h.count("heard: quay line"), "moss": tag_rows(h, "moss")[:40]})
+
+
+def s42e_draft_before_toggle(ctx):
+    """A draft in the composer before the switch is wanted: is there a way to switch with it in place?"""
+    t = start_fg(ctx)
+    submit(t, "seed line")
+    t.wait_for("heard: seed line", 20)
+    time.sleep(0.6)
+    draft = "pier draft nine exact words"
+    t.type(draft)
+    time.sleep(0.8)
+    t.capture("0-draft")
+    # Overlay with the draft already in place.
+    t.keys("C-t")
+    t.wait_for("T R A N S C R I P T", 10)
+    t.keys("q")
+    time.sleep(0.8)
+    s = t.screen()
+    ctx.check("e.overlay_keeps_draft", draft in s and not prompts_with(ctx, draft), s[-300:])
+    # The only switch is the slash command, which has to be typed into the same composer.
+    t.type("/screen")
+    time.sleep(1.0)
+    s = t.screen()
+    t.capture("1-slash-after-draft")
+    ctx.check("e.slash_with_draft_offers_no_switch", (draft + "/screen") in s and not t.alt_screen(),
+              {"alt": t.alt_screen(), "tail": s[-300:]})
+    for _ in "/screen":
+        t.keys("BSpace")
+    time.sleep(0.5)
+    # Candidate composer-independent actions: none should be bound at this head.
+    tried = {}
+    for key in ["C-l", "F11", "M-s", "C-s"]:
+        before = t.alt_screen()
+        t.keys(key)
+        time.sleep(0.8)
+        tried[key] = t.alt_screen() != before
+        if t.alt_screen():
+            break
+    t.capture("2-after-candidate-keys")
+    s = t.screen()
+    ctx.check("e.switch_with_draft_in_place", any(tried.values()) and draft in s, tried)
+    ctx.check("e.draft_still_exact_unsent", draft in s and not prompts_with(ctx, draft), s[-300:])
+    if t.alt_screen():
+        ctx.check("e.draft_visible_full", draft in t.screen())
+    t.keys("Enter")
+    time.sleep(2.0)
+    t.capture("3-submitted")
+    sent = prompts_with(ctx, draft)
+    ctx.check("e.draft_submits_once_exact", len(sent) == 1 and sent[0].strip() == draft, sent)
+    quit_fg(t)
+
+
+def s42f_attach_menu(ctx):
+    ctx.start_host(cwd="alpha")
+    c = start_attach(ctx, "controller")
+    time.sleep(1.0)
+    c.keys("C-u")
+    c.type("/scr")
+    time.sleep(1.0)
+    s = c.screen()
+    c.capture("0-attach-menu")
+    ctx.check("f.attach_screen_greyed_with_reason", "/screen" in s and "nori attach is always full-screen" in s, s[-600:])
+    c.keys("C-u")
+    run_typed(c, "/screen", settle=1.0)
+    ctx.check("f.attach_screen_does_nothing", c.alt_screen() and not prompts_with(ctx, "/screen"), c.screen()[-300:])
+
+def s42i_resize_mid_turn_full(ctx):
+    """A resize while full-screen and streaming, then back inline: the reflow reprint must not lose or repeat rows."""
+    t = start_fg(ctx)
+    submit(t, "reef line")
+    t.wait_for("heard: reef line", 20)
+    time.sleep(0.6)
+    ctx.check("i.into_full", toggle_screen(t, True))
+    submit(t, "relay 40 coral")
+    wait_relay(ctx, "coral", 8)
+    resize(t, 96, 30)
+    t.capture("1-full-narrow-mid-turn")
+    wait_relay(ctx, "coral", 16)
+    resize(t, 132, 38)
+    s = t.screen()
+    t.capture("2-full-wide-mid-turn")
+    ctx.check("i.full_redraws_after_resizes", t.alt_screen() and "coral row" in s and "›" in s, s[-300:])
+    ctx.check("i.out_mid_turn", toggle_screen(t, False) and relay_n(ctx, "coral") < 40, relay_n(ctx, "coral"))
+    t.wait_for("coral relay finished.", 30)
+    time.sleep(2.0)
+    h = t.history()
+    t.capture("3-inline-after")
+    rows = tag_rows(h, "coral")
+    ctx.check("i.rows_once_in_order", rows == list(range(1, 41)),
+              {"count": len(rows), "dups": sorted({n for n in rows if rows.count(n) > 1}), "missing": sorted(set(range(1, 41)) - set(rows))})
+    ctx.check("i.earlier_once", h.count("heard: reef line") == 1, h.count("heard: reef line"))
+    quit_fg(t)
+    restored(ctx, t, "i.exit")
+
+
+def s42j_suspend_in_full(ctx):
+    """Ctrl+Z from the full-screen view, then fg: back on the full-screen view, and inline history intact."""
+    t = start_fg(ctx)
+    submit(t, "dune line")
+    t.wait_for("heard: dune line", 20)
+    time.sleep(0.6)
+    ctx.check("j.into_full", toggle_screen(t, True))
+    t.keys("C-z")
+    time.sleep(1.5)
+    s = t.screen()
+    t.capture("1-suspended")
+    ctx.check("j.suspend_shows_shell", not t.alt_screen() and "shell$" in s, {"alt": t.alt_screen(), "tail": s[-200:]})
+    t.run("fg")
+    time.sleep(2.0)
+    s = t.screen()
+    t.capture("2-resumed")
+    ctx.check("j.fg_returns_to_full", t.alt_screen() and "heard: dune line" in s and "›" in s, {"alt": t.alt_screen(), "tail": s[-300:]})
+    ctx.check("j.out_after_fg", toggle_screen(t, False))
+    time.sleep(1.0)
+    h = t.history()
+    t.capture("3-inline")
+    ctx.check("j.scrollback_once", h.count("heard: dune line") == 1, h.count("heard: dune line"))
+    submit(t, "after the pause")
+    t.wait_for("heard: after the pause", 15)
+    quit_fg(t)
+    restored(ctx, t, "j.exit")
+
+
+def s42k_permission_in_full(ctx, full=True):
+    """A permission request that arrives while full-screen is answerable there, and lands once inline.
+    With full=False the same turn runs inline as the ordering control."""
+    t = start_fg(ctx)
+    if full:
+        ctx.check("k.into_full", toggle_screen(t, True))
+    submit(t, "perm paint")
+    t.wait_for("Paint the boathouse", 15)
+    time.sleep(0.8)
+    t.capture("1-permission")
+    ctx.check("k.prompt_visible", t.alt_screen() == full and "Allow" in t.screen(), t.screen()[-400:])
+    t.keys("Enter")
+    t.wait_for("permission: {", 15)
+    time.sleep(1.0)
+    s = t.screen()
+    t.capture("2-answered")
+    ctx.check("k.answered_once", len(perm_responses(ctx)) == 1, perm_responses(ctx))
+    order = [l.strip()[:40] for l in s.splitlines() if "perm paint" in l or "Permission:" in l or "permission: {" in l]
+    # Compared with S42m (inline) and the base commit: the decision row lands above the prompt row
+    # in plain nori before #757 too, so this records the order rather than asserting one.
+    ctx.check("k.screen_rows_present", len(order) == 3, order)
+    if full:
+        ctx.check("k.still_full", t.alt_screen())
+        ctx.check("k.out", toggle_screen(t, False))
+        time.sleep(1.0)
+    h = t.history()
+    t.capture("3-inline")
+    ctx.check("k.scrollback_once", h.count("permission: {") == 1 and h.count("Permission: Allow once") == 1,
+              {"reply": h.count("permission: {"), "decision": h.count("Permission: Allow once")})
+    horder = [l.strip()[:40] for l in h.splitlines() if "› perm paint" in l or "Permission:" in l or "permission: {" in l]
+    ctx.check("k.scrollback_rows_once", len(horder) == 3, horder)
+    (ctx.dir / "order.json").write_text(json.dumps({"screen": order, "scrollback": horder}, indent=1))
+    quit_fg(t)
+    restored(ctx, t, "k.exit")
+
+
+def s42l_resume_in_full(ctx, full=True):
+    """/resume while full-screen: the restored session shows full-screen, and inline gets its history once.
+    With full=False the same resume runs inline as the control."""
+    t = start_fg(ctx)
+    submit(t, "lagoon line")
+    t.wait_for("heard: lagoon line", 20)
+    time.sleep(0.6)
+    if full:
+        ctx.check("l.into_full", toggle_screen(t, True))
+    open_resume_rows(t, "/resume")
+    t.capture("1-picker")
+    ok = choose(t, "Saved orchard survey")
+    ctx.check("l.picked", ok)
+    picked = time.time()
+    seen = {}
+    while time.time() - picked < 15:
+        s = t.screen()
+        for needle in ("an earlier synthetic question", "an earlier synthetic answer"):
+            if needle in s and needle not in seen:
+                seen[needle] = round(time.time() - picked, 1)
+        time.sleep(0.2)
+        if time.time() - picked > 8:
+            break
+    timeline = []
+    for _ in range(20):
+        s = t.screen()
+        timeline.append(int("an earlier synthetic answer" in s))
+        time.sleep(0.25)
+    s = t.screen()
+    t.capture("2-resumed")
+    (ctx.dir / "seen.json").write_text(json.dumps({"first_seen": seen, "answer_present_8s_to_13s": timeline}))
+    ctx.check("l.answer_stays_on_screen", all(timeline), timeline)
+    if full and not any(timeline):
+        resize(t, 118, 36)
+        after_resize = "an earlier synthetic answer" in t.screen()
+        t.capture("2b-after-resize")
+        ctrl_l(t, False)
+        time.sleep(1.0)
+        inline = "an earlier synthetic answer" in t.history()
+        t.capture("2c-inline-before-next-turn")
+        ctrl_l(t, True)
+        back = "an earlier synthetic answer" in t.screen()
+        t.capture("2d-full-again")
+        diag = {"after_resize_full": after_resize, "inline_before_next_turn": inline, "full_again": back}
+        (ctx.dir / "diag.json").write_text(json.dumps(diag))
+        ctx.check("l.diag_missing_answer", False, diag)
+    ctx.check("l.resumed_shows_saved_exchange", t.alt_screen() == full and len(seen) == 2 and "lagoon line" not in s,
+              {"alt": t.alt_screen(), "seen_after_s": seen, "tail": s[-300:]})
+    submit(t, "orchard follow up")
+    t.wait_for("heard: orchard follow up", 15)
+    time.sleep(0.8)
+    if full:
+        ctx.check("l.out", toggle_screen(t, False))
+        time.sleep(2.0)
+    h = t.history()
+    t.capture("3-inline")
+    ctx.check("l.inline_has_resumed_once", h.count("an earlier synthetic answer") == 1 and h.count("heard: orchard follow up") == 1,
+              {"answer": h.count("an earlier synthetic answer"), "follow": h.count("heard: orchard follow up")})
+    ctx.check("l.inline_drops_previous_session", "lagoon line" not in h, h.count("lagoon line"))
+    quit_fg(t)
+    restored(ctx, t, "l.exit")
+
+
+# ---- S43: the composer-independent switch (Ctrl+L, #757 7e648413) -----------
+
+def ctrl_l(t, want_alt, key="C-l", timeout=5):
+    t.keys(key)
+    deadline = time.time() + timeout
+    while time.time() < deadline and t.alt_screen() != want_alt:
+        time.sleep(0.1)
+    time.sleep(0.6)
+    return t.alt_screen() == want_alt
+
+
+def composer_row(screen):
+    """The last `›` row on screen with the glyph stripped: the composer in plain nori and attach."""
+    rows = [l for l in screen.splitlines() if l.lstrip().startswith("›")]
+    return rows[-1].strip()[1:].strip() if rows else ""
+
+
+def s43a_draft_across_switch(ctx, binary="nori"):
+    t = start_fg(ctx, cmd=f"{binary} --skip-trust-directory")
+    submit(t, "wharf opening")
+    t.wait_for("heard: wharf opening", 20)
+    time.sleep(0.6)
+    draft = "keel draft eleven exact words, kept"
+    t.type(draft)
+    time.sleep(1.0)
+    t.capture("0-inline-draft")
+    ctx.check("a.draft_typed_inline", composer_row(t.screen()) == draft and not t.alt_screen(), composer_row(t.screen()))
+    ctx.check("a.ctrl_l_into_full_with_draft", ctrl_l(t, True))
+    s = t.screen()
+    t.capture("1-full-draft")
+    ctx.check("a.full_shows_draft_exact", composer_row(s) == draft and "heard: wharf opening" in s, composer_row(s))
+    ctx.check("a.nothing_sent_into", not prompts_with(ctx, "keel draft"), len(prompts_with(ctx, "keel draft")))
+    ctx.check("a.ctrl_l_back_inline_with_draft", ctrl_l(t, False))
+    s = t.screen()
+    t.capture("2-inline-draft-again")
+    ctx.check("a.inline_shows_draft_exact", composer_row(s) == draft, composer_row(s))
+    ctx.check("a.nothing_sent_back", not prompts_with(ctx, "keel draft"))
+    h = t.history()
+    ctx.check("a.scrollback_once_after_round_trip", h.count("heard: wharf opening") == 1, h.count("heard: wharf opening"))
+    t.keys("Enter")
+    t.wait_for("heard: keel draft", 15)
+    time.sleep(1.0)
+    t.capture("3-sent-once")
+    sent = prompts_with(ctx, "keel draft")
+    ctx.check("a.draft_submits_once_exact", len(sent) == 1 and sent[0].strip() == draft, sent)
+    h = t.history()
+    ctx.check("a.reply_once", h.count("heard: keel draft") == 1, h.count("heard: keel draft"))
+    quit_fg(t)
+    restored(ctx, t, "a.exit")
+
+
+def s43b_draft_mid_turn(ctx):
+    """Draft typed during a streaming turn, then Ctrl+L both ways mid-turn: draft kept, rows once, draft sent once later."""
+    t = start_fg(ctx)
+    submit(t, "relay 50 opal")
+    wait_relay(ctx, "opal", 4)
+    draft = "mast draft typed while streaming"
+    t.type(draft)
+    time.sleep(0.8)
+    ctx.check("b.into_full_mid_turn", ctrl_l(t, True) and relay_n(ctx, "opal") < 50, relay_n(ctx, "opal"))
+    wait_relay(ctx, "opal", 25)
+    s = t.screen()
+    t.capture("1-full-mid-turn-draft")
+    ctx.check("b.full_draft_exact", composer_row(s) == draft, composer_row(s))
+    ctx.check("b.out_mid_turn", ctrl_l(t, False) and relay_n(ctx, "opal") < 50, relay_n(ctx, "opal"))
+    t.wait_for("opal relay finished.", 30)
+    time.sleep(1.2)
+    s = t.screen()
+    h = t.history()
+    t.capture("2-inline-after-turn")
+    ctx.check("b.inline_draft_exact_unsent", composer_row(s) == draft and not prompts_with(ctx, "mast draft"), composer_row(s))
+    rows = tag_rows(h, "opal")
+    ctx.check("b.rows_once_in_order", rows == list(range(1, 51)), {"count": len(rows), "dups": sorted({n for n in rows if rows.count(n) > 1})})
+    t.keys("Enter")
+    t.wait_for("heard: mast draft", 15)
+    sent = prompts_with(ctx, "mast draft")
+    ctx.check("b.draft_sent_once_exact", len(sent) == 1 and sent[0].strip() == draft, sent)
+    quit_fg(t)
+
+
+def s43c_multiline_draft_and_popups(ctx):
+    """A pasted two-line draft survives Ctrl+L; Ctrl+L with the slash menu or a permission prompt open is left to them."""
+    t = start_fg(ctx)
+    t.paste("first line of the buoy note\nsecond line of the buoy note")
+    time.sleep(1.0)
+    t.capture("0-two-line-draft")
+    ctx.check("c.full_with_two_line_draft", ctrl_l(t, True))
+    s = t.screen()
+    t.capture("1-full-two-line")
+    ctx.check("c.two_lines_kept_full", "first line of the buoy note" in s and "second line of the buoy note" in s, s[-300:])
+    ctx.check("c.back_inline", ctrl_l(t, False))
+    s = t.screen()
+    ctx.check("c.two_lines_kept_inline", "first line of the buoy note" in s and "second line of the buoy note" in s and not prompts_with(ctx, "buoy note"), s[-300:])
+    t.keys("C-u", "C-u", "C-u")
+    for _ in range(80):
+        t.keys("BSpace")
+    time.sleep(0.4)
+    t.type("/scr")
+    time.sleep(0.8)
+    before = t.alt_screen()
+    t.keys("C-l")
+    time.sleep(1.0)
+    s = t.screen()
+    t.capture("2-ctrl-l-over-slash-menu")
+    ctx.check("c.slash_menu_switch_keeps_typed_text_and_menu", t.alt_screen() != before and "/ scr" in s and "/screen  switch" in s,
+              {"before": before, "after": t.alt_screen(), "tail": s[-160:]})
+    if t.alt_screen():
+        ctrl_l(t, False)
+    t.keys("Escape")
+    t.keys("C-u")
+    time.sleep(0.4)
+    submit(t, "perm paint")
+    t.wait_for("Paint the boathouse", 15)
+    time.sleep(0.6)
+    before = t.alt_screen()
+    t.keys("C-l")
+    time.sleep(1.0)
+    s = t.screen()
+    t.capture("3-ctrl-l-over-permission")
+    # The prompt holds the key, as it holds Ctrl+T: no switch and no answer.
+    ctx.check("c.permission_prompt_holds_ctrl_l_unanswered",
+              t.alt_screen() == before and "Paint the boathouse" in s and "Allow once" in s and not perm_responses(ctx),
+              {"before": before, "after": t.alt_screen(), "responses": len(perm_responses(ctx))})
+    t.keys("Enter")
+    t.wait_for("permission: {", 15)
+    time.sleep(0.8)
+    t.capture("4-answered-full")
+    ctx.check("c.permission_answered_once", len(perm_responses(ctx)) == 1 and perm_responses(ctx)[0]["body"]["outcome"].get("optionId") == "allow",
+              perm_responses(ctx))
+    if t.alt_screen():
+        ctrl_l(t, False)
+    h = t.history()
+    ctx.check("c.permission_turn_once_inline", h.count("permission: {") == 1, h.count("permission: {"))
+    quit_fg(t)
+
+
+def s43d_rebound_and_unbound(ctx):
+    """[tui.hotkeys] toggle_screen = "alt+j": Ctrl+L stops switching, Alt+S switches; the ? overlay shows the binding."""
+    t = start_fg(ctx)
+    draft = "rebind draft"
+    t.type(draft)
+    time.sleep(0.6)
+    t.keys("C-l")
+    time.sleep(1.0)
+    ctx.check("d.ctrl_l_unbound_after_rebind", not t.alt_screen() and composer_row(t.screen()) == draft, composer_row(t.screen()))
+    ctx.check("d.alt_s_switches", ctrl_l(t, True, key="M-j"))
+    ctx.check("d.alt_s_back", ctrl_l(t, False, key="M-j"))
+    ctx.check("d.draft_kept", composer_row(t.screen()) == draft, composer_row(t.screen()))
+    t.keys("C-u")
+    time.sleep(0.3)
+    t.type("?")
+    time.sleep(1.0)
+    s = t.screen()
+    t.capture("1-shortcuts-overlay")
+    row = [l.strip() for l in s.splitlines() if "full screen" in l]
+    ctx.check("d.shortcuts_show_configured_key", row and "alt" in row[0].lower() and "ctrl + l" not in row[0].lower(), row)
+    t.keys("BSpace")
+    quit_fg(t)
+
+
+def s43e_attach_ctrl_l(ctx):
+    ctx.start_host(cwd="alpha")
+    c = start_attach(ctx, "controller")
+    time.sleep(1.0)
+    draft = "attach draft stays"
+    c.type(draft)
+    time.sleep(0.6)
+    before = c.screen()
+    c.keys("C-l")
+    time.sleep(1.0)
+    s = c.screen()
+    c.capture("0-attach-ctrl-l")
+    ctx.check("e.attach_ctrl_l_noop_keeps_draft", c.alt_screen() and composer_row(s) == draft and not prompts_with(ctx, draft), composer_row(s))
+    c.keys("C-u")
+    c.type("?")
+    time.sleep(1.0)
+    s = c.screen()
+    c.capture("1-attach-shortcuts")
+    row = [l.strip() for l in s.splitlines() if "full screen" in l or "ctrl+l" in l.lower()]
+    ctx.check("e.attach_hints_do_not_offer_noop_key", not row, row)
+    c.keys("BSpace")
+
+
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
     "S02": ("foreground quit stops a running turn", s02_foreground_quit_stops_turn),
@@ -3665,13 +4321,33 @@ SCENARIOS = {
     "S41e": ("cwd: plain nori with no session uses the launch folder", s41e_plain_no_session),
     "S41f": ("cwd: older host (no find_paths) with a newer attach client", s41f_older_host),
     "S41g": ("cwd: find_paths and session/new on the wire vs registry", s41g_wire_contract),
+    "S42a": ("screen: plain nori, inline<->full mid-turn, scrollback once and in order, exit restore", s42a_mid_turn_both_directions),
+    "S42b": ("screen: two sessions, Alt+, while full, each session's own scrollback on return", s42b_separate_sessions),
+    "S42c": ("screen: Ctrl+T and resizes over full, draft kept, exit with overlay open", s42c_overlay_resize_exit),
+    "S42d": ("screen: /quit from full mid-turn restores the terminal", lambda c: s42d_exit_from_full(c, "quit")),
+    "S42e": ("screen: Ctrl+C from full mid-turn restores the terminal", lambda c: s42d_exit_from_full(c, "ctrlc")),
+    "S42f": ("screen: draft present before the switch; overlay vs switch action", s42e_draft_before_toggle),
+    "S42g": ("screen: standalone nori-tui, mid-turn both directions", lambda c: s42a_mid_turn_both_directions(c, "nori-tui")),
+    "S42h": ("screen: attach shows /screen greyed with its reason", s42f_attach_menu),
+    "S42i": ("screen: resizes while full and streaming, then inline; rows once", s42i_resize_mid_turn_full),
+    "S42j": ("screen: Ctrl+Z and fg from full", s42j_suspend_in_full),
+    "S42k": ("screen: permission request answered while full", s42k_permission_in_full),
+    "S43a": ("Ctrl+L: draft typed before the switch survives both ways unsent, then sends once", s43a_draft_across_switch),
+    "S43b": ("Ctrl+L: draft typed mid-turn, switch both ways mid-turn", s43b_draft_mid_turn),
+    "S43c": ("Ctrl+L: two-line pasted draft; slash menu and permission prompt keep the key", s43c_multiline_draft_and_popups),
+    "S43d": ("Ctrl+L: toggle_screen rebound to alt+j", s43d_rebound_and_unbound),
+    "S43e": ("Ctrl+L: nori attach leaves the draft and screen alone", s43e_attach_ctrl_l),
+    "S43f": ("Ctrl+L: standalone nori-tui with a draft", lambda c: s43a_draft_across_switch(c, "nori-tui")),
+    "S42n": ("screen: /resume inline (control for S42l)", lambda c: s42l_resume_in_full(c, False)),
+    "S42m": ("screen: permission request answered inline (ordering control for S42k)", lambda c: s42k_permission_in_full(c, False)),
+    "S42l": ("screen: /resume while full, then inline", s42l_resume_in_full),
     "S36": ("startup activation window swept by Enter time", s36_startup_race),
     "S36b": ("startup activation window swept by typing time", lambda c: s36_startup_race(c, burst_at_reply=True)),
 }
 
 
 CAP = "[tui]\ntool_output_max_lines = 10"
-FIXTURE_ARGS = {"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
+FIXTURE_ARGS = {"S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
                 "S37b": {"host_extra": 'default_mode = "ask"', "top_extra": 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}
 
 
