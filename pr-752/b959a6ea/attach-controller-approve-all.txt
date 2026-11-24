@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · hello host · ~/project · ready · Approvals: Approve all
+
+ › You
+ hello host
+
+ Synthetic host agent response
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

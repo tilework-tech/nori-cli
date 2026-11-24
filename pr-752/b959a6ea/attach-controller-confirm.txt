@@ -1,0 +1,32 @@
+ Nori host  CONTROLLING
+ mock-model · hello host · ~/project · ready · Approvals: Agent
+
+ › You
+ hello host
+
+ Synthetic host agent response
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Approve every request in this session?
+ Nori will say yes to every edit, command and tool call the agent asks about.
+ The sandbox setting still applies; nothing else stops a harmful request.
+
+ enter approve all · esc go back
+
+
+
+

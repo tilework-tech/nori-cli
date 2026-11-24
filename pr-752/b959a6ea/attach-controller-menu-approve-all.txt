@@ -1,0 +1,32 @@
+ Nori host  CONTROLLING
+ mock-model · hello host · ~/project · ready · Approvals: Approve all
+
+ › You
+ hello host
+
+ Synthetic host agent response
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Approvals for this session
+ New sessions start in the host default. The sandbox is set separately.
+
+   Ask                    Ask before every edit and command.
+   Agent                  The agent asks when it judges it needs to.
+ › Approve all (current)  Nori approves every permission request.
+
+ ↑↓ move · enter choose · esc close
+
+
+
+

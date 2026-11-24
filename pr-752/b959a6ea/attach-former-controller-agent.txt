@@ -1,0 +1,40 @@
+ Nori host  WATCHING · read-only · alt+t take control
+ mock-model · hello host · ~/project · ready · Approvals: Agent
+
+ › You
+ hello host
+
+ Synthetic host agent response
+
+ Control moved to another terminal. You are now watching; alt+t takes control.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Control moved to another terminal. You are now watching; alt+t takes control.
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

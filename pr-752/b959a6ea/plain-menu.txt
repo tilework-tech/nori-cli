@@ -1,0 +1,30 @@
+
+
+› whoami
+
+
+
+› <context>
+  Source: this message is from Nori CLI.
+
+  When <goal_context> is present, Nori CLI is its authoritative owner. Do not use native or unqualified goal
+  tools. Read it with `get_goal` from the `nori-client` MCP server, and update it with `update_goal` from the
+  `nori-client` MCP server.
+  </context>
+
+
+
+• amber is answering (1).
+
+
+  Approvals for this session
+  New sessions start in the host default. The sandbox is set separately.
+
+   1. Ask
+      Ask before every edit and command.
+  ▏2. Agent (current)                                                                                      ▕
+  ▏   The agent asks when it judges it needs to.                                                           ▕
+   3. Approve all
+      Nori approves every permission request.
+  ↑↓/j/k move  enter select  esc close
+

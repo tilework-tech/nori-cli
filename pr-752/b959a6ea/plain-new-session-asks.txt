@@ -1,0 +1,30 @@
+  › Nori CLI v0.0.0
+
+  System       ~ · Agent approvals
+  Agent        Amber · Slow
+
+
+› hello again
+
+
+
+› <context>
+  Source: this message is from Nori CLI.
+
+  When <goal_context> is present, Nori CLI is its authoritative owner. Do not use native or unqualified goal
+  tools. Read it with `get_goal` from the `nori-client` MCP server, and update it with `update_goal` from the
+  `nori-client` MCP server.
+  </context>
+
+
+
+  1 waiting on you · 1 ready
+
+
+  Would you like to allow Other: amber?
+
+  amber
+
+› 1. Once (y)
+
+  Press enter to confirm or esc to cancel
