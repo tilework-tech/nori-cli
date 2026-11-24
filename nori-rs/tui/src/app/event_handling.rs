@@ -176,45 +176,7 @@ impl App {
                     return Ok(true);
                 }
                 if matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. })) {
-                    let Some(CandidateAgent::Prepared {
-                        agent_name,
-                        display_name,
-                        mut agent,
-                        ..
-                    }) = self.candidate_agent.take()
-                    else {
-                        unreachable!("candidate variant checked above")
-                    };
-                    let config = self.config_for_agent(&agent_name);
-                    if let Err(error) = nori_harness::runtime::refresh_prepared_agent(
-                        &mut agent,
-                        crate::chatwidget::agent::agent_prepare_spec(config.clone(), None),
-                    ) {
-                        tokio::spawn((*agent).shutdown());
-                        self.chat_widget.set_login_agent_override(Some(agent_name));
-                        self.chat_widget.add_error_message(format!(
-                            "Couldn't activate {display_name}: {error}"
-                        ));
-                        return Ok(true);
-                    }
-                    let mut init = self.chat_widget_init(
-                        tui.frame_requester(),
-                        None,
-                        Vec::new(),
-                        Some(config.active_agent.clone()),
-                        false,
-                        None,
-                    );
-                    init.config = config;
-                    init.prepared_agent = Some(*agent);
-                    let widget = ChatWidget::new_candidate(init);
-                    self.candidate_agent = Some(CandidateAgent::Activating {
-                        agent_name,
-                        display_name,
-                        widget: Box::new(widget),
-                        activation_error: None,
-                        resumes: false,
-                    });
+                    self.activate_host_candidate(None);
                     tui.frame_requester().schedule_frame();
                     return Ok(true);
                 }
@@ -298,64 +260,20 @@ impl App {
             AppEvent::SessionClosed { generation } => {
                 return self.on_session_closed(tui, generation);
             }
-            AppEvent::AgentPrepared {
+            AppEvent::HostCandidatePrepared {
                 generation,
-                agent,
-                intent,
+                agent_name,
+                display_name,
+                result,
             } => {
-                if let crate::app_event::AgentPrepareIntent::Candidate {
-                    agent_name,
-                    display_name,
-                } = intent
-                {
-                    let is_current = matches!(
-                        &self.candidate_agent,
-                        Some(CandidateAgent::Preparing {
-                            generation: current,
-                            agent_name: current_agent,
-                            ..
-                        }) if *current == generation && *current_agent == agent_name
-                    );
-                    if !is_current {
-                        if let Ok(agent) = agent {
-                            tokio::spawn(agent.shutdown());
-                        }
-                        return Ok(true);
-                    }
-
-                    match agent {
-                        Ok(agent) => {
-                            let sessions = match agent.catalog() {
-                                nori_harness::runtime::SessionCatalog::Unsupported => Vec::new(),
-                                nori_harness::runtime::SessionCatalog::Listed(sessions) => {
-                                    sessions.clone()
-                                }
-                            };
-                            let Some(CandidateAgent::Preparing { agent_name, .. }) =
-                                self.candidate_agent.take()
-                            else {
-                                unreachable!("candidate generation checked above")
-                            };
-                            self.candidate_agent = Some(CandidateAgent::Prepared {
-                                agent_name,
-                                display_name,
-                                agent: Box::new(agent),
-                            });
-                            self.chat_widget
-                                .show_acp_resume_session_picker(sessions, true);
-                        }
-                        Err(error) => {
-                            self.candidate_agent = None;
-                            self.chat_widget.set_login_agent_override(Some(agent_name));
-                            self.chat_widget.add_error_message(format!(
-                                "Couldn't prepare {display_name}: {error}"
-                            ));
-                        }
-                    }
-                    tui.frame_requester().schedule_frame();
-                    return Ok(true);
-                }
-
+                self.on_host_candidate_prepared(generation, agent_name, display_name, result);
+                tui.frame_requester().schedule_frame();
+            }
+            AppEvent::HostCandidateActivated { generation, result } => {
+                self.on_host_candidate_activated(tui.frame_requester(), generation, result);
+                tui.frame_requester().schedule_frame();
+            }
+            AppEvent::AgentPrepared { generation, agent } => {
                 let is_current = matches!(
                     &self.primary_agent_preparation,
                     Some(preparation) if preparation.generation == generation
@@ -469,9 +387,6 @@ impl App {
                                 } else {
                                     self.chat_widget.open_local_resume_session_picker();
                                 }
-                            }
-                            crate::app_event::AgentPrepareIntent::Candidate { .. } => {
-                                unreachable!("candidate handled above")
                             }
                         }
                     }
@@ -1639,50 +1554,10 @@ impl App {
                     return Ok(true);
                 }
                 if matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. })) {
-                    let Some(CandidateAgent::Prepared {
-                        agent_name,
-                        display_name,
-                        mut agent,
-                        ..
-                    }) = self.candidate_agent.take()
-                    else {
-                        unreachable!("candidate variant checked above")
-                    };
-                    let config = self.config_for_agent(&agent_name);
-                    if let Err(error) = nori_harness::runtime::refresh_prepared_agent(
-                        &mut agent,
-                        crate::chatwidget::agent::agent_prepare_spec(config.clone(), None),
-                    ) {
-                        tokio::spawn((*agent).shutdown());
-                        self.chat_widget.set_login_agent_override(Some(agent_name));
-                        self.chat_widget.add_error_message(format!(
-                            "Couldn't activate {display_name}: {error}"
-                        ));
-                        return Ok(true);
-                    }
-                    let mut init = self.chat_widget_init(
-                        tui.frame_requester(),
-                        None,
-                        Vec::new(),
-                        Some(config.active_agent.clone()),
-                        false,
-                        None,
-                    );
-                    init.config = config;
-                    init.prepared_agent = Some(*agent);
-                    let widget = ChatWidget::new_resumed_acp_candidate(
-                        init,
-                        Some(acp_session_id),
+                    self.activate_host_candidate(Some(host_candidate::SavedSession {
+                        id: acp_session_id,
                         title,
-                        None,
-                    );
-                    self.candidate_agent = Some(CandidateAgent::Activating {
-                        agent_name,
-                        display_name,
-                        widget: Box::new(widget),
-                        activation_error: None,
-                        resumes: true,
-                    });
+                    }));
                     tui.frame_requester().schedule_frame();
                     return Ok(true);
                 }

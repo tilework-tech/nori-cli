@@ -114,7 +114,21 @@ pub(crate) enum AppEvent {
     AgentPrepared {
         generation: SessionGeneration,
         agent: Result<nori_harness::runtime::PreparedAgent, String>,
-        intent: AgentPrepareIntent,
+    },
+
+    /// The host prepared a switch candidate and listed its saved sessions.
+    HostCandidatePrepared {
+        generation: SessionGeneration,
+        agent_name: String,
+        display_name: String,
+        result: Result<crate::app::PreparedCatalog, String>,
+    },
+
+    /// The host answered a switch candidate's activation with the live ID of
+    /// the conversation it started.
+    HostCandidateActivated {
+        generation: SessionGeneration,
+        result: Result<nori_harness::ConversationId, String>,
     },
 
     /// Activate a local transcript resume after the startup connection has
@@ -751,8 +765,4 @@ pub(crate) enum AgentPrepareIntent {
     /// Open the agent catalog when supported, otherwise use local transcripts.
     ResumePicker,
     Onboarding,
-    Candidate {
-        agent_name: String,
-        display_name: String,
-    },
 }
