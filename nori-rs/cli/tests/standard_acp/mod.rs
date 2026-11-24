@@ -1,4 +1,5 @@
 mod fork_side;
+mod picker;
 mod side_sessions;
 mod stdio;
 

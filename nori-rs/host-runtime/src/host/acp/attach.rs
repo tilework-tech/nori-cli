@@ -120,10 +120,16 @@ impl Forwarder {
                 // is one.
                 let message = ended.message.clone();
                 return Some(Err(match self.startup_error.take() {
-                    Some(error) => AcpError {
-                        message: message.unwrap_or(error.message),
-                        ..error
-                    },
+                    Some(mut error) => {
+                        if let Some(summary) = message {
+                            error.message = if summary.contains(&error.message) {
+                                summary
+                            } else {
+                                format!("{summary}: {}", error.message)
+                            };
+                        }
+                        error
+                    }
                     None => AcpError::internal(
                         message.unwrap_or_else(|| "the session ended before it started".to_owned()),
                     ),

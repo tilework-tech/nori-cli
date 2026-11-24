@@ -169,11 +169,15 @@ pub(crate) fn agent_prepare_spec(
     AgentPrepareSpec {
         config: Arc::new(config),
         cli_version: env!("CARGO_PKG_VERSION").to_string(),
-        session_context: Some(SessionContext {
-            with_http_mcp: include_str!("../../session_context_http_mcp.md").to_string(),
-            without_http_mcp: include_str!("../../session_context.md").to_string(),
-        }),
+        session_context: Some(terminal_session_context()),
         initial_context,
+    }
+}
+
+pub(crate) fn terminal_session_context() -> SessionContext {
+    SessionContext {
+        with_http_mcp: include_str!("../../session_context_http_mcp.md").to_string(),
+        without_http_mcp: include_str!("../../session_context.md").to_string(),
     }
 }
 

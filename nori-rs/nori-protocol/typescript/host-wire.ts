@@ -30,6 +30,11 @@ export type NoriHostWire =
   | RequestPermissionResponse
   | ListedSessionMeta
   | NewSessionMeta
+  | PrepareAgentParams
+  | PrepareAgentResult
+  | PreparedAgentRef
+  | PreparedAgentCapability
+  | PreparedAgentCatalogInfo
   | HostDiscovery
   | ControlStatus
   | ControlChanged
@@ -2720,6 +2725,102 @@ export interface NewSessionMeta {
    * adapter starts first.
    */
   "nori/agent"?: string | null;
+  "nori/preparedAgent"?: PreparedAgentActivation | null;
+}
+/**
+ * Use this selection exactly once to activate a host conversation.
+ */
+export interface PreparedAgentActivation {
+  id: string;
+  savedSessionId?: string | null;
+}
+/**
+ * Choose a registered downstream ACP server. Omitted fields use the host launch.
+ */
+export interface PrepareAgentParams {
+  agent?: string | null;
+  cwd?: string | null;
+}
+/**
+ * A pre-session connection scoped to the host client that opened it.
+ */
+export interface PrepareAgentResult {
+  agent: string;
+  cwd: string;
+  id: string;
+}
+/**
+ * Scope a session/list request to a prepared catalog, or discard that selection.
+ */
+export interface PreparedAgentRef {
+  id: string;
+}
+/**
+ * The host's prepared-agent capability on initialize.
+ */
+export interface PreparedAgentCapability {
+  agentOption: SessionConfigOption;
+  version: number;
+}
+/**
+ * Metadata accompanying the prepared adapter's saved-session rows.
+ */
+export interface PreparedAgentCatalogInfo {
+  agentCapabilities: AgentCapabilities1;
+}
+/**
+ * Capabilities supported by the agent.
+ *
+ * Advertised during initialization to inform the client about
+ * available features and content types.
+ *
+ * See protocol docs: [Agent Capabilities](https://agentclientprotocol.com/protocol/initialization#agent-capabilities)
+ */
+export interface AgentCapabilities1 {
+  /**
+   * The _meta property is reserved by ACP to allow clients and agents to attach additional
+   * metadata to their interactions. Implementations MUST NOT make assumptions about values at
+   * these keys.
+   *
+   * See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+   */
+  _meta?: {
+    [k: string]: unknown;
+  } | null;
+  auth?: AgentAuthCapabilities;
+  /**
+   * Whether the agent supports `session/load`.
+   */
+  loadSession?: boolean;
+  mcpCapabilities?: McpCapabilities;
+  /**
+   * **UNSTABLE**
+   *
+   * This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * NES (Next Edit Suggestions) capabilities supported by the agent.
+   */
+  nes?: NesCapabilities | null;
+  /**
+   * **UNSTABLE**
+   *
+   * This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * The position encoding selected by the agent from the client's supported encodings.
+   */
+  positionEncoding?: PositionEncodingKind | null;
+  promptCapabilities?: PromptCapabilities;
+  /**
+   * **UNSTABLE**
+   *
+   * This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Provider configuration capabilities supported by the agent.
+   *
+   * By supplying `{}` it means that the agent supports provider configuration methods.
+   */
+  providers?: ProvidersCapabilities | null;
+  sessionCapabilities?: SessionCapabilities;
 }
 /**
  * `$NORI_HOME/host/host.json`, the host's discovery file.

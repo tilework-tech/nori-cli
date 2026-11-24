@@ -108,6 +108,11 @@ pub trait ManagedAgent: Send + Sync + 'static {
         false
     }
 
+    /// Some requests wait on a downstream server only when scoped to a picker.
+    fn request_runs_concurrently(&self, request: &Value) -> bool {
+        self.runs_concurrently(request["method"].as_str().unwrap_or_default())
+    }
+
     /// Whether this host takes client notifications and responses through
     /// [`message_from`](Self::message_from). Otherwise frames without a
     /// request ID are refused as invalid requests.
