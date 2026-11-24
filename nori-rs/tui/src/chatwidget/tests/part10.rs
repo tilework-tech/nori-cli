@@ -1856,6 +1856,8 @@ fn external_turn_cancel_tracks_the_displayed_turn_until_confirmation() {
 
     let (mut chat, mut rx, _) = make_chatwidget_manual();
     let generation = chat.session_generation;
+    let session = nori_harness::ConversationId::new();
+    chat.managed_conversation_id = Some(session);
     chat.config.custom_working_messages = false;
     chat.set_composer_text("Draft for later".to_owned());
     chat.handle_session_event(generation, external_state("turn-a", State::Working));
@@ -1863,8 +1865,8 @@ fn external_turn_cancel_tracks_the_displayed_turn_until_confirmation() {
     assert!(working.contains("esc to interrupt"), "{working}");
     chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(std::iter::from_fn(|| rx.try_recv().ok()).any(|event| matches!(
-        event, AppEvent::HarnessAction(crate::app_event::HarnessAction::CancelExternal { id, .. })
-        if id == "turn-a"
+        event, AppEvent::HostRequest { call: crate::host_client::HostCall::CancelObserved { session_id, observed_turn_id }, .. }
+        if observed_turn_id == "turn-a" && session_id == session.to_string()
     )));
     chat.handle_session_event(generation, external_state("turn-a", State::CancelRequested));
     chat.handle_session_event(
@@ -1879,8 +1881,10 @@ fn external_turn_cancel_tracks_the_displayed_turn_until_confirmation() {
     insta::assert_snapshot!("external_cancel_requested", pending);
     chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(
-        std::iter::from_fn(|| rx.try_recv().ok())
-            .all(|event| !matches!(event, AppEvent::HarnessAction(_)))
+        std::iter::from_fn(|| rx.try_recv().ok()).all(|event| !matches!(
+            event,
+            AppEvent::HarnessAction(_) | AppEvent::HostRequest { .. }
+        ))
     );
     chat.handle_session_event(generation, external_state("turn-a", State::Unconfirmed));
     assert!(render_bottom_pane(&mut chat, 80).contains("unconfirmed"));
@@ -1906,8 +1910,10 @@ fn follow_only_external_activity_has_no_cancel_control() {
     assert!(!rendered.contains("esc to interrupt"), "{rendered}");
     chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(
-        std::iter::from_fn(|| rx.try_recv().ok())
-            .all(|event| !matches!(event, AppEvent::HarnessAction(_)))
+        std::iter::from_fn(|| rx.try_recv().ok()).all(|event| !matches!(
+            event,
+            AppEvent::HarnessAction(_) | AppEvent::HostRequest { .. }
+        ))
     );
 }
 

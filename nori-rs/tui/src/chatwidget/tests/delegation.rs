@@ -172,6 +172,7 @@ fn a_delegation_prompt_revealed_by_a_closed_request_waits_out_its_own_grace() {
     // A permission request opens above the waiting delegation prompt.
     chat.bottom_pane
         .push_approval_request(crate::bottom_pane::ApprovalRequest {
+            session_id: Some(nori_harness::ConversationId::new()),
             request_id: "permission".to_string().into(),
             title: "Run echo ok".to_string(),
             kind: crate::presentation::ToolKind::Execute,

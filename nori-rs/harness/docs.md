@@ -43,7 +43,9 @@ changing ACP semantics, and adds the small Nori-owned event branch. Stateful
 ACP reduction remains private because it supports harness behavior; widget and
 display projection remains private to the TUI.
 
-`nori-tui` starts every session through one app-owned `SessionManager`. The
+`nori-tui` starts every session through the `SessionManager` of the host it
+owns. The foreground runtime builds that host for each TUI run, and the TUI
+stops it on exit (see [the owned TUI host](../cli/src/host/docs.md#owned-tui-host)). The
 manager calls the same launch internals as `launch_session`, so a managed
 session behaves exactly like a directly launched one. The TUI serves no
 remote listener; the background host (including its stdio form,
@@ -363,13 +365,13 @@ Legacy `_nori/session/prompt` admission calls `HarnessHandle::prompt_with_meta_i
 the harness request ID; completion remains in the envelope stream. Permission
 answers validate the session/request pair against manager pending requests and
 serialize managed answer claims until the event pump observes resolution.
-They use the remote responder label, so every observer sees the same
-`RequestResolved`. Managed disconnect does not cancel a turn or resolve its
+All observers see the same `RequestResolved`, with the identity the host
+assigned to the answering connection. Managed disconnect does not cancel a turn or resolve its
 pending permission: the continuing session can be controlled after reconnect.
 
 The [follow-up operation](../cli/src/host/docs.md#mid-turn-follow-ups) uses the same harness session driver for direct input and background-host controllers. It checks the expected turn, retains a receipt keyed by message ID and routes an explicit queue or guarded fallback through the existing prompt FIFO. A successful injection leaves the original prompt responsible for completion, usage and cancellation.
 
-The background [`HostService`](../cli/src/host/service.rs) composes this
+The background [`HostService`](../host-runtime/src/host/service.rs) composes this
 adapter with manager lifecycle operations for new, close, cancel, and resume,
 and finds stored sessions through `TranscriptLoader::list_stored_sessions` and
 `find_stored_session`, which scan `transcripts/by-project/*/sessions/*.jsonl`
@@ -449,10 +451,9 @@ and `update_goal` tools must not control Nori continuation.
 ACP permission requests that require a consumer decision are emitted as
 `SessionEvent::Acp(AcpEvent::Request { request_id, request })`. A consumer
 responds through `respond_to_agent` with the same ID and a schema-native success
-or error. Each handle carries a responder label (`with_responder`, default
-`runtime::DEFAULT_RESPONDER` = `client`; `ManagedRemoteHost` labels the handles
-it answers through `remote_agent::REMOTE_CONTROL_RESPONDER` = `remote_control`) that the
-session manager uses to say who answered. `AskForApproval::Never` resolves permission requests inside the
+or error. The host records `client` for its foreground terminal and
+`remote_control` for an independent controller. Both use the same pending-request
+check and answer claim. `AskForApproval::Never` resolves permission requests inside the
 harness, and setup-time permission requests are cancelled internally because no
 consumer session exists yet. Filesystem requests are handled in
 `nori-acp-host`; they do not appear as duplicate delegated requests. Terminal
@@ -754,7 +755,8 @@ Execute call is read-only.
   cap.
 - The harness uses the submission path to decide whether the local composer
   may reclaim a queued item. For follow-ups, `HarnessHandle::local_follow_up`
-  marks composer input as local. An authenticated controller uses
+  marks input from the host-established foreground pipe as local. An independently
+  attached controller uses
   `HarnessHandle::follow_up`; its queued input stays read-only even if its
   displayed sender is `local`. Delegated child results also stay read-only.
 - A queued prompt runs its `pre_user_prompt` hooks, consumes pending hook

@@ -3,7 +3,7 @@ fn runtime_on_session_one() -> (
     super::runtime::Runtime,
     tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>,
 ) {
-    use super::connection::ConnectionEvent;
+    use crate::host_client::ConnectionEvent;
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime = super::runtime::Runtime::new(Some("one".into()), tx);
     runtime
@@ -66,7 +66,7 @@ fn session_commands_use_standard_acp_methods() {
 
 #[test]
 fn a_host_request_is_never_taken_for_the_reply_to_a_command() {
-    use super::connection::ConnectionEvent;
+    use crate::host_client::ConnectionEvent;
     let (mut runtime, mut rx) = runtime_on_session_one();
     let close = sent_for(&mut runtime, &mut rx, "/close");
 
@@ -216,7 +216,7 @@ fn attach_can_cancel_its_just_submitted_prompt_before_phase_delivery() {
 
 #[test]
 fn reconnect_without_a_prompt_phase_leaves_the_attached_session_idle() {
-    use super::connection::ConnectionEvent;
+    use crate::host_client::ConnectionEvent;
     use crossterm::event::KeyEvent;
     let (mut runtime, mut rx) = runtime_on_session_one();
     sent_for(&mut runtime, &mut rx, "Check these examples.");
@@ -260,7 +260,7 @@ fn a_second_attached_interrupt_keeps_an_admitted_cancellation_pending() {
 
 #[test]
 fn external_cancel_replies_are_bound_to_the_observation_and_never_fall_back() {
-    use super::connection::ConnectionEvent;
+    use crate::host_client::ConnectionEvent;
     use nori_protocol::ExternalTurnState::*;
     let (mut runtime, mut rx) = runtime_on_session_one();
     runtime
@@ -299,7 +299,7 @@ fn external_cancel_replies_are_bound_to_the_observation_and_never_fall_back() {
 
 #[test]
 fn interrupted_external_cancel_transport_allows_a_scoped_manual_retry_after_reconnect() {
-    use super::connection::ConnectionEvent;
+    use crate::host_client::ConnectionEvent;
     use nori_protocol::ExternalTurnState::*;
     let (mut runtime, mut rx) = runtime_on_session_one();
     runtime

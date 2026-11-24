@@ -27,29 +27,29 @@ use serde_json::Value;
 use serde_json::json;
 use tokio::sync::Notify;
 
-pub(super) struct HostService {
-    pub recovery: Option<super::recovery_control::RecoveryControl>,
+pub struct HostService {
+    pub(super) recovery: Option<super::recovery_control::RecoveryControl>,
     pub launches: Option<ManagedLaunches>,
     pub manager: SessionManager,
-    pub managed: ManagedRemoteHost,
-    pub config: Arc<NoriConfig>,
+    pub(super) managed: ManagedRemoteHost,
+    pub(super) config: Arc<NoriConfig>,
     /// The host's command-line settings, reapplied to each session folder.
-    pub overrides: NoriConfigOverrides,
+    pub(super) overrides: NoriConfigOverrides,
     pub stop: Notify,
     /// Per-connection state of the standard ACP face.
-    pub acp: super::acp::AcpFace,
+    pub(super) acp: super::acp::AcpFace,
     /// Mode and options clients chose, reapplied on resume.
-    pub settings: super::acp::config::SettingsStore,
+    pub(super) settings: super::acp::config::SettingsStore,
     /// The host instance ID clients see on upgrades and in `initialize`.
     pub instance: String,
     /// Sessions a client deleted during this host's lifetime.
-    pub deleted: std::sync::Mutex<std::collections::HashSet<ConversationId>>,
+    pub(super) deleted: std::sync::Mutex<std::collections::HashSet<ConversationId>>,
     /// Serializes restarting, replacing and deleting sessions, so two
     /// clients cannot start one session twice or revive a deleted one.
-    pub restarts: tokio::sync::Mutex<()>,
+    pub(super) restarts: tokio::sync::Mutex<()>,
     /// Serializes permission mode changes, so the adapter's mode and the
     /// mode the host reports change together.
-    pub mode_changes: tokio::sync::Mutex<()>,
+    pub(super) mode_changes: tokio::sync::Mutex<()>,
 }
 
 #[derive(serde::Deserialize)]
@@ -60,6 +60,41 @@ struct LaunchScope {
 }
 
 impl HostService {
+    /// Build the single session manager served by every connection to this host.
+    pub fn new(
+        config: NoriConfig,
+        overrides: NoriConfigOverrides,
+        managed: Option<(ManagedLaunches, &Path)>,
+    ) -> anyhow::Result<Arc<Self>> {
+        let (launches, recovery) = match managed {
+            Some((launches, directory)) => (
+                Some(launches),
+                Some(super::recovery_control::RecoveryControl::open(directory)?),
+            ),
+            None => (None, None),
+        };
+        let manager = SessionManager::new(nori_harness::session_manager::SessionManagerConfig {
+            max_sessions: config.max_sessions,
+            ..Default::default()
+        });
+        let settings = super::acp::config::SettingsStore::open(&config.nori_home);
+        Ok(Arc::new(Self {
+            recovery,
+            launches,
+            managed: ManagedRemoteHost::authenticated_host(manager.clone()),
+            manager,
+            config: Arc::new(config),
+            overrides,
+            stop: tokio::sync::Notify::new(),
+            acp: super::acp::AcpFace::default(),
+            settings,
+            instance: uuid::Uuid::new_v4().to_string(),
+            deleted: Default::default(),
+            restarts: tokio::sync::Mutex::new(()),
+            mode_changes: tokio::sync::Mutex::new(()),
+        }))
+    }
+
     /// The host's configuration as it applies in `folder`, so the folder's
     /// own project trust and settings hold for its sessions.
     pub(super) async fn config_in(&self, folder: PathBuf) -> anyhow::Result<NoriConfig> {
@@ -224,6 +259,16 @@ impl ManagedAgent for HostService {
         self.acp.closed(client);
     }
 
+    fn admit_foreground_input(
+        &self,
+        request: &Value,
+    ) -> Option<futures::future::BoxFuture<'static, Value>> {
+        self.managed.admit_input(
+            request,
+            nori_harness::remote_agent::HostClientOrigin::Foreground,
+        )
+    }
+
     fn runs_concurrently(&self, method: &str) -> bool {
         self.launches.is_none() && super::acp::runs_concurrently(method)
     }
@@ -250,6 +295,15 @@ impl ManagedAgent for HostService {
                 response: self.acp_request(client, &request).await,
                 subscription: None,
             };
+        }
+        if self.launches.is_none()
+            && method == "_nori/session/respond"
+            && let Ok(connection) = self.acp.connection(client)
+        {
+            return self
+                .managed
+                .request_with_origin(request, connection.origin)
+                .await;
         }
         self.request(request).await
     }

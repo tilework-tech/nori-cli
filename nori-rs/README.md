@@ -52,6 +52,7 @@ Cross-cutting docs: [workspace noridoc](docs.md), [configuration reference](conf
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | [tui](tui/docs.md)                                                                                                                                               | Ratatui frontend for the harness                        |
 | [tui/src/attach](tui/src/attach/docs.md)                                                                                                                         | Terminal attached to a background host                  |
+| [tui/src/host_client](tui/src/host_client/docs.md)                                                                                                               | Connection and request correlation for a `nori host`    |
 | [tui/src/chatwidget/EXEC_CELL_LIFECYCLE.md](tui/src/chatwidget/EXEC_CELL_LIFECYCLE.md)                                                                           | How ACP tool calls become chat history cells and render |
 | [tui/styles.md](tui/styles.md)                                                                                                                                   | TUI text and color style rules                          |
 | [tui-components](tui-components/docs.md) ([README](tui-components/README.md), [DESIGN](tui-components/DESIGN.md), [examples](tui-components/examples/README.md)) | Reusable, domain-free Ratatui components                |
@@ -102,8 +103,8 @@ Cross-cutting docs: [workspace noridoc](docs.md), [configuration reference](conf
 ## Working in this workspace
 
 - Build the shipped binary: `cargo build --bin nori`
-- Test a crate: `cargo test -p <crate>`; e2e: `cargo test -p tui-pty-e2e`
-  (requires `cargo build --bin nori` first)
+- Test a crate: `cargo test -p <crate>`; run the PTY suite from the repository root with
+  `just test e2e`, which builds both launchers and the mock agent first
 - Format and lint: `just fmt` and `just fix -p <crate>` from this directory
 - Contributor conventions live in the repo-root `AGENTS.md`; architecture
   docs in `docs.md` files beside the code

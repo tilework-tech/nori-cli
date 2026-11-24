@@ -1,22 +1,15 @@
 //! Background session host commands and local discovery.
 
-mod acp;
 mod join;
 mod local_stdio;
 mod oneshot;
-mod recovery_control;
-mod recovery_history;
-mod service;
 mod session_lookup;
 mod start;
-mod state;
 mod stdio;
 mod table;
-mod transcripts;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -26,19 +19,17 @@ use nori_config::NoriConfig;
 use nori_config::NoriConfigOverrides;
 use nori_harness::managed_launch::HostSessionIdentity;
 use nori_harness::remote_agent::ManagedClient;
-use nori_harness::remote_agent::ManagedRemoteHost;
 use nori_harness::remote_agent::RemoteAcpServer;
-use nori_harness::session_manager::SessionManager;
-use nori_harness::session_manager::SessionManagerConfig;
 use serde::Deserialize;
 use serde_json::json;
 
 pub(crate) use self::local_stdio::serve as serve_stdio;
 pub(crate) use self::oneshot::Request as OneShot;
 pub(crate) use self::oneshot::run as run_one_shot;
-use self::service::HostService;
 use self::state::HostFiles;
 use self::state::HostState;
+use nori_host_runtime::HostService;
+use nori_host_runtime::state;
 
 #[derive(Debug, Parser)]
 pub(crate) struct HostCommand {
@@ -395,17 +386,12 @@ async fn serve(
         nori_harness::set_adapter_launch_overrides(config.acp_adapters.clone())?;
         None
     };
-    let manager = SessionManager::new(SessionManagerConfig {
-        max_sessions: config.max_sessions,
-        ..Default::default()
-    });
-    let recovery = if launches.is_some() {
-        Some(recovery_control::RecoveryControl::open(&files.directory)?)
-    } else {
-        None
-    };
     let max_clients = config.host.max_clients.max(1);
-    let host = host_service(config, overrides, manager, launches, recovery);
+    let host = HostService::new(
+        config,
+        overrides,
+        launches.map(|set| (set, files.directory.as_path())),
+    )?;
     let server = RemoteAcpServer::bind_host_with_limit(
         format!("127.0.0.1:{port}").parse()?,
         host.clone(),
@@ -466,31 +452,6 @@ async fn serve(
     );
     drop(lock);
     Ok(())
-}
-
-fn host_service(
-    config: NoriConfig,
-    overrides: NoriConfigOverrides,
-    manager: SessionManager,
-    launches: Option<nori_harness::managed_launch::ManagedLaunches>,
-    recovery: Option<recovery_control::RecoveryControl>,
-) -> Arc<HostService> {
-    let settings = acp::config::SettingsStore::open(&config.nori_home);
-    Arc::new(HostService {
-        recovery,
-        launches,
-        managed: ManagedRemoteHost::authenticated_host(manager.clone()),
-        manager,
-        config: Arc::new(config),
-        overrides,
-        stop: tokio::sync::Notify::new(),
-        acp: acp::AcpFace::default(),
-        settings,
-        instance: uuid::Uuid::new_v4().to_string(),
-        deleted: Default::default(),
-        restarts: tokio::sync::Mutex::new(()),
-        mode_changes: tokio::sync::Mutex::new(()),
-    })
 }
 
 #[cfg(test)]

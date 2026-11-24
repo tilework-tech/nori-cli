@@ -27,6 +27,14 @@ pub struct StandardAcpConnection {
     pub finished: tokio::task::JoinHandle<anyhow::Result<()>>,
 }
 
+/// Set by the host when it constructs a connection. Independent clients can
+/// acquire control, but only the terminal's private pipe has foreground origin.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum HostClientOrigin {
+    Foreground,
+    Independent,
+}
+
 /// One initialized client connection on an authenticated host socket.
 ///
 /// The host may write any JSON-RPC message to `outbound` at any time:
@@ -37,6 +45,7 @@ pub struct StandardAcpConnection {
 #[derive(Clone)]
 pub struct HostConnection {
     pub client: i64,
+    pub origin: HostClientOrigin,
     pub outbound: mpsc::Sender<Value>,
     pub close: tokio_util::sync::CancellationToken,
     /// `"controller"` or `"watcher"`; changes when control moves.
@@ -80,6 +89,15 @@ pub trait ManagedAgent: Send + Sync + 'static {
         request: Value,
     ) -> impl Future<Output = ManagedReply> + Send {
         self.request(request)
+    }
+
+    /// Admit input from the private terminal before reading its next frame.
+    /// Only waiting for the adapter receipt may run concurrently.
+    fn admit_foreground_input(
+        &self,
+        _request: &Value,
+    ) -> Option<futures::future::BoxFuture<'static, Value>> {
+        None
     }
 
     /// Whether `method` may take long enough that it must not hold up the

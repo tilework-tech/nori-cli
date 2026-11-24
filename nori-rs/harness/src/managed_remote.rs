@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::PoisonError;
 
+use futures::future::BoxFuture;
 use nori_acp_host::remote::ManagedAgent;
 use nori_acp_host::remote::ManagedReply;
 use nori_acp_host::remote::ManagedSubscription;
@@ -13,6 +14,7 @@ use serde_json::Value;
 use serde_json::json;
 
 use crate::ConversationId;
+use crate::remote_agent::HostClientOrigin;
 use crate::remote_agent::REMOTE_CONTROL_RESPONDER;
 use crate::session_manager::SessionManager;
 
@@ -23,7 +25,6 @@ pub struct ManagedRemoteHost {
     manager: SessionManager,
     authenticated_controller: bool,
     selected: Mutex<Option<ConversationId>>,
-    answers: tokio::sync::Mutex<Vec<(ConversationId, acp::RequestId)>>,
 }
 
 #[derive(Deserialize)]
@@ -90,7 +91,6 @@ impl ManagedRemoteHost {
             manager,
             authenticated_controller: false,
             selected: Mutex::new(None),
-            answers: tokio::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -129,10 +129,101 @@ impl ManagedRemoteHost {
         Ok(id)
     }
 
+    fn start_prompt(
+        &self,
+        params: Value,
+    ) -> Result<BoxFuture<'static, Result<Value, RemoteError>>, RemoteError> {
+        let params: PromptParams =
+            serde_json::from_value(params).map_err(|error| RemoteError::new(-32602, error))?;
+        let id = self.target(params.session_id.as_deref())?;
+        let handle = self
+            .manager
+            .handle(&id)
+            .ok_or_else(|| RemoteError::new(-32002, "session is not running"))?;
+        let accepted = handle.submit_prompt_if_idle(params.prompt, params.meta);
+        Ok(Box::pin(async move {
+            let request_id = accepted.await.map_err(|error| {
+                let code = if error.downcast_ref::<crate::backend::PromptBusy>().is_some() {
+                    -32015
+                } else {
+                    -32000
+                };
+                RemoteError::new(code, error)
+            })?;
+            Ok(json!({"session_id":id.to_string(),"request_id":request_id}))
+        }))
+    }
+
+    fn start_follow_up(
+        &self,
+        params: Value,
+        origin: HostClientOrigin,
+    ) -> Result<BoxFuture<'static, Result<Value, RemoteError>>, RemoteError> {
+        let params = crate::follow_up_rpc::FollowUpParams::parse(params)
+            .map_err(|error| RemoteError::new(-32602, error))?;
+        let id = self.target(Some(&params.session_id))?;
+        let handle = self
+            .manager
+            .handle(&id)
+            .ok_or_else(|| RemoteError::new(-32002, "session is not running"))?;
+        let receipt = match origin {
+            HostClientOrigin::Foreground => futures::future::Either::Left(handle.local_follow_up(
+                params.message_id,
+                params.expected_turn,
+                params.intent,
+                params.prompt,
+            )),
+            HostClientOrigin::Independent => futures::future::Either::Right(handle.follow_up(
+                params.message_id,
+                params.expected_turn,
+                params.intent,
+                params.prompt,
+                "host-controller".to_owned(),
+            )),
+        };
+        Ok(Box::pin(async move {
+            Ok(json!(
+                receipt
+                    .await
+                    .map_err(|error| RemoteError::new(-32000, error))?
+            ))
+        }))
+    }
+
+    /// Enqueue an already validated request in its session's FIFO and return its wire reply.
+    pub fn admit_input(
+        &self,
+        request: &Value,
+        origin: HostClientOrigin,
+    ) -> Option<BoxFuture<'static, Value>> {
+        let params = || request.get("params").cloned().unwrap_or_else(|| json!({}));
+        let submitted = match request["method"].as_str()? {
+            "_nori/session/prompt" => self.start_prompt(params()),
+            crate::follow_up_rpc::METHOD if self.authenticated_controller => {
+                self.start_follow_up(params(), origin)
+            }
+            _ => return None,
+        };
+        let id = request["id"].clone();
+        Some(Box::pin(async move {
+            let result = match submitted {
+                Ok(receipt) => receipt.await,
+                Err(error) => Err(error),
+            };
+            match result {
+                Ok(value) => json!({"jsonrpc":"2.0","id":id,"result":value}),
+                Err(error) => {
+                    json!({"jsonrpc":"2.0","id":id,"error":{"code":error.code,"message":error.message}})
+                }
+            }
+        }))
+    }
+
     async fn dispatch(
         &self,
         method: &str,
         params: Value,
+        origin: HostClientOrigin,
     ) -> Result<(Value, Option<ManagedSubscription>), RemoteError> {
         match method {
             "initialize" => Ok((
@@ -197,26 +288,6 @@ impl ManagedRemoteHost {
                     .map_err(|error| RemoteError::new(-32003, error))?;
                 Ok((json!({"subscribed":true}), Some(subscription)))
             }
-            crate::follow_up_rpc::METHOD if self.authenticated_controller => {
-                let params = crate::follow_up_rpc::FollowUpParams::parse(params)
-                    .map_err(|error| RemoteError::new(-32602, error))?;
-                let id = self.target(Some(&params.session_id))?;
-                let handle = self
-                    .manager
-                    .handle(&id)
-                    .ok_or_else(|| RemoteError::new(-32002, "session is not running"))?;
-                let receipt = handle
-                    .follow_up(
-                        params.message_id,
-                        params.expected_turn,
-                        params.intent,
-                        params.prompt,
-                        "host-controller".to_owned(),
-                    )
-                    .await
-                    .map_err(|error| RemoteError::new(-32000, error))?;
-                Ok((json!(receipt), None))
-            }
             "_nori/session/cancel_observed" if self.authenticated_controller => {
                 let params: CancelObservedParams = serde_json::from_value(params)
                     .map_err(|error| RemoteError::new(-32602, error))?;
@@ -233,30 +304,6 @@ impl ManagedRemoteHost {
                     .await
                     .map_err(|error| RemoteError::new(-32000, error))?;
                 Ok((json!({"sessionId": id.to_string()}), None))
-            }
-            "_nori/session/prompt" => {
-                let params: PromptParams = serde_json::from_value(params)
-                    .map_err(|error| RemoteError::new(-32602, error))?;
-                let id = self.target(params.session_id.as_deref())?;
-                let handle = self
-                    .manager
-                    .handle(&id)
-                    .ok_or_else(|| RemoteError::new(-32002, "session is not running"))?;
-                let request_id = handle
-                    .prompt_with_meta_if_idle(params.prompt, params.meta)
-                    .await
-                    .map_err(|error| {
-                        let code = if error.downcast_ref::<crate::backend::PromptBusy>().is_some() {
-                            -32015
-                        } else {
-                            -32000
-                        };
-                        RemoteError::new(code, error)
-                    })?;
-                Ok((
-                    json!({"session_id":id.to_string(),"request_id":request_id}),
-                    None,
-                ))
             }
             "_nori/session/delegate" => {
                 let params: DelegateParams = serde_json::from_value(params)
@@ -284,41 +331,30 @@ impl ManagedRemoteHost {
                 let params: RespondParams = serde_json::from_value(params)
                     .map_err(|error| RemoteError::new(-32602, error))?;
                 let id = self.target(params.session_id.as_deref())?;
-                let mut answers = self.answers.lock().await;
-                // Keep claims until the manager observes their resolution, so
-                // two answers cannot race its asynchronous event pump.
-                answers.retain(|(session, request)| {
-                    self.manager
-                        .get(session)
-                        .is_some_and(|record| record.pending_requests.contains(request))
-                });
-                let record = self
-                    .manager
-                    .get(&id)
-                    .ok_or_else(|| RemoteError::new(-32002, "unknown session id"))?;
-                if !record.pending_requests.contains(&params.request_id)
-                    || answers.contains(&(id, params.request_id.clone()))
-                {
-                    return Err(RemoteError::new(
-                        -32600,
-                        "no unanswered permission request with this session and request id",
-                    ));
-                }
                 let handle = self
                     .manager
-                    .handle(&id)
-                    .ok_or_else(|| RemoteError::new(-32002, "session is not running"))?
-                    .with_responder(REMOTE_CONTROL_RESPONDER);
+                    .claim_permission(&id, &params.request_id)
+                    .ok_or_else(|| {
+                        RemoteError::new(
+                            -32600,
+                            "no unanswered permission request with this session and request id",
+                        )
+                    })?;
+                let handle = match origin {
+                    HostClientOrigin::Independent => {
+                        handle.with_responder(REMOTE_CONTROL_RESPONDER)
+                    }
+                    HostClientOrigin::Foreground => handle,
+                };
                 handle
                     .respond_to_agent(
-                        params.request_id.clone(),
+                        params.request_id,
                         Ok(acp::ClientResponse::RequestPermissionResponse(
                             params.response,
                         )),
                     )
                     .await
                     .map_err(|error| RemoteError::new(-32000, error))?;
-                answers.push((id, params.request_id));
                 Ok((json!({"session_id":id.to_string(),"answered":true}), None))
             }
             _ => Err(RemoteError::new(-32601, "method not found")),
@@ -328,6 +364,17 @@ impl ManagedRemoteHost {
 
 impl ManagedAgent for ManagedRemoteHost {
     async fn request(&self, request: Value) -> ManagedReply {
+        self.request_with_origin(request, HostClientOrigin::Independent)
+            .await
+    }
+}
+
+impl ManagedRemoteHost {
+    pub async fn request_with_origin(
+        &self,
+        request: Value,
+        origin: HostClientOrigin,
+    ) -> ManagedReply {
         let id = request.get("id").cloned().unwrap_or(Value::Null);
         let valid = request["jsonrpc"] == "2.0"
             && request["method"].is_string()
@@ -335,9 +382,17 @@ impl ManagedAgent for ManagedRemoteHost {
             && (id.is_string() || id.is_i64() || id.is_null())
             && request.get("params").is_none_or(Value::is_object);
         let result = if valid {
+            if let Some(receipt) = self.admit_input(&request, origin) {
+                return ManagedReply {
+                    response: receipt.await,
+                    subscription: None,
+                    delivery_guard: None,
+                };
+            }
             self.dispatch(
                 request["method"].as_str().unwrap_or_default(),
                 request.get("params").cloned().unwrap_or_else(|| json!({})),
+                origin,
             )
             .await
         } else {

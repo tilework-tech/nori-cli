@@ -406,7 +406,7 @@ fn next_waiting_refreshes_stale_rows_and_opens_new_child_without_second_key() {
         .try_recv()
         .expect("navigation refreshes stale session rows");
     assert_eq!(refresh["method"], "_nori/session/list");
-    runtime.connection_event(super::connection::ConnectionEvent::Message(json!({
+    runtime.connection_event(crate::host_client::ConnectionEvent::Message(json!({
         "id":refresh["id"],"result":{"sessions":[
             {"session_id":"parent-session","agent":"mock-model","status":"ready"},
             {"session_id":"child-session","agent":"mock-model","status":"waiting_on_you","parent":"parent-session","depth":1}
@@ -438,7 +438,7 @@ fn deferred_next_waiting_keeps_a_new_draft_in_its_parent_session() {
     runtime.key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
     let refresh = rx.try_recv().unwrap();
     runtime.composer.handle_paste("Parent-only draft".into());
-    runtime.connection_event(super::connection::ConnectionEvent::Message(json!({
+    runtime.connection_event(crate::host_client::ConnectionEvent::Message(json!({
         "id":refresh["id"],"result":{"sessions":[
             {"session_id":"parent-session","agent":"mock-model","status":"ready"},
             {"session_id":"child-session","agent":"mock-model","status":"waiting_on_you","parent":"parent-session","depth":1}
@@ -467,7 +467,7 @@ fn explicit_session_list_navigation_cancels_deferred_next_waiting() {
     runtime.key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
     let refresh = rx.try_recv().unwrap();
     runtime.key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::ALT));
-    runtime.connection_event(super::connection::ConnectionEvent::Message(json!({
+    runtime.connection_event(crate::host_client::ConnectionEvent::Message(json!({
         "id":refresh["id"],"result":{"sessions":[
             {"session_id":"parent-session","agent":"mock-model","status":"ready"},
             {"session_id":"child-session","agent":"mock-model","status":"waiting_on_you","parent":"parent-session","depth":1}

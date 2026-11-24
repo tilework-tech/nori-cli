@@ -11,6 +11,11 @@ Path: @/nori-rs/tui
   application events. It owns runtime policy and lifecycle for the optional
   remote ACP surface, while WebSocket/ACP wire mechanics remain in
   `nori-acp-host`; it does not expose a second protocol vocabulary.
+- The package provides the standalone `nori-tui` executable and the library
+  used by plain `nori`. From `nori-rs/`, run
+  `cargo run -p nori-tui --bin nori-tui -- [OPTIONS] [PROMPT]`. The
+  [standalone entry point](src/main.rs) parses the TUI options and prints
+  nonzero token usage on exit.
 
 ### How it fits into the larger codebase
 
@@ -58,19 +63,16 @@ unknown states. Press `u` to cycle usage and resize the terminal to inspect
 the responsive layout. `--json` exports styled spans for browser review.
 
 ```text
-nori-tui
-   |  typed HarnessHandle methods
-   |  SessionEvent::{Acp, Nori}
-   v
-nori-harness -> nori-acp-host -> ACP agent
-   ^
-   |
-nori-config
+nori              nori-tui
+  └──────┬──────────┘
+    nori_tui::run_main
+         └─ nori_host_runtime::launch
+                  └─ HostService ── SessionManager ── ACP agents
 ```
 
-The TUI depends on `nori-harness`, `nori-config`, and `nori-protocol`; it does
-not import the ACP host or ACP schema crate directly. Its ACP types arrive
-through `nori_protocol::acp`.
+Both binaries run the same terminal loop. The TUI uses the foreground
+controller pipe for host calls and the host's manager for operations that
+require an in-process handle. Its ACP types come through `nori_protocol::acp`.
 
 Shared pickers and overlay menus receive
 [`nori-tui-components`](../tui-components/docs.md) styles through
@@ -421,8 +423,8 @@ and drive the unchanged rewind-to-message local fork path; agents without fork
 support see only those.
 
 When an ACP permission request arrives, the overlay renders the ACP subject and
-options, then calls `respond_to_agent(request_id, response)` with the exact ID
-from the request. Esc picks the `RejectOnce` option when offered, else
+options. It sends the answer over the host pipe with the session and request IDs
+captured when the request arrived. Esc picks the `RejectOnce` option when offered, else
 `RejectAlways` (the shared `answer_guard::esc_reject_option`, which
 `nori attach` also uses), and the footer then reads `esc to reject`; with no reject
 option Esc sends `Cancelled` and the footer reads `esc to cancel`. Ctrl-C
@@ -769,8 +771,9 @@ ordinary-agent failure reopens the existing agent picker so the user can recover
 by choosing another agent unless a live candidate already owns its picker; cloud
 remains on its sessionless `/resume` or `/new` retry flow.
 
-`App` owns one harness `SessionManager` (default limits) and hands clones to
-every `ChatWidget` through `ChatWidgetInit`. `chatwidget/agent.rs` starts every
+`App` uses the session manager of the host it owns (see
+[Owned host](#owned-host)) and hands clones to every `ChatWidget` through
+`ChatWidgetInit`. `chatwidget/agent.rs` starts every
 session — new, resumed, from a prepared connection, and the hidden `/agent`
 switch candidate — through the manager. Sessions are user-sourced except a
 fork to an earlier message (`/fork` rewind or Esc-Esc backtrack fork): `App`
@@ -961,8 +964,10 @@ activating candidate that is discarded, shuts down through
 `ChatWidget::shutdown_harness_session`, which calls `SessionManager::close`
 with the widget's managed conversation ID (with the cloud detach grace in
 cloud mode). That ID follows branch-at-head forks. Exit keeps its existing path: the active
-session shuts down through its handle and a candidate is discarded, so exit
-latency is unchanged; the TUI does not call `SessionManager::shutdown`.
+session shuts down through its handle and a candidate is discarded. The TUI
+never calls `SessionManager::shutdown` itself; after the main loop it stops
+its owned host, which shuts down whatever sessions remain (parked ones, or one
+still mid-turn) with zero grace.
 Preparation generations apply the
 same stale-result rule before a widget or active session exists.
 
@@ -1374,7 +1379,7 @@ cloud /close ──> session/close ──> SessionEnded(Closed)
                     add "Session closed (released)." to the new picker screen
 ```
 
-- **Session cap.** `App` builds its `SessionManager` with
+- **Session cap.** The owned host builds its `SessionManager` with
   `NoriConfig.max_sessions` (`[tui] max_sessions`). Before `/new`, `/agent`,
   `/resume`, or a new-process fork prepares or activates an agent,
   `refuse_at_session_cap` checks
@@ -1497,11 +1502,48 @@ resumed with Ctrl+R under the same conversation ID to receive held results,
 including redelivery when the previous parent process admitted but never
 acknowledged a result turn. See the [manager lifecycle](../harness/docs.md#delegation-between-managed-sessions).
 
+#### Owned host
+
+[`run_main`](src/lib.rs) resolves configuration, onboarding, and automatic
+worktree creation before calling the [foreground host factory](../host-runtime/src/host/tui_owned.rs).
+A newly created worktree becomes the host's working directory through the
+resolved overrides. A startup error restores the terminal and ends the run.
+
+```text
+App::run
+  └─ HostLink::start(OwnedHost)
+       ├─ manager ───────────────▶ ChatWidgets (sessions, in-process features)
+       └─ drive_pipe(to_host, from_host) ─▶ HostSessionClient ─▶ main-loop arm
+  ...main loop ends (quit or error)...
+  └─ HostLink::stop ─▶ OwnedHost.stop (ends every host session) ─▶ abort driver
+```
+
+- [`HostLink`](src/app/host_link.rs) splits the `OwnedHost`: the manager goes
+  to the widgets, and the pipe is driven by the
+  [host session client](src/host_client/docs.md) as a third arm of the main
+  `select!` loop beside app and terminal events.
+- The App queues `initialize` before reading UI events. The private pipe holds control.
+  An initialize failure, a rejected initialize, or the pipe stopping is fatal
+  and ends the main loop with that error. Session notifications and other
+  host events are ignored in this layer.
+- The App stops the host after the loop even when the loop returned an error;
+  the loop's error is reported first, then any stop failure.
+- Features with no wire method yet (compaction, fork and undo, shell, history,
+  goals, custom prompts, `/context`, queue reclaim) work through the host's
+  manager on the same sessions. The pipe carries permission answers, idle-only
+  composer submissions, turn-scoped follow-ups and interrupts for observed
+  agent-started turns. Startup and programmatic prompts keep their existing
+  queue-on-busy admission. The widget receives the result of its own request.
+- Only the CLI's foreground launcher builds an `OwnedHost`, so the
+  [attach frontend](src/attach/docs.md) never holds the in-process half.
+
 #### Host attachment
 
 [`attach`](src/attach/docs.md) is the dedicated frontend for `nori attach`.
 It consumes host-owned manager envelopes
-through the harness's `ManagedClient` re-export. It does not construct the
+through the [host session client](src/host_client/docs.md), which owns the
+connection, reconnect, and reply matching over the harness's `ManagedClient`
+re-export and is meant to serve other host frontends too. It does not construct the
 local process-owning `App`, launch agents, or shut down sessions when its
 terminal closes. Its session list and selected conversation are terminal-local;
 the host remains authoritative for session lifecycle and controller ownership.
@@ -1799,6 +1841,9 @@ part of the public harness protocol.
   recall.
 - `nori-config` is the source of approval and sandbox policy; ACP session config
   options remain ACP schema values.
+- Never construct a `SessionManager` in the TUI. Sessions must belong to the
+  owned host so they end when it stops; a second manager would run sessions
+  the host cannot see or shut down.
 - `-p` belongs to the top-level CLI as `--print`. The TUI's own flag set must not
   claim it, and the legacy Codex `--profile` / `-p` selector stays rejected
   outright.

@@ -267,6 +267,14 @@ struct FirstPromptStarted {
     callback: Box<dyn Fn() + Send + Sync>,
 }
 
+impl FirstPromptStarted {
+    fn fire(&self) {
+        if !self.fired.swap(true, std::sync::atomic::Ordering::AcqRel) {
+            (self.callback)();
+        }
+    }
+}
+
 impl std::fmt::Debug for HarnessHandle {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -323,6 +331,14 @@ impl HarnessHandle {
             callback: Box::new(callback),
         }));
         self
+    }
+
+    /// Report the same admission when this session's prompt reached the agent
+    /// through the host client. Both paths share the once-per-session callback.
+    pub fn record_host_prompt_started(&self) {
+        if let Some(started) = &self.first_prompt_started {
+            started.fire();
+        }
     }
 
     /// Label this handle's answers to agent requests with `responder`, so
@@ -464,12 +480,8 @@ impl HarnessHandle {
                     "ACP agent did not accept the prompt",
                 ))
             })??;
-            if let Some(first_prompt_started) = &first_prompt_started
-                && !first_prompt_started
-                    .fired
-                    .swap(true, std::sync::atomic::Ordering::AcqRel)
-            {
-                (first_prompt_started.callback)();
+            if let Some(started) = first_prompt_started {
+                started.fire();
             }
             Ok(request_id)
         }

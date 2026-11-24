@@ -720,6 +720,18 @@ for `--agent`), `session/set_mode` (`approve-all` with the bypass flag, else
 `agent`), `session/prompt`, and `session/close`; every permission request is
 rejected.
 
+### The interactive TUI as a client
+
+Plain `nori`, standalone `nori-tui`, `nori resume`, and `nori cloud` use the
+same interactive entry point. It starts a private in-process host that owns
+the **session manager** and runs for the lifetime of the terminal. The TUI connects over in-memory lines, sends `initialize`, and
+is always the controller; a failed initialize or a closed pipe ends the TUI
+with an error. Quitting stops the host, which ends every **session** it runs,
+including one mid-turn. The same host also hands the TUI its own manager for
+foreground features that have no wire method yet, so both paths reach the
+same sessions; `nori attach` never gets that in-process half. See the
+[owned TUI host](../nori-rs/cli/src/host/docs.md#owned-tui-host).
+
 ### Session configuration
 
 `session/load` and `session/resume` return the session's `configOptions` and

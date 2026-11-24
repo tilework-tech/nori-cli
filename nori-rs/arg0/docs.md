@@ -8,7 +8,7 @@ The arg0 crate implements the "argv[0] trick" for multi-binary dispatch. It allo
 
 ### How it fits into the larger codebase
 
-Wraps `main()` in `@/nori-rs/cli/` (the `nori` binary) and in the standalone `nori-tui` binary of `@/nori-rs/tui/`. Before the app starts, this crate checks if the binary was invoked as `codex-linux-sandbox` or `apply_patch` and dispatches accordingly.
+Wraps `main()` in `@/nori-rs/cli/` (the `nori` binary); `nori-tui` is a library with no binary of its own. Before the app starts, this crate checks if the binary was invoked as `codex-linux-sandbox` or `apply_patch` and dispatches accordingly.
 
 ### Core Implementation
 

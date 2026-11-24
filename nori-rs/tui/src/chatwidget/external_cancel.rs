@@ -12,15 +12,17 @@ impl ChatWidget {
     }
 
     pub(super) fn request_external_cancel(&self) {
-        if let Some(turn) = &self.external_turn
+        if !self.follow_only_attachment
+            && let (Some(session), Some(turn)) = (self.managed_conversation_id, &self.external_turn)
             && turn.state == ExternalTurnState::Working
         {
-            self.app_event_tx.send(AppEvent::HarnessAction(
-                crate::app_event::HarnessAction::CancelExternal {
-                    generation: self.session_generation,
-                    id: turn.id.clone(),
+            self.app_event_tx.send(AppEvent::HostRequest {
+                call: crate::host_client::HostCall::CancelObserved {
+                    session_id: session.to_string(),
+                    observed_turn_id: turn.id.clone(),
                 },
-            ));
+                reply: crate::app_event_sender::HostReply::ReportError(self.app_event_tx.clone()),
+            });
         }
     }
 

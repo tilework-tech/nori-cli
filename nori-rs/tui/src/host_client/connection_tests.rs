@@ -11,9 +11,9 @@ use serde_json::Value;
 use serde_json::json;
 use tokio::sync::mpsc;
 
-use super::AttachOptions;
-use super::connection::ConnectionEvent;
-use super::connection::drive;
+use super::ConnectionEvent;
+use super::HostEndpoint;
+use super::drive;
 
 struct EmptyHost;
 impl ManagedAgent for EmptyHost {
@@ -52,10 +52,9 @@ async fn replacement_failure(
     let endpoint = format!("ws://{}/sessions", replacement.local_addr());
     let reads = Arc::new(AtomicUsize::new(0));
     let counter = reads.clone();
-    let options = AttachOptions {
+    let options = HostEndpoint {
         endpoint,
         token: "old".into(),
-        session_id: None,
         refresh_local_token: local.then(|| {
             Box::new(move || {
                 counter.fetch_add(1, Ordering::SeqCst);

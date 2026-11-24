@@ -15,7 +15,7 @@ The production path is layered downward:
 ```text
 nori-cli / nori-tui
         -> nori-installed -> authenticated analytics ingress
-        -> nori-harness
+        -> nori-host-runtime -> nori-harness
         -> nori-acp-host
         -> ACP agent subprocess
 ```
@@ -34,7 +34,10 @@ used in production.
   their own folder. One-shot `nori exec "prompt"` is a thin ACP client of
   that host: it uses the home's running host when it can and an in-process
   host otherwise.
-- `tui/` renders events and forwards user intent through typed harness methods.
+- `tui/` provides both the standalone executable and the foreground terminal
+  used by `nori`. Both call the same [TUI entry point](tui/src/lib.rs), which
+  obtains a private host from the [shared runtime](host-runtime/src/lib.rs).
+  Its controller pipe and the in-process session handle share one manager.
   Its [attach frontend](tui/src/attach/docs.md) instead consumes host-owned
   envelopes and sends managed commands; closing that terminal never ends the
   host's sessions.

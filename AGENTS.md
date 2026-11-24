@@ -33,7 +33,7 @@ Run `just fmt` (in `nori-rs` directory) automatically after you have finished ma
 
 1. Run the test for the specific project that was changed. For example, if changes were made in `nori-rs/tui`, run `cargo test -p nori-tui`.
 2. Once those pass, if any changes were made in shared crates such as `common`, `core`, `nori-config`, or `nori-protocol`, run the complete test suite with `cargo test`. Avoid `--all-features` for routine local runs because it expands the build matrix and can significantly increase `target/` disk usage; use it only when you specifically need full feature coverage.
-3. If any changes were made in `tui`, `cli`, `harness`, or `acp-host`, run `cargo build --bin nori && cargo test -p tui-pty-e2e`. The E2E tests require the `nori` binary (from the `cli` crate), not `nori-tui`.
+3. If any changes were made in `tui`, `cli`, `harness`, or `acp-host`, run `just test e2e` from the repository root to build both foreground binaries and the mock ACP agent before the PTY suite.
 
 Before finalizing a change to `nori-rs`, run `just fix -p <project>` (in `nori-rs` directory) to fix any linter issues in the code. Prefer scoping with `-p` to avoid slow workspace‑wide Clippy builds; only run `just fix` without `-p` if you changed shared crates. Do not re-run tests after running `fix` or `fmt`.
 

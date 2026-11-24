@@ -11,11 +11,13 @@ layers.
 
 ### How it fits into the larger codebase
 
-Tests launch `nori` with `mock-acp-agent`, send keyboard input, and observe
-screen output and process lifecycle. The path under test is:
+Tests launch `nori` by default. The [foreground launcher test](tests/prepared_startup.rs)
+selects each built executable in turn and checks the rendered response, inline
+screen, adapter process, and quit status. Build both binaries from `nori-rs/`
+with `cargo build --bin nori --bin nori-tui` before running the suite.
 
 ```text
-PTY -> nori-tui -> nori-harness -> nori-acp-host -> mock ACP agent
+PTY -> nori or nori-tui -> foreground host -> nori-harness -> nori-acp-host -> mock ACP agent
 ```
 
 ### Core Implementation

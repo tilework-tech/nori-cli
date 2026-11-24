@@ -1083,6 +1083,7 @@ mod tests {
 
     fn exec_request() -> ApprovalRequest {
         ApprovalRequest {
+            session_id: Some(nori_harness::ConversationId::new()),
             request_id: "1".to_string().into(),
             title: "Run echo ok".to_string(),
             kind: crate::presentation::ToolKind::Execute,

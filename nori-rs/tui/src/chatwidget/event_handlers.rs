@@ -1206,9 +1206,13 @@ impl ChatWidget {
         request_id: nori_protocol::acp::v1::RequestId,
         options: Vec<nori_protocol::acp::v1::PermissionOption>,
     ) {
-        let Some(request) =
-            approval_request_from_client_event(approval, &self.config.cwd, request_id, options)
-        else {
+        let Some(request) = approval_request_from_client_event(
+            approval,
+            &self.config.cwd,
+            self.managed_conversation_id,
+            request_id,
+            options,
+        ) else {
             return;
         };
 
@@ -1389,12 +1393,14 @@ fn is_turn_content_update(update: &nori_protocol::acp::v1::SessionUpdate) -> boo
 fn approval_request_from_client_event(
     approval: crate::presentation::ApprovalRequest,
     cwd: &std::path::Path,
+    session_id: Option<nori_harness::ConversationId>,
     request_id: nori_protocol::acp::v1::RequestId,
     options: Vec<nori_protocol::acp::v1::PermissionOption>,
 ) -> Option<ApprovalRequest> {
     let crate::presentation::ApprovalSubject::ToolSnapshot(snapshot) = approval.subject;
 
     Some(ApprovalRequest {
+        session_id,
         request_id,
         title: approval.title,
         kind: approval.kind,

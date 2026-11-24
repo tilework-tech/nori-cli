@@ -3,6 +3,7 @@
 
 pub use crate::managed_remote::ManagedRemoteHost;
 pub use nori_acp_host::recovery;
+pub use nori_acp_host::remote::HostClientOrigin;
 pub use nori_acp_host::remote::HostConnection;
 pub use nori_acp_host::remote::ManagedAgent;
 pub use nori_acp_host::remote::ManagedClient;

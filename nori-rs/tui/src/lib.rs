@@ -58,6 +58,7 @@ mod frames;
 mod get_git_diff;
 mod git_marker;
 mod history_cell;
+mod host_client;
 pub mod insert_history;
 mod key_hint;
 pub mod live_wrap;
@@ -67,6 +68,7 @@ mod markdown_render;
 mod markdown_stream;
 mod nori;
 mod overlay_menu;
+pub use nori_host_runtime::OwnedHost;
 mod pager_overlay;
 mod pinned_plan_drawer;
 mod presentation;
@@ -134,6 +136,7 @@ use std::io::Write as _;
 
 // (tests access modules directly within the crate)
 
+/// Run the inline terminal on a private host and stop that host on exit.
 pub async fn run_main(
     cli: Cli,
     _codex_linux_sandbox_exe: Option<PathBuf>,
@@ -318,7 +321,6 @@ pub async fn run_main(
     .map_err(|err| std::io::Error::other(err.to_string()))
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn run_ratatui_app(
     cli: Cli,
     initial_config: NoriConfig,
@@ -375,7 +377,7 @@ async fn run_ratatui_app(
         && (should_show_trust_screen
             || (!cli.skip_welcome && nori::onboarding::is_first_launch(&initial_config.nori_home)));
 
-    let (config, overrides) = if should_show_onboarding {
+    let (config, mut overrides) = if should_show_onboarding {
         // Use Nori-branded onboarding flow
         let onboarding_result = run_nori_onboarding_app(
             NoriOnboardingScreenArgs {
@@ -422,9 +424,8 @@ async fn run_ratatui_app(
             match nori_harness::auto_worktree::setup_auto_worktree(&effective_cwd) {
                 Ok(worktree_path) => {
                     tracing::info!("Auto-worktree created at {}", worktree_path.display());
-                    let mut new_overrides = overrides;
-                    new_overrides.cwd = Some(worktree_path);
-                    load_config_or_exit(new_overrides)
+                    overrides.cwd = Some(worktree_path);
+                    load_config_or_exit(overrides.clone())
                 }
                 Err(e) => {
                     tracing::warn!("Auto-worktree setup skipped: {e}");
@@ -532,6 +533,13 @@ async fn run_ratatui_app(
         ..
     } = cli;
     let vertical_footer = config.vertical_footer;
+    let host = match nori_host_runtime::launch(&config, &overrides) {
+        Ok(host) => host,
+        Err(error) => {
+            restore();
+            return Err(color_eyre::eyre::eyre!(error));
+        }
+    };
 
     let app_result = App::run(
         &mut tui,
@@ -544,6 +552,7 @@ async fn run_ratatui_app(
         cloud_mode,
         cloud_onboard,
         analytics.clone(),
+        host,
     )
     .await;
 

@@ -184,8 +184,11 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   read a client's first `initialize`, try to relay it to a running host, and
   replay it here when it falls back.
 - `RemoteAcpServer::serve_host_pipe` serves one in-process host client the
-  same way over in-memory channels of JSON-RPC lines (used by one-shot
-  `nori exec`, see [its host client](../cli/src/host/docs.md#one-shot-exec)).
+  same way over in-memory channels of JSON-RPC lines for one-shot
+  [exec](../cli/src/host/docs.md#one-shot-exec). The
+  [foreground launcher](../cli/src/host/docs.md#owned-tui-host) uses
+  `serve_host_pipe_from` to assign foreground origin. Ordinary pipes,
+  WebSocket and stdio clients have independent origin.
   Stdio and pipe share `serve_lines`, which owns the client-always-controls
   policy, blank-line skipping and the stop/lag handling; stdio only adds the
   stdin thread and maps non-UTF-8 lines to a parse error.
