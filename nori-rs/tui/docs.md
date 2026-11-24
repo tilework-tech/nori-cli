@@ -747,7 +747,7 @@ once. A resume that
 must first prepare its agent clears when the sessionless placeholder widget
 takes over instead, so the "Resuming session with" message the placeholder
 prints stays with the resumed session; the later activation does not clear
-again. An agent-switch candidate that resumes clears at its commit.
+again. A host-picker candidate that resumes clears at its commit.
 
 #### Lifecycle behavior
 
@@ -774,9 +774,10 @@ remains on its sessionless `/resume` or `/new` retry flow.
 `App` uses the session manager of the host it owns (see
 [Owned host](#owned-host)) and hands clones to every `ChatWidget` through
 `ChatWidgetInit`. `chatwidget/agent.rs` starts every new, resumed, or
-prepared-connection session through the manager; the hidden `/agent` switch
-candidate is instead started by the owned host itself (see the agent-switch
-flow below) and lands in the same manager. Sessions are user-sourced except a
+prepared-connection session through the manager; a hidden host-picker
+candidate (an `/agent` switch, or a local `/resume` or post-`/close` restore) is
+instead started by the owned host itself (see the host candidate flow below)
+and lands in the same manager. Sessions are user-sourced except a
 fork to an earlier message (`/fork` rewind or Esc-Esc backtrack fork): `App`
 passes a `ForkOrigin` (fork context plus the current widget's managed
 conversation ID) into preparation, the preparation task tags the
@@ -795,13 +796,13 @@ through `BottomPane::dismiss_request`: every open view gets
 `BottomPaneView::dismiss_request`, and `ApprovalOverlay` drops the matching
 request from its current slot or queue, so an approval answered through
 another handle closes the TUI modal too. Views that hold no requests
-keep the default no-op. The `/agent` candidate's ACP server belongs to the
+keep the default no-op. A host-picker candidate's ACP server belongs to the
 host's picker connection until activation and becomes an ordinary manager
 session afterwards; `CandidateAgent` holds only the host selection ID and UI
 flow state (picker, pending request, activation capture). The pre-session `PreparedAgent` that `App`
 keeps is held outside the manager until a session consumes it.
 
-Cloud startup and agent-switch candidates keep deferred activation as an
+Cloud startup and host-picker candidates keep deferred activation as an
 invariant: cloud stays picker-first and sessionless until the user chooses a
 session, and a candidate stays hidden until it publishes `SessionStarted`. Only
 the plain-local and per-session-skillset startup paths auto-activate; the
@@ -824,8 +825,10 @@ skillset is chosen: applying a skillset writes its workspace state
 (`.claude/CLAUDE.md`) and then records New, while dismissing the picker records
 New without a skillset — both preserving the ordering that the skillset is
 written before `session/new`. `/new` and a first genuine user prompt record New
-as well; `/resume` changes the intent to open the prepared catalog and then
-records the selected Resume. Esc-Esc backtrack and transcript fork also queue
+as well. In cloud mode, or locally while the startup preparation is still in
+flight or unconsumed, `/resume` changes the intent to open that live catalog and
+then records the selected Resume; otherwise a local `/resume` goes through the
+host candidate flow below. Esc-Esc backtrack and transcript fork also queue
 deferred New while preserving their selected history summary as initial context. If preparation is in flight, these decisions wait
 for it instead of cancelling it; if preparation is complete, they consume the
 stored connection. Thus `initialize`, optional `session/list`, and the chosen
@@ -887,20 +890,25 @@ An `AgentPrepared` result is accepted only when its generation still matches
 the owned preparation; a late successful result is explicitly shut down.
 Primary preparation uses a 20-second wall-clock bound in
 [`session_setup.rs`](src/app/session_setup.rs); the host applies the same bound
-to a switch candidate's preparation in
+to a host-picker candidate's preparation in
 [`picker.rs`](../host-runtime/src/host/acp/picker.rs). Close,
 cancellation, timeout, and exit invalidate preparation and reap its subprocess.
 Together these rules keep a cancelled or hung initialize/list task from
 repopulating the picker, leaking its child, or displacing a usable session.
 
-Agent switching is transactional and runs through the host the App owns.
-Selecting an `/agent` row never changes the active `ChatWidget`; the private
-`CandidateAgent` state in [`host_candidate.rs`](src/app/host_candidate.rs)
-tracks each phase, and every host call goes over the in-process pipe through
-the [host session client](src/host_client/docs.md):
+Agent switching and local session restore are transactional and run through
+the host the App owns. Each candidate carries a `PickerPurpose`: `Switch` for an
+`/agent` row, `Restore` for a local `/resume` (outside the startup case above)
+and for the picker after the last `/close`, which target the current agent and
+print "Listing <Agent> sessions…". Neither changes the active `ChatWidget`
+before commit; the private `CandidateAgent` state in
+[`host_candidate.rs`](src/app/host_candidate.rs) tracks each phase, and every
+host call goes over the in-process pipe through the
+[host session client](src/host_client/docs.md):
 
 ```text
-/agent row ──▶ Preparing ── _nori/host/prepare_agent {agent, cwd}
+/agent row, local /resume, last /close
+               ──▶ Preparing ── _nori/host/prepare_agent {agent, cwd}
                   │         session/list  _meta["nori/preparedAgent"].id
                   ▼
                Prepared ── adapter's saved sessions in the ACP resume picker
@@ -928,10 +936,15 @@ the [host session client](src/host_client/docs.md):
   new conversation, not from its tail, so history the adapter replayed
   (`session/load`) before the host's reply still renders. It carries the saved
   row's ACP session ID and title when restoring.
+- A `Restore` catalog whose server cannot list, or can neither load nor resume
+  (from the list result's `agentCapabilities`), discards the selection and
+  opens the local transcript picker instead. A failed or dismissed restore with
+  no session on screen repeats the "No session is active" hint.
 - Promotion uses the existing `Activating` path: the current and candidate
   sessions coexist, and until `SessionStarted` positional or deferred input
   stays with the current widget; after commit it transfers and is submitted
-  once. Prompt submission always targets the current widget; there is no
+  once. Commit announces "Started new conversation with agent: <Agent>" only
+  for a switch, and "Resuming session with <Agent>..." for a restored row. Prompt submission always targets the current widget; there is no
   pending switch-on-next-prompt state.
 - Each reply is matched against the current candidate by generation. A
   preparation reply that arrives after the candidate changed discards its
@@ -943,9 +956,12 @@ the [host session client](src/host_client/docs.md):
   "Couldn't prepare <Agent>: …", a refused activation shows
   "Couldn't activate <Agent>: …" with the host error (including the adapter's
   message), and a failed journal subscription closes the new conversation.
-- Only `/agent` switching uses the host. Picker-first primary startup, the
-  post-`/close` picker, `/resume`, and `/new` still prepare in-process through
-  `AgentPrepared` and [`session_setup.rs`](src/app/session_setup.rs).
+  Only a switch keeps the bare `/login` override pointed at the failed agent.
+- Dismissing the picker discards the selection; "Agent switch cancelled." is
+  printed only for a switch, a dismissed restore is silent.
+- Cloud mode, picker-first primary startup, the startup-time `/resume`, and
+  `/new` still prepare in-process through `AgentPrepared` and
+  [`session_setup.rs`](src/app/session_setup.rs).
 
 Candidate activation classifies hidden candidate events in
 [`App`](src/app/event_handling.rs) before they reach the candidate widget. An
@@ -1389,7 +1405,7 @@ Both path lines are built by [`session_path.rs`](src/session_path.rs), which
 | `fit(text, cells)` | Cuts by display cells, ending in `…` |
 | `fit_name(text, cells)` | Cuts by display cells in the middle (start, `…`, end), so names sharing a long prefix stay distinct; used for every session name on these lines. Delegates to `nori_tui_components::text::truncate_middle`, the same cut the session lists' Session columns use |
 
-While an `/agent` candidate is preparing, a dim `Preparing <agent>…` line sits
+While a host-picker candidate is preparing, a dim `Preparing <agent>…` line sits
 above these. No history cell is added for it, so the session on screen keeps
 no line about another session.
 
@@ -1407,8 +1423,9 @@ row reads `closed`/`done` ── Ctrl+D ──> AppEvent::RemoveSession ──> 
 local /close via owned host or cloud /close via agent ──> SessionEnded(Closed)
         ──> AppEvent::SessionClosed{generation} ──> App::on_session_closed
               another open session? show it (released one stays listed closed)
-              none? park it, open the agent session picker, and (cloud)
-                    add "Session closed (released)." to the new picker screen
+              none? park it; local: host Restore picker (see above);
+                    cloud: in-process agent session picker plus
+                    "Session closed (released)." on the new picker screen
 ```
 
 - **Session cap.** The owned host builds its `SessionManager` with
@@ -1568,8 +1585,8 @@ App::run
   goals, custom prompts, `/context`, queue reclaim) work through the host's
   manager on the same sessions. The pipe carries permission answers, idle-only
   composer submissions, turn-scoped follow-ups and interrupts for observed
-  agent-started turns, and `/agent` candidate preparation, listing,
-  activation, and discard. Startup and programmatic prompts keep their existing
+  agent-started turns, and host-picker candidate (`/agent`, local `/resume`,
+  post-`/close`) preparation, listing, activation, and discard. Startup and programmatic prompts keep their existing
   queue-on-busy admission. The widget receives the result of its own request.
 - Only the CLI's foreground launcher builds an `OwnedHost`, so the
   [attach frontend](src/attach/docs.md) never holds the in-process half.
@@ -1773,7 +1790,7 @@ and options the agent resolved on their own history line (the same cell a
 `session/update` config announcement uses) rather than writing a second card.
 Two entries keep writing the card at session start instead: a cloud session,
 whose card names a broker session it only learns about once attached, and the
-agent-switch candidate, which is hidden until it publishes `SessionStarted`.
+host-picker candidate, which is hidden until it publishes `SessionStarted`.
 When activation swaps in a fresh widget, `App::configure_new_chat_widget`
 suppresses that widget's card so the conversation keeps the one card it already
 has; a later `/new` is a different conversation and writes its own.
