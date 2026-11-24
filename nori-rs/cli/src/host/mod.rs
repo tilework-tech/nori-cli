@@ -43,6 +43,8 @@ pub(crate) struct HostCommand {
     port: i32,
     #[arg(long, hide = true)]
     foreground: bool,
+    #[arg(long, hide = true, requires = "foreground")]
+    notify_launcher: bool,
     /// Serve one client as ACP on stdin and stdout, in the foreground, until
     /// stdin closes. With --launch, serve that one managed launch instead;
     /// it needs `[host] managed` and `[host.dedicated_roots]`.
@@ -302,14 +304,26 @@ pub(crate) async fn run(
                 .binding_id
                 .clone();
             let launch = command.launch.context("--stdio needs --launch")?;
-            let served = serve(0, (config, overrides), &files);
+            let (ready, started) = tokio::sync::oneshot::channel();
+            let served = serve(
+                0,
+                (config, overrides),
+                &files,
+                start::Startup::Foreground(Some(ready)),
+            );
+            let relay = async {
+                started
+                    .await
+                    .context("the host exited before the managed stdio relay started")?;
+                stdio::relay(&files, &binding, &launch, command.inherit_env).await
+            };
             tokio::pin!(served);
             let relayed = tokio::select! {
                 ended = &mut served => {
                     ended?;
                     anyhow::bail!("the host stopped before the ACP stream ended");
                 }
-                relayed = stdio::relay(&files, &binding, &launch, command.inherit_env) => relayed,
+                relayed = relay => relayed,
             };
             tokio::time::timeout(Duration::from_secs(35), served)
                 .await
@@ -321,6 +335,11 @@ pub(crate) async fn run(
                 command.port,
                 config.context("host configuration is required")?,
                 &files,
+                if command.notify_launcher {
+                    start::Startup::detached()?
+                } else {
+                    start::Startup::Foreground(None)
+                },
             )
             .await
         }
@@ -355,26 +374,25 @@ async fn serve(
     port: i32,
     (config, overrides): (NoriConfig, NoriConfigOverrides),
     files: &HostFiles,
+    startup: start::Startup,
 ) -> anyhow::Result<()> {
     anyhow::ensure!(
         (0..=65535).contains(&port),
         "port must be between 0 and 65535"
     );
-    let lock = files.lock()?;
-    let deadline = Instant::now() + Duration::from_secs(2);
-    loop {
-        match lock.try_lock() {
-            Ok(()) => break,
-            Err(std::fs::TryLockError::WouldBlock) if Instant::now() < deadline => {
-                // Discovery probes briefly acquire the same lock. Only a
-                // persistent owner means another daemon is running.
-                tokio::time::sleep(Duration::from_millis(25)).await;
-            }
-            Err(error) => return Err(error).context("another host is already starting or running"),
+    let election = match startup {
+        start::Startup::Foreground(_) => Some(start::startup_lock(files).await?),
+        start::Startup::Detached(_) => None,
+    };
+    let lock = start::lifetime_lock(files).await?;
+    // A previous local host may have crashed before a managed host reused its home.
+    for name in ["state.json", "host.json"] {
+        match std::fs::remove_file(files.directory.join(name)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
         }
     }
-    // A crash can leave discovery state, but cannot retain the OS lock.
-    let _ = std::fs::remove_file(files.directory.join("state.json"));
     let token = files.new_token()?;
     let launches = if config.host.managed {
         Some(nori_harness::managed_launch::ManagedLaunches::from_config(
@@ -424,9 +442,11 @@ async fn serve(
                 .unwrap_or_else(|| "nori-cli".to_owned()),
         })?;
     }
-    files.publish(&HostState { endpoint, pid })?;
     #[cfg(unix)]
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    files.publish(&HostState { endpoint, pid })?;
+    startup.ready(server.host_instance())?;
+    drop(election);
     #[cfg(unix)]
     tokio::select! {
         _ = host.stop.notified() => {},

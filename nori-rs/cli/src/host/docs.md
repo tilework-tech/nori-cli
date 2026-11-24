@@ -60,10 +60,13 @@ plain nori TUI --pipe (controller)--> owned HostService --> its own SessionManag
 
 #### Local host and attach
 
-- [Startup](mod.rs) launches the same executable with a private foreground
-  argument, starts a Unix process session, disconnects stdin, and redirects
-  output to the host log. The launching command waits for an authenticated
-  readiness check before reporting success.
+- [Detached startup](start.rs) probes a live host directly. On a cold start,
+  callers take the per-home startup lock and check ownership again. The
+  elected caller launches the same executable in a new Unix process session
+  with null stdin and logs redirected. The child sends its instance UUID on
+  a private pipe after publishing discovery. The launcher checks that UUID
+  and its child's PID against the authenticated endpoint before returning.
+  Plain `nori` continues to use its in-process host and editable composer.
 - [HostFiles](../../../host-runtime/src/host/state.rs) creates the host directory beneath `NORI_HOME` with
   owner-only permissions. It validates ownership, rejects file symlinks and
   nonregular files, and holds an OS file lock for the entire host lifetime.

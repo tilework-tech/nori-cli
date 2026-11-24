@@ -23,8 +23,22 @@ pub struct ManagedClient {
 impl ManagedClient {
     /// Authenticate the WebSocket upgrade. The caller sends initialization.
     pub async fn connect(url: &str, token: &str) -> anyhow::Result<Self> {
+        Self::upgrade(url, token, false).await
+    }
+
+    /// Short-lived observer connection reserved for host readiness and shutdown.
+    pub async fn connect_lifecycle(url: &str, token: &str) -> anyhow::Result<Self> {
+        Self::upgrade(url, token, true).await
+    }
+
+    async fn upgrade(url: &str, token: &str, lifecycle: bool) -> anyhow::Result<Self> {
         anyhow::ensure!(!token.trim().is_empty(), "host token must not be empty");
         let mut request = url.into_client_request()?;
+        if lifecycle {
+            request
+                .headers_mut()
+                .insert("x-nori-lifecycle", "1".parse()?);
+        }
         let mut authorization = format!("Bearer {token}")
             .parse::<tokio_tungstenite::tungstenite::http::HeaderValue>()?;
         authorization.set_sensitive(true);

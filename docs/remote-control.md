@@ -331,8 +331,10 @@ The CLI stores discovery state, token, log, and lock under `$NORI_HOME/host`.
 The directory is created with mode `0700`; files are created with mode `0600`.
 Existing paths must be owned by the effective user and inaccessible to group
 and other users; files must be regular and cannot be symlinks. An OS-held lock,
-not the saved PID, determines whether the host is running. Each host start
-generates a new token and publishes its endpoint only after binding. Local
+not the saved PID, determines whether the host is running. Concurrent launchers elect one starter per home before spawning. A new host
+generates a token, binds its listener and publishes discovery. Its launcher
+checks the child's readiness signal against the authenticated endpoint.
+An already-running host answers directly. Local
 commands read that token automatically; startup prints its path, never its
 value. Background hosting is refused on platforms without the implemented Unix
 permission checks.
