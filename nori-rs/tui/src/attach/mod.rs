@@ -3,6 +3,7 @@
 mod input;
 mod new_session;
 mod render;
+mod replies;
 mod runtime;
 mod state;
 #[cfg(test)]

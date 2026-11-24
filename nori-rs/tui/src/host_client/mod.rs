@@ -19,8 +19,7 @@ use serde_json::Value;
 use serde_json::json;
 use tokio::sync::mpsc;
 
-/// Where a host listens and how to authenticate. The token is deliberately
-/// excluded from Debug output.
+/// Where a host listens and how to authenticate.
 pub(crate) struct HostEndpoint {
     pub endpoint: String,
     pub token: String,
@@ -248,9 +247,10 @@ impl<T> HostSessionClient<T> {
                 self.stop();
                 HostEvent::Stopped(reason)
             }
-            ConnectionEvent::Message(mut message) => match message["method"].as_str() {
-                Some("_nori/session/event") => HostEvent::Session(message["params"].take()),
-                Some("_nori/control/changed") => HostEvent::RoleChanged(
+            ConnectionEvent::Message(mut message) => match message.get("method").map(Value::as_str)
+            {
+                Some(Some("_nori/session/event")) => HostEvent::Session(message["params"].take()),
+                Some(Some("_nori/control/changed")) => HostEvent::RoleChanged(
                     message["params"]["role"]
                         .as_str()
                         .unwrap_or("watcher")
