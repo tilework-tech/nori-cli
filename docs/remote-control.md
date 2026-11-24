@@ -675,9 +675,13 @@ Preparing another agent or disconnecting also retires the unused selection.
 An adapter error during preparation is returned to the scoped list or
 activation request. Keep the foreground session until activation succeeds.
 The foreground terminal uses these requests on the pipe to the host it owns
-for `/agent` and, outside cloud mode, for `/resume` and the picker after the
-last `/close`. Startup, `/new`, a `/resume` while startup preparation is still
-in flight, and every cloud-mode picker still prepare the agent in-process.
+for `/agent` and, outside cloud mode, for `/resume`, the picker after the last
+`/close`, and `/new` while a session is live (which skips the picker and
+activates a fresh session at once), always in the folder of the session on
+screen. On that pipe the host prepares with the terminal's current
+configuration rather than its launch configuration. Startup, `/new` with no
+live session, a `/resume` or `/new` while startup preparation is still in
+flight, and every cloud-mode picker still prepare the agent in-process.
 
 ### Stdio transport
 

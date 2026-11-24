@@ -137,17 +137,33 @@ impl HostService {
     ) -> Result<Value, AcpError> {
         let PrepareAgentParams { agent, cwd } =
             serde_json::from_value(params).map_err(AcpError::invalid_params)?;
-        let folder = nori_harness::managed_launch::session_folder(
-            cwd.as_deref().unwrap_or(&self.config.cwd),
-        )
-        .map_err(AcpError::invalid_params)?;
-        let mut config = if folder == self.config.cwd {
-            (*self.config).clone()
+        let base = self
+            .acp
+            .connection(client)
+            .ok()
+            .filter(|connection| {
+                matches!(
+                    connection.origin,
+                    nori_harness::remote_agent::HostClientOrigin::Foreground
+                )
+            })
+            .and_then(|_| {
+                self.foreground_config
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone()
+            })
+            .unwrap_or_else(|| self.config.clone());
+        let folder =
+            nori_harness::managed_launch::session_folder(cwd.as_deref().unwrap_or(&base.cwd))
+                .map_err(AcpError::invalid_params)?;
+        let mut config = if folder == base.cwd {
+            (*base).clone()
         } else {
             self.config_in(folder.clone()).await?
         };
         let agent =
-            nori_harness::resolve_agent_slug(agent.as_deref().unwrap_or(&self.config.active_agent));
+            nori_harness::resolve_agent_slug(agent.as_deref().unwrap_or(&base.active_agent));
         if !nori_harness::registry::list_available_agents()
             .iter()
             .any(|a| a.agent_name == agent)
