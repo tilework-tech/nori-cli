@@ -77,6 +77,9 @@ for line in sys.stdin:
             update(sid, "agent_message_chunk", f"{name}/{sid}/{decision['outcome']}")
             send(id=prompt, result={"stopReason": "end_turn", "_meta": {"decision": decision, "receivedPromptMeta": metadata}})
     elif method == "initialize":
+        if Path("fixture-slow-init").exists():
+            import time
+            time.sleep(1.5)
         if params.get("_meta", {}).get("fixture.rejectInitialize"):
             send(id=rid, error={"code": -32603, "message": "fixture unavailable", "data": {"retry": True}})
             continue
