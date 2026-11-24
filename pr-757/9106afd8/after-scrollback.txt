@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/proof757-harbor.PoI7 · Approvals: Agent
+  Agent        Mock ACP · Mock Default Model · Medium
+
+• Resuming session with Mock ACP...
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• replay chunk 0
+
+
+› loaded user activity
+
+
+  2 ready
+
+
+› ? for shortcuts
+
