@@ -34,16 +34,22 @@ impl PromptInterrupt {
         }
     }
 
+    fn lock_state(&self) -> std::sync::MutexGuard<'_, Admission> {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     pub fn live(&self) -> bool {
-        !matches!(*self.state.lock().unwrap(), Admission::Finished)
+        !matches!(*self.lock_state(), Admission::Finished)
     }
 
     pub fn retire(&self) {
-        *self.state.lock().unwrap() = Admission::Finished;
+        *self.lock_state() = Admission::Finished;
     }
 
     pub fn interrupt(&self) -> Option<HostCall> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.lock_state();
         match &*state {
             Admission::Admitted(id) => {
                 let call = self.cancel(id.clone());
@@ -66,7 +72,7 @@ impl PromptInterrupt {
     }
 
     pub fn admitted_id(&self, id: Option<&str>) -> Option<HostCall> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.lock_state();
         let previous = std::mem::replace(&mut *state, Admission::Finished);
         let id = id?.to_owned();
         match previous {
