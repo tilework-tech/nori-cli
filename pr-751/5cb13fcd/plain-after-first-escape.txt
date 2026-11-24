@@ -1,0 +1,30 @@
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/proofhome.MNVA/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› survey the orchard mock:stream-until-cancel
+
+
+• Praying to the demo gods (4s • esc to interrupt)
+
+
+/
+
+
+
+
+
+
+
+
+
+
+
+
