@@ -167,7 +167,7 @@ impl ApprovalOverlay {
                 request_id: serde_json::json!(request.request_id),
                 response: acp::RequestPermissionResponse::new(outcome),
             },
-            feedback: self.app_event_tx.clone(),
+            reply: crate::app_event_sender::HostReply::ReportError(self.app_event_tx.clone()),
         });
     }
 

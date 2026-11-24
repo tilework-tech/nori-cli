@@ -55,7 +55,8 @@ App (HostLink) ──HostCall + tag──▶ HostSessionClient ──JSON──�
 
 - [`HostSessionClient<T>`](mod.rs) allocates increasing JSON-RPC ids, stores
   the caller's tag per id, and serializes each `HostCall` to its wire method.
-  `request` expects a reply; `notify` sends a JSON-RPC notification with no id
+  If the connection cannot enqueue a request, `request` returns its tag so
+  the caller can resolve the waiting operation. `notify` sends a JSON-RPC notification with no id
   (`Cancel` is sent as the standard `session/cancel` notification).
   `has_pending` lets a caller avoid duplicate calls, such as a second
   outstanding list.

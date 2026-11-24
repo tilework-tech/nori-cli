@@ -159,7 +159,7 @@ impl App {
         host: &mut super::host_link::HostLink,
     ) -> Result<bool> {
         match event {
-            AppEvent::HostRequest { call, feedback } => host.request(call, feedback),
+            AppEvent::HostRequest { call, reply } => host.request(call, reply),
             AppEvent::ContextTimelineReady {
                 generation,
                 conversation_id,

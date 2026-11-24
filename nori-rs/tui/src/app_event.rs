@@ -42,10 +42,6 @@ pub(crate) enum QueuedPromptAction {
 #[derive(Debug)]
 pub(crate) enum HarnessAction {
     Cancel,
-    CancelExternal {
-        generation: SessionGeneration,
-        id: String,
-    },
     /// Take a queued prompt out of the queue before it is sent.
     ReclaimQueuedPrompt {
         event_id: String,
@@ -84,7 +80,7 @@ pub(crate) enum HarnessAction {
 pub(crate) enum AppEvent {
     HostRequest {
         call: crate::host_client::HostCall,
-        feedback: crate::app_event_sender::AppEventSender,
+        reply: crate::app_event_sender::HostReply,
     },
     ContextTimelineReady {
         generation: SessionGeneration,

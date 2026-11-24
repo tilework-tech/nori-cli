@@ -448,6 +448,15 @@ where
                                 match admitted {
                                     HostRequest::Reply(reply) => reply,
                                     HostRequest::Forward(request) => {
+                                        if matches!(transport, Transport::Lines(super::HostClientOrigin::Foreground))
+                                            && let Some(receipt) = state.host.admit_foreground_input(&request)
+                                        {
+                                            let outbound = outbound.clone();
+                                            tokio::spawn(async move {
+                                                let _ = outbound.send(receipt.await).await;
+                                            });
+                                            continue;
+                                        }
                                         let method = request["method"].as_str().unwrap_or_default();
                                         if state.host.runs_concurrently(method) {
                                             let host = state.host.clone();

@@ -14,7 +14,7 @@ use crate::owned_host::StopHost;
 /// What a call to the owned host was for.
 pub(crate) enum HostTag {
     Initialize,
-    Operation(crate::app_event_sender::AppEventSender),
+    Operation(crate::app_event_sender::HostReply),
 }
 
 pub(crate) struct HostLink {
@@ -55,15 +55,10 @@ impl HostLink {
             .map_err(|_| anyhow::anyhow!("The host this terminal owns stopped."))
     }
 
-    pub fn request(&mut self, call: HostCall, feedback: crate::app_event_sender::AppEventSender) {
-        if self
-            .client
-            .request(call, HostTag::Operation(feedback.clone()))
-            .is_err()
+    pub fn request(&mut self, call: HostCall, reply: crate::app_event_sender::HostReply) {
+        if let Err(HostTag::Operation(reply)) = self.client.request(call, HostTag::Operation(reply))
         {
-            feedback.send(crate::app_event::AppEvent::HarnessActionFailed(
-                "The host this terminal owns stopped.".into(),
-            ));
+            reply.deliver(Err(anyhow::anyhow!("The host this terminal owns stopped.")));
         }
     }
 
@@ -82,13 +77,13 @@ impl HostLink {
                 tag: HostTag::Operation(feedback),
                 result,
             } => {
-                if let Err(error) = result {
-                    feedback.send(crate::app_event::AppEvent::HarnessActionFailed(
+                feedback.deliver(result.map_err(|error| {
+                    anyhow::anyhow!(
                         error
                             .message
-                            .unwrap_or_else(|| "Host request failed.".into()),
-                    ));
-                }
+                            .unwrap_or_else(|| "Host request failed.".into())
+                    )
+                }));
                 Ok(())
             }
             HostEvent::Reply {

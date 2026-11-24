@@ -50,7 +50,7 @@ pub(crate) enum HostCall {
         expected_turn: nori_protocol::acp::v1::RequestId,
         message_id: String,
         intent: nori_harness::FollowUpIntent,
-        text: String,
+        prompt: Vec<nori_protocol::acp::v1::ContentBlock>,
     },
     Cancel {
         session_id: String,
@@ -101,12 +101,12 @@ impl HostCall {
                 expected_turn,
                 message_id,
                 intent,
-                text,
+                prompt,
             } => (
                 "_nori/session/follow_up",
                 json!({"session_id": session_id, "expected_turn": expected_turn,
                     "message_id": message_id, "intent": intent,
-                    "prompt": [{"type": "text", "text": text}]}),
+                    "prompt": prompt}),
             ),
             Self::Cancel { session_id } => ("session/cancel", json!({"sessionId": session_id})),
             Self::CancelObserved {
@@ -206,16 +206,20 @@ impl<T> HostSessionClient<T> {
         }
     }
 
-    pub fn request(&mut self, call: HostCall, tag: T) -> Result<(), Unsent> {
+    pub fn request(&mut self, call: HostCall, tag: T) -> Result<(), T> {
         if self.stopped {
-            return Err(Unsent);
+            return Err(tag);
         }
         self.next_id += 1;
         let id = self.next_id;
         let (method, params) = call.into_wire();
-        self.requests
-            .send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}))
-            .map_err(|_| Unsent)?;
+        if self
+            .requests
+            .send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
+            .is_err()
+        {
+            return Err(tag);
+        }
         self.pending.insert(id, tag);
         Ok(())
     }
