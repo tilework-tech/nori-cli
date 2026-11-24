@@ -15,6 +15,7 @@ use tokio::sync::mpsc::unbounded_channel;
 
 fn request(id: &str) -> ApprovalRequest {
     ApprovalRequest {
+        session_id: Some(nori_harness::ConversationId::new()),
         request_id: id.to_string().into(),
         title: "Run echo ok".to_string(),
         kind: crate::presentation::ToolKind::Execute,
@@ -82,18 +83,22 @@ fn pane(clock: &ManualClock) -> (BottomPane, UnboundedReceiver<AppEvent>) {
 fn answers(rx: &mut UnboundedReceiver<AppEvent>) -> Vec<(String, String)> {
     let mut answers = Vec::new();
     while let Ok(event) = rx.try_recv() {
-        if let AppEvent::HarnessAction(crate::app_event::HarnessAction::RespondToAgent {
-            request_id,
-            response,
-        }) = event
-            && let Ok(acp::ClientResponse::RequestPermissionResponse(response)) = *response
+        if let AppEvent::HostRequest {
+            call:
+                crate::host_client::HostCall::Respond {
+                    request_id,
+                    response,
+                    ..
+                },
+            ..
+        } = event
         {
             let outcome = match response.outcome {
                 acp::RequestPermissionOutcome::Selected(selected) => selected.option_id.to_string(),
                 acp::RequestPermissionOutcome::Cancelled => "cancelled".to_string(),
                 _ => "other".to_string(),
             };
-            answers.push((request_id.to_string(), outcome));
+            answers.push((request_id.as_str().unwrap().to_owned(), outcome));
         }
     }
     answers

@@ -291,6 +291,8 @@ impl App {
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
+        host.initialize()
+            .map_err(|error| color_eyre::eyre::eyre!(error))?;
         let (app_event_tx, mut app_event_rx) = unbounded_channel();
         let app_event_tx = AppEventSender::new(app_event_tx);
 
@@ -501,6 +503,7 @@ impl App {
                     latest_version,
                     crate::update_action::get_update_action(),
                 ))),
+                host,
             )
             .await?;
         }
@@ -519,7 +522,7 @@ impl App {
         let ran = async {
             while select! {
                 Some(event) = app_event_rx.recv() => {
-                    app.handle_event(tui, event).await?
+                    app.handle_event(tui, event, host).await?
                 }
                 Some(event) = tui_events.next() => {
                     app.handle_tui_event(tui, event).await?

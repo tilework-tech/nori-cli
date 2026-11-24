@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use crate::app_event::AppEvent;
-use crate::app_event::HarnessAction;
 use crate::app_event_sender::AppEventSender;
 use crate::bottom_pane::BottomPaneView;
 use crate::bottom_pane::CancellationEvent;
@@ -10,6 +9,7 @@ use crate::bottom_pane::list_selection_view::SelectionItem;
 use crate::bottom_pane::list_selection_view::SelectionViewParams;
 use crate::diff_render::DiffSummary;
 use crate::history_cell;
+use crate::host_client::HostCall;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::render::renderable::ColumnRenderable;
@@ -29,6 +29,7 @@ use ratatui::widgets::Wrap;
 /// An ACP permission request awaiting a schema-native client response.
 #[derive(Clone, Debug)]
 pub(crate) struct ApprovalRequest {
+    pub(crate) session_id: Option<nori_harness::ConversationId>,
     pub(crate) request_id: acp::RequestId,
     pub(crate) title: String,
     pub(crate) kind: crate::presentation::ToolKind,
@@ -141,13 +142,7 @@ impl ApprovalOverlay {
         let outcome = acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
             option.permission.option_id.clone(),
         ));
-        self.app_event_tx
-            .send(AppEvent::HarnessAction(HarnessAction::RespondToAgent {
-                request_id: request.request_id.clone(),
-                response: Box::new(Ok(acp::ClientResponse::RequestPermissionResponse(
-                    acp::RequestPermissionResponse::new(outcome),
-                ))),
-            }));
+        self.answer(request, outcome);
         self.current_complete = true;
         self.advance_queue();
     }
@@ -156,13 +151,24 @@ impl ApprovalOverlay {
         let Some(request) = self.current_request.as_ref() else {
             return;
         };
-        self.app_event_tx
-            .send(AppEvent::HarnessAction(HarnessAction::RespondToAgent {
-                request_id: request.request_id.clone(),
-                response: Box::new(Ok(acp::ClientResponse::RequestPermissionResponse(
-                    acp::RequestPermissionResponse::new(acp::RequestPermissionOutcome::Cancelled),
-                ))),
-            }));
+        self.answer(request, acp::RequestPermissionOutcome::Cancelled);
+    }
+
+    fn answer(&self, request: &ApprovalRequest, outcome: acp::RequestPermissionOutcome) {
+        let Some(session_id) = request.session_id else {
+            self.app_event_tx.send(AppEvent::HarnessActionFailed(
+                "The permission request has no host session.".into(),
+            ));
+            return;
+        };
+        self.app_event_tx.send(AppEvent::HostRequest {
+            call: HostCall::Respond {
+                session_id: session_id.to_string(),
+                request_id: serde_json::json!(request.request_id),
+                response: acp::RequestPermissionResponse::new(outcome),
+            },
+            feedback: self.app_event_tx.clone(),
+        });
     }
 
     fn dismiss(&mut self, request_id: &acp::RequestId) -> bool {

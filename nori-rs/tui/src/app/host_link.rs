@@ -14,6 +14,7 @@ use crate::owned_host::StopHost;
 /// What a call to the owned host was for.
 pub(crate) enum HostTag {
     Initialize,
+    Operation(crate::app_event_sender::AppEventSender),
 }
 
 pub(crate) struct HostLink {
@@ -48,6 +49,24 @@ impl HostLink {
         )
     }
 
+    pub fn initialize(&mut self) -> anyhow::Result<()> {
+        self.client
+            .request(HostCall::Initialize, HostTag::Initialize)
+            .map_err(|_| anyhow::anyhow!("The host this terminal owns stopped."))
+    }
+
+    pub fn request(&mut self, call: HostCall, feedback: crate::app_event_sender::AppEventSender) {
+        if self
+            .client
+            .request(call, HostTag::Operation(feedback.clone()))
+            .is_err()
+        {
+            feedback.send(crate::app_event::AppEvent::HarnessActionFailed(
+                "The host this terminal owns stopped.".into(),
+            ));
+        }
+    }
+
     /// The host only sends what this pipe attached; sessions the App runs
     /// through the manager are not attached here, so the pipe stays quiet
     /// apart from replies.
@@ -58,10 +77,20 @@ impl HostLink {
     /// An error means the host can no longer serve this terminal.
     pub fn handle(&mut self, event: ConnectionEvent) -> anyhow::Result<()> {
         match self.client.incoming(event) {
-            HostEvent::Connected => self
-                .client
-                .request(HostCall::Initialize, HostTag::Initialize)
-                .map_err(|_| anyhow::anyhow!("The host this terminal owns stopped.")),
+            HostEvent::Connected => Ok(()),
+            HostEvent::Reply {
+                tag: HostTag::Operation(feedback),
+                result,
+            } => {
+                if let Err(error) = result {
+                    feedback.send(crate::app_event::AppEvent::HarnessActionFailed(
+                        error
+                            .message
+                            .unwrap_or_else(|| "Host request failed.".into()),
+                    ));
+                }
+                Ok(())
+            }
             HostEvent::Reply {
                 tag: HostTag::Initialize,
                 result: Err(error),

@@ -183,7 +183,7 @@ pub(super) enum Transport {
     /// The host's own stdin and stdout: its one client always controls, and
     /// an ended subscription is reported in band, as the stream cannot close
     /// and reopen.
-    Stdio,
+    Lines(super::HostClientOrigin),
 }
 
 async fn serve<M: ManagedAgent>(
@@ -243,7 +243,15 @@ pub(super) async fn serve_stdio<M: ManagedAgent, T>(
             Ok::<_, std::io::Error>(output)
         },
     );
-    serve_lines(host, instance, incoming, sink, stop).await
+    serve_lines(
+        host,
+        instance,
+        super::HostClientOrigin::Independent,
+        incoming,
+        sink,
+        stop,
+    )
+    .await
 }
 
 /// Serve one in-process host client over channels of JSON-RPC lines until
@@ -251,6 +259,7 @@ pub(super) async fn serve_stdio<M: ManagedAgent, T>(
 pub(super) async fn serve_pipe<M: ManagedAgent, T>(
     host: Arc<M>,
     instance: String,
+    origin: super::HostClientOrigin,
     input: tokio::sync::mpsc::Receiver<String>,
     output: tokio::sync::mpsc::Sender<String>,
     stop: impl std::future::Future<Output = T>,
@@ -265,7 +274,7 @@ pub(super) async fn serve_pipe<M: ManagedAgent, T>(
         }
         Ok::<_, std::io::Error>(output)
     });
-    serve_lines(host, instance, incoming, sink, stop).await
+    serve_lines(host, instance, origin, incoming, sink, stop).await
 }
 
 /// The client of a line transport always controls; blank lines are skipped
@@ -273,6 +282,7 @@ pub(super) async fn serve_pipe<M: ManagedAgent, T>(
 async fn serve_lines<M: ManagedAgent, T>(
     host: Arc<M>,
     instance: String,
+    origin: super::HostClientOrigin,
     incoming: impl futures::Stream<Item = std::io::Result<String>> + Send,
     sink: impl futures::Sink<Message, Error = std::io::Error> + Send,
     stop: impl std::future::Future<Output = T>,
@@ -304,7 +314,7 @@ async fn serve_lines<M: ManagedAgent, T>(
         &state,
         0,
         cancel.clone(),
-        Transport::Stdio,
+        Transport::Lines(origin),
     );
     tokio::pin!(serving);
     let stopped = tokio::select! {
@@ -411,7 +421,7 @@ where
                             let reply = if request["method"] == "initialize" {
                                 let observe = match transport {
                                     Transport::WebSocket => request["params"]["observe"] == true,
-                                    Transport::Stdio => false,
+                                    Transport::Lines(_) => false,
                                 };
                                 let mut reply = state.host.request_from(client, request).await;
                                 if reply.response.get("error").is_none() {
@@ -422,6 +432,10 @@ where
                                     if !initialized {
                                         state.host.connection_opened(super::managed::HostConnection {
                                             client,
+                                            origin: match transport {
+                                                Transport::WebSocket => super::HostClientOrigin::Independent,
+                                                Transport::Lines(origin) => origin,
+                                            },
                                             outbound: outbound.clone(),
                                             close: cancel.clone(),
                                             role: roles.clone(),
@@ -474,7 +488,7 @@ where
                     let Some(envelope) = event else {
                         match transport {
                             Transport::WebSocket => break,
-                            Transport::Stdio => {
+                            Transport::Lines(_) => {
                                 subscription = None;
                                 send_frame(&mut sink, Message::Text(json!({"jsonrpc":"2.0","method":"_nori/session/subscription_ended","params":{"reason":"replay_required"}}).to_string().into())).await?;
                                 continue;

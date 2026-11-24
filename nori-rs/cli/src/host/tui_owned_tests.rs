@@ -123,3 +123,67 @@ async fn stopping_the_host_ends_its_sessions() {
     );
     draining.await.unwrap();
 }
+
+#[tokio::test]
+async fn permission_on_the_foreground_pipe_is_answered_once_as_the_user() {
+    use nori_protocol::AcpEvent;
+    use nori_protocol::NoriEvent;
+    use nori_protocol::SessionEvent;
+
+    let home = TempDir::new().unwrap();
+    let (config, overrides) = config(&home);
+    let mut host = launcher()(&config, &overrides).unwrap();
+    let mut events = host.manager.subscribe(256);
+    call(&mut host, 1, "initialize", json!({})).await;
+    let created = call(
+        &mut host,
+        2,
+        "_nori/session/new",
+        json!({"agent":"mock-model"}),
+    )
+    .await;
+    let id = &created["result"]["session_id"];
+    let prompted = call(
+        &mut host,
+        3,
+        "_nori/session/prompt",
+        json!({
+            "session_id":id, "prompt":[{"type":"text","text":"mock:request-permission"}]
+        }),
+    )
+    .await;
+    assert!(prompted.get("error").is_none(), "{prompted}");
+    let request = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if let SessionEvent::Acp(AcpEvent::Request {
+                request_id,
+                request: nori_protocol::acp::v1::AgentRequest::RequestPermissionRequest(_),
+            }) = events.recv().await.unwrap().event
+            {
+                break request_id;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    let answer = json!({"session_id":id, "request_id":request, "responder":"remote_control",
+        "response":{"outcome":{"outcome":"selected","optionId":"allow"}}});
+    let accepted = call(&mut host, 4, "_nori/session/respond", answer.clone()).await;
+    assert_eq!(accepted["result"]["answered"], true, "{accepted}");
+    let duplicate = call(&mut host, 5, "_nori/session/respond", answer).await;
+    assert_eq!(duplicate["error"]["code"], -32600);
+    let resolved = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if let SessionEvent::Nori(NoriEvent::RequestResolved(resolved)) =
+                events.recv().await.unwrap().event
+            {
+                break resolved;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(resolved.request_id, request);
+    assert_eq!(resolved.answered_by, "client");
+    (host.stop)().await.unwrap();
+}

@@ -428,10 +428,6 @@ impl ChatWidget {
                     handle.set_goal_status(status).await.map(drop)
                 }
                 HarnessAction::ClearGoal => handle.clear_goal().await,
-                HarnessAction::RespondToAgent {
-                    request_id,
-                    response,
-                } => handle.respond_to_agent(request_id, *response).await,
             };
             if let Err(error) = result
                 && !handle.is_expected_shutdown_error(&error)

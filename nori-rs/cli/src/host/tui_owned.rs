@@ -41,8 +41,9 @@ fn serve(host: Arc<HostService>) -> OwnedHost {
     let (to_host, from_client) = mpsc::channel(64);
     let (to_client, from_host) = mpsc::channel(1024);
     let (stop, stopped) = oneshot::channel::<()>();
-    let served = tokio::spawn(RemoteAcpServer::serve_host_pipe(
+    let served = tokio::spawn(RemoteAcpServer::serve_host_pipe_from(
         host.clone(),
+        nori_harness::remote_agent::HostClientOrigin::Foreground,
         from_client,
         to_client,
         stopped,

@@ -353,20 +353,22 @@ impl HostService {
                 serde_json::from_value::<acp::RequestPermissionResponse>(result.clone()).is_ok()
             })
             .unwrap_or_else(|| json!({"outcome": {"outcome": "cancelled"}}));
-        let reply = nori_harness::remote_agent::ManagedAgent::request(
-            &self.managed,
-            json!({
-                "jsonrpc": "2.0",
-                "id": 0,
-                "method": "_nori/session/respond",
-                "params": {
-                    "session_id": ask.session.to_string(),
-                    "request_id": ask.request_id,
-                    "response": response,
-                },
-            }),
-        )
-        .await;
+        let reply = self
+            .managed
+            .request_with_origin(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 0,
+                    "method": "_nori/session/respond",
+                    "params": {
+                        "session_id": ask.session.to_string(),
+                        "request_id": ask.request_id,
+                        "response": response,
+                    },
+                }),
+                connection.origin,
+            )
+            .await;
         if let Some(error) = reply.response.get("error") {
             tracing::debug!(%error, "a permission answer was not used");
         }

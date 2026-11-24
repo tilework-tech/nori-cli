@@ -725,7 +725,7 @@ nori_tui::run_main ──resolved config + overrides──▶ launcher()
                                                        │
                        fresh SessionManager (max_sessions) ─▶ host_service(...)
                                                        │
-                     RemoteAcpServer::serve_host_pipe ◀┘
+                     RemoteAcpServer::serve_host_pipe_from ◀┘
                                                        │
 OwnedHost { manager, to_host, from_host, stop } ◀──────┘ ──▶ TUI App
 ```
@@ -738,12 +738,12 @@ OwnedHost { manager, to_host, from_host, stop } ◀──────┘ ──�
   recovery. It does not initialize the agent registry: the TUI already did,
   including agents its caller injected (such as `nori cloud`'s), and
   reloading from configuration would drop them.
-- **Two halves, one host.** The TUI receives the host's own manager plus an
-  ACP pipe that `serve_host_pipe` always treats as the controller. Both reach
+- **Two halves, one host.** The TUI receives the host's own manager plus a
+  private controller pipe with foreground origin. Both reach
   the same sessions. Foreground features with no wire method yet (compaction,
   fork and undo, shell, history, goals, custom prompts, `/context`, queue
-  reclaim) use the manager directly; in this layer session operations also
-  still go through the manager. Only this launcher builds an `OwnedHost`, so
+  reclaim) use the manager directly. Permission answers go over the pipe
+  with the host session ID captured by the overlay. Only this launcher builds an `OwnedHost`, so
   `nori attach` never holds the in-process half.
 - **Private.** Like the in-process exec host, it binds no socket, writes no
   token or discovery files, and takes no lock. It and a background host in

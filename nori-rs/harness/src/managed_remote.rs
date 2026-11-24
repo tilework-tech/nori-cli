@@ -13,6 +13,7 @@ use serde_json::Value;
 use serde_json::json;
 
 use crate::ConversationId;
+use crate::remote_agent::HostClientOrigin;
 use crate::remote_agent::REMOTE_CONTROL_RESPONDER;
 use crate::session_manager::SessionManager;
 
@@ -23,7 +24,6 @@ pub struct ManagedRemoteHost {
     manager: SessionManager,
     authenticated_controller: bool,
     selected: Mutex<Option<ConversationId>>,
-    answers: tokio::sync::Mutex<Vec<(ConversationId, acp::RequestId)>>,
 }
 
 #[derive(Deserialize)]
@@ -90,7 +90,6 @@ impl ManagedRemoteHost {
             manager,
             authenticated_controller: false,
             selected: Mutex::new(None),
-            answers: tokio::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -133,6 +132,7 @@ impl ManagedRemoteHost {
         &self,
         method: &str,
         params: Value,
+        origin: HostClientOrigin,
     ) -> Result<(Value, Option<ManagedSubscription>), RemoteError> {
         match method {
             "initialize" => Ok((
@@ -284,41 +284,30 @@ impl ManagedRemoteHost {
                 let params: RespondParams = serde_json::from_value(params)
                     .map_err(|error| RemoteError::new(-32602, error))?;
                 let id = self.target(params.session_id.as_deref())?;
-                let mut answers = self.answers.lock().await;
-                // Keep claims until the manager observes their resolution, so
-                // two answers cannot race its asynchronous event pump.
-                answers.retain(|(session, request)| {
-                    self.manager
-                        .get(session)
-                        .is_some_and(|record| record.pending_requests.contains(request))
-                });
-                let record = self
-                    .manager
-                    .get(&id)
-                    .ok_or_else(|| RemoteError::new(-32002, "unknown session id"))?;
-                if !record.pending_requests.contains(&params.request_id)
-                    || answers.contains(&(id, params.request_id.clone()))
-                {
-                    return Err(RemoteError::new(
-                        -32600,
-                        "no unanswered permission request with this session and request id",
-                    ));
-                }
                 let handle = self
                     .manager
-                    .handle(&id)
-                    .ok_or_else(|| RemoteError::new(-32002, "session is not running"))?
-                    .with_responder(REMOTE_CONTROL_RESPONDER);
+                    .claim_permission(&id, &params.request_id)
+                    .ok_or_else(|| {
+                        RemoteError::new(
+                            -32600,
+                            "no unanswered permission request with this session and request id",
+                        )
+                    })?;
+                let handle = match origin {
+                    HostClientOrigin::Independent => {
+                        handle.with_responder(REMOTE_CONTROL_RESPONDER)
+                    }
+                    HostClientOrigin::Foreground => handle,
+                };
                 handle
                     .respond_to_agent(
-                        params.request_id.clone(),
+                        params.request_id,
                         Ok(acp::ClientResponse::RequestPermissionResponse(
                             params.response,
                         )),
                     )
                     .await
                     .map_err(|error| RemoteError::new(-32000, error))?;
-                answers.push((id, params.request_id));
                 Ok((json!({"session_id":id.to_string(),"answered":true}), None))
             }
             _ => Err(RemoteError::new(-32601, "method not found")),
@@ -328,6 +317,17 @@ impl ManagedRemoteHost {
 
 impl ManagedAgent for ManagedRemoteHost {
     async fn request(&self, request: Value) -> ManagedReply {
+        self.request_with_origin(request, HostClientOrigin::Independent)
+            .await
+    }
+}
+
+impl ManagedRemoteHost {
+    pub async fn request_with_origin(
+        &self,
+        request: Value,
+        origin: HostClientOrigin,
+    ) -> ManagedReply {
         let id = request.get("id").cloned().unwrap_or(Value::Null);
         let valid = request["jsonrpc"] == "2.0"
             && request["method"].is_string()
@@ -338,6 +338,7 @@ impl ManagedAgent for ManagedRemoteHost {
             self.dispatch(
                 request["method"].as_str().unwrap_or_default(),
                 request.get("params").cloned().unwrap_or_else(|| json!({})),
+                origin,
             )
             .await
         } else {

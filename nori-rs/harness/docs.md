@@ -365,8 +365,8 @@ Legacy `_nori/session/prompt` admission calls `HarnessHandle::prompt_with_meta_i
 the harness request ID; completion remains in the envelope stream. Permission
 answers validate the session/request pair against manager pending requests and
 serialize managed answer claims until the event pump observes resolution.
-They use the remote responder label, so every observer sees the same
-`RequestResolved`. Managed disconnect does not cancel a turn or resolve its
+All observers see the same `RequestResolved`, with the identity the host
+assigned to the answering connection. Managed disconnect does not cancel a turn or resolve its
 pending permission: the continuing session can be controlled after reconnect.
 
 The [follow-up operation](../cli/src/host/docs.md#mid-turn-follow-ups) uses the same harness session driver for direct input and background-host controllers. It checks the expected turn, retains a receipt keyed by message ID and routes an explicit queue or guarded fallback through the existing prompt FIFO. A successful injection leaves the original prompt responsible for completion, usage and cancellation.
@@ -451,10 +451,9 @@ and `update_goal` tools must not control Nori continuation.
 ACP permission requests that require a consumer decision are emitted as
 `SessionEvent::Acp(AcpEvent::Request { request_id, request })`. A consumer
 responds through `respond_to_agent` with the same ID and a schema-native success
-or error. Each handle carries a responder label (`with_responder`, default
-`runtime::DEFAULT_RESPONDER` = `client`; `ManagedRemoteHost` labels the handles
-it answers through `remote_agent::REMOTE_CONTROL_RESPONDER` = `remote_control`) that the
-session manager uses to say who answered. `AskForApproval::Never` resolves permission requests inside the
+or error. The host records `client` for its foreground terminal and
+`remote_control` for an independent controller. Both use the same pending-request
+check and answer claim. `AskForApproval::Never` resolves permission requests inside the
 harness, and setup-time permission requests are cancelled internally because no
 consumer session exists yet. Filesystem requests are handled in
 `nori-acp-host`; they do not appear as duplicate delegated requests. Terminal
