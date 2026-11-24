@@ -1950,6 +1950,12 @@ impl App {
                 tui.frame_requester().schedule_frame();
                 return;
             }
+
+            let screen_binding = self.hotkey_config.binding_for(HotkeyAction::ToggleScreen);
+            if matches_binding(screen_binding, &key_event) {
+                self.app_event_tx.send(AppEvent::ToggleScreenMode);
+                return;
+            }
         }
 
         match key_event {

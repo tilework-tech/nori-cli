@@ -209,7 +209,9 @@ jump to a long history takes; run it with `--ignored --nocapture`.
 transcript, keeps a draft across the Ctrl+T transcript overlay and a resize,
 follows Alt+, session moves, and that returning inline leaves every prompt
 and answer in the scrollback exactly once, including a turn that streamed
-(paced by `MOCK_AGENT_RESPONSE_CHUNK_DELAY_MS`) while full-screen.
+(paced by `MOCK_AGENT_RESPONSE_CHUNK_DELAY_MS`) while full-screen. One
+scenario switches with Ctrl+L while a draft is typed and checks that the
+draft stays in the composer, unsent, until Enter sends it once.
 
 [Tool output preference scenarios](tests/tool_output_preference.rs) use a
 shared home and the mock agent's `MOCK_AGENT_SEND_COMMAND_OUTPUT` command to

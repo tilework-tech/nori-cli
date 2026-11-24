@@ -284,3 +284,59 @@ fn moving_between_sessions_while_full_screen_shows_each_session_and_reprints_on_
         "the scrollback belongs to the session on screen:\n{history}"
     );
 }
+
+/// The text on the composer's prompt line, without the `›` marker.
+fn composer_line(screen: &str) -> String {
+    screen
+        .lines()
+        .rev()
+        .find_map(|line| line.trim_start().strip_prefix('›'))
+        .map(|rest| rest.trim().to_string())
+        .unwrap_or_default()
+}
+
+#[test]
+fn the_screen_key_switches_views_and_leaves_an_unsent_draft_alone() {
+    let mut session = spawn(SessionConfig::new().with_mock_response(ANSWER));
+    session.submit_input("what did the keeper count").unwrap();
+    session
+        .wait_for_text(ANSWER, TIMEOUT)
+        .expect("inline answer");
+    session.settle(Duration::from_millis(300));
+
+    let draft = "count the terns at noon";
+    session.type_input(draft).unwrap();
+    session.settle(Duration::from_millis(300));
+
+    session.send_key(Key::Ctrl('l')).unwrap();
+    wait_for_screen(&mut session, true);
+    let screen = session.screen_contents();
+    assert_eq!(
+        composer_line(&screen),
+        draft,
+        "the full-screen composer holds the draft:\n{screen}"
+    );
+    assert_eq!(count(&screen, ANSWER), 1, "nothing was sent:\n{screen}");
+    assert_eq!(count(&screen, draft), 1, "nothing was sent:\n{screen}");
+
+    session.send_key(Key::Ctrl('l')).unwrap();
+    wait_for_screen(&mut session, false);
+    let screen = session.screen_contents();
+    assert_eq!(
+        composer_line(&screen),
+        draft,
+        "the inline composer holds the draft:\n{screen}"
+    );
+    let history = session.history_contents();
+    assert_eq!(count(&history, ANSWER), 1, "nothing was sent:\n{history}");
+    assert_eq!(count(&history, draft), 1, "nothing was sent:\n{history}");
+
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for(|screen| count(screen, ANSWER) == 2, TIMEOUT)
+        .expect("Enter sends the draft and it is answered");
+    session.settle(Duration::from_millis(800));
+    let history = session.history_contents();
+    assert_eq!(count(&history, ANSWER), 2, "one new answer:\n{history}");
+    assert_eq!(count(&history, draft), 1, "sent exactly once:\n{history}");
+}

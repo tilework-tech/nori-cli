@@ -340,6 +340,7 @@ fn shortcut_overlay_lines(state: ShortcutsState) -> Vec<Line<'static>> {
     let mut quit = Line::from("");
     let mut show_transcript = Line::from("");
     let mut toggle_plan_drawer = Line::from("");
+    let mut toggle_screen = Line::from("");
 
     for descriptor in SHORTCUTS {
         if let Some(text) = descriptor.overlay_entry(state) {
@@ -353,6 +354,7 @@ fn shortcut_overlay_lines(state: ShortcutsState) -> Vec<Line<'static>> {
                 ShortcutId::Quit => quit = text,
                 ShortcutId::ShowTranscript => show_transcript = text,
                 ShortcutId::TogglePlanDrawer => toggle_plan_drawer = text,
+                ShortcutId::ToggleScreen => toggle_screen = text,
             }
         }
     }
@@ -366,7 +368,7 @@ fn shortcut_overlay_lines(state: ShortcutsState) -> Vec<Line<'static>> {
         open_editor,
         quit,
         toggle_plan_drawer,
-        Line::from(""),
+        toggle_screen,
         show_transcript,
     ];
 
@@ -740,6 +742,7 @@ enum ShortcutId {
     Quit,
     ShowTranscript,
     TogglePlanDrawer,
+    ToggleScreen,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -891,6 +894,15 @@ const SHORTCUTS: &[ShortcutDescriptor] = &[
         }],
         prefix: "",
         label: " to toggle plan drawer",
+    },
+    ShortcutDescriptor {
+        id: ShortcutId::ToggleScreen,
+        bindings: &[ShortcutBinding {
+            key: key_hint::ctrl(KeyCode::Char('l')),
+            condition: DisplayCondition::Always,
+        }],
+        prefix: "",
+        label: " to toggle full screen",
     },
 ];
 
