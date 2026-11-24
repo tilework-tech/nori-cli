@@ -92,6 +92,10 @@ for line in sys.stdin:
     elif method == "session/list":
         send(id=rid, result={"sessions": [saved] if params.get("cwd") in (None, saved["cwd"]) else []})
     elif method == "session/new":
+        if Path("fixture-refuse-new").exists():
+            Path("fixture-refuse-new").unlink()
+            send(id=rid, error={"code": -32004, "message": "new session unavailable"})
+            continue
         sid = str(next(ids))
         sessions.add(sid)
         modes[sid] = mode_ids[0]
