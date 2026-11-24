@@ -228,8 +228,21 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
   delivery or confirmation failures and leaves any retry to the controller.
   For an admitted prompt the same request carries its ACP request UUID.
   Before admission, attach remembers Escape for that submission and waits
-  for its receipt. Losing control discards the pending interrupt. `/close` sends ACP `session/close`, and `/resume` and Ctrl+R
-  send `session/resume` with the row's
+  for its receipt. Losing control discards the pending interrupt.
+- [`/close`](close.rs) sends ACP `session/close` tagged `Pending::Close` with
+  the targeted session. The adapter's refusal reaches attach twice, as an
+  unowned error on the session stream and as the host's error reply, so the
+  conversation's [`CloseRefusal`](../close_refusal.rs) holds stream errors
+  while the close is in flight. On refusal, held errors the host text already
+  contains are dropped, others are shown first, and one
+  `Failed to close the session: …` notice lands in the targeted session's
+  transcript; the session stays open for a retry. The notice row stays empty
+  unless the terminal is showing another session, in which case it names the
+  refused one. The host's success reply, or a disconnect before any reply,
+  releases held errors into the transcript. Attach does not settle on the
+  stream's close response: its ACP body is `{}` and deserializes as an
+  ambiguous untagged variant.
+- `/resume` and Ctrl+R send `session/resume` with the row's
   folder (`_nori/session/resume` for an older host whose rows carry no
   folder). A resumed session is attached to this connection, so the host
   also sends it plain `session/update` notifications and
@@ -237,8 +250,8 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
   ignored: attach renders the subscription and answers permissions through it.
 - The host client never replays unacknowledged calls after reconnect (see
   [its docs](../host_client/docs.md)). On disconnect attach receives the
-  unanswered `Pending` tags; if any was a mutation, prompt, follow-up, or
-  cancel it warns that the outcome is uncertain and marks follow-ups and
+  unanswered `Pending` tags; if any was a mutation, close, prompt, follow-up,
+  or cancel it warns that the outcome is uncertain and marks follow-ups and
   cancel delivery unknown. Only the event subscription resumes.
 - Replay failure preserves existing conversation content and displays the
   error. It does not silently substitute a new live cursor. Cursors are local

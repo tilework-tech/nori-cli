@@ -135,7 +135,7 @@ impl ChatWidget {
                         self.unpaired_prompt_error_ids.insert(request_id);
                     }
                 } else if !self.unpaired_prompt_error_ids.remove(&request_id)
-                    && !self.absorb_close_refusal(&error.message, &message)
+                    && !self.close_refusal.absorb(&error.message, &message)
                 {
                     self.on_error(message);
                 }

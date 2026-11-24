@@ -531,3 +531,4 @@ fn disconnect_retains_uncertain_follow_up_with_its_originating_session() {
         assert_ne!(request["method"], "_nori/session/follow_up");
     }
 }
+include!("tests_close.rs");

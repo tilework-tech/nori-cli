@@ -32,6 +32,9 @@ pub(super) enum Pending {
     Mutation {
         draft: Option<String>,
     },
+    Close {
+        session_id: String,
+    },
     FollowUp {
         session_id: String,
         message_id: String,
@@ -172,6 +175,7 @@ impl Runtime {
             | Pending::TakeControl
             | Pending::Prompt { .. }
             | Pending::Mutation { .. }
+            | Pending::Close { .. }
             | Pending::FollowUp { .. } => None,
         };
         if self.client.request(call, pending).is_err() {
@@ -256,6 +260,7 @@ impl Runtime {
                         pending,
                         Pending::New
                             | Pending::Mutation { .. }
+                            | Pending::Close { .. }
                             | Pending::Prompt { .. }
                             | Pending::CancelObserved { .. }
                             | Pending::FollowUp { .. }
@@ -263,6 +268,9 @@ impl Runtime {
                 });
                 self.uncertain_delivery |= uncertain;
                 for pending in unanswered {
+                    if let Pending::Close { session_id } = &pending {
+                        self.close_settled(session_id);
+                    }
                     if let Pending::FollowUp {
                         session_id,
                         message_id,
@@ -439,6 +447,10 @@ impl Runtime {
                 {
                     self.send(call, Pending::Mutation { draft: None });
                 }
+                self.refresh_list();
+            }
+            Pending::Close { session_id } => {
+                self.close_settled(&session_id);
                 self.refresh_list();
             }
             Pending::Subscribe { .. } | Pending::Mutation { .. } => self.refresh_list(),
