@@ -151,6 +151,7 @@ impl App {
             None => {}
         }
         self.chat_widget.set_login_agent_override(None);
+        self.new_session_return = None;
     }
 
     /// Replace the current widget with a sessionless one while a new child is
