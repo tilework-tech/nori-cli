@@ -222,6 +222,10 @@ The results above carry over, and native macOS passed at all four. Linux #747 th
 `managed_recovery::disconnected_machine_output_is_saved_and_its_live_lane_can_reattach` (`_nori/host/replay` -> -32016
 watcher is read-only). That failure predates the stack change (also seen at #743 `6ed85ffb` and on a #739 macOS run) and was routed on #747.
 
+Latest heads (09:30): #746 `1e7f593a` adds a test-only fix that takes control after reconnecting in `managed_recovery`,
+which resolves the routed finding. #747 `63b4daff`, #748 `c8be2df9` and #749 `541c65f6` have the same patches as before. Linux and native macOS
+passed at all four.
+
 Observation, not a finding: the watcher shows the adapter's bare stream error (`close declined by …`) without the
 `Failed to close the session:` prefix, because only the terminal that sent the close knows it is a close refusal.
 
