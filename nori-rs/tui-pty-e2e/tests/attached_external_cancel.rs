@@ -357,3 +357,90 @@ fn delayed_cancel_for_amber_does_not_interrupt_blue() {
     client.adapter_title("Received cancel 1");
     client.activity(false, 1);
 }
+
+#[test]
+fn escape_in_attach_reaches_the_terminal_submitted_prompt_once() {
+    let mut client = Attach::open();
+    client.tui.submit_input("amber").unwrap();
+    client.screen("Awaiting interrupt");
+    client.tui.send_key(Key::Escape).unwrap();
+    client.tui.send_key(Key::Escape).unwrap();
+    client.adapter_title("Received cancel 1");
+    client.activity(false, 1);
+    client.screen("ready");
+}
+
+#[test]
+fn early_escape_in_plain_nori_waits_for_its_admission() {
+    let home = tempfile::tempdir().unwrap();
+    let folder = home.path().canonicalize().unwrap();
+    let hook = folder.join("gate.sh");
+    fs::write(
+        &hook,
+        r#"cd "$(dirname "$0")"
+touch entered
+while [ ! -e release ]; do sleep 0.02; done
+"#,
+    )
+    .unwrap();
+    let trace = folder.join("fixture-traffic");
+    fs::write(&trace, "").unwrap();
+    let script = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../cli/tests/standard_acp/fixture.py"
+    );
+    fs::write(
+        folder.join("config.toml"),
+        format!(
+            r#"agent = "external-turn"
+[projects.{folder:?}]
+trust_level = "trusted"
+[hooks]
+pre_user_prompt = [{hook:?}]
+[[agents]]
+name = "External Turn"
+slug = "external-turn"
+[agents.distribution.local]
+command = "python3"
+args = [{script:?}, "external-turn"]
+"#
+        ),
+    )
+    .unwrap();
+    let config = SessionConfig::new()
+        .with_agent("external-turn".into())
+        .with_cwd(&folder)
+        .with_nori_home(&folder)
+        .with_arg("amber");
+    let mut tui = TuiSession::spawn_with_config(36, 110, config).unwrap();
+    tui.wait_for(|_| folder.join("entered").exists(), TIMEOUT)
+        .unwrap();
+    tui.send_key(Key::Escape).unwrap();
+    tui.send_key(Key::Escape).unwrap();
+    // A composer edit is a terminal-side barrier before the hook is released.
+    tui.type_input("draft").unwrap();
+    tui.wait_for_text("draft", TIMEOUT).unwrap();
+    assert!(
+        !fs::read_to_string(&trace)
+            .unwrap()
+            .contains("session/cancel")
+    );
+    fs::write(folder.join("release"), "").unwrap();
+    tui.wait_for(
+        |_| {
+            fs::read_to_string(&trace)
+                .unwrap()
+                .contains("session/cancel")
+        },
+        TIMEOUT,
+    )
+    .unwrap();
+    let traffic = fs::read_to_string(&trace).unwrap();
+    let calls: Vec<_> = traffic
+        .lines()
+        .filter(|line| line.starts_with("session/prompt ") || line.starts_with("session/cancel "))
+        .collect();
+    assert_eq!(calls.len(), 2, "{traffic}");
+    assert_eq!(calls[0].replace("prompt", "cancel"), calls[1]);
+    assert!(tui.screen_contents().contains("draft"));
+}

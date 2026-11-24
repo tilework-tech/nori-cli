@@ -51,12 +51,8 @@ fn session_commands_use_standard_acp_methods() {
 
     assert_eq!(close["method"], "session/close");
     assert_eq!(close["params"], json!({"sessionId": "one"}));
-    assert_eq!(cancel["method"], "session/cancel");
-    assert_eq!(cancel["params"], json!({"sessionId": "one"}));
-    assert!(
-        cancel.get("id").is_none(),
-        "cancel is a notification: {cancel}"
-    );
+    assert_eq!(cancel["method"], "_nori/session/cancel_observed");
+    assert_eq!(cancel["params"], json!({"sessionId": "one", "observedTurnId":"owned"}));
     assert_eq!(resume["method"], "session/resume");
     assert_eq!(
         resume["params"],
@@ -209,9 +205,37 @@ fn attach_can_cancel_its_just_submitted_prompt_before_phase_delivery() {
     let (mut runtime, mut rx) = runtime_on_session_one();
     let prompt = sent_for(&mut runtime, &mut rx, "Check the sample files.");
     assert_eq!(prompt["method"], "_nori/session/prompt");
-    let cancel = sent_for(&mut runtime, &mut rx, "/cancel");
-    assert_eq!(cancel["method"], "session/cancel");
-    assert_eq!(cancel["params"], json!({"sessionId":"one"}));
+    let second = sent_for(&mut runtime, &mut rx, "Second sample.");
+    assert_ne!(second["id"], prompt["id"]);
+    for _ in 0..2 {
+        runtime.key(crossterm::event::KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    }
+    assert!(rx.try_recv().is_err());
+    runtime.connection_event(crate::host_client::ConnectionEvent::Message(json!({
+        "jsonrpc":"2.0","id":prompt["id"],"result":{"session_id":"one","request_id":"amber"}
+    }))).unwrap();
+    let calls: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok())
+        .filter(|msg| msg["method"] != "_nori/session/list").collect();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0]["method"], "_nori/session/cancel_observed");
+    assert_eq!(calls[0]["params"], json!({"sessionId":"one","observedTurnId":"amber"}));
+}
+
+#[test]
+fn a_control_handoff_retires_an_interrupt_waiting_for_admission() {
+    use crate::host_client::ConnectionEvent;
+    let (mut runtime, mut rx) = runtime_on_session_one();
+    let prompt = sent_for(&mut runtime, &mut rx, "Read the sample.");
+    runtime.key(crossterm::event::KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    for role in ["watcher", "controller"] {
+        runtime.connection_event(ConnectionEvent::Message(json!({
+            "method":"_nori/control/changed", "params":{"role":role}
+        }))).unwrap();
+    }
+    runtime.connection_event(ConnectionEvent::Message(json!({
+        "id":prompt["id"],"result":{"session_id":"one","request_id":"amber"}
+    }))).unwrap();
+    assert!(std::iter::from_fn(|| rx.try_recv().ok()).all(|frame| frame["method"] == "_nori/session/list"));
 }
 
 #[test]

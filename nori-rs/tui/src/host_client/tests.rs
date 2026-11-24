@@ -127,13 +127,6 @@ fn a_stopped_connection_sends_nothing_more() {
     assert!(matches!(late, HostEvent::Ignored));
 
     assert!(client.request(HostCall::List, "list").is_err());
-    assert!(
-        client
-            .notify(HostCall::Cancel {
-                session_id: "one".into()
-            })
-            .is_err()
-    );
     assert!(sent(&mut rx).is_empty());
 }
 

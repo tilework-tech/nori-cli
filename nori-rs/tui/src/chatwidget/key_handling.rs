@@ -18,13 +18,24 @@ impl ChatWidget {
             return;
         }
         if key_event.code == KeyCode::Esc
+            && key_event.kind != KeyEventKind::Press
+            && !self.cloud_mode
+            && self.managed_conversation_id.is_some()
+        {
+            return;
+        }
+        if key_event.code == KeyCode::Esc
             && key_event.kind == KeyEventKind::Press
             && !self.exiting
-            && self.can_control_external_turn()
             && self.bottom_pane.can_interrupt_with_escape(key_event)
         {
-            self.request_external_cancel();
-            return;
+            if self.can_control_external_turn() {
+                self.request_external_cancel();
+                return;
+            }
+            if self.interrupt_host_prompt() {
+                return;
+            }
         }
         match key_event {
             KeyEvent {

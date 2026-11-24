@@ -207,3 +207,55 @@ async fn observed_cancel_rejects_a_late_or_foreign_turn_and_only_the_controller_
     set_activity(&mut control, &id, false, 1).await;
     set_activity(&mut control, &sibling, false, 0).await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn prompt_receipt_fences_successor_and_sibling_cancellation() {
+    let host = external_turn_host();
+    let folder = TempDir::new().unwrap();
+    let mut control = controller(&host);
+    let mut observations = watcher(&host);
+    observations
+        .call("_nori/session/subscribe", json!({"session_id":"*"}))
+        .await
+        .unwrap();
+    let (id, _) = new_session(&mut control, folder.path()).await;
+    let (sibling, _) = new_session(&mut control, folder.path()).await;
+    let method = "_nori/session/cancel_observed";
+    let submit = |session: &str| json!({"session_id": session, "prompt":text("check sample")});
+    let first = control
+        .call("_nori/session/prompt", submit(&id))
+        .await
+        .unwrap();
+    let other = control
+        .call("_nori/session/prompt", submit(&sibling))
+        .await
+        .unwrap();
+    let guard = |session: &str, receipt: &serde_json::Value| json!({"sessionId":session, "observedTurnId": receipt["request_id"].as_str().expect("host observation")});
+    control.call(method, guard(&id, &other)).await.unwrap_err();
+    control.call(method, guard(&id, &first)).await.unwrap();
+    control
+        .until(is_update_mentioning(&id, "Received cancel 1"))
+        .await;
+    for phase in ["cancelling", "idle"] {
+        observations
+            .until(|frame| {
+                frame["params"]["conversation_id"] == id
+                    && frame["params"]["event"]["event"]["event_type"] == "session_phase_changed"
+                    && frame["params"]["event"]["event"]["event"]["phase"] == phase
+            })
+            .await;
+    }
+    let second = control
+        .call("_nori/session/prompt", submit(&id))
+        .await
+        .unwrap();
+    control.call(method, guard(&id, &first)).await.unwrap_err();
+    control.call(method, guard(&id, &second)).await.unwrap();
+    control
+        .until(is_update_mentioning(&id, "Received cancel 2"))
+        .await;
+    control.call(method, guard(&sibling, &other)).await.unwrap();
+    control
+        .until(is_update_mentioning(&sibling, "Received cancel 1"))
+        .await;
+}

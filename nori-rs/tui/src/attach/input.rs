@@ -24,7 +24,9 @@ impl Runtime {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> bool {
-        if key.kind == KeyEventKind::Release {
+        if key.kind == KeyEventKind::Release
+            || (key.code == KeyCode::Esc && key.kind == KeyEventKind::Repeat)
+        {
             return true;
         }
         // A later user action supersedes navigation waiting on a list refresh.
@@ -80,7 +82,22 @@ impl Runtime {
             return true;
         }
         if key.code == KeyCode::Esc {
-            if self.state.list_open && self.state.picker.search_active {
+            if !self.state.list_open
+                && self
+                    .state
+                    .selected
+                    .as_ref()
+                    .and_then(|id| self.state.conversations.get(id))
+                    .is_some_and(|c| {
+                        c.active_prompt().is_some()
+                            || c.submitted_prompt
+                                .as_ref()
+                                .is_some_and(crate::host_client::PromptInterrupt::live)
+                            || c.external_turn.is_some()
+                    })
+            {
+                self.cancel_selected();
+            } else if self.state.list_open && self.state.picker.search_active {
                 self.state.picker.handle(PickerAction::ClearQuery);
                 self.state.picker.handle(PickerAction::DeactivateSearch);
             } else {
@@ -380,8 +397,22 @@ impl Runtime {
                     },
                 );
             }
-        } else if conversation.is_some_and(|c| c.active_prompt().is_some() || c.submitted_prompt) {
-            self.notify(HostCall::Cancel { session_id: id });
+        } else if let Some(acp::RequestId::Str(turn)) = conversation.and_then(|c| c.active_prompt())
+        {
+            self.send(
+                HostCall::CancelObserved {
+                    session_id: id,
+                    observed_turn_id: turn.clone(),
+                },
+                Pending::Mutation { draft: None },
+            );
+        } else if let Some(pending) = conversation
+            .and_then(|c| c.submitted_prompt.as_ref())
+            .filter(|p| p.live())
+        {
+            if let Some(call) = pending.interrupt() {
+                self.send(call, Pending::Mutation { draft: None });
+            }
         } else if !conversation.is_some_and(super::state::Conversation::cancelling_prompt) {
             self.state.show_notice("No active turn to cancel.");
         }
@@ -474,15 +505,17 @@ impl Runtime {
         } else {
             match self.state.prompt(&id, &text) {
                 Ok(params) => {
-                    self.state
-                        .conversations
-                        .entry(id.clone())
-                        .or_default()
-                        .submitted_prompt = true;
+                    let interrupt = crate::host_client::PromptInterrupt::new(id.clone());
+                    let conversation = self.state.conversations.entry(id.clone()).or_default();
+                    crate::host_client::PromptInterrupt::track_first(
+                        &mut conversation.submitted_prompt,
+                        &interrupt,
+                    );
                     self.send(
                         HostCall::Prompt(params),
                         Pending::Prompt {
-                            session_id: id,
+                            interrupt,
+                            control_epoch: self.control_epoch,
                             draft: text,
                         },
                     );

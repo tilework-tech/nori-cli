@@ -42,6 +42,7 @@ impl CancelAdmission {
 
 pub(crate) enum CancelTarget {
     External(String),
+    Observed(String),
     /// Standard ACP notifications identify the session only.
     Current,
 }
@@ -198,13 +199,22 @@ impl super::AcpBackend {
                 | nori_protocol::SessionPhase::Cancelling { .. },
             ) => None,
             (
-                CancelTarget::External(_) | CancelTarget::Current,
+                CancelTarget::Observed(expected),
+                nori_protocol::SessionPhase::Prompting {
+                    request_id: acp::RequestId::Str(id),
+                }
+                | nori_protocol::SessionPhase::Cancelling {
+                    request_id: acp::RequestId::Str(id),
+                },
+            ) if expected == &id => None,
+            (
+                CancelTarget::External(_) | CancelTarget::Observed(_) | CancelTarget::Current,
                 nori_protocol::SessionPhase::Idle,
             ) => {
                 let Some(observed) = driver.external.current(&session) else {
                     anyhow::bail!("No active turn to cancel");
                 };
-                if let CancelTarget::External(expected) = &target
+                if let CancelTarget::External(expected) | CancelTarget::Observed(expected) = &target
                     && expected != &observed.id
                 {
                     anyhow::bail!("The observed turn is no longer active");

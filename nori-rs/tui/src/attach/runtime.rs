@@ -25,7 +25,8 @@ pub(super) enum Pending {
         observed_turn_id: String,
     },
     Prompt {
-        session_id: String,
+        interrupt: crate::host_client::PromptInterrupt,
+        control_epoch: i64,
         draft: String,
     },
     Mutation {
@@ -43,6 +44,7 @@ pub(super) struct Runtime {
     pub composer: crate::ComposerInput,
     pub(super) client: HostSessionClient<Pending>,
     uncertain_delivery: bool,
+    pub(super) control_epoch: i64,
     pub session_list_binding: nori_config::HotkeyBinding,
     pub next_waiting_binding: nori_config::HotkeyBinding,
     pub(super) next_waiting_after_refresh: bool,
@@ -111,6 +113,7 @@ impl Runtime {
             composer,
             client: HostSessionClient::new(requests),
             uncertain_delivery: false,
+            control_epoch: 0,
             session_list_binding: nori_config::HotkeyConfig::default().open_session_list,
             next_waiting_binding: nori_config::HotkeyConfig::default().next_waiting_session,
             next_waiting_after_refresh: false,
@@ -183,17 +186,6 @@ impl Runtime {
         }
     }
 
-    /// Send a JSON-RPC notification, which has no reply.
-    pub fn notify(&mut self, call: HostCall) {
-        if self.state.stopped.is_some() {
-            return;
-        }
-        if self.client.notify(call).is_err() {
-            self.state
-                .show_notice("Host connection worker stopped. Detach and try again.");
-        }
-    }
-
     /// `session/resume` for `id` in its folder; a host too old to report
     /// the folder gets its own resume request instead.
     pub fn resume(&mut self, id: &str) {
@@ -247,7 +239,7 @@ impl Runtime {
             }
             HostEvent::Disconnected { reason, unanswered } => {
                 for conversation in self.state.conversations.values_mut() {
-                    conversation.submitted_prompt = false;
+                    conversation.submitted_prompt = None;
                     if conversation.cancel_delivery == CancelDelivery::AwaitingHost {
                         conversation.cancel_delivery = CancelDelivery::Unknown;
                     }
@@ -326,6 +318,12 @@ impl Runtime {
                 return Ok(());
             }
             HostEvent::RoleChanged(role) => {
+                if role != "controller" {
+                    self.control_epoch += 1;
+                    for conversation in self.state.conversations.values_mut() {
+                        conversation.submitted_prompt = None;
+                    }
+                }
                 self.state.role_changed(&role);
                 self.state.show_notice(if self.state.watching {
                     "Control moved to another terminal. You are now watching; alt+t takes control."
@@ -429,9 +427,21 @@ impl Runtime {
                     crate::follow_up::delivery_notice(status, &message_id, &draft),
                 );
             }
-            Pending::Subscribe { .. } | Pending::Mutation { .. } | Pending::Prompt { .. } => {
-                self.refresh_list()
+            Pending::Prompt {
+                interrupt,
+                control_epoch,
+                ..
+            } => {
+                if control_epoch == self.control_epoch
+                    && !self.state.watching
+                    && self.state.replay_error.is_none()
+                    && let Some(call) = interrupt.admitted(result)
+                {
+                    self.send(call, Pending::Mutation { draft: None });
+                }
+                self.refresh_list();
             }
+            Pending::Subscribe { .. } | Pending::Mutation { .. } => self.refresh_list(),
         }
         Ok(())
     }
