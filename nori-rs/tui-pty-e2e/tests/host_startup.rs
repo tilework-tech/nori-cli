@@ -52,7 +52,7 @@ fn a_prompt_typed_while_the_agent_prepares_reaches_the_startup_session_once() {
     let held = home.path().join("fixture-init-held");
     tui.wait_for(|_| held.exists(), TIMEOUT).unwrap();
     ask(&mut tui, "whoami");
-    tui.settle(PAUSE);
+    tui.verifier_pause(PAUSE);
     assert!(
         !trace(home.path(), "amber")
             .iter()
@@ -91,7 +91,7 @@ fn a_refused_startup_session_reports_the_agent_and_the_next_prompt_retries() {
     tui.wait_for_text("new session unavailable", TIMEOUT)
         .unwrap();
     started_through_the_host(&mut tui);
-    tui.settle(PAUSE);
+    tui.verifier_pause(PAUSE);
     assert_eq!(
         trace(home.path(), "amber")
             .iter()
@@ -125,7 +125,7 @@ fn resume_while_the_agent_prepares_restores_on_the_startup_server() {
     std::fs::remove_file(home.path().join("fixture-hold-init")).unwrap();
     tui.wait_for_text("saved-1", TIMEOUT).unwrap();
     tui.send_key(tui_pty_e2e::Key::Down).unwrap();
-    tui.settle(PAUSE);
+    tui.verifier_pause(PAUSE);
     tui.send_key(tui_pty_e2e::Key::Enter).unwrap();
     tui.wait_for_text("saved input", TIMEOUT).unwrap();
     ask(&mut tui, "whoami");
@@ -168,7 +168,7 @@ fn a_positional_prompt_whose_session_is_refused_returns_to_the_composer_unsent()
             .any(|method| method.starts_with("session/prompt")),
         "the refused session's prompt is never sent"
     );
-    tui.settle(PAUSE);
+    tui.verifier_pause(PAUSE);
     tui.send_key(tui_pty_e2e::Key::Enter).unwrap();
     tui.wait_for_text("amber is answering (1).", TIMEOUT)
         .unwrap();
@@ -194,7 +194,7 @@ fn a_prompt_typed_while_resume_prepares_reaches_the_restored_session() {
     std::fs::remove_file(home.path().join("fixture-hold-init")).unwrap();
     tui.wait_for_text("saved-1", TIMEOUT).unwrap();
     tui.send_key(tui_pty_e2e::Key::Down).unwrap();
-    tui.settle(PAUSE);
+    tui.verifier_pause(PAUSE);
     tui.send_key(tui_pty_e2e::Key::Enter).unwrap();
     tui.wait_for_text("amber is answering (1).", TIMEOUT)
         .unwrap();

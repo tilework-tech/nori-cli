@@ -1,8 +1,7 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/pr-750-54b4ca5c-native-drain']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +11,7 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 75
     defaults:
       run:
         working-directory: nori-rs
@@ -25,10 +24,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: macOS driver A-B
+            mode: ab
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: macOS exact head
+            mode: exact
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Select sources
+        run: |
+          if [ "${{ matrix.mode }}" = exact ]; then git checkout 54b4ca5c1 -- . && git diff --cached --stat HEAD; fi
+          git diff --stat 54b4ca5c1 -- . ':!.github'
+          uname -sm
 
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -115,8 +131,6 @@ jobs:
             sccache-${{ matrix.runner }}-${{ matrix.target }}-
 
       # CI checks
-      - name: cargo fmt
-        run: cargo +nightly fmt -- --check
       # - name: cargo check
       #   run: cargo check --profile ci-test --target ${{ matrix.target }}
       # - name: cargo clippy
@@ -126,21 +140,44 @@ jobs:
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
           cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
-      - name: cargo test nori
+      - name: Binary identity
+        run: shasum -a 256 target/aarch64-apple-darwin/ci-test/nori target/aarch64-apple-darwin/ci-test/nori-tui | tee $GITHUB_WORKSPACE/bins-before.txt
+      - name: Driver A-B on one build
+        if: matrix.mode == 'ab'
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
-          cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-harness
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-host-runtime
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp-host
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-auth-providers
-      - name: cargo clippy
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
-
+          out=$GITHUB_WORKSPACE/ab; mkdir -p $out
+          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-run
+          suites="--test host_startup --test host_new_session --test host_session_picker --test host_agent_switch"
+          run() { d=$1; r=$2; mkdir -p $out/$d; env PTY_DRIVER=$d PTY_PROBE_DIR=$out/$d ${3:-PTY_NONE=1} cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast $suites 2>&1 | tee -a $out/$d/full.txt | grep -E "^test .* (ok|FAILED)$" | sed "s/^/$d round $r: /"; }
+          for r in $(seq 1 12); do
+            if [ $r -le 2 ]; then run sleep $r PTY_SAMPLE=1; else run sleep $r; fi
+            run drain $r
+            if [ $r -le 6 ]; then run human $r; fi
+          done | tee $out/results.txt
+          for d in sleep drain human; do echo "$d: $(grep -c "^$d .* ok$" $out/results.txt) ok, $(grep -c "^$d .*FAILED$" $out/results.txt) failed"; done | tee $out/summary.txt
+          shasum -a 256 target/aarch64-apple-darwin/ci-test/nori target/aarch64-apple-darwin/ci-test/nori-tui | diff $GITHUB_WORKSPACE/bins-before.txt - && echo "binaries unchanged across drivers" | tee -a $out/summary.txt
+      - name: Exact head full suites
+        if: matrix.mode == 'exact'
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          out=$GITHUB_WORKSPACE/ab; mkdir -p $out
+          for p in tui-pty-e2e nori-harness nori-host-runtime nori-acp-host nori-config nori-tui nori-cli nori-auth-providers; do
+            cargo test --profile ci-test --target ${{ matrix.target }} --package $p --no-fail-fast 2>&1 | tee $out/full-$p.txt | grep -E "^test result:" | sed "s/^/$p: /"
+          done | tee $out/suites.txt
+          for r in $(seq 1 10); do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_startup --test host_new_session --test host_session_picker --test host_agent_switch 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $r: /"; done | tee $out/repeat.txt
+          echo "repeat: $(grep -c ' ok$' $out/repeat.txt) ok, $(grep -c FAILED $out/repeat.txt) failed" | tee -a $out/suites.txt
+          ! grep -q FAILED $out/suites.txt $out/repeat.txt
+      - name: Upload synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-${{ matrix.mode }}
+          path: ab/
+          include-hidden-files: true
+          retention-days: 14
       # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache
         if: always() && !cancelled() && steps.cache_cargo_home_restore.outputs.cache-hit != 'true'

@@ -412,7 +412,7 @@ trust_level = "trusted"
         // Enable debug logging for nori_harness to capture timing information
         cmd.env(
             "RUST_LOG",
-            "codex_core=info,nori_tui=info,codex_rmcp_client=info,nori_harness=debug,nori_acp_host=debug,nori_host_runtime=debug",
+            std::env::var("PTY_RUST_LOG").unwrap_or_else(|_| "codex_core=info,nori_tui=info,codex_rmcp_client=info,nori_harness=debug,nori_acp_host=debug,nori_host_runtime=debug".into()),
         );
 
         let spawned_at = Instant::now();
@@ -720,6 +720,33 @@ trust_level = "trusted"
     pub fn send_str(&mut self, s: &str) -> std::io::Result<()> {
         self.writer.write_all(s.as_bytes())?;
         self.writer.flush()
+    }
+
+    /// Verifier-only: `PTY_DRIVER=sleep` pauses without reading the PTY (the
+    /// pre-54b4ca5c driver); anything else keeps draining while it waits.
+    pub fn verifier_pause(&mut self, duration: Duration) {
+        if std::env::var("PTY_DRIVER").as_deref() == Ok("sleep") {
+            std::thread::sleep(duration);
+        } else {
+            self.settle(duration);
+        }
+    }
+
+    /// Verifier-only: bytes the TUI has written that the driver has not read.
+    pub fn unread_output_bytes(&self) -> i64 {
+        #[cfg(unix)]
+        if let Some(fd) = self._master.as_raw_fd() {
+            let mut n: libc::c_int = 0;
+            if unsafe { libc::ioctl(fd, libc::FIONREAD, &mut n) } == 0 {
+                return n as i64;
+            }
+        }
+        -1
+    }
+
+    /// Verifier-only: the TUI's pid.
+    pub fn pid(&self) -> Option<u32> {
+        self.child.process_id()
     }
 
     /// Send a key event

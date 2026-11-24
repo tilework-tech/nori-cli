@@ -98,7 +98,7 @@ pub fn wait_for_host_request(tui: &mut TuiSession, method: &str) -> Vec<String> 
             "the owned host never received {method}: {requests:?} (log {:?})",
             tui.acp_log_path()
         );
-        tui.settle(Duration::from_millis(50));
+        tui.verifier_pause(Duration::from_millis(50));
     }
 }
 
@@ -109,8 +109,42 @@ pub fn wait_for_host_request(tui: &mut TuiSession, method: &str) -> Vec<String> 
 /// buffer (macOS buffers far less than Linux); the keys then arrive in one
 /// burst and Enter becomes part of a paste instead of submitting.
 pub fn ask(tui: &mut TuiSession, text: &str) {
+    let driver = std::env::var("PTY_DRIVER").unwrap_or_else(|_| "drain".into());
+    if driver == "human" {
+        // A person in a responsive terminal: one key at a time, the terminal
+        // read continuously, Enter shortly after the last key.
+        for ch in text.chars() {
+            tui.send_str(&ch.to_string()).unwrap();
+            tui.settle(Duration::from_millis(70));
+        }
+        tui.settle(Duration::from_millis(250));
+        tui.send_key(Key::Enter).unwrap();
+        return;
+    }
     tui.send_str(text).unwrap();
-    tui.settle(PAUSE);
+    let start = std::time::Instant::now();
+    let mut samples = Vec::new();
+    for at in [100u64, 400, 800] {
+        let wait = Duration::from_millis(at).saturating_sub(start.elapsed());
+        tui.verifier_pause(wait);
+        samples.push(format!("{at}ms={}", tui.unread_output_bytes()));
+        if at == 400 && std::env::var("PTY_SAMPLE").is_ok() {
+            if let (Some(pid), Ok(dir)) = (tui.pid(), std::env::var("PTY_PROBE_DIR")) {
+                let name = std::thread::current().name().unwrap_or("t").replace("::", "-");
+                let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+                let _ = std::process::Command::new("/usr/bin/sample")
+                    .args([&pid.to_string(), "0.2", "-mayDie", "-file", &format!("{dir}/sample-{name}-{n}.txt")])
+                    .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn();
+            }
+        }
+    }
+    tui.verifier_pause(PAUSE.saturating_sub(start.elapsed()));
+    if let Ok(dir) = std::env::var("PTY_PROBE_DIR") {
+        use std::io::Write as _;
+        let name = std::thread::current().name().unwrap_or("t").to_string();
+        let mut f = fs::OpenOptions::new().create(true).append(true).open(format!("{dir}/probes.txt")).unwrap();
+        let _ = writeln!(f, "{driver} {name} text={text:?} unread {}", samples.join(" "));
+    }
     tui.send_key(Key::Enter).unwrap();
 }
 

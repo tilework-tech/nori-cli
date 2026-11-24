@@ -59,7 +59,7 @@ fn a_refused_new_session_returns_the_held_input_without_sending_it() {
         1,
         "the held prompt never reaches the previous session"
     );
-    tui.settle(PAUSE);
+    tui.verifier_pause(PAUSE);
     tui.send_key(tui_pty_e2e::Key::Enter).unwrap();
     tui.wait_for_text("amber is answering (2).", TIMEOUT)
         .unwrap();
