@@ -26,12 +26,19 @@ pub(crate) struct HostLink {
 
 impl HostLink {
     /// Connects to `host`; the returned manager is the host's own.
-    pub fn start(host: OwnedHost) -> (nori_harness::session_manager::SessionManager, Self) {
+    pub fn start(
+        host: OwnedHost,
+    ) -> (
+        nori_harness::session_manager::SessionManager,
+        nori_host_runtime::ForegroundConfig,
+        Self,
+    ) {
         let OwnedHost {
             manager,
             to_host,
             from_host,
             stop,
+            foreground_config,
         } = host;
         let (requests, request_rx) = mpsc::unbounded_channel();
         let (event_tx, events) = mpsc::unbounded_channel();
@@ -40,6 +47,7 @@ impl HostLink {
         ));
         (
             manager,
+            foreground_config,
             Self {
                 client: HostSessionClient::new(requests),
                 events,
