@@ -3,6 +3,7 @@
 mod host;
 pub use host::service::HostService;
 pub use host::state;
+pub use host::tui_owned::ForegroundConfig;
 pub use host::tui_owned::OwnedHost;
 pub use host::tui_owned::StopHost;
 pub use host::tui_owned::launch;

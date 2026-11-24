@@ -62,6 +62,8 @@ pub(crate) struct App {
     /// Registry of every session this process runs. The active widget's
     /// session and a hidden `/agent` switch candidate are both entries.
     session_manager: nori_harness::session_manager::SessionManager,
+    /// Where the host this terminal owns reads the terminal's current config.
+    foreground_config: nori_host_runtime::ForegroundConfig,
 
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: NoriConfig,
@@ -268,7 +270,7 @@ impl App {
         host: crate::OwnedHost,
     ) -> Result<AppExitInfo> {
         // Sessions belong to the host the CLI built for this run.
-        let (session_manager, mut host) = host_link::HostLink::start(host);
+        let (session_manager, foreground_config, mut host) = host_link::HostLink::start(host);
         let ran = Self::run_on_host(
             tui,
             auth_manager,
@@ -281,6 +283,7 @@ impl App {
             cloud_onboard,
             analytics,
             session_manager,
+            foreground_config,
             &mut host,
         )
         .await;
@@ -303,6 +306,7 @@ impl App {
         cloud_onboard: bool,
         analytics: Option<nori_installed::AnalyticsReporter>,
         session_manager: nori_harness::session_manager::SessionManager,
+        foreground_config: nori_host_runtime::ForegroundConfig,
         host: &mut host_link::HostLink,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
@@ -379,6 +383,7 @@ impl App {
             chat_widget,
             auth_manager: auth_manager.clone(),
             session_manager,
+            foreground_config,
             config,
             vertical_footer,
             cloud_mode,

@@ -96,6 +96,12 @@ impl App {
         self.discard_candidate();
         let generation = crate::chatwidget::agent::next_session_generation();
         let cwd = self.chat_widget.config_ref().cwd.clone();
+        let cwd = nori_harness::managed_launch::session_folder(&cwd).unwrap_or(cwd);
+        // One slot per host: a newer picker replaces both this config and
+        // the candidate that would have used it.
+        let mut live = self.config_for_agent(&agent_name);
+        live.cwd.clone_from(&cwd);
+        self.foreground_config.set(live);
         let tx = self.app_event_tx.clone();
         let prepared_agent_name = agent_name.clone();
         tokio::spawn(async move {
