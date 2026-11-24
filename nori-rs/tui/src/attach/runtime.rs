@@ -444,7 +444,8 @@ impl Runtime {
             }
             Pending::CompleteFolder { text } => {
                 let found: nori_protocol::FindPathsResult = serde_json::from_value(result.clone())?;
-                let complete = found.matches.len() < super::input::FOLDER_MATCHES;
+                let complete = i32::try_from(found.matches.len())
+                    .is_ok_and(|listed| listed < super::input::FOLDER_MATCHES);
                 if self.composer.text() == text
                     && let Some(typed) = crate::session_folder::typed_folder(&text)
                     && let Some((completed, candidates)) =
