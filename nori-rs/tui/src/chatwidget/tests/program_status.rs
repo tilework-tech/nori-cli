@@ -9,6 +9,7 @@ fn chat() -> ChatWidget {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
     chat.config.animations = false;
     chat.set_foreground(true);
+    chat.pre_draw_tick();
     chat
 }
 
@@ -24,6 +25,7 @@ fn complete_turn(
             failure,
         },
     ));
+    chat.pre_draw_tick();
 }
 
 fn approval(id: &str) -> crate::bottom_pane::ApprovalRequest {
@@ -66,6 +68,7 @@ fn a_turn_works_then_reports_done() {
     let mut chat = chat();
 
     chat.on_task_started();
+    chat.pre_draw_tick();
     assert_eq!(chat.last_program_status, Some(ProgramStatus::Working));
 
     complete_turn(&mut chat, nori_protocol::acp::v1::StopReason::EndTurn, None);
@@ -124,5 +127,6 @@ fn a_parked_session_does_not_report() {
     chat.last_program_status = None;
 
     chat.on_task_started();
+    chat.pre_draw_tick();
     assert_eq!(chat.last_program_status, None);
 }

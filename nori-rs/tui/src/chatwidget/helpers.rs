@@ -601,7 +601,6 @@ impl ChatWidget {
         if !self.foreground {
             return;
         }
-        self.refresh_program_status();
         let now = Instant::now();
         let spinner_frame = if self.should_animate_terminal_title_spinner() {
             Some(crate::terminal_title::spinner_frame_at(
@@ -692,11 +691,9 @@ impl ChatWidget {
 
     /// Called before every frame draw to advance the terminal title spinner.
     pub(crate) fn pre_draw_tick(&mut self) {
+        self.refresh_program_status();
         if self.should_animate_terminal_title_spinner() {
             self.refresh_terminal_title();
-        } else {
-            // Answering an approval only redraws, so pick up status here too.
-            self.refresh_program_status();
         }
     }
 }

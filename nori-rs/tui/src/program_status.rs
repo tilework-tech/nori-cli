@@ -53,21 +53,23 @@ pub(crate) fn clear_program_status() -> io::Result<()> {
 /// Build the `key=value` body of a report. Free text is sanitized and base64
 /// encoded because the spec refuses control characters and `:` in values.
 fn encode_report(status: &ProgramStatus) -> String {
-    match status {
-        ProgramStatus::Idle => format!("state=idle:app={APP_ID}"),
-        ProgramStatus::Working => format!("state=working:app={APP_ID}"),
-        ProgramStatus::Done => format!("state=done:app={APP_ID}"),
-        ProgramStatus::Error => format!("state=error:app={APP_ID}"),
-        ProgramStatus::Blocked { message } => {
-            let message = crate::terminal_title::sanitize_terminal_title(message);
-            if message.is_empty() {
-                format!("state=blocked:kind=permission:app={APP_ID}")
-            } else {
-                let msg = base64::engine::general_purpose::STANDARD.encode(message);
-                format!("state=blocked:kind=permission:app={APP_ID}:msg={msg}")
-            }
+    let state = match status {
+        ProgramStatus::Idle => "idle",
+        ProgramStatus::Working => "working",
+        ProgramStatus::Blocked { .. } => "blocked",
+        ProgramStatus::Done => "done",
+        ProgramStatus::Error => "error",
+    };
+    let mut report = format!("state={state}:app={APP_ID}");
+    if let ProgramStatus::Blocked { message } = status {
+        report.push_str(":kind=permission");
+        let message = crate::terminal_title::sanitize_terminal_title(message);
+        if !message.is_empty() {
+            let msg = base64::engine::general_purpose::STANDARD.encode(message);
+            report.push_str(&format!(":msg={msg}"));
         }
     }
+    report
 }
 
 #[derive(Debug, Clone)]
@@ -124,7 +126,7 @@ mod tests {
             message: "Run cargo test".to_string(),
         });
 
-        assert!(report.starts_with("state=blocked:kind=permission:app=nori:msg="));
+        assert!(report.starts_with("state=blocked:app=nori:kind=permission:msg="));
         assert_eq!(decode_msg(&report), "Run cargo test");
     }
 
@@ -143,7 +145,7 @@ mod tests {
             message: " \n ".to_string(),
         });
 
-        assert_eq!(report, "state=blocked:kind=permission:app=nori");
+        assert_eq!(report, "state=blocked:app=nori:kind=permission");
     }
 
     #[test]

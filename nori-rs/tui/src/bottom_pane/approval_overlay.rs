@@ -270,11 +270,9 @@ impl BottomPaneView for ApprovalOverlay {
     }
 
     fn pending_approval_title(&self) -> Option<&str> {
-        if self.done || self.current_complete {
-            return None;
-        }
         self.current_request
             .as_ref()
+            .filter(|_| !self.done && !self.current_complete)
             .map(|request| request.title.as_str())
     }
 

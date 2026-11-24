@@ -329,14 +329,13 @@ impl ChatWidget {}
 
 impl Drop for ChatWidget {
     fn drop(&mut self) {
-        if self.foreground
-            && let Err(err) = self.clear_managed_terminal_title()
-        {
+        if !self.foreground {
+            return;
+        }
+        if let Err(err) = self.clear_managed_terminal_title() {
             tracing::debug!(error = %err, "failed to clear terminal title on drop");
         }
-        if self.foreground
-            && let Err(err) = crate::program_status::clear_program_status()
-        {
+        if let Err(err) = crate::program_status::clear_program_status() {
             tracing::debug!(error = %err, "failed to clear program status on drop");
         }
     }

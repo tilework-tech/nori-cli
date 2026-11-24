@@ -1614,8 +1614,7 @@ tells the terminal what the active session is doing, as one root record with
 approval title as its message, a running turn reports `working`, and otherwise
 the way the last turn ended decides: `done` after a clean end, `error` after a
 failure, `idle` after a cancel or before the first turn. The status is derived
-whenever the title refreshes and before each frame, and written only when it
-changes. A parked session never writes it, the session brought on screen
+before each frame and written only when it changes. A parked session never writes it, the session brought on screen
 writes its own, and the widget clears every record when it is dropped.
 Terminals that do not know the sequence ignore it.
 

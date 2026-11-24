@@ -1,6 +1,6 @@
 //! Reports the foreground session's state to the terminal as OSC 7501.
 //!
-//! The status is derived on each refresh: a pending approval blocks, a
+//! The status is derived before each frame: a pending approval blocks, a
 //! running turn works, and otherwise the way the last turn ended decides.
 //! Parked sessions never write, the same as the terminal title.
 
@@ -13,14 +13,21 @@ impl ChatWidget {
         if !self.foreground {
             return;
         }
-        let status = if let Some(title) = self.bottom_pane.pending_approval_title() {
-            ProgramStatus::Blocked {
-                message: title.to_string(),
+        let status = match self.bottom_pane.pending_approval_title() {
+            Some(title) => {
+                // Compare before copying the title, since this runs every frame.
+                if matches!(
+                    &self.last_program_status,
+                    Some(ProgramStatus::Blocked { message }) if message == title
+                ) {
+                    return;
+                }
+                ProgramStatus::Blocked {
+                    message: title.to_string(),
+                }
             }
-        } else if self.bottom_pane.is_task_running() {
-            ProgramStatus::Working
-        } else {
-            self.turn_end_status.clone()
+            None if self.bottom_pane.is_task_running() => ProgramStatus::Working,
+            None => self.turn_end_status.clone(),
         };
         if self.last_program_status.as_ref() == Some(&status) {
             return;
