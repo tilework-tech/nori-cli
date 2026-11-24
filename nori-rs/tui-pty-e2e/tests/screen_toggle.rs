@@ -340,3 +340,46 @@ fn the_screen_key_switches_views_and_leaves_an_unsent_draft_alone() {
     assert_eq!(count(&history, ANSWER), 2, "one new answer:\n{history}");
     assert_eq!(count(&history, draft), 1, "sent exactly once:\n{history}");
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn a_session_resumed_while_full_screen_shows_its_replayed_history() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_owned())
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1")
+        .with_agent_env("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1")
+        .with_agent_env("MOCK_AGENT_LOAD_SESSION_USER_NOTIFICATION", "1")
+        .with_agent_env("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT", "1");
+    let mut session = spawn(config);
+    toggle_screen(&mut session, true);
+
+    session.submit_input("/resume").unwrap();
+    session
+        .wait_for_text("First mock session", TIMEOUT)
+        .expect("the picker lists the agent's sessions");
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Nothing else happens after the replay, so only the replay itself can
+    // bring its rows on screen.
+    session
+        .wait_for(
+            |screen| screen.contains("loaded user activity") && screen.contains("replay chunk 0"),
+            TIMEOUT,
+        )
+        .expect("the full-screen view shows the replayed history");
+    assert!(
+        session.is_alternate_screen(),
+        "resuming keeps the full-screen view:\n{}",
+        session.screen_contents()
+    );
+
+    toggle_screen(&mut session, false);
+    session
+        .wait_for_text("replay chunk 0", TIMEOUT)
+        .expect("the inline view shows the replayed history");
+    let history = session.history_contents();
+    assert_eq!(count(&history, "loaded user activity"), 1, "{history}");
+    assert_eq!(count(&history, "replay chunk 0"), 1, "{history}");
+}
