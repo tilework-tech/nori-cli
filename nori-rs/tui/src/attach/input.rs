@@ -480,10 +480,7 @@ impl Runtime {
             return true;
         }
         if command == "/close" {
-            self.send(
-                HostCall::Close { session_id: id },
-                Pending::Mutation { draft: None },
-            );
+            self.close(id);
         } else if command == "/resume" {
             self.resume(&id);
         } else if let Some(expected_turn) = active_turn {

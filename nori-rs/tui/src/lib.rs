@@ -42,6 +42,7 @@ mod cli;
 mod client_event_format;
 mod client_tool_cell;
 mod clipboard_paste;
+mod close_refusal;
 mod color;
 mod context_view;
 pub mod custom_terminal;

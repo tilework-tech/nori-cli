@@ -1402,10 +1402,14 @@ local /close via owned host or cloud /close via agent ──> SessionEnded(Close
   session and permits retry. Cloud sends the request directly to its agent and
   reports failure with the full cause chain. A refusal arrives twice, as an
   unowned adapter error on the event stream and as `SessionCloseFailed`, in
-  either order; the per-close `CloseRefusal` state in
-  [`session_close.rs`](src/chatwidget/session_close.rs) prints it once,
-  dropping the adapter error whose raw message the command error contains,
-  while unrelated errors still show.
+  either order. [`session_close.rs`](src/chatwidget/session_close.rs) feeds
+  both into the shared [`CloseRefusal`](src/close_refusal.rs) ledger, which
+  `nori attach` also uses (see [its docs](src/attach/docs.md)). While a close
+  is in flight the ledger holds unowned adapter errors; on refusal it drops
+  those whose raw text the command error contains and returns the rest to
+  show before the single `Failed to close the session: …` line. A command
+  error that arrives first covers only the next adapter error, and only when
+  it describes it. A close that ends without refusal releases everything held.
   On `SessionEnded(Closed)`, the next open session comes on screen. Closing
   the last session opens the agent session picker. Cloud also displays the
   release confirmation there.

@@ -39,6 +39,10 @@ impl Runtime {
             self.follow_up_notice(session_id, format!("{text} [{message_id}] {draft}"));
             return;
         }
+        if let Pending::Close { session_id } = &pending {
+            self.close_refused(session_id, &text);
+            return;
+        }
         if let Pending::Prompt { interrupt, .. } = &pending {
             interrupt.retire();
         }
