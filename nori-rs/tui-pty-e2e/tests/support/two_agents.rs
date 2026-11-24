@@ -86,7 +86,7 @@ pub fn host_requests(tui: &TuiSession) -> Vec<String> {
 }
 
 /// Wait until the owned host has received `method`.
-pub fn wait_for_host_request(tui: &TuiSession, method: &str) -> Vec<String> {
+pub fn wait_for_host_request(tui: &mut TuiSession, method: &str) -> Vec<String> {
     let deadline = std::time::Instant::now() + TIMEOUT;
     loop {
         let requests = host_requests(tui);
@@ -98,13 +98,19 @@ pub fn wait_for_host_request(tui: &TuiSession, method: &str) -> Vec<String> {
             "the owned host never received {method}: {requests:?} (log {:?})",
             tui.acp_log_path()
         );
-        std::thread::sleep(Duration::from_millis(50));
+        tui.settle(Duration::from_millis(50));
     }
 }
 
+/// Type `text`, then press Enter after the paste window has passed.
+///
+/// The harness reads the terminal only while it polls, so the pause keeps
+/// polling. A bare sleep leaves the TUI blocked writing into a full PTY
+/// buffer (macOS buffers far less than Linux); the keys then arrive in one
+/// burst and Enter becomes part of a paste instead of submitting.
 pub fn ask(tui: &mut TuiSession, text: &str) {
     tui.send_str(text).unwrap();
-    std::thread::sleep(PAUSE);
+    tui.settle(PAUSE);
     tui.send_key(Key::Enter).unwrap();
 }
 

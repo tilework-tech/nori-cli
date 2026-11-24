@@ -12,7 +12,7 @@ use two_agents::*;
 fn pick_saved_row(tui: &mut TuiSession) {
     tui.wait_for_text("saved-1", TIMEOUT).unwrap();
     tui.send_key(Key::Down).unwrap();
-    std::thread::sleep(PAUSE);
+    tui.settle(PAUSE);
     tui.send_key(Key::Enter).unwrap();
 }
 
