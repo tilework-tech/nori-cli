@@ -1,0 +1,16 @@
+{"t": 1795547498.9184883, "adapter": "claude-code", "pid": 26111, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S42l/roots/alpha/app", "argv": []}
+{"t": 1795547498.9185555, "adapter": "claude-code", "pid": 26111, "kind": "request", "method": "initialize"}
+{"t": 1795547498.919734, "adapter": "claude-code", "pid": 26111, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S42l/roots/alpha/app"}
+{"t": 1795547498.9213717, "adapter": "claude-code", "pid": 26111, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance/S42l/roots/alpha/app"}
+{"t": 1795547498.924209, "adapter": "claude-code", "pid": 26111, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795547500.1440258, "adapter": "claude-code", "pid": 26111, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nlagoon line"}
+{"t": 1795547500.1442468, "adapter": "claude-code", "pid": 26111, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795547504.3339646, "adapter": "claude-code", "pid": 26248, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S42l/roots/alpha/app", "argv": []}
+{"t": 1795547504.3340251, "adapter": "claude-code", "pid": 26248, "kind": "request", "method": "initialize"}
+{"t": 1795547504.3351135, "adapter": "claude-code", "pid": 26248, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S42l/roots/alpha/app"}
+{"t": 1795547507.77221, "adapter": "claude-code", "pid": 26248, "kind": "request", "method": "session/load", "cwd": "/tmp/nori-host-tui-acceptance/S42l/roots/alpha/app", "sessionId": "saved-orchard"}
+{"t": 1795547507.7774286, "adapter": "claude-code", "pid": 26248, "kind": "request", "method": "session/set_config_option", "sessionId": "saved-orchard", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795547522.1601543, "adapter": "claude-code", "pid": 26248, "kind": "request", "method": "session/prompt", "sessionId": "saved-orchard", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\norchard follow up"}
+{"t": 1795547522.160516, "adapter": "claude-code", "pid": 26248, "kind": "turn_end", "sessionId": "saved-orchard", "stopReason": "end_turn"}
+{"t": 1795547528.5406065, "adapter": "claude-code", "pid": 26248, "kind": "stdin_eof"}
+{"t": 1795547528.5432458, "adapter": "claude-code", "pid": 26111, "kind": "stdin_eof"}

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-f1/S44a/roots/alpha/app · Approvals: Agent
+  Agent        Claude · acceptEdits
+
+• Resuming session with Lantern Claude...
+
+
+› an earlier synthetic question
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• an earlier synthetic answer
+
+  2 ready
+
+                                                                                                         [ acceptEdits ]
+› @ for file mentions
+

@@ -4191,6 +4191,92 @@ def s43d_rebound_and_unbound(ctx):
     quit_fg(t)
 
 
+# ---- S44: /resume while full-screen, no further input (#757 9106afd8 recheck) --
+
+def s44_resume_spontaneous(ctx, binary="nori", full=True):
+    """/resume while full-screen, then hands off: the restored question and answer must appear and stay
+    with no key, resize or turn. Back inline before any new turn: each once, question before answer."""
+    t = start_fg(ctx, cmd=f"{binary} --skip-trust-directory")
+    submit(t, "lagoon line")
+    t.wait_for("heard: lagoon line", 20)
+    time.sleep(0.6)
+    if full:
+        ctx.check("r.into_full", toggle_screen(t, True))
+    open_resume_rows(t, "/resume")
+    t.capture("1-picker")
+    ctx.check("r.picked", choose(t, "Saved orchard survey"))
+    picked = time.time()
+    seen, timeline = {}, []
+    while time.time() - picked < 13:
+        s = t.screen()
+        for needle in ("an earlier synthetic question", "an earlier synthetic answer"):
+            if needle in s and needle not in seen:
+                seen[needle] = round(time.time() - picked, 1)
+        if time.time() - picked > 8:
+            timeline.append(int("an earlier synthetic question" in s and "an earlier synthetic answer" in s))
+        time.sleep(0.2)
+    s = t.screen()
+    t.capture("2-resumed-no-input")
+    (ctx.dir / "seen.json").write_text(json.dumps({"first_seen_s": seen, "both_present_8s_to_13s": timeline}))
+    ctx.check("r.alt_unchanged", t.alt_screen() == full, t.fmt("#{alternate_on}"))
+    ctx.check("r.both_appear_without_input", len(seen) == 2, {"seen_after_s": seen, "tail": s[-400:]})
+    ctx.check("r.both_stay_on_screen", bool(timeline) and all(timeline), timeline)
+    ctx.check("r.previous_session_gone", "lagoon line" not in s, s[-400:])
+    if full:
+        ctx.check("r.out_before_turn", toggle_screen(t, False))
+        time.sleep(2.0)
+    h = t.history()
+    t.capture("3-inline-before-turn")
+    q, a = h.count("an earlier synthetic question"), h.count("an earlier synthetic answer")
+    ctx.check("r.inline_once", q == 1 and a == 1, {"question": q, "answer": a})
+    ctx.check("r.inline_in_order", q >= 1 and a >= 1 and h.index("an earlier synthetic question") < h.index("an earlier synthetic answer"))
+    ctx.check("r.inline_drops_previous_session", "lagoon line" not in h, h.count("lagoon line"))
+    submit(t, "orchard follow up")
+    t.wait_for("heard: orchard follow up", 15)
+    time.sleep(0.8)
+    h = t.history()
+    t.capture("4-after-turn")
+    ctx.check("r.after_turn_once_in_order",
+              h.count("an earlier synthetic answer") == 1 and h.count("heard: orchard follow up") == 1
+              and h.index("an earlier synthetic answer") < h.index("heard: orchard follow up"),
+              {"answer": h.count("an earlier synthetic answer"), "follow": h.count("heard: orchard follow up")})
+    quit_fg(t)
+    restored(ctx, t, "r.exit")
+
+
+def s44_resume_then_quit_full(ctx, binary="nori"):
+    """/resume while full-screen, no input until /quit from full-screen: afterwards the normal terminal
+    scrollback holds the restored question and answer once each, in order."""
+    t = start_fg(ctx, cmd=f"{binary} --skip-trust-directory")
+    submit(t, "lagoon line")
+    t.wait_for("heard: lagoon line", 20)
+    time.sleep(0.6)
+    ctx.check("q.into_full", toggle_screen(t, True))
+    open_resume_rows(t, "/resume")
+    ctx.check("q.picked", choose(t, "Saved orchard survey"))
+    picked = time.time()
+    seen = {}
+    while time.time() - picked < 8:
+        s = t.screen()
+        for needle in ("an earlier synthetic question", "an earlier synthetic answer"):
+            if needle in s and needle not in seen:
+                seen[needle] = round(time.time() - picked, 1)
+        time.sleep(0.2)
+    t.capture("1-resumed-full-no-input")
+    ctx.check("q.both_appear_without_input", len(seen) == 2, seen)
+    ctx.check("q.still_full", t.alt_screen())
+    quit_fg(t)
+    time.sleep(1.0)
+    h = t.history()
+    t.capture("2-after-quit")
+    (ctx.dir / "scrollback-after-quit.txt").write_text(h)
+    q, a = h.count("an earlier synthetic question"), h.count("an earlier synthetic answer")
+    ctx.check("q.scrollback_once", q == 1 and a == 1, {"question": q, "answer": a})
+    ctx.check("q.scrollback_in_order", q >= 1 and a >= 1 and h.index("an earlier synthetic question") < h.index("an earlier synthetic answer"))
+    ctx.check("q.scrollback_drops_previous_session", "heard: lagoon line" not in h, h.count("heard: lagoon line"))
+    restored(ctx, t, "q.exit")
+
+
 def s43e_attach_ctrl_l(ctx):
     ctx.start_host(cwd="alpha")
     c = start_attach(ctx, "controller")
@@ -4341,6 +4427,12 @@ SCENARIOS = {
     "S42n": ("screen: /resume inline (control for S42l)", lambda c: s42l_resume_in_full(c, False)),
     "S42m": ("screen: permission request answered inline (ordering control for S42k)", lambda c: s42k_permission_in_full(c, False)),
     "S42l": ("screen: /resume while full, then inline", s42l_resume_in_full),
+    "S44a": ("resume while full, no input: plain nori", lambda c: s44_resume_spontaneous(c, "nori", True)),
+    "S44b": ("resume while full, no input: nori-tui", lambda c: s44_resume_spontaneous(c, "nori-tui", True)),
+    "S44c": ("resume inline, no input: plain nori (control)", lambda c: s44_resume_spontaneous(c, "nori", False)),
+    "S44d": ("resume inline, no input: nori-tui (control)", lambda c: s44_resume_spontaneous(c, "nori-tui", False)),
+    "S44e": ("resume while full, no input, /quit from full: plain nori", lambda c: s44_resume_then_quit_full(c, "nori")),
+    "S44f": ("resume while full, no input, /quit from full: nori-tui", lambda c: s44_resume_then_quit_full(c, "nori-tui")),
     "S36": ("startup activation window swept by Enter time", s36_startup_race),
     "S36b": ("startup activation window swept by typing time", lambda c: s36_startup_race(c, burst_at_reply=True)),
 }

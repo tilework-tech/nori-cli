@@ -1,0 +1,146 @@
+[
+  {
+    "scenario": "S44e",
+    "check": "q.into_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44e",
+    "check": "q.picked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44e",
+    "check": "q.both_appear_without_input",
+    "passed": true,
+    "detail": "{'an earlier synthetic question': 0.0, 'an earlier synthetic answer': 0.0}"
+  },
+  {
+    "scenario": "S44e",
+    "check": "q.still_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44e",
+    "check": "q.scrollback_once",
+    "passed": false,
+    "detail": "{'question': 0, 'answer': 0}"
+  },
+  {
+    "scenario": "S44e",
+    "check": "q.scrollback_in_order",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S44e",
+    "check": "q.scrollback_drops_previous_session",
+    "passed": false,
+    "detail": "1"
+  },
+  {
+    "scenario": "S44e",
+    "check": "q.exit.back_at_shell",
+    "passed": true,
+    "detail": "                                  \u2502\n\u2502   (none)                                      \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nshell$\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S44e",
+    "check": "q.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S44e",
+    "check": "q.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S44e",
+    "check": "q.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44e",
+    "check": "q.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 5, 'cursor_show': 32, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.into_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.picked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.both_appear_without_input",
+    "passed": true,
+    "detail": "{'an earlier synthetic question': 0.0, 'an earlier synthetic answer': 0.0}"
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.still_full",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.scrollback_once",
+    "passed": false,
+    "detail": "{'question': 0, 'answer': 0}"
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.scrollback_in_order",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.scrollback_drops_previous_session",
+    "passed": false,
+    "detail": "1"
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.exit.back_at_shell",
+    "passed": true,
+    "detail": "                                  \u2502\n\u2502   (none)                                      \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nshell$\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44f",
+    "check": "q.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 5, 'cursor_show': 32, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  }
+]

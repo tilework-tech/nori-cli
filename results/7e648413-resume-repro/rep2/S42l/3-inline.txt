@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance/S42l/roots/alpha/app · Approvals: Agent
+  Agent        Claude · acceptEdits
+
+• Resuming session with Lantern Claude...
+
+
+› an earlier synthetic question
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• an earlier synthetic answer
+
+
+› orchard follow up
+
+
+• claude-code heard: orchard follow up
+
+  2 ready
+
+                                                                                                         [ acceptEdits ]
+› ! for shell commands
+

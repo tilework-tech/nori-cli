@@ -1,0 +1,35 @@
+
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/nori-host-tui-acceptance-f1/S44f/roots/alpha/app[2m · [0m[39m[49mApprovals: Agent
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude[2m[39m · [0m[39m[49macceptEdits
+
+[2m• [0m[39m[49mResuming session with Lantern Claude...
+
+
+[1;2m› [0m[39m[49man earlier synthetic question
+
+
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• [0m[39m[49man earlier synthetic answer
+
+[2m╭───────────────────────────────────────────────╮
+│ [0;1m[38;5;2m[49mGoodbye! [0;2m[39m[49mThanks for using Nori.               │
+│                                               │
+│ Session: [0m[39m[49mfde4180b-e4cd-41a5-8ed8-1bfb2676eda9[2m │
+│                                               │
+│ [0;1m[39m[49mMessages[0;2m[39m[49m      User: 0  Assistant: 0  Total: 0 │
+│ [0;1m[39m[49mTool Calls[0m[39m[49m    [2m(none)                          │
+│                                               │
+│ [0;1m[39m[49mSkills Used[0;2m[39m[49m                                   │
+│   (none)                                      │
+│                                               │
+│ [0;1m[39m[49mSubagents Used[0;2m[39m[49m                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+[0m[39m[49mshell$
+
+
+
+

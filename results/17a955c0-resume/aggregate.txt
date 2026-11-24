@@ -1,0 +1,20 @@
+17a955c0 S42l: 5/5 clean 
+17a955c0 S43d: 0/5 clean {'d.shortcuts_show_configured_key': 5}
+17a955c0 S44a: 12/12 clean 
+17a955c0 S44b: 12/12 clean 
+17a955c0 S44c: 5/5 clean 
+17a955c0 S44d: 5/5 clean 
+17a955c0 S44e: 12/12 clean 
+17a955c0 S44f: 12/12 clean 
+7e648413 S42l: 8/12 clean {'l.diag_missing_answer': 4, 'l.resumed_shows_saved_exchange': 4, 'l.answer_stays_on_screen': 4}
+7e648413 S44a: 10/12 clean {'r.both_appear_without_input': 2, 'r.both_stay_on_screen': 2}
+7e648413 S44b: 9/12 clean {'r.both_appear_without_input': 3, 'r.both_stay_on_screen': 3}
+9106afd8 S42l: 10/10 clean 
+9106afd8 S42n: 5/5 clean 
+9106afd8 S43d: 0/5 clean {'d.shortcuts_show_configured_key': 5}
+9106afd8 S44a: 12/12 clean 
+9106afd8 S44b: 12/12 clean 
+9106afd8 S44c: 5/5 clean 
+9106afd8 S44d: 5/5 clean 
+9106afd8 S44e: 0/4 clean {'q.scrollback_in_order': 4, 'q.scrollback_drops_previous_session': 4, 'q.scrollback_once': 4}
+9106afd8 S44f: 0/4 clean {'q.scrollback_in_order': 4, 'q.scrollback_drops_previous_session': 4, 'q.scrollback_once': 4}

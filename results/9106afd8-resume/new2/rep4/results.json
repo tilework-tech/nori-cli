@@ -1,0 +1,260 @@
+[
+  {
+    "scenario": "S43d",
+    "check": "d.ctrl_l_unbound_after_rebind",
+    "passed": true,
+    "detail": "rebind draft"
+  },
+  {
+    "scenario": "S43d",
+    "check": "d.alt_s_switches",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43d",
+    "check": "d.alt_s_back",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S43d",
+    "check": "d.draft_kept",
+    "passed": true,
+    "detail": "rebind draft"
+  },
+  {
+    "scenario": "S43d",
+    "check": "d.shortcuts_show_configured_key",
+    "passed": false,
+    "detail": "['ctrl + l to toggle full screen          ctrl + t to view transcript']"
+  },
+  {
+    "scenario": "S42n",
+    "check": "l.picked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42n",
+    "check": "l.answer_stays_on_screen",
+    "passed": true,
+    "detail": "[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]"
+  },
+  {
+    "scenario": "S42n",
+    "check": "l.resumed_shows_saved_exchange",
+    "passed": true,
+    "detail": "{'alt': False, 'seen_after_s': {'an earlier synthetic question': 0.0, 'an earlier synthetic answer': 0.0}, 'tail': '\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\\n\\n\u2022 an earlier synthetic answer\\n\\n  2 ready\\n\\n                                                                                                         [ acceptEdits ]\\n\u203a ? for shortcuts\\n\\n'}"
+  },
+  {
+    "scenario": "S42n",
+    "check": "l.inline_has_resumed_once",
+    "passed": true,
+    "detail": "{'answer': 1, 'follow': 1}"
+  },
+  {
+    "scenario": "S42n",
+    "check": "l.inline_drops_previous_session",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42n",
+    "check": "l.exit.back_at_shell",
+    "passed": true,
+    "detail": "        \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 96fe30a1-2f80-4bb8-8673-59b9b6a1231d\nshell$\n\n\n\n"
+  },
+  {
+    "scenario": "S42n",
+    "check": "l.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S42n",
+    "check": "l.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S42n",
+    "check": "l.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S42n",
+    "check": "l.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 0, 'alt_off': 0, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 5, 'cursor_show': 30, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.picked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.alt_unchanged",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.both_appear_without_input",
+    "passed": true,
+    "detail": "{'seen_after_s': {'an earlier synthetic question': 0.0, 'an earlier synthetic answer': 0.0}, 'tail': ' acceptEdits\\n\\n\u2022 Resuming session with Lantern Claude...\\n\\n\\n\u203a an earlier synthetic question\\n\\n\\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\\n\\n\u2022 an earlier synthetic answer\\n\\n  2 ready\\n\\n                                                                                                         [ acceptEdits ]\\n\u203a $ for skill listing\\n\\n'}"
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.both_stay_on_screen",
+    "passed": true,
+    "detail": "[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]"
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.previous_session_gone",
+    "passed": true,
+    "detail": " acceptEdits\n\n\u2022 Resuming session with Lantern Claude...\n\n\n\u203a an earlier synthetic question\n\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n\u2022 an earlier synthetic answer\n\n  2 ready\n\n                                                                                                         [ acceptEdits ]\n\u203a $ for skill listing\n\n"
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.inline_once",
+    "passed": true,
+    "detail": "{'question': 1, 'answer': 1}"
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.inline_in_order",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.inline_drops_previous_session",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.after_turn_once_in_order",
+    "passed": true,
+    "detail": "{'answer': 1, 'follow': 1}"
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.exit.back_at_shell",
+    "passed": true,
+    "detail": "        \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 67e0aee4-a0c9-4f03-aad1-155d00891c89\nshell$\n\n\n\n"
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44c",
+    "check": "r.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 0, 'alt_off': 0, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 5, 'cursor_show': 30, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.picked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.alt_unchanged",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.both_appear_without_input",
+    "passed": true,
+    "detail": "{'seen_after_s': {'an earlier synthetic question': 0.0, 'an earlier synthetic answer': 0.0}, 'tail': 'de \u00b7 acceptEdits\\n\\n\u2022 Resuming session with Lantern Claude...\\n\\n\\n\u203a an earlier synthetic question\\n\\n\\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\\n\\n\u2022 an earlier synthetic answer\\n\\n  2 ready\\n\\n                                                                                                         [ acceptEdits ]\\n\u203a ? for shortcuts\\n\\n'}"
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.both_stay_on_screen",
+    "passed": true,
+    "detail": "[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]"
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.previous_session_gone",
+    "passed": true,
+    "detail": "de \u00b7 acceptEdits\n\n\u2022 Resuming session with Lantern Claude...\n\n\n\u203a an earlier synthetic question\n\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n\u2022 an earlier synthetic answer\n\n  2 ready\n\n                                                                                                         [ acceptEdits ]\n\u203a ? for shortcuts\n\n"
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.inline_once",
+    "passed": true,
+    "detail": "{'question': 1, 'answer': 1}"
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.inline_in_order",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.inline_drops_previous_session",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.after_turn_once_in_order",
+    "passed": true,
+    "detail": "{'answer': 1, 'follow': 1}"
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.exit.back_at_shell",
+    "passed": true,
+    "detail": "d                                   \u2502\n\u2502   (none)                                      \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nshell$\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S44d",
+    "check": "r.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 0, 'alt_off': 0, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 5, 'cursor_show': 33, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  }
+]
