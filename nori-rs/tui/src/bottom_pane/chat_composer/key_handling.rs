@@ -256,8 +256,16 @@ impl ChatComposer {
                     return (InputResult::Submitted(expanded), true);
                 }
 
+                // A frontend that cannot list the agent's own commands runs a
+                // builtin only when its name starts with what was typed;
+                // anything else is submitted for the agent.
+                let pass_unknown = self.pass_unknown_commands;
+                let typed_builtin = |cmd: SlashCommand| {
+                    !pass_unknown || CommandPopup::typed_prefix_of(first_line, cmd)
+                };
                 if let Some(sel) = popup.selected_item() {
                     match sel {
+                        CommandItem::Builtin(cmd) if !typed_builtin(cmd) => {}
                         CommandItem::Builtin(cmd) => {
                             self.textarea.set_text("");
                             return (InputResult::Command(cmd), true);
@@ -304,6 +312,15 @@ impl ChatComposer {
                             return (InputResult::None, true);
                         }
                     }
+                }
+                // A greyed builtin still runs through the frontend's gate, which
+                // refuses it with the reason the menu shows.
+                if let Some(cmd) = popup
+                    .highlighted_disabled_builtin()
+                    .filter(|cmd| CommandPopup::typed_prefix_of(first_line, *cmd))
+                {
+                    self.textarea.set_text("");
+                    return (InputResult::Command(cmd), true);
                 }
                 // Fallback to default newline handling if no command selected.
                 self.handle_key_event_without_popup(key_event, false)
@@ -746,9 +763,7 @@ impl ChatComposer {
             let text = draft.trim();
             let is_command = text.starts_with('!')
                 || parse_slash_name(text).is_some_and(|(name, _)| !name.contains('/'))
-                || (!self.literal_commands
-                    && !draft.starts_with(' ')
-                    && matches!(text, "exit" | "quit"));
+                || (!draft.starts_with(' ') && matches!(text, "exit" | "quit"));
             if text.is_empty() || is_command {
                 if draft != self.textarea.text() {
                     self.textarea.set_text(&draft);
@@ -865,7 +880,6 @@ impl ChatComposer {
                 // literal text.
                 let first_line = self.textarea.text().lines().next().unwrap_or("");
                 if let Some((name, rest)) = parse_slash_name(first_line)
-                    && !self.literal_commands
                     && rest.is_empty()
                     && let Some((_n, cmd)) = built_in_slash_commands()
                         .into_iter()
@@ -921,7 +935,7 @@ impl ChatComposer {
                 // user can quit without the leading slash. A leading space opts out
                 // (mirroring how a leading space escapes slash commands below),
                 // keeping the words available as literal messages to the agent.
-                if !input_starts_with_space && !self.literal_commands {
+                if !input_starts_with_space {
                     if text == "exit" {
                         return (InputResult::Command(SlashCommand::Exit), true);
                     }
@@ -930,8 +944,12 @@ impl ChatComposer {
                     }
                 }
                 if let Some((name, _rest)) = parse_slash_name(&text) {
-                    let treat_as_plain_text =
-                        self.literal_commands || input_starts_with_space || name.contains('/');
+                    let treat_as_plain_text = input_starts_with_space
+                        || name.contains('/')
+                        || (self.pass_unknown_commands
+                            && !built_in_slash_commands()
+                                .into_iter()
+                                .any(|(command_name, _)| command_name == name));
                     if !treat_as_plain_text {
                         let is_builtin = built_in_slash_commands()
                             .into_iter()

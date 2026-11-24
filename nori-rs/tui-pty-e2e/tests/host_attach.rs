@@ -290,7 +290,10 @@ fn refusal_count(client: &mut Client) -> usize {
         .to_lowercase()
         .lines()
         .filter(|line| {
-            line.contains("read-only") || line.contains("not allowed") || line.contains("cannot")
+            line.contains("read-only")
+                || line.contains("not allowed")
+                || line.contains("cannot")
+                || line.contains("alt+t to take control")
         })
         .count()
 }
@@ -899,6 +902,48 @@ fn watcher_cannot_delegate_a_child() {
         host.list().lines().count(),
         2,
         "watcher cannot create a child"
+    );
+}
+
+#[test]
+fn attached_slash_menu_greys_what_this_terminal_cannot_run_and_refuses_it_with_the_same_reason() {
+    let host = Host::new();
+    host.start();
+    let mut controller = host.create_session();
+    ask(&mut controller, "shared command menu");
+    let id = host.session_id();
+    let mut watcher = host.attach(Some(&id));
+    wait_watching(&mut watcher);
+
+    controller.send_str("/").unwrap();
+    controller
+        .wait_for_text("not available in nori attach yet", TIMEOUT)
+        .expect("the controller's menu greys commands attach has no screen for");
+    controller.send_str("comp").unwrap();
+    controller
+        .wait_for_text("not available on this host yet", TIMEOUT)
+        .expect("the menu names commands the host has no method for");
+    controller.settle(Duration::from_millis(1000));
+    controller.send_key(Key::Enter).unwrap();
+    controller
+        .wait_for_text("/compact: not available on this host yet", TIMEOUT)
+        .expect("Enter on a greyed row refuses it with the menu's reason");
+
+    watcher.send_str("/").unwrap();
+    watcher
+        .wait_for_text("watching · Alt+T to take control", TIMEOUT)
+        .expect("a watcher's menu greys controller commands");
+    let before = host.list().lines().count();
+    watcher.send_str("new").unwrap();
+    watcher.settle(Duration::from_millis(1000));
+    watcher.send_key(Key::Enter).unwrap();
+    watcher
+        .wait_for_text("/new: watching · Alt+T to take control", TIMEOUT)
+        .expect("a watcher's /new is refused with the menu's reason");
+    assert_eq!(
+        host.list().lines().count(),
+        before,
+        "the watcher started nothing"
     );
 }
 

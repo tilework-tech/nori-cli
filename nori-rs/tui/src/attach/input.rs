@@ -13,11 +13,13 @@ use super::runtime::Pending;
 use super::runtime::Runtime;
 use super::state::CancelDelivery;
 use crate::host_client::HostCall;
+use crate::slash_command::SlashCommand;
 
 impl Runtime {
     /// False means detach. It never requests host or session shutdown.
     pub fn key(&mut self, key: KeyEvent) -> bool {
         self.note_request_on_screen();
+        self.sync_command_menu();
         let handled = self.handle_key(key);
         self.note_request_on_screen();
         handled
@@ -79,6 +81,10 @@ impl Runtime {
             if !self.delegation_key(key) {
                 self.permission_key(key);
             }
+            return true;
+        }
+        if key.code == KeyCode::Esc && !self.state.list_open && self.composer.popup_open() {
+            self.composer.attachment_input(key, false);
             return true;
         }
         if key.code == KeyCode::Esc {
@@ -201,7 +207,10 @@ impl Runtime {
             InputResult::Submitted(text) => {
                 self.submit_with_intent(text, active_turn, nori_harness::FollowUpIntent::Steer)
             }
-            InputResult::None | InputResult::Command(_) => true,
+            InputResult::Command(command) => {
+                self.run_command(command, "", format!("/{}", command.command()))
+            }
+            InputResult::None => true,
         }
     }
 
@@ -348,7 +357,7 @@ impl Runtime {
         true
     }
 
-    fn require_mutation(&self) -> anyhow::Result<()> {
+    pub(super) fn require_mutation(&self) -> anyhow::Result<()> {
         if let Some(reason) = &self.state.stopped {
             anyhow::bail!("{reason}");
         }
@@ -425,13 +434,8 @@ impl Runtime {
         intent: nori_harness::FollowUpIntent,
     ) -> bool {
         let command = text.trim();
-        if matches!(command, "/quit" | "/exit" | "/detach") {
+        if command == "/detach" {
             return false;
-        }
-        if command == "/sessions" {
-            self.state.list_open = true;
-            self.refresh_list();
-            return true;
         }
         if command.is_empty() {
             return true;
@@ -440,54 +444,28 @@ impl Runtime {
             self.cancel_selected();
             return true;
         }
+        // `/close` and `/resume` take no arguments; with text after them the
+        // line is a prompt, as before the shared menu.
+        if let Some((builtin, args)) = crate::command_availability::parse_builtin(command)
+            && (!matches!(builtin, SlashCommand::Close | SlashCommand::Resume)
+                || args.trim().is_empty())
+        {
+            let args = args.to_owned();
+            return self.run_command(builtin, &args, text);
+        }
         if let Err(error) = self.require_mutation() {
             self.composer.handle_paste(text);
             self.state.show_notice(error.to_string());
             return true;
         }
         self.state.notice = None;
-        if let Some(args) = command
-            .strip_prefix("/new")
-            .filter(|args| args.is_empty() || args.starts_with(' '))
-        {
-            match super::new_session::params(args, &self.cwd, self.session_folders, self.remote) {
-                Ok(params) => {
-                    self.send(HostCall::NewSession(params), Pending::New);
-                }
-                Err(message) => {
-                    self.composer.handle_paste(text);
-                    self.state.show_notice(message);
-                }
-            }
-            return true;
-        }
         let Some(id) = self.state.selected.clone() else {
             self.composer.handle_paste(text);
             self.state
                 .show_notice("Choose a session with /sessions or start one with /new.");
             return true;
         };
-        if let Some(command) = crate::delegation::parse_command(command) {
-            match command {
-                Ok((agent, task)) => {
-                    self.send(
-                        HostCall::Delegate {
-                            session_id: id,
-                            agent,
-                            task,
-                        },
-                        Pending::Mutation { draft: Some(text) },
-                    );
-                }
-                Err(message) => self.state.show_notice(message),
-            }
-            return true;
-        }
-        if command == "/close" {
-            self.close(id);
-        } else if command == "/resume" {
-            self.resume(&id);
-        } else if let Some(expected_turn) = active_turn {
+        if let Some(expected_turn) = active_turn {
             let message_id = uuid::Uuid::new_v4().to_string();
             self.send(
                 HostCall::FollowUp {
