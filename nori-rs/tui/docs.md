@@ -772,6 +772,12 @@ Ctrl+L does nothing there.
   On exit, any open overlay closes and the alternate screen is left however
   deeply it is nested (`Tui::leave_alt_screen_entirely`), so the held
   history and the exit message land in the scrollback.
+- **Redraws.** Every cell added to the active transcript while full-screen
+  requests a frame, because no inline print does it. Resuming or replacing
+  a session while the alternate screen is up never writes to the inline
+  scrollback: it clears the transcript and marks a session reprint, which
+  runs on the first draw back on the normal screen. The replayed cells
+  fill the full-screen view as they arrive.
 - **Nesting.** `Tui::enter_alt_screen` / `leave_alt_screen` nest
   ([`alt_screen`](src/tui/alt_screen.rs)): only the outermost pair switches
   the terminal and saves or restores the inline viewport. Closing the Ctrl+T

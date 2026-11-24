@@ -50,6 +50,14 @@ impl App {
     pub(super) fn begin_replacing_session_transcript(&mut self, tui: &mut tui::Tui) -> Result<()> {
         self.transcript_cells.edit().clear();
         self.backtrack = crate::app_backtrack::BacktrackState::default();
+        if self.overlay.is_some() || tui.is_alt_screen_active() {
+            // The inline scrollback is not on screen; reprint it once the
+            // terminal is back on the normal screen.
+            self.screen.discard_held();
+            self.session_reprint_pending = true;
+            tui.frame_requester().schedule_frame();
+            return Ok(());
+        }
         self.reprint_active_transcript(tui)
     }
 
@@ -209,6 +217,10 @@ impl App {
             tui.frame_requester().schedule_frame();
         }
         self.transcript_cells.push(cell.clone());
+        if self.screen.is_full_screen() {
+            // The full-screen view draws the transcript itself.
+            tui.frame_requester().schedule_frame();
+        }
         let mut display = cell.display_lines(tui.terminal.last_known_screen_size.width);
         if display.is_empty() {
             return;
