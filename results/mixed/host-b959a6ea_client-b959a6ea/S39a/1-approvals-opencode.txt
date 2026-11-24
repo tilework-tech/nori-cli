@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ opencode · new session · app · ready · Approvals: Agent
+
+ Ready. Send a prompt to begin.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Approvals for this session
+ New sessions start in the host default. The sandbox is set separately.
+
+   Ask                    Ask before every edit and command.
+ › Agent (current)        The agent asks when it judges it needs to.
+   Approve all            Nori approves every permission request.
+
+ ↑↓ move · enter choose · esc close
+
+
+
+

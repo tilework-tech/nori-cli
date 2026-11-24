@@ -1,0 +1,35 @@
+{
+  "host_mode": "agent",
+  "after_new": {
+    "running": true,
+    "mode_label": "none",
+    "error_lines": [
+      " unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,",
+      " `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`"
+    ],
+    "tail": [
+      " `context_compacted`, `session_forked`, `goal_changed`, `capabilities_changed`, `undo`, `user_shell`, `hook_output`,",
+      " `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`",
+      " Replay gap for d4594ad2-93e0-4a9a-931c-416193061367: expected event 4, received 5. Existing conversation retained;",
+      "detach to investigate.",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "after_prompt": {
+    "running": true,
+    "mode_label": "none",
+    "error_lines": [
+      " unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,",
+      " `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`"
+    ],
+    "tail": [
+      " `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`",
+      " Session history has a replay gap. Resolve it before sending more work.",
+      " Replay gap for d4594ad2-93e0-4a9a-931c-416193061367: expected event 4, received 5. Existing conversation retained;",
+      "detach to investigate.",
+      "\u203a fresh errand",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  }
+}

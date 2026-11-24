@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · new session · app · ready
+
+ unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,
+ `external_turn_changed`, `session_ended`, `queue_changed`, `replay_started`, `replay_finished`,
+ `context_compacted`, `session_forked`, `goal_changed`, `capabilities_changed`, `undo`, `user_shell`, `hook_output`,
+ `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Replay gap for d4594ad2-93e0-4a9a-931c-416193061367: expected event 4, received 5. Existing conversation retained;
+detach to investigate.
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

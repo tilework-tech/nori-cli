@@ -1,0 +1,146 @@
+[
+  {
+    "scenario": "S38a",
+    "check": "join.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'none', 'error_lines': [' unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`'], 'tail': [' `context_compacted`, `session_forked`, `goal_changed`, `capabilities_changed`, `undo`, `user_shell`, `hook_output`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`', ' Replay gap for b88f09e0-ae8a-4476-8eac-1fd95f6fd378: expected event 4, received 5. Existing conversation reta"
+  },
+  {
+    "scenario": "S38a",
+    "check": "join.shows_conversation",
+    "passed": false,
+    "detail": "[' `context_compacted`, `session_forked`, `goal_changed`, `capabilities_changed`, `undo`, `user_shell`, `hook_output`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`', ' Replay gap for b88f09e0-ae8a-4476-8eac-1fd95f6fd378: expected event 4, received 5. Existing conversation retained;', 'detach to investigate.', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38a",
+    "check": "join.no_error",
+    "passed": false,
+    "detail": "[' unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`']"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.host_now_ask",
+    "passed": true,
+    "detail": "{'start': 'agent', 'now': 'ask'}"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'none', 'error_lines': [' unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`'], 'tail': [' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`', ' Control moved to another terminal. You are now watching; alt+t takes control.', ' Replay gap for b88f09e0-ae8a-4476-8eac-1fd95f6fd378: expected event 4, received 5. Existing conversation retained;', 'detach to investigate.', '\u203a S"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.no_error",
+    "passed": false,
+    "detail": "[' unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`']"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.client_label_matches_host",
+    "passed": false,
+    "detail": "{'ui': 'none', 'host': 'ask'}"
+  },
+  {
+    "scenario": "S38a",
+    "check": "follow.prompt_reached_adapter_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S38a",
+    "check": "follow.client_shows_reply",
+    "passed": false,
+    "detail": "[' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`', ' Control moved to another terminal. You are now watching; alt+t takes control.', ' Replay gap for b88f09e0-ae8a-4476-8eac-1fd95f6fd378: expected event 4, received 5. Existing conversation retained;', 'detach to investigate.', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'none', 'error_lines': [' unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`'], 'tail': [' `context_compacted`, `session_forked`, `goal_changed`, `capabilities_changed`, `undo`, `user_shell`, `hook_output`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`', ' Replay gap for d4594ad2-93e0-4a9a-931c-416193061367: expected event 4, received 5. Existing conversation reta"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.no_error",
+    "passed": false,
+    "detail": "[' unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`']"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.prompt_reached_adapter_once",
+    "passed": false,
+    "detail": "0"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_shows_reply",
+    "passed": false,
+    "detail": "[' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`', ' Session history has a replay gap. Resolve it before sending more work.', ' Replay gap for d4594ad2-93e0-4a9a-931c-416193061367: expected event 4, received 5. Existing conversation retained;', 'detach to investigate.', '\u203a fresh errand', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_label_matches_host",
+    "passed": true,
+    "detail": "{'ui': 'none', 'host': 'agent'}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "join.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'none', 'error_lines': [' unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`'], 'tail': [' `context_compacted`, `session_forked`, `goal_changed`, `capabilities_changed`, `undo`, `user_shell`, `hook_output`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`', ' Replay gap for 92e6d61d-fa54-48ef-b1c2-69e23d5d5d73: expected event 4, received 5. Existing conversation reta"
+  },
+  {
+    "scenario": "S38c",
+    "check": "join.shows_conversation",
+    "passed": false,
+    "detail": "[' `context_compacted`, `session_forked`, `goal_changed`, `capabilities_changed`, `undo`, `user_shell`, `hook_output`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`', ' Replay gap for 92e6d61d-fa54-48ef-b1c2-69e23d5d5d73: expected event 4, received 5. Existing conversation retained;', 'detach to investigate.', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38c",
+    "check": "join.no_error",
+    "passed": false,
+    "detail": "[' unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`']"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.host_now_ask",
+    "passed": false,
+    "detail": "{'start': 'agent', 'now': 'agent'}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'none', 'error_lines': [' unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`'], 'tail': [' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`', ' /approvals: not available in nori attach yet', ' Replay gap for 92e6d61d-fa54-48ef-b1c2-69e23d5d5d73: expected event 4, received 5. Existing conversation retained;', 'detach to investigate.', '/ approvals', '  /approvals  not ava"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.no_error",
+    "passed": false,
+    "detail": "[' unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,', ' `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`']"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.client_label_matches_host",
+    "passed": false,
+    "detail": "{'ui': 'none', 'host': 'agent'}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.menu_marks_host_mode_current",
+    "passed": false,
+    "detail": " not available in nori attach yet\n\n /approvals: not available in nori attach yet\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n Replay gap for 92e6d61d-fa54-48ef-b1c2-69e23d5d5d73: expected event 4, received 5. Existing conversation retained;\ndetach to investigate.\n\n/ approvals\n\n  /approvals  not available in nori attach yet\n"
+  },
+  {
+    "scenario": "S38c",
+    "check": "follow.prompt_reached_adapter_once",
+    "passed": false,
+    "detail": "0"
+  },
+  {
+    "scenario": "S38c",
+    "check": "follow.client_shows_reply",
+    "passed": false,
+    "detail": "[' /approvals: not available in nori attach yet', ' Session history has a replay gap. Resolve it before sending more work.', ' Replay gap for 92e6d61d-fa54-48ef-b1c2-69e23d5d5d73: expected event 4, received 5. Existing conversation retained;', 'detach to investigate.', '\u203a after the change', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  }
+]

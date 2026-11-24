@@ -1,0 +1,55 @@
+{
+  "selected_session_id": "dab04318-f82b-4444-9fc2-721f3b43812e",
+  "sessions": [
+    {
+      "session_id": "26ac0ab6-2614-4d63-b2c8-e567df92bd51",
+      "agent": "opencode",
+      "status": "starting",
+      "family_status": "starting",
+      "cwd": "/tmp/nori-host-tui-acceptance-m1/S39b/roots/alpha/app",
+      "parent": null,
+      "pending_requests": [],
+      "approval_mode": "agent",
+      "source": "user",
+      "depth": 0,
+      "delegations": [],
+      "latest_seq": 2,
+      "first_available_seq": 1,
+      "age_seconds": 0,
+      "title": null,
+      "reply_preview": null,
+      "waiting_request": null,
+      "idle_seconds": 0,
+      "context_used": null,
+      "context_size": null,
+      "model": null
+    },
+    {
+      "session_id": "dab04318-f82b-4444-9fc2-721f3b43812e",
+      "agent": "claude-code",
+      "status": "starting",
+      "family_status": "starting",
+      "cwd": "/tmp/nori-host-tui-acceptance-m1/S39b/roots/alpha/app",
+      "parent": null,
+      "pending_requests": [],
+      "approval_mode": "agent",
+      "source": "user",
+      "depth": 0,
+      "delegations": [],
+      "latest_seq": 0,
+      "first_available_seq": 1,
+      "age_seconds": 0,
+      "title": null,
+      "reply_preview": null,
+      "waiting_request": null,
+      "idle_seconds": 0,
+      "context_used": null,
+      "context_size": null,
+      "model": null
+    }
+  ],
+  "replay_cursors": {
+    "26ac0ab6-2614-4d63-b2c8-e567df92bd51": 2,
+    "dab04318-f82b-4444-9fc2-721f3b43812e": 0
+  }
+}

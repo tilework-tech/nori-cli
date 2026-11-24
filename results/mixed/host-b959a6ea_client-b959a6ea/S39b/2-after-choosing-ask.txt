@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory --agent opencode
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-m1/S39b/roots/alpha/app · Agent approvals
+  Agent        Lantern Opencode
+
+• Lantern Opencode options: Mode=build (/config to change)
+
+■ opencode has no mode that asks before every edit and command
+
+                                                                                                               [ build ]
+› / for slash command menu
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

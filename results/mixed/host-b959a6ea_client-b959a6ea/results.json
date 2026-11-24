@@ -1,0 +1,218 @@
+[
+  {
+    "scenario": "S38a",
+    "check": "join.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'agent', 'error_lines': [], 'tail': [' claude-code \u00b7 first errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' \u203a You', ' first errand', ' claude-code heard: first errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']}"
+  },
+  {
+    "scenario": "S38a",
+    "check": "join.shows_conversation",
+    "passed": true,
+    "detail": "[' claude-code \u00b7 first errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' \u203a You', ' first errand', ' claude-code heard: first errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38a",
+    "check": "join.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.host_now_ask",
+    "passed": true,
+    "detail": "{'start': 'agent', 'now': 'ask'}"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'ask', 'error_lines': [], 'tail': [' first errand', ' claude-code heard: first errand', ' Control moved to another terminal. You are now watching; alt+t takes control.', ' Control moved to another terminal. You are now watching; alt+t takes control.', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']}"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.client_label_matches_host",
+    "passed": true,
+    "detail": "{'ui': 'ask', 'host': 'ask'}"
+  },
+  {
+    "scenario": "S38a",
+    "check": "follow.prompt_reached_adapter_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S38a",
+    "check": "follow.client_shows_reply",
+    "passed": true,
+    "detail": "[' \u203a You', ' after the change', ' claude-code heard: after the change', ' Control moved to another terminal. You are now watching; alt+t takes control.', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'agent', 'error_lines': [], 'tail': [' Nori host  CONTROLLING', ' claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' Ready. Send a prompt to begin.', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']}"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.prompt_reached_adapter_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_shows_reply",
+    "passed": true,
+    "detail": "[' claude-code \u00b7 fresh errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' \u203a You', ' fresh errand', ' claude-code heard: fresh errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_label_matches_host",
+    "passed": true,
+    "detail": "{'ui': 'agent', 'host': 'agent'}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "join.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'agent', 'error_lines': [], 'tail': [' claude-code \u00b7 first errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' \u203a You', ' first errand', ' claude-code heard: first errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "join.shows_conversation",
+    "passed": true,
+    "detail": "[' claude-code \u00b7 first errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' \u203a You', ' first errand', ' claude-code heard: first errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38c",
+    "check": "join.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.host_now_ask",
+    "passed": true,
+    "detail": "{'start': 'agent', 'now': 'ask'}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'ask', 'error_lines': [], 'tail': [' claude-code \u00b7 first errand \u00b7 app \u00b7 ready \u00b7 Approvals: Ask', ' \u203a You', ' first errand', ' claude-code heard: first errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.client_label_matches_host",
+    "passed": true,
+    "detail": "{'ui': 'ask', 'host': 'ask'}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.menu_marks_host_mode_current",
+    "passed": true,
+    "detail": "\u203a Ask (current)          Ask before every edit and command."
+  },
+  {
+    "scenario": "S38c",
+    "check": "follow.prompt_reached_adapter_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S38c",
+    "check": "follow.client_shows_reply",
+    "passed": true,
+    "detail": "[' claude-code heard: first errand', ' \u203a You', ' after the change', ' claude-code heard: after the change', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S39a",
+    "check": "host.opencode_list_has_no_ask",
+    "passed": true,
+    "detail": "{'ba0c86e4-41bb-49b4-8af0-d5c9a66a08fa': {'availableModes': ['agent', 'approve-all'], 'mode_option': ['agent', 'approve-all'], 'current': 'agent'}, '6dd61b15-7977-44f4-a2f3-350f7c150eab': {'availableModes': ['ask', 'agent', 'approve-all'], 'mode_option': ['ask', 'agent', 'approve-all'], 'current': 'agent'}}"
+  },
+  {
+    "scenario": "S39a",
+    "check": "host.claude_list_has_ask",
+    "passed": true,
+    "detail": "{'ba0c86e4-41bb-49b4-8af0-d5c9a66a08fa': {'availableModes': ['agent', 'approve-all'], 'mode_option': ['agent', 'approve-all'], 'current': 'agent'}, '6dd61b15-7977-44f4-a2f3-350f7c150eab': {'availableModes': ['ask', 'agent', 'approve-all'], 'mode_option': ['ask', 'agent', 'approve-all'], 'current': 'agent'}}"
+  },
+  {
+    "scenario": "S39a",
+    "check": "menu.matches_host_list",
+    "passed": false,
+    "detail": "{'menu': ['agent', 'approve-all', 'ask'], 'host': ['agent', 'approve-all']}"
+  },
+  {
+    "scenario": "S39a",
+    "check": "ask.not_applied",
+    "passed": true,
+    "detail": "{'picked': True, 'host': 'agent'}"
+  },
+  {
+    "scenario": "S39a",
+    "check": "ask.reason_shown_or_not_offered",
+    "passed": true,
+    "detail": "['opencode has no mode that asks before every edit and command', 'opencode has no mode that asks before every edit and command', 'alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S39a",
+    "check": "ask.no_adapter_mode_change",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S39b",
+    "check": "host.opencode_list_has_no_ask",
+    "passed": true,
+    "detail": "{'26ac0ab6-2614-4d63-b2c8-e567df92bd51': {'availableModes': ['agent', 'approve-all'], 'mode_option': ['agent', 'approve-all'], 'current': 'agent'}, 'dab04318-f82b-4444-9fc2-721f3b43812e': {'availableModes': ['ask', 'agent', 'approve-all'], 'mode_option': ['ask', 'agent', 'approve-all'], 'current': 'agent'}}"
+  },
+  {
+    "scenario": "S39b",
+    "check": "host.claude_list_has_ask",
+    "passed": true,
+    "detail": "{'26ac0ab6-2614-4d63-b2c8-e567df92bd51': {'availableModes': ['agent', 'approve-all'], 'mode_option': ['agent', 'approve-all'], 'current': 'agent'}, 'dab04318-f82b-4444-9fc2-721f3b43812e': {'availableModes': ['ask', 'agent', 'approve-all'], 'mode_option': ['ask', 'agent', 'approve-all'], 'current': 'agent'}}"
+  },
+  {
+    "scenario": "S39b",
+    "check": "menu.matches_host_list",
+    "passed": false,
+    "detail": "{'menu': ['agent', 'approve-all', 'ask'], 'host': ['agent', 'approve-all']}"
+  },
+  {
+    "scenario": "S39b",
+    "check": "ask.not_applied",
+    "passed": true,
+    "detail": "{'picked': True, 'host': 'n/a (private host)'}"
+  },
+  {
+    "scenario": "S39b",
+    "check": "ask.reason_shown_or_not_offered",
+    "passed": true,
+    "detail": "['\u25a0 opencode has no mode that asks before every edit and command']"
+  },
+  {
+    "scenario": "S39b",
+    "check": "ask.no_adapter_mode_change",
+    "passed": true,
+    "detail": "[]"
+  }
+]

@@ -31,6 +31,7 @@ P.add_argument("--nori", required=True)
 P.add_argument("--out", required=True)
 P.add_argument("--only", default="")
 P.add_argument("--merge", action="store_true", help="keep results.json rows of scenarios not re-run")
+P.add_argument("--client", default="", help="a different nori build for the attach client under test (S38)")
 ARGS = P.parse_args()
 # Terminals run `nori` from a synthetic bin directory so captures and logs
 # show only synthetic paths.
@@ -41,6 +42,13 @@ BIN.mkdir(parents=True, exist_ok=True)
 (BIN / "nori").unlink(missing_ok=True)
 (BIN / "nori").symlink_to(Path(ARGS.nori).resolve())
 NORI = "nori"
+# S38 runs the attach client under test from its own synthetic directory, so `nori` on PATH stays the host's build.
+CLIENT = NORI
+if ARGS.client:
+    (WORK / "client").mkdir(parents=True, exist_ok=True)
+    (WORK / "client" / "nori").unlink(missing_ok=True)
+    (WORK / "client" / "nori").symlink_to(Path(ARGS.client).resolve())
+    CLIENT = str(WORK / "client" / "nori")
 OUT = Path(ARGS.out).resolve()
 OUT.mkdir(parents=True, exist_ok=True)
 RESULTS = []
@@ -2894,6 +2902,206 @@ def s37_approve_all_answers_on_host(ctx):
               last_nonblank(a.screen()))
     obs.close()
 
+# ---------------------------------------------------------------------------
+# S38: mixed versions. --nori is the host's build, --client the attach client's.
+# ---------------------------------------------------------------------------
+
+ERRORISH = re.compile(r"(error|failed|unknown variant|invalid|Connection lost|Reconnecting)", re.I)
+
+
+def client_state(ctx, t, label):
+    """What the client under test is doing: still running, what it shows, and any error text."""
+    time.sleep(1.5)
+    t.capture(label)
+    screen = t.screen()
+    lines = [l.rstrip() for l in screen.splitlines() if l.strip()]
+    return {"running": not t.at_shell(), "mode_label": footer_mode(screen),
+            "error_lines": [l for l in lines if ERRORISH.search(l)][-4:], "tail": lines[-6:]}
+
+
+def mode_envelopes(ctx):
+    """approval_mode_changed envelopes the observer saw on the wire."""
+    log = ctx.dir / "observer-wire.jsonl"
+    if not log.exists():
+        return []
+    return [l for l in log.read_text().splitlines() if "approval_mode_changed" in l]
+
+
+def take_control(t):
+    if re.search(r"WATCHING|watching", t.screen()):
+        t.keys("M-t")
+        t.wait_for(r"CONTROLLING", 10, regex=True)
+        time.sleep(1.5)
+
+
+def s38_join_then_mode_change(ctx, changer):
+    """The client under test joins an existing session; a mode change follows, made by a terminal on the
+    host's own build (`other`) or by the client under test (`self`). Records connection and display."""
+    ctx.start_host()
+    obs = ctx.observer()
+    out = ctx.nori("host", "new", "--prompt", "first errand")
+    (ctx.dir / "host-new.txt").write_text(out.stdout + out.stderr)
+    deadline = time.time() + 20
+    while not obs.sessions() and time.time() < deadline:
+        time.sleep(0.5)
+    s1 = obs.sessions()[0]["sessionId"]
+    wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and "first errand" in json.dumps(r), 20)
+    obs.call("session/load", {"sessionId": s1, "cwd": str(ctx.fx["roots"]["alpha"]), "mcpServers": []})
+    start_mode = host_mode(obs, s1)
+
+    o = ctx.term("client-under-test")
+    o.run(f"{CLIENT} attach {s1[:8]}")
+    time.sleep(5)
+    joined = client_state(ctx, o, "1-joined")
+    ctx.check("join.client_running", joined["running"], joined)
+    ctx.check("join.shows_conversation", "heard: first errand" in o.screen(), joined["tail"])
+    ctx.check("join.no_error", not joined["error_lines"], joined["error_lines"])
+
+    if changer == "other":
+        c = ctx.term("controller-host-build")
+        c.run(f"{NORI} attach {s1[:8]}")
+        c.wait_for(r"(WATCHING|CONTROLLING|watching)", 20, regex=True)
+        take_control(c)
+        actor = c
+    else:
+        take_control(o)
+        actor = o
+    picked = pick_mode(actor, "Ask")
+    actor.capture("2-picked-ask")
+    obs.drain(1.0)
+    now = host_mode(obs, s1)
+    ctx.check("change.host_now_ask", picked and now == "ask", {"start": start_mode, "now": now})
+    after = client_state(ctx, o, "3-after-change")
+    ctx.check("change.client_running", after["running"], after)
+    ctx.check("change.no_error", not after["error_lines"], after["error_lines"])
+    ctx.check("change.client_label_matches_host", after["mode_label"] == now, {"ui": after["mode_label"], "host": now})
+    if changer == "self":
+        menu = run_typed(o, "/approvals", settle=1.2)
+        o.capture("3b-menu-after-change")
+        current = next((l.strip() for l in menu.splitlines() if "(current)" in l), "")
+        ctx.check("change.menu_marks_host_mode_current", MODE_LABELS.get(now, "?") in current, current or menu[-300:])
+        o.keys("Escape")
+        o.keys("C-u")
+        time.sleep(0.5)
+
+    n = len(prompts_with(ctx, "after the change"))
+    if changer == "other":
+        c.keys("Escape")
+        c.keys("C-u")
+        submit(c, "after the change")
+    else:
+        submit(o, "after the change")
+    wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and "after the change" in json.dumps(r), 15)
+    time.sleep(3)
+    follow = client_state(ctx, o, "4-after-prompt")
+    ctx.check("follow.prompt_reached_adapter_once", len(prompts_with(ctx, "after the change")) - n == 1,
+              len(prompts_with(ctx, "after the change")) - n)
+    ctx.check("follow.client_shows_reply", follow["running"] and "heard: after the change" in o.screen(), follow["tail"])
+    (ctx.dir / "observed.json").write_text(json.dumps({"session": s1, "start_mode": start_mode, "mode_after": now,
+        "joined": joined, "after_change": after, "after_prompt": follow,
+        "mode_envelopes_on_wire": len(mode_envelopes(ctx))}, indent=2))
+    obs.close()
+
+
+def s38_fresh_new(ctx):
+    """The client under test starts a session with /new and prompts it (the host announces the start mode)."""
+    ctx.start_host()
+    obs = ctx.observer()
+    o = ctx.term("client-under-test")
+    o.run(f"{CLIENT} attach")
+    attach_new_session(o)
+    time.sleep(2)
+    started = client_state(ctx, o, "1-after-new")
+    ctx.check("new.client_running", started["running"], started)
+    ctx.check("new.no_error", not started["error_lines"], started["error_lines"])
+    submit(o, "fresh errand")
+    wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and "fresh errand" in json.dumps(r), 15)
+    time.sleep(3)
+    replied = client_state(ctx, o, "2-after-prompt")
+    sessions = obs.sessions()
+    mode = host_mode(obs, sessions[0]["sessionId"]) if sessions else "no session"
+    ctx.check("new.prompt_reached_adapter_once", len(prompts_with(ctx, "fresh errand")) == 1, len(prompts_with(ctx, "fresh errand")))
+    ctx.check("new.client_shows_reply", replied["running"] and "heard: fresh errand" in o.screen(), replied["tail"])
+    ctx.check("new.client_label_matches_host", shown_as(o.screen()) == mode or (replied["mode_label"] == "none" and mode == "agent"),
+              {"ui": replied["mode_label"], "host": mode})
+    (ctx.dir / "observed.json").write_text(json.dumps({"host_mode": mode, "after_new": started, "after_prompt": replied}, indent=2))
+    obs.close()
+
+
+# ---------------------------------------------------------------------------
+# S39: the host's mode list for an agent without Ask, against each menu.
+# ---------------------------------------------------------------------------
+
+def advertised(obs, sid):
+    cwd = next((x.get("cwd") for x in obs.sessions() if x["sessionId"] == sid), "/")
+    result = obs.call("session/load", {"sessionId": sid, "cwd": cwd, "mcpServers": []}).get("result") or {}
+    modes = [m.get("id") for m in (result.get("modes") or {}).get("availableModes") or []]
+    option = next((o for o in result.get("configOptions") or [] if o.get("id") == "mode"), {})
+    choices = [c.get("value") for c in option.get("options") or option.get("choices") or []]
+    return {"availableModes": modes, "mode_option": choices, "current": (result.get("modes") or {}).get("currentModeId")}
+
+
+def menu_modes(screen):
+    rows = [l for l in screen.splitlines() if re.search(r"\b(Ask|Agent|Approve all)\b", l)]
+    shown = []
+    for label, mode in (("Approve all", "approve-all"), ("Agent", "agent"), ("Ask", "ask")):
+        if any(re.match(rf"^\s*(›|>)?\s*(\d\.\s*)?{label}\b", l) for l in rows):
+            shown.append(mode)
+    return sorted(shown)
+
+
+def s39_mode_list_without_ask(ctx, where):
+    """Compare the modes the host advertises for an opencode session with the /approvals menu, then try Ask."""
+    ctx.start_host()
+    obs = ctx.observer()
+    for agent in ("opencode", "claude-code"):
+        ctx.nori("host", "new", "--agent", agent)
+    deadline = time.time() + 20
+    while len(obs.sessions()) < 2 and time.time() < deadline:
+        time.sleep(0.5)
+    rows = obs.call("_nori/session/list", {}).get("result", {})
+    (ctx.dir / "nori-session-list.json").write_text(json.dumps(rows, indent=2))
+    by_agent = {}
+    for x in obs.sessions():
+        ad = advertised(obs, x["sessionId"])
+        by_agent[x["sessionId"]] = ad
+    (ctx.dir / "advertised.json").write_text(json.dumps(by_agent, indent=2))
+    opencode = next((sid for sid, ad in by_agent.items() if "ask" not in ad["availableModes"]), None)
+    claude = next((sid for sid, ad in by_agent.items() if "ask" in ad["availableModes"]), None)
+    ctx.check("host.opencode_list_has_no_ask", opencode is not None, by_agent)
+    ctx.check("host.claude_list_has_ask", claude is not None, by_agent)
+    if not opencode:
+        return
+    host_list = sorted(by_agent[opencode]["availableModes"])
+    if where == "attach":
+        t = ctx.term("controller")
+        t.run(f"{CLIENT} attach {opencode[:8]}")
+        t.wait_for("›", 20)
+        take_control(t)
+    else:
+        t = start_fg(ctx, cmd=f"{NORI} --skip-trust-directory --agent opencode")
+        time.sleep(3)
+    run_typed(t, "/approvals", settle=1.2)
+    menu = t.capture("1-approvals-opencode")
+    shown = menu_modes(t.screen())
+    ctx.check("menu.matches_host_list", shown == host_list, {"menu": shown, "host": host_list})
+    n = len(mode_sets(ctx))
+    picked = choose(t, "Ask")
+    time.sleep(1.5)
+    t.capture("2-after-choosing-ask")
+    screen = t.screen()
+    target = opencode if where == "attach" else (obs.sessions()[-1]["sessionId"])
+    mode = host_mode(obs, target) if where == "attach" else "n/a (private host)"
+    reason = [l.strip() for l in screen.splitlines() if re.search(r"(ask|strict|support|refus)", l, re.I)][-3:]
+    ctx.check("ask.not_applied", where != "attach" or mode != "ask", {"picked": picked, "host": mode})
+    ctx.check("ask.reason_shown_or_not_offered", not picked or bool(reason), reason)
+    ctx.check("ask.no_adapter_mode_change", len(mode_sets(ctx)) == n, mode_sets(ctx)[n:])
+    (ctx.dir / "observed.json").write_text(json.dumps({"host_list": host_list, "menu": shown, "picked_ask": picked,
+                                                       "host_mode_after": mode, "reason_lines": reason}, indent=2))
+    t.keys("Escape")
+    obs.close()
+
+
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
     "S02": ("foreground quit stops a running turn", s02_foreground_quit_stops_turn),
@@ -2986,6 +3194,11 @@ SCENARIOS = {
     "S37b": ("approvals: current config read as-is on repeat launch; sandbox kept", s37_repeat_launch_keeps_config),
     "S37c": ("approvals: plain nori, two sessions, mode follows the session", s37_plain_two_sessions),
     "S37d": ("approvals: Approve all answers permission requests on the host", s37_approve_all_answers_on_host),
+    "S38a": ("mixed versions: client joins, another terminal changes the mode", lambda c: s38_join_then_mode_change(c, "other")),
+    "S38b": ("mixed versions: client starts a session with /new and prompts", s38_fresh_new),
+    "S38c": ("mixed versions: client joins and changes the mode itself", lambda c: s38_join_then_mode_change(c, "self")),
+    "S39a": ("agent without Ask: host list vs attach menu, then Ask", lambda c: s39_mode_list_without_ask(c, "attach")),
+    "S39b": ("agent without Ask: host list vs plain menu, then Ask", lambda c: s39_mode_list_without_ask(c, "fg")),
     "S36": ("startup activation window swept by Enter time", s36_startup_race),
     "S36b": ("startup activation window swept by typing time", lambda c: s36_startup_race(c, burst_at_reply=True)),
 }

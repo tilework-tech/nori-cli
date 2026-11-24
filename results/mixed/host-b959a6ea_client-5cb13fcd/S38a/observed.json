@@ -1,0 +1,54 @@
+{
+  "session": "b88f09e0-ae8a-4476-8eac-1fd95f6fd378",
+  "start_mode": "agent",
+  "mode_after": "ask",
+  "joined": {
+    "running": true,
+    "mode_label": "none",
+    "error_lines": [
+      " unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,",
+      " `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`"
+    ],
+    "tail": [
+      " `context_compacted`, `session_forked`, `goal_changed`, `capabilities_changed`, `undo`, `user_shell`, `hook_output`,",
+      " `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`",
+      " Replay gap for b88f09e0-ae8a-4476-8eac-1fd95f6fd378: expected event 4, received 5. Existing conversation retained;",
+      "detach to investigate.",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "after_change": {
+    "running": true,
+    "mode_label": "none",
+    "error_lines": [
+      " unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,",
+      " `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`"
+    ],
+    "tail": [
+      " `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`",
+      " Control moved to another terminal. You are now watching; alt+t takes control.",
+      " Replay gap for b88f09e0-ae8a-4476-8eac-1fd95f6fd378: expected event 4, received 5. Existing conversation retained;",
+      "detach to investigate.",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "after_prompt": {
+    "running": true,
+    "mode_label": "none",
+    "error_lines": [
+      " unknown variant `approval_mode_changed`, expected one of `session_started`, `session_phase_changed`,",
+      " `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`"
+    ],
+    "tail": [
+      " `prompt_summary_updated`, `notice`, `request_failed`, `request_resolved`, `delegation_changed`",
+      " Control moved to another terminal. You are now watching; alt+t takes control.",
+      " Replay gap for b88f09e0-ae8a-4476-8eac-1fd95f6fd378: expected event 4, received 5. Existing conversation retained;",
+      "detach to investigate.",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "mode_envelopes_on_wire": 0
+}

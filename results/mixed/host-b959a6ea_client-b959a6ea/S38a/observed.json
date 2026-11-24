@@ -1,0 +1,45 @@
+{
+  "session": "b694aa09-d7c0-4cff-9ab6-bcc1298b8e1c",
+  "start_mode": "agent",
+  "mode_after": "ask",
+  "joined": {
+    "running": true,
+    "mode_label": "agent",
+    "error_lines": [],
+    "tail": [
+      " claude-code \u00b7 first errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent",
+      " \u203a You",
+      " first errand",
+      " claude-code heard: first errand",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "after_change": {
+    "running": true,
+    "mode_label": "ask",
+    "error_lines": [],
+    "tail": [
+      " first errand",
+      " claude-code heard: first errand",
+      " Control moved to another terminal. You are now watching; alt+t takes control.",
+      " Control moved to another terminal. You are now watching; alt+t takes control.",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "after_prompt": {
+    "running": true,
+    "mode_label": "ask",
+    "error_lines": [],
+    "tail": [
+      " \u203a You",
+      " after the change",
+      " claude-code heard: after the change",
+      " Control moved to another terminal. You are now watching; alt+t takes control.",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "mode_envelopes_on_wire": 0
+}

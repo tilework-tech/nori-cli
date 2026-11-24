@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · first errand · app · ready · Approvals: Ask
+
+ › You
+ first errand
+
+ claude-code heard: first errand
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Approvals for this session
+ New sessions start in the host default. The sandbox is set separately.
+
+ › Ask (current)          Ask before every edit and command.
+   Agent                  The agent asks when it judges it needs to.
+   Approve all            Nori approves every permission request.
+
+ ↑↓ move · enter choose · esc close
+
+
+
+

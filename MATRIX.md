@@ -320,3 +320,14 @@ plain `nori` with two sessions; Approve all enforced by the host.
 | #751 `5cb13fcd` (baseline) | 13/37 (several passes vacuous: no attach menu, no migration) | — | — |
 | #752 `e4728d92` | 42/43 | 510/531; 468/489 shared vs 456 at `c31726f7`, no regressions | — |
 | #752 `b959a6ea` | 42/43 (the failure is decision 2, Ask on agents without Ask) | — | changes requested: plain `nori` mode badge and startup card disagree with the host. See `results/b959a6ea/VERDICT.md` |
+
+## S38 mixed versions and S39 agent without Ask, #752 `b959a6ea`, 2026-11-24
+
+| Host ← attach client | Checks | Outcome |
+|---|---|---|
+| `b959a6ea` ← `b959a6ea` | 34/36 | control; only S39 menu-vs-host-list fails (decision 2) |
+| `5cb13fcd` ← `5cb13fcd` | 19/24 | control; old attach has no `/approvals` |
+| `b959a6ea` ← `5cb13fcd` | 8/24 | connected, but no history and every prompt refused (replay gap from `approval_mode_changed`) |
+| `5cb13fcd` ← `b959a6ea` | 20/24 | works; Ask applied on host, but no label and menu highlights Agent |
+
+See `results/mixed/NOTE.md`.

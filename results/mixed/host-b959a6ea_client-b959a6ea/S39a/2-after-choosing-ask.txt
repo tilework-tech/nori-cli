@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ opencode · new session · app · ready · Approvals: Agent
+
+ opencode has no mode that asks before every edit and command
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ opencode has no mode that asks before every edit and command
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
