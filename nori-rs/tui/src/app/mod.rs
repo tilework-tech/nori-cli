@@ -191,11 +191,13 @@ enum CandidateAgent {
     Preparing {
         generation: crate::app_event::SessionGeneration,
         agent_name: String,
+        purpose: host_candidate::PickerPurpose,
     },
     Prepared {
         agent_name: String,
         display_name: String,
         selection: host_candidate::HostSelection,
+        purpose: host_candidate::PickerPurpose,
     },
     /// The host is starting the picked session; no widget exists until it
     /// answers with the live ID.
@@ -204,6 +206,7 @@ enum CandidateAgent {
         agent_name: String,
         display_name: String,
         saved: Option<host_candidate::SavedSession>,
+        purpose: host_candidate::PickerPurpose,
     },
     Activating {
         agent_name: String,
@@ -212,6 +215,8 @@ enum CandidateAgent {
         activation_error: Option<String>,
         /// The candidate resumes an existing session and replays its history.
         resumes: bool,
+        /// The candidate moves to another agent, which the screen announces.
+        announce_agent: bool,
     },
 }
 
