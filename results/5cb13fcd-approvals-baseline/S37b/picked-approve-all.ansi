@@ -1,0 +1,35 @@
+[2m• [0m[39m[49mLantern Claude options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+╭───────────────────────────────────────────────╮
+│ [0;1m[38;5;2m[49mGoodbye! [0;2m[39m[49mThanks for using Nori.               │
+│                                               │
+│ Session: [0m[39m[49mac015e7a-383f-4ab1-898d-9ff3b39e9387[2m │
+│                                               │
+│ [0;1m[39m[49mMessages[0;2m[39m[49m      User: 0  Assistant: 0  Total: 0 │
+│ [0;1m[39m[49mTool Calls[0m[39m[49m    [2m(none)                          │
+│                                               │
+│ [0;1m[39m[49mSkills Used[0;2m[39m[49m                                   │
+│   (none)                                      │
+│                                               │
+│ [0;1m[39m[49mSubagents Used[0;2m[39m[49m                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+[0m[39m[49mshell$ nori --skip-trust-directory
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/nori-host-tui-acceptance/S37b/roots/alpha/app[2m · [0m[39m[49mAgent approvals
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude
+
+[2m[39m• [0m[39m[49mLantern Claude options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+
+[0m[39m[49m  [1mSelect approval mode
+[0m[39m[49m  [38;5;8mChoose what Nori can do without approval
+
+[39m   1. Read Only
+      [38;5;8mRequires approval to edit files and run commands.
+[39m   2. Agent (current)
+      [38;5;8mRead and edit files, and run commands.[39m
+  [38;5;2m▏3.[39m Agent (full access)                                                                                            [38;5;2m▕
+[39m  [38;5;2m▏[39m   [38;5;8mCan edit files outside this workspace and run commands with network access. Exercise caution when using.[39m       [38;5;2m▕
+[39m  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mselect  [38;5;2mesc[39m [38;5;8mclose

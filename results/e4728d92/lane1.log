@@ -1,0 +1,255 @@
+== S02 foreground quit stops a running turn
+PASS S02/exit.shell_prompt_returns shell$
+PASS S02/exit.alt_screen_off 
+PASS S02/exit.cursor_visible 
+PASS S02/exit.escapes_balanced {'alt_on': 0, 'alt_off': 0, 'paste_on': 2, 'paste_off': 2, 'cursor_hide': 2, 'cursor_show': 40, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+PASS S02/exit.tty_cooked 
+PASS S02/lifetime.turn_stopped_after_quit ticks 3->3
+== S03c attach PTY hangup keeps the turn
+PASS S03c/attach.alt_screen_on 
+PASS S03c/hint_row.exactly_one ['   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']
+PASS S03c/hint_row.at_bottom    alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PASS S03c/detach.client_exits_on_hangup ['42765']
+PASS S03c/detach.turn_keeps_running ticks 11->18
+PASS S03c/detach.session_still_on_host [{'sessionId': '748bedc8-1ac0-4163-9368-6eaceec29a4e', 'cwd': '/tmp/nori-host-tui-acceptance-l1/S03c/roots/alpha/app', 'title': 'hold the lamp', 'updatedAt': '2
+PASS S03c/detach.host_reports_working ID                                    AGENT             STATUS               AGE  CWD                                                    TITLE
+748bedc8-1ac0-416
+== S06 folder inheritance, override and completion
+PASS S06/cwd.empty_remote_falls_back_to_host_folder [{'t': 1795530804.341876, 'adapter': 'claude-code', 'pid': 43370, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance-l1/S06/roots
+PASS S06/cwd.explicit_override {'t': 1795530806.121493, 'adapter': 'claude-code', 'pid': 43509, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance-l1/S06/roots/
+FAIL S06/cwd.plain_new_inherits_foreground {'t': 1795530808.3957639, 'adapter': 'claude-code', 'pid': 43573, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance-l1/S06/roots
+FAIL S06/cwd.confirmation_names_folder [' claude-code · new session · app · ready · Approvals: Agent']
+FAIL S06/cwd.dir_completion_from_session_fs ['/ new assets/laptop-only/']
+== S09 reconnect keeps drafts
+PASS S09/reconnect.controller_draft_kept 
+PASS S09/reconnect.controller_role_restored controlling
+== S11b Agent Home in attach
+PASS S11b/home.thought_text_in_history 
+FAIL S11b/home.terminal_title_names_agent modal
+PASS S11b/home.read_range_shown ['   • Read harbor/tides.md · lines 12–19']
+PASS S11b/home.search_hits_shown ['   • Search beacon · 3 matches in 2 files']
+== S14 host-scoped picker and agent-server resume
+PASS S14/picker.excludes_other_hosts 
+FAIL S14/resume.lists_agent_server_saved_sessions  Nori host  CONTROLLING
+ claude-code · new session · app · ready · Approvals: Agent
+
+ Ready. Send a prompt to begin.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a promp
+FAIL S14/resume.adapter_loaded_saved_session_on_host []
+== S15c legacy Read Only without Ask migrates to Agent
+PASS S15c/migration.read-only-no-ask_maps_to_agent ['  ▏2. Agent (current)                                                                                                ▕']
+PASS S15c/migration.sandbox_setting_unchanged sandbox_mode = "read-only"
+PASS S15c/migration.runs_once 
+== S18a thought text in the working indicator (plain)
+PASS S18a/indicator.thought_1_shown {'rows': ['• Charting the breakwater (0s • esc to interrupt)'], 'working': ['• Charting the breakwater (0s • esc to interrupt)']}
+PASS S18a/indicator.thought_1_on_working_row {'rows': ['• Charting the breakwater (0s • esc to interrupt)'], 'working': ['• Charting the breakwater (0s • esc to interrupt)']}
+PASS S18a/indicator.thought_2_shown {'rows': ['• Sorting the buoy colours (2s • esc to interrupt)'], 'working': ['• Sorting the buoy colours (2s • esc to interrupt)']}
+PASS S18a/indicator.thought_2_on_working_row {'rows': ['• Sorting the buoy colours (2s • esc to interrupt)'], 'working': ['• Sorting the buoy colours (2s • esc to interrupt)']}
+PASS S18a/indicator.thought_3_shown {'rows': ['• Listening for the foghorn cadence (4s • esc to interrupt)'], 'working': ['• Listening for the foghorn cadence (4s • esc to interrupt)']}
+PASS S18a/indicator.thought_3_on_working_row {'rows': ['• Listening for the foghorn cadence (4s • esc to interrupt)'], 'working': ['• Listening for the foghorn cadence (4s • esc to interrupt)']}
+PASS S18a/indicator.second_heading_replaces_first 
+PASS S18a/indicator.plain_thought_replaces_heading 
+PASS S18a/indicator.cleared_after_turn 
+PASS S18a/indicator.thoughts_in_history []
+== S19b tool-output cap (attach)
+PASS S19b/cap.head_and_tail_kept [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 
+FAIL S19b/cap.total_rows_at_most_cap 60 rows: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+FAIL S19b/cap.hidden_marker_counts_the_rest []
+PASS S19b/cap.diff_left_whole 40 added lines
+== S20a cancel an agent-started turn (plain, Esc)
+PASS S20a/agent_turn.started_without_prompt [{'t': 1795530865.7658913, 'adapter': 'claude-code', 'pid': 46684, 'kind': 'agent_turn_start', 'sessionId': 'claude-code-0', 'turnId': 'claude-code-wake-65765'}
+PASS S20a/agent_turn.tui_shows_working › @ for file mentions
+PASS S20a/agent_turn.adapter_received_one_cancel 1
+PASS S20a/agent_turn.adapter_reports_cancelled_same_turn [{'t': 1795530866.5664835, 'adapter': 'claude-code', 'pid': 46684, 'kind': 'agent_turn_end', 'sessionId': 'claude-code-0', 'turnId': 'claude-code-wake-65765', '
+PASS S20a/agent_turn.ticks_stopped 
+PASS S20a/agent_turn.tui_back_to_idle ['• Agent confirmed cancellation.']
+PASS S20a/agent_turn.no_unconfirmed_warning 
+PASS S20a/agent_turn.next_prompt_works 
+== S21b plain nori: SIGTERM ends every session and restores the terminal
+PASS S21b/owned.no_discovery_files no host dir
+PASS S21b/owned.no_listening_socket []
+PASS S21b/owned.not_visible_to_host_ls Error: no host running; start one with `nori host`
+
+PASS S21b/owned.adapters_are_children_of_nori {'adapters': [47035], 'tree': [47035]}
+PASS S21b/owned.nori_exits sigterm
+PASS S21b/owned.terminal_restored_after_sigterm shell$
+PASS S21b/owned.no_adapter_outlives_nori []
+PASS S21b/owned.turn_stopped 7->7
+== S23 client-local commands in plain nori
+PASS S23/local.status_works                                                                                                                 ⎇ master
+PASS S23/local.diff_works  q to quit
+PASS S23/local.first-prompt_works                                                                                                                 ⎇ master
+PASS S23/local.memory_works                                                                                                                 ⎇ master
+PASS S23/local.context_works                                                                                                                 ⎇ master
+PASS S23/local.model_works   ↑↓/j/k move  enter select  esc close
+PASS S23/local.config_works   ↑↓/j/k move  enter select  esc close
+PASS S23/local.approvals_works   ↑↓/j/k move  enter select  esc close
+FAIL S23/local.echo_works                                                                                                                 ⎇ master
+PASS S23/local.fork_works   ↑↓/j/k move  enter select  esc close
+PASS S23/local.sessions_works ↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+PASS S23/local.resume_works   ↑↓/j/k move  / search  enter select  esc close
+PASS S23/local.none_sent_to_agent_as_prompt {'prompts': 1, 'leaked': []}
+PASS S23/local.no_extra_sessions_started [('claude-code', '/tmp/nori-host-tui-acceptance-l1/S23/roots/alpha/app')]
+== S25b permission: controller answers, watcher cannot (attach)
+PASS S25b/perm.watcher_enter_does_not_answer []
+PASS S25b/perm.controller_answer_reaches_adapter_once [{'outcome': {'outcome': 'selected', 'optionId': 'allow'}}]
+PASS S25b/perm.watcher_sees_outcome    alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+== S26c paused queue resumed, delivered once (plain)
+PASS S26c/queue.not_sent_while_turn_runs 
+PASS S26c/queue.paused_after_interrupt ['  1 queued · paused (interrupted) · enter resumes']
+PASS S26c/queue.resume_delivers_exactly_once 1
+PASS S26c/queue.resumed_reply_shown › @ for file mentions
+== S28b Escape cancels once (attach)
+PASS S28b/cancel.exactly_one_cancel 1
+PASS S28b/cancel.next_turn_completes ['cancelled', 'end_turn']
+PASS S28b/cancel.no_cancel_for_next_turn 1
+== S29c refused /close with two attached terminals
+PASS S29c/close_refusal2.adapter_got_one_close 1
+PASS S29c/close_refusal2.adapter_refused_once 1
+PASS S29c/close_refusal2.controller_shows_once ['Failed to close the session: Failed to close ACP session: close declined by claude-code']
+PASS S29c/close_refusal2.watcher_shows_at_most_once ['close declined by claude-code']
+PASS S29c/close_refusal2.session_still_live_on_host 1
+PASS S29c/close_refusal2.session_keeps_working_in_both ('   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task', '   alt+s sessions    alt+down next waiting    
+PASS S29c/close_refusal2.counts_unchanged_after_next_turn (['Failed to close the session: Failed to close ACP session: close declined by claude-code'], ['close declined by claude-code'])
+== S31a /resume restores an agent server's saved row via the host
+PASS S31a/restore.lists_agent_server_saved_row ['', '', '', '', '', '', '', '']
+PASS S31a/restore.loaded_by_prepared_server {'loads': [(52411, 'session/load')], 'prepared': [52411]}
+PASS S31a/restore.replayed_history_shown › ! for shell commands
+PASS S31a/restore.prompt_reaches_restored_session saved-orchard
+PASS S31a/restore.exactly_one_load 1
+PASS S31a/restore.all_servers_stopped_on_quit [52298, 52411]
+== S31d refused /agent restore keeps the current session
+PASS S31d/restore.lists_agent_server_saved_row ['', '', '', '', '', '', '', '']
+PASS S31d/restore.loaded_by_prepared_server {'loads': [(53222, 'session/load')], 'prepared': [53222]}
+PASS S31d/restore.refusal_message_shown ["■ Couldn't activate Lantern Codex: Failed to resume ACP session: Failed to load ACP session: the orchard ledger is", 'sealed by codex']
+PASS S31d/restore.refusal_keeps_current_session (52996, 52996)
+PASS S31d/restore.all_servers_stopped_on_quit [52996, 53222]
+== S33c input typed while the /new server initializes reaches only the new session
+PASS S33c/early.typed_during_init {'start': 1795531019.1223993, 'typed': 1795531020.6490927, 'end': 1795531025.1225302, 'pid': 53826}
+PASS S33c/early.delivered_once [(53826, 1795531025.137619)]
+PASS S33c/early.reaches_the_new_session [(53826, 53826, 53732)]
+PASS S33c/early.sent_after_the_new_session_exists {'prompt': 1795531025.137619, 'session_new': 1795531025.1261117}
+PASS S33c/early.previous_session_gets_only_its_own_prompt 53732
+PASS S33c/early.answered_on_screen › / for slash command menu
+== S33f input typed while a refused session/new is pending stays unsent
+PASS S33f/early.typed_during_new {'start': 1795531035.9211915, 'typed': 1795531037.4456573, 'end': 1795531041.9213269, 'pid': 54477}
+PASS S33f/early.refusal_recorded_by_adapter 1
+PASS S33f/early.refused_input_stays_unsent []
+PASS S33f/early.refusal_message_shown ['• claude-code heard: hello lantern', "■ Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is", '› 
+PASS S33f/early.refused_input_back_in_composer ['› early lantern word']
+PASS S33f/early.enter_sends_held_input_once_to_previous_session [(54374, 54374)]
+== S34a plain startup prepares and starts through the owned host
+PASS S34a/startup.one_server [55055]
+PASS S34a/startup.session_started_before_any_prompt ['initialize', 'session/list', 'session/new']
+PASS S34a/startup.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+PASS S34a/startup.prompt_answered_once 1
+PASS S34a/startup.server_stopped_on_quit [55055]
+== S34d piped prompt before readiness is sent once
+PASS S34d/early.server_held_in_initialize {'start': True, 'end': True}
+PASS S34d/early.nothing_sent_before_initialize []
+PASS S34d/early.delivered_once [(55500, 1795531068.835308)]
+PASS S34d/early.one_server_one_session (1, 1)
+PASS S34d/early.sent_after_session_new {'prompt': 1795531068.835308, 'new': 1795531068.823711}
+PASS S34d/early.answered_on_screen › / for slash command menu
+PASS S34d/early.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+== S34g refused startup keeps a positional prompt unsent
+PASS S34g/refused.adapter_refused_session_new 1
+PASS S34g/refused.input_unsent 0
+PASS S34g/refused.reason_shown ['shell$ RUST_LOG=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory "startup lantern word"', "■ Couldn't activate Lantern Claude: Failed to
+PASS S34g/refused.input_back_in_composer ['› startup lantern word']
+PASS S34g/refused.enter_retries_and_sends_once [(56106, 'claude-code-0')]
+PASS S34g/refused.retry_started_a_session 2
+PASS S34g/refused.servers_stopped_on_quit [55981, 56106]
+== S34j /resume during startup reuses the startup server
+PASS S34j/resume.rows_from_startup_server   ↑↓/j/k move  / search  enter select  esc close
+PASS S34j/resume.same_adapter_process {'spawns': [56430], 'loads': [(56430, 'saved-orchard')]}
+PASS S34j/resume.no_fresh_session_started []
+PASS S34j/resume.exactly_one_load 1
+PASS S34j/resume.prompt_reaches_restored_session ['saved-orchard']
+PASS S34j/resume.loaded_through_host ['_nori/host/prepare_agent', 'session/list', 'session/new']
+== S34m control: `nori resume --last` stays in-process
+PASS S34m/control.first_launch_used_host ['_nori/host/prepare_agent', 'session/list', 'session/new']
+PASS S34m/control.last_session_loaded [('session/load', 'claude-code-0')]
+PASS S34m/control.no_host_requests []
+== S35c two attached terminals: watcher refusals and control transfer
+PASS S35c/watch.control_commands_greyed {'/new': '/new  watching · Alt+T to take control', '/close': '/close  watching · Alt+T to take control', '/resume': '/resume           watching · Alt+T to take 
+PASS S35c/watch.sessions_enabled /sessions  list sessions and move between them
+PASS S35c/watch.new_refused_with_reason   /new  watching · Alt+T to take control
+PASS S35c/watch.new_nothing_sent []
+PASS S35c/watch.new_draft_kept /new
+PASS S35c/transfer.controller_menu_enabled_before /new              start a new chat during a conversation
+PASS S35c/transfer.open_menu_regreys /new              watching · Alt+T to take control
+PASS S35c/transfer.new_controller_menu_enabled /new              start a new chat during a conversation
+PASS S35c/transfer.demoted_new_refused 1
+PASS S35c/transfer.promoted_new_runs_once 2
+== S35f pasted slash commands (plain)
+PASS S35f/paste.single_line_dispatched_like_typed []
+PASS S35f/paste.multiline_sent_once_or_refused {'sent': ['/diff the harbor notes\nsecond synthetic line'], 'refused': False, 'requests': ['session/prompt']}
+== S35i menu open mid-turn: first Escape closes, later Escapes interrupt (plain)
+PASS S35i/esc2.control_interrupts {'presses': 1, 'draft': 'lamp draft'}
+PASS S35i/esc2.menu_open_during_turn   /delegate         delegate a task: /delegate <agent> <task>
+PASS S35i/esc2.first_closes_menu /
+PASS S35i/esc2.first_keeps_draft /
+PASS S35i/esc2.first_does_not_cancel {'cancels': 0, 'ticks': [14, 22]}
+PASS S35i/esc2.then_interrupts_like_a_plain_draft {'after_first': 1, 'control': 1}
+PASS S35i/esc2.one_cancel_per_turn 2
+PASS S35i/esc2.draft_after_interrupt_matches_control {'menu_path': '/', 'control': 'lamp draft'}
+== S37b approvals: current config read as-is on repeat launch; sandbox kept
+PASS S37b/repeat.launch1_session_starts_at_host_default [('claude-code-0', 'default')]
+PASS S37b/repeat.launch1_footer_shows_host_default ['', '', '', '']
+PASS S37b/repeat.launch1_config_unchanged 
+PASS S37b/repeat.launch2_session_starts_at_host_default [('claude-code-0', 'default'), ('claude-code-0', 'default')]
+PASS S37b/repeat.launch2_footer_shows_host_default ['', '', '', '']
+PASS S37b/repeat.launch2_config_unchanged 
+PASS S37b/repeat.mode_change_keeps_sandbox_settings ['sandbox_mode = "workspace-write"', '[sandbox_workspace_write]', 'network_access = true']
+== S36 startup activation window swept by Enter time
+RACE {'rep': 0, 'offset': -0.3, 'enter_minus_reply': 0.1256, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': -0.05, 'enter_minus_reply': 0.1261, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.0, 'enter_minus_reply': 0.1275, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.01, 'enter_minus_reply': 0.1321, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.02, 'enter_minus_reply': 0.1422, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.04, 'enter_minus_reply': 0.1623, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.08, 'enter_minus_reply': 0.2026, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.15, 'enter_minus_reply': 0.2723, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.3, 'enter_minus_reply': 0.4224, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': -0.3, 'enter_minus_reply': 0.1274, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': False, 'echoed': False, 'started': True}
+RACE {'rep': 1, 'offset': -0.05, 'enter_minus_reply': 0.1256, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.0, 'enter_minus_reply': 0.1262, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.01, 'enter_minus_reply': 0.132, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.02, 'enter_minus_reply': 0.142, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.04, 'enter_minus_reply': 0.1621, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.08, 'enter_minus_reply': 0.2025, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.15, 'enter_minus_reply': 0.2723, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.3, 'enter_minus_reply': 0.4226, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+PASS S36/race.every_enter_delivered_once []
+PASS S36/race.trials 18 trials, 0 not delivered once
+{"nori": "nori", "passed": 162, "failed": 9, "checks": 171}

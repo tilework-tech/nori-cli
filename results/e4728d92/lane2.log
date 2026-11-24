@@ -1,0 +1,321 @@
+== S03a attach detach by Ctrl+D keeps the turn
+PASS S03a/attach.alt_screen_on 
+PASS S03a/hint_row.exactly_one ['   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']
+PASS S03a/hint_row.at_bottom    alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PASS S03a/detach.shell_prompt_returns shell$
+PASS S03a/detach.alt_screen_off 
+PASS S03a/detach.cursor_visible 
+PASS S03a/detach.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 0, 'cursor_show': 51, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+PASS S03a/detach.tty_cooked 
+PASS S03a/alt.scrollback_untouched 
+PASS S03a/detach.turn_keeps_running ticks 5->13
+PASS S03a/detach.session_still_on_host [{'sessionId': '00425f6d-7134-47c5-a421-2d0691e3d46b', 'cwd': '/tmp/nori-host-tui-acceptance-l2/S03a/roots/alpha/app', 'title': 'hold the lamp', 'updatedAt': '2
+PASS S03a/detach.host_reports_working ID                                    AGENT             STATUS               AGE  CWD                                                    TITLE
+00425f6d-7134-47c
+PASS S03a/reattach.sees_live_turn 24->30
+== S04 /close ends the session
+PASS S04/close.session_not_live_on_host {'before': [{'sessionId': '0709f900-ece3-4906-ad1c-e1e5a34a89bf', 'cwd': '/tmp/nori-host-tui-acceptance-l2/S04/roots/alpha/app', 'title': 'first light', 'update
+PASS S04/close.adapter_released_session {'tail': ['turn_end:', 'request:session/close', 'stdin_eof:'], 'adapter_running': []}
+PASS S04/close.client_still_attached 
+== S07 remote @ completion per session
+FAIL S07/at.alpha_files_offered  Nori host  CONTROLLING
+ claude-code · new session · app · ready · Approvals: Agent
+
+ Ready. Send a prompt to begin.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› @lan
+
+  load
+PASS S07/at.no_laptop_files 
+PASS S07/at.laptop_file_not_found 
+FAIL S07/at.beta_files_offered_same_logical_path  Nori host  CONTROLLING
+ claude-code · new session · app · ready · Approvals: Agent
+
+ Ready. Send a prompt to begin.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› @src/
+
+  loa
+PASS S07/at.no_stale_alpha_results 
+== S10 approval modes
+PASS S10/approvals.offers_host_modes  Nori host  CONTROLLING
+ claude-code · new session · app · ready · Approvals: Agent
+
+ Ready. Send a prompt to begin.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Approvals for this ses
+PASS S10/approvals.no_legacy_presets 
+PASS S10/approvals.not_sent_as_prompt 
+== S12 new sessions take the host default mode
+PASS S12/default.first_new_uses_host_default [('claude-code-0', 'default')]
+PASS S12/approvals.controller_can_pick_approve_all    alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PASS S12/default.second_new_does_not_copy_foreground {'session/new': 2, 'mode sets': [('claude-code-0', 'default'), ('claude-code-0', 'acceptEdits'), ('claude-code-0', 'default')]}
+== S15a legacy Full Access migrates
+PASS S15a/migration.full-access_maps_to_approve-all ['  ▏3. Approve all (current)                                                                                          ▕']
+PASS S15a/migration.sandbox_setting_unchanged sandbox_mode = "danger-full-access"
+PASS S15a/migration.runs_once 
+== S16 watcher reconnect keeps an unsent draft
+PASS S16/watcher_reconnect.shows_reconnecting 
+PASS S16/watcher_reconnect.draft_kept_while_down 
+PASS S16/watcher_reconnect.draft_kept_after 
+PASS S16/watcher_reconnect.still_watching watching
+PASS S16/watcher_reconnect.controller_unchanged controlling
+PASS S16/watcher_reconnect.sees_new_turns 
+PASS S16/watcher_reconnect.enter_still_not_delivered ['first light', 'second light']
+PASS S16/watcher_reconnect.draft_kept_after_enter 
+== S18b thought text in the working indicator (attach)
+PASS S18b/indicator.thought_1_shown {'rows': [' │ Charting the breakwater'], 'working': []}
+FAIL S18b/indicator.thought_1_on_working_row {'rows': [' │ Charting the breakwater'], 'working': []}
+PASS S18b/indicator.thought_2_shown {'rows': [' │ Sorting the buoy colours'], 'working': []}
+FAIL S18b/indicator.thought_2_on_working_row {'rows': [' │ Sorting the buoy colours'], 'working': []}
+PASS S18b/indicator.thought_3_shown {'rows': [' │ Listening for the foghorn cadence'], 'working': []}
+FAIL S18b/indicator.thought_3_on_working_row {'rows': [' │ Listening for the foghorn cadence'], 'working': []}
+PASS S18b/indicator.second_heading_replaces_first 
+PASS S18b/indicator.plain_thought_replaces_heading 
+PASS S18b/indicator.cleared_after_turn 
+PASS S18b/indicator.thoughts_in_history []
+== S19c tool output full by default (plain)
+PASS S19c/cap.default_shows_all_rows 60 rows
+PASS S19c/cap.default_has_no_hidden_marker []
+PASS S19c/cap.diff_left_whole 40 added lines
+== S20b cancel an agent-started turn (attach, Ctrl+C)
+PASS S20b/agent_turn.started_without_prompt [{'t': 1795530882.2738907, 'adapter': 'claude-code', 'pid': 47643, 'kind': 'agent_turn_start', 'sessionId': 'claude-code-0', 'turnId': 'claude-code-wake-82273'}
+PASS S20b/agent_turn.tui_shows_working    alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PASS S20b/agent_turn.watcher_cannot_cancel 0
+PASS S20b/agent_turn.adapter_received_one_cancel 1
+PASS S20b/agent_turn.adapter_reports_cancelled_same_turn [{'t': 1795530886.8781614, 'adapter': 'claude-code', 'pid': 47643, 'kind': 'agent_turn_end', 'sessionId': 'claude-code-0', 'turnId': 'claude-code-wake-82273', '
+PASS S20b/agent_turn.ticks_stopped 
+PASS S20b/agent_turn.tui_back_to_idle [' claude-code · wake the keeper · app · ready · Approvals: Agent', ' Agent confirmed cancellation.']
+PASS S20b/agent_turn.no_unconfirmed_warning 
+PASS S20b/agent_turn.draft_kept 
+PASS S20b/agent_turn.watcher_sees_idle 
+PASS S20b/agent_turn.info_second_ctrl_c_when_idle draft cleared (idle Ctrl+C clears the composer)
+PASS S20b/agent_turn.next_prompt_works 
+== S21c plain nori beside a background host
+PASS S21c/owned.background_host_lists_no_live_foreground_session [{'sessionId': '893749bf-44e8-4884-9937-6fb430d994b4', 'cwd': '/tmp/nori-host-tui-acceptance-l2/S21c/roots/alpha/app', 'title': 'hello lantern', 'updatedAt': '2
+PASS S21c/owned.background_host_survives_foreground_quit ID                                    AGENT             STATUS               AGE  CWD  TITLE
+
+== S24 picker-first `nori resume` on the owned host
+PASS S24/picker_first.picker_before_any_session []
+PASS S24/picker_first.no_listening_socket []
+PASS S24/picker_first.esc_starts_one_session_in_launch_folder [{'t': 1795530905.997513, 'adapter': 'claude-code', 'pid': 49020, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance-l2/S24/roots
+PASS S24/picker_first.adapters_stopped_on_quit [48643, 49020]
+== S26a queued follow-up delivered once (plain)
+PASS S26a/queue.not_sent_while_turn_runs 
+PASS S26a/queue.delivered_exactly_once 1
+PASS S26a/queue.reply_shown › ? for shortcuts
+== S27 standalone nori-tui binary
+PASS S27/standalone.reply_shown › ! for shell commands
+PASS S27/standalone.inline 
+PASS S27/standalone.one_session 1
+PASS S27/standalone.no_listening_socket []
+PASS S27/standalone.exit.shell_prompt_returns shell$
+PASS S27/standalone.exit.alt_screen_off 
+PASS S27/standalone.exit.cursor_visible 
+PASS S27/standalone.exit.escapes_balanced {'alt_on': 0, 'alt_off': 0, 'paste_on': 2, 'paste_off': 2, 'cursor_hide': 2, 'cursor_show': 17, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+PASS S27/standalone.exit.tty_cooked 
+PASS S27/standalone.adapters_stopped [49962]
+PASS S27/standalone.process_exits 49874
+== S29a refused /close (plain)
+PASS S29a/close_refusal.adapter_refused 
+PASS S29a/close_refusal.shown_once ['■ Failed to close the session: Failed to close ACP session: close declined by claude-code']
+PASS S29a/close_refusal.session_keeps_working › ! for shell commands
+PASS S29a/close_refusal.retry_reaches_adapter 2
+PASS S29a/close_refusal.no_cancel_sent 
+PASS S29a/close_refusal.retry_leaves_terminal_open   ↑↓/j/k move  / search  enter select  esc close
+PASS S29a/close_refusal.shown_once_after_retry []
+== S29d second /close while a refused first is in flight
+PASS S29d/close_twice.second_sent_during_first {'second': 1795530969.5280497, 'first_reply': 1795530970.930109}
+PASS S29d/close_twice.adapter_got_one_close 1
+PASS S29d/close_twice.refusal_shown_once ['Failed to close the session: Failed to close ACP session: close declined by claude-code']
+PASS S29d/close_twice.session_still_live 1
+PASS S29d/close_twice.session_keeps_working    alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PASS S29d/close_twice.refusal_still_once_after_next_turn ['Failed to close the session: Failed to close ACP session: close declined by claude-code']
+== S31b /agent restores another server's saved row via the host
+PASS S31b/restore.lists_agent_server_saved_row ['', '', '', '', '', '', '', '']
+PASS S31b/restore.loaded_by_prepared_server {'loads': [(52455, 'session/load')], 'prepared': [52455]}
+PASS S31b/restore.replayed_history_shown › $ for skill listing
+PASS S31b/restore.prompt_reaches_restored_session saved-orchard
+PASS S31b/restore.exactly_one_load 1
+PASS S31b/restore.all_servers_stopped_on_quit [52233, 52455]
+== S33a /new through the owned host in the session folder
+FAIL S33a/new.dir_argument_sets_session_folder /tmp/nori-host-tui-acceptance-l2/S33a/roots/alpha/app
+PASS S33a/new.on_a_fresh_server_process [(53421, 53082)]
+PASS S33a/new.prompt_reaches_new_session claude-code-0
+PASS S33a/new.previous_server_still_running 53082
+PASS S33a/new.all_servers_stopped_on_quit [53082, 53421]
+== S33d input typed while a refused /new initializes stays unsent
+PASS S33d/early.typed_during_init {'start': 1795531023.828075, 'typed': 1795531025.3554037, 'end': 1795531029.8281891, 'pid': 54000}
+PASS S33d/early.refusal_recorded_by_adapter 1
+PASS S33d/early.refused_input_stays_unsent []
+PASS S33d/early.refusal_message_shown ['• claude-code heard: hello lantern', "■ Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is", '› 
+PASS S33d/early.refused_input_back_in_composer ['› early lantern word']
+PASS S33d/early.enter_sends_held_input_once_to_previous_session [(53914, 53914)]
+== S32a Esc on /resume rows reaps the prepared server
+PASS S32a/dismiss.prepared_server_started [54700]
+PASS S32a/dismiss.prepared_server_reaped [(54700, False)]
+PASS S32a/dismiss.current_session_keeps_working › ? for shortcuts
+== S34b prompt typed before the startup server is ready is sent once
+PASS S34b/early.server_held_in_initialize {'start': True, 'end': True}
+PASS S34b/early.typed_during_hold {'start': 1795531055.0062108, 'typed': 1795531056.3187916, 'end': 1795531061.006312}
+PASS S34b/early.nothing_sent_before_initialize []
+PASS S34b/early.delivered_once [(55220, 1795531061.0210342)]
+PASS S34b/early.one_server_one_session (1, 1)
+PASS S34b/early.sent_after_session_new {'prompt': 1795531061.0210342, 'new': 1795531061.0099742}
+PASS S34b/early.answered_on_screen › ! for shell commands
+PASS S34b/early.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+== S34e piped context plus instruction before readiness is sent once
+PASS S34e/early.server_held_in_initialize {'start': True, 'end': True}
+PASS S34e/early.nothing_sent_before_initialize []
+PASS S34e/early.delivered_once [(55721, 1795531075.2945962)]
+PASS S34e/early.one_server_one_session (1, 1)
+PASS S34e/early.sent_after_session_new {'prompt': 1795531075.2945962, 'new': 1795531075.2834535}
+PASS S34e/early.piped_context_included ools such as update_goal, are unavailable in this session.
+</context>
+
+summarize the piped lantern
+
+orchard context line
+PASS S34e/early.answered_on_screen › ! for shell commands
+PASS S34e/early.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+== S34h /new during startup waits for the startup session
+PASS S34h/new.one_session_started [(56219, '/tmp/nori-host-tui-acceptance-l2/S34h/roots/alpha/app')]
+PASS S34h/new.reused_startup_server [56219]
+PASS S34h/new.prompt_reaches_started_session_once [(56219, 56219)]
+PASS S34h/new.started_through_host ['_nori/host/prepare_agent', 'session/list', 'session/new']
+PASS S34h/new.servers_stopped_on_quit [56219]
+== S34k skillset choice then startup through the host
+PASS S34k/skillset.picker_shown   ↑↓/j/k move  / search  enter select  esc close
+PASS S34k/skillset.no_session_before_choice 0
+PASS S34k/skillset.one_session_started_after_choice 1
+PASS S34k/skillset.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+PASS S34k/skillset.prompt_answered_once 1
+== S35a shared / menu, Tab and dispatch in plain nori
+PASS S35a/plain.menu_lists_builtins missing []
+PASS S35a/plain.no_attach_reasons_in_plain_menu []
+PASS S35a/plain.agent_command_listed     Review the synthetic change
+PASS S35a/plain.tab_completes_builtin /approvals
+PASS S35a/plain.builtin_dispatched_locally []
+PASS S35a/plain.agent_command_review_args_sent_once {'sent': 1, 'prompts': ['<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://gi
+PASS S35a/plain.agent_command_review_sent_once {'sent': 1, 'prompts': ['<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://gi
+PASS S35a/plain.agent_command_lanternize_sent_once {'sent': 1, 'prompts': ['<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://gi
+FAIL S35a/plain.bare_review_not_captured_by_loose_match {'requests': [], 'last': '  ↑↓/j/k move  / search  enter select  esc close'}
+== S35d Escape with the menu open mid-turn (plain)
+PASS S35d/esc.menu_open_during_turn   /delegate         delegate a task: /delegate <agent> <task>
+PASS S35d/esc.first_escape_closes_menu /
+PASS S35d/esc.first_escape_does_not_cancel {'cancels': 0, 'ticks': [8, 16]}
+PASS S35d/esc.cancelled_exactly_once 1
+== S35g pasted slash commands (attach)
+PASS S35g/paste.single_line_refused_like_typed {'sent': [], 'last': '  /compact  not available on this host yet'}
+PASS S35g/paste.multiline_sent_once_or_refused {'sent': [], 'refused': True, 'requests': []}
+== S35j menu open mid-turn: first Escape closes, later Escapes interrupt (attach)
+PASS S35j/esc2.control_interrupts {'presses': 1, 'draft': 'lamp draft'}
+PASS S35j/esc2.menu_open_during_turn   /delegate         delegate a task: /delegate <agent> <task>
+PASS S35j/esc2.first_closes_menu    alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PASS S35j/esc2.first_keeps_draft /
+PASS S35j/esc2.first_does_not_cancel {'cancels': 0, 'ticks': [14, 22]}
+PASS S35j/esc2.then_interrupts_like_a_plain_draft {'after_first': 1, 'control': 1}
+PASS S35j/esc2.one_cancel_per_turn 2
+PASS S35j/esc2.draft_after_interrupt_matches_control {'menu_path': '/', 'control': 'lamp draft'}
+== S37c approvals: plain nori, two sessions, mode follows the session
+PASS S37c/plain2.first_session_ask {'ui': 'ask', 'sets': [('claude-code-0', 'acceptEdits'), ('claude-code-0', 'default')]}
+PASS S37c/plain2.new_session_not_copying_ask {'ui': 'none', 'sets': [('claude-code-0', 'default'), ('claude-code-0', 'acceptEdits')]}
+PASS S37c/plain2.switch_back_shows_ask ask
+PASS S37c/plain2.switch_sends_no_mode_change []
+== S36b startup activation window swept by typing time
+RACE {'rep': 0, 'offset': -0.3, 'enter_minus_reply': 1.0283, 'typed_minus_reply': 0.0037, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': -0.05, 'enter_minus_reply': 1.0301, 'typed_minus_reply': 0.006, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.0, 'enter_minus_reply': 1.0296, 'typed_minus_reply': 0.0052, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.01, 'enter_minus_reply': 1.0345, 'typed_minus_reply': 0.01, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.02, 'enter_minus_reply': 1.0446, 'typed_minus_reply': 0.02, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.04, 'enter_minus_reply': 1.0643, 'typed_minus_reply': 0.04, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.08, 'enter_minus_reply': 1.1044, 'typed_minus_reply': 0.08, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.15, 'enter_minus_reply': 1.1746, 'typed_minus_reply': 0.15, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.3, 'enter_minus_reply': 1.3248, 'typed_minus_reply': 0.3, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': -0.3, 'enter_minus_reply': 1.0295, 'typed_minus_reply': 0.0048, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': -0.05, 'enter_minus_reply': 1.0303, 'typed_minus_reply': 0.0056, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.0, 'enter_minus_reply': 1.0287, 'typed_minus_reply': 0.0044, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.01, 'enter_minus_reply': 1.0344, 'typed_minus_reply': 0.01, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.02, 'enter_minus_reply': 1.0445, 'typed_minus_reply': 0.02, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.04, 'enter_minus_reply': 1.0648, 'typed_minus_reply': 0.04, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.08, 'enter_minus_reply': 1.1046, 'typed_minus_reply': 0.0801, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.15, 'enter_minus_reply': 1.1748, 'typed_minus_reply': 0.15, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.3, 'enter_minus_reply': 1.3247, 'typed_minus_reply': 0.3, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+PASS S36b/race.every_enter_delivered_once []
+PASS S36b/race.trials 18 trials, 0 not delivered once
+{"nori": "nori", "passed": 164, "failed": 7, "checks": 171}

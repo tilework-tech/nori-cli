@@ -9,6 +9,7 @@ adapter ledger, then records checks in results.json. Screens are saved as
 .txt and .ansi; render PNGs afterwards with harness/render.sh.
 """
 import argparse
+import difflib
 import json
 import os
 import re
@@ -563,14 +564,24 @@ def mode_sets(ctx):
 HOST_MODE_FOR = {"default": "ask", "read-only": "ask", "acceptEdits": "agent", "workspace-write": "agent"}
 
 
+def confirm_if_asked(t):
+    """Accept an Approve all confirmation step if one is on screen."""
+    if re.search(r"(stop asking|enter approve all)", t.screen(), re.I):
+        t.capture("approve-all-confirmation")
+        t.keys("Enter")
+        time.sleep(1.2)
+
+
 def choose(t, label, limit=12):
     """Move a list selection onto the row containing `label`, then press Enter."""
-    for _ in range(limit):
-        row = next((l for l in t.screen().splitlines() if re.match(r"^\s*(›|>|▶|▏)", l) and label in l), None)
-        if row:
-            t.keys("Enter")
-            return True
-        t.keys("Down")
+    for direction in ("Down", "Up"):
+        for _ in range(limit):
+            row = next((l for l in t.screen().splitlines() if re.match(r"^\s*(›|>|▶|▏)", l) and label in l), None)
+            if row:
+                t.keys("Enter")
+                return True
+            t.keys(direction)
+            time.sleep(0.1)
     return False
 
 
@@ -588,6 +599,7 @@ def s12_new_takes_host_default(ctx):
     time.sleep(1)
     picked = choose(t, "Approve all")
     time.sleep(1)
+    confirm_if_asked(t)
     ctx.check("approvals.controller_can_pick_approve_all", picked, last_nonblank(t.screen()))
     t.type("/new")
     t.keys("Enter")
@@ -596,8 +608,9 @@ def s12_new_takes_host_default(ctx):
         t.keys("Enter")
     time.sleep(2)
     sets = mode_sets(ctx)
-    ctx.check("default.second_new_does_not_copy_foreground", len({s for s, _ in sets}) >= 2
-              and HOST_MODE_FOR.get(sets[-1][1]) == "ask", sets)
+    news = len(ctx.ledger("request", "session/new"))
+    ctx.check("default.second_new_does_not_copy_foreground", news >= 2
+              and HOST_MODE_FOR.get(sets[-1][1]) == "ask", {"session/new": news, "mode sets": sets})
     t.capture("after-second-new")
 
 
@@ -623,11 +636,12 @@ def s13_approvals_per_session(ctx):
     before = mode_sets(ctx)
     picked = choose(a, "Approve all")
     time.sleep(1)
+    confirm_if_asked(a)
     after = mode_sets(ctx)
     ctx.check("approvals.change_reaches_only_foreground", picked and len(after) >= len(before), after)
     footer = a.screen()
-    ctx.check("approvals.footer_shows_foreground_mode", re.search(r"Approve all", footer.splitlines()[-1] if footer else "")
-              or "Approve all" in "\n".join(footer.splitlines()[-4:]), footer.splitlines()[-4:])
+    ctx.check("approvals.footer_shows_foreground_mode", footer_mode(footer) == "approve-all",
+              [l for l in footer.splitlines() if "Approvals:" in l])
     obs = ctx.observer()
     sid = obs.sessions()[0]["sessionId"]
     obs.close()
@@ -2673,6 +2687,213 @@ def s36_startup_race(ctx, burst_at_reply=False):
     ctx.check("race.trials", True, f"{len(rows)} trials, {len(bad)} not delivered once")
 
 
+
+# ---------------------------------------------------------------------------
+# S37: per-session approvals across sessions, terminals and launches
+# ---------------------------------------------------------------------------
+MODE_LABELS = {"ask": "Ask", "agent": "Agent", "approve-all": "Approve all"}
+
+
+def host_mode(obs, sid):
+    """The mode the host reports for `sid` to an observing client (session/load result), or the raw reply."""
+    cwd = next((x.get("cwd") for x in obs.sessions() if x["sessionId"] == sid), "/")
+    reply = obs.call("session/load", {"sessionId": sid, "cwd": cwd, "mcpServers": []})
+    result = reply.get("result") or {}
+    modes = result.get("modes") or {}
+    if modes.get("currentModeId"):
+        return modes["currentModeId"]
+    for option in result.get("configOptions") or []:
+        if option.get("id") == "mode":
+            return option.get("currentValue")
+    return f"unreadable: {json.dumps(reply)[:200]}"
+
+
+def footer_mode(screen):
+    """The mode a terminal shows: the last `Approvals: …` label on screen, else "none" (plain nori leaves
+    Agent unlabelled by default, #752 decision 1)."""
+    found = re.findall(r"Approvals:\s*(Approve all|Ask|Agent)", screen)
+    if not found:
+        return "none"
+    return {v: k for k, v in MODE_LABELS.items()}[found[-1]]
+
+
+def shown_as(screen, plain=False):
+    mode = footer_mode(screen)
+    return "agent" if plain and mode == "none" else mode
+
+
+def pick_mode(t, label):
+    """Open /approvals, select `label`; for Approve all, confirm the second step when one is shown."""
+    run_typed(t, "/approvals", settle=1.2)
+    picked = choose(t, label)
+    time.sleep(1.2)
+    if picked and label == "Approve all":
+        confirm_if_asked(t)
+    return picked
+
+
+def s37_handoff_two_sessions(ctx):
+    """Two sessions, three terminals: the controller's mode change reaches only its session, a watcher
+    cannot change it, the new controller can after Alt+T, and every UI matches what the host reports."""
+    ctx.start_host()
+    a = ctx.term("controller-a")
+    a.run(f"{NORI} attach")
+    attach_new_session(a)
+    submit(a, "first light")
+    a.wait_for("heard: first light", 20)
+    obs = ctx.observer()
+    s1 = obs.sessions()[0]["sessionId"]
+    out = ctx.nori("host", "new", "--prompt", "second errand", cwd=ctx.fx["roots"]["alpha"])
+    (ctx.dir / "host-new.txt").write_text(out.stdout + out.stderr)
+    deadline = time.time() + 20
+    while len(obs.sessions()) < 2 and time.time() < deadline:
+        time.sleep(0.5)
+    s2 = next(x["sessionId"] for x in obs.sessions() if x["sessionId"] != s1)
+    c = ctx.term("second-session")
+    c.run(f"{NORI} attach {s2[:8]}")
+    c.wait_for(r"(WATCHING|watching)", 20, regex=True)
+    time.sleep(1)
+    start = {"s1": host_mode(obs, s1), "s2": host_mode(obs, s2)}
+    (ctx.dir / "host-modes-start.json").write_text(json.dumps(start))
+    b = ctx.term("watcher-b")
+    b.run(f"{NORI} attach {s1[:8]}")
+    b.wait_for(r"(WATCHING|watching)", 20, regex=True)
+    time.sleep(1)
+
+    sets_before = mode_sets(ctx)
+    picked = pick_mode(a, "Ask")
+    a.capture("a-picked-ask")
+    b.capture("b-watching-after-ask")
+    c.capture("c-second-session-after-ask")
+    hosts = {"s1": host_mode(obs, s1), "s2": host_mode(obs, s2)}
+    ctx.check("handoff.controller_sets_ask_on_host", picked and hosts["s1"] == "ask", hosts)
+    ctx.check("handoff.other_session_unchanged_on_host", hosts["s2"] == start["s2"], {"start": start, "now": hosts})
+    new_sets = mode_sets(ctx)[len(sets_before):]
+    ctx.check("handoff.adapter_mode_sent_only_to_foreground", bool(new_sets) and all(sid != s2 for sid, _ in new_sets)
+              and HOST_MODE_FOR.get(new_sets[-1][1]) == "ask", new_sets)
+    ui = {"a": footer_mode(a.screen()), "b": footer_mode(b.screen()), "c": footer_mode(c.screen())}
+    ctx.check("handoff.controller_footer_matches_host", ui["a"] == hosts["s1"], {"ui": ui, "host": hosts})
+    ctx.check("handoff.watcher_footer_matches_host", ui["b"] == hosts["s1"], {"ui": ui, "host": hosts})
+    ctx.check("handoff.second_session_footer_matches_host", ui["c"] == hosts["s2"], {"ui": ui, "host": hosts})
+
+    n = len(ctx.ledger("request"))
+    run_typed(b, "/approvals", settle=1.2)
+    b.capture("b-watcher-approvals")
+    choose(b, "Approve all")
+    time.sleep(1)
+    b.keys("Escape")
+    b.keys("C-u")
+    ctx.check("handoff.watcher_cannot_change_mode", host_mode(obs, s1) == "ask" and not mode_sets(ctx)[len(sets_before) + len(new_sets):],
+              {"host": host_mode(obs, s1), "requests": requests_since(ctx, n)})
+
+    b.keys("M-t")
+    b.wait_for(r"CONTROLLING", 10, regex=True)
+    time.sleep(1.5)
+    picked = pick_mode(b, "Approve all")
+    b.capture("b-controller-approve-all")
+    a.capture("a-watching-after-handoff")
+    hosts = {"s1": host_mode(obs, s1), "s2": host_mode(obs, s2)}
+    ui = {"a": footer_mode(a.screen()), "b": footer_mode(b.screen()), "c": footer_mode(c.screen())}
+    ctx.check("handoff.new_controller_sets_mode_on_host", picked and hosts["s1"] == "approve-all", hosts)
+    ctx.check("handoff.both_terminals_show_host_mode", ui["a"] == ui["b"] == hosts["s1"], {"ui": ui, "host": hosts})
+    ctx.check("handoff.other_session_still_unchanged", hosts["s2"] == start["s2"] and ui["c"] == hosts["s2"], {"ui": ui, "host": hosts})
+    n = len(mode_sets(ctx))
+    run_typed(a, "/approvals", settle=1.2)
+    a.capture("a-demoted-approvals")
+    choose(a, "Agent")
+    time.sleep(1)
+    a.keys("Escape")
+    a.keys("C-u")
+    ctx.check("handoff.demoted_controller_cannot_change_mode", host_mode(obs, s1) == "approve-all" and len(mode_sets(ctx)) == n,
+              {"host": host_mode(obs, s1), "sets": mode_sets(ctx)[n:]})
+    (ctx.dir / "host-modes-end.json").write_text(json.dumps({"s1": host_mode(obs, s1), "s2": host_mode(obs, s2)}))
+    obs.close()
+
+
+def s37_repeat_launch_keeps_config(ctx):
+    """A current config (host default mode, sandbox table) is read as-is on every launch: no rewrite,
+    mode from the host default, and a mode change leaves the sandbox settings alone."""
+    config = ctx.fx["homes"]["host"] / "config.toml"
+    original = config.read_text()
+    ctx.dir.mkdir(parents=True, exist_ok=True)
+    (ctx.dir / "config-before.toml").write_text(original)
+    t = ctx.term("fg")
+    for launch in (1, 2):
+        t.run("clear")
+        time.sleep(0.5)
+        t.run(f"{NORI} --skip-trust-directory")
+        wait_composer(t)
+        time.sleep(1.5)
+        sets = mode_sets(ctx)
+        ctx.check(f"repeat.launch{launch}_session_starts_at_host_default", bool(sets) and HOST_MODE_FOR.get(sets[-1][1]) == "ask", sets[-2:])
+        ctx.check(f"repeat.launch{launch}_footer_shows_host_default", shown_as(t.screen(), plain=True) == "ask", t.screen().splitlines()[-4:])
+        t.capture(f"launch{launch}")
+        quit_fg(t)
+        time.sleep(1)
+        ctx.check(f"repeat.launch{launch}_config_unchanged", config.read_text() == original,
+                  "".join(difflib.unified_diff(original.splitlines(True), config.read_text().splitlines(True))))
+    t.run(f"{NORI} --skip-trust-directory")
+    wait_composer(t)
+    time.sleep(1)
+    picked = pick_mode(t, "Approve all")
+    t.capture("picked-approve-all")
+    quit_fg(t)
+    time.sleep(1)
+    after = config.read_text()
+    (ctx.dir / "config-after.toml").write_text(after)
+    sandbox = [l for l in original.splitlines() if l.startswith("sandbox_mode") or l.startswith("network_access") or l.startswith("[sandbox_workspace_write]")]
+    ctx.check("repeat.mode_change_keeps_sandbox_settings", picked and all(l in after.splitlines() for l in sandbox), sandbox)
+
+
+def s37_plain_two_sessions(ctx):
+    """Plain nori: a mode set on one session stays with it; /new starts at the default; switching back restores it."""
+    t = start_fg(ctx)
+    submit(t, "first light")
+    t.wait_for("heard: first light", 20)
+    picked = pick_mode(t, "Ask")
+    t.capture("first-session-ask")
+    sets = mode_sets(ctx)
+    ctx.check("plain2.first_session_ask", picked and shown_as(t.screen(), plain=True) == "ask"
+              and bool(sets) and HOST_MODE_FOR.get(sets[-1][1]) == "ask", {"ui": footer_mode(t.screen()), "sets": sets[-2:]})
+    news = len(ctx.ledger("request", "session/new"))
+    run_typed(t, "/new", settle=3.0)
+    wait_ledger(ctx, lambda r: r.get("method") == "session/new" and len(ctx.ledger("request", "session/new")) > news, timeout=10)
+    time.sleep(1.5)
+    t.capture("second-session")
+    sets = mode_sets(ctx)
+    ctx.check("plain2.new_session_not_copying_ask", len(ctx.ledger("request", "session/new")) == news + 1
+              and HOST_MODE_FOR.get(sets[-1][1]) == "agent" and shown_as(t.screen(), plain=True) == "agent",
+              {"ui": footer_mode(t.screen()), "sets": sets[-2:]})
+    n = len(mode_sets(ctx))
+    t.keys("M-,")
+    time.sleep(2)
+    t.capture("back-to-first")
+    ctx.check("plain2.switch_back_shows_ask", shown_as(t.screen(), plain=True) == "ask", footer_mode(t.screen()))
+    ctx.check("plain2.switch_sends_no_mode_change", len(mode_sets(ctx)) == n, mode_sets(ctx)[n:])
+    quit_fg(t)
+
+
+def s37_approve_all_answers_on_host(ctx):
+    """Approve all is enforced by the host: a permission request is answered without a prompt in either terminal."""
+    ctx.start_host()
+    a = ctx.term("controller")
+    a.run(f"{NORI} attach")
+    attach_new_session(a)
+    picked = pick_mode(a, "Approve all")
+    obs = ctx.observer()
+    sid = obs.sessions()[0]["sessionId"]
+    ctx.check("approveall.host_reports_mode", picked and host_mode(obs, sid) == "approve-all", host_mode(obs, sid))
+    submit(a, "perm check")
+    try:
+        a.wait_for(r"permission: ", 15, regex=True)
+        answered = True
+    except TimeoutError:
+        answered = False
+    a.capture("perm-answered")
+    ctx.check("approveall.permission_answered_without_prompt", answered and "waiting on you" not in a.screen(),
+              last_nonblank(a.screen()))
+    obs.close()
+
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
     "S02": ("foreground quit stops a running turn", s02_foreground_quit_stops_turn),
@@ -2761,13 +2982,18 @@ SCENARIOS = {
     "S35h": ("commands while reconnecting and after", s35_reconnect),
     "S35i": ("menu open mid-turn: first Escape closes, later Escapes interrupt (plain)", lambda c: s35_escape_two_presses(c, "fg")),
     "S35j": ("menu open mid-turn: first Escape closes, later Escapes interrupt (attach)", lambda c: s35_escape_two_presses(c, "attach")),
+    "S37a": ("approvals: two sessions, three terminals, controller handoff, host vs UI", s37_handoff_two_sessions),
+    "S37b": ("approvals: current config read as-is on repeat launch; sandbox kept", s37_repeat_launch_keeps_config),
+    "S37c": ("approvals: plain nori, two sessions, mode follows the session", s37_plain_two_sessions),
+    "S37d": ("approvals: Approve all answers permission requests on the host", s37_approve_all_answers_on_host),
     "S36": ("startup activation window swept by Enter time", s36_startup_race),
     "S36b": ("startup activation window swept by typing time", lambda c: s36_startup_race(c, burst_at_reply=True)),
 }
 
 
 CAP = "[tui]\ntool_output_max_lines = 10"
-FIXTURE_ARGS = {"S12": {"host_extra": 'default_mode = "ask"'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}
+FIXTURE_ARGS = {"S12": {"host_extra": 'default_mode = "ask"'},
+                "S37b": {"host_extra": 'default_mode = "ask"', "top_extra": 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}
 
 
 def main():

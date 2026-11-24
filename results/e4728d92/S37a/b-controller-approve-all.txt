@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · first light · app · ready · Approvals: Approve all
+
+ › You
+ first light
+
+ claude-code heard: first light
+
+ /approvals: watching · Alt+T to take control
+
+ You now control the host. Other terminals can keep watching.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

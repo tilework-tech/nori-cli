@@ -1,0 +1,147 @@
+[1m[32m    Finished[0m `ci-test` profile [unoptimized + debuginfo] target(s) in 0.08s
+[1m[32m     Running[0m tests/host_attach.rs (target/aarch64-apple-darwin/ci-test/deps/host_attach-28817338eb1b3fe3)
+
+running 1 test
+test verifier_settled_only_the_controller_changes_a_session_mode ... FAILED
+
+failures:
+
+---- verifier_settled_only_the_controller_changes_a_session_mode stdout ----
+
+thread 'verifier_settled_only_the_controller_changes_a_session_mode' panicked at tui-pty-e2e/tests/host_attach.rs:1252:5:
+the former controller can no longer change the mode:
+ Nori host  CONTROLLING
+ mock-model · approvals shared session · project · ready · Approvals: Agent
+
+ › You
+ approvals shared session
+
+ D2 host agent response
+
+ /approvals: watching · Alt+T to take control
+
+ You now control the host. Other terminals can keep watching.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Approvals for this session
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+/
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+=== TUI Screen State at Panic ===
+     Nori host  CONTROLLING
+     mock-model · approvals shared session · project · ready · Approvals: Agent
+    
+     › You
+     approvals shared session
+    
+     D2 host agent response
+    
+     /approvals: watching · Alt+T to take control
+    
+     You now control the host. Other terminals can keep watching.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+     Approvals for this session
+     New sessions start in the host default. The sandbox is set separately.
+    
+       Ask                  Ask before every edit and command.
+     › Agent (current)      The agent asks when it judges it needs to.
+       Approve all          Nori approves every permission request.
+     
+     ↑↓ move · enter choose · esc close
+     
+     
+PTY output tail (escaped): \x1b[0m\x1b[m\x1b[K\x1b[39;2H\x1b[0m\x1b[m\x1b[K\x1b[40;2H\x1b[0m\x1b[m\x1b[K\x1b[29;1H\x1b[1m Approvals for this session\x1b[30;1H\x1b[22m\x1b[2m\x1b[2m New sessions start in the host default. The sandbox is set separately.\x1b[32;4H\x1b[22mAsk\x1b[32;25H\x1b[2mAsk before every edit and command.\x1b[33;1H\x1b[22m\x1b[1m\x1b[;m \xe2\x80\xba Agent (current)      \x1b[22m\x1b[2m\x1b[2m\x1b[;mThe agent asks when it judges it needs to.\x1b[34;4H\x1b[22mApprove\x1b[34;12Hall\x1b[34;25H\x1b[2mNori approves every permission request.\x1b[36;1H \xe2\x86\x91\xe2\x86\x93 move \xc2\xb7 enter choose \xc2\xb7 esc close\x1b[38;1H\x1b[22m \x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;3H\x1b[?2026l
+=================================
+
+
+=== TUI Screen State at Panic ===
+     Nori host  WATCHING · read-only · alt+t take control
+     mock-model · approvals shared session · project · ready · Approvals: Agent
+    
+     › You
+     approvals shared session
+    
+     D2 host agent response
+    
+     Control moved to another terminal. You are now watching; alt+t takes control.
+    
+     /approvals: watching · Alt+T to take control
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+     
+    
+     
+     
+    
+     
+    
+     
+     
+     /approvals: watching · Alt+T to take control
+     
+    / approvals approve-all
+    
+       alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PTY output tail (escaped): 10;2H\x1b[0m\x1b[m\x1b[K\x1b[11;46H\x1b[0m\x1b[m\x1b[K\x1b[12;2H\x1b[0m\x1b[m\x1b[K\x1b[13;2H\x1b[0m\x1b[m\x1b[K\x1b[14;2H\x1b[0m\x1b[m\x1b[K\x1b[15;2H\x1b[0m\x1b[m\x1b[K\x1b[16;2H\x1b[0m\x1b[m\x1b[K\x1b[17;2H\x1b[0m\x1b[m\x1b[K\x1b[18;2H\x1b[0m\x1b[m\x1b[K\x1b[19;2H\x1b[0m\x1b[m\x1b[K\x1b[20;2H\x1b[0m\x1b[m\x1b[K\x1b[21;2H\x1b[0m\x1b[m\x1b[K\x1b[22;2H\x1b[0m\x1b[m\x1b[K\x1b[23;2H\x1b[0m\x1b[m\x1b[K\x1b[24;2H\x1b[0m\x1b[m\x1b[K\x1b[25;2H\x1b[0m\x1b[m\x1b[K\x1b[26;2H\x1b[0m\x1b[m\x1b[K\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;2H\x1b[0m\x1b[m\x1b[K\x1b[29;2H\x1b[0m\x1b[m\x1b[K\x1b[30;2H\x1b[0m\x1b[m\x1b[K\x1b[31;2H\x1b[0m\x1b[m\x1b[K\x1b[32;2H\x1b[0m\x1b[m\x1b[K\x1b[33;2H\x1b[0m\x1b[m\x1b[K\x1b[34;2H\x1b[0m\x1b[m\x1b[K\x1b[35;2H\x1b[0m\x1b[m\x1b[K\x1b[36;46H\x1b[0m\x1b[m\x1b[K\x1b[37;2H\x1b[0m\x1b[m\x1b[K\x1b[38;24H\x1b[0m\x1b[m\x1b[K\x1b[39;2H\x1b[0m\x1b[m\x1b[K\x1b
+=================================
+
+
+
+failures:
+    verifier_settled_only_the_controller_changes_a_session_mode
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 12.70s
+
+[1m[31merror[0m[1m:[0m test failed, to rerun pass `-p tui-pty-e2e --test host_attach`

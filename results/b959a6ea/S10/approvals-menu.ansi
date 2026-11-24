@@ -1,0 +1,35 @@
+[1m Nori host  [0m[38;5;2m[49mCONTROLLING[39m
+ [2mclaude-code · [0;1m[39m[49mnew session[0;2m[39m[49m · app · ready · Approvals: Agent[0m[39m[49m
+
+ [2mReady. Send a prompt to begin.[0m[39m[49m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1m Approvals for this session
+[0;2m[39m[49m New sessions start in the host default. The sandbox is set separately.
+
+[0m[39m[49m   Ask                    [2mAsk before every edit and command.
+[0;1m[38;5;6m[49m › Agent (current)        [0;2m[39m[49mThe agent asks when it judges it needs to.
+[0m[39m[49m   Approve all            [2mNori approves every permission request.
+
+ ↑↓ move · enter choose · esc close
+
+[0m[39m[49m
+

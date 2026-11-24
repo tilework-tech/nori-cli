@@ -1,0 +1,50 @@
+agent = "claude-code"
+approval_policy = "on-request"
+sandbox_mode = "read-only"
+host = { default_mode = "ask" }
+notice = { approval_presets_migrated = true }
+[projects."/tmp/nori-host-tui-acceptance/S15b/roots/alpha/app"]
+trust_level = "trusted"
+[projects."/tmp/nori-host-tui-acceptance/S15b/roots/beta/app"]
+trust_level = "trusted"
+[projects."/tmp/nori-host-tui-acceptance/S15b/roots/laptop/app"]
+trust_level = "trusted"
+
+[[agents]]
+name = "Lantern Claude"
+slug = "claude-code"
+[agents.distribution.local]
+command = "/usr/bin/python3"
+args = ["-I", "/tmp/nori-host-tui-acceptance/bin/lantern_adapter.py"]
+[agents.distribution.local.env]
+LANTERN_NAME = "claude-code"
+LANTERN_LEDGER = "/tmp/nori-host-tui-acceptance/S15b/ledger.jsonl"
+LANTERN_MODES = "auto,default,acceptEdits,plan"
+LANTERN_SAVED = "/tmp/nori-host-tui-acceptance/S15b/saved-sessions.json"
+LANTERN_CONTROL = "/tmp/nori-host-tui-acceptance/S15b/control"
+
+[[agents]]
+name = "Lantern Codex"
+slug = "codex"
+[agents.distribution.local]
+command = "/usr/bin/python3"
+args = ["-I", "/tmp/nori-host-tui-acceptance/bin/lantern_adapter.py"]
+[agents.distribution.local.env]
+LANTERN_NAME = "codex"
+LANTERN_LEDGER = "/tmp/nori-host-tui-acceptance/S15b/ledger.jsonl"
+LANTERN_MODES = "agent,read-only,workspace-write,agent-full-access"
+LANTERN_SAVED = "/tmp/nori-host-tui-acceptance/S15b/saved-sessions.json"
+LANTERN_CONTROL = "/tmp/nori-host-tui-acceptance/S15b/control"
+
+[[agents]]
+name = "Lantern Opencode"
+slug = "opencode"
+[agents.distribution.local]
+command = "/usr/bin/python3"
+args = ["-I", "/tmp/nori-host-tui-acceptance/bin/lantern_adapter.py"]
+[agents.distribution.local.env]
+LANTERN_NAME = "opencode"
+LANTERN_LEDGER = "/tmp/nori-host-tui-acceptance/S15b/ledger.jsonl"
+LANTERN_MODES = "build,plan"
+LANTERN_SAVED = "/tmp/nori-host-tui-acceptance/S15b/saved-sessions.json"
+LANTERN_CONTROL = "/tmp/nori-host-tui-acceptance/S15b/control"

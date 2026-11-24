@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · mock:stream-until-cancel · project · working
+
+ › You
+ mock:stream-until-cancel
+
+ D2 host agent
+ responseStreaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+ reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+ Streaming...
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/
+
+  /agent            not available in nori attach yet
+  /model            not available in nori attach yet
+  /config           not available in nori attach yet
+  /approvals        not available in nori attach yet
+  /settings         not available in nori attach yet
+  /vim              not available in nori attach yet
+  /goal             not available on this host yet
+  /new              start a new chat during a conversation
+  /sessions         list sessions and move between them
+  /delegate         delegate a task: /delegate <agent> <task>

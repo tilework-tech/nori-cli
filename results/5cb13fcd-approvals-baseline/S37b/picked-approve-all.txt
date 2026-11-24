@@ -1,0 +1,36 @@
+• Lantern Claude options: Mode=auto (/config to change)
+
+╭───────────────────────────────────────────────╮
+│ Goodbye! Thanks for using Nori.               │
+│                                               │
+│ Session: ac015e7a-383f-4ab1-898d-9ff3b39e9387 │
+│                                               │
+│ Messages      User: 0  Assistant: 0  Total: 0 │
+│ Tool Calls    (none)                          │
+│                                               │
+│ Skills Used                                   │
+│   (none)                                      │
+│                                               │
+│ Subagents Used                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance/S37b/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+  Select approval mode
+  Choose what Nori can do without approval
+
+   1. Read Only
+      Requires approval to edit files and run commands.
+   2. Agent (current)
+      Read and edit files, and run commands.
+  ▏3. Agent (full access)                                                                                            ▕
+  ▏   Can edit files outside this workspace and run commands with network access. Exercise caution when using.       ▕
+  ↑↓/j/k move  enter select  esc close
+

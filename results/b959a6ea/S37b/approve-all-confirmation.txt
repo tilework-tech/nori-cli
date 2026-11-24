@@ -1,0 +1,36 @@
+• Lantern Claude options: Mode=auto (/config to change)
+
+╭───────────────────────────────────────────────╮
+│ Goodbye! Thanks for using Nori.               │
+│                                               │
+│ Session: fb76e699-fd6e-4336-b2f0-7c4e685b0f1e │
+│                                               │
+│ Messages      User: 0  Assistant: 0  Total: 0 │
+│ Tool Calls    (none)                          │
+│                                               │
+│ Skills Used                                   │
+│   (none)                                      │
+│                                               │
+│ Subagents Used                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance/S37b/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+  Approve every request in this session?
+  Nori will say yes to every edit, command and tool call the agent asks about. The sandbox setting still applies;
+  nothing else stops a harmful request.
+
+› 1. Approve all                           Only for this session
+  2. Approve all, and stop asking me this  Skip this question next time
+  3. Go back                               Keep the current mode
+
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back
+
+

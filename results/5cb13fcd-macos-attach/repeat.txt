@@ -1,0 +1,70 @@
+round 1: VERIFIER step 1 turn-running: cancels=0 row="90173ffd-5720-4497-8513-b45d2d63974b  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpsl7IeG/project  mock:stream-until-cancel"
+round 1: VERIFIER step 2 menu-open: cancels=0 row="90173ffd-5720-4497-8513-b45d2d63974b  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpsl7IeG/project  mock:stream-until-cancel"
+round 1: test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+round 1: VERIFIER step 3 first-escape: cancels=0 row="90173ffd-5720-4497-8513-b45d2d63974b  mock-model        working               4s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpsl7IeG/project  mock:stream-until-cancel"
+round 1: VERIFIER step 4 second-escape: cancels=1 row="90173ffd-5720-4497-8513-b45d2d63974b  mock-model        ready                 6s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpsl7IeG/project  mock:stream-until-cancel"
+round 1: test verifier_attach_escape_trace ... ok
+round 1: test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok
+round 2: VERIFIER step 1 turn-running: cancels=0 row="dc662536-a02f-452e-ab3f-c91f261e32ba  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmp0j5qlt/project  mock:stream-until-cancel"
+round 2: VERIFIER step 2 menu-open: cancels=0 row="dc662536-a02f-452e-ab3f-c91f261e32ba  mock-model        working               3s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmp0j5qlt/project  mock:stream-until-cancel"
+round 2: VERIFIER step 3 first-escape: cancels=0 row="dc662536-a02f-452e-ab3f-c91f261e32ba  mock-model        working               4s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmp0j5qlt/project  mock:stream-until-cancel"
+round 2: test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+round 2: VERIFIER step 4 second-escape: cancels=1 row="dc662536-a02f-452e-ab3f-c91f261e32ba  mock-model        ready                 6s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmp0j5qlt/project  mock:stream-until-cancel"
+round 2: test verifier_attach_escape_trace ... ok
+round 2: test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok
+round 3: VERIFIER step 1 turn-running: cancels=0 row="a5d2ae3c-da47-44fe-b2f0-276afe07a706  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpFw3jft/project  mock:stream-until-cancel"
+round 3: VERIFIER step 2 menu-open: cancels=0 row="a5d2ae3c-da47-44fe-b2f0-276afe07a706  mock-model        working               3s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpFw3jft/project  mock:stream-until-cancel"
+round 3: VERIFIER step 3 first-escape: cancels=0 row="a5d2ae3c-da47-44fe-b2f0-276afe07a706  mock-model        working               5s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpFw3jft/project  mock:stream-until-cancel"
+round 3: test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+round 3: VERIFIER step 4 second-escape: cancels=1 row="a5d2ae3c-da47-44fe-b2f0-276afe07a706  mock-model        ready                 7s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpFw3jft/project  mock:stream-until-cancel"
+round 3: test verifier_attach_escape_trace ... ok
+round 3: test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok
+round 4: VERIFIER step 1 turn-running: cancels=0 row="bead5d94-ae02-4e36-8518-ac580886f47a  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpE5Qx04/project  mock:stream-until-cancel"
+round 4: VERIFIER step 2 menu-open: cancels=0 row="bead5d94-ae02-4e36-8518-ac580886f47a  mock-model        working               3s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpE5Qx04/project  mock:stream-until-cancel"
+round 4: test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+round 4: VERIFIER step 3 first-escape: cancels=0 row="bead5d94-ae02-4e36-8518-ac580886f47a  mock-model        working               4s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpE5Qx04/project  mock:stream-until-cancel"
+round 4: VERIFIER step 4 second-escape: cancels=1 row="bead5d94-ae02-4e36-8518-ac580886f47a  mock-model        ready                 6s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpE5Qx04/project  mock:stream-until-cancel"
+round 4: test verifier_attach_escape_trace ... ok
+round 4: test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok
+round 5: VERIFIER step 1 turn-running: cancels=0 row="cec99202-fbae-4031-9fd1-6e3d4eee2cee  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpl9tyVi/project  mock:stream-until-cancel"
+round 5: VERIFIER step 2 menu-open: cancels=0 row="cec99202-fbae-4031-9fd1-6e3d4eee2cee  mock-model        working               3s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpl9tyVi/project  mock:stream-until-cancel"
+round 5: VERIFIER step 3 first-escape: cancels=0 row="cec99202-fbae-4031-9fd1-6e3d4eee2cee  mock-model        working               4s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpl9tyVi/project  mock:stream-until-cancel"
+round 5: test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+round 5: VERIFIER step 4 second-escape: cancels=1 row="cec99202-fbae-4031-9fd1-6e3d4eee2cee  mock-model        ready                 6s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpl9tyVi/project  mock:stream-until-cancel"
+round 5: test verifier_attach_escape_trace ... ok
+round 5: test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok
+round 6: VERIFIER step 1 turn-running: cancels=0 row="16de800c-597c-40d8-b66a-a7692d8a8af9  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpp1wixs/project  mock:stream-until-cancel"
+round 6: VERIFIER step 2 menu-open: cancels=0 row="16de800c-597c-40d8-b66a-a7692d8a8af9  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpp1wixs/project  mock:stream-until-cancel"
+round 6: VERIFIER step 3 first-escape: cancels=0 row="16de800c-597c-40d8-b66a-a7692d8a8af9  mock-model        working               4s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpp1wixs/project  mock:stream-until-cancel"
+round 6: test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+round 6: VERIFIER step 4 second-escape: cancels=1 row="16de800c-597c-40d8-b66a-a7692d8a8af9  mock-model        ready                 7s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpp1wixs/project  mock:stream-until-cancel"
+round 6: test verifier_attach_escape_trace ... ok
+round 6: test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok
+round 7: VERIFIER step 1 turn-running: cancels=0 row="da38afb6-084a-4a4d-9854-d231183bad6c  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpVscCmD/project  mock:stream-until-cancel"
+round 7: VERIFIER step 2 menu-open: cancels=0 row="da38afb6-084a-4a4d-9854-d231183bad6c  mock-model        working               3s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpVscCmD/project  mock:stream-until-cancel"
+round 7: test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+round 7: VERIFIER step 3 first-escape: cancels=0 row="da38afb6-084a-4a4d-9854-d231183bad6c  mock-model        working               5s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpVscCmD/project  mock:stream-until-cancel"
+round 7: VERIFIER step 4 second-escape: cancels=1 row="da38afb6-084a-4a4d-9854-d231183bad6c  mock-model        ready                 7s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpVscCmD/project  mock:stream-until-cancel"
+round 7: test verifier_attach_escape_trace ... ok
+round 7: test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok
+round 8: VERIFIER step 1 turn-running: cancels=0 row="206c6f9f-670c-4025-a920-77d8c72e38f6  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmp46zQYf/project  mock:stream-until-cancel"
+round 8: VERIFIER step 2 menu-open: cancels=0 row="206c6f9f-670c-4025-a920-77d8c72e38f6  mock-model        working               3s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmp46zQYf/project  mock:stream-until-cancel"
+round 8: test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+round 8: VERIFIER step 3 first-escape: cancels=0 row="206c6f9f-670c-4025-a920-77d8c72e38f6  mock-model        working               5s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmp46zQYf/project  mock:stream-until-cancel"
+round 8: VERIFIER step 4 second-escape: cancels=1 row="206c6f9f-670c-4025-a920-77d8c72e38f6  mock-model        ready                 7s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmp46zQYf/project  mock:stream-until-cancel"
+round 8: test verifier_attach_escape_trace ... ok
+round 8: test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok
+round 9: VERIFIER step 1 turn-running: cancels=0 row="9ac53d2d-5e76-419b-b193-68e2186be230  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpeKV4L0/project  mock:stream-until-cancel"
+round 9: VERIFIER step 2 menu-open: cancels=0 row="9ac53d2d-5e76-419b-b193-68e2186be230  mock-model        working               3s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpeKV4L0/project  mock:stream-until-cancel"
+round 9: VERIFIER step 3 first-escape: cancels=0 row="9ac53d2d-5e76-419b-b193-68e2186be230  mock-model        working               4s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpeKV4L0/project  mock:stream-until-cancel"
+round 9: test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+round 9: VERIFIER step 4 second-escape: cancels=1 row="9ac53d2d-5e76-419b-b193-68e2186be230  mock-model        ready                 7s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpeKV4L0/project  mock:stream-until-cancel"
+round 9: test verifier_attach_escape_trace ... ok
+round 9: test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok
+round 10: VERIFIER step 1 turn-running: cancels=0 row="93cb416c-9d28-42b3-a7ed-8664198ef0e6  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpdigy4E/project  mock:stream-until-cancel"
+round 10: VERIFIER step 2 menu-open: cancels=0 row="93cb416c-9d28-42b3-a7ed-8664198ef0e6  mock-model        working               3s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpdigy4E/project  mock:stream-until-cancel"
+round 10: VERIFIER step 3 first-escape: cancels=0 row="93cb416c-9d28-42b3-a7ed-8664198ef0e6  mock-model        working               4s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpdigy4E/project  mock:stream-until-cancel"
+round 10: test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+round 10: VERIFIER step 4 second-escape: cancels=1 row="93cb416c-9d28-42b3-a7ed-8664198ef0e6  mock-model        ready                 6s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpdigy4E/project  mock:stream-until-cancel"
+round 10: test verifier_attach_escape_trace ... ok
+round 10: test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok

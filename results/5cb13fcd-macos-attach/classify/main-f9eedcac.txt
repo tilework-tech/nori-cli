@@ -1,0 +1,15 @@
+round 1: test attached_busy_enter_reports_fallback_and_tab_explicitly_queues ... FAILED
+round 1: test two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt ... ok
+round 1: test watcher_cannot_answer_a_permission_request_but_controller_can ... FAILED
+round 2: test attached_busy_enter_reports_fallback_and_tab_explicitly_queues ... FAILED
+round 2: test two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt ... FAILED
+round 2: test watcher_cannot_answer_a_permission_request_but_controller_can ... FAILED
+round 3: test attached_busy_enter_reports_fallback_and_tab_explicitly_queues ... FAILED
+round 3: test two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt ... ok
+round 3: test watcher_cannot_answer_a_permission_request_but_controller_can ... FAILED
+round 4: test attached_busy_enter_reports_fallback_and_tab_explicitly_queues ... FAILED
+round 4: test two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt ... FAILED
+round 4: test watcher_cannot_answer_a_permission_request_but_controller_can ... FAILED
+round 5: test attached_busy_enter_reports_fallback_and_tab_explicitly_queues ... FAILED
+round 5: test two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt ... ok
+round 5: test watcher_cannot_answer_a_permission_request_but_controller_can ... FAILED

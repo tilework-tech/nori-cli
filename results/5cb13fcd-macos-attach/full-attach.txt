@@ -1,0 +1,316 @@
+[1m[32m    Finished[0m `ci-test` profile [unoptimized + debuginfo] target(s) in 0.09s
+[1m[32m     Running[0m tests/host_attach.rs (target/aarch64-apple-darwin/ci-test/deps/host_attach-28817338eb1b3fe3)
+
+running 17 tests
+test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+test attached_slash_menu_greys_what_this_terminal_cannot_run_and_refuses_it_with_the_same_reason ... ok
+test attached_enter_delivers_to_the_original_turn_then_tab_drains_once ... ok
+test cancel_in_an_attached_terminal_ends_the_running_turn ... ok
+test detach_and_named_reattach_keep_the_session_history_and_host_alive ... ok
+test delegated_child_in_host_list_preserves_metadata_columns_and_can_be_opened ... ok
+test host_starts_without_a_terminal_session_and_stops_explicitly ... ok
+
+thread 'attached_busy_enter_reports_fallback_and_tab_explicitly_queues' panicked at tui-pty-e2e/tests/host_attach.rs:1023:10:
+called `Result::unwrap()` on an `Err` value: "waiting for \"Steering unavailable\": Timed out after 10.026297167s (182 polls, 18.686324417s since spawn, 339480 PTY bytes, first output Some(58.360958ms), pid Some(11760), status Ok(None))"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+=== TUI Screen State at Panic ===
+     Nori host  CONTROLLING
+     mock-model · mock:stream-until-cancel · project · working
+    
+     
+     D2 host agent
+     responseStreaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+     reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+     Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+     ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+     g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+     ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+     aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+     reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+     Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+     ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+     g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+     ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+     aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+     reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+     Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+     ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+     g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+     ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+     aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+     reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+     Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+     ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+     g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+     ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+     aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+     reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+     Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+     ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+     g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+     ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+    
+     
+    › Send a prompt
+    
+       alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PTY output tail (escaped): H\x1b[0m\x1b[m\x1b[K\x1b[17;120H\x1b[0m\x1b[m\x1b[K\x1b[18;120H\x1b[0m\x1b[m\x1b[K\x1b[19;120H\x1b[0m\x1b[m\x1b[K\x1b[20;120H\x1b[0m\x1b[m\x1b[K\x1b[21;120H\x1b[0m\x1b[m\x1b[K\x1b[22;120H\x1b[0m\x1b[m\x1b[K\x1b[23;120H\x1b[0m\x1b[m\x1b[K\x1b[24;120H\x1b[0m\x1b[m\x1b[K\x1b[25;120H\x1b[0m\x1b[m\x1b[K\x1b[26;120H\x1b[0m\x1b[m\x1b[K\x1b[27;120H\x1b[0m\x1b[m\x1b[K\x1b[28;120H\x1b[0m\x1b[m\x1b[K\x1b[29;120H\x1b[0m\x1b[m\x1b[K\x1b[30;120H\x1b[0m\x1b[m\x1b[K\x1b[31;120H\x1b[0m\x1b[m\x1b[K\x1b[32;120H\x1b[0m\x1b[m\x1b[K\x1b[33;120H\x1b[0m\x1b[m\x1b[K\x1b[34;120H\x1b[0m\x1b[m\x1b[K\x1b[35;116H\x1b[0m\x1b[m\x1b[K\x1b[36;2H\x1b[0m\x1b[m\x1b[K\x1b[37;2H\x1b[0m\x1b[m\x1b[K\x1b[38;16H\x1b[0m\x1b[m\x1b[K\x1b[39;2H\x1b[0m\x1b[m\x1b[K\x1b[40;109H\x1b[0m\x1b[m\x1b[K\x1b[35;104HStreaming...\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;3H\x1b[?2026l
+=================================
+
+test attached_busy_enter_reports_fallback_and_tab_explicitly_queues ... FAILED
+test dropped_tcp_connection_shows_reconnecting_and_replays_missed_output_once ... ok
+test new_sessions_start_in_the_attaching_folder_or_a_tab_completed_one ... ok
+test same_port_host_restart_stops_reconnecting_and_explains_session_loss ... ok
+test host_list_truncates_tty_title_without_losing_piped_title ... ok
+VERIFIER step 1 turn-running: cancels=0 row="f153f684-35ec-4fb0-bf15-e0354f535250  mock-model        working               2s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpgFQiN3/project  mock:stream-until-cancel"
+VERIFIER step 2 menu-open: cancels=0 row="f153f684-35ec-4fb0-bf15-e0354f535250  mock-model        working               3s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpgFQiN3/project  mock:stream-until-cancel"
+VERIFIER step 3 first-escape: cancels=0 row="f153f684-35ec-4fb0-bf15-e0354f535250  mock-model        working               4s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpgFQiN3/project  mock:stream-until-cancel"
+VERIFIER step 4 second-escape: cancels=1 row="f153f684-35ec-4fb0-bf15-e0354f535250  mock-model        ready                 7s  /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmpgFQiN3/project  mock:stream-until-cancel"
+test verifier_attach_escape_trace ... ok
+
+thread 'two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt' panicked at tui-pty-e2e/tests/host_attach.rs:303:9:
+watcher action must show an error:
+ Nori host  WATCHING · read-only · alt+t take control
+ mock-model · D2 shared session · project · ready
+
+ › You
+ D2 shared session
+
+ D2 host agent response
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› D2 watcher must not ru
+ 
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+
+=== TUI Screen State at Panic ===
+     Nori host  WATCHING · read-only · alt+t take control
+     mock-model · D2 shared session · project · ready
+    
+     › You
+     D2 shared session
+    
+     D2 host agent response
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    › D2 watcher must not ru
+     
+    
+       alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PTY output tail (escaped): [K\x1b[13;2H\x1b[0m\x1b[m\x1b[K\x1b[14;2H\x1b[0m\x1b[m\x1b[K\x1b[15;2H\x1b[0m\x1b[m\x1b[K\x1b[16;2H\x1b[0m\x1b[m\x1b[K\x1b[17;2H\x1b[0m\x1b[m\x1b[K\x1b[18;2H\x1b[0m\x1b[m\x1b[K\x1b[19;2H\x1b[0m\x1b[m\x1b[K\x1b[20;2H\x1b[0m\x1b[m\x1b[K\x1b[21;2H\x1b[0m\x1b[m\x1b[K\x1b[22;2H\x1b[0m\x1b[m\x1b[K\x1b[23;2H\x1b[0m\x1b[m\x1b[K\x1b[24;2H\x1b[0m\x1b[m\x1b[K\x1b[25;2H\x1b[0m\x1b[m\x1b[K\x1b[26;2H\x1b[0m\x1b[m\x1b[K\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;2H\x1b[0m\x1b[m\x1b[K\x1b[29;2H\x1b[0m\x1b[m\x1b[K\x1b[30;2H\x1b[0m\x1b[m\x1b[K\x1b[31;2H\x1b[0m\x1b[m\x1b[K\x1b[32;2H\x1b[0m\x1b[m\x1b[K\x1b[33;2H\x1b[0m\x1b[m\x1b[K\x1b[34;2H\x1b[0m\x1b[m\x1b[K\x1b[35;2H\x1b[0m\x1b[m\x1b[K\x1b[36;2H\x1b[0m\x1b[m\x1b[K\x1b[37;25H\x1b[0m\x1b[m\x1b[K\x1b[38;2H\x1b[0m\x1b[m\x1b[K\x1b[39;2H\x1b[0m\x1b[m\x1b[K\x1b[40;109H\x1b[0m\x1b[m\x1b[K\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;3H\x1b[?2026l
+=================================
+
+
+=== TUI Screen State at Panic ===
+     Nori host  CONTROLLING
+     mock-model · D2 shared session · project · ready
+    
+     › You
+     D2 shared session
+    
+     D2 host agent response
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+     
+    
+    
+    
+    
+    
+    
+    
+     
+    › Send a prompt
+    
+       alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PTY output tail (escaped): [m\x1b[K\x1b[7;24H\x1b[0m\x1b[m\x1b[K\x1b[8;2H\x1b[0m\x1b[m\x1b[K\x1b[9;2H\x1b[0m\x1b[m\x1b[K\x1b[10;2H\x1b[0m\x1b[m\x1b[K\x1b[11;2H\x1b[0m\x1b[m\x1b[K\x1b[12;2H\x1b[0m\x1b[m\x1b[K\x1b[13;2H\x1b[0m\x1b[m\x1b[K\x1b[14;2H\x1b[0m\x1b[m\x1b[K\x1b[15;2H\x1b[0m\x1b[m\x1b[K\x1b[16;2H\x1b[0m\x1b[m\x1b[K\x1b[17;2H\x1b[0m\x1b[m\x1b[K\x1b[18;2H\x1b[0m\x1b[m\x1b[K\x1b[19;2H\x1b[0m\x1b[m\x1b[K\x1b[20;2H\x1b[0m\x1b[m\x1b[K\x1b[21;2H\x1b[0m\x1b[m\x1b[K\x1b[22;2H\x1b[0m\x1b[m\x1b[K\x1b[23;2H\x1b[0m\x1b[m\x1b[K\x1b[24;2H\x1b[0m\x1b[m\x1b[K\x1b[25;2H\x1b[0m\x1b[m\x1b[K\x1b[26;2H\x1b[0m\x1b[m\x1b[K\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;2H\x1b[0m\x1b[m\x1b[K\x1b[29;2H\x1b[0m\x1b[m\x1b[K\x1b[30;2H\x1b[0m\x1b[m\x1b[K\x1b[31;2H\x1b[0m\x1b[m\x1b[K\x1b[32;2H\x1b[0m\x1b[m\x1b[K\x1b[33;2H\x1b[0m\x1b[m\x1b[K\x1b[34;2H\x1b[0m\x1b[m\x1b[K\x1b[35;2H\x1b[0m\x1b[m\x1b[K\x1b[36;2H\x1b[0m\x1b[m\x1b[
+=================================
+
+test two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt ... FAILED
+test watcher_cannot_delegate_a_child ... ok
+test silently_blackholed_connection_shows_reconnecting_and_replays_missed_output_once ... ok
+
+thread 'watcher_cannot_answer_a_permission_request_but_controller_can' panicked at tui-pty-e2e/tests/host_attach.rs:479:10:
+called `Result::unwrap()` on an `Err` value: "waiting for \"Permission granted with option: allow\": Timed out after 10.000023709s (176 polls, 17.9878995s since spawn, 132396 PTY bytes, first output Some(62.459625ms), pid Some(12665), status Ok(None))"
+
+=== TUI Screen State at Panic ===
+     Nori host  WATCHING · read-only · alt+t take control
+     mock-model · D2 approval session · project · waiting on you
+    
+     › You
+     D2 approval session
+    
+     D2 host agent response
+    
+     › You
+     mock:request-permission:echo D2-permission
+    
+     D2 host agent response
+    
+     Read-only: take control with alt+t before sending prompts or permission answers.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+     Permission · Execute shell command
+     › 1  Allow
+       2  Reject
+     Watching · read-only · alt+t to take control
+    
+    
+     Read-only: take control with alt+t before sending prom
+    
+     
+PTY output tail (escaped): [m\x1b[K\x1b[31;12H\x1b[0m\x1b[m\x1b[K\x1b[32;13H\x1b[0m\x1b[m\x1b[K\x1b[33;46H\x1b[0m\x1b[m\x1b[K\x1b[34;2H\x1b[0m\x1b[m\x1b[K\x1b[35;2H\x1b[0m\x1b[m\x1b[K\x1b[36;82H\x1b[0m\x1b[m\x1b[K\x1b[37;2H\x1b[0m\x1b[m\x1b[K\x1b[38;2H\x1b[0m\x1b[m\x1b[K\x1b[39;2H\x1b[0m\x1b[m\x1b[K\x1b[40;2H\x1b[0m\x1b[m\x1b[K\x1b[14;2H\x1b[;mRead-only: take control with alt+t before sending prompts or permission answers.\x1b[30;2H\x1b[1m\x1b[;mPermission \xc2\xb7 Execute shell command\x1b[31;2H\x1b[22m\x1b[;m\xe2\x80\xba 1  \x1b[;mAllow\x1b[32;2H\x1b[;m \x1b[32;4H2\x1b[32;7H\x1b[;mReject\x1b[33;2H\x1b[;mWatching \xc2\xb7 read-only \xc2\xb7 alt+t to take control\x1b[36;1H\x1b[;m Read-only: take control with alt+t before sending prom
+=================================
+
+
+=== TUI Screen State at Panic ===
+     Nori host  CONTROLLING
+     mock-model · D2 approval session · project · waiting on you
+    
+     › You
+     D2 approval session
+    
+     D2 host agent response
+    
+     › You
+     mock:request-permission:echo D2-permission
+    
+     D2 host agent response
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+     
+    
+     Permission · Execute shell command
+     › 1  Allow
+       2  Reject
+     ↑↓ choose · enter answer · number selects · esc reject · ctrl+c cancel
+    
+    
+     
+     
+PTY output tail (escaped): 0m\x1b[m\x1b[K\x1b[13;2H\x1b[0m\x1b[m\x1b[K\x1b[14;2H\x1b[0m\x1b[m\x1b[K\x1b[15;2H\x1b[0m\x1b[m\x1b[K\x1b[16;2H\x1b[0m\x1b[m\x1b[K\x1b[17;2H\x1b[0m\x1b[m\x1b[K\x1b[18;2H\x1b[0m\x1b[m\x1b[K\x1b[19;2H\x1b[0m\x1b[m\x1b[K\x1b[20;2H\x1b[0m\x1b[m\x1b[K\x1b[21;2H\x1b[0m\x1b[m\x1b[K\x1b[22;2H\x1b[0m\x1b[m\x1b[K\x1b[23;2H\x1b[0m\x1b[m\x1b[K\x1b[24;2H\x1b[0m\x1b[m\x1b[K\x1b[25;2H\x1b[0m\x1b[m\x1b[K\x1b[26;2H\x1b[0m\x1b[m\x1b[K\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;2H\x1b[0m\x1b[m\x1b[K\x1b[29;2H\x1b[0m\x1b[m\x1b[K\x1b[30;2H\x1b[0m\x1b[m\x1b[K\x1b[31;36H\x1b[0m\x1b[m\x1b[K\x1b[32;12H\x1b[0m\x1b[m\x1b[K\x1b[33;13H\x1b[0m\x1b[m\x1b[K\x1b[34;72H\x1b[0m\x1b[m\x1b[K\x1b[35;2H\x1b[0m\x1b[m\x1b[K\x1b[36;2H\x1b[0m\x1b[m\x1b[K\x1b[37;2H\x1b[0m\x1b[m\x1b[K\x1b[38;2H\x1b[0m\x1b[m\x1b[K\x1b[39;2H\x1b[0m\x1b[m\x1b[K\x1b[40;2H\x1b[0m\x1b[m\x1b[K\x1b[m\x1b[m\x1b[0m\x1b[?25l\x1b[?2026l
+=================================
+
+test watcher_cannot_answer_a_permission_request_but_controller_can ... FAILED
+
+failures:
+
+failures:
+    attached_busy_enter_reports_fallback_and_tab_explicitly_queues
+    two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt
+    watcher_cannot_answer_a_permission_request_but_controller_can
+
+test result: FAILED. 14 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 44.98s
+
+[1m[31merror[0m[1m:[0m test failed, to rerun pass `-p tui-pty-e2e --test host_attach`
+[1m[32m     Running[0m tests/slash_menu_escape.rs (target/aarch64-apple-darwin/ci-test/deps/slash_menu_escape-066b17aa39d1a8e6)
+
+running 1 test
+test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.27s
+
+[1m[31merror[0m[1m:[0m 1 target failed:
+    `-p tui-pty-e2e --test host_attach`

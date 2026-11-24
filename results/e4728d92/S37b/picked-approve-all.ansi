@@ -1,0 +1,35 @@
+[2m• [0m[39m[49mLantern Claude options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+╭───────────────────────────────────────────────╮
+│ [0;1m[38;5;2m[49mGoodbye! [0;2m[39m[49mThanks for using Nori.               │
+│                                               │
+│ Session: [0m[39m[49me345f685-dd0b-41a2-98b7-adb1d99be192[2m │
+│                                               │
+│ [0;1m[39m[49mMessages[0;2m[39m[49m      User: 0  Assistant: 0  Total: 0 │
+│ [0;1m[39m[49mTool Calls[0m[39m[49m    [2m(none)                          │
+│                                               │
+│ [0;1m[39m[49mSkills Used[0;2m[39m[49m                                   │
+│   (none)                                      │
+│                                               │
+│ [0;1m[39m[49mSubagents Used[0;2m[39m[49m                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+[0m[39m[49mshell$ nori --skip-trust-directory
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/nori-host-tui-acceptance-l1/S37b/roots/alpha/app[2m · [0m[39m[49mAgent approvals
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude
+
+[2m[39m• [0m[39m[49mLantern Claude options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+[0m[39m[49m                                                                                                             [2m[ default ]
+[0;1m[39m[49m›[0m[39m[49m [2m? for shortcuts
+
+[0m[39m[49m  [38;5;5mApprovals: Approve all
+
+
+
+
+
+
+

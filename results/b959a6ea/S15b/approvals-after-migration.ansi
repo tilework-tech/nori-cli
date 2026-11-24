@@ -1,0 +1,35 @@
+shell$ nori --skip-trust-directory
+[2m• [0m[39m[49mApproval preset Read Only is now `[host] default_mode = "ask"`: new sessions start in Ask. sandbox_mode stays "read-
+only"; /approvals no longer changes it.
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/nori-host-tui-acceptance/S15b/roots/alpha/app[2m · [0m[39m[49mAgent approvals
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude
+
+[2m[39m• [0m[39m[49mLantern Claude options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+
+[0m[39m[49m  [1mApprovals for this session
+[0m[39m[49m  [38;5;8mNew sessions start in the host default. The sandbox is set separately.
+
+[39m  [38;5;2m▏1.[39m Ask (current)                                                                                                  [38;5;2m▕
+[39m  [38;5;2m▏[39m   [38;5;8mAsk before every edit and command.                                                                             [38;5;2m▕
+[39m   2. Agent
+      [38;5;8mThe agent asks when it judges it needs to.
+[39m   3. Approve all
+      [38;5;8mNori approves every permission request.
+[39m  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mselect  [38;5;2mesc[39m [38;5;8mclose
+
+
+
+
+
+
+
+
+
+
+
+
+
+

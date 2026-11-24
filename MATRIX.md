@@ -298,3 +298,25 @@ run 45379653626 (`verify/pr-750-32471d77-native-startup`, checkout pinned to `32
 | Native exact head (run 45406511352) | full suites pass; host suites plus `slash_menu_escape` × 10 rounds 200/200; `host_attach` is Linux-only |
 | Linux | CI 45399358573 passed; local 5 rounds × 27, all passing |
 | Verdict | pass. See `results/5cb13fcd/VERDICT.md` |
+
+## #751 `5cb13fcd`: attached-terminal Escape on native macOS, 2026-11-24
+
+| Check | Result |
+|---|---|
+| `host_attach` ungated on macOS (run 45411751044): attach Escape test plus a verifier trace (screen, `nori host ls`, adapter cancel count per step) | pass; first Escape: menu closed, `/` kept, turn working, 0 cancels; second Escape: ready, 1 cancel |
+| Escape tests × 10 rounds (attach, trace, plain) | 30/30 |
+| Other ungated `host_attach` tests on macOS | 3 fail at `5cb13fcd` and at `main f9eedcac` at the same rates (run 45415081456): inherited, cause not traced |
+| Verdict | the macOS coverage gap is closed for Escape; the #751 pass stands. See `results/5cb13fcd-macos-attach/VERDICT.md` |
+
+## S37 and #752 per-session approvals, 2026-11-24
+
+S37a–d add to S10/S12/S13/S15: two sessions with three terminals and an Alt+T
+handoff, with host state read by an observer (`session/load` modes) and compared
+with every terminal's `Approvals:` label; repeat launches of a current config;
+plain `nori` with two sessions; Approve all enforced by the host.
+
+| Head | Approvals scenarios (S10, S12, S13, S15a–c, S37a–d) | Full matrix | Verdict |
+|---|---|---|---|
+| #751 `5cb13fcd` (baseline) | 13/37 (several passes vacuous: no attach menu, no migration) | — | — |
+| #752 `e4728d92` | 42/43 | 510/531; 468/489 shared vs 456 at `c31726f7`, no regressions | — |
+| #752 `b959a6ea` | 42/43 (the failure is decision 2, Ask on agents without Ask) | — | changes requested: plain `nori` mode badge and startup card disagree with the host. See `results/b959a6ea/VERDICT.md` |

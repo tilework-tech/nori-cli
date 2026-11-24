@@ -1,0 +1,3 @@
+test attached_busy_enter_reports_fallback_and_tab_explicitly_queues ... FAILED
+test two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt ... FAILED
+test watcher_cannot_answer_a_permission_request_but_controller_can ... FAILED
