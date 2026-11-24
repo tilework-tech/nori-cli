@@ -1,0 +1,35 @@
+  › Nori CLI v0.0.0
+
+  System       /tmp/proof757-harbor.jOWf · Approvals: Agent
+  Agent        Mock ACP · Mock Default Model · Medium
+
+• Resuming session with Mock ACP...
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• replay chunk 0
+
+
+› loaded user activity
+
+
+╭───────────────────────────────────────────────╮
+│ Goodbye! Thanks for using Nori.               │
+│                                               │
+│ Session: 99b7de03-0942-4931-8313-4245501c9b90 │
+│                                               │
+│ Messages      User: 0  Assistant: 0  Total: 0 │
+│ Tool Calls    (none)                          │
+│                                               │
+│ Skills Used                                   │
+│   (none)                                      │
+│                                               │
+│ Subagents Used                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+
+
+
+
+
+
