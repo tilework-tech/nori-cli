@@ -8,9 +8,9 @@ to change)
 › Analyze files
 
 • Exploring 3 reads
-  • Read app.rs
-  • Read config.rs
-  • Read main.rs
+  • Read src/app.rs
+  • Read src/config.rs
+  • Read src/main.rs
 
 ────────────────────────────────────────────────────────────────────────────────
 

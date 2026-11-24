@@ -1087,6 +1087,7 @@ mod tests {
                 raw_input: None,
                 raw_output: None,
                 owner_request_id: None,
+                details: Default::default(),
             }),
             options: vec![nori_protocol::acp::v1::PermissionOption::new(
                 nori_protocol::acp::v1::PermissionOptionId::new("allow-once"),

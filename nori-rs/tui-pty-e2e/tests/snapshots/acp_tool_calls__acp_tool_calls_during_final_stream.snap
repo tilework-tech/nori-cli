@@ -5,17 +5,17 @@ expression: normalize_for_input_snapshot(contents)
 › Analyze the codebase
 
 • Explored 2 reads
-  • Read file1.rs
-  • Read file2.rs
+  • Read src/file1.rs · 200 lines
+  • Read src/file2.rs · 150 lines
 
 ────────────────────────────────────────────────────────────────────────────────
 
 • Here is my analysis of the codebase.
 
 • Explored 2 reads · 1 search
-  • Read SKILL.md
+  • Read .claude/skills/using-skills/SKILL.md · 80 lines
   • Search undefined
-  • Read config.toml
+  • Read config.toml · 25 lines
 
 ────────────────────────────────────────────────────────────────────────────────
 

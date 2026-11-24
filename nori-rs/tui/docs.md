@@ -273,6 +273,25 @@ into display cells and friendly labels. These view models are allowed to be
 lossy and UI-specific; they are not fed back into the harness or exported from
 `nori-protocol`.
 
+`ClientEventNormalizer` ([`presentation/mod.rs`](src/presentation/mod.rs))
+keeps one stored `acp::ToolCall` per call ID and rebuilds a `ToolSnapshot` from
+it on every update. Two details of that store matter:
+
+- Update-level `_meta` is deep-merged into the stored call's `meta` (nested
+  objects merge, other values replace). The Claude adapter sends its post-tool
+  report (`_meta.claudeCode.toolResponse`) as a separate update after
+  `completed`, and the merge keeps it alive across later updates. A report that
+  arrives after the cell has been flushed to history is not applied.
+- `ToolSnapshot.details` (`ToolDetails`, omitted from serialization when empty)
+  is recomputed from the stored call on each update. It holds read line spans
+  and search hit counts drawn only from structured fields: observed values
+  from the Claude adapter's `toolResponse` (Read, Grep, and Glob shapes), an
+  integer `rawOutput.lines`, or OpenCode-style `rawOutput.metadata` counts;
+  and requested values from `rawInput` offset/limit or start/end lines and a
+  location line past the first. Observed values win over requested ones. No
+  Nori `_meta` key is involved. `rawOutput.lines` also still produces the
+  separate "Read N lines" output artifact.
+
 #### Picker and overlay-menu presentation
 
 Searchable pickers use two explicit interaction states instead of interpreting
@@ -615,7 +634,27 @@ summary with bold command names and arguments elided to `…`, and one `└` lin
 holding the last non-blank output line. Read-only Execute calls join `Read`,
 `Search`, and list-files calls in one `Explored` group with read/search/failed
 counts; edits show only their header. The full view shows the highlighted
-command, all output, every exploring step, and diffs. Snapshot routing, the
+command, all output, every exploring step, and diffs.
+
+Each exploring step names its path relative to the session working directory
+by anchored prefix stripping: the working directory itself shows as `.`, paths
+outside it stay absolute, and a search scoped to the working directory omits
+the ` in <dir>` suffix. A step may append a dim ` · <summary>` such as
+`lines 40–120 of 845`, `12 matches in 4 files`, `250+ files`, or `no matches`.
+A `+` marks a lower bound: a Glob or legacy Grep list cut at a limit, or a
+search that reported `timedOut`. A search that found nothing but stopped early
+shows `no matches (incomplete)`, never `no matches`. Claude Code's Grep report
+is read per `mode`: in `content` mode `numFiles` is always 0 and
+`numLines`/`totalLines` count output lines (context included), so the row
+shows no count unless `totalLines` is 0; in `count` mode the totals cover every
+result even when `appliedLimit` trims the list; in `files_with_matches` mode
+`totalFiles` is the exact count before the limit.
+The summary comes from the snapshot's typed `ToolDetails`
+([`tool_details.rs`](src/presentation/tool_details.rs)), never from output
+text or file IO, so servers that send no structured fields get the bare row.
+When the row plus summary would exceed the compact width the summary is
+dropped whole, so a count is never shown cut mid-number, and a read path too
+long for a compact row falls back to its file name. Snapshot routing, the
 pending/completed bookkeeping, and exploring-group lifetime are described in
 [EXEC_CELL_LIFECYCLE.md](src/chatwidget/EXEC_CELL_LIFECYCLE.md).
 

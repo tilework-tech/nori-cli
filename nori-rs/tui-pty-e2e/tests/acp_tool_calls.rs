@@ -85,7 +85,7 @@ fn test_acp_tool_call_rendered_in_tui() {
 
             // The tool call should display with the tool name
             assert!(
-                contents.contains("Explored") && contents.contains("Read config.toml"),
+                contents.contains("Explored") && contents.contains("Read /etc/config.toml"),
                 "Tool call should show tool name or 'Calling' prefix, got:\n{}",
                 contents
             );
