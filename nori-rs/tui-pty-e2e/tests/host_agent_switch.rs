@@ -14,7 +14,7 @@ fn open_birch_picker(tui: &mut TuiSession) {
     ask(tui, "/agent");
     tui.wait_for_text("Amber (current)", TIMEOUT).unwrap();
     tui.send_key(Key::Down).unwrap();
-    std::thread::sleep(PAUSE);
+    tui.settle(PAUSE);
     tui.send_key(Key::Enter).unwrap();
     tui.wait_for_text("saved-1", TIMEOUT).unwrap();
 }
@@ -24,7 +24,7 @@ fn switching_restores_a_saved_session_of_the_selected_agent() {
     let (home, mut tui) = terminal(&[]);
     open_birch_picker(&mut tui);
     tui.send_key(Key::Down).unwrap();
-    std::thread::sleep(PAUSE);
+    tui.settle(PAUSE);
     tui.send_key(Key::Enter).unwrap();
     tui.wait_for_text("saved input", TIMEOUT).unwrap();
     ask(&mut tui, "whoami");
@@ -63,7 +63,7 @@ fn a_refused_restore_keeps_the_current_session() {
     let (home, mut tui) = terminal(&["fixture-refuse-load"]);
     open_birch_picker(&mut tui);
     tui.send_key(Key::Down).unwrap();
-    std::thread::sleep(PAUSE);
+    tui.settle(PAUSE);
     tui.send_key(Key::Enter).unwrap();
     tui.wait_for_text("saved session unavailable", TIMEOUT)
         .unwrap();
