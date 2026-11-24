@@ -258,7 +258,7 @@ pub(super) fn compact_lines(model: &StatusViewModel, inner_width: usize) -> Vec<
 
     let mut system_parts = vec![location];
     if let Some(approval_mode) = &model.approval_mode_label {
-        system_parts.push(format!("{approval_mode} approvals"));
+        system_parts.push(format!("Approvals: {approval_mode}"));
     }
 
     let mut system_spans = Vec::new();

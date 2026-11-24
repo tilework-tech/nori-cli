@@ -62,7 +62,17 @@ pub enum NoriEvent {
     DelegationChanged(Delegation),
     /// The session's permission mode: sent once it starts and after every
     /// change, so each client can show the mode of the session it follows.
-    ApprovalModeChanged(ApprovalMode),
+    ApprovalModeChanged(SessionApprovalModes),
+}
+
+/// A session's permission mode and the modes its agent can honor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct SessionApprovalModes {
+    pub current: ApprovalMode,
+    /// The modes `session/set_mode` accepts for this session. Ask is left
+    /// out for an agent with no mode that asks before every edit and
+    /// command.
+    pub available: Vec<ApprovalMode>,
 }
 
 /// How a session answers its agent's permission requests.
@@ -75,6 +85,17 @@ pub enum ApprovalMode {
     Agent,
     /// Every request is approved without asking.
     ApproveAll,
+}
+
+impl ApprovalMode {
+    /// The name clients show for the mode.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Ask => "Ask",
+            Self::Agent => "Agent",
+            Self::ApproveAll => "Approve all",
+        }
+    }
 }
 
 /// Persistent and agent-side identities established for a harness session.

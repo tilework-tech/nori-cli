@@ -67,6 +67,9 @@ pub(super) struct SessionRow {
     /// The session's permission mode when the list was read.
     #[serde(default)]
     pub approval_mode: Option<nori_protocol::ApprovalMode>,
+    /// The modes the host says the session accepts, when the list read it.
+    #[serde(default)]
+    pub approval_modes: Option<Vec<nori_protocol::ApprovalMode>>,
 }
 
 pub(super) enum Part {
@@ -112,8 +115,9 @@ pub(super) struct Conversation {
     pub cwd: std::path::PathBuf,
     /// This terminal's `/close` of the session, shown once if refused.
     pub close_refusal: crate::close_refusal::CloseRefusal,
-    /// The permission mode the host last announced.
+    /// The permission mode the host last announced, and the modes it offers.
     pub approval_mode: Option<nori_protocol::ApprovalMode>,
+    pub available_modes: Option<Vec<nori_protocol::ApprovalMode>>,
     normalizer: ClientEventNormalizer,
     message_boundary: bool,
 }
@@ -508,7 +512,8 @@ impl AttachState {
                 }
             }
             SessionEvent::Nori(NoriEvent::ApprovalModeChanged(mode)) => {
-                conversation.approval_mode = Some(mode);
+                conversation.approval_mode = Some(mode.current);
+                conversation.available_modes = Some(mode.available);
             }
             SessionEvent::Nori(NoriEvent::SessionStarted(started)) => {
                 conversation.cwd = started.cwd

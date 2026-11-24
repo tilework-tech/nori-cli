@@ -739,7 +739,7 @@ include!("session_manager/recovery.rs");
 
 fn announced_mode(event: &SessionEvent) -> Option<nori_protocol::ApprovalMode> {
     match event {
-        SessionEvent::Nori(NoriEvent::ApprovalModeChanged(mode)) => Some(*mode),
+        SessionEvent::Nori(NoriEvent::ApprovalModeChanged(modes)) => Some(modes.current),
         _ => None,
     }
 }

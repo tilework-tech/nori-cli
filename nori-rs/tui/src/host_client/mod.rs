@@ -115,7 +115,11 @@ pub(crate) enum HostCall {
 impl HostCall {
     fn into_wire(self) -> (&'static str, Value) {
         match self {
-            Self::Initialize => ("initialize", json!({})),
+            // Hosts send `approval_mode_changed` only to clients that declare it.
+            Self::Initialize => (
+                "initialize",
+                json!({"capabilities":{"nori_sessions":{"approval_modes":true}}}),
+            ),
             Self::List => ("_nori/session/list", json!({})),
             Self::Subscribe { session_id, cursor } => (
                 "_nori/session/subscribe",

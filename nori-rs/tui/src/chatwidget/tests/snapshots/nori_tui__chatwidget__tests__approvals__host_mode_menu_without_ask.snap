@@ -1,0 +1,15 @@
+---
+source: tui/src/chatwidget/tests/approvals.rs
+assertion_line: 171
+expression: menu
+---
+  Approvals for this session
+  New sessions start in the host default. The sandbox is set separately.
+
+   1. Ask (not available)
+      Claude Code has no mode that asks before every edit and command.
+  ▏2. Agent (current)                                                                            ▕
+  ▏   The agent asks when it judges it needs to.                                                 ▕
+   3. Approve all
+      Nori approves every permission request.
+  ↑↓/j/k move  enter select  esc close

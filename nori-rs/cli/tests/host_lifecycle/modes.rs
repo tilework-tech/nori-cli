@@ -360,3 +360,104 @@ async fn a_changed_mode_and_model_survive_a_host_restart() {
         "approve-all"
     );
 }
+
+/// Session `id`'s envelopes from a `*` subscription, up to and including the
+/// first one `last` accepts.
+async fn envelopes_until(
+    client: &mut ManagedClient,
+    id: &str,
+    last: impl Fn(&Value) -> bool,
+) -> Vec<Value> {
+    let mut envelopes = Vec::new();
+    tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            let frame = client.recv().await.unwrap();
+            if frame["method"] != "_nori/session/event" || frame["params"]["conversation_id"] != id
+            {
+                continue;
+            }
+            let envelope = frame["params"].clone();
+            let done = last(&envelope);
+            envelopes.push(envelope);
+            if done {
+                return;
+            }
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("stopped after {envelopes:?}"));
+    envelopes
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn clients_that_do_not_declare_approval_modes_get_a_notice_with_the_same_seq() {
+    let host = configured_host(&[]);
+    let folder = TempDir::new().unwrap();
+    let mut old = tokio::task::block_in_place(|| host.observer());
+    let mut new = tokio::task::block_in_place(|| {
+        host.connect(json!({
+            "observe": true,
+            "capabilities": {"nori_sessions": {"approval_modes": true}},
+        }))
+    });
+    for client in [&mut old, &mut new] {
+        client
+            .request("_nori/session/subscribe", json!({"session_id": "*"}))
+            .await
+            .unwrap();
+    }
+    let (mut controller, id, _) = attached(&host, folder.path()).await;
+
+    controller
+        .call(
+            "session/set_mode",
+            json!({"sessionId": id, "modeId": "approve-all"}),
+        )
+        .await
+        .unwrap();
+
+    let new_envelopes = envelopes_until(&mut new, &id, |envelope| {
+        envelope["event"]["event"]["event_type"] == "approval_mode_changed"
+            && envelope["event"]["event"]["event"]["current"] == "approve-all"
+    })
+    .await;
+    let is_last_notice = |envelope: &Value| {
+        envelope["event"]["event"]["event"]["message"] == "Approvals: Approve all"
+    };
+    let old_envelopes = envelopes_until(&mut old, &id, is_last_notice).await;
+    let mut late = tokio::task::block_in_place(|| host.observer());
+    late.request("_nori/session/subscribe", json!({"session_id": "*"}))
+        .await
+        .unwrap();
+    let replayed = envelopes_until(&mut late, &id, is_last_notice).await;
+
+    let expected: Vec<Value> = new_envelopes
+        .iter()
+        .map(|envelope| {
+            let mut envelope = envelope.clone();
+            if envelope["event"]["event"]["event_type"] == "approval_mode_changed" {
+                let name = match envelope["event"]["event"]["event"]["current"].as_str() {
+                    Some("ask") => "Ask",
+                    Some("agent") => "Agent",
+                    Some("approve-all") => "Approve all",
+                    other => panic!("unexpected mode {other:?}"),
+                };
+                envelope["event"] = json!({"source": "nori", "event": {
+                    "event_type": "notice",
+                    "event": {"message": format!("Approvals: {name}")},
+                }});
+            }
+            envelope
+        })
+        .collect();
+    assert_ne!(expected, new_envelopes, "the new client saw no mode change");
+    assert_eq!(
+        new_envelopes
+            .iter()
+            .map(|envelope| envelope["seq"].as_i64().unwrap())
+            .collect::<Vec<_>>(),
+        (1..=new_envelopes.len() as i64).collect::<Vec<_>>()
+    );
+    assert_eq!(old_envelopes, expected);
+    assert_eq!(replayed, expected);
+}

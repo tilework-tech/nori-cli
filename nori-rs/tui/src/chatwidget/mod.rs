@@ -197,6 +197,8 @@ pub(crate) struct ChatWidget {
     managed_conversation_id: Option<nori_harness::ConversationId>,
     /// The permission mode the host last announced for this session.
     approval_mode: Option<nori_protocol::ApprovalMode>,
+    /// The modes the host says this session accepts; unknown until announced.
+    available_approval_modes: Option<Vec<nori_protocol::ApprovalMode>>,
     // True while /close awaits the agent's session/close response. Blocks
     // session-switching commands so the deferred NewSession can't clobber a
     // conversation the user switched to mid-close.

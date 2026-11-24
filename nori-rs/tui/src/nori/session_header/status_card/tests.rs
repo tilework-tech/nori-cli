@@ -239,7 +239,7 @@ fn compact_block_summarizes_location_and_approvals() {
         .expect("System row");
     assert_eq!(
         system,
-        "  System       /home/user/project · Agent approvals"
+        "  System       /home/user/project · Approvals: Agent"
     );
     assert!(
         !rendered.contains("senior-swe"),

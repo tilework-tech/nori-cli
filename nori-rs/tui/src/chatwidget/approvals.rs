@@ -13,10 +13,32 @@ impl ChatWidget {
             .notices
             .hide_full_access_warning
             .unwrap_or(false);
+        let unavailable_reason = format!(
+            "{} has no mode that asks before every edit and command.",
+            nori_harness::get_agent_display_name(&self.config.active_agent)
+        );
         let items = PermissionMode::ALL
             .into_iter()
             .map(|mode| {
                 let wire = nori_protocol::ApprovalMode::from(mode);
+                let offered = self
+                    .available_approval_modes
+                    .as_ref()
+                    .is_none_or(|available| available.contains(&wire));
+                if !offered {
+                    let reason = unavailable_reason.clone();
+                    return SelectionItem {
+                        name: format!("{} (not available)", mode.name()),
+                        description: Some(reason.clone()),
+                        actions: vec![Box::new(move |tx: &AppEventSender| {
+                            tx.send(AppEvent::HarnessActionFailed(format!(
+                                "/approvals: {reason}"
+                            )));
+                        }) as SelectionAction],
+                        dismiss_on_select: true,
+                        ..Default::default()
+                    };
+                }
                 let actions = if mode == PermissionMode::ApproveAll && warn_before_approve_all {
                     let session_id = session_id.clone();
                     vec![Box::new(move |tx: &AppEventSender| {

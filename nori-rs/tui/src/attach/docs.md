@@ -211,8 +211,11 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
   session-move bindings keep working. Losing control or selecting another
   session closes it. The identity line appends `· Approvals: <mode>` once a
   mode is known. Nothing here writes configuration: new sessions start in the
-  host default. A host refusal (for example `ask` on an agent that cannot ask)
-  arrives as an ordinary mutation error.
+  host default. The modes the host announces for the session
+  (`approval_mode_changed.available`, or the list row's `approval_modes`) are
+  the authority: a mode left out, such as Ask for an agent with no mode that
+  asks every time, shows as not available and is refused here without a
+  request. A host refusal still arrives as an ordinary mutation error.
 - Child permissions stay in the child's conversation. The configured
   `next_waiting_session` binding (Alt+Down by default) navigates there, even
   with a draft in the composer, as in the local TUI. With nothing waiting in

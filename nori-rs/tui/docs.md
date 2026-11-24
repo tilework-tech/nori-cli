@@ -430,8 +430,12 @@ the agent unchanged.
 Approve all, from `nori_harness::permission_mode`) for the session on screen
 ([`chatwidget/approvals.rs`](src/chatwidget/approvals.rs)). Choosing one sends
 `HostCall::SetMode` (`session/set_mode`) for the widget's host session over
-the owned-host pipe and reports a host error, such as Ask refused for an agent
-that cannot ask every time, as an error. A widget with no host session (a
+the owned-host pipe and reports a host error as an error. A mode the host
+leaves out of the session's announced `available` modes (Ask for an agent with
+no mode that asks every time) is listed as not available, with the reason, and
+choosing it sends nothing. The footer's agent-mode badge is reread when the host
+announces a mode, because the host moves the agent's own mode without the agent
+announcing it, and the startup card shows only the mode the host announced. A widget with no host session (a
 cloud session) applies the mode to its own harness through
 `AppEvent::ApplyApprovalMode`. Approve all first opens a confirmation
 (`AppEvent::OpenApproveAllConfirmation`) unless
