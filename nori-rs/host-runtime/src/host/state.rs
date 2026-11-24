@@ -71,12 +71,17 @@ impl HostFiles {
         Ok((serde_json::from_str(&state)?, token))
     }
 
-    pub fn publish(&self, state: &HostState) -> anyhow::Result<()> {
-        let mut file = private_open(&self.directory.join("state.json"), true)?;
+    /// Hold this generation's state inode locked until shutdown is complete.
+    /// A replacement host publishes a different inode, even at the same port.
+    pub fn publish(&self, state: &HostState) -> anyhow::Result<File> {
+        let temporary = self.directory.join("state.json.tmp");
+        let mut file = private_open(&temporary, true)?;
+        file.try_lock()?;
         file.set_len(0)?;
         file.write_all(&serde_json::to_vec(state)?)?;
         file.sync_all()?;
-        Ok(())
+        std::fs::rename(&temporary, self.directory.join("state.json"))?;
+        Ok(file)
     }
 
     /// Publish `host.json`, the single discovery file of the host contract,
