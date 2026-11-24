@@ -64,6 +64,9 @@ pub(crate) struct App {
     session_manager: nori_harness::session_manager::SessionManager,
     /// Where the host this terminal owns reads the terminal's current config.
     foreground_config: nori_host_runtime::ForegroundConfig,
+    /// While `/new` waits for the host, the session to bring back if the
+    /// host refuses.
+    new_session_return: Option<crate::app_event::SessionGeneration>,
 
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: NoriConfig,
@@ -384,6 +387,7 @@ impl App {
             auth_manager: auth_manager.clone(),
             session_manager,
             foreground_config,
+            new_session_return: None,
             config,
             vertical_footer,
             cloud_mode,
