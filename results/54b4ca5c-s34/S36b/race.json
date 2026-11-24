@@ -1,0 +1,200 @@
+[
+  {
+    "rep": 0,
+    "offset": -0.3,
+    "enter_minus_reply": 1.0316,
+    "typed_minus_reply": 0.0063,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": -0.05,
+    "enter_minus_reply": 1.0293,
+    "typed_minus_reply": 0.0045,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.0,
+    "enter_minus_reply": 1.0309,
+    "typed_minus_reply": 0.0061,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.01,
+    "enter_minus_reply": 1.0345,
+    "typed_minus_reply": 0.01,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.02,
+    "enter_minus_reply": 1.0443,
+    "typed_minus_reply": 0.02,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.04,
+    "enter_minus_reply": 1.0646,
+    "typed_minus_reply": 0.04,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.08,
+    "enter_minus_reply": 1.1051,
+    "typed_minus_reply": 0.08,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.15,
+    "enter_minus_reply": 1.1751,
+    "typed_minus_reply": 0.1501,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 0,
+    "offset": 0.3,
+    "enter_minus_reply": 1.3249,
+    "typed_minus_reply": 0.3001,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": -0.3,
+    "enter_minus_reply": 1.0283,
+    "typed_minus_reply": 0.0038,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": -0.05,
+    "enter_minus_reply": 1.0298,
+    "typed_minus_reply": 0.0039,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.0,
+    "enter_minus_reply": 1.0304,
+    "typed_minus_reply": 0.0059,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.01,
+    "enter_minus_reply": 1.0344,
+    "typed_minus_reply": 0.01,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.02,
+    "enter_minus_reply": 1.0446,
+    "typed_minus_reply": 0.02,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.04,
+    "enter_minus_reply": 1.0645,
+    "typed_minus_reply": 0.04,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.08,
+    "enter_minus_reply": 1.1051,
+    "typed_minus_reply": 0.0801,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.15,
+    "enter_minus_reply": 1.1757,
+    "typed_minus_reply": 0.1501,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  },
+  {
+    "rep": 1,
+    "offset": 0.3,
+    "enter_minus_reply": 1.3254,
+    "typed_minus_reply": 0.3001,
+    "tui_to_host_prompts": 0,
+    "adapter_prompts": 1,
+    "answered": true,
+    "echoed": true,
+    "started": true
+  }
+]

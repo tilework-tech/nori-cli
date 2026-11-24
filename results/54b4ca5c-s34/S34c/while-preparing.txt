@@ -1,0 +1,36 @@
+shell$ RUST_LOG=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory "startup lantern word"
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance/S34c/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+  Preparing Lantern Claude…
+
+
+› ! for shell commands
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

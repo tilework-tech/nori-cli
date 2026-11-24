@@ -277,3 +277,14 @@ run 45379653626 (`verify/pr-750-32471d77-native-startup`, checkout pinned to `32
 | #751 | `c31726f7` | S35a-h + S36 | 56/59; Escape on an open `/` menu neither closes it nor cancels (plain on both heads, attach new in #751); bare `/review` opens `/resume-viewonly` in plain (both heads) |
 | #751 | `c31726f7` | full matrix | 400/430, no regressions vs `32471d77` (394/430); S05 slash discovery and S10 not-sent now pass |
 | #751 | `c31726f7` | native trace repeat (45394569051) | startup suites 8/8; its full native run 45384170358 failed the same startup test twice |
+
+## #750 `54b4ca5c` (test-driver-only fix), 2026-11-24
+
+| Check | Result |
+|---|---|
+| Native A/B, same build (run 45398909781) | old pause driver 224/228 (4 lost Enters, matching the original symptom); continuous drain 228/228; human-speed typing 114/114 |
+| Native stack sample in the failing round | TUI main thread blocked in `write()` inside `Tui::draw`; passing round idle |
+| Native exact head | full suites pass; 4 host suites × 10 rounds 190/190 |
+| Linux A/B (local) | sleep, drain, human each 95/95 |
+| S33c–f, S34a–m, S36, S36b via tmux at `54b4ca5c` | 105/105 checks; 36/36 race trials delivered once |
+| Verdict | pass; the earlier user-impact claim is withdrawn for responsive terminals. See `results/54b4ca5c/VERDICT.md` |

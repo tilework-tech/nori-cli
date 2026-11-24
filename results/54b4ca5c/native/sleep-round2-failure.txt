@@ -1,0 +1,60 @@
+---- startup_activates_its_session_through_the_owned_host stdout ----
+
+thread 'startup_activates_its_session_through_the_owned_host' panicked at tui-pty-e2e/tests/host_startup.rs:37:10:
+called `Result::unwrap()` on an `Err` value: "waiting for \"amber is answering (1).\": Timed out after 10.042133625s (171 polls, 11.294764875s since spawn, 2422 PTY bytes, first output Some(58.198625ms), pid Some(42244), status Ok(None))"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+=== TUI Screen State at Panic ===
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+      › Nori CLI v0.0.0
+    
+      System       /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmp15ajd3 · Agent approvals
+      Agent        Amber
+    
+    
+      Run 'npx nori-skillsets init' to set up Nori AI enhancements
+    
+    • Amber options: Speed=Slow (/config to change)
+    
+    
+    › whoami
+PTY output tail (escaped): \x1b[?2026l\x1b[?2026h\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;2H\x1b[0m\x1b[m\x1b[K\x1b[29;22H\x1b[0m\x1b[m\x1b[K\x1b[30;2H\x1b[0m\x1b[m\x1b[K\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[29;3H\x1b[?2026l\x1b[?2026h\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;2H\x1b[0m\x1b[m\x1b[K\x1b[29;22H\x1b[0m\x1b[m\x1b[K\x1b[30;2H\x1b[0m\x1b[m\x1b[K\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[29;3H\x1b[?2026l\x1b[?2026h\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;2H\x1b[0m\x1b[m\x1b[K\x1b[29;22H\x1b[0m\x1b[m\x1b[K\x1b[30;2H\x1b[0m\x1b[m\x1b[K\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[29;3H\x1b[?2026l\x1b[?2026h\x1b[1;26r\x1b[1S\x1b[r\x1b[27;1H\x1b[J\x1b[26;2H\x1b[0m\x1b[m\x1b[K\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;9H\x1b[0m\x1b[m\x1b[K\x1b[29;2H\x1b[0m\x1b[m\x1b[K\x1b[30;2H\x1b[0m\x1b[m\x1b[K\x1b[28;1H\x1b[1m\xe2\x80\xba\x1b[28;3H\x1b[22mwhoami\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[29;3H\x1b[?2026l
+
+=== ACP Tracing Subscriber    ===
+    2026-11-24T13:03:40.517150Z DEBUG nori_acp_host::registry: Mock ACP agent path from MOCK_ACP_AGENT_BIN: /Users/runner/_work/nori-cli/nori-cli/nori-rs/target/mock-acp-out/mock_acp_agent
+    2026-11-24T13:03:40.517272Z DEBUG nori_acp_host::registry: Mock ACP agent path from MOCK_ACP_AGENT_BIN: /Users/runner/_work/nori-cli/nori-cli/nori-rs/target/mock-acp-out/mock_acp_agent
+    2026-11-24T13:03:40.542839Z DEBUG nori_host_runtime::host::acp: host ACP request client=0 method=_nori/host/prepare_agent
+    2026-11-24T13:03:40.543502Z DEBUG nori_acp_host::connection::acp_connection: Spawning ACP agent: python3 ["/Users/runner/_work/nori-cli/nori-cli/nori-rs/tui-pty-e2e/../cli/tests/standard_acp/fixture.py", "amber", "/private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmp15ajd3"] in /private/var/folders/pm/cmklcsfj60nd7nfc79g8xmbc0000gn/T/.tmp15ajd3
+    2026-11-24T13:03:40.544595Z DEBUG nori_acp_host::connection::acp_connection: ACP agent spawned (pid: Some(42355))
+    2026-11-24T13:03:40.565516Z DEBUG nori_acp_host::connection::acp_connection: ACP connection established, agent: Some(Implementation { name: "amber", title: None, version: "1", meta: None })
+    2026-11-24T13:03:40.565716Z DEBUG nori_host_runtime::host::acp: host ACP request client=0 method=session/list
+    2026-11-24T13:03:40.566567Z DEBUG nori_host_runtime::host::acp: host ACP request client=0 method=session/new
+    2026-11-24T13:03:40.566770Z DEBUG nori_harness::backend::spawn_and_relay: Activating prepared ACP backend for agent: amber
+    2026-11-24T13:03:40.567529Z DEBUG nori_harness::backend::spawn_and_relay: ACP session created: SessionId("0")
+    2026-11-24T13:03:40.575416Z DEBUG nori_acp_host::registry: Mock ACP agent path from MOCK_ACP_AGENT_BIN: /Users/runner/_work/nori-cli/nori-cli/nori-rs/target/mock-acp-out/mock_acp_agent
+    2026-11-24T13:03:40.575492Z DEBUG nori_acp_host::registry: Mock ACP agent path from MOCK_ACP_AGENT_BIN: /Users/runner/_work/nori-cli/nori-cli/nori-rs/target/mock-acp-out/mock_acp_agent
+=================================
+---- startup_activates_its_session_through_the_owned_host stdout ----
+
+thread 'startup_activates_its_session_through_the_owned_host' panicked at tui-pty-e2e/tests/host_startup.rs:37:10:
+called `Result::unwrap()` on an `Err` value: "waiting for \"amber is answering (1).\": Timed out after 10.006167375s (160 polls, 11.2946465s since spawn, 2298 PTY bytes, first output Some(62.404583ms), pid Some(58459), status Ok(None))"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+=== TUI Screen State at Panic ===
+    
+    

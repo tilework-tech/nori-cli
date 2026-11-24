@@ -1,0 +1,166 @@
+== S33c input typed while the /new server initializes reaches only the new session
+PASS S33c/early.typed_during_init {'start': 1795526168.7696168, 'typed': 1795526170.296949, 'end': 1795526174.7697504, 'pid': 66357}
+PASS S33c/early.delivered_once [(66357, 1795526174.784793)]
+PASS S33c/early.reaches_the_new_session [(66357, 66357, 66295)]
+PASS S33c/early.sent_after_the_new_session_exists {'prompt': 1795526174.784793, 'session_new': 1795526174.7734096}
+PASS S33c/early.previous_session_gets_only_its_own_prompt 66295
+PASS S33c/early.answered_on_screen › / for slash command menu
+== S33d input typed while a refused /new initializes stays unsent
+PASS S33d/early.typed_during_init {'start': 1795526185.5623436, 'typed': 1795526187.0888631, 'end': 1795526191.5624945, 'pid': 66693}
+PASS S33d/early.refusal_recorded_by_adapter 1
+PASS S33d/early.refused_input_stays_unsent []
+PASS S33d/early.refusal_message_shown ['• claude-code heard: hello lantern', "■ Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is", '› 
+PASS S33d/early.refused_input_back_in_composer ['› early lantern word']
+PASS S33d/early.enter_sends_held_input_once_to_previous_session [(66634, 66634)]
+== S33e input typed while session/new is pending reaches only the new session
+PASS S33e/early.typed_during_new {'start': 1795526204.482407, 'typed': 1795526206.0075934, 'end': 1795526210.4825332, 'pid': 67098}
+PASS S33e/early.delivered_once [(67098, 1795526210.4941857)]
+PASS S33e/early.reaches_the_new_session [(67098, 67098, 67008)]
+PASS S33e/early.sent_after_the_new_session_exists {'prompt': 1795526210.4941857, 'session_new': 1795526204.4823048}
+PASS S33e/early.previous_session_gets_only_its_own_prompt 67008
+PASS S33e/early.answered_on_screen › ! for shell commands
+== S33f input typed while a refused session/new is pending stays unsent
+PASS S33f/early.typed_during_new {'start': 1795526221.2826786, 'typed': 1795526222.806378, 'end': 1795526227.2828343, 'pid': 67422}
+PASS S33f/early.refusal_recorded_by_adapter 1
+PASS S33f/early.refused_input_stays_unsent []
+PASS S33f/early.refusal_message_shown ['• claude-code heard: hello lantern', "■ Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is", '› 
+PASS S33f/early.refused_input_back_in_composer ['› early lantern word']
+PASS S33f/early.enter_sends_held_input_once_to_previous_session [(67356, 67356)]
+== S34a plain startup prepares and starts through the owned host
+PASS S34a/startup.one_server [67738]
+PASS S34a/startup.session_started_before_any_prompt ['initialize', 'session/list', 'session/new']
+PASS S34a/startup.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+PASS S34a/startup.prompt_answered_once 1
+PASS S34a/startup.server_stopped_on_quit [67738]
+== S34b prompt typed before the startup server is ready is sent once
+PASS S34b/early.server_held_in_initialize {'start': True, 'end': True}
+PASS S34b/early.typed_during_hold {'start': 1795526248.1787436, 'typed': 1795526249.4938285, 'end': 1795526254.1788747}
+PASS S34b/early.nothing_sent_before_initialize []
+PASS S34b/early.delivered_once [(67939, 1795526254.1938148)]
+PASS S34b/early.one_server_one_session (1, 1)
+PASS S34b/early.sent_after_session_new {'prompt': 1795526254.1938148, 'new': 1795526254.1826363}
+PASS S34b/early.answered_on_screen › $ for skill listing
+PASS S34b/early.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+== S34c positional prompt before readiness is sent once
+PASS S34c/early.server_held_in_initialize {'start': True, 'end': True}
+PASS S34c/early.nothing_sent_before_initialize []
+PASS S34c/early.delivered_once [(68229, 1795526268.4615674)]
+PASS S34c/early.one_server_one_session (1, 1)
+PASS S34c/early.sent_after_session_new {'prompt': 1795526268.4615674, 'new': 1795526268.451887}
+PASS S34c/early.answered_on_screen › ? for shortcuts
+PASS S34c/early.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+== S34d piped prompt before readiness is sent once
+PASS S34d/early.server_held_in_initialize {'start': True, 'end': True}
+PASS S34d/early.nothing_sent_before_initialize []
+PASS S34d/early.delivered_once [(68483, 1795526282.6609285)]
+PASS S34d/early.one_server_one_session (1, 1)
+PASS S34d/early.sent_after_session_new {'prompt': 1795526282.6609285, 'new': 1795526282.649671}
+PASS S34d/early.answered_on_screen › ? for shortcuts
+PASS S34d/early.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+== S34e piped context plus instruction before readiness is sent once
+PASS S34e/early.server_held_in_initialize {'start': True, 'end': True}
+PASS S34e/early.nothing_sent_before_initialize []
+PASS S34e/early.delivered_once [(68770, 1795526296.8560991)]
+PASS S34e/early.one_server_one_session (1, 1)
+PASS S34e/early.sent_after_session_new {'prompt': 1795526296.8560991, 'new': 1795526296.8457744}
+PASS S34e/early.piped_context_included ools such as update_goal, are unavailable in this session.
+</context>
+
+summarize the piped lantern
+
+orchard context line
+PASS S34e/early.answered_on_screen › ? for shortcuts
+PASS S34e/early.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+== S34f refused startup keeps typed input unsent
+PASS S34f/refused.adapter_refused_session_new 1
+PASS S34f/refused.input_unsent 0
+PASS S34f/refused.reason_shown ["■ Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is", '› startup lantern word']
+PASS S34f/refused.input_back_in_composer ['› startup lantern word']
+PASS S34f/refused.enter_retries_and_sends_once [(69203, 'claude-code-0')]
+PASS S34f/refused.retry_started_a_session 2
+PASS S34f/refused.servers_stopped_on_quit [69024, 69203]
+== S34g refused startup keeps a positional prompt unsent
+PASS S34g/refused.adapter_refused_session_new 1
+PASS S34g/refused.input_unsent 0
+PASS S34g/refused.reason_shown ['shell$ RUST_LOG=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory "startup lantern word"', "■ Couldn't activate Lantern Claude: Failed to
+PASS S34g/refused.input_back_in_composer ['› startup lantern word']
+PASS S34g/refused.enter_retries_and_sends_once [(69436, 'claude-code-0')]
+PASS S34g/refused.retry_started_a_session 2
+PASS S34g/refused.servers_stopped_on_quit [69370, 69436]
+== S34h /new during startup waits for the startup session
+PASS S34h/new.one_session_started [(69603, '/tmp/nori-host-tui-acceptance/S34h/roots/alpha/app')]
+PASS S34h/new.reused_startup_server [69603]
+PASS S34h/new.prompt_reaches_started_session_once [(69603, 69603)]
+PASS S34h/new.started_through_host ['_nori/host/prepare_agent', 'session/list', 'session/new']
+PASS S34h/new.servers_stopped_on_quit [69603]
+== S34i /new after a refused startup starts a session
+PASS S34i/new.one_session_started [(69964, '/tmp/nori-host-tui-acceptance/S34i/roots/alpha/app'), (70029, '/tmp/nori-host-tui-acceptance/S34i/roots/alpha/app')]
+PASS S34i/new.prompt_reaches_started_session_once [(70029, 70029)]
+PASS S34i/new.started_through_host ['_nori/host/prepare_agent', 'session/list', 'session/new', '_nori/host/discard_agent', '_nori/host/prepare_agent', 'session/list', 'session/new']
+PASS S34i/new.servers_stopped_on_quit [69964, 70029]
+== S34j /resume during startup reuses the startup server
+PASS S34j/resume.rows_from_startup_server   ↑↓/j/k move  / search  enter select  esc close
+PASS S34j/resume.same_adapter_process {'spawns': [70279], 'loads': [(70279, 'saved-orchard')]}
+PASS S34j/resume.no_fresh_session_started []
+PASS S34j/resume.exactly_one_load 1
+PASS S34j/resume.prompt_reaches_restored_session ['saved-orchard']
+PASS S34j/resume.loaded_through_host ['_nori/host/prepare_agent', 'session/list', 'session/new']
+== S34k skillset choice then startup through the host
+PASS S34k/skillset.picker_shown   ↑↓/j/k move  / search  enter select  esc close
+PASS S34k/skillset.no_session_before_choice 0
+PASS S34k/skillset.one_session_started_after_choice 1
+PASS S34k/skillset.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+PASS S34k/skillset.prompt_answered_once 1
+== S34l skillset picker dismissed then startup through the host
+PASS S34l/skillset.picker_shown   ↑↓/j/k move  / search  enter select  esc close
+PASS S34l/skillset.no_session_before_choice 0
+PASS S34l/skillset.one_session_started_after_choice 1
+PASS S34l/skillset.host_prepared_then_started ['_nori/host/prepare_agent', 'session/list', 'session/new']
+PASS S34l/skillset.prompt_answered_once 1
+== S34m control: `nori resume --last` stays in-process
+PASS S34m/control.first_launch_used_host ['_nori/host/prepare_agent', 'session/list', 'session/new']
+PASS S34m/control.last_session_loaded [('session/load', 'claude-code-0')]
+PASS S34m/control.no_host_requests []
+== S36 startup activation window swept by Enter time
+RACE {'rep': 0, 'offset': -0.3, 'enter_minus_reply': 0.1265, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': -0.05, 'enter_minus_reply': 0.1272, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.0, 'enter_minus_reply': 0.1271, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.01, 'enter_minus_reply': 0.1322, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.02, 'enter_minus_reply': 0.1425, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.04, 'enter_minus_reply': 0.1623, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.08, 'enter_minus_reply': 0.2023, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.15, 'enter_minus_reply': 0.2726, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.3, 'enter_minus_reply': 0.4225, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': -0.3, 'enter_minus_reply': 0.1263, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': -0.05, 'enter_minus_reply': 0.1283, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': False, 'echoed': False, 'started': True}
+RACE {'rep': 1, 'offset': 0.0, 'enter_minus_reply': 0.1266, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.01, 'enter_minus_reply': 0.132, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.02, 'enter_minus_reply': 0.1421, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.04, 'enter_minus_reply': 0.1622, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.08, 'enter_minus_reply': 0.2025, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.15, 'enter_minus_reply': 0.2725, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.3, 'enter_minus_reply': 0.4224, 'typed_minus_reply': None, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+PASS S36/race.every_enter_delivered_once []
+PASS S36/race.trials 18 trials, 0 not delivered once
+== S36b startup activation window swept by typing time
+RACE {'rep': 0, 'offset': -0.3, 'enter_minus_reply': 1.0316, 'typed_minus_reply': 0.0063, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': -0.05, 'enter_minus_reply': 1.0293, 'typed_minus_reply': 0.0045, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.0, 'enter_minus_reply': 1.0309, 'typed_minus_reply': 0.0061, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.01, 'enter_minus_reply': 1.0345, 'typed_minus_reply': 0.01, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.02, 'enter_minus_reply': 1.0443, 'typed_minus_reply': 0.02, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.04, 'enter_minus_reply': 1.0646, 'typed_minus_reply': 0.04, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.08, 'enter_minus_reply': 1.1051, 'typed_minus_reply': 0.08, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.15, 'enter_minus_reply': 1.1751, 'typed_minus_reply': 0.1501, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 0, 'offset': 0.3, 'enter_minus_reply': 1.3249, 'typed_minus_reply': 0.3001, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': -0.3, 'enter_minus_reply': 1.0283, 'typed_minus_reply': 0.0038, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': -0.05, 'enter_minus_reply': 1.0298, 'typed_minus_reply': 0.0039, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.0, 'enter_minus_reply': 1.0304, 'typed_minus_reply': 0.0059, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.01, 'enter_minus_reply': 1.0344, 'typed_minus_reply': 0.01, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.02, 'enter_minus_reply': 1.0446, 'typed_minus_reply': 0.02, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.04, 'enter_minus_reply': 1.0645, 'typed_minus_reply': 0.04, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.08, 'enter_minus_reply': 1.1051, 'typed_minus_reply': 0.0801, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.15, 'enter_minus_reply': 1.1757, 'typed_minus_reply': 0.1501, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+RACE {'rep': 1, 'offset': 0.3, 'enter_minus_reply': 1.3254, 'typed_minus_reply': 0.3001, 'tui_to_host_prompts': 0, 'adapter_prompts': 1, 'answered': True, 'echoed': True, 'started': True}
+PASS S36b/race.every_enter_delivered_once []
+PASS S36b/race.trials 18 trials, 0 not delivered once
+{"nori": "nori", "passed": 105, "failed": 0, "checks": 105}

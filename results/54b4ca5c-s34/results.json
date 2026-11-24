@@ -1,0 +1,632 @@
+[
+  {
+    "scenario": "S33c",
+    "check": "early.typed_during_init",
+    "passed": true,
+    "detail": "{'start': 1795526168.7696168, 'typed': 1795526170.296949, 'end': 1795526174.7697504, 'pid': 66357}"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(66357, 1795526174.784793)]"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.reaches_the_new_session",
+    "passed": true,
+    "detail": "[(66357, 66357, 66295)]"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.sent_after_the_new_session_exists",
+    "passed": true,
+    "detail": "{'prompt': 1795526174.784793, 'session_new': 1795526174.7734096}"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.previous_session_gets_only_its_own_prompt",
+    "passed": true,
+    "detail": "66295"
+  },
+  {
+    "scenario": "S33c",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a / for slash command menu"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.typed_during_init",
+    "passed": true,
+    "detail": "{'start': 1795526185.5623436, 'typed': 1795526187.0888631, 'end': 1795526191.5624945, 'pid': 66693}"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.refusal_recorded_by_adapter",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.refused_input_stays_unsent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.refusal_message_shown",
+    "passed": true,
+    "detail": "['\u2022 claude-code heard: hello lantern', \"\u25a0 Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is\", '\u203a early lantern word']"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.refused_input_back_in_composer",
+    "passed": true,
+    "detail": "['\u203a early lantern word']"
+  },
+  {
+    "scenario": "S33d",
+    "check": "early.enter_sends_held_input_once_to_previous_session",
+    "passed": true,
+    "detail": "[(66634, 66634)]"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.typed_during_new",
+    "passed": true,
+    "detail": "{'start': 1795526204.482407, 'typed': 1795526206.0075934, 'end': 1795526210.4825332, 'pid': 67098}"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(67098, 1795526210.4941857)]"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.reaches_the_new_session",
+    "passed": true,
+    "detail": "[(67098, 67098, 67008)]"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.sent_after_the_new_session_exists",
+    "passed": true,
+    "detail": "{'prompt': 1795526210.4941857, 'session_new': 1795526204.4823048}"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.previous_session_gets_only_its_own_prompt",
+    "passed": true,
+    "detail": "67008"
+  },
+  {
+    "scenario": "S33e",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a ! for shell commands"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.typed_during_new",
+    "passed": true,
+    "detail": "{'start': 1795526221.2826786, 'typed': 1795526222.806378, 'end': 1795526227.2828343, 'pid': 67422}"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refusal_recorded_by_adapter",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refused_input_stays_unsent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refusal_message_shown",
+    "passed": true,
+    "detail": "['\u2022 claude-code heard: hello lantern', \"\u25a0 Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is\", '\u203a early lantern word']"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.refused_input_back_in_composer",
+    "passed": true,
+    "detail": "['\u203a early lantern word']"
+  },
+  {
+    "scenario": "S33f",
+    "check": "early.enter_sends_held_input_once_to_previous_session",
+    "passed": true,
+    "detail": "[(67356, 67356)]"
+  },
+  {
+    "scenario": "S34a",
+    "check": "startup.one_server",
+    "passed": true,
+    "detail": "[67738]"
+  },
+  {
+    "scenario": "S34a",
+    "check": "startup.session_started_before_any_prompt",
+    "passed": true,
+    "detail": "['initialize', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34a",
+    "check": "startup.host_prepared_then_started",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34a",
+    "check": "startup.prompt_answered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34a",
+    "check": "startup.server_stopped_on_quit",
+    "passed": true,
+    "detail": "[67738]"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.server_held_in_initialize",
+    "passed": true,
+    "detail": "{'start': True, 'end': True}"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.typed_during_hold",
+    "passed": true,
+    "detail": "{'start': 1795526248.1787436, 'typed': 1795526249.4938285, 'end': 1795526254.1788747}"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.nothing_sent_before_initialize",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(67939, 1795526254.1938148)]"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.one_server_one_session",
+    "passed": true,
+    "detail": "(1, 1)"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.sent_after_session_new",
+    "passed": true,
+    "detail": "{'prompt': 1795526254.1938148, 'new': 1795526254.1826363}"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a $ for skill listing"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.host_prepared_then_started",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.server_held_in_initialize",
+    "passed": true,
+    "detail": "{'start': True, 'end': True}"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.nothing_sent_before_initialize",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(68229, 1795526268.4615674)]"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.one_server_one_session",
+    "passed": true,
+    "detail": "(1, 1)"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.sent_after_session_new",
+    "passed": true,
+    "detail": "{'prompt': 1795526268.4615674, 'new': 1795526268.451887}"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a ? for shortcuts"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.host_prepared_then_started",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.server_held_in_initialize",
+    "passed": true,
+    "detail": "{'start': True, 'end': True}"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.nothing_sent_before_initialize",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(68483, 1795526282.6609285)]"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.one_server_one_session",
+    "passed": true,
+    "detail": "(1, 1)"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.sent_after_session_new",
+    "passed": true,
+    "detail": "{'prompt': 1795526282.6609285, 'new': 1795526282.649671}"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a ? for shortcuts"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.host_prepared_then_started",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.server_held_in_initialize",
+    "passed": true,
+    "detail": "{'start': True, 'end': True}"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.nothing_sent_before_initialize",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(68770, 1795526296.8560991)]"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.one_server_one_session",
+    "passed": true,
+    "detail": "(1, 1)"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.sent_after_session_new",
+    "passed": true,
+    "detail": "{'prompt': 1795526296.8560991, 'new': 1795526296.8457744}"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.piped_context_included",
+    "passed": true,
+    "detail": "ools such as update_goal, are unavailable in this session.\n</context>\n\nsummarize the piped lantern\n\norchard context line"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a ? for shortcuts"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.host_prepared_then_started",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.adapter_refused_session_new",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.input_unsent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.reason_shown",
+    "passed": true,
+    "detail": "[\"\u25a0 Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is\", '\u203a startup lantern word']"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.input_back_in_composer",
+    "passed": true,
+    "detail": "['\u203a startup lantern word']"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.enter_retries_and_sends_once",
+    "passed": true,
+    "detail": "[(69203, 'claude-code-0')]"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.retry_started_a_session",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[69024, 69203]"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.adapter_refused_session_new",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.input_unsent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.reason_shown",
+    "passed": true,
+    "detail": "['shell$ RUST_LOG=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory \"startup lantern word\"', \"\u25a0 Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is\", '\u203a startup lantern word']"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.input_back_in_composer",
+    "passed": true,
+    "detail": "['\u203a startup lantern word']"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.enter_retries_and_sends_once",
+    "passed": true,
+    "detail": "[(69436, 'claude-code-0')]"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.retry_started_a_session",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[69370, 69436]"
+  },
+  {
+    "scenario": "S34h",
+    "check": "new.one_session_started",
+    "passed": true,
+    "detail": "[(69603, '/tmp/nori-host-tui-acceptance/S34h/roots/alpha/app')]"
+  },
+  {
+    "scenario": "S34h",
+    "check": "new.reused_startup_server",
+    "passed": true,
+    "detail": "[69603]"
+  },
+  {
+    "scenario": "S34h",
+    "check": "new.prompt_reaches_started_session_once",
+    "passed": true,
+    "detail": "[(69603, 69603)]"
+  },
+  {
+    "scenario": "S34h",
+    "check": "new.started_through_host",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34h",
+    "check": "new.servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[69603]"
+  },
+  {
+    "scenario": "S34i",
+    "check": "new.one_session_started",
+    "passed": true,
+    "detail": "[(69964, '/tmp/nori-host-tui-acceptance/S34i/roots/alpha/app'), (70029, '/tmp/nori-host-tui-acceptance/S34i/roots/alpha/app')]"
+  },
+  {
+    "scenario": "S34i",
+    "check": "new.prompt_reaches_started_session_once",
+    "passed": true,
+    "detail": "[(70029, 70029)]"
+  },
+  {
+    "scenario": "S34i",
+    "check": "new.started_through_host",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new', '_nori/host/discard_agent', '_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34i",
+    "check": "new.servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[69964, 70029]"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.rows_from_startup_server",
+    "passed": true,
+    "detail": "  \u2191\u2193/j/k move  / search  enter select  esc close"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.same_adapter_process",
+    "passed": true,
+    "detail": "{'spawns': [70279], 'loads': [(70279, 'saved-orchard')]}"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.no_fresh_session_started",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.exactly_one_load",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.prompt_reaches_restored_session",
+    "passed": true,
+    "detail": "['saved-orchard']"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.loaded_through_host",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34k",
+    "check": "skillset.picker_shown",
+    "passed": true,
+    "detail": "  \u2191\u2193/j/k move  / search  enter select  esc close"
+  },
+  {
+    "scenario": "S34k",
+    "check": "skillset.no_session_before_choice",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S34k",
+    "check": "skillset.one_session_started_after_choice",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34k",
+    "check": "skillset.host_prepared_then_started",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34k",
+    "check": "skillset.prompt_answered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34l",
+    "check": "skillset.picker_shown",
+    "passed": true,
+    "detail": "  \u2191\u2193/j/k move  / search  enter select  esc close"
+  },
+  {
+    "scenario": "S34l",
+    "check": "skillset.no_session_before_choice",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S34l",
+    "check": "skillset.one_session_started_after_choice",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34l",
+    "check": "skillset.host_prepared_then_started",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34l",
+    "check": "skillset.prompt_answered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.first_launch_used_host",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.last_session_loaded",
+    "passed": true,
+    "detail": "[('session/load', 'claude-code-0')]"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.no_host_requests",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S36",
+    "check": "race.every_enter_delivered_once",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S36",
+    "check": "race.trials",
+    "passed": true,
+    "detail": "18 trials, 0 not delivered once"
+  },
+  {
+    "scenario": "S36b",
+    "check": "race.every_enter_delivered_once",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S36b",
+    "check": "race.trials",
+    "passed": true,
+    "detail": "18 trials, 0 not delivered once"
+  }
+]
