@@ -2,6 +2,7 @@
 //! terminal boundary retires descendants and releases their pending work.
 
 use super::*;
+use anyhow::Context;
 
 #[derive(Default)]
 pub(super) struct Closing {
@@ -87,7 +88,7 @@ impl SessionManager {
             let closing = state
                 .explicit_closes
                 .get_mut(&session)
-                .expect("close registered");
+                .context("Missing pending session close")?;
             closing.running = false;
             closing.awaiting = None;
             if closing.children.is_empty() {
@@ -107,13 +108,22 @@ impl SessionManager {
             handle.close_from_host().await?;
             super::delegation_driver::wait_process_end(&self.shared, process).await;
             anyhow::ensure!(
-                self.shared.state().explicit_closes[&session]
+                self.shared
+                    .state()
+                    .explicit_closes
+                    .get(&session)
+                    .context("Missing pending session close")?
                     .awaiting
                     .is_none(),
                 "Session ended before close was acknowledged"
             );
         }
-        let children = self.shared.state().explicit_closes[&session]
+        let children = self
+            .shared
+            .state()
+            .explicit_closes
+            .get(&session)
+            .context("Missing pending session close")?
             .children
             .clone();
         let mut first_error = None;
@@ -139,7 +149,7 @@ impl SessionManager {
                 .state()
                 .explicit_closes
                 .get_mut(&session)
-                .expect("close registered")
+                .context("Missing pending session close")?
                 .children
                 .retain(|p| *p != process);
         }
