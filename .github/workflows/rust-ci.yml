@@ -27,8 +27,14 @@ jobs:
         include:
           - runner: blacksmith-6vcpu-macos-15
             target: aarch64-apple-darwin
-            name: macOS attach PTY
+            name: macOS attach PTY 5cb13fcd
             mode: exact
+            sha: 5cb13fcd9f79caa15c7d56100f23f776ce3bf915
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: macOS attach PTY main
+            mode: main
+            sha: f9eedcac7a1d473a4d0bb264d81d9a095aebe7cd
 
     steps:
       - uses: actions/checkout@v6
@@ -39,16 +45,15 @@ jobs:
       - name: Select sources
         run: |
           set -euo pipefail
-          git fetch -q origin 5cb13fcd9f79caa15c7d56100f23f776ce3bf915
-          git checkout 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- .
-          git diff --quiet 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- . && echo "nori-rs matches 5cb13fcd"
-          test -f tui-pty-e2e/tests/slash_menu_escape.rs
-          git -C .. apply .verifier/host_attach.patch
-          git diff --stat 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- .
-          test "$(git diff --name-only 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- .)" = "nori-rs/tui-pty-e2e/tests/host_attach.rs"
+          sha=${{ matrix.sha }}
+          git fetch -q origin $sha
+          git checkout $sha -- .
+          git diff --quiet $sha -- . && echo "nori-rs matches $sha"
+          if [ "${{ matrix.mode }}" = exact ]; then git -C .. apply .verifier/host_attach.patch; else sed -i '' '2{/target_os = "linux"/d;}' tui-pty-e2e/tests/host_attach.rs; fi
+          git diff --stat $sha -- .
+          test "$(git diff --name-only $sha -- .)" = "nori-rs/tui-pty-e2e/tests/host_attach.rs"
           ! head -3 tui-pty-e2e/tests/host_attach.rs | grep -q 'target_os'
           uname -sm
-
       - name: Free disk space
         if: runner.os == 'Linux'
         run: |
@@ -149,19 +154,19 @@ jobs:
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
-          set -o pipefail
           out=$GITHUB_WORKSPACE/ab; mkdir -p $out
-          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --test host_attach --test slash_menu_escape --no-run
-          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach --test slash_menu_escape -- --nocapture 2>&1 | tee $out/full-attach.txt | grep -E "^test |^test result:|VERIFIER" || true
-          for r in $(seq 1 10); do PTY_PROBE_DIR=$out/probe-$r cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach --test slash_menu_escape -- --nocapture escape 2>&1 | tee $out/round-$r.txt | grep -E "^test .* (ok|FAILED)$|VERIFIER" | sed "s/^/round $r: /"; done | tee $out/repeat.txt
-          echo "repeat: $(grep -c ' ok$' $out/repeat.txt) ok, $(grep -c FAILED $out/repeat.txt) failed" | tee $out/summary.txt
-          grep -E "^test result:" $out/full-attach.txt | tee -a $out/summary.txt
-          ! grep -q FAILED $out/full-attach.txt $out/repeat.txt
+          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --test host_attach --no-run
+          for r in $(seq 1 5); do
+            for t in attached_busy_enter_reports_fallback_and_tab_explicitly_queues two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt watcher_cannot_answer_a_permission_request_but_controller_can; do
+              cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --test host_attach -- --exact $t 2>&1 | tee -a $out/round-$r.txt | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $r: /"
+            done
+          done | tee $out/repeat.txt
+          echo "${{ matrix.mode }}: $(grep -c ' ok$' $out/repeat.txt) ok, $(grep -c FAILED $out/repeat.txt) failed" | tee $out/summary.txt
       - name: Upload synthetic evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evidence-${{ matrix.mode }}
+          name: classify-${{ matrix.mode }}
           path: ab/
           include-hidden-files: true
           retention-days: 14
