@@ -33,6 +33,8 @@ pub(crate) enum PickerPurpose {
     /// `/resume` or the picker after the last `/close`: restore one of the
     /// current agent's saved sessions or start a new one.
     Restore,
+    /// `/new`: start a session on the current agent without a picker.
+    New,
 }
 
 /// The saved session a switch restores, with the title its row showed.
@@ -77,6 +79,14 @@ impl App {
         self.begin_host_picker(agent_name, display_name, PickerPurpose::Restore);
     }
 
+    /// Start a session beside the current one on a server the host prepares
+    /// in the foreground session's folder.
+    pub(crate) fn begin_host_new_session(&mut self) {
+        let agent_name = self.config.active_agent.clone();
+        let display_name = nori_harness::get_agent_display_name(&agent_name);
+        self.begin_host_picker(agent_name, display_name, PickerPurpose::New);
+    }
+
     fn begin_host_picker(
         &mut self,
         agent_name: String,
@@ -85,7 +95,7 @@ impl App {
     ) {
         self.discard_candidate();
         let generation = crate::chatwidget::agent::next_session_generation();
-        let cwd = self.config_for_agent(&agent_name).cwd;
+        let cwd = self.chat_widget.config_ref().cwd.clone();
         let tx = self.app_event_tx.clone();
         let prepared_agent_name = agent_name.clone();
         tokio::spawn(async move {
@@ -145,8 +155,12 @@ impl App {
                     selection,
                     purpose,
                 });
-                self.chat_widget
-                    .show_acp_resume_session_picker(sessions, true);
+                if purpose == PickerPurpose::New {
+                    self.activate_host_candidate(None);
+                } else {
+                    self.chat_widget
+                        .show_acp_resume_session_picker(sessions, true);
+                }
             }
             Err(error) => {
                 if purpose == PickerPurpose::Switch {
@@ -285,6 +299,7 @@ impl App {
             activation_error: None,
             resumes,
             announce_agent: purpose == PickerPurpose::Switch,
+            carries_draft: purpose == PickerPurpose::New,
         });
     }
 

@@ -217,6 +217,8 @@ enum CandidateAgent {
         resumes: bool,
         /// The candidate moves to another agent, which the screen announces.
         announce_agent: bool,
+        /// `/new`: the composer draft and loop state move to the new session.
+        carries_draft: bool,
     },
 }
 
