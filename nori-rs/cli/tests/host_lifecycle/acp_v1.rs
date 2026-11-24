@@ -314,6 +314,37 @@ async fn permission_requests_go_to_the_controller_only() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn the_adapter_can_reuse_a_permission_id_after_an_answer() {
+    let script = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/standard_acp/fixture.py");
+    let extra = format!(
+        r#"
+[[agents]]
+name = "Amber"
+slug = "amber"
+[agents.distribution.local]
+command = "python3"
+args = ["{script}", "amber"]
+"#
+    );
+    let host = host_with(&extra, &[]);
+    let mut acp = controller(&host);
+    let folder = TempDir::new().unwrap();
+    let created = acp.call("session/new", json!({"cwd": canonical(folder.path()), "mcpServers":[], "_meta":{"nori/agent":"amber"}})).await.unwrap();
+    let id = &created["sessionId"];
+    for turn in ["first", "second"] {
+        acp.send(json!({"jsonrpc":"2.0","id":turn,"method":"session/prompt",
+            "params":{"sessionId":id,"prompt":text("reuse permission id")}}))
+            .await;
+        acp.until(is_permission_request).await;
+        let answer = acp.call("_nori/session/respond", json!({"session_id":id,
+            "request_id":40,"response":{"outcome":{"outcome":"selected","optionId":"allow-amber"}}})).await;
+        assert!(answer.is_ok(), "{turn}: {answer:?}");
+        let ended = acp.until(|frame| frame["id"] == turn).await;
+        assert_eq!(ended["result"]["stopReason"], "end_turn");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_pending_permission_request_is_asked_again_after_reconnecting() {
     let host = host_with("", &[("MOCK_AGENT_REQUEST_PERMISSION", "1")]);
     let folder = TempDir::new().unwrap();

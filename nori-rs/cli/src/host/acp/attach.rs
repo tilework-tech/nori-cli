@@ -58,7 +58,7 @@ pub(super) struct Forwarder {
     delivered: watch::Sender<i64>,
     /// Permission requests waiting on a client, by session.
     open: HashMap<String, Vec<(acp::RequestId, acp::RequestPermissionRequest)>>,
-    asked: HashSet<(String, acp::RequestId)>,
+    asked: HashMap<(String, acp::RequestId), String>,
     /// False while history is being sent: requests in history may already
     /// be answered, and the ones still open are asked once attached.
     asking: bool,
@@ -80,7 +80,7 @@ impl Forwarder {
             startup_error: None,
             delivered: watch::channel(0).0,
             open: HashMap::new(),
-            asked: HashSet::new(),
+            asked: HashMap::new(),
             asking: false,
         }
     }
@@ -132,11 +132,7 @@ impl Forwarder {
             SessionEvent::Nori(NoriEvent::RequestResolved(resolved)) => {
                 self.forget(session, &resolved.request_id);
             }
-            SessionEvent::Acp(AcpEvent::Response {
-                request_id,
-                response,
-            }) => {
-                self.forget(session, request_id);
+            SessionEvent::Acp(AcpEvent::Response { response, .. }) => {
                 if !self.started
                     && let Err(error) = response
                 {
@@ -190,6 +186,9 @@ impl Forwarder {
         if let Some(open) = self.open.get_mut(session) {
             open.retain(|(id, _)| id != request_id);
         }
+        if let Some(id) = self.asked.remove(&(session.to_owned(), request_id.clone())) {
+            self.face.take_ask(self.connection.client, &id);
+        }
     }
 
     /// Send the controller every open permission request it has not been
@@ -203,7 +202,8 @@ impl Forwarder {
                 continue;
             };
             for (request_id, request) in requests {
-                if !self.asked.insert((session.clone(), request_id.clone())) {
+                let key = (session.clone(), request_id.clone());
+                if self.asked.contains_key(&key) {
                     continue;
                 }
                 let Ok(mut params) = serde_json::to_value(request) else {
@@ -215,6 +215,7 @@ impl Forwarder {
                     conversation,
                     request_id.clone(),
                 );
+                self.asked.insert(key, id.clone());
                 self.connection.deliver(json!({
                     "jsonrpc":"2.0",
                     "id":id,
@@ -296,7 +297,9 @@ impl Forwarder {
                         self.ask();
                     } else {
                         // Ask again if this client takes control back.
-                        self.asked.clear();
+                        for (_, id) in self.asked.drain() {
+                            self.face.take_ask(self.connection.client, &id);
+                        }
                     }
                 }
             }

@@ -171,7 +171,7 @@ for line in sys.stdin:
         if text == "finish":
             send(id=rid, result={"stopReason": "end_turn"})
             continue
-        perm = next(permissions)
+        perm = 40 if text == "reuse permission id" else next(permissions)
         pending[perm] = (rid, sid, params.get("_meta"))
         permission = {"sessionId": sid, "toolCall": {"toolCallId": sid, "title": name},
                       "options": [{"optionId": f"allow-{name}", "name": "Once", "kind": "allow_once"}]}

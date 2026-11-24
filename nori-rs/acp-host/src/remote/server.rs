@@ -117,10 +117,28 @@ impl RemoteAcpServer {
         output: tokio::sync::mpsc::Sender<String>,
         stop: impl std::future::Future<Output = T>,
     ) -> anyhow::Result<Option<T>> {
+        Self::serve_host_pipe_from(
+            managed,
+            super::HostClientOrigin::Independent,
+            input,
+            output,
+            stop,
+        )
+        .await
+    }
+
+    /// Serve a pipe whose peer was selected by the launcher.
+    pub async fn serve_host_pipe_from<M: super::ManagedAgent, T>(
+        managed: Arc<M>,
+        origin: super::HostClientOrigin,
+        input: tokio::sync::mpsc::Receiver<String>,
+        output: tokio::sync::mpsc::Sender<String>,
+        stop: impl std::future::Future<Output = T>,
+    ) -> anyhow::Result<Option<T>> {
         let instance = managed
             .instance_id()
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        super::host_wire::serve_pipe(managed, instance, input, output, stop).await
+        super::host_wire::serve_pipe(managed, instance, origin, input, output, stop).await
     }
 
     /// Every address on which this server is listening.

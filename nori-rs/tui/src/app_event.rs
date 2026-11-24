@@ -77,16 +77,15 @@ pub(crate) enum HarnessAction {
     },
     SetGoalStatus(nori_protocol::ThreadGoalStatus),
     ClearGoal,
-    RespondToAgent {
-        request_id: nori_protocol::acp::v1::RequestId,
-        response:
-            Box<Result<nori_protocol::acp::v1::ClientResponse, nori_protocol::acp::v1::Error>>,
-    },
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum AppEvent {
+    HostRequest {
+        call: crate::host_client::HostCall,
+        feedback: crate::app_event_sender::AppEventSender,
+    },
     ContextTimelineReady {
         generation: SessionGeneration,
         conversation_id: Option<nori_harness::ConversationId>,

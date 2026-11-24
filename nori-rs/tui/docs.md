@@ -427,8 +427,8 @@ and drive the unchanged rewind-to-message local fork path; agents without fork
 support see only those.
 
 When an ACP permission request arrives, the overlay renders the ACP subject and
-options, then calls `respond_to_agent(request_id, response)` with the exact ID
-from the request. Esc picks the `RejectOnce` option when offered, else
+options. It sends the answer over the host pipe with the session and request IDs
+captured when the request arrived. Esc picks the `RejectOnce` option when offered, else
 `RejectAlways` (the shared `answer_guard::esc_reject_option`, which
 `nori attach` also uses), and the footer then reads `esc to reject`; with no reject
 option Esc sends `Cancelled` and the footer reads `esc to cancel`. Ctrl-C
@@ -1529,7 +1529,7 @@ App::run
   to the widgets, and the pipe is driven by the
   [host session client](src/host_client/docs.md) as a third arm of the main
   `select!` loop beside app and terminal events.
-- On `Connected` it sends `initialize`; the pipe makes it the controller.
+- The App queues `initialize` before reading UI events. The private pipe holds control.
   An initialize failure, a rejected initialize, or the pipe stopping is fatal
   and ends the main loop with that error. Session notifications and other
   host events are ignored in this layer.
@@ -1537,8 +1537,8 @@ App::run
   the loop's error is reported first, then any stop failure.
 - Features with no wire method yet (compaction, fork and undo, shell, history,
   goals, custom prompts, `/context`, queue reclaim) work through the host's
-  manager on the same sessions. Session operations also still go through that
-  manager; later layers move host-backed operations onto the pipe client.
+  manager on the same sessions. Permission answers use the pipe. A rejected answer
+  reports its error to the widget that submitted it.
 - Only the CLI's foreground launcher builds an `OwnedHost`, so the
   [attach frontend](src/attach/docs.md) never holds the in-process half.
 

@@ -251,6 +251,15 @@ impl ManagedAgent for HostService {
                 subscription: None,
             };
         }
+        if self.launches.is_none()
+            && method == "_nori/session/respond"
+            && let Ok(connection) = self.acp.connection(client)
+        {
+            return self
+                .managed
+                .request_with_origin(request, connection.origin)
+                .await;
+        }
         self.request(request).await
     }
 

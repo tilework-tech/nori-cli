@@ -49,6 +49,11 @@ pub(crate) struct Reservation {
     _permit: OwnedSemaphorePermit,
 }
 
+struct PendingPermission {
+    id: acp::v1::RequestId,
+    claimed: bool,
+}
+
 struct Entry {
     settings: SessionSettings,
     order: i64,
@@ -58,7 +63,7 @@ struct Entry {
     started: bool,
     busy: bool,
     /// Agent requests waiting on a client, in arrival order.
-    pending_requests: Vec<acp::v1::RequestId>,
+    pending_requests: Vec<PendingPermission>,
     delegation_approvals: std::collections::HashSet<String>,
     /// Answers that arrived before the request they answer. A client can
     /// read a request from the harness directly, ahead of this registry.
@@ -136,7 +141,11 @@ impl Entry {
             approval_policy: self.settings.approval_policy,
             transcript_path: self.transcript_path.clone(),
             acp_session_id: self.acp_session_id.clone(),
-            pending_requests: self.pending_requests.clone(),
+            pending_requests: self
+                .pending_requests
+                .iter()
+                .map(|request| request.id.clone())
+                .collect(),
             status: self.status(),
         }
     }
@@ -201,6 +210,22 @@ impl Registry {
             limit: max_sessions.max(1),
             next_order: 0,
         }
+    }
+
+    /// Reserve one answer for this occurrence of a permission request.
+    pub(super) fn claim_permission(
+        &mut self,
+        session: &ConversationId,
+        id: &acp::v1::RequestId,
+    ) -> Option<AgentProcessId> {
+        let entry = self.sessions.get_mut(session)?;
+        let process = entry.process?;
+        let request = entry
+            .pending_requests
+            .iter_mut()
+            .find(|request| &request.id == id && !request.claimed)?;
+        request.claimed = true;
+        Some(process)
     }
 
     /// Reserve a slot before an agent process is started.
@@ -362,7 +387,7 @@ impl Registry {
             let Some(position) = entry
                 .pending_requests
                 .iter()
-                .position(|pending| *pending == resolved.request_id)
+                .position(|pending| pending.id == resolved.request_id)
             else {
                 if !entry
                     .early_answers
@@ -415,8 +440,15 @@ impl Registry {
                 request_id,
                 request: acp::v1::AgentRequest::RequestPermissionRequest(_),
             }) => {
-                if !entry.pending_requests.contains(request_id) {
-                    entry.pending_requests.push(request_id.clone());
+                if !entry
+                    .pending_requests
+                    .iter()
+                    .any(|pending| pending.id == *request_id)
+                {
+                    entry.pending_requests.push(PendingPermission {
+                        id: request_id.clone(),
+                        claimed: false,
+                    });
                 }
             }
             SessionEvent::Acp(AcpEvent::Notification(

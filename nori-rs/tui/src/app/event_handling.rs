@@ -156,8 +156,10 @@ impl App {
         &mut self,
         tui: &mut tui::Tui,
         event: AppEvent,
+        host: &mut super::host_link::HostLink,
     ) -> Result<bool> {
         match event {
+            AppEvent::HostRequest { call, feedback } => host.request(call, feedback),
             AppEvent::ContextTimelineReady {
                 generation,
                 conversation_id,

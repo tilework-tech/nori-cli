@@ -32,6 +32,7 @@ pub(crate) struct HostEndpoint {
 }
 
 /// One host call, named by what it does rather than by its wire method.
+#[derive(Debug)]
 pub(crate) enum HostCall {
     Initialize,
     List,

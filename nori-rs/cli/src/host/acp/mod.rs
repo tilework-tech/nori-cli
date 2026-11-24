@@ -173,7 +173,7 @@ impl AcpFace {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn connection(&self, client: i64) -> Result<HostConnection, AcpError> {
+    pub(super) fn connection(&self, client: i64) -> Result<HostConnection, AcpError> {
         self.lock()
             .connections
             .get(&client)
@@ -247,8 +247,10 @@ impl AcpFace {
 
     fn take_ask(&self, client: i64, id: &str) -> Option<Ask> {
         let mut state = self.lock();
-        let ask = state.asks.remove(id)?;
-        (ask.client == client).then_some(ask)
+        if state.asks.get(id)?.client != client {
+            return None;
+        }
+        state.asks.remove(id)
     }
 }
 

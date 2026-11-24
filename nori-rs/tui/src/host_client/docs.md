@@ -43,8 +43,8 @@ App (HostLink) ──HostCall + tag──▶ HostSessionClient ──JSON──�
   so correlation and event mapping are identical for both transports.
 - The pipe's two line channels come from the CLI's
   [owned TUI host](../../../cli/src/host/docs.md#owned-tui-host), which serves
-  them with `RemoteAcpServer::serve_host_pipe`. That server makes every pipe
-  client the controller.
+  them with `RemoteAcpServer::serve_host_pipe_from` and binds the foreground
+  user's identity to that connection.
 - Method names and parameter shapes follow the
   [host contract](../../../../docs/remote-control.md#11-background-host-and-attached-terminals).
   Calls cover initialize, session list, subscribe, take control, new, prompt,

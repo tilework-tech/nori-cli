@@ -569,6 +569,16 @@ impl SessionManager {
         state.handles.get(&process).cloned()
     }
 
+    pub(crate) fn claim_permission(
+        &self,
+        session: &ConversationId,
+        request: &nori_protocol::acp::v1::RequestId,
+    ) -> Option<HarnessHandle> {
+        let mut state = self.shared.state();
+        let process = state.registry.claim_permission(session, request)?;
+        state.handles.get(&process).cloned()
+    }
+
     /// Change how a running session answers permission requests from now
     /// on, and record it. Requests already waiting on a client keep waiting.
     pub async fn set_approval_policy(

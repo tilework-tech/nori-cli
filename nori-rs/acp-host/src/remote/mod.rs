@@ -19,6 +19,7 @@ mod standard_wire;
 pub use client::ManagedClient;
 pub use server::RemoteAcpServer;
 
+pub use managed::HostClientOrigin;
 pub use managed::HostConnection;
 pub use managed::ManagedAgent;
 pub use managed::ManagedReply;

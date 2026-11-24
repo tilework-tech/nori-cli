@@ -326,7 +326,7 @@ async fn selection_filters_events_and_permissions_survive_disconnect() {
         json!({"session_id":fixture.ids[0].to_string()}),
     )
     .await;
-    send(&mut socket, 11, "_nori/session/respond", json!({"session_id":fixture.ids[0].to_string(), "request_id":requests[0], "response":{"outcome":{"outcome":"selected", "optionId":"allow"}}})).await;
+    send(&mut socket, 11, "_nori/session/respond", json!({"session_id":fixture.ids[0].to_string(), "request_id":requests[0], "responder":"client", "response":{"outcome":{"outcome":"selected", "optionId":"allow"}}})).await;
     let mut seen = Vec::new();
     let mut answered = false;
     let mut idle = false;
@@ -348,6 +348,16 @@ async fn selection_filters_events_and_permissions_survive_disconnect() {
         }
         answered |= value["id"] == 11;
     }
+    let responders: Vec<_> = seen
+        .iter()
+        .filter_map(|envelope| match &envelope.event {
+            nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::RequestResolved(
+                answer,
+            )) if answer.request_id == requests[0] => Some(answer.answered_by.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(responders, ["remote_control"]);
     wait_status(&fixture.manager, fixture.ids[0], SessionStatus::Ready).await;
     assert_eq!(
         fixture.manager.get(&fixture.ids[1]).unwrap().status,
