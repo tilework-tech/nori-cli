@@ -32,3 +32,4 @@ Inherited, not caused by #757: the "Permission: Allow once" row is printed above
 - Linux CI 45455617170: passed and ran all 6 `screen_toggle` tests.
 - Owner's native run 45455645488: passed; repeats 0 failed of 95, attach folder tests 0 of 15.
 - My exact-head native run 45456861528 (`verify/pr-757-7e648413-screen-macos-load`): standard steps passed. `screen_toggle` 6 tests × 15 runs (5 plain rounds + 10 under parallel load) all passed. With `host_attach` ungated, the inherited failures recur at baseline rates: watcher permission 0/10, busy Enter 0/10, two-terminal takeover 7/10 (#751 0/0/7, #752 0/0/8, #753 0/0/5).
+- Linux, repo terminal suites (`screen_toggle`, `host_startup`, `host_new_session`, `agent_switching`, `host_file_mentions`, `host_attach`, `transcript_keys`, `streaming`), 5 rounds: 325/325 (`linux-pty-5-rounds.txt`).
