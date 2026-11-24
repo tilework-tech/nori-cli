@@ -1,7 +1,7 @@
 name: rust-ci
 on:
   push:
-    branches: ['verify/pr-751-c31726f7-native-flake']
+    branches: ['verify/pr-750-32471d77-native-trace', 'verify/pr-751-c31726f7-native-trace']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,11 +32,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: c31726f731c4eb90faeee219bc849c263242190b
           persist-credentials: false
 
       - name: Verify source revision
-        run: test "$(git rev-parse HEAD)" = c31726f731c4eb90faeee219bc849c263242190b && git rev-parse HEAD && uname -sm
+        run: git log --oneline -4 && uname -sm && git diff --stat HEAD~2 HEAD
 
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -134,18 +133,24 @@ jobs:
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
           cargo build -p nori-cli -p nori-tui --bins --profile ci-test --target ${{ matrix.target }}
-      - name: Host and harness
+      - name: Host and harness (skipped in the trace run)
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
-          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-cli --bin nori --test host_lifecycle --test host_stdio --test host_wire_schema -- --nocapture
-          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-harness --test managed_remote
-          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-host-runtime --lib
+          true
       - name: Terminal and PTYs
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
-          for round in 1 2 3 4 5; do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_startup --test host_new_session 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $round: /"; done | tee results.txt; echo "FAILED: $(grep -c FAILED results.txt)"; ! grep -q FAILED results.txt
+          export PTY_RUST_LOG='nori_tui=trace,nori_harness=trace,nori_acp_host=trace,nori_host_runtime=trace,codex_core=info'
+          for round in 1 2 3 4 5 6 7 8; do PTY_KEEP_HOMES=$GITHUB_WORKSPACE/homes/round-$round cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_startup --test host_new_session 2>&1 | tee -a full.txt | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $round: /"; done | tee results.txt; echo "FAILED: $(grep -c FAILED results.txt)"; cp results.txt full.txt $GITHUB_WORKSPACE/homes/; ! grep -q FAILED results.txt
+      - name: Upload synthetic trace homes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trace-homes
+          path: homes/
+          retention-days: 14
       # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache
         if: always() && !cancelled() && steps.cache_cargo_home_restore.outputs.cache-hit != 'true'
