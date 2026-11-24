@@ -1,0 +1,35 @@
+shell$ RUST_LOG=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/nori-host-tui-acceptance-full2/S34i/roots/alpha/app
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude
+
+[38;5;1m■ Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is
+available from claude-code
+
+[2m[39m• [0m[39m[49mLantern Claude options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+[0m[39m[49m                                                                                                         [38;5;6m[ acceptEdits ]
+[1m[39m›[0m[39m[49m [2m$ for skill listing[0m[39m[49m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

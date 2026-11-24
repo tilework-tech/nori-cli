@@ -1,0 +1,15 @@
+{"t": 1795539935.0753047, "adapter": "opencode", "pid": 27717, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-c/S39b/roots/alpha/app", "argv": []}
+{"t": 1795539935.075374, "adapter": "opencode", "pid": 27717, "kind": "request", "method": "initialize"}
+{"t": 1795539935.0763605, "adapter": "opencode", "pid": 27717, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-c/S39b/roots/alpha/app"}
+{"t": 1795539935.077172, "adapter": "opencode", "pid": 27717, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-c/S39b/roots/alpha/app"}
+{"t": 1795539935.0903385, "adapter": "claude-code", "pid": 27727, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-c/S39b/roots/alpha/app", "argv": []}
+{"t": 1795539935.090406, "adapter": "claude-code", "pid": 27727, "kind": "request", "method": "initialize"}
+{"t": 1795539935.091098, "adapter": "claude-code", "pid": 27727, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-c/S39b/roots/alpha/app"}
+{"t": 1795539935.0915318, "adapter": "claude-code", "pid": 27727, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-c/S39b/roots/alpha/app"}
+{"t": 1795539935.0937834, "adapter": "claude-code", "pid": 27727, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795539937.3370693, "adapter": "opencode", "pid": 27863, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-c/S39b/roots/alpha/app", "argv": []}
+{"t": 1795539937.3372295, "adapter": "opencode", "pid": 27863, "kind": "request", "method": "initialize"}
+{"t": 1795539937.3383853, "adapter": "opencode", "pid": 27863, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-c/S39b/roots/alpha/app"}
+{"t": 1795539937.3405757, "adapter": "opencode", "pid": 27863, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-c/S39b/roots/alpha/app"}
+{"t": 1795539947.9115493, "adapter": "opencode", "pid": 27717, "kind": "stdin_eof"}
+{"t": 1795539947.9115493, "adapter": "claude-code", "pid": 27727, "kind": "stdin_eof"}

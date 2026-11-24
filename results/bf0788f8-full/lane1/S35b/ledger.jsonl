@@ -1,0 +1,16 @@
+{"t": 1795540796.716768, "adapter": "claude-code", "pid": 64822, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-full1/S35b/roots/alpha/app", "argv": []}
+{"t": 1795540796.7168741, "adapter": "claude-code", "pid": 64822, "kind": "request", "method": "initialize"}
+{"t": 1795540796.7181628, "adapter": "claude-code", "pid": 64822, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-full1/S35b/roots/alpha/app"}
+{"t": 1795540796.7194064, "adapter": "claude-code", "pid": 64822, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-full1/S35b/roots/alpha/app"}
+{"t": 1795540796.723581, "adapter": "claude-code", "pid": 64822, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795540799.4811335, "adapter": "claude-code", "pid": 64822, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "first light"}
+{"t": 1795540799.4813812, "adapter": "claude-code", "pid": 64822, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795540819.9280374, "adapter": "claude-code", "pid": 64822, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "/review the parser"}
+{"t": 1795540819.9282873, "adapter": "claude-code", "pid": 64822, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795540823.326841, "adapter": "claude-code", "pid": 64822, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "/review"}
+{"t": 1795540823.3270435, "adapter": "claude-code", "pid": 64822, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795540826.724342, "adapter": "claude-code", "pid": 64822, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "/lanternize"}
+{"t": 1795540826.7245717, "adapter": "claude-code", "pid": 64822, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795540830.1248035, "adapter": "claude-code", "pid": 64822, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "quit"}
+{"t": 1795540830.1250584, "adapter": "claude-code", "pid": 64822, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795540835.6696155, "adapter": "claude-code", "pid": 64822, "kind": "stdin_eof"}

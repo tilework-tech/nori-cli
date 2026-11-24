@@ -1,0 +1,10 @@
+{"t": 1795539899.137937, "adapter": "claude-code", "pid": 26494, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-c/S38c/roots/alpha/app", "argv": []}
+{"t": 1795539899.1380124, "adapter": "claude-code", "pid": 26494, "kind": "request", "method": "initialize"}
+{"t": 1795539899.1392512, "adapter": "claude-code", "pid": 26494, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-c/S38c/roots/alpha/app"}
+{"t": 1795539899.1401627, "adapter": "claude-code", "pid": 26494, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-c/S38c/roots/alpha/app"}
+{"t": 1795539899.144265, "adapter": "claude-code", "pid": 26494, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795539899.1448905, "adapter": "claude-code", "pid": 26494, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "first errand"}
+{"t": 1795539899.1450808, "adapter": "claude-code", "pid": 26494, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795539911.9143682, "adapter": "claude-code", "pid": 26494, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "default"}
+{"t": 1795539920.296888, "adapter": "claude-code", "pid": 26494, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "after the change"}
+{"t": 1795539920.2970793, "adapter": "claude-code", "pid": 26494, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}

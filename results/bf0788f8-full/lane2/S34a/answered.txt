@@ -1,0 +1,36 @@
+shell$ RUST_LOG=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-full2/S34a/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› startup lantern word
+
+
+• claude-code heard: startup lantern word
+
+                                                                                                         [ acceptEdits ]
+› $ for skill listing
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

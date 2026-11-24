@@ -1,0 +1,36 @@
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-full0/S35i/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hold the lamp
+
+
+• tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+
+
+› hold the second lamp
+
+
+• Awaiting further instructions from the void (2s • esc to interrupt)
+
+                                                                                                         [ acceptEdits ]
+/
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-a/S41b/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+  3 ready
+
+                                                                                                         [ acceptEdits ]
+› @lan
+
+  src/lantern_glass.rs
+  src/lantern_wick.rs
+  docs/alpha_notes.md

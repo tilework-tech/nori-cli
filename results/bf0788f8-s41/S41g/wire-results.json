@@ -1,0 +1,178 @@
+{
+  "no_session_files": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "root": "/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app",
+      "matches": [
+        {
+          "path": "src/lantern_glass.rs",
+          "indices": [
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "path": "src/lantern_wick.rs",
+          "indices": [
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "path": "docs/alpha_notes.md",
+          "indices": [
+            6,
+            9,
+            11
+          ]
+        }
+      ]
+    }
+  },
+  "empty_query": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "root": "/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app",
+      "matches": []
+    }
+  },
+  "folders_tilde": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "result": {
+      "root": "/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app",
+      "matches": [
+        {
+          "path": "~/kiln_host/"
+        }
+      ]
+    }
+  },
+  "limit_0": {
+    "jsonrpc": "2.0",
+    "id": 5,
+    "result": {
+      "root": "/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app",
+      "matches": [
+        {
+          "path": "assets/"
+        }
+      ]
+    }
+  },
+  "limit_100": {
+    "jsonrpc": "2.0",
+    "id": 6,
+    "result": {
+      "root": "/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app",
+      "matches": [
+        {
+          "path": "docs/alpha_notes.md",
+          "indices": [
+            5
+          ]
+        },
+        {
+          "path": "shared/README.md",
+          "indices": [
+            2
+          ]
+        },
+        {
+          "path": "src/lantern_glass.rs",
+          "indices": [
+            5
+          ]
+        },
+        {
+          "path": "src/lantern_wick.rs",
+          "indices": [
+            5
+          ]
+        }
+      ]
+    }
+  },
+  "new_tilde": {
+    "jsonrpc": "2.0",
+    "id": 7,
+    "result": {
+      "session_id": "71b47cf8-fe62-4ee9-b202-5b5a6ef5647b",
+      "cwd": "/tmp/nori-host-tui-acceptance-a/S41g/homes/host/spool/app"
+    }
+  },
+  "new_tilde_user": {
+    "jsonrpc": "2.0",
+    "id": 8,
+    "error": {
+      "code": -32000,
+      "message": "session folder must be an absolute path: ~nobody/x"
+    }
+  },
+  "new_relative": {
+    "jsonrpc": "2.0",
+    "id": 9,
+    "result": {
+      "session_id": "cbed4ef3-ef38-42ad-b1a9-40d0ec8b3ee5",
+      "cwd": "/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app/docs"
+    }
+  },
+  "camel_sessionId": {
+    "jsonrpc": "2.0",
+    "id": 10,
+    "result": {
+      "root": "/tmp/nori-host-tui-acceptance-a/S41g/homes/host/spool/app",
+      "matches": [
+        {
+          "path": "src/spool_thread.rs",
+          "indices": [
+            4,
+            5,
+            6,
+            7,
+            8
+          ]
+        }
+      ]
+    }
+  },
+  "snake_session_id_registry": {
+    "jsonrpc": "2.0",
+    "id": 11,
+    "error": {
+      "code": -32602,
+      "message": "unknown field `session_id`, expected one of `sessionId`, `query`, `kind`, `limit`"
+    }
+  },
+  "unknown_session": {
+    "jsonrpc": "2.0",
+    "id": 12,
+    "error": {
+      "code": -32602,
+      "message": "unknown session"
+    }
+  },
+  "watcher": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "root": "/tmp/nori-host-tui-acceptance-a/S41g/homes/host/spool/app",
+      "matches": [
+        {
+          "path": "src/spool_thread.rs",
+          "indices": [
+            4,
+            5,
+            6,
+            7,
+            8
+          ]
+        }
+      ]
+    }
+  }
+}

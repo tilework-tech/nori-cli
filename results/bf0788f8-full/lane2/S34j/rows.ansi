@@ -1,0 +1,35 @@
+shell$ RUST_LOG=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/nori-host-tui-acceptance-full2/S34j/roots/alpha/app
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude
+
+[2m[39m• [0m[39m[49mListing Lantern Claude sessions…
+
+
+  [38;5;8mResume a live session or start a new one
+
+[39m   [1m [0m[39m[49m [1mSession[0m[39m[49m                                    [1mSource[0m[39m[49m     [1mWorking directory[0m[39m[49m         [1mUpdated[0m[39m[49m           [1mTurn status
+[0m[39m[49m  [38;5;2m▏ [39m Start a new session                        CLI        Not reported              now               ready         [38;5;2m▕
+[39m     Saved orchard survey                       Local      /tmp/nori-host-tui-acce…  unknown           Not reported
+  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2m/[39m [38;5;8msearch  [38;5;2menter[39m [38;5;8mselect  [38;5;2mesc[39m [38;5;8mclose
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

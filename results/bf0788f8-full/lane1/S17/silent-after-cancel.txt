@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · hold the lamp · app · ready · Approvals: Agent
+
+ › You
+ hold the lamp
+
+ tick 1 tick 2 tick 3 tick 4
+
+ Connection lost. Reconnecting… Host stopped responding
+
+ tick 5 tick 6 tick 7 tick 8 tick 9 tick 10 tick 11 tick 12 tick 13 tick 14 tick 15 tick 16 tick 17 tick 18 tick 19
+ tick 20 tick 21 tick 22 tick 23 tick 24 tick 25 tick 26 tick 27 tick 28 tick 29 tick 30 tick 31 tick 32 tick 33 tick
+ 34 tick 35 tick 36 tick 37 tick 38 tick 39 tick 40 tick 41 tick 42 tick 43 tick 44 tick 45 tick 46 tick 47 tick 48
+ tick 49 tick 50 tick 51 tick 52 tick 53 tick 54 tick 55 tick 56 tick 57 tick 58 tick 59 tick 60 tick 61 tick 62 tick
+ 63 tick 64 tick 65 tick 66 tick 67 tick 68 tick 69 tick 70 tick 71 tick 72 tick 73 tick 74 tick 75 tick 76 tick 77
+ tick 78 tick 79 tick 80 tick 81
+
+ tick 82
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

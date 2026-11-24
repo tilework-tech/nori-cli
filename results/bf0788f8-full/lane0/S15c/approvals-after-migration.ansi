@@ -1,0 +1,35 @@
+shell$ nori --skip-trust-directory
+[2m• [0m[39m[49mApproval preset Read Only is now `[host] default_mode = "ask"`: new sessions start in Ask. sandbox_mode stays "read-
+only"; /approvals no longer changes it.
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/nori-host-tui-acceptance-full0/S15c/roots/alpha/app
+[2m  Agent        [0m[39m[49mLantern Opencode
+
+[2m• [0m[39m[49mLantern Opencode options: Mode=[1m[38;5;6mbuild[0;2m[39m[49m (/config to change)
+
+
+[0m[39m[49m  [1mApprovals for this session
+[0m[39m[49m  [38;5;8mNew sessions start in the host default. The sandbox is set separately.
+
+[39m   1. Ask (not available)
+      [38;5;8mLantern Opencode has no mode that asks before every edit and command.
+[39m  [38;5;2m▏2.[39m Agent (current)                                                                                                [38;5;2m▕
+[39m  [38;5;2m▏[39m   [38;5;8mThe agent asks when it judges it needs to.                                                                     [38;5;2m▕
+[39m   3. Approve all
+      [38;5;8mNori approves every permission request.
+[39m  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mselect  [38;5;2mesc[39m [38;5;8mclose
+
+
+
+
+
+
+
+
+
+
+
+
+
+

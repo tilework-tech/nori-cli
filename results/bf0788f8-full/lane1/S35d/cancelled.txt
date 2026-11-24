@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-full1/S35d/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hold the lamp
+
+
+• Unrecognized command '/review'. Type "/" for a list of supported commands.
+
+• tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 tick 10 tick 11 tick 12 tick 13 tick 14 tick 15 tick 16
+  tick 17 tick 18 tick 19 tick 20 tick 21 tick 22 tick 23 tick 24 tick 25 tick 26 tick 27 tick 28 tick 29 tick 30 tick
+  31 tick 32 tick 33
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+
+                                                                                                         [ acceptEdits ]
+› ! for shell commands
+
+
+
+
+
+
+
+
+
+
+
+
+

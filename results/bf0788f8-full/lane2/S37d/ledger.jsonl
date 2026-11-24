@@ -1,0 +1,8 @@
+{"t": 1795540910.480897, "adapter": "claude-code", "pid": 69292, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-full2/S37d/roots/alpha/app", "argv": []}
+{"t": 1795540910.4809804, "adapter": "claude-code", "pid": 69292, "kind": "request", "method": "initialize"}
+{"t": 1795540910.4822645, "adapter": "claude-code", "pid": 69292, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-full2/S37d/roots/alpha/app"}
+{"t": 1795540910.4832559, "adapter": "claude-code", "pid": 69292, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-full2/S37d/roots/alpha/app"}
+{"t": 1795540910.4867668, "adapter": "claude-code", "pid": 69292, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795540918.7175083, "adapter": "claude-code", "pid": 69292, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "perm check"}
+{"t": 1795540918.718857, "adapter": "claude-code", "pid": 69292, "kind": "response", "id": 9000, "body": {"outcome": {"outcome": "selected", "optionId": "allow"}}}
+{"t": 1795540918.8565943, "adapter": "claude-code", "pid": 69292, "kind": "stdin_eof"}

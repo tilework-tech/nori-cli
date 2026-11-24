@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ Sessions · /new starts a session · ctrl+d detaches
+
+ No session selected. Use /sessions to browse or /new to start.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/ new ./assets/laptop-only/
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

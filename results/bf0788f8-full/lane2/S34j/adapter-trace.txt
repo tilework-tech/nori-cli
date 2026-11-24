@@ -1,0 +1,5 @@
+66443 initialize - ''
+66443 session/list - ''
+66443 session/load saved-orchard ''
+66443 session/set_config_option saved-orchard ''
+66443 session/prompt saved-orchard 'ession.\n</context>\n\nstartup lantern word'

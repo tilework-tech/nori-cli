@@ -1,0 +1,36 @@
+shell$ PATH=/tmp/nori-host-tui-acceptance-full2/S34k/skillsets-bin:$PATH RUST_LOG=nori_host_runtime=debug,nori_harness=d
+ebug nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-full2/S34k/roots/alpha/app
+  Agent        Claude
+
+✔ Switched to skillset "default"
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› startup lantern word
+
+
+• claude-code heard: startup lantern word
+
+                                                                                                         [ acceptEdits ]
+› ! for shell commands
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

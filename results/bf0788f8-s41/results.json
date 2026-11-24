@@ -1,0 +1,272 @@
+[
+  {
+    "scenario": "S41a",
+    "check": "a.session_one_in_alpha",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance-a/S41a/roots/alpha/app"
+  },
+  {
+    "scenario": "S41a",
+    "check": "a.controller_at_offers_alpha",
+    "passed": true,
+    "detail": " Nori host  CONTROLLING\n claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent\n\n Ready. Send a prompt to begin.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "b.tilde_expands_with_host_home",
+    "passed": true,
+    "detail": "{'cwd': '/tmp/nori-host-tui-acceptance-a/S41a/homes/host/spool/app', 'host_home': '/tmp/nori-host-tui-acceptance-a/S41a/homes/host/spool/app', 'client_home': '/tmp/nori-host-tui-acceptance-a/S41a/homes/laptop/spool/app'}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "b.controller_at_follows_new_session",
+    "passed": true,
+    "detail": " Nori host  CONTROLLING\n claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent\n\n Ready. Send a prompt to begin.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a @spool\n\n  src/spool_thread.rs\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "host.session_cwds",
+    "passed": true,
+    "detail": "{'f936e170-522a-446c-a440-75dd44443638': '/tmp/nori-host-tui-acceptance-a/S41a/roots/alpha/app', '90dd246a-4304-47dc-a838-fbfd621bb097': '/tmp/nori-host-tui-acceptance-a/S41a/homes/host/spool/app'}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_at_offers_its_session_folder",
+    "passed": true,
+    "detail": " Nori host  WATCHING \u00b7 read-only \u00b7 alt+t take control\n claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent\n\n Ready. Send a prompt to begin.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.find_paths_answered_for_watcher_client",
+    "passed": true,
+    "detail": "{'before': {'2': 2}, 'after': {'2': 2, '4': 2}}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_tab_completes_from_host",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_still_watching",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.plain_new_inherits_foreground_folder",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance-a/S41a/homes/host/spool/app"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.tab_completes_from_host_home",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.tab_completes_spool",
+    "passed": true,
+    "detail": "['/ new ~/spool/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "s.at_follows_switched_session",
+    "passed": true,
+    "detail": "[{'lan': ['lantern_wick'], 'spool': [], 'identity': 'claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent'}, {'lan': [], 'spool': ['spool_thread'], 'identity': 'claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent'}, {'lan': [], 'spool': ['spool_thread'], 'identity': 'claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent'}]"
+  },
+  {
+    "scenario": "S41b",
+    "check": "p.at_offers_launch_folder",
+    "passed": true,
+    "detail": "st-directory\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/nori-host-tui-acceptance-a/S41b/roots/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n                                                                                                         [ acceptEdits ]\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S41b",
+    "check": "p.new_dir_starts_in_dir",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance-a/S41b/roots/beta/app"
+  },
+  {
+    "scenario": "S41b",
+    "check": "p.at_follows_new_session",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/nori-host-tui-acceptance-a/S41b/roots/beta/app \u00b7 Approvals: Agent\n  Agent        Claude \u00b7 acceptEdits\n\n  2 ready\n\n                                                                                                         [ acceptEdits ]\n\u203a @harb\n\n  src/harbor_bell.rs\n  src/harbor_tide.rs\n"
+  },
+  {
+    "scenario": "S41b",
+    "check": "p.plain_new_inherits",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance-a/S41b/roots/beta/app"
+  },
+  {
+    "scenario": "S41b",
+    "check": "p.switch_back_at_alpha",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/nori-host-tui-acceptance-a/S41b/roots/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n  3 ready\n\n                                                                                                         [ acceptEdits ]\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.at_offers_host_folder",
+    "passed": true,
+    "detail": " Nori host  CONTROLLING\n Sessions \u00b7 /new starts a session \u00b7 ctrl+d detaches\n\n No session selected. Use /sessions to browse or /new to start.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_relative_from_host_folder",
+    "passed": true,
+    "detail": "['/ new ./assets/alpha-only/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_tilde_from_host_home",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.relative_new_uses_host_folder",
+    "passed": true,
+    "detail": "{'cwd': '/tmp/nori-host-tui-acceptance-a/S41c/roots/alpha/app/docs', 'host': '/tmp/nori-host-tui-acceptance-a/S41c/roots/alpha/app/docs', 'client': '/tmp/nori-host-tui-acceptance-a/S41c/roots/laptop/app/docs'}"
+  },
+  {
+    "scenario": "S41d",
+    "check": "d.tab_tilde_completes",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41d",
+    "check": "d.tab_relative_from_session",
+    "passed": true,
+    "detail": "['/ new ./assets/']"
+  },
+  {
+    "scenario": "S41d",
+    "check": "d.tilde_new_uses_home",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance-a/S41d/homes/host/spool/app"
+  },
+  {
+    "scenario": "S41d",
+    "check": "d.at_follows_tilde_session",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  \u203a Nori CLI v0.0.0\n\n  System       ~/spool/app \u00b7 Approvals: Agent\n  Agent        Claude \u00b7 acceptEdits\n\n  2 ready\n\n                                                                                                         [ acceptEdits ]\n\u203a @spool\n\n  src/spool_thread.rs\n"
+  },
+  {
+    "scenario": "S41d",
+    "check": "d.tab_relative_follows_session",
+    "passed": true,
+    "detail": "['/ new ./src/']"
+  },
+  {
+    "scenario": "S41d",
+    "check": "d.tab_follows_switch",
+    "passed": true,
+    "detail": "['/ new ./s']"
+  },
+  {
+    "scenario": "S41e",
+    "check": "e.at_offers_launch_folder",
+    "passed": true,
+    "detail": "=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/nori-host-tui-acceptance-a/S41e/roots/beta/app\n  Agent        Claude\n\n\u25a0 Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is\navailable from claude-code\n\n\n\u203a @harb\n\n  src/harbor_bell.rs\n  src/harbor_tide.rs\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S41e",
+    "check": "e.tab_from_launch_folder",
+    "passed": true,
+    "detail": "['/ new ./assets/']"
+  },
+  {
+    "scenario": "S41e",
+    "check": "e.plain_new_uses_launch_folder",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance-a/S41e/roots/beta/app"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.capability_advertised",
+    "passed": true,
+    "detail": "{\"capabilities\": {\"nori_sessions\": {\"version\": 1, \"envelopes\": true, \"reconnect\": true, \"session_cwd\": true, \"find_paths\": true, \"follow_up\": 1}}, \"server_info\": {\"name\": \"nori\", \"version\": \"0.0.0\"}, \"protocolVersion\": 1, \"agentInfo\": {\"name\": \"nori-host\", \"version\": \"0.0.0+contract.1.2.0\"}, \"agentC"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.no_session_root_is_host_folder",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.files_relative_and_links_out_dropped",
+    "passed": true,
+    "detail": "['src/lantern_glass.rs', 'src/lantern_wick.rs', 'docs/alpha_notes.md']"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.empty_files_query_no_matches",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'result': {'root': '/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app', 'matches': []}}"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.folders_tilde_host_home",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'result': {'root': '/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app', 'matches': [{'path': '~/kiln_host/'}]}}"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.limit_clamped_low",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 5, 'result': {'root': '/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app', 'matches': [{'path': 'assets/'}]}}"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.limit_100_accepted",
+    "passed": true,
+    "detail": "None"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.new_tilde_host_home",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 7, 'result': {'session_id': '71b47cf8-fe62-4ee9-b202-5b5a6ef5647b', 'cwd': '/tmp/nori-host-tui-acceptance-a/S41g/homes/host/spool/app'}}"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.new_tilde_user_refused",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 8, 'error': {'code': -32000, 'message': 'session folder must be an absolute path: ~nobody/x'}}"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.new_relative_host_folder",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 9, 'result': {'session_id': 'cbed4ef3-ef38-42ad-b1a9-40d0ec8b3ee5', 'cwd': '/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app/docs'}}"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.sessionId_camel_scopes_to_session",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 10, 'result': {'root': '/tmp/nori-host-tui-acceptance-a/S41g/homes/host/spool/app', 'matches': [{'path': 'src/spool_thread.rs', 'indices': [4, 5, 6, 7, 8]}]}}"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.registry_spelling_session_id_accepted",
+    "passed": false,
+    "detail": "{'jsonrpc': '2.0', 'id': 11, 'error': {'code': -32602, 'message': 'unknown field `session_id`, expected one of `sessionId`, `query`, `kind`, `limit`'}}"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.unknown_session_32602",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 12, 'error': {'code': -32602, 'message': 'unknown session'}}"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g.watcher_allowed",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {'root': '/tmp/nori-host-tui-acceptance-a/S41g/homes/host/spool/app', 'matches': [{'path': 'src/spool_thread.rs', 'indices': [4, 5, 6, 7, 8]}]}}"
+  }
+]

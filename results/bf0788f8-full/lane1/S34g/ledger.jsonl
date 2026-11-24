@@ -1,0 +1,13 @@
+{"t": 1795540766.0462422, "adapter": "claude-code", "pid": 63682, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-full1/S34g/roots/alpha/app", "argv": []}
+{"t": 1795540766.0463176, "adapter": "claude-code", "pid": 63682, "kind": "request", "method": "initialize"}
+{"t": 1795540766.0473146, "adapter": "claude-code", "pid": 63682, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-full1/S34g/roots/alpha/app"}
+{"t": 1795540766.049456, "adapter": "claude-code", "pid": 63682, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-full1/S34g/roots/alpha/app"}
+{"t": 1795540766.0496366, "adapter": "claude-code", "pid": 63682, "kind": "new_refused", "cwd": "/tmp/nori-host-tui-acceptance-full1/S34g/roots/alpha/app"}
+{"t": 1795540770.123635, "adapter": "claude-code", "pid": 63828, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-full1/S34g/roots/alpha/app", "argv": []}
+{"t": 1795540770.1237066, "adapter": "claude-code", "pid": 63828, "kind": "request", "method": "initialize"}
+{"t": 1795540770.1249175, "adapter": "claude-code", "pid": 63828, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-full1/S34g/roots/alpha/app"}
+{"t": 1795540770.126768, "adapter": "claude-code", "pid": 63828, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-full1/S34g/roots/alpha/app"}
+{"t": 1795540770.1304185, "adapter": "claude-code", "pid": 63828, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795540770.1357713, "adapter": "claude-code", "pid": 63828, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nstartup lantern word"}
+{"t": 1795540770.136381, "adapter": "claude-code", "pid": 63828, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795540773.389101, "adapter": "claude-code", "pid": 63828, "kind": "stdin_eof"}

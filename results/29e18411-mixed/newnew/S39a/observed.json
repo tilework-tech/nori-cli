@@ -1,0 +1,29 @@
+{
+  "host_list": [
+    "agent",
+    "approve-all"
+  ],
+  "menu": [
+    "agent",
+    "approve-all"
+  ],
+  "menu_rows": {
+    "offered": [
+      "agent",
+      "approve-all"
+    ],
+    "disabled": [
+      "ask"
+    ]
+  },
+  "ask_rows": [
+    "Ask                    Not available: this agent has no mode that asks before every edit and command."
+  ],
+  "picked_ask": true,
+  "host_mode_after": "agent",
+  "reason_lines": [
+    "/approvals: this agent has no mode that asks before every edit and command",
+    "/approvals: this agent has no mode that asks before every edit and command",
+    "alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  ]
+}

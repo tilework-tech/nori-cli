@@ -1,0 +1,28 @@
+{
+  "host_mode": "agent",
+  "after_new": {
+    "running": true,
+    "mode_label": "agent",
+    "error_lines": [],
+    "tail": [
+      " Nori host  CONTROLLING",
+      " claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent",
+      " Ready. Send a prompt to begin.",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  },
+  "after_prompt": {
+    "running": true,
+    "mode_label": "agent",
+    "error_lines": [],
+    "tail": [
+      " claude-code \u00b7 fresh errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent",
+      " \u203a You",
+      " fresh errand",
+      " claude-code heard: fresh errand",
+      "\u203a Send a prompt",
+      "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+    ]
+  }
+}

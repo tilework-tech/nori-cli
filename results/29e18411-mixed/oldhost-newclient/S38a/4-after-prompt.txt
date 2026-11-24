@@ -1,0 +1,36 @@
+ Nori host  WATCHING · read-only · alt+t take control
+ claude-code · first errand · app · ready · Approvals: Ask
+
+ › You
+ first errand
+
+ claude-code heard: first errand
+
+ Control moved to another terminal. You are now watching; alt+t takes control.
+
+ › You
+ after the change
+
+ claude-code heard: after the change
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Control moved to another terminal. You are now watching; alt+t takes control.
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

@@ -1,0 +1,23 @@
+[
+  {
+    "lan": [
+      "lantern_wick"
+    ],
+    "spool": [],
+    "identity": "claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent"
+  },
+  {
+    "lan": [],
+    "spool": [
+      "spool_thread"
+    ],
+    "identity": "claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent"
+  },
+  {
+    "lan": [],
+    "spool": [
+      "spool_thread"
+    ],
+    "identity": "claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent"
+  }
+]

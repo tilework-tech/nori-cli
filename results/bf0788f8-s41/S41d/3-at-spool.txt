@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/spool/app · Approvals: Agent
+  Agent        Claude · acceptEdits
+
+  2 ready
+
+                                                                                                         [ acceptEdits ]
+› @spool
+
+  src/spool_thread.rs

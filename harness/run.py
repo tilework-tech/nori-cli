@@ -3205,21 +3205,39 @@ def s40_card_and_badge_at_launch(ctx, legacy):
 # ---------------------------------------------------------------------------
 
 def spool_dirs(ctx):
-    """`~/spool/app` exists under both homes with different files, so `~` expansion shows whose home was used."""
+    """`~/spool/app` exists under both homes with different files, so `~` expansion shows whose home was used.
+    `~/kiln_host` and `~/kiln_laptop` exist only under one home each, so Tab on `~/kil` shows whose disk answered."""
     made = {}
     for name, leaf in (("host", "spool_thread.rs"), ("laptop", "decoy_spool.rs")):
         d = ctx.fx["homes"][name] / "spool" / "app"
         (d / "src").mkdir(parents=True, exist_ok=True)
         (d / "src" / leaf).write_text(f"synthetic {name} spool file\n")
+        (ctx.fx["homes"][name] / f"kiln_{name}").mkdir(exist_ok=True)
         made[name] = d.resolve()
     return made
 
 
-def at_rows(t, query, settle=2.0):
+def at_rows(t, query, settle=2.0, label=None):
     t.keys("C-u")
     t.type(query)
     time.sleep(settle)
     screen = t.screen()
+    if label:
+        t.capture(label)
+    t.keys("C-u")
+    return screen
+
+
+def tab_rows(t, draft, settle=1.5, label=None):
+    """Type a draft, press Tab once, return (composer+notice text) and clear."""
+    t.keys("C-u")
+    t.type(draft)
+    time.sleep(0.6)
+    t.keys("Tab")
+    time.sleep(settle)
+    screen = t.screen()
+    if label:
+        t.capture(label)
     t.keys("C-u")
     return screen
 
@@ -3229,33 +3247,58 @@ def last_new_cwd(ctx):
     return news[-1].get("cwd") if news else None
 
 
+def new_session_typed(ctx, t, text):
+    news = len(ctx.ledger("request", "session/new"))
+    t.keys("C-u")
+    t.type(text)
+    time.sleep(0.8)
+    t.keys("Enter")
+    time.sleep(0.8)
+    if re.search(r"^\s*›?\s*/new\b", t.screen(), re.M):
+        t.keys("Enter")
+    started = wait_ledger(ctx, lambda r: len(ctx.ledger("request", "session/new")) > news, 15)
+    time.sleep(1.5)
+    return bool(started)
+
+
+def host_requests_by_client(ctx, method):
+    """{client id: count} of one ACP method in the host debug log."""
+    out = {}
+    for log in sorted((ctx.fx["homes"]["host"] / "log").glob("nori-acp*")):
+        for line in log.read_text(errors="replace").splitlines():
+            if "host ACP request" in line and f" method={method}" in line:
+                m = re.search(r"client=(\d+)", line)
+                out[m.group(1) if m else "?"] = out.get(m.group(1) if m else "?", 0) + 1
+    return out
+
+
+def remote_attach(ctx, name, sid=""):
+    endpoint, _ = wire.host_endpoint(ctx.fx["homes"]["host"])
+    token_file = ctx.fx["homes"]["host"] / "host" / "token"
+    t = ctx.term(name, cwd="laptop", home="laptop")
+    t.run(f"{CLIENT} attach --host {endpoint} --token-file {token_file} {sid}".strip())
+    return t
+
+
+def files_of(screen):
+    return {k for k in ("lantern_wick", "harbor_tide", "spool_thread", "decoy_laptop", "decoy_spool") if k in screen}
+
+
 def s41_attach_two_sessions_and_watcher(ctx):
     spool = spool_dirs(ctx)
     ctx.start_host(cwd="alpha", log=True)
     obs = ctx.observer()
-    endpoint, _ = wire.host_endpoint(ctx.fx["homes"]["host"])
-    token_file = ctx.fx["homes"]["host"] / "host" / "token"
-    c = ctx.term("controller", cwd="laptop", home="laptop")
-    c.run(f"{NORI} attach --host {endpoint} --token-file {token_file}")
+    c = remote_attach(ctx, "controller")
     attach_new_session(c, str(ctx.fx["roots"]["alpha"]))
     ctx.check("a.session_one_in_alpha", last_new_cwd(ctx) == str(ctx.fx["roots"]["alpha"]), last_new_cwd(ctx))
-    screen = at_rows(c, "@lan")
-    c_alpha = screen
+    screen = at_rows(c, "@lan", label="0-at-alpha")
     ctx.check("a.controller_at_offers_alpha", "lantern_wick" in screen and "decoy_laptop" not in screen, screen[-400:])
 
-    news = len(ctx.ledger("request", "session/new"))
-    c.type("/new ~/spool/app")
-    c.keys("Enter")
-    time.sleep(0.8)
-    if re.search(r"^\s*/new\b", c.screen(), re.M):
-        c.keys("Enter")
-    wait_ledger(ctx, lambda r: len(ctx.ledger("request", "session/new")) > news, 15)
-    time.sleep(1.5)
+    new_session_typed(ctx, c, "/new ~/spool/app")
     c.capture("1-new-tilde")
     ctx.check("b.tilde_expands_with_host_home", last_new_cwd(ctx) == str(spool["host"]),
               {"cwd": last_new_cwd(ctx), "host_home": str(spool["host"]), "client_home": str(spool["laptop"])})
-    screen = at_rows(c, "@spool")
-    c.capture("2-at-spool")
+    screen = at_rows(c, "@spool", label="2-at-spool")
     ctx.check("b.controller_at_follows_new_session", "spool_thread" in screen and "decoy_spool" not in screen
               and "lantern_" not in screen, screen[-400:])
 
@@ -3264,42 +3307,60 @@ def s41_attach_two_sessions_and_watcher(ctx):
     first = next((sid for sid, cwd in sessions.items() if cwd == str(ctx.fx["roots"]["alpha"])), None)
     ctx.check("host.session_cwds", first is not None and str(spool["host"]) in sessions.values(), sessions)
 
-    w = ctx.term("watcher", cwd="laptop", home="laptop")
-    w.run(f"{NORI} attach --host {endpoint} --token-file {token_file} {first[:8] if first else ''}".strip())
+    before = host_requests_by_client(ctx, "_nori/session/find_paths")
+    w = remote_attach(ctx, "watcher", first[:8] if first else "")
     w.wait_for(r"(WATCHING|watching)", 20, regex=True)
     time.sleep(1.5)
-    screen = at_rows(w, "@lan")
-    w.capture("3-watcher-at-alpha")
+    screen = at_rows(w, "@lan", label="3-watcher-at-alpha")
     ctx.check("w.watcher_at_offers_its_session_folder", "lantern_wick" in screen and "decoy_laptop" not in screen
               and "spool_thread" not in screen, screen[-400:])
-    reqs = host_requests(ctx)
-    ctx.check("w.find_paths_answered_for_watcher", "_nori/session/find_paths" in reqs,
-              sorted(set(reqs)))
+    wscreen = tab_rows(w, "/new ~/kil", label="3b-watcher-tab-kiln")
+    after = host_requests_by_client(ctx, "_nori/session/find_paths")
+    new_clients = [k for k in after if k not in before]
+    ctx.check("w.find_paths_answered_for_watcher_client", len(new_clients) == 1 and after[new_clients[0]] >= 2,
+              {"before": before, "after": after})
+    ctx.check("w.watcher_tab_completes_from_host", "kiln_host" in wscreen and "kiln_laptop" not in wscreen,
+              [l.strip() for l in wscreen.splitlines() if "kil" in l])
+    ctx.check("w.watcher_still_watching", re.search(r"WATCHING", w.screen()) is not None, last_nonblank(w.screen()))
 
-    news = len(ctx.ledger("request", "session/new"))
-    c.type("/new")
-    c.keys("Enter")
-    time.sleep(0.8)
-    if re.search(r"^\s*/new\b", c.screen(), re.M):
-        c.keys("Enter")
-    wait_ledger(ctx, lambda r: len(ctx.ledger("request", "session/new")) > news, 15)
-    time.sleep(1.5)
+    new_session_typed(ctx, c, "/new")
     ctx.check("c.plain_new_inherits_foreground_folder", last_new_cwd(ctx) == str(spool["host"]), last_new_cwd(ctx))
 
-    c.type("/new ~/spo")
-    c.keys("Tab")
-    time.sleep(1.2)
-    rows = [l.strip() for l in c.screen().splitlines() if "spo" in l]
-    c.capture("4-tab-tilde")
-    ctx.check("c.tab_completes_from_host", any("spool" in l for l in rows), rows)
-    c.keys("C-u")
+    screen = tab_rows(c, "/new ~/kil", label="4-tab-tilde")
+    ctx.check("c.tab_completes_from_host_home", "kiln_host" in screen and "kiln_laptop" not in screen,
+              [l.strip() for l in screen.splitlines() if "kil" in l])
+    screen = tab_rows(c, "/new ~/spo")
+    ctx.check("c.tab_completes_spool", "~/spool/" in screen, [l.strip() for l in screen.splitlines() if "spo" in l])
+
+    # Foreground switching through the session list: each visited session's `@` offers only its own folder.
+    seen = []
+    for i in range(3):
+        c.keys("C-u")
+        c.keys("M-s")
+        time.sleep(1.2)
+        if i == 0:
+            c.capture("5-session-list")
+        for _ in range(i):
+            c.keys("Down")
+            time.sleep(0.2)
+        c.keys("Enter")
+        time.sleep(1.5)
+        lan = at_rows(c, "@lan")
+        spo = at_rows(c, "@spool", label=f"6-switch-{i}")
+        seen.append({"lan": sorted(files_of(lan)), "spool": sorted(files_of(spo)),
+                     "identity": next((l.strip() for l in c.screen().splitlines() if "·" in l and "Approvals" in l), "")})
+    (ctx.dir / "switch-visits.json").write_text(json.dumps(seen, indent=2))
+    exclusive = all((v["lan"] == ["lantern_wick"] and v["spool"] == []) or
+                    (v["lan"] == [] and v["spool"] == ["spool_thread"]) for v in seen)
+    kinds = {"alpha" if v["lan"] else "spool" for v in seen}
+    ctx.check("s.at_follows_switched_session", exclusive and kinds == {"alpha", "spool"}, seen)
     (ctx.dir / "host-requests.txt").write_text("\n".join(host_requests(ctx)) + "\n")
     obs.close()
 
 
 def s41_plain_new_dir_and_at(ctx):
     t = start_fg(ctx)
-    screen = at_rows(t, "@lan")
+    screen = at_rows(t, "@lan", label="0-at-alpha")
     ctx.check("p.at_offers_launch_folder", "lantern_wick" in screen, screen[-400:])
     news = len(ctx.ledger("request", "session/new"))
     run_typed(t, f"/new {ctx.fx['roots']['beta']}", settle=3.0)
@@ -3307,8 +3368,7 @@ def s41_plain_new_dir_and_at(ctx):
     time.sleep(1)
     t.capture("1-new-beta")
     ctx.check("p.new_dir_starts_in_dir", last_new_cwd(ctx) == str(ctx.fx["roots"]["beta"]), last_new_cwd(ctx))
-    screen = at_rows(t, "@harb")
-    t.capture("2-at-beta")
+    screen = at_rows(t, "@harb", label="2-at-beta")
     ctx.check("p.at_follows_new_session", "harbor_tide" in screen and "lantern_" not in screen, screen[-400:])
     news = len(ctx.ledger("request", "session/new"))
     run_typed(t, "/new", settle=3.0)
@@ -3318,10 +3378,169 @@ def s41_plain_new_dir_and_at(ctx):
     time.sleep(1.5)
     t.keys("M-,")
     time.sleep(1.5)
-    screen = at_rows(t, "@lan")
-    t.capture("3-back-at-alpha")
+    screen = at_rows(t, "@lan", label="3-back-at-alpha")
     ctx.check("p.switch_back_at_alpha", "lantern_wick" in screen and "harbor_" not in screen, screen[-400:])
     quit_fg(t)
+
+
+def s41c_attach_no_session_defaults(ctx):
+    """A `--host` attach with no session on screen: `@`, Tab and relative `/new` use the host's folder."""
+    spool_dirs(ctx)
+    ctx.start_host(cwd="alpha", log=True)
+    c = remote_attach(ctx, "controller")
+    screen = c.wait_for(r"(Sessions|›)", 20, regex=True)
+    if "No sessions yet" in screen or "Sessions" in screen:
+        c.keys("Escape")
+    time.sleep(1)
+    c.capture("0-empty")
+    screen = at_rows(c, "@lan", label="1-at-no-session")
+    ctx.check("n.at_offers_host_folder", "lantern_wick" in screen and "decoy_laptop" not in screen, screen[-400:])
+    screen = tab_rows(c, "/new ./assets/", label="2-tab-relative")
+    ctx.check("n.tab_relative_from_host_folder", "alpha-only" in screen and "laptop-only" not in screen,
+              [l.strip() for l in screen.splitlines() if "assets" in l])
+    screen = tab_rows(c, "/new ~/kil")
+    ctx.check("n.tab_tilde_from_host_home", "kiln_host" in screen and "kiln_laptop" not in screen,
+              [l.strip() for l in screen.splitlines() if "kil" in l])
+    started = new_session_typed(ctx, c, "/new ./docs")
+    c.capture("3-new-relative")
+    want = str(ctx.fx["roots"]["alpha"] / "docs")
+    ctx.check("n.relative_new_uses_host_folder", started and last_new_cwd(ctx) == want,
+              {"cwd": last_new_cwd(ctx), "host": want, "client": str(ctx.fx["roots"]["laptop"] / "docs")})
+    c.keys("C-u")
+
+
+def s41d_plain_tilde_and_tab(ctx):
+    """Plain `nori`: `/new ~/…` and Tab on `/new` from the session on screen, including relative folders."""
+    spool = spool_dirs(ctx)
+    t = start_fg(ctx)
+    screen = tab_rows(t, "/new ~/kil", label="0-tab-tilde")
+    ctx.check("d.tab_tilde_completes", "~/kiln_host/" in screen, [l.strip() for l in screen.splitlines() if "kil" in l])
+    screen = tab_rows(t, "/new ./ass", label="1-tab-relative")
+    ctx.check("d.tab_relative_from_session", "./assets/" in screen, [l.strip() for l in screen.splitlines() if "ass" in l])
+    news = len(ctx.ledger("request", "session/new"))
+    run_typed(t, "/new ~/spool/app", settle=3.0)
+    wait_ledger(ctx, lambda r: len(ctx.ledger("request", "session/new")) > news, 15)
+    time.sleep(1)
+    t.capture("2-new-tilde")
+    ctx.check("d.tilde_new_uses_home", last_new_cwd(ctx) == str(spool["host"]), last_new_cwd(ctx))
+    screen = at_rows(t, "@spool", label="3-at-spool")
+    ctx.check("d.at_follows_tilde_session", "spool_thread" in screen and "lantern_" not in screen, screen[-400:])
+    screen = tab_rows(t, "/new ./s", label="4-tab-relative-spool")
+    ctx.check("d.tab_relative_follows_session", "./src/" in screen and "./shared" not in screen,
+              [l.strip() for l in screen.splitlines() if "./s" in l])
+    t.keys("M-,")
+    time.sleep(1.5)
+    screen = tab_rows(t, "/new ./s", label="5-tab-after-switch")
+    ctx.check("d.tab_follows_switch", "./s" in screen and "shared" in screen,
+              [l.strip() for l in screen.splitlines() if "./s" in l])
+    quit_fg(t)
+
+
+def s41e_plain_no_session(ctx):
+    """Plain `nori` after a refused start (no session): `@`, Tab and `/new` use the launch folder."""
+    (ctx.fx["control"] / "new-refuse").write_text("1")
+    t = ctx.term("fg", cwd="beta")
+    t.run(f"{HOST_LOG_ENV} {NORI} --skip-trust-directory")
+    wait_ledger(ctx, lambda r: r.get("kind") == "new_refused", timeout=15)
+    time.sleep(2.5)
+    t.keys("Escape")
+    time.sleep(0.5)
+    t.capture("0-refused")
+    screen = at_rows(t, "@harb", label="1-at-no-session")
+    ctx.check("e.at_offers_launch_folder", "harbor_tide" in screen and "lantern_" not in screen, screen[-400:])
+    screen = tab_rows(t, "/new ./ass", label="2-tab-no-session")
+    ctx.check("e.tab_from_launch_folder", "./assets/" in screen, [l.strip() for l in screen.splitlines() if "ass" in l])
+    news = len(ctx.ledger("request", "session/new"))
+    run_typed(t, "/new", settle=3.0)
+    wait_ledger(ctx, lambda r: len(ctx.ledger("request", "session/new")) > news, 15)
+    ctx.check("e.plain_new_uses_launch_folder", last_new_cwd(ctx) == str(ctx.fx["roots"]["beta"]), last_new_cwd(ctx))
+    quit_fg(t)
+
+
+def s41f_older_host(ctx):
+    """Run with --nori <older host> --client <new client>: no find_paths; this machine completes and names folders."""
+    spool = spool_dirs(ctx)
+    ctx.start_host(cwd="alpha", log=True)
+    c = remote_attach(ctx, "controller")
+    screen = c.wait_for(r"(Sessions|›)", 20, regex=True)
+    if "No sessions yet" in screen or "Sessions" in screen:
+        c.keys("Escape")
+    time.sleep(1)
+    started = new_session_typed(ctx, c, "/new ./docs")
+    ctx.check("o.relative_no_session_joined_to_terminal",
+              started and last_new_cwd(ctx) == str(ctx.fx["roots"]["laptop"] / "docs"), last_new_cwd(ctx))
+    started = new_session_typed(ctx, c, "/new ~/spool/app")
+    c.capture("0-new-tilde")
+    ctx.check("o.tilde_expanded_with_client_home", started and last_new_cwd(ctx) == str(spool["laptop"]),
+              {"cwd": last_new_cwd(ctx), "client": str(spool["laptop"]), "host": str(spool["host"])})
+    screen = tab_rows(c, "/new ~/kil", label="1-tab-local")
+    ctx.check("o.tab_completes_locally", "kiln_laptop" in screen and "kiln_host" not in screen,
+              [l.strip() for l in screen.splitlines() if "kil" in l])
+    screen = at_rows(c, "@spool", label="2-at-empty")
+    ctx.check("o.at_shows_nothing", not files_of(screen), sorted(files_of(screen)))
+    reqs = host_requests(ctx)
+    ctx.check("o.no_find_paths_sent", "_nori/session/find_paths" not in reqs, sorted(set(reqs)))
+    word = "kiln older host word"
+    submit(c, word)
+    ok = wait_text(c, f"heard: {word}", 20)
+    ctx.check("o.prompt_delivered", ok and len(prompts_with(ctx, word)) == 1, len(prompts_with(ctx, word)))
+    c.capture("3-prompt")
+    ctx.check("o.still_connected", "CONTROLLING" in c.screen(), last_nonblank(c.screen()))
+
+
+def s41g_wire_contract(ctx):
+    """`_nori/session/find_paths` and `_nori/session/new` on the wire, against the registry row and the repo docs."""
+    spool = spool_dirs(ctx)
+    alpha = ctx.fx["roots"]["alpha"]
+    (alpha / "src" / "lantern_escape.rs").symlink_to(ctx.fx["roots"]["laptop"] / "src" / "decoy_laptop.rs")
+    ctx.start_host(cwd="alpha", log=True)
+    endpoint, token = wire.host_endpoint(ctx.fx["homes"]["host"])
+    ctl = wire.Wire(endpoint, token, observe=False, log=ctx.dir / "controller-wire.jsonl")
+    caps = ctl.init.get("result", {})
+    ctx.check("g.capability_advertised", "find_paths" in json.dumps(caps), json.dumps(caps)[:300])
+    obs = ctx.observer()
+    out = {}
+
+    def fp(label, params, who=ctl):
+        r = who.call("_nori/session/find_paths", params)
+        out[label] = r
+        return r
+    r = fp("no_session_files", {"query": "lan", "kind": "files"})
+    res = r.get("result", {})
+    paths = [m["path"] for m in res.get("matches", [])]
+    ctx.check("g.no_session_root_is_host_folder", res.get("root") == str(alpha), res.get("root"))
+    ctx.check("g.files_relative_and_links_out_dropped", "src/lantern_wick.rs" in paths and
+              not any("lantern_escape" in p for p in paths), paths)
+    r = fp("empty_query", {"query": "", "kind": "files"})
+    ctx.check("g.empty_files_query_no_matches", r.get("result", {}).get("matches") == [], r)
+    r = fp("folders_tilde", {"query": "~/kil", "kind": "folders"})
+    ctx.check("g.folders_tilde_host_home", [m["path"] for m in r.get("result", {}).get("matches", [])] == ["~/kiln_host/"], r)
+    r = fp("limit_0", {"query": "", "kind": "folders", "limit": 0})
+    ctx.check("g.limit_clamped_low", "result" in r and len(r["result"]["matches"]) == 1, r)
+    r = fp("limit_100", {"query": "a", "kind": "files", "limit": 100})
+    ctx.check("g.limit_100_accepted", "result" in r, r.get("error"))
+    news = ctl.call("_nori/session/new", {"cwd": "~/spool/app"}, timeout=30)
+    out["new_tilde"] = news
+    sid = news.get("result", {}).get("session_id")
+    ctx.check("g.new_tilde_host_home", news.get("result", {}).get("cwd") == str(spool["host"]), news)
+    r = ctl.call("_nori/session/new", {"cwd": "~nobody/x"}, timeout=30)
+    out["new_tilde_user"] = r
+    ctx.check("g.new_tilde_user_refused", "error" in r, r)
+    r = ctl.call("_nori/session/new", {"cwd": "docs"}, timeout=30)
+    out["new_relative"] = r
+    ctx.check("g.new_relative_host_folder", r.get("result", {}).get("cwd") == str(alpha / "docs"), r)
+    r = fp("camel_sessionId", {"sessionId": sid, "query": "spool", "kind": "files"})
+    ctx.check("g.sessionId_camel_scopes_to_session", r.get("result", {}).get("root") == str(spool["host"]), r)
+    r = fp("snake_session_id_registry", {"session_id": sid, "query": "spool", "kind": "files"})
+    ctx.check("g.registry_spelling_session_id_accepted", r.get("result", {}).get("root") == str(spool["host"]), r)
+    r = fp("unknown_session", {"sessionId": "no-such-session", "query": "x", "kind": "files"})
+    ctx.check("g.unknown_session_32602", r.get("error", {}).get("code") == -32602, r)
+    r = fp("watcher", {"sessionId": sid, "query": "spool", "kind": "files"}, who=obs)
+    ctx.check("g.watcher_allowed", r.get("result", {}).get("root") == str(spool["host"]), r)
+    (ctx.dir / "wire-results.json").write_text(json.dumps(out, indent=2))
+    ctl.close()
+    obs.close()
+
 
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
@@ -3425,6 +3644,11 @@ SCENARIOS = {
     "S40c": ("plain nori: migrated Read Only; card and badge at launch", lambda c: s40_card_and_badge_at_launch(c, True)),
     "S41a": ("cwd: attach, separate client home/folder, two sessions, watcher; @, /new ~, /new, Tab", s41_attach_two_sessions_and_watcher),
     "S41b": ("cwd: plain nori /new DIR, @ follows the session on screen", s41_plain_new_dir_and_at),
+    "S41c": ("cwd: attach --host with no session: @, Tab and relative /new use the host folder", s41c_attach_no_session_defaults),
+    "S41d": ("cwd: plain nori /new ~ and Tab from the session on screen", s41d_plain_tilde_and_tab),
+    "S41e": ("cwd: plain nori with no session uses the launch folder", s41e_plain_no_session),
+    "S41f": ("cwd: older host (no find_paths) with a newer attach client", s41f_older_host),
+    "S41g": ("cwd: find_paths and session/new on the wire vs registry", s41g_wire_contract),
     "S36": ("startup activation window swept by Enter time", s36_startup_race),
     "S36b": ("startup activation window swept by typing time", lambda c: s36_startup_race(c, burst_at_reply=True)),
 }

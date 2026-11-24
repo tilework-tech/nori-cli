@@ -1,0 +1,266 @@
+[
+  {
+    "scenario": "S38a",
+    "check": "join.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'agent', 'error_lines': [], 'tail': [' claude-code \u00b7 first errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' \u203a You', ' first errand', ' claude-code heard: first errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']}"
+  },
+  {
+    "scenario": "S38a",
+    "check": "join.shows_conversation",
+    "passed": true,
+    "detail": "[' claude-code \u00b7 first errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' \u203a You', ' first errand', ' claude-code heard: first errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38a",
+    "check": "join.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.host_now_ask",
+    "passed": true,
+    "detail": "{'start': 'agent', 'now': 'ask'}"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'ask', 'error_lines': [], 'tail': [' first errand', ' claude-code heard: first errand', ' Control moved to another terminal. You are now watching; alt+t takes control.', ' Control moved to another terminal. You are now watching; alt+t takes control.', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']}"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38a",
+    "check": "change.client_label_matches_host",
+    "passed": true,
+    "detail": "{'ui': 'ask', 'host': 'ask'}"
+  },
+  {
+    "scenario": "S38a",
+    "check": "follow.prompt_reached_adapter_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S38a",
+    "check": "follow.client_shows_reply",
+    "passed": true,
+    "detail": "[' \u203a You', ' after the change', ' claude-code heard: after the change', ' Control moved to another terminal. You are now watching; alt+t takes control.', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'agent', 'error_lines': [], 'tail': [' Nori host  CONTROLLING', ' claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' Ready. Send a prompt to begin.', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']}"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.prompt_reached_adapter_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_shows_reply",
+    "passed": true,
+    "detail": "[' claude-code \u00b7 fresh errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' \u203a You', ' fresh errand', ' claude-code heard: fresh errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_label_matches_host",
+    "passed": true,
+    "detail": "{'ui': 'agent', 'host': 'agent'}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "join.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'agent', 'error_lines': [], 'tail': [' claude-code \u00b7 first errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' \u203a You', ' first errand', ' claude-code heard: first errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "join.shows_conversation",
+    "passed": true,
+    "detail": "[' claude-code \u00b7 first errand \u00b7 app \u00b7 ready \u00b7 Approvals: Agent', ' \u203a You', ' first errand', ' claude-code heard: first errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S38c",
+    "check": "join.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.host_now_ask",
+    "passed": true,
+    "detail": "{'start': 'agent', 'now': 'ask'}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'ask', 'error_lines': [], 'tail': [' claude-code \u00b7 first errand \u00b7 app \u00b7 ready \u00b7 Approvals: Ask', ' \u203a You', ' first errand', ' claude-code heard: first errand', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.client_label_matches_host",
+    "passed": true,
+    "detail": "{'ui': 'ask', 'host': 'ask'}"
+  },
+  {
+    "scenario": "S38c",
+    "check": "change.menu_marks_host_mode_current",
+    "passed": true,
+    "detail": "\u203a Ask (current)          Ask before every edit and command."
+  },
+  {
+    "scenario": "S38c",
+    "check": "follow.prompt_reached_adapter_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S38c",
+    "check": "follow.client_shows_reply",
+    "passed": true,
+    "detail": "[' claude-code heard: first errand', ' \u203a You', ' after the change', ' claude-code heard: after the change', '\u203a Send a prompt', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "a.session_one_in_alpha",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance-a/S41a/roots/alpha/app"
+  },
+  {
+    "scenario": "S41a",
+    "check": "a.controller_at_offers_alpha",
+    "passed": false,
+    "detail": " Nori host  CONTROLLING\n claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent\n\n Ready. Send a prompt to begin.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a @lan\n\n  loading...\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "b.tilde_expands_with_host_home",
+    "passed": false,
+    "detail": "{'cwd': '/tmp/nori-host-tui-acceptance-a/S41a/homes/laptop/spool/app', 'host_home': '/tmp/nori-host-tui-acceptance-a/S41a/homes/host/spool/app', 'client_home': '/tmp/nori-host-tui-acceptance-a/S41a/homes/laptop/spool/app'}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "b.controller_at_follows_new_session",
+    "passed": false,
+    "detail": " Nori host  CONTROLLING\n claude-code \u00b7 new session \u00b7 ~/spool/app \u00b7 ready \u00b7 Approvals: Agent\n\n Ready. Send a prompt to begin.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a @spool\n\n  loading...\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "host.session_cwds",
+    "passed": false,
+    "detail": "{'800578a1-d53a-46ee-8b3f-dd0d147b63df': '/tmp/nori-host-tui-acceptance-a/S41a/roots/alpha/app', '94f5e9dd-9c2e-4756-9fa5-50e89f964c14': '/tmp/nori-host-tui-acceptance-a/S41a/homes/laptop/spool/app'}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_at_offers_its_session_folder",
+    "passed": false,
+    "detail": " Nori host  WATCHING \u00b7 read-only \u00b7 alt+t take control\n claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent\n\n Ready. Send a prompt to begin.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a @lan\n\n  loading...\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.find_paths_answered_for_watcher_client",
+    "passed": false,
+    "detail": "{'before': {}, 'after': {}}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_tab_completes_from_host",
+    "passed": false,
+    "detail": "['/ new ~/kiln_laptop/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_still_watching",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.plain_new_inherits_foreground_folder",
+    "passed": false,
+    "detail": "/tmp/nori-host-tui-acceptance-a/S41a/roots/alpha/app"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.tab_completes_from_host_home",
+    "passed": false,
+    "detail": "['/ new ~/kiln_laptop/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.tab_completes_spool",
+    "passed": true,
+    "detail": "['/ new ~/spool/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "s.at_follows_switched_session",
+    "passed": false,
+    "detail": "[{'lan': [], 'spool': [], 'identity': 'claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent'}, {'lan': [], 'spool': [], 'identity': 'claude-code \u00b7 new session \u00b7 ~/spool/app \u00b7 ready \u00b7 Approvals: Agent'}, {'lan': [], 'spool': [], 'identity': 'claude-code \u00b7 new session \u00b7 app \u00b7 ready \u00b7 Approvals: Agent'}]"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.relative_no_session_joined_to_terminal",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance-a/S41f/roots/laptop/app/docs"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.tilde_expanded_with_client_home",
+    "passed": true,
+    "detail": "{'cwd': '/tmp/nori-host-tui-acceptance-a/S41f/homes/laptop/spool/app', 'client': '/tmp/nori-host-tui-acceptance-a/S41f/homes/laptop/spool/app', 'host': '/tmp/nori-host-tui-acceptance-a/S41f/homes/host/spool/app'}"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.tab_completes_locally",
+    "passed": true,
+    "detail": "['/ new ~/kiln_laptop/']"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.at_shows_nothing",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.no_find_paths_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.prompt_delivered",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.still_connected",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  }
+]

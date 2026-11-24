@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · perm check · app · working · Approvals: Approve all
+
+ › You
+ perm check
+
+ claude-code permission: {"outcome": "selected", "optionId": "allow"}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

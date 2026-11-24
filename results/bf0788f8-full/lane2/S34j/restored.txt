@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+• Resuming session with Lantern Claude...
+
+
+› an earlier synthetic question
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• an earlier synthetic answer
+
+                                                                                                         [ acceptEdits ]
+› ! for shell commands
+

@@ -1,0 +1,36 @@
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hello lantern
+
+
+• claude-code heard: hello lantern
+
+╭───────────────────────────────────────────────╮
+│ Goodbye! Thanks for using Nori.               │
+│                                               │
+│ Session: 27fe6114-8275-42ac-963c-8a15dbbff18c │
+│                                               │
+│ Messages      User: 1  Assistant: 1  Total: 2 │
+│ Tool Calls    (none)                          │
+│                                               │
+│ Skills Used                                   │
+│   (none)                                      │
+│                                               │
+│ Subagents Used                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+To continue this session, run:
+nori resume 27fe6114-8275-42ac-963c-8a15dbbff18c
+shell$ echo STTY1795540513191; stty -a | tr '\n' ' '; echo; echo ENDSTTY1795540513191
+STTY1795540513191
+speed 38400 baud; rows 36; columns 120; line = 0; intr = ^C; quit = ^\; erase = ^?; kill = ^U; eof = ^D; eol = <undef>;
+eol2 = <undef>; swtch = <undef>; start = ^Q; stop = ^S; susp = ^Z; rprnt = ^R; werase = ^W; lnext = ^V; discard = ^O; mi
+n = 1; time = 0; -parenb -parodd -cmspar cs8 -hupcl -cstopb cread -clocal -crtscts -ignbrk -brkint -ignpar -parmrk -inpc
+k -istrip -inlcr -igncr icrnl ixon -ixoff -iuclc -ixany -imaxbel iutf8 opost -olcuc -ocrnl onlcr -onocr -onlret -ofill -
+ofdel nl0 cr0 tab0 bs0 vt0 ff0 isig icanon iexten echo echoe echok -echonl -noflsh -xcase -tostop -echoprt echoctl echok
+e -flusho -extproc
+ENDSTTY1795540513191
+shell$
