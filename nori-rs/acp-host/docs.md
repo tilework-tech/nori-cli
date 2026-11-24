@@ -653,9 +653,11 @@ following for the binding generation and the lifetime of every active side.
 - Shutdown closes stdin and optionally waits for a caller-selected grace period.
   The child owner then kills the process group before reaping its leader, so
   MCP servers and other descendants cannot survive a cooperative agent exit.
-  A nonzero grace is reserved for bounded cooperative cleanup, including the
-  short pre-session grace for an abandoned prepared connection and the longer
-  cloud-detach path.
+  [Host-owned shutdown](../host-runtime/src/host/service.rs) gives local
+  sessions two seconds in parallel to flush on EOF. An abrupt host death
+  bypasses the watcher. On Linux the direct adapter also receives a
+  parent-death signal. Descendants have no portable cleanup guarantee after
+  a hard crash.
 - The removed ACP-to-Codex translator must not be recreated. Display-friendly
   projection belongs privately in a consumer such as the TUI.
 

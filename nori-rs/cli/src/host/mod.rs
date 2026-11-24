@@ -418,19 +418,15 @@ async fn serve(
     if let Some(launches) = &host.launches {
         launches.shutdown().await?;
     }
-    let report = host.manager.shutdown(Duration::ZERO).await;
+    let shutdown = host.shutdown_sessions().await;
     std::fs::remove_file(files.directory.join("state.json"))?;
     match std::fs::remove_file(files.directory.join("host.json")) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
-    anyhow::ensure!(
-        report.timed_out.is_empty() && report.failed.is_empty(),
-        "some sessions did not stop cleanly: {report:?}"
-    );
     drop(lock);
-    Ok(())
+    shutdown
 }
 
 #[cfg(test)]

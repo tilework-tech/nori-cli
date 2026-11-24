@@ -87,9 +87,10 @@ async fn run_on_a_host(
             },
         }
     };
-    host.manager.shutdown(Duration::ZERO).await;
+    let shutdown = host.shutdown_sessions().await;
     let outcome = outcome?;
     served??;
+    shutdown?;
     Ok(outcome)
 }
 

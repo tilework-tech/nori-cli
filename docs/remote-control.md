@@ -315,7 +315,10 @@ every terminal detaches or the last session ends. It binds only loopback,
 defaults to port 7420, and accepts `--port 0` to allocate a port. `nori host stop`
 authenticates to the discovered instance, requests shutdown on that connection,
 and waits for that instance to release its state-file lock after cleanup. A
-replacement publishes a fresh state file and can keep serving independently. Startup and stop do not require a terminal.
+replacement publishes a fresh state file and can keep serving independently. On orderly stop, host-owned local adapters receive EOF and up to two seconds
+in parallel to flush before Unix process-group cleanup. After a hard host
+crash, reconnect to the new instance and re-list sessions to determine what
+can be resumed. Startup and stop do not require a terminal.
 
 | Command | Behavior |
 | --- | --- |
