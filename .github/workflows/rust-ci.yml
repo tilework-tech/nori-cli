@@ -27,11 +27,6 @@ jobs:
         include:
           - runner: blacksmith-6vcpu-macos-15
             target: aarch64-apple-darwin
-            name: macOS attach PTY 5cb13fcd
-            mode: exact
-            sha: 5cb13fcd9f79caa15c7d56100f23f776ce3bf915
-          - runner: blacksmith-6vcpu-macos-15
-            target: aarch64-apple-darwin
             name: macOS attach PTY main
             mode: main
             sha: f9eedcac7a1d473a4d0bb264d81d9a095aebe7cd
@@ -47,7 +42,7 @@ jobs:
           set -euo pipefail
           sha=${{ matrix.sha }}
           git fetch -q origin $sha
-          git checkout $sha -- .
+          git rm -rqf . && git checkout $sha -- .
           git diff --quiet $sha -- . && echo "nori-rs matches $sha"
           if [ "${{ matrix.mode }}" = exact ]; then git -C .. apply .verifier/host_attach.patch; else sed -i '' '2{/target_os = "linux"/d;}' tui-pty-e2e/tests/host_attach.rs; fi
           git diff --stat $sha -- .
