@@ -249,10 +249,14 @@ pub(crate) enum AppEvent {
     StopCommitAnimation,
     CommitTick,
 
-    /// Open the confirmation prompt before enabling full access mode.
-    OpenFullAccessConfirmation {
-        preset: ApprovalPreset,
+    /// Ask before a session starts approving every request. `session_id`
+    /// names its host session; `None` means the widget's own session.
+    OpenApproveAllConfirmation {
+        session_id: Option<String>,
     },
+
+    /// Change the permission mode of a session that has no host session.
+    ApplyApprovalMode(nori_protocol::ApprovalMode),
 
     /// Open the Windows world-writable directories warning.
     /// If `preset` is `Some`, the confirmation will apply the provided

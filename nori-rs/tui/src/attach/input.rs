@@ -67,6 +67,9 @@ impl Runtime {
             self.refresh_list();
             return true;
         }
+        if self.mode_menu_key(key) {
+            return true;
+        }
         if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('t') {
             if self.state.connected {
                 self.send(HostCall::TakeControl, Pending::TakeControl);

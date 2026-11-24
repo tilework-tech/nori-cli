@@ -1,78 +1,50 @@
 use super::*;
+use crate::app_event_sender::AppEventSender;
+use nori_harness::permission_mode::PermissionMode;
 
 impl ChatWidget {
-    /// Open a popup to choose the approvals mode (ask for approval policy + sandbox policy).
+    /// Open the host modes for the session on screen. Choosing one changes
+    /// that session only; later sessions start in the host's default.
     pub(crate) fn open_approvals_popup(&mut self) {
-        let current_approval = self.config.approval_policy;
-        let current_sandbox = self.config.sandbox_policy.clone();
-        let mut items: Vec<SelectionItem> = Vec::new();
-        let presets: Vec<ApprovalPreset> = builtin_approval_presets();
-        for preset in presets.into_iter() {
-            let is_current =
-                Self::preset_matches_current(current_approval, &current_sandbox, &preset);
-            let name = preset.label.to_string();
-            let description_text = preset.description;
-            let description = Some(description_text.to_string());
-            let requires_confirmation = preset.id == "full-access"
-                && !self
-                    .config
-                    .notices
-                    .hide_full_access_warning
-                    .unwrap_or(false);
-            let actions: Vec<SelectionAction> = if requires_confirmation {
-                let preset_clone = preset.clone();
-                vec![Box::new(move |tx| {
-                    tx.send(AppEvent::OpenFullAccessConfirmation {
-                        preset: preset_clone.clone(),
-                    });
-                })]
-            } else if preset.id == "auto" {
-                #[cfg(target_os = "windows")]
-                {
-                    if codex_sandbox::get_platform_sandbox().is_none() {
-                        let preset_clone = preset.clone();
-                        vec![Box::new(move |tx| {
-                            tx.send(AppEvent::OpenWindowsSandboxEnablePrompt {
-                                preset: preset_clone.clone(),
-                            });
-                        })]
-                    } else if let Some((sample_paths, extra_count, failed_scan)) =
-                        self.world_writable_warning_details()
-                    {
-                        let preset_clone = preset.clone();
-                        vec![Box::new(move |tx| {
-                            tx.send(AppEvent::OpenWorldWritableWarningConfirmation {
-                                preset: Some(preset_clone.clone()),
-                                sample_paths: sample_paths.clone(),
-                                extra_count,
-                                failed_scan,
-                            });
-                        })]
-                    } else {
-                        Self::approval_preset_actions(preset.approval, preset.sandbox.clone())
-                    }
+        let current = self.current_approval_mode();
+        let session_id = self.managed_conversation_id.map(|id| id.to_string());
+        let warn_before_approve_all = !self
+            .config
+            .notices
+            .hide_full_access_warning
+            .unwrap_or(false);
+        let items = PermissionMode::ALL
+            .into_iter()
+            .map(|mode| {
+                let wire = nori_protocol::ApprovalMode::from(mode);
+                let actions = if mode == PermissionMode::ApproveAll && warn_before_approve_all {
+                    let session_id = session_id.clone();
+                    vec![Box::new(move |tx: &AppEventSender| {
+                        tx.send(AppEvent::OpenApproveAllConfirmation {
+                            session_id: session_id.clone(),
+                        });
+                    }) as SelectionAction]
+                } else {
+                    Self::approval_mode_actions(session_id.clone(), wire)
+                };
+                SelectionItem {
+                    name: mode.name().to_string(),
+                    description: Some(mode.description().to_string()),
+                    is_current: mode == current,
+                    actions,
+                    dismiss_on_select: true,
+                    ..Default::default()
                 }
-                #[cfg(not(target_os = "windows"))]
-                {
-                    Self::approval_preset_actions(preset.approval, preset.sandbox.clone())
-                }
-            } else {
-                Self::approval_preset_actions(preset.approval, preset.sandbox.clone())
-            };
-            items.push(SelectionItem {
-                name,
-                description,
-                is_current,
-                actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            });
-        }
+            })
+            .collect();
 
         self.bottom_pane.show_selection_view(
             SelectionViewParams {
-                title: Some("Select approval mode".to_string()),
-                subtitle: Some("Choose what Nori can do without approval".to_string()),
+                title: Some("Approvals for this session".to_string()),
+                subtitle: Some(
+                    "New sessions start in the host default. The sandbox is set separately."
+                        .to_string(),
+                ),
                 footer_hint: Some(standard_popup_hint_line()),
                 items,
                 header: Box::new(()),
@@ -82,6 +54,22 @@ impl ChatWidget {
         );
     }
 
+    /// Change the mode of `session_id` on its host, or of this terminal's
+    /// own session when it has no host session.
+    fn approval_mode_actions(
+        session_id: Option<String>,
+        mode: nori_protocol::ApprovalMode,
+    ) -> Vec<SelectionAction> {
+        vec![Box::new(move |tx| match session_id.clone() {
+            Some(session_id) => tx.send(AppEvent::HostRequest {
+                call: crate::host_client::HostCall::SetMode { session_id, mode },
+                reply: crate::app_event_sender::HostReply::ReportError(tx.clone()),
+            }),
+            None => tx.send(AppEvent::ApplyApprovalMode(mode)),
+        })]
+    }
+
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub(super) fn approval_preset_actions(
         approval: AskForApproval,
         sandbox: SandboxPolicy,
@@ -94,26 +82,17 @@ impl ChatWidget {
         })]
     }
 
-    pub(super) fn preset_matches_current(
-        current_approval: AskForApproval,
-        current_sandbox: &SandboxPolicy,
-        preset: &ApprovalPreset,
-    ) -> bool {
-        if current_approval != preset.approval {
-            return false;
-        }
-        matches!(
-            (&preset.sandbox, current_sandbox),
-            (SandboxPolicy::ReadOnly, SandboxPolicy::ReadOnly)
-                | (
-                    SandboxPolicy::DangerFullAccess,
-                    SandboxPolicy::DangerFullAccess
-                )
-                | (
-                    SandboxPolicy::WorkspaceWrite { .. },
-                    SandboxPolicy::WorkspaceWrite { .. }
-                )
+    /// The mode the host last announced, or the one this widget's own
+    /// settings stand for before any announcement.
+    fn current_approval_mode(&self) -> PermissionMode {
+        self.approval_mode.map_or_else(
+            || PermissionMode::from_approval_policy(self.config.approval_policy),
+            PermissionMode::from,
         )
+    }
+
+    pub(crate) fn approval_mode_name(&self) -> &'static str {
+        self.current_approval_mode().name()
     }
 
     #[cfg(target_os = "windows")]
@@ -146,62 +125,53 @@ impl ChatWidget {
         None
     }
 
-    pub(crate) fn open_full_access_confirmation(&mut self, preset: ApprovalPreset) {
-        let approval = preset.approval;
-        let sandbox = preset.sandbox;
-        let mut header_children: Vec<Box<dyn Renderable>> = Vec::new();
-        let title_line = Line::from("Enable full access?").bold();
-        let info_line = Line::from(vec![
-            "When Nori runs with full access, it can edit any file on your computer and run commands with network, without your approval."
-                .into(),
-            "Exercise caution when enabling full access. This significantly increases the risk of data loss, leaks, or unexpected behavior."
-                .fg(Color::Red),
+    pub(crate) fn open_approve_all_confirmation(&mut self, session_id: Option<String>) {
+        let mode = nori_protocol::ApprovalMode::ApproveAll;
+        let header = ColumnRenderable::with([
+            Box::new(Line::from("Approve every request in this session?").bold())
+                as Box<dyn Renderable>,
+            Box::new(
+                Paragraph::new(vec![Line::from(vec![
+                    "Nori will say yes to every edit, command and tool call the agent asks about. "
+                        .into(),
+                    "The sandbox setting still applies; nothing else stops a harmful request."
+                        .fg(Color::Red),
+                ])])
+                .wrap(Wrap { trim: false }),
+            ),
         ]);
-        header_children.push(Box::new(title_line));
-        header_children.push(Box::new(
-            Paragraph::new(vec![info_line]).wrap(Wrap { trim: false }),
-        ));
-        let header = ColumnRenderable::with(header_children);
-
-        let mut accept_actions = Self::approval_preset_actions(approval, sandbox.clone());
+        let mut accept_actions = Self::approval_mode_actions(session_id.clone(), mode);
         accept_actions.push(Box::new(|tx| {
             tx.send(AppEvent::UpdateFullAccessWarningAcknowledged(true));
         }));
-
-        let mut accept_and_remember_actions = Self::approval_preset_actions(approval, sandbox);
-        accept_and_remember_actions.push(Box::new(|tx| {
+        let mut remember_actions = Self::approval_mode_actions(session_id, mode);
+        remember_actions.push(Box::new(|tx| {
             tx.send(AppEvent::UpdateFullAccessWarningAcknowledged(true));
             tx.send(AppEvent::PersistFullAccessWarningAcknowledged);
         }));
-
-        let deny_actions: Vec<SelectionAction> = vec![Box::new(|tx| {
-            tx.send(AppEvent::OpenApprovalsPopup);
-        })];
-
         let items = vec![
             SelectionItem {
-                name: "Yes, continue anyway".to_string(),
-                description: Some("Apply full access for this session".to_string()),
+                name: "Approve all".to_string(),
+                description: Some("Only for this session".to_string()),
                 actions: accept_actions,
                 dismiss_on_select: true,
                 ..Default::default()
             },
             SelectionItem {
-                name: "Yes, and don't ask again".to_string(),
-                description: Some("Enable full access and remember this choice".to_string()),
-                actions: accept_and_remember_actions,
+                name: "Approve all, and stop asking me this".to_string(),
+                description: Some("Skip this question next time".to_string()),
+                actions: remember_actions,
                 dismiss_on_select: true,
                 ..Default::default()
             },
             SelectionItem {
-                name: "Cancel".to_string(),
-                description: Some("Go back without enabling full access".to_string()),
-                actions: deny_actions,
+                name: "Go back".to_string(),
+                description: Some("Keep the current mode".to_string()),
+                actions: vec![Box::new(|tx| tx.send(AppEvent::OpenApprovalsPopup))],
                 dismiss_on_select: true,
                 ..Default::default()
             },
         ];
-
         self.bottom_pane.show_selection_view(SelectionViewParams {
             footer_hint: Some(standard_popup_hint_line()),
             items,
@@ -425,10 +395,17 @@ impl ChatWidget {
         self.update_approval_mode_label();
     }
 
-    /// Update the approval mode label displayed in the footer based on current config.
+    /// Show the session's permission mode in the footer.
     pub(crate) fn update_approval_mode_label(&mut self) {
-        let label = approval_mode_label(self.config.approval_policy, &self.config.sandbox_policy);
-        self.bottom_pane.set_approval_mode_label(label);
+        let label = self.approval_mode_name().to_owned();
+        self.bottom_pane.set_approval_mode_label(Some(label));
+    }
+
+    /// Change the mode of a session that has no host session, such as a
+    /// cloud session, on its own harness.
+    pub(crate) fn apply_local_approval_mode(&mut self, mode: nori_protocol::ApprovalMode) {
+        self.approval_mode = Some(mode);
+        self.set_approval_policy(PermissionMode::from(mode).approval_policy());
     }
 
     pub(crate) fn set_full_access_warning_acknowledged(&mut self, acknowledged: bool) {

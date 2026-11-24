@@ -250,6 +250,10 @@ impl ChatWidget {
             nori_protocol::NoriEvent::DelegationChanged(delegation) => {
                 self.handle_delegation_changed(delegation);
             }
+            nori_protocol::NoriEvent::ApprovalModeChanged(mode) => {
+                self.approval_mode = Some(mode);
+                self.update_approval_mode_label();
+            }
             nori_protocol::NoriEvent::SessionEnded(ended) => {
                 let pending = self.external_cancel_status().is_some();
                 if self.external_turn.take().is_some() {

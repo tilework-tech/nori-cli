@@ -79,7 +79,7 @@ mod user_input;
 use crate::nori::session_header::CloudSessionInfo;
 use crate::streaming::controller::StreamController;
 use codex_common::approval_presets::ApprovalPreset;
-use codex_common::approval_presets::approval_mode_label;
+#[cfg(target_os = "windows")]
 use codex_common::approval_presets::builtin_approval_presets;
 
 use crate::ui_types::PlanUpdate;
@@ -195,6 +195,8 @@ pub(crate) struct ChatWidget {
     /// This widget's session in the session manager. Follows branch-at-head
     /// forks, which move the agent process to the child conversation.
     managed_conversation_id: Option<nori_harness::ConversationId>,
+    /// The permission mode the host last announced for this session.
+    approval_mode: Option<nori_protocol::ApprovalMode>,
     // True while /close awaits the agent's session/close response. Blocks
     // session-switching commands so the deferred NewSession can't clobber a
     // conversation the user switched to mid-close.

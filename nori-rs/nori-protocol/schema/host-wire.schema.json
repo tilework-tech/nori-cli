@@ -280,6 +280,26 @@
       },
       "type": "object"
     },
+    "ApprovalMode": {
+      "description": "How a session answers its agent's permission requests.",
+      "oneOf": [
+        {
+          "const": "ask",
+          "description": "Ask before every edit and command.",
+          "type": "string"
+        },
+        {
+          "const": "agent",
+          "description": "The agent asks when it judges it needs to.",
+          "type": "string"
+        },
+        {
+          "const": "approve-all",
+          "description": "Every request is approved without asking.",
+          "type": "string"
+        }
+      ]
+    },
     "AudioContent": {
       "description": "Audio provided to or from an LLM.",
       "properties": {
@@ -4337,6 +4357,23 @@
             },
             "event_type": {
               "const": "delegation_changed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "event_type",
+            "event"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The session's permission mode: sent once it starts and after every\nchange, so each client can show the mode of the session it follows.",
+          "properties": {
+            "event": {
+              "$ref": "#/$defs/ApprovalMode"
+            },
+            "event_type": {
+              "const": "approval_mode_changed",
               "type": "string"
             }
           },

@@ -736,3 +736,71 @@ async fn an_answer_from_another_client_is_announced_to_every_follower() {
 }
 
 include!("session_manager/recovery.rs");
+
+fn announced_mode(event: &SessionEvent) -> Option<nori_protocol::ApprovalMode> {
+    match event {
+        SessionEvent::Nori(NoriEvent::ApprovalModeChanged(mode)) => Some(*mode),
+        _ => None,
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn every_follower_learns_the_starting_mode_and_each_change() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let manager = SessionManager::new(SessionManagerConfig::default());
+    let mut follower = manager.subscribe(256);
+    let mut spec = prepare_spec("mock-model", home.path(), None);
+    let mut config = (*spec.config).clone();
+    config.approval_policy = nori_config::AskForApproval::UnlessTrusted;
+    spec.config = Arc::new(config);
+    let mut session = start(&manager, spec);
+    wait_for_status(&manager, &session.conversation_id, SessionStatus::Ready).await;
+
+    manager
+        .set_approval_policy(&session.conversation_id, nori_config::AskForApproval::Never)
+        .await
+        .expect("the mode changes");
+    // The same mode again is no change, so nothing is announced.
+    manager
+        .set_approval_policy(&session.conversation_id, nori_config::AskForApproval::Never)
+        .await
+        .expect("the mode stays");
+    manager
+        .set_approval_policy(
+            &session.conversation_id,
+            nori_config::AskForApproval::OnRequest,
+        )
+        .await
+        .expect("the mode changes again");
+
+    let primary = tokio::time::timeout(WAIT, async {
+        let mut modes = Vec::new();
+        while modes.len() < 3 {
+            let envelope = session.events.recv().await.expect("stream open");
+            modes.extend(announced_mode(&envelope.event));
+        }
+        modes
+    })
+    .await
+    .expect("the session's own stream announces each mode");
+    let followed = tokio::time::timeout(WAIT, async {
+        let mut modes = Vec::new();
+        while modes.len() < 3 {
+            let envelope = follower.recv().await.expect("follower open");
+            modes.extend(announced_mode(&envelope.event));
+        }
+        modes
+    })
+    .await
+    .expect("a follower is told each mode");
+
+    use nori_protocol::ApprovalMode;
+    let expected = vec![
+        ApprovalMode::Ask,
+        ApprovalMode::ApproveAll,
+        ApprovalMode::Agent,
+    ];
+    assert_eq!(primary, expected);
+    assert_eq!(followed, expected);
+}

@@ -52,6 +52,9 @@ Path: @/nori-rs/tui/src/attach
   that need plain `nori`'s in-process session read `not available on this
   host yet`; a watcher's controller-only commands read `watching · Alt+T to
   take control`.
+- `/approvals` is controller-only, so a watcher sees it greyed with
+  `watching · Alt+T to take control`; the host would also refuse a watcher's
+  `session/set_mode` with `-32016`.
 - `/detach` and `/cancel` remain attach-only aliases. `/close` and `/resume`
   with trailing text go to the agent as a prompt.
 - Attach's `/resume` resumes the on-screen failed session; plain `nori`'s
@@ -193,6 +196,23 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
   key, and restarts
   the grace whenever that identity changes. `Runtime::with_clock` injects the
   time source so tests step time instead of sleeping.
+- [`/approvals`](approvals.rs) shows and sets the host's permission mode
+  for the selected session; the host owns the mode, and this terminal only
+  displays what the host announced and asks for changes. `AttachState`
+  keeps each conversation's latest `ApprovalModeChanged` and falls back to
+  the list row's `approval_mode` once the announcement has left the replay
+  window. Without arguments the command opens a `ModeMenu` pinned to that
+  session; `ask`, `agent` or `approve-all` sets the mode directly, and an
+  unknown word restores the draft with a notice. Every change is one
+  `HostCall::SetMode` (`session/set_mode`) mutation; Approve all always waits
+  for a second Enter, whether picked from the menu or typed. The menu is drawn
+  in place of the composer and takes keys only while no request is on screen,
+  and only unmodified Up/Down, `j`/`k`, Enter and Esc, so Alt+T and
+  session-move bindings keep working. Losing control or selecting another
+  session closes it. The identity line appends `· Approvals: <mode>` once a
+  mode is known. Nothing here writes configuration: new sessions start in the
+  host default. A host refusal (for example `ask` on an agent that cannot ask)
+  arrives as an ordinary mutation error.
 - Child permissions stay in the child's conversation. The configured
   `next_waiting_session` binding (Alt+Down by default) navigates there, even
   with a draft in the composer, as in the local TUI. With nothing waiting in
@@ -248,6 +268,9 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
 
 ### Things to Know
 
+- Older `nori attach` builds decode `_nori/session/event` envelopes strictly
+  and fail on `ApprovalModeChanged`, so they cannot follow a host new enough
+  to send it.
 - [Input routing](input.rs) honors `hotkeys.open_session_list`, also opens the
   list with Left on an empty composer or `/sessions`, and resumes a highlighted
   failed session with Ctrl+R while retaining its conversation identity.
@@ -299,7 +322,9 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
   draft, displays a persistent reason with instructions to rerun
   `nori attach`, and remains open for Ctrl+D detach.
 - Snapshot and reducer [tests](tests.rs) cover roles, read-only behavior, the
-  controller and watcher command menus, and sequence application. The [PTY scenarios](../../../tui-pty-e2e/tests/host_attach.rs)
+  controller and watcher command menus, and sequence application;
+  [approvals tests](tests_approvals.rs) cover the mode menu and the Approve
+  all confirmation. The [PTY scenarios](../../../tui-pty-e2e/tests/host_attach.rs)
   exercise the complete host, multiple terminals, and dropped or silently
   stalled TCP connections.
 

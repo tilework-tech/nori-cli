@@ -61,3 +61,30 @@ impl PermissionMode {
         }
     }
 }
+
+impl From<PermissionMode> for nori_protocol::ApprovalMode {
+    fn from(mode: PermissionMode) -> Self {
+        match mode {
+            PermissionMode::Ask => Self::Ask,
+            PermissionMode::Agent => Self::Agent,
+            PermissionMode::ApproveAll => Self::ApproveAll,
+        }
+    }
+}
+
+impl From<nori_protocol::ApprovalMode> for PermissionMode {
+    fn from(mode: nori_protocol::ApprovalMode) -> Self {
+        match mode {
+            nori_protocol::ApprovalMode::Ask => Self::Ask,
+            nori_protocol::ApprovalMode::Agent => Self::Agent,
+            nori_protocol::ApprovalMode::ApproveAll => Self::ApproveAll,
+        }
+    }
+}
+
+/// The mode clients are told a session with `policy` runs in.
+pub fn announced(policy: AskForApproval) -> nori_protocol::SessionEvent {
+    nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ApprovalModeChanged(
+        PermissionMode::from_approval_policy(policy).into(),
+    ))
+}

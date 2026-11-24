@@ -1,16 +1,17 @@
 ---
 source: tui-pty-e2e/tests/prepared_startup.rs
+assertion_line: 451
 expression: "tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())"
 ---
 • Remote Handroll options: Model=Mock Default Model, Thought Level=Medium (/config to change)
 
-  Select approval mode
-  Choose what Nori can do without approval
+  Approvals for this session
+  New sessions start in the host default. The sandbox is set separately.
 
-   1. Read Only
-      Requires approval to edit files and run commands.
+   1. Ask
+      Ask before every edit and command.
   ▏2. Agent (current)                                                                            ▕
-  ▏   Read and edit files, and run commands.                                                     ▕
-   3. Agent (full access)
-      Can edit files outside this workspace and run commands with network access. Exercise cauti…
+  ▏   The agent asks when it judges it needs to.                                                 ▕
+   3. Approve all
+      Nori approves every permission request.
   ↑↓/j/k move  enter select  esc close

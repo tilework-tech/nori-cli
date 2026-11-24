@@ -83,11 +83,11 @@ fn runs_in_attach(command: SlashCommand) -> bool {
         | SlashCommand::New
         | SlashCommand::Delegate
         | SlashCommand::Resume
-        | SlashCommand::Close => true,
+        | SlashCommand::Close
+        | SlashCommand::Approvals => true,
         SlashCommand::Agent
         | SlashCommand::Model
         | SlashCommand::Config
-        | SlashCommand::Approvals
         | SlashCommand::Settings
         | SlashCommand::Vim
         | SlashCommand::Goal

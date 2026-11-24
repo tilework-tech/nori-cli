@@ -118,12 +118,21 @@ connected, submit the first user prompt through the real ACP agent, observe the
 exact public `session_mode`, and verify a later prompt on the same logical
 session does not create another activity.
 
+[Host approvals scenarios](tests/host_approvals.rs) drive `/approvals` in plain
+`nori`: the footer follows the session on screen and `/new` starts in the host
+default rather than the last choice. [Preset migration
+scenarios](tests/approval_presets_migration.rs) launch on a home config holding
+a retired `/approvals` preset and check that the first launch shows the notice
+and writes `[host] default_mode`, that sessions on every launch start in the
+migrated mode, and that a config without presets is never written.
+
 The [host attachment scenarios](tests/host_attach.rs) run a detached host and
 independent attached PTYs sharing a disposable Nori home. They cover the flat
 script-facing list, session creation (including `/new` in the attaching
 terminal's folder or a Tab-completed one), controller/watcher handoff, refused
 watcher prompts and permission answers, greyed `/` menu rows refused with
-the menu's reason, detach/reattach, and host survival
+the menu's reason, `/approvals` changing a session's mode from the controller
+and showing it in every terminal, detach/reattach, and host survival
 after its last session closes. A local TCP proxy either drops one terminal's
 connection or silently stops forwarding traffic while the controller continues,
 then checks the reconnecting marker and replay of missed output without

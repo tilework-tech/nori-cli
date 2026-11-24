@@ -1,6 +1,6 @@
 ---
 source: tui/src/attach/tests_commands.rs
-assertion_line: 127
+assertion_line: 116
 expression: rendered
 ---
  Nori host  WATCHING · read-only · alt+t take control
@@ -26,7 +26,7 @@ expression: rendered
   /agent            not available in nori attach yet
   /model            not available in nori attach yet
   /config           not available in nori attach yet
-  /approvals        not available in nori attach yet
+  /approvals        watching · Alt+T to take control
   /settings         not available in nori attach yet
   /vim              not available in nori attach yet
   /goal             not available on this host yet
