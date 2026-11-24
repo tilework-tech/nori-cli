@@ -361,7 +361,40 @@ active project's entry, then `[tui]`, then no cap.
 ```toml
 [host]
 max_clients = 16
+default_mode = "agent"
 ```
+
+`[host] default_mode` (`ask`, `agent`, or `approve-all`) is the permission
+mode new sessions on the host start in, whether plain `nori`, `nori attach`,
+`nori host new`, or an ACP client's `session/new` started them (`nori exec`
+then sets its own mode). Unset, a session starts from its folder's
+`approval_policy` (`untrusted` is Ask, `on-request` and `on-failure` are Agent,
+`never` is Approve all). A session whose agent cannot ask every time starts in
+Agent instead of Ask. `/approvals` changes only the session on screen and never
+writes the config, so this key, not the last `/approvals` choice, decides how
+the next session starts. The sandbox is a separate setting: neither this key
+nor `/approvals` changes `sandbox_mode`. Plain `nori`'s footer shows
+`Approvals: Ask` or `Approvals: Approve all` for the session on screen even
+though the `approval_mode` footer segment is off by default; Agent is shown
+only when `[tui.footer_segments]` turns the segment on.
+
+`/approvals` used to offer three presets (Read Only, Agent, Full Access) that
+set `approval_policy` and `sandbox_mode` together. On every launch, `nori`
+checks `$NORI_HOME/config.toml` once for those presets:
+
+| Home config | Result |
+| --- | --- |
+| No file, `[notice] approval_presets_migrated = true`, `[host] default_mode` already set, or neither `approval_policy` nor `sandbox_mode` set | Nothing is written |
+| `on-request` + `read-only` (Read Only) | `[host] default_mode = "ask"` is added |
+| `on-request` + `workspace-write` (Agent) | `[host] default_mode = "agent"` is added |
+| `never` + `danger-full-access` (Full Access) | `[host] default_mode = "approve-all"` is added |
+| Any other explicit pair | Left as is and reported |
+
+`approval_policy` and `sandbox_mode` are never changed. Whenever something was
+added or reported, `[notice] approval_presets_migrated = true` is written so
+the check does not run again. The one-line notice appears at the top of the
+transcript in an interactive run and on stderr otherwise. Only the home
+config is checked; per-folder configs are not.
 
 `[host] max_clients` (default 16) is the most clients a background `nori host`
 serves at once over its WebSocket endpoints, `/acp` and its alias `/sessions`,

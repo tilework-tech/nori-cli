@@ -105,6 +105,11 @@ pub(crate) enum HostCall {
     DiscardPrepared {
         selection: String,
     },
+    /// Change one session's permission mode. Only a controller may.
+    SetMode {
+        session_id: String,
+        mode: nori_protocol::ApprovalMode,
+    },
 }
 
 impl HostCall {
@@ -199,6 +204,10 @@ impl HostCall {
             Self::DiscardPrepared { selection } => {
                 ("_nori/host/discard_agent", json!({"id": selection}))
             }
+            Self::SetMode { session_id, mode } => (
+                "session/set_mode",
+                json!({"sessionId": session_id, "modeId": mode}),
+            ),
         }
     }
 }

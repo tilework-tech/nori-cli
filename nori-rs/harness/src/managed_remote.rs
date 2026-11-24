@@ -250,6 +250,9 @@ impl ManagedRemoteHost {
                         "cwd":record.cwd,
                         "parent":record.parent.map(|id| id.to_string()),
                         "pending_requests":record.pending_requests,
+                        "approval_mode": nori_protocol::ApprovalMode::from(
+                            crate::permission_mode::PermissionMode::from_approval_policy(record.approval_policy),
+                        ),
                         "source": match record.source {
                             crate::session_manager::SessionSource::User => "user",
                             crate::session_manager::SessionSource::Fork => "fork",

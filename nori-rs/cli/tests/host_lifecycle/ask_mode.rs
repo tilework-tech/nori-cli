@@ -460,3 +460,26 @@ async fn real_adapters_offer_ask() {
     ];
     assert_eq!(offered, [("claude-code", all.clone()), ("codex", all)]);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_host_default_of_ask_applies_to_sessions_an_attached_terminal_starts() {
+    let host = host_with("claude-code", "\n[host]\ndefault_mode = \"ask\"\n");
+    let folder = TempDir::new().unwrap();
+    let mut acp = controller(&host);
+
+    let started = acp
+        .call(
+            "_nori/session/new",
+            json!({"cwd": canonical(folder.path())}),
+        )
+        .await
+        .unwrap();
+    let id = started["session_id"].as_str().unwrap().to_owned();
+    let configuration = configuration(&mut acp, &id, folder.path()).await;
+
+    assert_eq!(configuration["modes"]["currentModeId"], "ask");
+    assert!(
+        turn_asks(&mut acp, &id, "first").await,
+        "the first turn asks"
+    );
+}

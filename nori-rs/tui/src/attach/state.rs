@@ -64,6 +64,9 @@ pub(super) struct SessionRow {
     /// The folder the session works in.
     #[serde(default)]
     pub cwd: Option<std::path::PathBuf>,
+    /// The session's permission mode when the list was read.
+    #[serde(default)]
+    pub approval_mode: Option<nori_protocol::ApprovalMode>,
 }
 
 pub(super) enum Part {
@@ -109,6 +112,8 @@ pub(super) struct Conversation {
     pub cwd: std::path::PathBuf,
     /// This terminal's `/close` of the session, shown once if refused.
     pub close_refusal: crate::close_refusal::CloseRefusal,
+    /// The permission mode the host last announced.
+    pub approval_mode: Option<nori_protocol::ApprovalMode>,
     normalizer: ClientEventNormalizer,
     message_boundary: bool,
 }
@@ -132,6 +137,8 @@ pub(super) struct AttachState {
     pub jump_binding: nori_config::HotkeyBinding,
     /// Show agent thought text as a thought block; otherwise hide it.
     pub thoughts_in_history: bool,
+    /// The `/approvals` menu, while open.
+    pub mode_menu: Option<super::approvals::ModeMenu>,
 }
 
 impl Default for AttachState {
@@ -158,6 +165,7 @@ impl Default for AttachState {
             parent_binding: nori_config::HotkeyConfig::default().parent_session,
             jump_binding: nori_config::HotkeyConfig::default().next_waiting_session,
             thoughts_in_history: true,
+            mode_menu: None,
         }
     }
 }
@@ -355,6 +363,9 @@ impl AttachState {
 
     pub fn role_changed(&mut self, role: &str) {
         self.watching = role != "controller";
+        if self.watching {
+            self.mode_menu = None;
+        }
     }
 
     pub fn require_control(&self) -> anyhow::Result<()> {
@@ -495,6 +506,9 @@ impl AttachState {
                     conversation.delegations.push(delegation);
                     conversation.message_boundary = true;
                 }
+            }
+            SessionEvent::Nori(NoriEvent::ApprovalModeChanged(mode)) => {
+                conversation.approval_mode = Some(mode);
             }
             SessionEvent::Nori(NoriEvent::SessionStarted(started)) => {
                 conversation.cwd = started.cwd

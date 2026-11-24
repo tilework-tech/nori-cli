@@ -882,8 +882,11 @@ impl App {
             AppEvent::RefreshSystemInfoForDirectory { dir, agent } => {
                 self.request_system_info_refresh(dir, agent, self.chat_widget.first_prompt_text());
             }
-            AppEvent::OpenFullAccessConfirmation { preset } => {
-                self.chat_widget.open_full_access_confirmation(preset);
+            AppEvent::OpenApproveAllConfirmation { session_id } => {
+                self.chat_widget.open_approve_all_confirmation(session_id);
+            }
+            AppEvent::ApplyApprovalMode(mode) => {
+                self.chat_widget.apply_local_approval_mode(mode);
             }
             AppEvent::OpenWorldWritableWarningConfirmation {
                 preset,

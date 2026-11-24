@@ -83,7 +83,7 @@ impl SlashCommand {
             SlashCommand::FirstPrompt => "show the first prompt from this session",
             SlashCommand::Model => "choose what model and reasoning effort to use",
             SlashCommand::Config => "configure ACP agent settings (if exposed by the agent)",
-            SlashCommand::Approvals => "choose what Nori can do without approval",
+            SlashCommand::Approvals => "set how this session asks for approval",
             SlashCommand::Settings => "configure Nori CLI settings (theme, hotkeys, layout, …)",
             SlashCommand::Vim => "configure Vim mode and Enter key behavior",
             SlashCommand::Goal => "set or view the goal for a long-running task",

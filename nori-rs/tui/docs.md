@@ -418,7 +418,7 @@ in-process session), and the verdict depends on the `Surface`:
 | Surface | Used by | Reasons a command is greyed |
 | --- | --- | --- |
 | `Owned { cloud_mode, agent_session_close }` | plain `nori` (owns its host, always controller) | `LocalOnly` commands in cloud mode; cloud `/close` without the agent's `session/close`. A local `/close` closes the session on screen. |
-| `Attached { watching, connected }` | `nori attach` | `not available on this host yet` (needs plain `nori`'s in-process session, e.g. `/compact`, `/diff`), `not available in nori attach yet` (host could run it but attach has no screen, e.g. `/model`, `/settings`), `watching · Alt+T to take control` (controller-only `/new`, `/close`, `/resume`, `/delegate`), `reconnecting` |
+| `Attached { watching, connected }` | `nori attach` | `not available on this host yet` (needs plain `nori`'s in-process session, e.g. `/compact`, `/diff`), `not available in nori attach yet` (host could run it but attach has no screen, e.g. `/model`, `/settings`), `watching · Alt+T to take control` (controller-only `/new`, `/close`, `/resume`, `/delegate`, `/approvals`), `reconnecting` |
 
 `/quit`, `/exit`, and (attached) `/sessions` always run. In plain `nori` the
 chat widget's merged verdict takes an explicit server verdict first and falls
@@ -426,7 +426,25 @@ back to the `Owned` reason. `parse_builtin` maps a submitted line to a builtin;
 other slash names (agent commands, custom prompts) are not builtins and reach
 the agent unchanged.
 
-The `/approvals` preset chooser and the replace-goal confirmation are bounded
+`/approvals` in plain `nori` lists the host's permission modes (Ask, Agent,
+Approve all, from `nori_harness::permission_mode`) for the session on screen
+([`chatwidget/approvals.rs`](src/chatwidget/approvals.rs)). Choosing one sends
+`HostCall::SetMode` (`session/set_mode`) for the widget's host session over
+the owned-host pipe and reports a host error, such as Ask refused for an agent
+that cannot ask every time, as an error. A widget with no host session (a
+cloud session) applies the mode to its own harness through
+`AppEvent::ApplyApprovalMode`. Approve all first opens a confirmation
+(`AppEvent::OpenApproveAllConfirmation`) unless
+`notice.hide_full_access_warning` is set; its "stop asking me this" choice
+sets and saves that notice. The choice never changes the App's `NoriConfig`, so the next
+session starts in the host default, and it never touches `sandbox_mode`. The
+current mode is the one the host last announced through
+`NoriEvent::ApprovalModeChanged`, else the one the widget's
+`approval_policy` reads as. The former Read Only / Agent / Full Access presets
+in `codex_common::approval_presets` remain only for the Windows sandbox
+prompts.
+
+The `/approvals` mode menu and the replace-goal confirmation are bounded
 bottom-pane actions and therefore use the overlay-menu presentation. Warning
 tone is carried only by the consequential action; selection, number shortcuts,
 and cancellation still flow through the shared adapter. Rich confirmations
@@ -1708,13 +1726,20 @@ branch, worktree, and context on the footer row beneath it:
 
 `footer_left` holds only self-hiding state — the cloud session id when attached
 through cloud mode, and the vim mode indicator when vim mode is on — so an
-ordinary local shell leaves that group empty. Approvals, skillset, skillset
+ordinary local shell leaves that group empty. Skillset, skillset
 version, session title, and cumulative token usage are all off by default:
 they are static, restate the transcript, or belong to a workflow the user has
 not opted into. Every one of them still appears in `/status`, and each is one
 `[tui.footer_segments]` line away from returning to the footer. Those segments
 keep a default `footer_left` placement precisely so enabling them needs nothing
 more than that one line.
+
+The `approval_mode` segment (`Approvals: <mode>`) is also off by default, with
+one exception: a session in Ask or Approve all always shows it, because those
+modes change what happens to the agent's next request. Agent shows only when
+the segment is enabled. Each session has its own chat widget, and each widget
+sets the label from the mode the host announced for its session, so the
+footer follows session switches.
 
 On a terminal too narrow to hold both groups, the right group sheds trailing
 segments until it fits and then disappears, rather than overwriting the left
@@ -1835,6 +1860,11 @@ into `SessionInfoState`, so the session title keeps reaching the footer and the
 
 #### Status card
 
+Before the App starts, [`run_ratatui_app`](src/lib.rs) writes each line in
+`Cli::startup_notices` into history with a dim bullet, so CLI notices such as
+the approval preset migration's appear above the status block instead of on
+stderr, where the TUI would paint over them.
+
 The startup status block is an unbordered two-row summary beneath a green
 prompt marker: system context on one row and agent identity on the next. The
 system row is the location (directory, or the cloud session id and title) and
@@ -1870,7 +1900,7 @@ labels and a two-cell label/value gutter, expanding it into a superset of the
 footer's information categories independent of the user's footer configuration:
 directory, session id (the conversation id, shown for every agent — cloud
 sessions append the broker title), title, summary, skillsets (with detected
-skillsets version), approvals, a git row (branch / worktree / +added −removed /
+skillsets version), approvals (the session's permission mode), a git row (branch / worktree / +added −removed /
 untracked), a single consolidated context row (`% left (used / window)`), and
 cumulative token usage. Everything the agent decides then follows in its own
 block: the provider on the `Agent` row and one indented row per advertised

@@ -60,6 +60,21 @@ pub enum NoriEvent {
     RequestFailed(RequestFailure),
     RequestResolved(RequestResolved),
     DelegationChanged(Delegation),
+    /// The session's permission mode: sent once it starts and after every
+    /// change, so each client can show the mode of the session it follows.
+    ApprovalModeChanged(ApprovalMode),
+}
+
+/// How a session answers its agent's permission requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum ApprovalMode {
+    /// Ask before every edit and command.
+    Ask,
+    /// The agent asks when it judges it needs to.
+    Agent,
+    /// Every request is approved without asking.
+    ApproveAll,
 }
 
 /// Persistent and agent-side identities established for a harness session.

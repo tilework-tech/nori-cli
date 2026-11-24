@@ -488,8 +488,33 @@ impl Registry {
             }) => Some(request_id.clone()),
             _ => None,
         };
-        let mut envelopes: Vec<SessionEnvelope> =
-            self.observe(process, event).into_iter().collect();
+        // Clients learn the mode before the session's start, so whatever
+        // they show for the started session already has it.
+        let mut envelopes = Vec::new();
+        if matches!(&event, SessionEvent::Nori(NoriEvent::SessionStarted(_))) {
+            let conversation = self.processes.get(&process).copied();
+            let policy = conversation
+                .and_then(|id| self.sessions.get(&id))
+                .map(|entry| entry.settings.approval_policy);
+            if let (Some(id), Some(policy)) = (conversation, policy) {
+                envelopes.extend(self.emit(&id, crate::permission_mode::announced(policy)));
+            }
+        }
+        let forked = matches!(&event, SessionEvent::Nori(NoriEvent::SessionForked(_)));
+        envelopes.extend(self.observe(process, event));
+        // A fork's child starts with no start event, so it is told its mode
+        // right after the fork.
+        if forked
+            && let Some(child) = envelopes
+                .last()
+                .and_then(|envelope| ConversationId::from_string(&envelope.conversation_id).ok())
+            && let Some(policy) = self
+                .sessions
+                .get(&child)
+                .map(|entry| entry.settings.approval_policy)
+        {
+            envelopes.extend(self.emit(&child, crate::permission_mode::announced(policy)));
+        }
         let early = request_id.and_then(|request_id| {
             let entry = self
                 .processes

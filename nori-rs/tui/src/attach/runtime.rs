@@ -158,6 +158,7 @@ impl Runtime {
         }
         self.state.selected = Some(id);
         self.state.list_open = false;
+        self.state.mode_menu = None;
         self.state.scroll = 0;
         self.state.notice = None;
         self.state.replay_error = None;

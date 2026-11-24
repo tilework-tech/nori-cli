@@ -234,6 +234,7 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
 | **Tool call status** | The ACP lifecycle value `pending`, `in_progress`, `completed`, or `failed` reported for a tool call.                                  | Turn status                      |
 | **Approval policy**  | Nori configuration deciding whether to surface a permission request or auto-select an allow option.                                   | Sandbox policy, execution policy |
+| **Permission mode**  | The host's per-session choice of Ask, Agent, or Approve all, mapped onto an **approval policy** and the adapter's own mode.               | Approval preset, access mode     |
 | **Sandbox policy**   | Resolved filesystem and network restrictions for Nori's local sandbox execution.                                                      | Approval policy, permission      |
 | **Execution policy** | Command rules classifying argument vectors as allow, prompt, or forbidden in execpolicy tooling, not Nori's live ACP permission path. | Approval policy                  |
 | **Cancellation**     | A client signal to stop the active turn, cancel pending permission requests, and abort agent work.                                    | Rejection, failure               |
@@ -245,6 +246,7 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 - An **ACP permission request** may leave its tool call `pending`; its selected **permission outcome** may allow or reject.
 - Only an affirmative human selection is **user approval**.
 - **Approval policy** governs consultation, while **sandbox policy** constrains an execution environment.
+- Choosing a **permission mode** never changes the **sandbox policy**.
 - External ACP-agent tools bypass Nori's sandbox executor, and provider-internal tools may never cross an ACP permission boundary.
 - **Cancellation** is not complete until the correlated prompt response reports the cancelled stop reason; final tool updates may arrive first.
 

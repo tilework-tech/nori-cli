@@ -531,6 +531,7 @@ async fn run_ratatui_app(
         images,
         cloud_mode,
         cloud_onboard,
+        startup_notices,
         ..
     } = cli;
     let vertical_footer = config.vertical_footer;
@@ -546,6 +547,12 @@ async fn run_ratatui_app(
         }
     };
 
+    for notice in startup_notices {
+        tui.insert_history_lines(vec![ratatui::text::Line::from(vec![
+            ratatui::style::Stylize::dim("• "),
+            notice.into(),
+        ])]);
+    }
     let app_result = App::run(
         &mut tui,
         auth_manager,

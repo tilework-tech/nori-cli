@@ -283,6 +283,33 @@ remote /session/delegate ----------+         |
   its registered process through a weak manager reference, avoiding an
   ownership cycle and rejecting calls from an ended process.
 
+#### Approval policy, permission mode, and agent replacement
+
+`set_approval_policy` changes a running session's approval policy and records
+it on the session. When the policy reads as a different permission mode
+(`permission_mode::PermissionMode::from_approval_policy`, so `on-request` to
+`on-failure` is no change), it also emits `NoriEvent::ApprovalModeChanged` into
+the journal and the session's own stream.
+
+Every client learns a session's mode from that event. The registry emits it
+in two other places, building it with `permission_mode::announced` from the
+policy in the session's settings:
+
+| When | Order |
+| --- | --- |
+| The agent's `SessionStarted` arrives | Just before `SessionStarted`, so a client has the mode before it draws the started session |
+| A `SessionForked` arrives | Just after the fork, addressed to the child, which gets no start event of its own |
+| `set_approval_policy` changes the mode | On its own |
+
+A session's events replay from the journal, so a client that subscribes later
+sees the latest announcement while it is still in the replay window; once it
+has been evicted, the `approval_mode` field of `_nori/session/list` rows
+(from the record's approval policy) is the fallback.
+
+`replace_agent` stops a top-level session's process and
+starts another agent under the same conversation ID; the host only uses it
+before the session's first prompt, so the restarted transcript loses nothing.
+
 ### Things to Know
 
 Agents without HTTP MCP support can still receive children started by the
@@ -291,9 +318,3 @@ The [managed remote contract](../../../../docs/remote-control.md#delegation) def
 controller authorization and request payloads.
 
 Created and maintained by Nori.
-
-`set_approval_policy` changes a running session's approval policy and records
-it on the session. `replace_agent` stops a top-level session's process and
-starts another agent under the same conversation ID; the host only uses it
-before the session's first prompt, so the restarted transcript loses nothing.
-

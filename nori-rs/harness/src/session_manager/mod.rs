@@ -592,10 +592,23 @@ impl SessionManager {
             .ok_or_else(|| anyhow::anyhow!("session is not running"))?
             .set_approval_policy(policy)
             .await?;
-        self.shared
-            .state()
+        let mut state = self.shared.state();
+        let mode = crate::permission_mode::PermissionMode::from_approval_policy;
+        let changed = state
             .registry
-            .set_approval_policy(conversation_id, policy);
+            .record(conversation_id)
+            .is_none_or(|record| mode(record.approval_policy) != mode(policy));
+        state.registry.set_approval_policy(conversation_id, policy);
+        if changed
+            && let Some(envelope) = state
+                .registry
+                .emit(conversation_id, crate::permission_mode::announced(policy))
+        {
+            state.journal.publish(&envelope);
+            if let Some(primary) = state.primary.get(conversation_id) {
+                let _ = primary.send(envelope);
+            }
+        }
         Ok(())
     }
 

@@ -502,6 +502,10 @@ export type NoriEvent =
   | {
       event: Delegation;
       event_type: "delegation_changed";
+    }
+  | {
+      event: ApprovalMode;
+      event_type: "approval_mode_changed";
     };
 /**
  * A unique identifier for a conversation session between a client and agent.
@@ -577,6 +581,10 @@ export type HookOutputLevel = "info" | "warn" | "error";
 export type RequestFailureKind = "retryable" | "fatal";
 export type DelegationStatus =
   "awaiting_approval" | "running" | "declined" | "completed" | "failed" | "cancelled";
+/**
+ * How a session answers its agent's permission requests.
+ */
+export type ApprovalMode = "ask" | "agent" | "approve-all";
 
 /**
  * Request parameters for the initialize method.

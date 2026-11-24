@@ -515,7 +515,8 @@ fn an_answer_that_arrives_before_its_request_is_announced_after_it() {
         ),
         (
             0,
-            vec![(3, None), (4, Some("remote_control".to_string()))],
+            // The session's mode is announced just before its start.
+            vec![(4, None), (5, Some("remote_control".to_string()))],
             Vec::new(),
             SessionStatus::Working,
         )

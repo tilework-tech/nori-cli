@@ -159,6 +159,10 @@ For `nori resume`, subcommand-scoped interactive flags are copied into the same 
 - `nori resume` without an ID opens a picker, scoped to the current working directory unless `--all` is present.
 - If the saved session metadata records an agent, that recorded agent is used automatically. Passing a different `--agent` is a startup error so the command never resumes a session with the wrong agent.
 
+**Approval preset migration:**
+
+Right after file tracing starts, every launch that finds a Nori home calls `nori_config::migrate_approval_presets`, which moves a home config that still spells out a retired `/approvals` preset to `[host] default_mode` once (rules in [`nori-config`](../nori-config/docs.md) and [`config.md`](../config.md#background-host-host)). Its one-line result goes where the user will see it: for an interactive TUI run (no subcommand, `resume`, or `cloud`, without `-p`) it is pushed onto `Cli::startup_notices`, which the TUI prints at the top of the transcript, because the TUI repaints the terminal and would hide stderr; every other route prints it to stderr. A failed migration prints a warning and the launch continues.
+
 **Process Hardening:**
 
 The `#[ctor]` attribute applies security hardening measures at process startup in release builds via `codex_process_hardening::pre_main_hardening()`.

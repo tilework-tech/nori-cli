@@ -915,7 +915,7 @@ fn test_slash_popup_shows_current_agent_in_description() {
 /// /approvals description when the TUI first starts.
 ///
 /// The /approvals description should include a parenthetical like:
-///   "choose what Nori can do without approval (current: Agent)"
+///   "set how this session asks for approval (current: Agent)"
 ///
 /// This verifies that the approval mode description override is set during
 /// initial construction.
@@ -947,19 +947,11 @@ fn test_slash_popup_shows_current_approval_mode_in_description() {
 
     let screen = session.screen_contents();
 
-    // The description for /approvals should include the current approval mode
-    // in parentheses. The exact mode depends on config defaults, but it should
-    // be one of the known preset labels.
-    let has_approval_mode = screen.contains("(current: Agent)")
-        || screen.contains("(current: Read Only)")
-        || screen.contains("(current: Full Access)");
-
+    // A trusted folder's session starts in Agent.
     assert!(
-        has_approval_mode,
-        "Slash popup /approvals description should show current approval mode.\n\
-         Expected to find '(current: Agent)' or '(current: Read Only)' or '(current: Full Access)' in screen.\n\
-         Screen contents:\n{}",
-        screen
+        screen.contains("(current: Agent)"),
+        "Slash popup /approvals description should show the session's mode.\n\
+         Screen contents:\n{screen}"
     );
 }
 

@@ -445,7 +445,7 @@ approval_mode = true
     let _ = fake.wait_for_stderr("Mock agent: new_session id=", TIMEOUT);
     session.submit_input("/approvals").unwrap();
     session
-        .wait_for_text("Select approval mode", TIMEOUT)
+        .wait_for_text("Approvals for this session", TIMEOUT)
         .expect("approval picker");
     std::thread::sleep(tui_pty_e2e::TIMEOUT_PRESNAPSHOT);
     insta::assert_snapshot!(
@@ -454,9 +454,10 @@ approval_mode = true
     );
     session.send_key(Key::Down).unwrap();
     session.send_key(Key::Enter).unwrap();
+    // The fixture acknowledged the warning, so Approve all applies at once.
     session
-        .wait_for_text("Approvals: Full Access", TIMEOUT)
-        .expect("full-access policy should be applied to the active session");
+        .wait_for_text("Approvals: Approve all", TIMEOUT)
+        .expect("approve all should be applied to the active session");
     std::thread::sleep(TIMEOUT_INPUT);
 
     session.submit_input("exercise refreshed policy").unwrap();

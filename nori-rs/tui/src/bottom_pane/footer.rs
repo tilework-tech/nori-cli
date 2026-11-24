@@ -10,6 +10,7 @@ use nori_config::FooterLayoutConfig;
 use nori_config::FooterLayoutItem;
 use nori_config::FooterSegment;
 use nori_config::FooterSegmentConfig;
+use nori_harness::permission_mode::PermissionMode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -468,9 +469,21 @@ fn segments_for(props: &FooterProps, segment_order: &[FooterLayoutItem]) -> Vec<
         .collect()
 }
 
+/// A session that asks every time or approves everything shows its mode
+/// even in a footer that hides the segment; plain Agent stays quiet.
+fn approval_mode_stands_out(props: &FooterProps) -> bool {
+    props
+        .approval_mode_label
+        .as_deref()
+        .is_some_and(|label| label != PermissionMode::Agent.name())
+}
+
 fn footer_layout_item(props: &FooterProps, item: &FooterLayoutItem) -> Option<Line<'static>> {
     match item {
-        FooterLayoutItem::Builtin(segment) if props.footer_segment_config.is_enabled(*segment) => {
+        FooterLayoutItem::Builtin(segment)
+            if props.footer_segment_config.is_enabled(*segment)
+                || (*segment == FooterSegment::ApprovalMode && approval_mode_stands_out(props)) =>
+        {
             builtin_footer_segment(props, *segment)
         }
         FooterLayoutItem::Builtin(_) => None,
@@ -1168,6 +1181,23 @@ footer_right = ["mode_indicator"]
                 ..default_props()
             },
         );
+    }
+
+    #[test]
+    fn the_default_footer_shows_a_mode_that_is_not_agent() {
+        let shown = |label: &str| {
+            render_footer_text(FooterProps {
+                git_branch: Some("main".to_string()),
+                approval_mode_label: Some(label.to_string()),
+                footer_segment_config: FooterSegmentConfig::default(),
+                footer_layout_config: FooterLayoutConfig::default(),
+                ..default_props()
+            })
+        };
+
+        assert!(shown("Ask").contains("Approvals: Ask"));
+        assert!(shown("Approve all").contains("Approvals: Approve all"));
+        assert!(!shown("Agent").contains("Approvals"));
     }
 
     #[test]
