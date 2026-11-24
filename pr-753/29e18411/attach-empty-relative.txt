@@ -1,0 +1,34 @@
+ Nori host  CONTROLLING
+ mock-model · new session · greenhouse · ready · Approvals: Agent
+
+ Ready. Send a prompt to begin.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
