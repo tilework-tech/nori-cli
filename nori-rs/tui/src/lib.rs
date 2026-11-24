@@ -68,9 +68,7 @@ mod markdown_render;
 mod markdown_stream;
 mod nori;
 mod overlay_menu;
-mod owned_host;
-pub use owned_host::HostLauncher;
-pub use owned_host::OwnedHost;
+pub use nori_host_runtime::OwnedHost;
 mod pager_overlay;
 mod pinned_plan_drawer;
 mod presentation;
@@ -137,13 +135,11 @@ use std::io::Write as _;
 
 // (tests access modules directly within the crate)
 
-/// Runs the interactive TUI on a host built by `launch_host`, which the TUI
-/// owns until it quits.
+/// Run the inline terminal on a private host and stop that host on exit.
 pub async fn run_main(
     cli: Cli,
     _codex_linux_sandbox_exe: Option<PathBuf>,
     analytics: Option<nori_installed::AnalyticsReporter>,
-    launch_host: HostLauncher,
 ) -> std::io::Result<AppExitInfo> {
     // Track install/session in background (non-blocking, fire-and-forget)
     // This updates ~/.nori/cli/.nori-install.json with launch metadata
@@ -319,13 +315,11 @@ pub async fn run_main(
         pending_worktree_ask,
         worktree_blocked_reason,
         analytics,
-        launch_host,
     )
     .await
     .map_err(|err| std::io::Error::other(err.to_string()))
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn run_ratatui_app(
     cli: Cli,
     initial_config: NoriConfig,
@@ -333,7 +327,6 @@ async fn run_ratatui_app(
     pending_worktree_ask: bool,
     worktree_blocked_reason: Option<String>,
     analytics: Option<nori_installed::AnalyticsReporter>,
-    launch_host: HostLauncher,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -539,7 +532,7 @@ async fn run_ratatui_app(
         ..
     } = cli;
     let vertical_footer = config.vertical_footer;
-    let host = match launch_host(&config, &overrides) {
+    let host = match nori_host_runtime::launch(&config, &overrides) {
         Ok(host) => host,
         Err(error) => {
             restore();

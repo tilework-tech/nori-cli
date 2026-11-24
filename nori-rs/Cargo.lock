@@ -3847,6 +3847,7 @@ dependencies = [
  "nori-auth-providers",
  "nori-config",
  "nori-harness",
+ "nori-host-runtime",
  "nori-installed",
  "nori-protocol",
  "nori-tui",
@@ -3940,6 +3941,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "nori-host-runtime"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "libc",
+ "nori-config",
+ "nori-harness",
+ "nori-protocol",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+ "which",
+]
+
+[[package]]
 name = "nori-installed"
 version = "0.0.0"
 dependencies = [
@@ -4024,6 +4045,7 @@ dependencies = [
  "nori-auth-providers",
  "nori-config",
  "nori-harness",
+ "nori-host-runtime",
  "nori-installed",
  "nori-protocol",
  "nori-skillsets",

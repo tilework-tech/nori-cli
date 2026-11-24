@@ -125,13 +125,14 @@ jobs:
         run: |
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
-          cargo build -p nori-cli --profile ci-test --target ${{ matrix.target }}
+          cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
       - name: cargo test nori
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
           cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-harness
+          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-host-runtime
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp-host
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui

@@ -9,7 +9,7 @@ use crate::host_client::ConnectionEvent;
 use crate::host_client::HostCall;
 use crate::host_client::HostEvent;
 use crate::host_client::HostSessionClient;
-use crate::owned_host::StopHost;
+use nori_host_runtime::StopHost;
 
 /// What a call to the owned host was for.
 pub(crate) enum HostTag {

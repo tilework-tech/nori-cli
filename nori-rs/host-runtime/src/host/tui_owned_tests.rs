@@ -8,7 +8,7 @@ use serde_json::Value;
 use serde_json::json;
 use tempfile::TempDir;
 
-use super::launcher;
+use super::launch;
 
 /// A home whose default agent is the mock, which the registry finds beside
 /// the test binary.
@@ -29,7 +29,7 @@ fn config(home: &TempDir) -> (NoriConfig, NoriConfigOverrides) {
     )
 }
 
-async fn call(host: &mut nori_tui::OwnedHost, id: i64, method: &str, params: Value) -> Value {
+async fn call(host: &mut super::OwnedHost, id: i64, method: &str, params: Value) -> Value {
     host.to_host
         .send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}).to_string())
         .await
@@ -51,7 +51,7 @@ async fn call(host: &mut nori_tui::OwnedHost, id: i64, method: &str, params: Val
 async fn the_pipe_client_and_the_tui_share_one_host() {
     let home = TempDir::new().unwrap();
     let (config, overrides) = config(&home);
-    let mut host = launcher()(&config, &overrides).unwrap();
+    let mut host = launch(&config, &overrides).unwrap();
 
     let initialized = call(&mut host, 1, "initialize", json!({"protocolVersion":1})).await;
     assert_eq!(initialized["result"]["control"]["role"], "controller");
@@ -80,7 +80,7 @@ async fn the_pipe_client_and_the_tui_share_one_host() {
 async fn stopping_the_host_ends_its_sessions() {
     let home = TempDir::new().unwrap();
     let (config, overrides) = config(&home);
-    let mut host = launcher()(&config, &overrides).unwrap();
+    let mut host = launch(&config, &overrides).unwrap();
     call(&mut host, 1, "initialize", json!({"protocolVersion":1})).await;
     call(
         &mut host,
@@ -132,7 +132,7 @@ async fn permission_on_the_foreground_pipe_is_answered_once_as_the_user() {
 
     let home = TempDir::new().unwrap();
     let (config, overrides) = config(&home);
-    let mut host = launcher()(&config, &overrides).unwrap();
+    let mut host = launch(&config, &overrides).unwrap();
     let mut events = host.manager.subscribe(256);
     call(&mut host, 1, "initialize", json!({})).await;
     let created = call(

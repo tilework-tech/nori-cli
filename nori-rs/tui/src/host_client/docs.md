@@ -7,15 +7,15 @@ Path: @/nori-rs/tui/src/host_client
 - A client of a Nori host: one connection, JSON-RPC request correlation, and
   the host's notifications, with no terminal state. The connection is either
   an authenticated socket to a background `nori host` or an in-process pipe to
-  the host that plain `nori` owns.
+  the host owned by the foreground TUI.
 - Separates wire traffic from frontends. A frontend names what it wants as a
   `HostCall`, attaches its own tag, and gets back `HostEvent`s with replies
   matched to that tag.
 - Exists so more than one frontend can drive a host through the same code,
   because the host contract says the TUI must not own its own session manager.
   The [attach frontend](../attach/docs.md) drives a background host over the
-  socket; the normal `nori` TUI drives its [owned host](../owned_host.rs) over
-  the pipe through [`HostLink`](../app/host_link.rs).
+  socket. Both foreground binaries drive their [owned host](../../../host-runtime/src/host/tui_owned.rs)
+  over the pipe through [`HostLink`](../app/host_link.rs).
 
 ### How it fits into the larger codebase
 

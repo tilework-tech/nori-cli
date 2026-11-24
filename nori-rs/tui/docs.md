@@ -11,11 +11,11 @@ Path: @/nori-rs/tui
   application events. It owns runtime policy and lifecycle for the optional
   remote ACP surface, while WebSocket/ACP wire mechanics remain in
   `nori-acp-host`; it does not expose a second protocol vocabulary.
-- The TUI is a host client. It never builds a session manager: the `nori`
-  binary hands [`run_main`](src/lib.rs) a `HostLauncher`, and the TUI runs on
-  the resulting [`OwnedHost`](src/owned_host.rs) until it quits (see
-  [Owned host](#owned-host)). The crate is a library only; there is no
-  standalone `nori-tui` binary, because the host lives in `nori-cli`.
+- The package provides the standalone `nori-tui` executable and the library
+  used by plain `nori`. From `nori-rs/`, run
+  `cargo run -p nori-tui --bin nori-tui -- [OPTIONS] [PROMPT]`. The
+  [standalone entry point](src/main.rs) parses the TUI options and prints
+  nonzero token usage on exit.
 
 ### How it fits into the larger codebase
 
@@ -63,20 +63,16 @@ unknown states. Press `u` to cycle usage and resize the terminal to inspect
 the responsive layout. `--json` exports styled spans for browser review.
 
 ```text
-nori-cli ──HostLauncher──▶ nori-tui
-                            |  pipe (controller)      ─▶ owned HostService (nori-cli)
-                            |  typed HarnessHandle methods, SessionEvent::{Acp, Nori}
-                            v  through the host's SessionManager
-                          nori-harness -> nori-acp-host -> ACP agent
-                            ^
-                            |
-                          nori-config
+nori              nori-tui
+  └──────┬──────────┘
+    nori_tui::run_main
+         └─ nori_host_runtime::launch
+                  └─ HostService ── SessionManager ── ACP agents
 ```
 
-The TUI depends on `nori-harness`, `nori-config`, and `nori-protocol`; it does
-not import the ACP host or ACP schema crate directly. Its ACP types arrive
-through `nori_protocol::acp`. It does not depend on `nori-cli`; the host
-reaches it only through the `HostLauncher` the binary passes in.
+Both binaries run the same terminal loop. The TUI uses the foreground
+controller pipe for host calls and the host's manager for operations that
+require an in-process handle. Its ACP types come through `nori_protocol::acp`.
 
 Shared pickers and overlay menus receive
 [`nori-tui-components`](../tui-components/docs.md) styles through
@@ -1508,13 +1504,10 @@ acknowledged a result turn. See the [manager lifecycle](../harness/docs.md#deleg
 
 #### Owned host
 
-Plain `nori` keeps a foreground lifetime but no longer owns a session manager.
-[`run_main`](src/lib.rs) requires a `HostLauncher`; after configuration,
-onboarding, and automatic worktree creation are resolved it calls the launcher
-with the final configuration and overrides. Worktree creation writes the new
-folder into those overrides, so the host's cwd matches the TUI's. A launcher
-error restores the terminal and ends the run. The
-[CLI's owned TUI host](../cli/src/host/docs.md#owned-tui-host) builds the host.
+[`run_main`](src/lib.rs) resolves configuration, onboarding, and automatic
+worktree creation before calling the [foreground host factory](../host-runtime/src/host/tui_owned.rs).
+A newly created worktree becomes the host's working directory through the
+resolved overrides. A startup error restores the terminal and ends the run.
 
 ```text
 App::run

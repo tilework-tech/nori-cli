@@ -566,3 +566,68 @@ fn primary_preparation_timeout_reaps_the_child_without_activating() {
     assert!(!FakeRemoteHandroll::descendant_is_running(descendant_pid));
     assert!(!fake.read("agent_stderr").contains("new_session"));
 }
+
+#[test]
+fn both_foreground_launchers_own_one_inline_session_until_quit() {
+    for binary in ["nori-tui", "nori"] {
+        let fake = FakeRemoteHandroll::new();
+        let mut config = fake
+            .config()
+            .with_excluded_binary("nori")
+            .with_agent_env(
+                "MOCK_AGENT_DESCENDANT_PID_FILE",
+                fake.path("descendant").to_string_lossy(),
+            )
+            .with_arg("Count the lanterns")
+            .with_agent_env(
+                "MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK",
+                "Count the lanterns",
+            )
+            .with_mock_response("Six lanterns are lit.");
+        config.binary = binary;
+        let mut terminal = TuiSession::spawn_with_config(24, 90, config).expect(binary);
+        terminal
+            .wait_for_text("Six lanterns are lit.", TIMEOUT)
+            .expect(binary);
+        assert!(
+            !terminal
+                .raw_output()
+                .windows(8)
+                .any(|seq| seq == b"\x1b[?1049h"),
+            "{binary} entered the alternate screen"
+        );
+        assert_eq!(fake.pid_count(), 1, "{binary} started extra adapters");
+        assert_eq!(
+            fake.read("agent_stderr")
+                .matches("Mock agent: new_session id=")
+                .count(),
+            1,
+            "{binary} opened extra sessions"
+        );
+        let child = fake.wait_for_recorded_pid("descendant", TIMEOUT);
+        let parent = std::process::Command::new("ps")
+            .args(["-o", "ppid=", "-p", &child.to_string()])
+            .output()
+            .expect("read mock agent PID");
+        let agent = std::str::from_utf8(&parent.stdout)
+            .unwrap()
+            .trim()
+            .parse()
+            .expect("live mock agent");
+        assert!(FakeRemoteHandroll::descendant_is_running(agent));
+        terminal.submit_input("/quit").unwrap();
+        assert!(
+            terminal
+                .wait_for_exit_status(TIMEOUT)
+                .unwrap()
+                .expect("timely exit")
+                .success(),
+            "{binary} quit unsuccessfully"
+        );
+        assert!(
+            !FakeRemoteHandroll::descendant_is_running(agent)
+                && !FakeRemoteHandroll::descendant_is_running(child),
+            "adapter survived {binary}"
+        );
+    }
+}

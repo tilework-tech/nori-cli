@@ -10,10 +10,8 @@ use std::time::Duration;
 use nori_config::NoriConfig;
 use nori_config::NoriConfigOverrides;
 use nori_harness::remote_agent::RemoteAcpServer;
-use nori_harness::session_manager::SessionManager;
-use nori_harness::session_manager::SessionManagerConfig;
 
-use super::service::HostService;
+use nori_host_runtime::HostService;
 
 /// Why the host stopped before stdin closed.
 enum Stop {
@@ -28,11 +26,7 @@ pub(super) fn local_host(
 ) -> anyhow::Result<Arc<HostService>> {
     nori_harness::initialize_registry(config.agents.clone())?;
     nori_harness::set_adapter_launch_overrides(config.acp_adapters.clone())?;
-    let manager = SessionManager::new(SessionManagerConfig {
-        max_sessions: config.max_sessions,
-        ..Default::default()
-    });
-    Ok(super::host_service(config, overrides, manager, None, None))
+    HostService::new(config, overrides, None)
 }
 
 /// Serve a client that speaks ACP on stdin and stdout.

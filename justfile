@@ -56,7 +56,7 @@ test *args:
         cd nori-rs && cargo test -p nori-protocol "$@"
         ;;
       e2e)
-        cd nori-rs && cargo build --bin nori && cargo test -p tui-pty-e2e "$@"
+        cd nori-rs && cargo build --bin nori --bin nori-tui --bin mock_acp_agent && cargo test -p tui-pty-e2e "$@"
         ;;
       all)
         cd nori-rs && cargo test --all-features "$@"

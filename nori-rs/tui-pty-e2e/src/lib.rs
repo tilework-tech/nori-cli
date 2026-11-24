@@ -252,7 +252,7 @@ impl TuiSession {
             pixel_height: 0,
         })?;
 
-        let mut cmd = CommandBuilder::new(codex_binary_path());
+        let mut cmd = CommandBuilder::new(binary_path(config.binary));
 
         // Set working directory if provided
         if let Some(cwd) = &config.cwd {
@@ -451,17 +451,23 @@ trust_level = "trusted"
     /// output so the child can't block on a full PTY buffer. Returns true if
     /// the process exited within the timeout.
     pub fn wait_for_process_exit(&mut self, timeout: Duration) -> bool {
-        let deadline = std::time::Instant::now() + timeout;
+        self.wait_for_exit_status(timeout)
+            .map_or(true, |status| status.is_some())
+    }
+
+    /// Drain output and collect the exit status, or return None on timeout.
+    pub fn wait_for_exit_status(
+        &mut self,
+        timeout: Duration,
+    ) -> Result<Option<portable_pty::ExitStatus>> {
+        let deadline = Instant::now() + timeout;
         loop {
             let _ = self.poll();
-            match self.child.try_wait() {
-                Ok(Some(_)) => return true,
-                Ok(None) => {}
-                // If the wait itself errors, treat the process as gone.
-                Err(_) => return true,
+            if let Some(status) = self.child.try_wait()? {
+                return Ok(Some(status));
             }
-            if std::time::Instant::now() >= deadline {
-                return false;
+            if Instant::now() >= deadline {
+                return Ok(None);
             }
             std::thread::sleep(Duration::from_millis(50));
         }
@@ -765,6 +771,8 @@ fn find_acp_log_file(nori_home: &std::path::Path) -> Option<std::path::PathBuf> 
 
 /// Configuration for spawning a test session
 pub struct SessionConfig {
+    /// Executable to launch from the Cargo profile directory.
+    pub binary: &'static str,
     pub agent: String,
     /// Exact command arguments, bypassing the default interactive TUI flags.
     pub command_args: Option<Vec<String>>,
@@ -814,6 +822,7 @@ impl Default for SessionConfig {
 impl SessionConfig {
     pub fn new() -> Self {
         Self {
+            binary: "nori",
             agent: "mock-model".to_string(),
             command_args: None,
             subcommand: None,
@@ -964,14 +973,14 @@ impl SessionConfig {
     }
 }
 
-/// Get path to codex binary
-fn codex_binary_path() -> String {
+/// Locate a built workspace executable next to the test directory.
+fn binary_path(name: &str) -> String {
     let test_exe = std::env::current_exe().expect("Failed to get current exe path");
     test_exe
         .parent() // deps
         .and_then(|p| p.parent()) // debug or release
         .expect("Failed to get target directory")
-        .join("nori")
+        .join(name)
         .to_string_lossy()
         .into_owned()
 }
