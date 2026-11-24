@@ -116,8 +116,9 @@ pub(crate) struct ChatComposer {
     textarea: TextArea,
     textarea_state: RefCell<TextAreaState>,
     input_enabled: bool,
-    /// Let embedding frontends interpret submitted commands themselves.
-    literal_commands: bool,
+    /// Unknown slash names are submitted as text for the agent instead of
+    /// being refused, for a frontend that does not know the agent's commands.
+    pass_unknown_commands: bool,
     active_popup: ActivePopup,
     app_event_tx: AppEventSender,
     history: ChatComposerHistory,
@@ -197,7 +198,7 @@ impl ChatComposer {
             textarea: TextArea::new(),
             textarea_state: RefCell::new(TextAreaState::default()),
             input_enabled: true,
-            literal_commands: false,
+            pass_unknown_commands: false,
             active_popup: ActivePopup::None,
             app_event_tx,
             history: ChatComposerHistory::new(),
@@ -246,9 +247,8 @@ impl ChatComposer {
         !self.is_shell_mode && self.textarea.is_empty()
     }
 
-    pub(crate) fn set_literal_commands(&mut self, enabled: bool) {
-        self.literal_commands = enabled;
-        self.sync_command_popup();
+    pub(crate) fn set_pass_unknown_commands(&mut self, enabled: bool) {
+        self.pass_unknown_commands = enabled;
     }
 
     /// Record the history metadata advertised by `SessionConfiguredEvent` so
@@ -521,6 +521,20 @@ impl ChatComposer {
         desc: Line<'static>,
     ) {
         self.command_description_overrides.insert(cmd, desc);
+    }
+
+    /// Replace every greyed builtin and its reason at once.
+    pub(crate) fn set_disabled_builtin_commands(
+        &mut self,
+        disabled: HashMap<SlashCommand, Line<'static>>,
+    ) {
+        if disabled == self.disabled_builtin_commands {
+            return;
+        }
+        self.disabled_builtin_commands = disabled;
+        if let ActivePopup::Command(popup) = &mut self.active_popup {
+            popup.set_disabled_builtins(self.disabled_builtin_commands.clone());
+        }
     }
 
     pub(crate) fn set_builtin_command_disabled(

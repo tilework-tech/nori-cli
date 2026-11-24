@@ -327,6 +327,33 @@ impl CommandPopup {
             .ensure_visible(matches_len, MAX_COMMAND_POPUP_ROWS.min(matches_len));
     }
 
+    /// Whether the command name typed on `first_line` is the start of
+    /// `cmd`'s name, rather than a loose match of its letters.
+    pub(crate) fn typed_prefix_of(first_line: &str, cmd: SlashCommand) -> bool {
+        let typed = first_line.trim_start().trim_start_matches('/');
+        let typed = typed.split_whitespace().next().unwrap_or("");
+        cmd.command().starts_with(typed)
+    }
+
+    /// The highlighted builtin when it is greyed, so Enter can say why it
+    /// cannot run instead of submitting the typed fragment.
+    pub(crate) fn highlighted_disabled_builtin(&self) -> Option<SlashCommand> {
+        let matches = self.filtered_items();
+        match self
+            .state
+            .selected_idx
+            .and_then(|idx| matches.get(idx).copied())
+        {
+            Some(CommandItem::Builtin(cmd)) if self.disabled_builtins.contains_key(&cmd) => {
+                Some(cmd)
+            }
+            Some(
+                CommandItem::Builtin(_) | CommandItem::UserPrompt(_) | CommandItem::AgentCommand(_),
+            )
+            | None => None,
+        }
+    }
+
     /// Return currently selected command, if any.
     pub(crate) fn selected_item(&self) -> Option<CommandItem> {
         let matches = self.filtered_items();

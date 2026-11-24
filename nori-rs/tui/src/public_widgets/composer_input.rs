@@ -32,21 +32,24 @@ pub struct ComposerInput {
 }
 
 impl ComposerInput {
-    /// Composer for an attached host, whose commands are interpreted by its frontend.
+    /// Composer for an attached host. It shows the shared `/` menu and
+    /// returns builtin commands for the frontend to run; other slash names
+    /// are submitted as text for the agent.
     pub fn for_attachment() -> Self {
-        Self::with_commands("Send a prompt", true)
+        let mut input = Self::with_placeholder("Send a prompt");
+        input.inner.set_pass_unknown_commands(true);
+        input
     }
     /// Create a new composer input with a neutral placeholder.
     pub fn new() -> Self {
-        Self::with_commands("Compose new task", false)
+        Self::with_placeholder("Compose new task")
     }
 
-    fn with_commands(placeholder: &str, literal_commands: bool) -> Self {
+    fn with_placeholder(placeholder: &str) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let sender = AppEventSender::new(tx.clone());
         // `enhanced_keys_supported=true` enables Shift+Enter newline hint/behavior.
-        let mut inner = ChatComposer::new(true, sender, true, placeholder.to_string(), false);
-        inner.set_literal_commands(literal_commands);
+        let inner = ChatComposer::new(true, sender, true, placeholder.to_string(), false);
         Self { inner, _tx: tx, rx }
     }
 
@@ -100,6 +103,24 @@ impl ComposerInput {
             .0;
         self.drain_app_events();
         result
+    }
+
+    /// Grey exactly these builtins in the `/` menu, each with its reason.
+    pub(crate) fn set_disabled_builtin_commands(
+        &mut self,
+        disabled: impl IntoIterator<Item = (crate::slash_command::SlashCommand, String)>,
+    ) {
+        self.inner.set_disabled_builtin_commands(
+            disabled
+                .into_iter()
+                .map(|(command, reason)| (command, ratatui::text::Line::from(reason)))
+                .collect(),
+        );
+    }
+
+    /// Whether a completion menu (`/`, `@`, …) is open and should get Esc.
+    pub(crate) fn popup_open(&self) -> bool {
+        self.inner.popup_active()
     }
 
     pub fn handle_paste(&mut self, pasted: String) -> bool {

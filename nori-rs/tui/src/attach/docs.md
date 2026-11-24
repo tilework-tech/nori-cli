@@ -22,10 +22,41 @@ Path: @/nori-rs/tui/src/attach
   to controllers and watchers.
 - Presentation reuses the TUI's [normalizer](../presentation), composer,
   Markdown, tool cells, and picker components. The
-  [attachment composer](../public_widgets/composer_input.rs) submits slash
-  commands literally for this frontend to interpret; the local TUI keeps its
-  ordinary command handling. A terminal's selected session does not change
-  another terminal's selection.
+  [attachment composer](../public_widgets/composer_input.rs) shows the local
+  TUI's `/` menu and returns builtin commands for this frontend to run;
+  unknown slash names (agent commands, custom prompts) are submitted as text
+  for the agent rather than refused. Bare `exit`/`quit` detach, as in plain
+  `nori`. A terminal's selected session does not change another terminal's
+  selection.
+
+[Commands](commands.rs) take their verdict from the shared
+[command availability](../command_availability.rs) table (see the
+[TUI docs](../../docs.md#commands-and-approvals)) with
+`Surface::Attached { watching, connected }`:
+
+- `sync_command_menu` greys every builtin with its reason. It runs when the
+  runtime is built, before each key and after each connection event, so an
+  open menu follows role changes and reconnects.
+- Attach cannot list the agent's own commands, so Enter runs a highlighted
+  builtin only when the typed name is the start of its name. `/review` stays
+  a prompt even though the menu's loose match highlights `/resume-viewonly`.
+- Esc with a menu open goes to the composer and never cancels the turn.
+- Builtin names win over same-named agent commands, as in plain `nori`:
+  `/compact` or `/model` typed in attach is refused with its reason instead
+  of reaching the agent as text.
+- `run_command` executes popup selections and typed builtins. A refused
+  command restores the typed text and shows `/<name>: <reason>`. While
+  reconnecting, stopped, or after a replay gap, the existing
+  `require_mutation` messages apply instead. Commands the host could run but
+  attach has no screen for read `not available in nori attach yet`; commands
+  that need plain `nori`'s in-process session read `not available on this
+  host yet`; a watcher's controller-only commands read `watching · Alt+T to
+  take control`.
+- `/detach` and `/cancel` remain attach-only aliases. `/close` and `/resume`
+  with trailing text go to the agent as a prompt.
+- Attach's `/resume` resumes the on-screen failed session; plain `nori`'s
+  opens the saved-session picker. Watcher prompt refusals keep their
+  read-only wording.
 
 The controller uses the [host follow-up operation](../../../cli/src/host/docs.md#mid-turn-follow-ups) for a composed message during a working turn. Enter steers and Tab queues. Session events supply the expected turn ID. A pending permission dialog continues to handle its own keys and idle Enter submits an ordinary prompt.
 
@@ -267,8 +298,8 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
   stops recovery. The terminal retains conversation history and the composer
   draft, displays a persistent reason with instructions to rerun
   `nori attach`, and remains open for Ctrl+D detach.
-- Snapshot and reducer [tests](tests.rs) cover roles, read-only behavior, and
-  sequence application. The [PTY scenarios](../../../tui-pty-e2e/tests/host_attach.rs)
+- Snapshot and reducer [tests](tests.rs) cover roles, read-only behavior, the
+  controller and watcher command menus, and sequence application. The [PTY scenarios](../../../tui-pty-e2e/tests/host_attach.rs)
   exercise the complete host, multiple terminals, and dropped or silently
   stalled TCP connections.
 
