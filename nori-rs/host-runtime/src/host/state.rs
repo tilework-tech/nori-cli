@@ -12,12 +12,12 @@ use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Serialize, Deserialize)]
-pub(super) struct HostState {
+pub struct HostState {
     pub endpoint: String,
     pub pid: i64,
 }
 
-pub(super) struct HostFiles {
+pub struct HostFiles {
     pub directory: PathBuf,
 }
 
@@ -115,7 +115,7 @@ impl HostFiles {
     }
 }
 
-pub(super) fn read_token(path: &Path) -> anyhow::Result<String> {
+pub fn read_token(path: &Path) -> anyhow::Result<String> {
     let mut token = String::new();
     private_open(path, false)?.read_to_string(&mut token)?;
     let token = token.trim().to_owned();
@@ -123,7 +123,7 @@ pub(super) fn read_token(path: &Path) -> anyhow::Result<String> {
     Ok(token)
 }
 
-pub(super) fn private_open(path: &Path, create: bool) -> anyhow::Result<File> {
+pub fn private_open(path: &Path, create: bool) -> anyhow::Result<File> {
     let mut options = OpenOptions::new();
     options.read(true).write(create).create(create);
     #[cfg(unix)]

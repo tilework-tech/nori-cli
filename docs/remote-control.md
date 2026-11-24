@@ -722,10 +722,9 @@ rejected.
 
 ### The interactive TUI as a client
 
-Plain `nori` (also `nori resume` and `nori cloud`) does not own a **session
-manager**. For each run the CLI builds a private in-process host, with no
-socket, token, lock, or discovery file, and the TUI owns it for exactly its
-own lifetime. The TUI connects over in-memory lines, sends `initialize`, and
+Plain `nori`, standalone `nori-tui`, `nori resume`, and `nori cloud` use the
+same interactive entry point. It starts a private in-process host that owns
+the **session manager** and runs for the lifetime of the terminal. The TUI connects over in-memory lines, sends `initialize`, and
 is always the controller; a failed initialize or a closed pipe ends the TUI
 with an error. Quitting stops the host, which ends every **session** it runs,
 including one mid-turn. The same host also hands the TUI its own manager for

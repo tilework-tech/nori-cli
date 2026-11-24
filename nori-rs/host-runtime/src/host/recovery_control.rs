@@ -538,7 +538,7 @@ mod tests {
                     "bindingId": binding, "generation": 1, "commandId": "launch",
                     "conversationId": uuid::Uuid::new_v4(),
                     "spec": {"projectId":"fixture", "runId":"fixture", "agent":"fixture",
-                        "adapter":{"path":Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/recovery/adapter.py"),"version":"1"},
+                        "adapter":{"path":Path::new(env!("CARGO_MANIFEST_DIR")).join("../cli/tests/recovery/adapter.py"),"version":"1"},
                         "cwd":root.join("workspace"), "home":root.join("home"),
                         "additions":{"promptEcho":false,"statusEvents":false,"recording":false,"clientMcp":false}}
                 }))
