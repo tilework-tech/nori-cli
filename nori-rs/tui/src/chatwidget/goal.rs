@@ -1,5 +1,4 @@
 use super::*;
-use crate::slash_command::CommandScope;
 use crate::ui_types::format_elapsed_seconds;
 use crate::ui_types::format_si_suffix;
 use strum::IntoEnumIterator;
@@ -110,12 +109,13 @@ impl ChatWidget {
         {
             return server.clone();
         }
-        // With several sessions, a local /close closes the session on screen.
-        let local_close = command == SlashCommand::Close && !self.cloud_mode;
-        if !local_close
-            && let Some(reason) =
-                scope_unavailable_reason(command, self.cloud_mode, &self.session_agent_capabilities)
-        {
+        if let Some(reason) = crate::command_availability::unavailable_reason(
+            command,
+            crate::command_availability::Surface::Owned {
+                cloud_mode: self.cloud_mode,
+                agent_session_close: self.session_agent_capabilities.session_close,
+            },
+        ) {
             return nori_protocol::CommandAvailability {
                 enabled: false,
                 reason: Some(reason),
@@ -272,32 +272,6 @@ impl ChatWidget {
 
 fn default_command_unavailable_reason(command: SlashCommand) -> String {
     format!("/{} is disabled for the active session.", command.command())
-}
-
-/// Client-side session-type scope verdict: Some(reason) when `command` is
-/// unavailable for the current session shape. LocalOnly commands operate on
-/// the local machine and are meaningless in a cloud session (agent on a
-/// remote VM); /close (CloudOnly) needs both cloud mode and the agent's
-/// `session/close` capability.
-fn scope_unavailable_reason(
-    command: SlashCommand,
-    cloud_mode: bool,
-    agent: &crate::presentation::AgentCapabilitiesView,
-) -> Option<String> {
-    match command.scope() {
-        CommandScope::LocalOnly if cloud_mode => Some(format!(
-            "/{} runs on the local machine and is unavailable in cloud sessions.",
-            command.command()
-        )),
-        CommandScope::CloudOnly if !cloud_mode => {
-            Some("/close is available only in cloud sessions.".to_string())
-        }
-        CommandScope::CloudOnly if !agent.session_close => Some(
-            "/close releases a cloud session and needs the agent's session/close capability."
-                .to_string(),
-        ),
-        CommandScope::LocalOnly | CommandScope::CloudOnly | CommandScope::Universal => None,
-    }
 }
 
 fn goal_status_label(status: nori_protocol::ThreadGoalStatus) -> &'static str {

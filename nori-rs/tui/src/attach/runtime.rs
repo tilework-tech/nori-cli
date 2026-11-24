@@ -107,7 +107,7 @@ impl Runtime {
             ("ctrl+d", "detach"),
             ("/new", "new session"),
         ]);
-        Self {
+        let mut runtime = Self {
             state: AttachState {
                 list_open: selected.is_none(),
                 selected,
@@ -126,7 +126,10 @@ impl Runtime {
             cwd: std::env::current_dir().unwrap_or_default(),
             session_folders: false,
             remote: false,
-        }
+        };
+        // A paste can open the `/` menu before the first key or host event.
+        runtime.sync_command_menu();
+        runtime
     }
 
     /// Starts the answer grace period when a request other than the last one
@@ -234,6 +237,13 @@ impl Runtime {
     }
 
     pub fn connection_event(&mut self, event: ConnectionEvent) -> anyhow::Result<()> {
+        let handled = self.handle_connection_event(event);
+        // Role and connection changes re-grey an open `/` menu at once.
+        self.sync_command_menu();
+        handled
+    }
+
+    fn handle_connection_event(&mut self, event: ConnectionEvent) -> anyhow::Result<()> {
         match self.client.incoming(event) {
             HostEvent::Stopped(reason) => {
                 self.state.connected = false;

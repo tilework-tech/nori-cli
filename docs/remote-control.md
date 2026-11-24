@@ -403,6 +403,13 @@ session inside the Session column. Its keys match the other pickers: arrows
 and `j`/`k` move, `/`, `f`, or Ctrl+F search, and Esc leaves a search; while
 the composer holds text, only arrows, PageUp/PageDown, and Ctrl keys act on
 the list.
+Typing `/` opens the same command menu as plain `nori`. Commands this terminal
+cannot run stay listed but greyed with a reason: `not available on this host
+yet` (the host has no method for it, e.g. `/compact`), `not available in nori
+attach yet` (e.g. `/model`), or, for a watcher, `watching · Alt+T to take
+control` on `/new`, `/close`, `/resume` and `/delegate`. Running a greyed
+command shows the same reason and sends nothing. Slash names that are not
+Nori commands go to the agent as a prompt.
 Session commands address the host; they do not launch local agents.
 `/new [DIR] [AGENT]` (which still requires control in the terminal) starts a
 session in the attaching terminal's directory (the host's own folder for a `--host` host), or in `DIR`, made absolute
