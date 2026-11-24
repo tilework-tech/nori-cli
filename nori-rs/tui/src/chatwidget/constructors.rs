@@ -53,10 +53,32 @@ impl ChatWidget {
         widget
     }
 
-    /// Build a hidden switch candidate. The app commits it only after its
-    /// `SessionStarted` event.
-    pub(crate) fn new_candidate(common: ChatWidgetInit) -> Self {
-        Self::new_inner(common)
+    /// Follow a conversation the host started for this terminal, from its
+    /// first journal entry, so history replayed before the host's answer is
+    /// shown. `saved` names the agent's saved session it restores.
+    pub(crate) fn from_host_activation(
+        mut common: ChatWidgetInit,
+        id: ConversationId,
+        handle: Option<HarnessHandle>,
+        subscription: nori_harness::remote_agent::ManagedSubscription,
+        saved: Option<(String, Option<String>)>,
+    ) -> Self {
+        common.deferred_spawn = true;
+        let analytics = common.analytics.clone();
+        let mut widget = Self::new_inner(common);
+        widget.harness_handle = match (analytics, handle) {
+            (Some(reporter), Some(handle)) => Some(reporter.attach(handle)),
+            (_, handle) => handle,
+        };
+        widget.managed_conversation_id = Some(id);
+        if let Some((acp_session_id, title)) = saved {
+            widget.acp_session_id = Some(acp_session_id);
+            widget.cloud_session_title = title;
+        }
+        let tx = widget.app_event_tx.clone();
+        let generation = widget.session_generation;
+        super::agent::forward_managed_view(id, subscription, tx, generation);
+        widget
     }
 
     fn new_inner(common: ChatWidgetInit) -> Self {
@@ -232,15 +254,6 @@ impl ChatWidget {
     /// or client-side replay when the agent doesn't support `session/load`.
     /// `title` is the broker-reported session title, when known.
     pub(crate) fn new_resumed_acp(
-        common: ChatWidgetInit,
-        acp_session_id: Option<String>,
-        title: Option<String>,
-        transcript: Option<nori_harness::transcript::Transcript>,
-    ) -> Self {
-        Self::new_resumed_acp_inner(common, acp_session_id, title, transcript)
-    }
-
-    pub(crate) fn new_resumed_acp_candidate(
         common: ChatWidgetInit,
         acp_session_id: Option<String>,
         title: Option<String>,

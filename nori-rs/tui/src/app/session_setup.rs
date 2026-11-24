@@ -87,7 +87,6 @@ impl App {
             initial_context.clone(),
         );
         let tx = self.app_event_tx.clone();
-        let event_intent = intent.clone();
         let task = tokio::spawn(async move {
             let agent = prepare_agent_with_timeout(spec)
                 .await
@@ -95,11 +94,7 @@ impl App {
                     Some(parent) => agent.with_fork_parent(parent),
                     None => agent,
                 });
-            tx.send(AppEvent::AgentPrepared {
-                generation,
-                agent,
-                intent: event_intent,
-            });
+            tx.send(AppEvent::AgentPrepared { generation, agent });
         });
         self.primary_agent_preparation = Some(PrimaryAgentPreparation {
             generation,
@@ -138,38 +133,6 @@ impl App {
         Ok(Some(agent))
     }
 
-    /// Start preparing a switch candidate immediately. Replacing this state
-    /// drops and tears down any older candidate without touching the active session.
-    pub(crate) fn begin_agent_candidate(&mut self, agent_name: String, display_name: String) {
-        if self.chat_widget.has_harness_session() && self.refuse_at_session_cap() {
-            return;
-        }
-        self.discard_candidate();
-        self.chat_widget
-            .set_login_agent_override(Some(agent_name.clone()));
-        let generation = crate::chatwidget::agent::next_session_generation();
-        let config = self.config_for_agent(&agent_name);
-        let spec = crate::chatwidget::agent::agent_prepare_spec(config, None);
-        let tx = self.app_event_tx.clone();
-        let prepared_agent_name = agent_name.clone();
-        let task = tokio::spawn(async move {
-            let agent = prepare_agent_with_timeout(spec).await;
-            tx.send(AppEvent::AgentPrepared {
-                generation,
-                agent,
-                intent: crate::app_event::AgentPrepareIntent::Candidate {
-                    agent_name,
-                    display_name,
-                },
-            });
-        });
-        self.candidate_agent = Some(CandidateAgent::Preparing {
-            generation,
-            agent_name: prepared_agent_name,
-            abort: task.abort_handle(),
-        });
-    }
-
     pub(crate) fn cancel_primary_agent_preparation(&mut self) {
         if let Some(preparation) = self.primary_agent_preparation.take() {
             preparation.abort.abort();
@@ -178,10 +141,10 @@ impl App {
 
     pub(crate) fn discard_candidate(&mut self) {
         match self.candidate_agent.take() {
-            Some(CandidateAgent::Preparing { abort, .. }) => abort.abort(),
-            Some(CandidateAgent::Prepared { agent, .. }) => {
-                tokio::spawn((*agent).shutdown());
-            }
+            // The host still answers an unfinished preparation; its reply
+            // finds no current candidate and discards what it prepared.
+            Some(CandidateAgent::Preparing { .. } | CandidateAgent::Requested { .. }) => {}
+            Some(CandidateAgent::Prepared { selection, .. }) => self.discard_selection(selection),
             Some(CandidateAgent::Activating { widget, .. }) => {
                 widget.shutdown_harness_session();
             }

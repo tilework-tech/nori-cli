@@ -33,6 +33,10 @@ pub(crate) struct HostEndpoint {
     pub refresh_local_token: Option<Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>>,
 }
 
+/// The `_meta` key that scopes `session/list` and `session/new` to a
+/// prepared agent server.
+pub(crate) const PREPARED_AGENT: &str = "nori/preparedAgent";
+
 /// One host call, named by what it does rather than by its wire method.
 #[derive(Debug)]
 pub(crate) enum HostCall {
@@ -80,6 +84,26 @@ pub(crate) enum HostCall {
         session_id: String,
         request_id: Value,
         approved: bool,
+    },
+    /// Start an ACP agent server on the host for this connection's picker.
+    PrepareAgent {
+        agent: String,
+        cwd: std::path::PathBuf,
+    },
+    /// The prepared server's own saved sessions, not host conversations.
+    ListPrepared {
+        selection: String,
+        cwd: std::path::PathBuf,
+    },
+    /// Start a host conversation on the prepared server: a new session, or
+    /// one of its saved sessions when `saved_session_id` names it.
+    ActivatePrepared {
+        selection: String,
+        cwd: std::path::PathBuf,
+        saved_session_id: Option<String>,
+    },
+    DiscardPrepared {
+        selection: String,
     },
 }
 
@@ -150,6 +174,31 @@ impl HostCall {
                 "_nori/session/delegation/resolve",
                 json!({"session_id": session_id, "request_id": request_id, "approved": approved}),
             ),
+            Self::PrepareAgent { agent, cwd } => (
+                "_nori/host/prepare_agent",
+                json!({"agent": agent, "cwd": cwd}),
+            ),
+            Self::ListPrepared { selection, cwd } => (
+                "session/list",
+                json!({"cwd": cwd, "_meta": {PREPARED_AGENT: {"id": selection}}}),
+            ),
+            Self::ActivatePrepared {
+                selection,
+                cwd,
+                saved_session_id,
+            } => {
+                let mut prepared = json!({"id": selection});
+                if let Some(saved) = saved_session_id {
+                    prepared["savedSessionId"] = json!(saved);
+                }
+                (
+                    "session/new",
+                    json!({"cwd": cwd, "mcpServers": [], "_meta": {PREPARED_AGENT: prepared}}),
+                )
+            }
+            Self::DiscardPrepared { selection } => {
+                ("_nori/host/discard_agent", json!({"id": selection}))
+            }
         }
     }
 }
