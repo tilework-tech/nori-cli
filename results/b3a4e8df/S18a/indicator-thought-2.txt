@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-M2/S18a/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› ponder the harbor
+
+
+• Sorting the buoy colours (2s • esc to interrupt)
+
+                                                                                                                [ auto ]
+› @ for file mentions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -153,3 +153,17 @@ Further pre-existing findings:
 Not covered: Escape pressed before host admission returns (#743) is covered only by the repository PTY test with its admission hook.
 
 Run several commits at once with `ACC_LANE=<name>` (own work dir and tmux socket); re-run part of a commit with `--merge --only ...`.
+
+### Added 2026-11-24 (#747, #748)
+
+| Requirement | Scenario / check | Observed by | #746 `c94867b1` | First green |
+|---|---|---|---|---|
+| `/resume` lists the agent server's own saved row and restores it on a separately prepared server process; history replays; prompt reaches it; one load | S31a restore.* | adapter, process, screen | FAIL (loads on the live adapter) | #748 |
+| `/agent` lists and restores another server's saved row | S31b restore.* | adapter, process, screen | pass | kept |
+| Refused `/resume` restore keeps the current session and shows the agent's message | S31c | adapter, screen | FAIL (session replaced) | #748 |
+| Refused `/agent` restore shows the agent's own message | S31d restore.refusal_message_shown | screen | FAIL (generic "Failed to load ACP session") | #747 |
+| Esc on `/resume` rows reaps the prepared server; current session keeps working | S32a | process, adapter | FAIL (no prepared server) | #748 |
+| Esc on `/agent` rows reaps the prepared server | S32b | process | pass | kept |
+
+Honest gap: in plain `nori` the owned host shares the process with the TUI, so whether `/agent`
+goes through the host or in-process is only visible through S31d's message and the repository tests.

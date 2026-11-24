@@ -1,0 +1,36 @@
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude
+
+[2m[39m• [0m[39m[49mLantern Claude options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mhello lantern
+
+
+[2m• [0m[39m[49mclaude-code heard: hello lantern
+
+[2m╭───────────────────────────────────────────────╮
+│ [0;1m[38;5;2m[49mGoodbye! [0;2m[39m[49mThanks for using Nori.               │
+│                                               │
+│ Session: [0m[39m[49m38ca125c-23fe-4fb3-bf8c-0ee1a632582b[2m │
+│                                               │
+│ [0;1m[39m[49mMessages[0;2m[39m[49m      User: 1  Assistant: 1  Total: 2 │
+│ [0;1m[39m[49mTool Calls[0m[39m[49m    [2m(none)                          │
+│                                               │
+│ [0;1m[39m[49mSkills Used[0;2m[39m[49m                                   │
+│   (none)                                      │
+│                                               │
+│ [0;1m[39m[49mSubagents Used[0;2m[39m[49m                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+[0m[39m[49mTo continue this session, run:
+[36mnori resume 38ca125c-23fe-4fb3-bf8c-0ee1a632582b
+[39mshell$ echo STTY1795503633965; stty -a | tr '\n' ' '; echo; echo ENDSTTY1795503633965
+STTY1795503633965
+speed 38400 baud; rows 36; columns 120; line = 0; intr = ^C; quit = ^\; erase = ^?; kill = ^U; eof = ^D; eol = <undef>;
+eol2 = <undef>; swtch = <undef>; start = ^Q; stop = ^S; susp = ^Z; rprnt = ^R; werase = ^W; lnext = ^V; discard = ^O; mi
+n = 1; time = 0; -parenb -parodd -cmspar cs8 -hupcl -cstopb cread -clocal -crtscts -ignbrk -brkint -ignpar -parmrk -inpc
+k -istrip -inlcr -igncr icrnl ixon -ixoff -iuclc -ixany -imaxbel iutf8 opost -olcuc -ocrnl onlcr -onocr -onlret -ofill -
+ofdel nl0 cr0 tab0 bs0 vt0 ff0 isig icanon iexten echo echoe echok -echonl -noflsh -xcase -tostop -echoprt echoctl echok
+e -flusho -extproc
+ENDSTTY1795503633965
+shell$

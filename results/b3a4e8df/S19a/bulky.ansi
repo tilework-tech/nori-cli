@@ -1,0 +1,69 @@
+shell$ nori --skip-trust-directory
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/nori-host-tui-acceptance-M2/S19a/roots/alpha/app[2m · [0m[39m[49mAgent approvals
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude
+
+[2m[39m• [0m[39m[49mLantern Claude options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mbulky rows
+
+
+[1m[38;5;2m•[0m[39m[49m [1mRan[0m[39m[49m [1m[38;2;137;180;250mcount[0m[38;2;205;214;244m[49m rows
+[2m[39m  └ row 01 of the synthetic ledger
+    row 02 of the synthetic ledger
+    row 03 of the synthetic ledger
+    row 04 of the synthetic ledger
+[0m[39m[49m    [2;3m┄ 51 lines hidden
+[0;2m[39m[49m    row 56 of the synthetic ledger
+    row 57 of the synthetic ledger
+    row 58 of the synthetic ledger
+    row 59 of the synthetic ledger
+    row 60 of the synthetic ledger
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• [0m[39m[49mclaude-code heard: bulky rows
+
+                                                                                                                [2m[ auto ]
+[0;1m[39m[49m›[0m[39m[49m [2m@ for file mentions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

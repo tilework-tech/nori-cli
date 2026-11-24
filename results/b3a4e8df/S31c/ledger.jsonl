@@ -1,0 +1,14 @@
+{"t": 1795504328.7636285, "adapter": "claude-code", "pid": 184281, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-Rb3a4e8df/S31c/roots/alpha/app", "argv": []}
+{"t": 1795504328.7637136, "adapter": "claude-code", "pid": 184281, "kind": "request", "method": "initialize"}
+{"t": 1795504328.7650132, "adapter": "claude-code", "pid": 184281, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-Rb3a4e8df/S31c/roots/alpha/app"}
+{"t": 1795504328.7696211, "adapter": "claude-code", "pid": 184281, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-Rb3a4e8df/S31c/roots/alpha/app"}
+{"t": 1795504329.9736264, "adapter": "claude-code", "pid": 184281, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nhello lantern"}
+{"t": 1795504329.9738855, "adapter": "claude-code", "pid": 184281, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795504331.2639947, "adapter": "claude-code", "pid": 184429, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-Rb3a4e8df/S31c/roots/alpha/app", "argv": []}
+{"t": 1795504331.2640784, "adapter": "claude-code", "pid": 184429, "kind": "request", "method": "initialize"}
+{"t": 1795504331.2652178, "adapter": "claude-code", "pid": 184429, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-Rb3a4e8df/S31c/roots/alpha/app"}
+{"t": 1795504334.6104164, "adapter": "claude-code", "pid": 184429, "kind": "request", "method": "session/load", "cwd": "/tmp/nori-host-tui-acceptance-Rb3a4e8df/S31c/roots/alpha/app", "sessionId": "saved-orchard"}
+{"t": 1795504334.6106071, "adapter": "claude-code", "pid": 184429, "kind": "load_refused", "sessionId": "saved-orchard"}
+{"t": 1795504339.3988967, "adapter": "claude-code", "pid": 184281, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "still here"}
+{"t": 1795504339.3990889, "adapter": "claude-code", "pid": 184281, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795504340.674993, "adapter": "claude-code", "pid": 184281, "kind": "stdin_eof"}

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Lantern Codex options: Mode=agent (/config to change)
+
+• Started new conversation with agent: Lantern Codex
+
+
+› an earlier synthetic question
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• an earlier synthetic answer
+
+
+› after the orchard
+
+
+• codex heard: after the orchard
+
+  2 ready
+
+                                                                                                               [ agent ]
+› $ for skill listing
+

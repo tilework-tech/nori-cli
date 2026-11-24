@@ -1,0 +1,10 @@
+  Resume a previous session
+  Saved sessions for this working directory
+                                                                                  Details
+     Conversation                             Updated           Branch
+  ▏  c30cb4d5-1f0a-4045-b2cd-9154473f4105     6 seconds ago     Not reported▕     Session         c30cb4d5-1f0a-40…
+                                                                                  Project         29770a442bd5d0ff
+                                                                                  Agent           claude-code
+                                                                                  Working direc…  /tmp/nori-host-t…
+                                                                                  Branch          Not reported
+  ↑↓/j/k browse  / search  enter resume  esc start new  ctrl+c quit

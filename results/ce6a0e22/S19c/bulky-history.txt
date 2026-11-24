@@ -1,0 +1,81 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-M1/S19c/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› bulky rows
+
+
+• Ran count rows
+  └ row 01 of the synthetic ledger
+    row 02 of the synthetic ledger
+    row 03 of the synthetic ledger
+    row 04 of the synthetic ledger
+    row 05 of the synthetic ledger
+    row 06 of the synthetic ledger
+    row 07 of the synthetic ledger
+    row 08 of the synthetic ledger
+    row 09 of the synthetic ledger
+    row 10 of the synthetic ledger
+    row 11 of the synthetic ledger
+    row 12 of the synthetic ledger
+    row 13 of the synthetic ledger
+    row 14 of the synthetic ledger
+    row 15 of the synthetic ledger
+    row 16 of the synthetic ledger
+    row 17 of the synthetic ledger
+    row 18 of the synthetic ledger
+    row 19 of the synthetic ledger
+    row 20 of the synthetic ledger
+    row 21 of the synthetic ledger
+    row 22 of the synthetic ledger
+    row 23 of the synthetic ledger
+    row 24 of the synthetic ledger
+    row 25 of the synthetic ledger
+    row 26 of the synthetic ledger
+    row 27 of the synthetic ledger
+    row 28 of the synthetic ledger
+    row 29 of the synthetic ledger
+    row 30 of the synthetic ledger
+    row 31 of the synthetic ledger
+    row 32 of the synthetic ledger
+    row 33 of the synthetic ledger
+    row 34 of the synthetic ledger
+    row 35 of the synthetic ledger
+    row 36 of the synthetic ledger
+    row 37 of the synthetic ledger
+    row 38 of the synthetic ledger
+    row 39 of the synthetic ledger
+    row 40 of the synthetic ledger
+    row 41 of the synthetic ledger
+    row 42 of the synthetic ledger
+    row 43 of the synthetic ledger
+    row 44 of the synthetic ledger
+    row 45 of the synthetic ledger
+    row 46 of the synthetic ledger
+    row 47 of the synthetic ledger
+    row 48 of the synthetic ledger
+    row 49 of the synthetic ledger
+    row 50 of the synthetic ledger
+    row 51 of the synthetic ledger
+    row 52 of the synthetic ledger
+    row 53 of the synthetic ledger
+    row 54 of the synthetic ledger
+    row 55 of the synthetic ledger
+    row 56 of the synthetic ledger
+    row 57 of the synthetic ledger
+    row 58 of the synthetic ledger
+    row 59 of the synthetic ledger
+    row 60 of the synthetic ledger
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• claude-code heard: bulky rows
+
+                                                                                                                [ auto ]
+› ? for shortcuts
+

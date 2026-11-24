@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Resuming session with Lantern Claude...
+
+■ the orchard ledger is sealed by claude-code
+
+■ ACP agent command channel closed
+
+■ Could not submit “still here”: session is not running
+
+  1 failed · 1 ready
+
+
+› $ for skill listing
+

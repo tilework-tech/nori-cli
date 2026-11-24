@@ -1,0 +1,9 @@
+{"t": 1795503810.183074, "adapter": "opencode", "pid": 166924, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-M1/S15c/roots/alpha/app", "argv": []}
+{"t": 1795503810.1831577, "adapter": "opencode", "pid": 166924, "kind": "request", "method": "initialize"}
+{"t": 1795503810.1842852, "adapter": "opencode", "pid": 166924, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-M1/S15c/roots/alpha/app"}
+{"t": 1795503810.1858382, "adapter": "opencode", "pid": 166924, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-M1/S15c/roots/alpha/app"}
+{"t": 1795503813.5036259, "adapter": "opencode", "pid": 166924, "kind": "stdin_eof"}
+{"t": 1795503817.361213, "adapter": "opencode", "pid": 167128, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-M1/S15c/roots/alpha/app", "argv": []}
+{"t": 1795503817.3612745, "adapter": "opencode", "pid": 167128, "kind": "request", "method": "initialize"}
+{"t": 1795503817.3625755, "adapter": "opencode", "pid": 167128, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-M1/S15c/roots/alpha/app"}
+{"t": 1795503817.364506, "adapter": "opencode", "pid": 167128, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-M1/S15c/roots/alpha/app"}

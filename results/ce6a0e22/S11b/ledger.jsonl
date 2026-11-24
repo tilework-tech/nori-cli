@@ -1,0 +1,10 @@
+{"t": 1795503748.4161928, "adapter": "claude-code", "pid": 164463, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-M1/S11b/roots/alpha/app", "argv": []}
+{"t": 1795503748.416279, "adapter": "claude-code", "pid": 164463, "kind": "request", "method": "initialize"}
+{"t": 1795503748.417613, "adapter": "claude-code", "pid": 164463, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-M1/S11b/roots/alpha/app"}
+{"t": 1795503748.4184582, "adapter": "claude-code", "pid": 164463, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-M1/S11b/roots/alpha/app"}
+{"t": 1795503748.422553, "adapter": "claude-code", "pid": 164463, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795503750.1795135, "adapter": "claude-code", "pid": 164463, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "think about the tide"}
+{"t": 1795503750.4802008, "adapter": "claude-code", "pid": 164463, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795503751.163475, "adapter": "claude-code", "pid": 164463, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "scan the harbor"}
+{"t": 1795503751.163687, "adapter": "claude-code", "pid": 164463, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795503751.809918, "adapter": "claude-code", "pid": 164463, "kind": "stdin_eof"}

@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-M1/S15c/roots/alpha/app · Read Only approvals
+  Agent        Lantern Opencode
+
+• Lantern Opencode options: Mode=build (/config to change)
+
+
+  Select approval mode
+  Choose what Nori can do without approval
+
+  ▏1. Read Only (current)                                                                                            ▕
+  ▏   Requires approval to edit files and run commands.                                                              ▕
+   2. Agent
+      Read and edit files, and run commands.
+   3. Agent (full access)
+      Can edit files outside this workspace and run commands with network access. Exercise caution when using.
+  ↑↓/j/k move  enter select  esc close
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

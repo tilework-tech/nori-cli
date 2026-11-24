@@ -1666,5 +1666,173 @@
     "check": "prepared.activated_session_survives_disconnect",
     "passed": true,
     "detail": "['58df37ae-6a97-4045-b330-2df112ca4089']"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.lists_agent_server_saved_row",
+    "passed": true,
+    "detail": "['', '', '', '', '', '', '', '']"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.loaded_by_prepared_server",
+    "passed": false,
+    "detail": "{'loads': [(159229, 'session/load')], 'prepared': []}"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.replayed_history_shown",
+    "passed": true,
+    "detail": "\u203a $ for skill listing"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.prompt_reaches_restored_session",
+    "passed": true,
+    "detail": "saved-orchard"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.exactly_one_load",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.all_servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[158835, 159229]"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.lists_agent_server_saved_row",
+    "passed": true,
+    "detail": "['', '', '', '', '', '', '', '']"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.loaded_by_prepared_server",
+    "passed": true,
+    "detail": "{'loads': [(160055, 'session/load')], 'prepared': [160055]}"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.replayed_history_shown",
+    "passed": true,
+    "detail": "\u203a $ for skill listing"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.prompt_reaches_restored_session",
+    "passed": true,
+    "detail": "saved-orchard"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.exactly_one_load",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.all_servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[159754, 160055]"
+  },
+  {
+    "scenario": "S32a",
+    "check": "dismiss.prepared_server_started",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S32a",
+    "check": "dismiss.prepared_server_reaped",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S32a",
+    "check": "dismiss.current_session_keeps_working",
+    "passed": true,
+    "detail": "\u203a ! for shell commands"
+  },
+  {
+    "scenario": "S32b",
+    "check": "dismiss.prepared_server_started",
+    "passed": true,
+    "detail": "[163124]"
+  },
+  {
+    "scenario": "S32b",
+    "check": "dismiss.prepared_server_reaped",
+    "passed": true,
+    "detail": "[(163124, False)]"
+  },
+  {
+    "scenario": "S32b",
+    "check": "dismiss.current_session_keeps_working",
+    "passed": true,
+    "detail": "\u203a $ for skill listing"
+  },
+  {
+    "scenario": "S31c",
+    "check": "restore.lists_agent_server_saved_row",
+    "passed": true,
+    "detail": "['', '', '', '', '', '', '', '']"
+  },
+  {
+    "scenario": "S31c",
+    "check": "restore.loaded_by_prepared_server",
+    "passed": false,
+    "detail": "{'loads': [(184487, 'session/load')], 'prepared': []}"
+  },
+  {
+    "scenario": "S31c",
+    "check": "restore.refusal_message_shown",
+    "passed": true,
+    "detail": "['\u25a0 the orchard ledger is sealed by claude-code']"
+  },
+  {
+    "scenario": "S31c",
+    "check": "restore.refusal_keeps_current_session",
+    "passed": false,
+    "detail": "(184279, 184279)"
+  },
+  {
+    "scenario": "S31c",
+    "check": "restore.all_servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[184279, 184487]"
+  },
+  {
+    "scenario": "S31d",
+    "check": "restore.lists_agent_server_saved_row",
+    "passed": true,
+    "detail": "['', '', '', '', '', '', '', '']"
+  },
+  {
+    "scenario": "S31d",
+    "check": "restore.loaded_by_prepared_server",
+    "passed": true,
+    "detail": "{'loads': [(185561, 'session/load')], 'prepared': [185561]}"
+  },
+  {
+    "scenario": "S31d",
+    "check": "restore.refusal_message_shown",
+    "passed": false,
+    "detail": "['\u25a0 Failed to resume ACP session: Failed to load ACP session']"
+  },
+  {
+    "scenario": "S31d",
+    "check": "restore.refusal_keeps_current_session",
+    "passed": true,
+    "detail": "(185347, 185347)"
+  },
+  {
+    "scenario": "S31d",
+    "check": "restore.all_servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[185347, 185561]"
   }
 ]

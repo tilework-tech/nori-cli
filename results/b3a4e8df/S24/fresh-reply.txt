@@ -1,0 +1,36 @@
+shell$ nori resume --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-M2/S24/roots/beta/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› after the orchard
+
+
+• claude-code heard: after the orchard
+
+                                                                                                                [ auto ]
+› $ for skill listing
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

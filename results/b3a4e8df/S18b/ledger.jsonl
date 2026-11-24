@@ -1,0 +1,10 @@
+{"t": 1795503866.525785, "adapter": "claude-code", "pid": 169247, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-M2/S18b/roots/alpha/app", "argv": []}
+{"t": 1795503866.5258834, "adapter": "claude-code", "pid": 169247, "kind": "request", "method": "initialize"}
+{"t": 1795503866.5269213, "adapter": "claude-code", "pid": 169247, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-M2/S18b/roots/alpha/app"}
+{"t": 1795503866.5280387, "adapter": "claude-code", "pid": 169247, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-M2/S18b/roots/alpha/app"}
+{"t": 1795503866.532115, "adapter": "claude-code", "pid": 169247, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795503868.2890062, "adapter": "claude-code", "pid": 169247, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "ponder the harbor"}
+{"t": 1795503868.2893004, "adapter": "claude-code", "pid": 169247, "kind": "thought", "sessionId": "claude-code-0", "n": 1}
+{"t": 1795503870.2895272, "adapter": "claude-code", "pid": 169247, "kind": "thought", "sessionId": "claude-code-0", "n": 2}
+{"t": 1795503872.2897506, "adapter": "claude-code", "pid": 169247, "kind": "thought", "sessionId": "claude-code-0", "n": 3}
+{"t": 1795503874.2899997, "adapter": "claude-code", "pid": 169247, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}

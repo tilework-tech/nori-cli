@@ -1,0 +1,40 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-M1/S23/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hello lantern
+
+
+• claude-code heard: hello lantern
+
+/status
+
+  › Nori CLI v0.0.0
+
+  Directory    /tmp/nori-host-tui-acceptance-M1/S23/roots/alpha/app
+  Session ID   f74faaf8-7be8-494b-aca0-58349052dbc9
+  Skillset     (none)
+  Approvals    Agent
+  Git          ⎇ master +1 -0
+
+  Agent        Claude
+               Mode  auto
+
+• hello lantern
+
+                                                                                                                [ auto ]
+› @ for file mentions
+
+                                                                                                                ⎇ master
+
+
+
+
+
+
+

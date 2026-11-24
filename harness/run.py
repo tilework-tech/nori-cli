@@ -1605,6 +1605,91 @@ def s30_prepared_agent(ctx):
     obs.close()
 
 
+def open_resume_rows(t, cmd):
+    slash(t, cmd, settle=2.5)
+    if cmd == "/agent":
+        choose(t, "Lantern Codex")
+        time.sleep(2.5)
+
+
+def s31_restore_through_host(ctx, cmd, refuse=False):
+    """/resume or /agent lists the agent server's own saved rows via the owned host and restores the pick there."""
+    t = start_fg(ctx)
+    submit(t, "hello lantern")
+    t.wait_for("heard: hello lantern", 20)
+    first = ctx.ledger("request", "session/new")[0]
+    open_resume_rows(t, cmd)
+    t.capture("rows")
+    listed = "Saved orchard survey" in t.screen()
+    ctx.check("restore.lists_agent_server_saved_row", listed, [l.strip() for l in t.screen().splitlines() if "│" not in l][-8:])
+    prepared = [r for r in ctx.ledger("spawn") if r["pid"] != first["pid"]]
+    if refuse:
+        (ctx.fx["control"] / "load-refuse").write_text("1")
+    if not listed:
+        return
+    choose(t, "Saved orchard survey")
+    time.sleep(3.5)
+    t.capture("after-pick")
+    loads = [r for r in ctx.ledger("request") if r.get("method") in ("session/load", "session/resume")
+             and r.get("sessionId") == "saved-orchard"]
+    ctx.check("restore.loaded_by_prepared_server", loads and prepared and loads[0]["pid"] == prepared[0]["pid"],
+              {"loads": [(l["pid"], l["method"]) for l in loads], "prepared": [p["pid"] for p in prepared]})
+    if refuse:
+        ctx.check("restore.refusal_message_shown", "orchard ledger is sealed by" in " ".join(t.screen().split()),
+                  [l.strip() for l in t.screen().splitlines() if "sealed" in l or "Failed" in l])
+        submit(t, "still here")
+        try:
+            t.wait_for("heard: still here", 15)
+            ok = True
+        except TimeoutError:
+            ok = False
+        last = ctx.ledger("request", "session/prompt")[-1]
+        ctx.check("restore.refusal_keeps_current_session", ok and last["sessionId"] == first.get("sessionId", last["sessionId"])
+                  and last["pid"] == first["pid"], (last["pid"], first["pid"]))
+    else:
+        ctx.check("restore.replayed_history_shown", "an earlier synthetic answer" in t.screen(), last_nonblank(t.screen()))
+        submit(t, "after the orchard")
+        try:
+            t.wait_for("heard: after the orchard", 15)
+            ok = True
+        except TimeoutError:
+            ok = False
+        last = ctx.ledger("request", "session/prompt")[-1]
+        ctx.check("restore.prompt_reaches_restored_session", ok and last["sessionId"] == "saved-orchard", last.get("sessionId"))
+        ctx.check("restore.exactly_one_load", len(loads) == 1, len(loads))
+    t.capture("final")
+    pids = {r["pid"] for r in ctx.ledger("spawn")}
+    quit_fg(t)
+    time.sleep(1)
+    ctx.check("restore.all_servers_stopped_on_quit", not [p for p in pids if running(p)], sorted(pids))
+
+
+def s32_dismiss_reaps_prepared(ctx, cmd):
+    """Esc on the restore picker discards the prepared server; the current session keeps working."""
+    t = start_fg(ctx)
+    submit(t, "hello lantern")
+    t.wait_for("heard: hello lantern", 20)
+    first_pid = ctx.ledger("spawn")[0]["pid"]
+    open_resume_rows(t, cmd)
+    t.capture("rows")
+    prepared = [r["pid"] for r in ctx.ledger("spawn") if r["pid"] != first_pid]
+    t.keys("Escape")
+    time.sleep(2.5)
+    t.capture("dismissed")
+    ctx.check("dismiss.prepared_server_started", bool(prepared), prepared)
+    ctx.check("dismiss.prepared_server_reaped", prepared and not [p for p in prepared if running(p)],
+              [(p, running(p)) for p in prepared])
+    submit(t, "still lit")
+    try:
+        t.wait_for("heard: still lit", 15)
+        ok = True
+    except TimeoutError:
+        ok = False
+    ctx.check("dismiss.current_session_keeps_working", ok and ctx.ledger("request", "session/prompt")[-1]["pid"] == first_pid,
+              last_nonblank(t.screen()))
+    quit_fg(t)
+
+
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
     "S02": ("foreground quit stops a running turn", s02_foreground_quit_stops_turn),
@@ -1654,6 +1739,12 @@ SCENARIOS = {
     "S29a": ("refused /close (plain)", lambda c: s29_close_refusal(c, "fg")),
     "S29b": ("refused /close (attach)", lambda c: s29_close_refusal(c, "attach")),
     "S30": ("prepared agent connection over the wire", s30_prepared_agent),
+    "S31a": ("/resume restores an agent server's saved row via the host", lambda c: s31_restore_through_host(c, "/resume")),
+    "S31b": ("/agent restores another server's saved row via the host", lambda c: s31_restore_through_host(c, "/agent")),
+    "S31c": ("refused restore keeps the current session", lambda c: s31_restore_through_host(c, "/resume", refuse=True)),
+    "S31d": ("refused /agent restore keeps the current session", lambda c: s31_restore_through_host(c, "/agent", refuse=True)),
+    "S32a": ("Esc on /resume rows reaps the prepared server", lambda c: s32_dismiss_reaps_prepared(c, "/resume")),
+    "S32b": ("Esc on /agent rows reaps the prepared server", lambda c: s32_dismiss_reaps_prepared(c, "/agent")),
 }
 
 

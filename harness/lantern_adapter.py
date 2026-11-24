@@ -10,7 +10,8 @@ Environment:
   LANTERN_MODES    comma-separated mode ids, first is the starting mode
   LANTERN_SAVED    JSON file with a list of saved sessions {sessionId,cwd,title}
   LANTERN_CONTROL  directory of run-time switches; `close-refuse` holds how many
-                   upcoming session/close requests to refuse ("close declined by <name>")
+                   upcoming session/close requests to refuse ("close declined by <name>");
+                   `load-refuse` does the same for session/load and session/resume
 
 Prompt words (first word of the prompt text):
   hold     stream a tick every 200 ms until cancelled (records ticks)
@@ -224,6 +225,9 @@ def main():
             send(id=rid, result={"sessionId": sid, **mode_state(sid)})
         elif method == "session/list":
             send(id=rid, result={"sessions": saved_sessions()})
+        elif method in ("session/load", "session/resume") and take_switch("load-refuse"):
+            ledger("load_refused", sessionId=sid)
+            send(id=rid, error={"code": -32603, "message": f"the orchard ledger is sealed by {NAME}"})
         elif method in ("session/load", "session/resume"):
             saved = {s["sessionId"]: s for s in saved_sessions()}
             sessions.setdefault(sid, {"cwd": params.get("cwd") or saved.get(sid, {}).get("cwd"),

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Listing Lantern Claude sessions…
+
+  1 starting
+
+
+  Resume a live session or start a new one
+
+     Session                                    Source     Working directory         Updated           Turn status
+  ▏  Start a new session                        CLI        Not reported              now               ready         ▕
+     Saved orchard survey                       Local      /tmp/nori-host-tui-acce…  unknown           Not reported
+  ↑↓/j/k move  / search  enter select  esc close
+
