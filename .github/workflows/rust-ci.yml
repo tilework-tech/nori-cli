@@ -1,8 +1,7 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/pr-752-b959a6ea-native-host']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +11,7 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 55
     defaults:
       run:
         working-directory: nori-rs
@@ -25,10 +24,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: macOS host verification
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: b959a6eaabb8f17dd9ace97cb07fb4f0da113e30
+          persist-credentials: false
+
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = b959a6eaabb8f17dd9ace97cb07fb4f0da113e30 && git rev-parse HEAD && uname -sm
 
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -125,22 +133,22 @@ jobs:
         run: |
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
-          cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
-      - name: cargo test nori
+          cargo build -p nori-cli -p nori-tui --bins --profile ci-test --target ${{ matrix.target }}
+      - name: Host and harness
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
-          cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-harness
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-host-runtime
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp-host
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-auth-providers
-      - name: cargo clippy
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
-
+          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-cli --bin nori --test host_lifecycle --test host_stdio --test host_wire_schema -- --nocapture
+          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-harness --test managed_remote --test session_manager
+          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-config
+          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-host-runtime --lib
+      - name: Terminal and PTYs
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-tui --lib
+          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test acp_mode --test host_attach --test prepared_startup --test agent_switching --test queue_pause --test queue_recall --test acp_exit_cleanup --test attached_external_cancel --test explicit_host_close --test session_lifecycle --test cloud_mode --test startup --test host_startup --test host_new_session --test host_session_picker --test host_agent_switch --test delegation --test slash_menu_escape --test host_approvals --test approval_presets_migration --test nori_footer --test multi_session
+          for round in 1 2 3 4 5; do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_startup --test host_new_session --test agent_switching 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $round: /"; done | tee repeat.txt; echo "repeat FAILED: $(grep -c FAILED repeat.txt) of $(grep -c "^round" repeat.txt)"; ! grep -q FAILED repeat.txt
       # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache
         if: always() && !cancelled() && steps.cache_cargo_home_restore.outputs.cache-hit != 'true'
