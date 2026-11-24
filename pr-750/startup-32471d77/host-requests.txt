@@ -1,0 +1,5 @@
+DEBUG nori_host_runtime::host::acp: host ACP request client=0 method=_nori/host/prepare_agent
+DEBUG nori_host_runtime::host::acp: host ACP request client=0 method=session/list
+DEBUG nori_host_runtime::host::acp: host ACP request client=0 method=_nori/host/prepare_agent
+DEBUG nori_host_runtime::host::acp: host ACP request client=0 method=session/list
+DEBUG nori_host_runtime::host::acp: host ACP request client=0 method=session/new

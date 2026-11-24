@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/maple-home.19TN · Agent approvals
+  Agent        Amber
+
+  Preparing Amber…
+
+
+› $ for skill listing
+
