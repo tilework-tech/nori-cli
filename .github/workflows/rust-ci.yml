@@ -38,8 +38,11 @@ jobs:
 
       - name: Select sources
         run: |
-          if [ "${{ matrix.mode }}" = exact ]; then git fetch -q origin 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 && git checkout 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- nori-rs && git diff --cached --stat HEAD; fi
-          git diff --stat 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- nori-rs
+          set -euo pipefail
+          git fetch -q origin 5cb13fcd9f79caa15c7d56100f23f776ce3bf915
+          git checkout 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- .
+          git diff --quiet 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- . && echo "nori-rs matches 5cb13fcd"
+          test -f tui-pty-e2e/tests/slash_menu_escape.rs
           uname -sm
 
       - name: Free disk space
