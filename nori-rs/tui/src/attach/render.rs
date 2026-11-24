@@ -297,11 +297,20 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
                 );
                 lines.push(line);
             }
+            Part::Message {
+                stream: MessageStream::Reasoning,
+                text,
+                ..
+            } => {
+                if state.thoughts_in_history
+                    && let Some(cell) = crate::history_cell::ThoughtCell::new(text.clone())
+                {
+                    lines.extend(cell.display_lines(history_area.width));
+                }
+            }
             Part::Message { stream, text, .. } => {
-                match stream {
-                    MessageStream::User => lines.push(Line::from("› You".bold())),
-                    MessageStream::Reasoning => lines.push(Line::from("Thinking".dim())),
-                    MessageStream::Answer => {}
+                if *stream == MessageStream::User {
+                    lines.push(Line::from("› You".bold()));
                 }
                 crate::markdown::append_markdown_with_cwd(
                     text,

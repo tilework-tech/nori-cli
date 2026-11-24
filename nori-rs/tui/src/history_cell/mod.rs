@@ -1,4 +1,3 @@
-use crate::markdown::append_markdown;
 use crate::render::line_utils::prefix_lines;
 use crate::render::line_utils::push_owned_lines;
 use crate::render::renderable::Renderable;
@@ -22,6 +21,9 @@ use std::any::Any;
 use std::path::Path;
 use std::path::PathBuf;
 use unicode_width::UnicodeWidthStr;
+
+mod thought;
+pub(crate) use thought::ThoughtCell;
 
 /// Represents an event to display in the conversation history. Returns its
 /// `Vec<Line<'static>>` representation to make it easier to display in a
@@ -128,71 +130,6 @@ impl HistoryCell for UserHistoryCell {
         lines.extend(prefix_lines(wrapped, "› ".bold().dim(), "  ".into()));
         lines.push(Line::from("").style(style));
         lines
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct ReasoningSummaryCell {
-    content: String,
-    transcript_only: bool,
-}
-
-impl ReasoningSummaryCell {
-    pub(crate) fn new(content: String, transcript_only: bool) -> Self {
-        Self {
-            content,
-            transcript_only,
-        }
-    }
-
-    fn lines(&self, width: u16) -> Vec<Line<'static>> {
-        let mut lines: Vec<Line<'static>> = Vec::new();
-        append_markdown(
-            &self.content,
-            Some((width as usize).saturating_sub(2)),
-            &mut lines,
-        );
-        let summary_style = Style::default().dim().italic();
-        let summary_lines = lines
-            .into_iter()
-            .map(|mut line| {
-                line.spans = line
-                    .spans
-                    .into_iter()
-                    .map(|span| span.patch_style(summary_style))
-                    .collect();
-                line
-            })
-            .collect::<Vec<_>>();
-
-        word_wrap_lines(
-            &summary_lines,
-            RtOptions::new(width as usize)
-                .initial_indent("• ".dim().into())
-                .subsequent_indent("  ".into()),
-        )
-    }
-}
-
-impl HistoryCell for ReasoningSummaryCell {
-    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if self.transcript_only {
-            Vec::new()
-        } else {
-            self.lines(width)
-        }
-    }
-
-    fn desired_height(&self, width: u16) -> u16 {
-        if self.transcript_only {
-            0
-        } else {
-            self.lines(width).len() as u16
-        }
-    }
-
-    fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        self.lines(width)
     }
 }
 
@@ -646,20 +583,6 @@ impl HistoryCell for PlanUpdateCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         render_plan_lines(self.explanation.as_deref(), &self.plan, width)
     }
-}
-
-pub(crate) fn new_reasoning_summary_block(full_reasoning_buffer: String) -> Box<dyn HistoryCell> {
-    let trimmed = full_reasoning_buffer.trim();
-    if let Some(after_open) = trimmed.strip_prefix("**")
-        && let Some(close) = after_open.find("**")
-    {
-        let summary = after_open[(close + 2)..].trim();
-        if !summary.is_empty() {
-            return Box::new(ReasoningSummaryCell::new(summary.to_string(), false));
-        }
-    }
-
-    Box::new(ReasoningSummaryCell::new(full_reasoning_buffer, true))
 }
 
 #[derive(Debug)]

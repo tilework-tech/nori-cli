@@ -10,6 +10,8 @@ mod runtime;
 mod state;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_thoughts;
 
 use nori_harness::remote_agent::ManagedClient;
 use tokio_stream::StreamExt;
@@ -33,7 +35,7 @@ pub async fn run_attach(
     let mut tui = crate::tui::Tui::new(crate::tui::init()?);
     let result = async {
         tui.enter_alt_screen()?;
-        run(&mut tui, options, initial, config.hotkeys, config.cwd).await
+        run(&mut tui, options, initial, config).await
     }
     .await;
     let leave = tui.leave_alt_screen();
@@ -48,13 +50,14 @@ async fn run(
     tui: &mut crate::tui::Tui,
     options: AttachOptions,
     initial: ManagedClient,
-    hotkeys: nori_config::HotkeyConfig,
-    cwd: std::path::PathBuf,
+    config: nori_config::NoriConfig,
 ) -> anyhow::Result<()> {
+    let hotkeys = config.hotkeys;
     let (request_tx, request_rx) = tokio::sync::mpsc::unbounded_channel();
     let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut runtime = runtime::Runtime::new(options.session_id.clone(), request_tx);
-    runtime.cwd = cwd;
+    runtime.cwd = config.cwd;
+    runtime.state.thoughts_in_history = config.thoughts_in_history;
     runtime.remote = options.refresh_local_token.is_none();
     runtime.set_session_list_binding(hotkeys.open_session_list);
     runtime.set_next_waiting_binding(hotkeys.next_waiting_session);

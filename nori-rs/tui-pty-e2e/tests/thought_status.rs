@@ -33,3 +33,38 @@ fn working_indicator_shows_a_thought_without_a_bold_header() {
         .wait_for_text("Reply done", TIMEOUT)
         .expect("the turn completes");
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn thought_text_stays_in_history_after_the_turn_once() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_owned())
+        .with_mock_response("Reply done")
+        .with_agent_env(
+            "MOCK_AGENT_THOUGHT",
+            "**Reading the config loader**\n\nThe loader merges three sources.",
+        );
+    let mut session = TuiSession::spawn_with_config(24, 100, config).expect("spawn nori");
+    session.wait_for_text("›", TIMEOUT).expect("composer");
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_str("change the default").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("Reply done", TIMEOUT)
+        .expect("the turn completes");
+    session
+        .wait_for_text("│ The loader merges three sources.", TIMEOUT)
+        .expect("the thought block stays in history");
+    let screen = session.screen_contents();
+    assert_eq!(
+        screen.matches("The loader merges three sources.").count(),
+        1,
+        "{screen}"
+    );
+    assert!(
+        screen.find("│ Reading the config loader") < screen.find("Reply done"),
+        "{screen}"
+    );
+}

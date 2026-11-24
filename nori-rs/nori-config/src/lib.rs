@@ -186,6 +186,30 @@ custom_working_message_list = ["alpha", "beta"]
     }
 
     #[test]
+    fn thoughts_appear_in_history_unless_the_tui_opts_out() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "agent = \"gemini\"\n").unwrap();
+        assert!(
+            NoriConfig::load_from_path(&config_path)
+                .unwrap()
+                .thoughts_in_history
+        );
+
+        std::fs::write(
+            &config_path,
+            "agent = \"gemini\"\n\n[tui]\nthoughts_in_history = false\n",
+        )
+        .unwrap();
+        assert!(
+            !NoriConfig::load_from_path(&config_path)
+                .unwrap()
+                .thoughts_in_history
+        );
+    }
+
+    #[test]
     fn test_nori_config_load_from_path() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join(CONFIG_FILE);
