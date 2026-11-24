@@ -33,6 +33,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          fetch-depth: 4
 
       - name: Verify source revision
         run: git log --oneline -4 && uname -sm && git diff --stat HEAD~2 HEAD
