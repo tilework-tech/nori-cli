@@ -158,6 +158,11 @@ execs or exits; a writer still holding it after that is refused. The dependency 
   shared counter in the upgrade handler and released by `Drop` when the
   connection ends or the upgrade never completes; it covers `/acp` and
   `/sessions` together and does not apply to a managed host or `/managed`.
+  Authenticated upgrades marked `x-nori-lifecycle: 1` on a host endpoint
+  use separate, bounded capacity. These short-lived observers can initialize
+  and request host shutdown while the ordinary client slots are occupied.
+  See the [upgrade handler](src/remote/host_wire.rs) and
+  [management client](src/remote/client.rs).
   Binary frames are ignored, as the ACP remote transport requires.
   Successful authenticated upgrades include `x-nori-host-instance`, a UUID
   that identifies the running host independently of the bearer token. A

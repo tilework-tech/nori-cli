@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 /// Dropping the server stops accepting new connections; open connections
 /// are closed by [`RemoteAcpServer::shutdown`].
 pub struct RemoteAcpServer {
+    instance: String,
     local_addrs: Vec<SocketAddr>,
     serve_tasks: Vec<tokio::task::JoinHandle<()>>,
     host_control: Arc<tokio::sync::Mutex<super::host_control::HostControl>>,
@@ -59,7 +60,7 @@ impl RemoteAcpServer {
         let router = super::host_wire::router(
             managed,
             token,
-            instance,
+            instance.clone(),
             control.clone(),
             max_clients,
             shutdown.clone(),
@@ -70,6 +71,7 @@ impl RemoteAcpServer {
             }
         });
         Ok(Self {
+            instance,
             local_addrs: vec![local_addr],
             serve_tasks: vec![task],
             host_control: control,
@@ -139,6 +141,11 @@ impl RemoteAcpServer {
             .instance_id()
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         super::host_wire::serve_pipe(managed, instance, origin, input, output, stop).await
+    }
+
+    /// The instance ID returned by this listener in authenticated upgrades.
+    pub fn host_instance(&self) -> &str {
+        &self.instance
     }
 
     /// Every address on which this server is listening.
