@@ -14,6 +14,7 @@ mod attach;
 pub(super) mod config;
 pub(super) mod handshake;
 mod list;
+pub(super) mod picker;
 mod session;
 
 use std::collections::HashMap;
@@ -36,7 +37,9 @@ use super::service::HostService;
 pub(super) fn handles(method: &str) -> bool {
     matches!(
         method,
-        "session/new"
+        picker::PREPARE
+            | picker::DISCARD
+            | "session/new"
             | "session/list"
             | "session/load"
             | "session/resume"
@@ -64,7 +67,7 @@ pub(super) fn runs_concurrently(method: &str) -> bool {
 }
 
 /// A JSON-RPC error for the client.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(super) struct AcpError {
     pub code: i32,
     pub message: String,
@@ -124,6 +127,7 @@ struct Attachment {
 }
 
 struct Connection {
+    selection: Option<picker::Selection>,
     handle: HostConnection,
     attached: HashMap<ConversationId, Attachment>,
 }
@@ -153,6 +157,7 @@ impl AcpFace {
         self.lock().connections.insert(
             handle.client,
             Connection {
+                selection: None,
                 handle,
                 attached: HashMap::new(),
             },
@@ -271,7 +276,24 @@ impl HostService {
         params: &Value,
     ) -> Result<Value, AcpError> {
         let params = params.clone();
+        if let Some(selection) = params["_meta"].get(picker::KEY) {
+            match method {
+                "session/list" => {
+                    return self
+                        .list_selection(client, &params, selection.clone())
+                        .await;
+                }
+                "session/new" => {
+                    return self
+                        .activate_selection(client, &params, selection.clone())
+                        .await;
+                }
+                _ => {}
+            }
+        }
         match method {
+            picker::PREPARE => self.prepare_selection(client, params).await,
+            picker::DISCARD => self.discard_selection(client, params).await,
             "session/new" => self.new_session(client, &params).await,
             "session/list" => self.list_sessions(&params).await,
             "session/load" => self.load_session(client, &params, true).await,

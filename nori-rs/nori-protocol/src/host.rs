@@ -41,10 +41,59 @@ pub struct ListedSessionState {
 /// `_meta` a client may put on `session/new`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct NewSessionMeta {
+    #[serde(rename = "nori/preparedAgent", skip_serializing_if = "Option::is_none")]
+    pub prepared_agent: Option<PreparedAgentActivation>,
     /// Start this agent instead of the folder's default, so the right
     /// adapter starts first.
     #[serde(rename = "nori/agent")]
     pub agent: Option<String>,
+}
+
+/// Choose a registered downstream ACP server. Omitted fields use the host launch.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PrepareAgentParams {
+    pub agent: Option<String>,
+    pub cwd: Option<std::path::PathBuf>,
+}
+
+/// A pre-session connection scoped to the host client that opened it.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct PrepareAgentResult {
+    pub id: String,
+    pub agent: String,
+    pub cwd: std::path::PathBuf,
+}
+
+/// Scope a session/list request to a prepared catalog, or discard that selection.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PreparedAgentRef {
+    pub id: String,
+}
+
+/// Use this selection exactly once to activate a host conversation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreparedAgentActivation {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saved_session_id: Option<String>,
+}
+
+/// The host's prepared-agent capability on initialize.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedAgentCapability {
+    pub version: i32,
+    pub agent_option: acp::SessionConfigOption,
+}
+
+/// Metadata accompanying the prepared adapter's saved-session rows.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedAgentCatalogInfo {
+    pub agent_capabilities: acp::AgentCapabilities,
 }
 
 /// `$NORI_HOME/host/host.json`, the host's discovery file.
@@ -72,7 +121,7 @@ pub struct HostDiscovery {
 /// methods, and `host.json`. A change that a client of the previous contract
 /// could not use bumps the major; an addition such clients can ignore bumps
 /// the minor; a fix that changes no message bumps the patch.
-pub const HOST_CONTRACT: &str = "1.0.0";
+pub const HOST_CONTRACT: &str = "1.1.0";
 
 /// Whether a host advertising contract `host` serves a client built for
 /// contract `client`: `host` must satisfy the caret requirement `^client`.
@@ -197,6 +246,11 @@ pub fn host_wire_schema() -> Value {
         // Nori's `_meta` keys and discovery file.
         generator.subschema_for::<ListedSessionMeta>(),
         generator.subschema_for::<NewSessionMeta>(),
+        generator.subschema_for::<PrepareAgentParams>(),
+        generator.subschema_for::<PrepareAgentResult>(),
+        generator.subschema_for::<PreparedAgentRef>(),
+        generator.subschema_for::<PreparedAgentCapability>(),
+        generator.subschema_for::<PreparedAgentCatalogInfo>(),
         generator.subschema_for::<HostDiscovery>(),
         // The `_nori/*` extension.
         generator.subschema_for::<ControlStatus>(),

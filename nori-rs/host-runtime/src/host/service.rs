@@ -28,6 +28,7 @@ use serde_json::json;
 use tokio::sync::Notify;
 
 pub struct HostService {
+    pub(super) terminal_context: Option<nori_harness::SessionContext>,
     pub(super) recovery: Option<super::recovery_control::RecoveryControl>,
     pub launches: Option<ManagedLaunches>,
     pub manager: SessionManager,
@@ -66,6 +67,15 @@ impl HostService {
         overrides: NoriConfigOverrides,
         managed: Option<(ManagedLaunches, &Path)>,
     ) -> anyhow::Result<Arc<Self>> {
+        Self::with_context(config, overrides, managed, None)
+    }
+
+    pub(super) fn with_context(
+        config: NoriConfig,
+        overrides: NoriConfigOverrides,
+        managed: Option<(ManagedLaunches, &Path)>,
+        terminal_context: Option<nori_harness::SessionContext>,
+    ) -> anyhow::Result<Arc<Self>> {
         let (launches, recovery) = match managed {
             Some((launches, directory)) => (
                 Some(launches),
@@ -79,6 +89,7 @@ impl HostService {
         });
         let settings = super::acp::config::SettingsStore::open(&config.nori_home);
         Ok(Arc::new(Self {
+            terminal_context,
             recovery,
             launches,
             managed: ManagedRemoteHost::authenticated_host(manager.clone()),
@@ -273,6 +284,16 @@ impl ManagedAgent for HostService {
         self.launches.is_none() && super::acp::runs_concurrently(method)
     }
 
+    fn request_runs_concurrently(&self, request: &Value) -> bool {
+        let method = request["method"].as_str().unwrap_or_default();
+        self.runs_concurrently(method)
+            || (self.launches.is_none()
+                && (method == "session/list"
+                    && request["params"]["_meta"]
+                        .get(super::acp::picker::KEY)
+                        .is_some()))
+    }
+
     fn accepts_client_messages(&self) -> bool {
         self.launches.is_none()
     }
@@ -391,7 +412,10 @@ impl ManagedAgent for HostService {
                 sessions["follow_up"] = json!(1);
             }
             if initialize && let Some(result) = reply.response.get_mut("result") {
-                super::acp::handshake::initialize(result);
+                super::acp::handshake::initialize(
+                    result,
+                    &nori_harness::resolve_agent_slug(&self.config.active_agent),
+                );
             }
             return reply;
         }

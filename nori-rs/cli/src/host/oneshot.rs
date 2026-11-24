@@ -200,6 +200,7 @@ async fn prompt(wire: &mut Wire, cwd: &Path, request: &Request) -> anyhow::Resul
     if let Some(agent) = &request.agent {
         params["_meta"] = serde_json::to_value(nori_protocol::NewSessionMeta {
             agent: Some(agent.clone()),
+            ..Default::default()
         })?;
     }
 

@@ -46,7 +46,15 @@ pub type StopHost =
 /// injected, so the host does not load it again. The host is private to
 /// the terminal: `[host] managed` does not apply, and only the TUI stops it.
 pub fn launch(config: &NoriConfig, overrides: &NoriConfigOverrides) -> anyhow::Result<OwnedHost> {
-    let host = HostService::new(config.clone(), overrides.clone(), None)?;
+    launch_with_context(config, overrides, None)
+}
+
+pub fn launch_with_context(
+    config: &NoriConfig,
+    overrides: &NoriConfigOverrides,
+    context: Option<nori_harness::SessionContext>,
+) -> anyhow::Result<OwnedHost> {
+    let host = HostService::with_context(config.clone(), overrides.clone(), None, context)?;
     Ok(serve(host))
 }
 

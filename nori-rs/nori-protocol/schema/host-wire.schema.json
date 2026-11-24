@@ -3918,6 +3918,16 @@
             "string",
             "null"
           ]
+        },
+        "nori/preparedAgent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreparedAgentActivation"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "type": "object"
@@ -4800,6 +4810,106 @@
           "type": "string"
         }
       ]
+    },
+    "PrepareAgentParams": {
+      "additionalProperties": false,
+      "description": "Choose a registered downstream ACP server. Omitted fields use the host launch.",
+      "properties": {
+        "agent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cwd": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "PrepareAgentResult": {
+      "description": "A pre-session connection scoped to the host client that opened it.",
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "agent",
+        "cwd"
+      ],
+      "type": "object"
+    },
+    "PreparedAgentActivation": {
+      "additionalProperties": false,
+      "description": "Use this selection exactly once to activate a host conversation.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "savedSessionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "PreparedAgentCapability": {
+      "description": "The host's prepared-agent capability on initialize.",
+      "properties": {
+        "agentOption": {
+          "$ref": "#/$defs/SessionConfigOption"
+        },
+        "version": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "agentOption"
+      ],
+      "type": "object"
+    },
+    "PreparedAgentCatalogInfo": {
+      "description": "Metadata accompanying the prepared adapter's saved-session rows.",
+      "properties": {
+        "agentCapabilities": {
+          "$ref": "#/$defs/AgentCapabilities"
+        }
+      },
+      "required": [
+        "agentCapabilities"
+      ],
+      "type": "object"
+    },
+    "PreparedAgentRef": {
+      "additionalProperties": false,
+      "description": "Scope a session/list request to a prepared catalog, or discard that selection.",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
     },
     "PromptCapabilities": {
       "description": "Prompt capabilities supported by the agent in `session/prompt` requests.\n\nBaseline agent functionality requires support for [`ContentBlock::Text`]\nand [`ContentBlock::ResourceLink`] in prompt requests.\n\nOther variants must be explicitly opted in to.\nCapabilities for different types of content in prompt requests.\n\nIndicates which content types beyond the baseline (text and resource links)\nthe agent can process.\n\nSee protocol docs: [Prompt Capabilities](https://agentclientprotocol.com/protocol/initialization#prompt-capabilities)",
@@ -7991,6 +8101,21 @@
     },
     {
       "$ref": "#/$defs/NewSessionMeta"
+    },
+    {
+      "$ref": "#/$defs/PrepareAgentParams"
+    },
+    {
+      "$ref": "#/$defs/PrepareAgentResult"
+    },
+    {
+      "$ref": "#/$defs/PreparedAgentRef"
+    },
+    {
+      "$ref": "#/$defs/PreparedAgentCapability"
+    },
+    {
+      "$ref": "#/$defs/PreparedAgentCatalogInfo"
     },
     {
       "$ref": "#/$defs/HostDiscovery"

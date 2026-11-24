@@ -495,22 +495,22 @@ unchanged and stays as legacy until durable sessions get their own design.
 - `protocolVersion: 1`, whatever the client asked for (the host speaks only
   ACP v1; a client that cannot speak it disconnects);
 - `agentInfo` `{name: "nori-host", version: "<nori version>+contract.<host contract>"}`,
-  for example `0.31.0+contract.1.0.0`: the host contract rides as semver
+  for example `0.31.0+contract.1.1.0`: the host contract rides as semver
   build metadata, so a client splits at `+contract.`;
 - `agentCapabilities`: `loadSession: true`,
   `sessionCapabilities` with `list`, `resume`, `close` and `delete`, and the
   ACP baseline for prompts and MCP servers (no image, audio, embedded context,
-  HTTP or SSE promises, because those depend on each session's adapter);
+  HTTP or SSE promises, because those depend on each session's adapter).
+  Its `_meta["nori/preparedAgent"]` carries `version: 1` and `agentOption`,
+  the host's ACP agent select option;
 - `authMethods: []` (see deferred items below);
-- no Nori `_meta` key and no `_nori/*` method for the contract; the
-  standard `agentInfo` field carries it.
+- the standard `agentInfo` field carries the host contract version.
 
 The host's `_meta` keys use the registry prefix `nori/<camelCase>`
 (clifford 2026-11-22): `nori/agent` on `session/new` params and `session/list`
-rows, and `nori/session` on `session/list` rows; see the extension registry
+rows, `nori/session` on host session rows, and `nori/preparedAgent` for
+connection-scoped adapter selections. See the extension registry
 (`docs/acp-extensions.md` in the workspace monorepo).
-The `_nori/*` methods are unchanged, including `_nori/session/follow_up`
-and `_nori/session/subscribe`.
 
 The existing keys (`capabilities.nori_sessions`, `server_info`, `control`)
 stay in the same result because `nori attach` reads them. `params.observe =
@@ -524,7 +524,7 @@ and `token`, and removes it on stop:
 do not write it.
 
 `contract` is the semver string of the host wire contract,
-`nori_protocol::HOST_CONTRACT` (`1.0.0`). It covers ACP v1 on `/sessions`,
+`nori_protocol::HOST_CONTRACT` (`1.1.0`). It covers ACP v1 on `/sessions`,
 the `nori/*` `_meta` keys, the `_nori/*` methods, and `host.json` itself. A
 change that a client of the previous contract cannot use bumps the major; an
 addition such clients can ignore bumps the minor; a fix that changes no
@@ -597,9 +597,10 @@ sign-in, not `ACP agent did not accept the prompt`.
 ### Schema and TypeScript types
 
 `nori-rs/nori-protocol/schema/host-wire.schema.json` (JSON Schema 2020-12)
-covers the ACP v1 messages above, the `session/list` row and `session/new`
-`_meta` objects (`nori/agent`, `nori/session`), the `host.json` file, and the `_nori/*` extension (control, subscribe with its
-`SessionEnvelope`, host stop, delegation). `nori-protocol/typescript/host-wire.ts`
+covers the ACP v1 messages above, metadata for host sessions and prepared
+selections, the `host.json` file, and the `_nori/*` extension (control,
+subscribe with its `SessionEnvelope`, prepared-agent selection, host stop,
+delegation). `nori-protocol/typescript/host-wire.ts`
 is generated from it by a pinned `json-schema-to-typescript`. Regenerate both
 with `scripts/generate-host-wire-types.sh`; `cargo test -p nori-cli --test
 host_wire_schema` fails when either drifts (the TypeScript half is skipped
@@ -611,7 +612,7 @@ without Node.js).
 | --- | --- |
 | `subscribe` | `_nori/session/subscribe` and its `_nori/session/event` envelopes, unchanged (section 10) |
 | `control` | `_nori/control/status`, `_nori/control/take`, `_nori/control/changed` |
-| `host` | `_nori/host/stop` |
+| `host` | `_nori/host/stop`, `_nori/host/prepare_agent`, `_nori/host/discard_agent` |
 | `delegation` | `_nori/session/delegate`, `_nori/session/delegation/resolve` |
 
 `_nori/session/list`, `new`, `prompt`, `respond`, `cancel`, `close` and
@@ -654,6 +655,28 @@ Attached connections receive `session/update` notifications whose
 one session, and each sees every update. Attachment ends when the connection
 closes. A connection that falls more than 1024 events behind a session is
 closed; reconnect and load again.
+
+### Picking a saved session from an ACP agent server
+
+An initialized client can inspect an ACP agent server before creating a host
+conversation. Check `agentCapabilities._meta["nori/preparedAgent"].version`
+for `1`. Its sibling `agentOption` supplies the host's registered choices
+and its default in `currentValue`, even when the host has no sessions. Send
+these requests on the same host connection.
+
+| Request | Picker behavior |
+| --- | --- |
+| `_nori/host/prepare_agent` with optional `agent` and absolute `cwd` | Returns `{id, agent, cwd}` as preparation begins. Keep the selection ID and resolved folder. |
+| `session/list` with `_meta["nori/preparedAgent"] = {id}` | Waits for preparation and returns the complete cached adapter catalog in `sessions`. Each row's `sessionId` belongs to the adapter. The result's `_meta["nori/preparedAgent"].agentCapabilities` distinguishes unsupported listing from an empty catalog. |
+| `session/new` with the returned `cwd`, `mcpServers` and `_meta["nori/preparedAgent"] = {id, savedSessionId?}` | Consumes the prepared connection. Omit `savedSessionId` for a fresh session or copy the selected row's ID for adapter load or resume. Use the returned host `sessionId` for subsequent prompts, close and reconnect. |
+
+To abandon the selection, send `_nori/host/discard_agent` with `{id}`.
+Preparing another agent or disconnecting also retires the unused selection.
+An adapter error during preparation is returned to the scoped list or
+activation request. Keep the foreground session until activation succeeds.
+The terminal picker still uses its existing preparation path. Its UI handoff
+is to route selection and activation through these requests and retain the
+ordinary host session list for live conversations.
 
 ### Stdio transport
 

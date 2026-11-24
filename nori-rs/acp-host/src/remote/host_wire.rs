@@ -339,6 +339,16 @@ async fn serve_lines<M: ManagedAgent, T>(
     Ok(stopped)
 }
 
+/// Releases the host's per-client resources even when the transport drops
+/// the serving future while evicting a slow reader.
+struct RegisteredClient<'a, M: ManagedAgent>(&'a M, i64);
+
+impl<M: ManagedAgent> Drop for RegisteredClient<'_, M> {
+    fn drop(&mut self) {
+        self.0.connection_closed(self.1);
+    }
+}
+
 async fn serve_frames<M, S, I, E>(
     mut sink: S,
     mut incoming: I,
@@ -356,6 +366,7 @@ where
 {
     let mut subscription: Option<ManagedSubscription> = None;
     let mut initialized = false;
+    let mut registration = None;
     let (changes, mut roles) = watch::channel("watcher");
     let (outbound, mut queued) = tokio::sync::mpsc::channel::<Value>(OUTBOUND_CAPACITY);
     let result = async {
@@ -430,6 +441,7 @@ where
                                     // not from a change notification.
                                     roles.borrow_and_update();
                                     if !initialized {
+                                        registration = Some(RegisteredClient(state.host.as_ref(), client));
                                         state.host.connection_opened(super::managed::HostConnection {
                                             client,
                                             origin: match transport {
@@ -457,8 +469,7 @@ where
                                             });
                                             continue;
                                         }
-                                        let method = request["method"].as_str().unwrap_or_default();
-                                        if state.host.runs_concurrently(method) {
+                                        if state.host.request_runs_concurrently(&request) {
                                             let host = state.host.clone();
                                             let outbound = outbound.clone();
                                             tokio::spawn(async move {
@@ -511,9 +522,7 @@ where
         anyhow::Ok(())
     }
     .await;
-    if initialized {
-        state.host.connection_closed(client);
-    }
+    drop(registration);
     let _ = send_frame(&mut sink, Message::Close(None)).await;
     result
 }
