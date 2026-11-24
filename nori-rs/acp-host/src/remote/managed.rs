@@ -2,7 +2,10 @@
 
 use std::future::Future;
 
+use nori_protocol::NoriEvent;
+use nori_protocol::Notice;
 use nori_protocol::SessionEnvelope;
+use nori_protocol::SessionEvent;
 use serde_json::Value;
 use tokio::sync::mpsc;
 
@@ -151,7 +154,25 @@ pub trait ManagedAgent: Send + Sync + 'static {
     }
 }
 
-/// Encode the complete manager envelope without changing its event vocabulary.
-pub fn managed_event(envelope: &SessionEnvelope) -> Value {
-    serde_json::json!({"jsonrpc":"2.0", "method":"_nori/session/event", "params":envelope})
+/// Encode a manager envelope for one connection.
+///
+/// A client that did not declare `capabilities.nori_sessions.approval_modes`
+/// on `initialize` predates `approval_mode_changed` and refuses an envelope
+/// it cannot decode. It gets a notice naming the mode under the same `seq`
+/// instead, so its sequence has no gap.
+pub fn managed_event(envelope: &SessionEnvelope, approval_modes: bool) -> Value {
+    let notice;
+    let params = match &envelope.event {
+        SessionEvent::Nori(NoriEvent::ApprovalModeChanged(modes)) if !approval_modes => {
+            notice = SessionEnvelope {
+                event: SessionEvent::Nori(NoriEvent::Notice(Notice {
+                    message: format!("Approvals: {}", modes.current.name()),
+                })),
+                ..envelope.clone()
+            };
+            &notice
+        }
+        _ => envelope,
+    };
+    serde_json::json!({"jsonrpc":"2.0", "method":"_nori/session/event", "params":params})
 }

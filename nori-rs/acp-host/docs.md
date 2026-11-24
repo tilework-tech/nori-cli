@@ -568,6 +568,11 @@ following for the binding generation and the lifetime of every active side.
   reverse. The remote module preserves it: its handlers call the
   `ManagedAgent` interface. The harness and CLI supply the
   session behavior behind those interfaces.
+- `managed_event` encodes envelopes per connection. A connection whose
+  `initialize` did not declare `capabilities.nori_sessions.approval_modes`
+  gets each `approval_mode_changed` as a `notice` under the same `seq`, live
+  and in subscription replay, because older clients decode `NoriEvent`
+  strictly and would stop at the unknown variant.
 - Disabling native goals is a policy of Nori's built-in Codex launch only.
   User-defined agent processes retain their explicit command and environment;
   goal ownership and routing remain a harness concern.

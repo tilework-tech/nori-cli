@@ -83,16 +83,21 @@ fn the_footer_follows_the_session_on_screen_and_new_sessions_start_at_the_host_d
 }
 
 #[test]
-fn ask_is_refused_for_an_adapter_that_cannot_ask_and_the_mode_stays() {
+fn ask_is_unavailable_for_an_agent_without_a_mode_that_asks() {
     let (_home, mut tui) = terminal(&[]);
     wait_agent(&mut tui);
+    ask(&mut tui, "/approvals");
+    tui.wait_for_text("Ask (not available)", TIMEOUT).unwrap();
 
-    choose(&mut tui, Key::Up);
+    tui.send_key(Key::Up).unwrap();
+    tui.settle(Duration::from_millis(200));
+    tui.send_key(Key::Enter).unwrap();
 
     tui.wait_for_text(
-        "has no mode that asks before every edit and command",
+        "/approvals: Amber has no mode that asks before every edit and command.",
         TIMEOUT,
     )
     .unwrap();
     wait_agent(&mut tui);
+    assert_eq!(mode_changes(&tui), 0, "nothing reaches the host");
 }

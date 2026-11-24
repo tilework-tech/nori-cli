@@ -28,7 +28,16 @@ fn announce(chat: &mut ChatWidget, mode: ApprovalMode) {
     let generation = chat.session_generation;
     chat.handle_session_event(
         generation,
-        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ApprovalModeChanged(mode)),
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ApprovalModeChanged(
+            nori_protocol::SessionApprovalModes {
+                current: mode,
+                available: vec![
+                    ApprovalMode::Ask,
+                    ApprovalMode::Agent,
+                    ApprovalMode::ApproveAll,
+                ],
+            },
+        )),
     );
 }
 
@@ -142,4 +151,27 @@ async fn the_footer_follows_the_mode_the_host_announces() {
 
     assert!(approving.contains("Approvals: Approve all"), "{approving}");
     assert!(asking.contains("Approvals: Ask"), "{asking}");
+}
+
+#[tokio::test]
+async fn ask_is_unavailable_when_the_host_does_not_offer_it() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    host_session(&mut chat);
+    let generation = chat.session_generation;
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ApprovalModeChanged(
+            nori_protocol::SessionApprovalModes {
+                current: ApprovalMode::Agent,
+                available: vec![ApprovalMode::Agent, ApprovalMode::ApproveAll],
+            },
+        )),
+    );
+
+    chat.dispatch_command(crate::slash_command::SlashCommand::Approvals);
+    let menu = render_bottom_pane(&chat);
+    let calls = choose(&mut chat, &mut rx, 0);
+
+    insta::assert_snapshot!("host_mode_menu_without_ask", menu);
+    assert_eq!(calls.iter().filter_map(mode_change).count(), 0);
 }

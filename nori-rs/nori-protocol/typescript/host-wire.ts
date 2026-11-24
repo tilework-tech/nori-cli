@@ -504,7 +504,7 @@ export type NoriEvent =
       event_type: "delegation_changed";
     }
   | {
-      event: ApprovalMode;
+      event: SessionApprovalModes;
       event_type: "approval_mode_changed";
     };
 /**
@@ -4111,6 +4111,18 @@ export interface Delegation {
   result?: string | null;
   status: DelegationStatus;
   task: string;
+}
+/**
+ * A session's permission mode and the modes its agent can honor.
+ */
+export interface SessionApprovalModes {
+  /**
+   * The modes `session/set_mode` accepts for this session. Ask is left
+   * out for an agent with no mode that asks before every edit and
+   * command.
+   */
+  available: ApprovalMode[];
+  current: ApprovalMode;
 }
 /**
  * Result of `_nori/host/stop`.

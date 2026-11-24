@@ -109,6 +109,9 @@ the harness.
 Each WebSocket text frame is a JSON-RPC 2.0 request with an ID and object
 params. `initialize` must come first and advertises
 `result.capabilities.nori_sessions` with version 1, envelopes, and reconnect.
+A client declares the session events it decodes beyond the original set in
+its own `params.capabilities.nori_sessions`; today the only one is
+`approval_modes: true` (see `approval_mode_changed` below).
 
 | Method | Params | Result |
 | --- | --- | --- |
@@ -160,9 +163,13 @@ has been answered. `approval_mode_changed` gives a session's permission mode
 (`ask`, `agent`, or `approve-all`): once just before its `session_started`,
 once for a fork's child right after the fork, and after every change. A client
 that subscribes after the announcement has left the replay window reads the
-mode from the list row's `approval_mode` instead. A client built before this
-event decodes it as an unknown Nori event and fails, so an older `nori attach`
-cannot follow a newer host.
+mode from the list row's `approval_mode` instead. The host sends this event
+only to connections whose `initialize` declared
+`capabilities.nori_sessions.approval_modes: true`, as plain `nori` and
+`nori attach` do. Any other connection, such as an older `nori attach` that
+would refuse the unknown variant, gets a `notice` event in its place under the
+same `seq`, with a message such as `Approvals: Approve all`, so its sequence
+has no gap.
 
 Keep event payloads as raw JSON when storing or forwarding envelopes. ACP
 response types are untagged; interpret a response using its correlated request

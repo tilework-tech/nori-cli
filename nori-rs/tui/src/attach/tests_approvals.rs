@@ -8,7 +8,14 @@ fn announced(session: &str, seq: i64, mode: nori_protocol::ApprovalMode) -> Sess
         agent: "test-agent".into(),
         seq,
         event: nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ApprovalModeChanged(
-            mode,
+            nori_protocol::SessionApprovalModes {
+                current: mode,
+                available: vec![
+                    nori_protocol::ApprovalMode::Ask,
+                    nori_protocol::ApprovalMode::Agent,
+                    nori_protocol::ApprovalMode::ApproveAll,
+                ],
+            },
         )),
     }
 }
@@ -185,4 +192,33 @@ fn a_session_known_only_from_the_list_shows_its_mode() {
     let header = runtime_screen(&runtime, 12);
 
     assert!(header.contains("Approvals: Approve all"), "{header}");
+}
+
+#[test]
+fn ask_is_unavailable_when_the_host_does_not_offer_it() {
+    let (mut runtime, mut rx) = attached("controller");
+    runtime
+        .state
+        .replace_sessions(json!({"sessions": [{
+            "session_id": "session-delta",
+            "agent": "test-agent",
+            "status": "ready",
+            "title": null,
+            "approval_mode": "agent",
+            "approval_modes": ["agent", "approve-all"],
+        }]}))
+        .unwrap();
+    runtime.state.selected = Some("session-delta".into());
+
+    submit(&mut runtime, "/approvals ask");
+    let typed = runtime.state.notice.clone().unwrap_or_default();
+    runtime.composer.clear();
+    submit(&mut runtime, "/approvals");
+    let menu = runtime_screen(&runtime, 20);
+    press(&mut runtime, KeyCode::Up);
+    press(&mut runtime, KeyCode::Enter);
+
+    assert!(typed.contains("no mode that asks"), "{typed}");
+    assert!(menu.contains("Not available"), "{menu}");
+    assert_eq!(mode_requests(&mut rx), Vec::<serde_json::Value>::new());
 }

@@ -790,3 +790,63 @@ fn after_a_resume_the_old_ids_lead_to_the_replacement() {
         )
     );
 }
+
+fn started_with_modes(modes: &[&'static str]) -> SessionEvent {
+    let mut event = started("s");
+    if let SessionEvent::Nori(NoriEvent::SessionStarted(started)) = &mut event {
+        started.config_options = vec![
+            acp::SessionConfigOption::select(
+                "mode",
+                "Mode",
+                modes[0],
+                modes
+                    .iter()
+                    .map(|mode| acp::SessionConfigSelectOption::new(*mode, *mode))
+                    .collect::<Vec<_>>(),
+            )
+            .category(acp::SessionConfigOptionCategory::Mode),
+        ];
+    }
+    event
+}
+
+fn offered(envelopes: &[nori_protocol::SessionEnvelope]) -> Vec<Vec<nori_protocol::ApprovalMode>> {
+    envelopes
+        .iter()
+        .filter_map(|envelope| match &envelope.event {
+            SessionEvent::Nori(NoriEvent::ApprovalModeChanged(modes)) => {
+                Some(modes.available.clone())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_session_offers_ask_only_when_its_agent_has_a_mode_that_asks() {
+    use nori_protocol::ApprovalMode::Agent;
+    use nori_protocol::ApprovalMode::ApproveAll;
+    use nori_protocol::ApprovalMode::Ask;
+    let mut registry = Registry::new(4);
+    let (_, claude) = start(&mut registry, "claude-code", None);
+    let (_, opencode) = start(&mut registry, "opencode", None);
+    let (_, claude_without_default) = start(&mut registry, "claude-code", None);
+
+    let with_ask = registry.observe_all(claude, started_with_modes(&["default", "acceptEdits"]));
+    let without = registry.observe_all(opencode, started_with_modes(&["build", "plan"]));
+    let missing_mode =
+        registry.observe_all(claude_without_default, started_with_modes(&["acceptEdits"]));
+
+    assert_eq!(
+        (
+            offered(&with_ask),
+            offered(&without),
+            offered(&missing_mode)
+        ),
+        (
+            vec![vec![Ask, Agent, ApproveAll]],
+            vec![vec![Agent, ApproveAll]],
+            vec![vec![Agent, ApproveAll]],
+        )
+    );
+}

@@ -253,6 +253,7 @@ impl ManagedRemoteHost {
                         "approval_mode": nori_protocol::ApprovalMode::from(
                             crate::permission_mode::PermissionMode::from_approval_policy(record.approval_policy),
                         ),
+                        "approval_modes": self.manager.available_modes(&record.conversation_id),
                         "source": match record.source {
                             crate::session_manager::SessionSource::User => "user",
                             crate::session_manager::SessionSource::Fork => "fork",

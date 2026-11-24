@@ -1168,12 +1168,8 @@ fn only_the_controller_changes_a_session_mode_and_every_terminal_shows_it() {
     second.send_key(Key::Alt('t')).unwrap();
     wait_controlling(&mut second);
     wait_watching(&mut first);
-    open_mode_menu(&mut second);
-    assert!(
-        second.screen_contents().contains("Approve all (current)"),
-        "the watcher's choice never reached the host:\n{}",
-        second.screen_contents()
-    );
+    // The menu's current row proves the watcher's choice never reached the host.
+    open_mode_menu(&mut second, "Approve all (current)");
     second.send_key(Key::Up).unwrap();
     second.settle(Duration::from_millis(200));
     second.send_key(Key::Enter).unwrap();
@@ -1184,20 +1180,25 @@ fn only_the_controller_changes_a_session_mode_and_every_terminal_shows_it() {
     first
         .wait_for_text("/approvals: watching · Alt+T to take control", TIMEOUT)
         .unwrap();
-    open_mode_menu(&mut second);
-    assert!(
-        second.screen_contents().contains("Agent (current)"),
-        "the former controller can no longer change the mode:\n{}",
-        second.screen_contents()
-    );
+    open_mode_menu(&mut second, "Agent (current)");
     second.send_key(Key::Escape).unwrap();
 }
 
-fn open_mode_menu(client: &mut Client) {
+/// Open `/approvals` and wait until its rows are drawn, with `current` the
+/// row marked current; the title can land a frame before the rows do.
+fn open_mode_menu(client: &mut Client, current: &str) {
     client.send_str("/approvals").unwrap();
     client.settle(Duration::from_millis(500));
     client.send_key(Key::Enter).unwrap();
     client
-        .wait_for_text("Approvals for this session", TIMEOUT)
-        .unwrap();
+        .wait_for(
+            |screen| screen.contains(current) && screen.contains("esc close"),
+            TIMEOUT,
+        )
+        .unwrap_or_else(|_| {
+            panic!(
+                "menu with {current} never drawn:\n{}",
+                client.screen_contents()
+            )
+        });
 }

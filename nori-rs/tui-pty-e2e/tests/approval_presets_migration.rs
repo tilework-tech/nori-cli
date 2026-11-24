@@ -70,6 +70,10 @@ fn a_read_only_preset_starts_sessions_in_ask_on_this_and_every_later_launch() {
     let mut first = launch(&folder);
     footer_mode(&mut first, "Ask");
     let first_output = first.history_contents();
+    assert!(
+        !first_output.contains("Agent approvals") && !first_output.contains("Approvals: Agent"),
+        "the startup card agrees with the session's mode:\n{first_output}"
+    );
     drop(first);
     let migrated = config(&folder);
     let mut second = launch(&folder);
@@ -142,4 +146,49 @@ fn the_host_default_applies_to_the_first_session_and_to_new_ones() {
     }
 
     footer_mode(&mut tui, "Ask");
+}
+
+/// The agent's own mode badge, shown above the prompt.
+fn badge(tui: &mut TuiSession, mode: &str) {
+    let label = format!("[ {mode} ]");
+    tui.wait_for(|screen| screen.contains(&label), TIMEOUT)
+        .unwrap_or_else(|_| panic!("badge never showed {label}:\n{}", tui.screen_contents()));
+}
+
+#[test]
+fn the_agent_mode_badge_follows_the_host_mode_and_the_session_on_screen() {
+    let (_home, folder) = home_with("");
+    let mut tui = launch(&folder);
+    // Agent puts Claude Code in acceptEdits; Ask puts it in default.
+    badge(&mut tui, "acceptEdits");
+
+    tui.send_str("/approvals").unwrap();
+    tui.settle(std::time::Duration::from_millis(900));
+    tui.send_key(tui_pty_e2e::Key::Enter).unwrap();
+    tui.wait_for_text("Approvals for this session", TIMEOUT)
+        .unwrap();
+    tui.send_key(tui_pty_e2e::Key::Up).unwrap();
+    tui.settle(std::time::Duration::from_millis(200));
+    tui.send_key(tui_pty_e2e::Key::Enter).unwrap();
+    footer_mode(&mut tui, "Ask");
+    badge(&mut tui, "default");
+
+    let first = sessions_started(&tui);
+    tui.send_str("/new").unwrap();
+    tui.settle(std::time::Duration::from_millis(900));
+    tui.send_key(tui_pty_e2e::Key::Enter).unwrap();
+    let deadline = std::time::Instant::now() + TIMEOUT;
+    while sessions_started(&tui) <= first {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{}",
+            tui.screen_contents()
+        );
+        tui.settle(std::time::Duration::from_millis(50));
+    }
+    badge(&mut tui, "acceptEdits");
+
+    tui.send_key(tui_pty_e2e::Key::Alt(',')).unwrap();
+    footer_mode(&mut tui, "Ask");
+    badge(&mut tui, "default");
 }

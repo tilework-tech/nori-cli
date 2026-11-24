@@ -8,8 +8,8 @@ expression: "tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents()
   Approvals for this session
   New sessions start in the host default. The sandbox is set separately.
 
-   1. Ask
-      Ask before every edit and command.
+   1. Ask (not available)
+      Remote Handroll has no mode that asks before every edit and command.
   ▏2. Agent (current)                                                                            ▕
   ▏   The agent asks when it judges it needs to.                                                 ▕
    3. Approve all

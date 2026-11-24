@@ -256,10 +256,13 @@ exact ACP wire `RequestId` for harness-issued operations.
   decoder, or presentation state. The delegation text helpers are plain
   strings with no styling; each frontend applies its own colors.
 - `NoriEvent` has no catch-all variant, so a client decodes envelopes
-  strictly: a new variant makes an older client fail on that envelope. A
-  `nori attach` built before `ApprovalModeChanged` therefore breaks against a
-  host that sends it. Adding a `NoriEvent` variant is a wire change for every
-  deployed client, not only a schema regeneration.
+  strictly: a new variant makes an older client fail on that envelope.
+  Adding a `NoriEvent` variant is a wire change for every deployed client, not
+  only a schema regeneration. `ApprovalModeChanged` is gated: the host sends it
+  only to clients whose `initialize` declares
+  `capabilities.nori_sessions.approval_modes`, and gives every other client a
+  `Notice` naming the mode (`ApprovalMode::name`) under the same `seq`. A
+  future variant needs the same treatment.
 - `ReplayStarted` and `ReplayFinished` bracket historical ACP notifications
   only. Current setup responses and Nori lifecycle events remain outside the
   replay body.

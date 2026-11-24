@@ -128,7 +128,13 @@ impl ChatWidget {
     fn status_view_model(&self, agent: AgentStatusHandle) -> StatusViewModel {
         let footer = self.bottom_pane.status_footer_values();
         let mut model = StatusViewModel::new(agent, self.config.cwd.clone());
-        model.approval_mode_label = Some(self.approval_mode_name().to_owned());
+        // Only the mode the host announced for this session; a card written
+        // before the session starts leaves it out rather than guess.
+        model.approval_mode_label = self.approval_mode.map(|mode| {
+            nori_harness::permission_mode::PermissionMode::from(mode)
+                .name()
+                .to_owned()
+        });
         model.skillset = SkillsetStatus {
             names: footer.active_skillsets,
             version: footer.nori_version,

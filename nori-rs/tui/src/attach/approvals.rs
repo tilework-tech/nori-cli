@@ -19,6 +19,7 @@ use super::state::AttachState;
 use crate::host_client::HostCall;
 
 pub(super) const TITLE: &str = "Approvals for this session";
+const UNAVAILABLE: &str = "this agent has no mode that asks before every edit and command";
 
 /// The open mode menu, for the session it was opened on.
 pub(super) struct ModeMenu {
@@ -43,6 +44,21 @@ impl AttachState {
                     .and_then(|row| row.approval_mode)
             })
             .map(PermissionMode::from)
+    }
+
+    /// Whether the host accepts `mode` for `session_id`. Unknown counts as
+    /// offered, and the host still refuses a mode it does not offer.
+    pub fn mode_offered(&self, session_id: &str, mode: PermissionMode) -> bool {
+        self.conversations
+            .get(session_id)
+            .and_then(|conversation| conversation.available_modes.as_ref())
+            .or_else(|| {
+                self.sessions
+                    .iter()
+                    .find(|row| row.session_id == session_id)
+                    .and_then(|row| row.approval_modes.as_ref())
+            })
+            .is_none_or(|available| available.contains(&mode.into()))
     }
 
     /// The menu is drawn and takes keys only while no request needs an answer.
@@ -74,6 +90,10 @@ impl Runtime {
             return;
         }
         match PermissionMode::from_id(wanted) {
+            Some(mode) if !self.state.mode_offered(&session_id, mode) => {
+                self.composer.set_text(draft);
+                self.state.show_notice(format!("/approvals: {UNAVAILABLE}"));
+            }
             Some(PermissionMode::ApproveAll) => {
                 self.state.mode_menu = Some(ModeMenu {
                     session_id,
@@ -92,6 +112,10 @@ impl Runtime {
     }
 
     fn set_mode(&mut self, session_id: String, mode: PermissionMode) {
+        if !self.state.mode_offered(&session_id, mode) {
+            self.state.show_notice(format!("/approvals: {UNAVAILABLE}"));
+            return;
+        }
         self.send(
             HostCall::SetMode {
                 session_id,
@@ -173,17 +197,23 @@ pub(super) fn render_mode_menu(state: &AttachState, area: Rect, buf: &mut Buffer
         } else {
             "   "
         };
+        let offered = state.mode_offered(&menu.session_id, mode);
         let mut name = format!("{marker}{}", mode.name());
         if current == Some(mode) {
             name.push_str(" (current)");
         }
         let name = format!("{name:<26}");
-        let name = if index == menu.selected {
-            name.cyan().bold()
+        let description = if offered {
+            mode.description().to_owned()
         } else {
-            name.into()
+            format!("Not available: {UNAVAILABLE}.")
         };
-        lines.push(Line::from(vec![name, mode.description().dim()]));
+        let name = match (index == menu.selected, offered) {
+            (_, false) => name.dim(),
+            (true, true) => name.cyan().bold(),
+            (false, true) => name.into(),
+        };
+        lines.push(Line::from(vec![name, description.dim()]));
     }
     lines.push(Line::default());
     lines.push(Line::from(" ↑↓ move · enter choose · esc close".dim()));

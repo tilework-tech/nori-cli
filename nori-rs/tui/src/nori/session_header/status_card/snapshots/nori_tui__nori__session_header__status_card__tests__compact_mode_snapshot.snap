@@ -1,8 +1,9 @@
 ---
 source: tui/src/nori/session_header/status_card/tests.rs
+assertion_line: 295
 expression: "render(view, DisplayMode::Compact)"
 ---
   › Nori CLI v0.1.0
 
-  System       /home/user/project · Agent approvals
+  System       /home/user/project · Approvals: Agent
   Agent        Claude · Opus 5 · xhigh · Plan · Fast mode
