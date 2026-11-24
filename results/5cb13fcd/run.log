@@ -1,0 +1,92 @@
+== S28a Escape cancels once (plain)
+PASS S28a/cancel.exactly_one_cancel 1
+PASS S28a/cancel.next_turn_completes ['cancelled', 'end_turn']
+PASS S28a/cancel.no_cancel_for_next_turn 1
+== S28b Escape cancels once (attach)
+PASS S28b/cancel.exactly_one_cancel 1
+PASS S28b/cancel.next_turn_completes ['cancelled', 'end_turn']
+PASS S28b/cancel.no_cancel_for_next_turn 1
+== S35a shared / menu, Tab and dispatch in plain nori
+PASS S35a/plain.menu_lists_builtins missing []
+PASS S35a/plain.no_attach_reasons_in_plain_menu []
+PASS S35a/plain.agent_command_listed     Review the synthetic change
+PASS S35a/plain.tab_completes_builtin /approvals
+PASS S35a/plain.builtin_dispatched_locally []
+PASS S35a/plain.agent_command_review_args_sent_once {'sent': 1, 'prompts': ['<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://gi
+PASS S35a/plain.agent_command_review_sent_once {'sent': 1, 'prompts': ['<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://gi
+PASS S35a/plain.agent_command_lanternize_sent_once {'sent': 1, 'prompts': ['<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://gi
+FAIL S35a/plain.bare_review_not_captured_by_loose_match {'requests': [], 'last': '  ↑↓/j/k move  / search  enter select  esc close'}
+== S35b attach controller: reasons, refusals, agent commands, quit
+PASS S35b/ctl.host_route_reason /compact  not available on this host yet
+PASS S35b/ctl.attach_screen_reason /agent  not available in nori attach yet
+PASS S35b/ctl.host_commands_enabled ['/new  start a new chat during a conversation', '/sessions  list sessions and move between them']
+PASS S35b/ctl.quit_enabled /quit  exit Nori
+PASS S35b/ctl.tab_completes_builtin /sessions
+PASS S35b/ctl.compact_refused_with_reason   /compact  not available on this host yet
+PASS S35b/ctl.compact_refusal_count shown 2 time(s)
+PASS S35b/ctl.compact_draft_kept /compact
+PASS S35b/ctl.compact_nothing_sent []
+PASS S35b/ctl.agent_refused_with_reason   /agent  not available in nori attach yet
+PASS S35b/ctl.agent_refusal_count shown 2 time(s)
+PASS S35b/ctl.agent_draft_kept /agent
+PASS S35b/ctl.agent_nothing_sent []
+PASS S35b/ctl.agent_command_review_args_sent_once {'sent': 1, 'prompts': ['first light', '/review the parser']}
+PASS S35b/ctl.agent_command_review_sent_once {'sent': 1, 'prompts': ['first light', '/review the parser', '/review']}
+PASS S35b/ctl.agent_command_lanternize_sent_once {'sent': 1, 'prompts': ['first light', '/review the parser', '/review', '/lanternize']}
+PASS S35b/ctl.leading_space_quit_is_a_prompt ['/review', '/lanternize', 'quit']
+PASS S35b/ctl.bare_quit_detaches shell$
+PASS S35b/ctl.detach_keeps_session ['c97f063f-5f2c-42f2-8834-989ec9fc3194']
+== S35c two attached terminals: watcher refusals and control transfer
+PASS S35c/watch.control_commands_greyed {'/new': '/new  watching · Alt+T to take control', '/close': '/close  watching · Alt+T to take control', '/resume': '/resume           watching · Alt+T to take 
+PASS S35c/watch.sessions_enabled /sessions  list sessions and move between them
+PASS S35c/watch.new_refused_with_reason   /new  watching · Alt+T to take control
+PASS S35c/watch.new_nothing_sent []
+PASS S35c/watch.new_draft_kept /new
+PASS S35c/transfer.controller_menu_enabled_before /new              start a new chat during a conversation
+PASS S35c/transfer.open_menu_regreys /new              watching · Alt+T to take control
+PASS S35c/transfer.new_controller_menu_enabled /new              start a new chat during a conversation
+PASS S35c/transfer.demoted_new_refused 1
+PASS S35c/transfer.promoted_new_runs_once 2
+== S35d Escape with the menu open mid-turn (plain)
+PASS S35d/esc.menu_open_during_turn   /delegate         delegate a task: /delegate <agent> <task>
+PASS S35d/esc.first_escape_closes_menu /
+PASS S35d/esc.first_escape_does_not_cancel {'cancels': 0, 'ticks': [8, 16]}
+PASS S35d/esc.cancelled_exactly_once 1
+== S35e Escape with the menu open mid-turn (attach)
+PASS S35e/esc.menu_open_during_turn   /delegate         delegate a task: /delegate <agent> <task>
+PASS S35e/esc.first_escape_closes_menu    alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PASS S35e/esc.first_escape_does_not_cancel {'cancels': 0, 'ticks': [8, 16]}
+PASS S35e/esc.refused_command_mid_turn_not_sent []
+PASS S35e/esc.cancelled_exactly_once 1
+== S35f pasted slash commands (plain)
+PASS S35f/paste.single_line_dispatched_like_typed []
+PASS S35f/paste.multiline_sent_once_or_refused {'sent': ['/diff the harbor notes\nsecond synthetic line'], 'refused': False, 'requests': ['session/prompt']}
+== S35g pasted slash commands (attach)
+PASS S35g/paste.single_line_refused_like_typed {'sent': [], 'last': '  /compact  not available on this host yet'}
+PASS S35g/paste.multiline_sent_once_or_refused {'sent': [], 'refused': True, 'requests': []}
+== S35h commands while reconnecting and after
+PASS S35h/reconnect.open_menu_shows_reason /new              reconnecting
+PASS S35h/reconnect.new_refused_with_reason ['Reconnecting. Your draft is preserved; send it after the connection is restored.', 'Reconnecting. Your draft is preserved; send it after the connection is res
+PASS S35h/reconnect.draft_kept /new
+PASS S35h/reconnect.nothing_sent_while_down 1
+PASS S35h/reconnect.menu_enabled_after /new              start a new chat during a conversation
+PASS S35h/reconnect.new_runs_once_after 2
+== S35i menu open mid-turn: first Escape closes, later Escapes interrupt (plain)
+PASS S35i/esc2.control_interrupts {'presses': 1, 'draft': 'lamp draft'}
+PASS S35i/esc2.menu_open_during_turn   /delegate         delegate a task: /delegate <agent> <task>
+PASS S35i/esc2.first_closes_menu /
+PASS S35i/esc2.first_keeps_draft /
+PASS S35i/esc2.first_does_not_cancel {'cancels': 0, 'ticks': [14, 22]}
+PASS S35i/esc2.then_interrupts_like_a_plain_draft {'after_first': 1, 'control': 1}
+PASS S35i/esc2.one_cancel_per_turn 2
+PASS S35i/esc2.draft_after_interrupt_matches_control {'menu_path': '/', 'control': 'lamp draft'}
+== S35j menu open mid-turn: first Escape closes, later Escapes interrupt (attach)
+PASS S35j/esc2.control_interrupts {'presses': 1, 'draft': 'lamp draft'}
+PASS S35j/esc2.menu_open_during_turn   /delegate         delegate a task: /delegate <agent> <task>
+PASS S35j/esc2.first_closes_menu    alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PASS S35j/esc2.first_keeps_draft /
+PASS S35j/esc2.first_does_not_cancel {'cancels': 0, 'ticks': [14, 22]}
+PASS S35j/esc2.then_interrupts_like_a_plain_draft {'after_first': 1, 'control': 1}
+PASS S35j/esc2.one_cancel_per_turn 2
+PASS S35j/esc2.draft_after_interrupt_matches_control {'menu_path': '/', 'control': 'lamp draft'}
+{"nori": "nori", "passed": 78, "failed": 1, "checks": 79}

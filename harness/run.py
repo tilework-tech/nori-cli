@@ -2458,6 +2458,73 @@ def s35_escape_mid_turn(ctx, mode):
         quit_fg(t)
 
 
+def s35_escape_two_presses(ctx, mode):
+    """With the menu open mid-turn, the first Escape only closes the menu and keeps the draft; the
+    Escapes after it interrupt exactly as they do with a plain draft (in-run control)."""
+    if mode == "fg":
+        t = start_fg(ctx)
+    else:
+        ctx.start_host()
+        t = start_attach(ctx, "attach")
+
+    def cancels():
+        return len(ctx.ledger("request", "session/cancel"))
+
+    def draft(screen):
+        text = composer_text(screen)
+        return text[2:] if text.startswith("› ") else text
+
+    def presses_until_cancel(before):
+        for n in range(1, 4):
+            t.keys("Escape")
+            time.sleep(1.5)
+            if cancels() > before:
+                return n
+        return None
+
+    submit(t, "hold the lamp")
+    wait_ticks(ctx, 3)
+    t.type("lamp draft")
+    time.sleep(0.8)
+    control = presses_until_cancel(cancels())
+    wait_ledger(ctx, lambda r: r["kind"] == "turn_end" and r.get("stopReason") == "cancelled")
+    time.sleep(0.8)
+    t.capture("control-cancelled")
+    control_draft = draft(t.screen())
+    ctx.check("esc2.control_interrupts", control is not None, {"presses": control, "draft": control_draft})
+    t.keys("C-u")
+    time.sleep(0.3)
+
+    submit(t, "hold the second lamp")
+    wait_ticks(ctx, 3)
+    t.type("/")
+    time.sleep(0.8)
+    t.capture("menu-open")
+    ctx.check("esc2.menu_open_during_turn", bool(menu_row(t.screen(), "/sessions")), last_nonblank(t.screen()))
+    before = cancels()
+    ticks = ctx.ticks()
+    t.keys("Escape")
+    time.sleep(1.5)
+    screen = t.screen()
+    t.capture("after-first-escape")
+    ctx.check("esc2.first_closes_menu", not menu_row(screen, "/sessions"), last_nonblank(screen))
+    ctx.check("esc2.first_keeps_draft", draft(screen) == "/", draft(screen))
+    ctx.check("esc2.first_does_not_cancel", cancels() == before and ctx.ticks() > ticks,
+              {"cancels": cancels() - before, "ticks": [ticks, ctx.ticks()]})
+    after = presses_until_cancel(before)
+    wait_ledger(ctx, lambda r: r["kind"] == "turn_end" and r.get("stopReason") == "cancelled"
+                and len([e for e in ctx.ledger("turn_end") if e.get("stopReason") == "cancelled"]) >= 2)
+    time.sleep(0.8)
+    t.capture("after-interrupt")
+    ctx.check("esc2.then_interrupts_like_a_plain_draft", after == control, {"after_first": after, "control": control})
+    ctx.check("esc2.one_cancel_per_turn", cancels() == 2, cancels())
+    ctx.check("esc2.draft_after_interrupt_matches_control",
+              (draft(t.screen()) == "/") == (control_draft == "lamp draft"),
+              {"menu_path": draft(t.screen()), "control": control_draft})
+    if mode == "fg":
+        quit_fg(t)
+
+
 def s35_paste(ctx, mode):
     """A pasted slash command follows the same table as a typed one; a multi-line paste is never run as a command."""
     if mode == "fg":
@@ -2692,6 +2759,8 @@ SCENARIOS = {
     "S35f": ("pasted slash commands (plain)", lambda c: s35_paste(c, "fg")),
     "S35g": ("pasted slash commands (attach)", lambda c: s35_paste(c, "attach")),
     "S35h": ("commands while reconnecting and after", s35_reconnect),
+    "S35i": ("menu open mid-turn: first Escape closes, later Escapes interrupt (plain)", lambda c: s35_escape_two_presses(c, "fg")),
+    "S35j": ("menu open mid-turn: first Escape closes, later Escapes interrupt (attach)", lambda c: s35_escape_two_presses(c, "attach")),
     "S36": ("startup activation window swept by Enter time", s36_startup_race),
     "S36b": ("startup activation window swept by typing time", lambda c: s36_startup_race(c, burst_at_reply=True)),
 }

@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · hold the lamp · app · working
+
+ › You
+ hold the lamp
+
+ tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8
+
+ › You
+ hold the second lamp
+
+ tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 tick 10 tick 11 tick 12 tick 13 tick 14
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

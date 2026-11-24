@@ -1,0 +1,38 @@
+== S28a Escape cancels once (plain)
+PASS S28a/cancel.exactly_one_cancel 1
+PASS S28a/cancel.next_turn_completes ['cancelled', 'end_turn']
+PASS S28a/cancel.no_cancel_for_next_turn 1
+== S28b Escape cancels once (attach)
+PASS S28b/cancel.exactly_one_cancel 1
+PASS S28b/cancel.next_turn_completes ['cancelled', 'end_turn']
+PASS S28b/cancel.no_cancel_for_next_turn 1
+== S35d Escape with the menu open mid-turn (plain)
+PASS S35d/esc.menu_open_during_turn   /delegate         delegate a task: /delegate <agent> <task>
+FAIL S35d/esc.first_escape_closes_menu   /delegate         delegate a task: /delegate <agent> <task>
+PASS S35d/esc.first_escape_does_not_cancel {'cancels': 0, 'ticks': [8, 16]}
+PASS S35d/esc.cancelled_exactly_once 1
+== S35e Escape with the menu open mid-turn (attach)
+PASS S35e/esc.menu_open_during_turn   /delegate         delegate a task: /delegate <agent> <task>
+FAIL S35e/esc.first_escape_closes_menu   /delegate         delegate a task: /delegate <agent> <task>
+PASS S35e/esc.first_escape_does_not_cancel {'cancels': 0, 'ticks': [8, 16]}
+PASS S35e/esc.refused_command_mid_turn_not_sent []
+PASS S35e/esc.cancelled_exactly_once 1
+== S35i menu open mid-turn: first Escape closes, later Escapes interrupt (plain)
+PASS S35i/esc2.control_interrupts {'presses': 1, 'draft': 'lamp draft'}
+PASS S35i/esc2.menu_open_during_turn   /delegate         delegate a task: /delegate <agent> <task>
+FAIL S35i/esc2.first_closes_menu   /delegate         delegate a task: /delegate <agent> <task>
+PASS S35i/esc2.first_keeps_draft /
+PASS S35i/esc2.first_does_not_cancel {'cancels': 0, 'ticks': [14, 22]}
+FAIL S35i/esc2.then_interrupts_like_a_plain_draft {'after_first': None, 'control': 1}
+FAIL S35i/esc2.one_cancel_per_turn 1
+PASS S35i/esc2.draft_after_interrupt_matches_control {'menu_path': '/', 'control': 'lamp draft'}
+== S35j menu open mid-turn: first Escape closes, later Escapes interrupt (attach)
+PASS S35j/esc2.control_interrupts {'presses': 1, 'draft': 'lamp draft'}
+PASS S35j/esc2.menu_open_during_turn   /delegate         delegate a task: /delegate <agent> <task>
+FAIL S35j/esc2.first_closes_menu   /delegate         delegate a task: /delegate <agent> <task>
+PASS S35j/esc2.first_keeps_draft /
+PASS S35j/esc2.first_does_not_cancel {'cancels': 0, 'ticks': [14, 22]}
+FAIL S35j/esc2.then_interrupts_like_a_plain_draft {'after_first': None, 'control': 1}
+FAIL S35j/esc2.one_cancel_per_turn 1
+PASS S35j/esc2.draft_after_interrupt_matches_control {'menu_path': '/', 'control': 'lamp draft'}
+{"nori": "nori", "passed": 23, "failed": 8, "checks": 31}

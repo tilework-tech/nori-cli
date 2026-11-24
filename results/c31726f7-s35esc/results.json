@@ -1,0 +1,188 @@
+[
+  {
+    "scenario": "S28a",
+    "check": "cancel.exactly_one_cancel",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S28a",
+    "check": "cancel.next_turn_completes",
+    "passed": true,
+    "detail": "['cancelled', 'end_turn']"
+  },
+  {
+    "scenario": "S28a",
+    "check": "cancel.no_cancel_for_next_turn",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S28b",
+    "check": "cancel.exactly_one_cancel",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S28b",
+    "check": "cancel.next_turn_completes",
+    "passed": true,
+    "detail": "['cancelled', 'end_turn']"
+  },
+  {
+    "scenario": "S28b",
+    "check": "cancel.no_cancel_for_next_turn",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35d",
+    "check": "esc.menu_open_during_turn",
+    "passed": true,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35d",
+    "check": "esc.first_escape_closes_menu",
+    "passed": false,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35d",
+    "check": "esc.first_escape_does_not_cancel",
+    "passed": true,
+    "detail": "{'cancels': 0, 'ticks': [8, 16]}"
+  },
+  {
+    "scenario": "S35d",
+    "check": "esc.cancelled_exactly_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.menu_open_during_turn",
+    "passed": true,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.first_escape_closes_menu",
+    "passed": false,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.first_escape_does_not_cancel",
+    "passed": true,
+    "detail": "{'cancels': 0, 'ticks': [8, 16]}"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.refused_command_mid_turn_not_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.cancelled_exactly_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35i",
+    "check": "esc2.control_interrupts",
+    "passed": true,
+    "detail": "{'presses': 1, 'draft': 'lamp draft'}"
+  },
+  {
+    "scenario": "S35i",
+    "check": "esc2.menu_open_during_turn",
+    "passed": true,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35i",
+    "check": "esc2.first_closes_menu",
+    "passed": false,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35i",
+    "check": "esc2.first_keeps_draft",
+    "passed": true,
+    "detail": "/"
+  },
+  {
+    "scenario": "S35i",
+    "check": "esc2.first_does_not_cancel",
+    "passed": true,
+    "detail": "{'cancels': 0, 'ticks': [14, 22]}"
+  },
+  {
+    "scenario": "S35i",
+    "check": "esc2.then_interrupts_like_a_plain_draft",
+    "passed": false,
+    "detail": "{'after_first': None, 'control': 1}"
+  },
+  {
+    "scenario": "S35i",
+    "check": "esc2.one_cancel_per_turn",
+    "passed": false,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35i",
+    "check": "esc2.draft_after_interrupt_matches_control",
+    "passed": true,
+    "detail": "{'menu_path': '/', 'control': 'lamp draft'}"
+  },
+  {
+    "scenario": "S35j",
+    "check": "esc2.control_interrupts",
+    "passed": true,
+    "detail": "{'presses': 1, 'draft': 'lamp draft'}"
+  },
+  {
+    "scenario": "S35j",
+    "check": "esc2.menu_open_during_turn",
+    "passed": true,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35j",
+    "check": "esc2.first_closes_menu",
+    "passed": false,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35j",
+    "check": "esc2.first_keeps_draft",
+    "passed": true,
+    "detail": "/"
+  },
+  {
+    "scenario": "S35j",
+    "check": "esc2.first_does_not_cancel",
+    "passed": true,
+    "detail": "{'cancels': 0, 'ticks': [14, 22]}"
+  },
+  {
+    "scenario": "S35j",
+    "check": "esc2.then_interrupts_like_a_plain_draft",
+    "passed": false,
+    "detail": "{'after_first': None, 'control': 1}"
+  },
+  {
+    "scenario": "S35j",
+    "check": "esc2.one_cancel_per_turn",
+    "passed": false,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35j",
+    "check": "esc2.draft_after_interrupt_matches_control",
+    "passed": true,
+    "detail": "{'menu_path': '/', 'control': 'lamp draft'}"
+  }
+]

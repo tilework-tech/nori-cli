@@ -1,0 +1,36 @@
+ Nori host  CONTROLLING
+ claude-code · hold the lamp · app · working
+
+ › You
+ hold the lamp
+
+ tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8
+
+ › You
+ hold the second lamp
+
+ tick 1 tick 2 tick 3 tick 4 tick 5 tick 6
+
+
+
+
+
+
+
+
+
+
+
+
+/
+
+  /agent            not available in nori attach yet
+  /model            not available in nori attach yet
+  /config           not available in nori attach yet
+  /approvals        not available in nori attach yet
+  /settings         not available in nori attach yet
+  /vim              not available in nori attach yet
+  /goal             not available on this host yet
+  /new              start a new chat during a conversation
+  /sessions         list sessions and move between them
+  /delegate         delegate a task: /delegate <agent> <task>

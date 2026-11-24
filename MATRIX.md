@@ -288,3 +288,13 @@ run 45379653626 (`verify/pr-750-32471d77-native-startup`, checkout pinned to `32
 | Linux A/B (local) | sleep, drain, human each 95/95 |
 | S33c–f, S34a–m, S36, S36b via tmux at `54b4ca5c` | 105/105 checks; 36/36 race trials delivered once |
 | Verdict | pass; the earlier user-impact claim is withdrawn for responsive terminals. See `results/54b4ca5c/VERDICT.md` |
+
+## #751 `5cb13fcd` (restack on #750 `54b4ca5c` plus the Escape fix), 2026-11-24
+
+| Check | Result |
+|---|---|
+| S35i/j: first Escape closes the menu and keeps `/`; the next Escape interrupts like a plain draft (in-run control: 1 press) | pass in plain and attach; `c31726f7` fails (menu stays open, no cancel after 3 more presses) |
+| S35a–j, S28a/b via tmux | 78/79 S35 (known `/review` plain gap) and S28 6/6; pre-fix 23/31 |
+| Native exact head (run 45406511352) | full suites pass; host suites plus `slash_menu_escape` × 10 rounds 200/200; `host_attach` is Linux-only |
+| Linux | CI 45399358573 passed; local 5 rounds × 27, all passing |
+| Verdict | pass. See `results/5cb13fcd/VERDICT.md` |
