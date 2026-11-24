@@ -716,6 +716,12 @@ trust_level = "trusted"
         self.emulator.screen_contents()
     }
 
+    /// Whether the TUI is drawing on the terminal's alternate screen, where
+    /// nothing it draws reaches the scrollback.
+    pub fn is_alternate_screen(&self) -> bool {
+        self.emulator.is_alternate_screen()
+    }
+
     /// Type a string
     pub fn send_str(&mut self, s: &str) -> std::io::Result<()> {
         self.writer.write_all(s.as_bytes())?;

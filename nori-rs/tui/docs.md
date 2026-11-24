@@ -737,6 +737,47 @@ set, so a one-off `-c` override never hides the question and is never saved.
 The step completes only after the question is answered or
 skipped. Directories that are already trusted never reach this step.
 
+#### Inline and full-screen view
+
+Plain `nori` and `nori-tui` start inline: finished history goes into the
+terminal's own scrollback above a bottom viewport. `/screen`
+([`screen_mode`](src/app/screen_mode.rs)) switches the same running app to a
+full-screen view on the alternate screen and back, as often as the user
+likes, even during a turn. It changes presentation only; the host, sessions,
+a streaming turn, the transcript, and the composer draft are untouched.
+`nori attach` is always full-screen, so its `/` menu greys `/screen`.
+
+- **Frame.** [`full_screen_frame`](src/app/full_screen_frame.rs) draws the
+  active session's transcript (the same rows inline mode prints)
+  bottom-anchored above the chat widget at its normal height, so the turn in
+  progress shows as it does inline. A session move shows the new session's
+  transcript at once. Rows are cached per cell: appends render only the new
+  cells; a width change or any other edit to `App::transcript_cells` (a
+  `TranscriptCells` whose generation moves on every non-append edit, see
+  [`transcript_cells`](src/app/transcript_cells.rs)) renders the tail again.
+  The view shows no truncation notice; it only shows the newest screenful.
+- **Scrolling.** The view itself does not scroll. The mouse wheel arrives as
+  Up/Down (alternate scroll mode), which recalls prompt history in the
+  composer; Ctrl+T opens the scrollable transcript over the view.
+- **Held history.** While full-screen, or while an overlay covers the
+  screen, history the inline view would print is held in `ScreenMode`.
+  Returning inline prints it once, in order, unless a resize reflow or a
+  session reprint is pending, which reprints the whole transcript instead.
+  Leaving the alternate screen leaves the earlier shell scrollback as it was.
+  On exit, any open overlay closes and the alternate screen is left however
+  deeply it is nested (`Tui::leave_alt_screen_entirely`), so the held
+  history and the exit message land in the scrollback.
+- **Nesting.** `Tui::enter_alt_screen` / `leave_alt_screen` nest
+  ([`alt_screen`](src/tui/alt_screen.rs)): only the outermost pair switches
+  the terminal and saves or restores the inline viewport. Closing the Ctrl+T
+  transcript or the diff pager over the full-screen view returns to it.
+  While on the alternate screen, a resize does not move the viewport to
+  follow the cursor.
+- **External programs.** `$EDITOR` (Ctrl+G) and the file browser run through
+  `Tui::run_external_program`. Such programs leave the alternate screen as
+  they exit, so when the TUI was on it, it switches back and redraws from
+  scratch. The panic hook also leaves the alternate screen.
+
 #### Inline transcript reflow
 
 In inline mode, terminal width changes rebuild the visible transcript at the

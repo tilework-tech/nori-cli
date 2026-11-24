@@ -79,7 +79,8 @@ impl Runtime {
             | SlashCommand::ApiKey
             | SlashCommand::SwitchSkillset
             | SlashCommand::Fork
-            | SlashCommand::Browser => {
+            | SlashCommand::Browser
+            | SlashCommand::Screen => {
                 // The availability table refuses these above.
                 self.composer.set_text(draft);
                 return true;
