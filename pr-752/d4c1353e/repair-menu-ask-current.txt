@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/project
+  Agent        Claude
+
+• Claude Code options: Model=Mock Default Model, Thought Level=Medium, Mode=default (/config to change)
+
+
+  Approvals for this session
+  New sessions start in the host default. The sandbox is set separately.
+
+  ▏1. Ask (current)                                                                                        ▕
+  ▏   Ask before every edit and command.                                                                   ▕
+   2. Agent
+      The agent asks when it judges it needs to.
+   3. Approve all
+      Nori approves every permission request.
+  ↑↓/j/k move  enter select  esc close
+
