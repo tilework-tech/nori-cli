@@ -1,7 +1,7 @@
 name: rust-ci
 on:
   push:
-    branches: ['verify/pr-750-54b4ca5c-native-drain']
+    branches: ['verify/pr-751-5cb13fcd-native-drain']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,10 +27,6 @@ jobs:
         include:
           - runner: blacksmith-6vcpu-macos-15
             target: aarch64-apple-darwin
-            name: macOS driver A-B
-            mode: ab
-          - runner: blacksmith-6vcpu-macos-15
-            target: aarch64-apple-darwin
             name: macOS exact head
             mode: exact
 
@@ -42,8 +38,8 @@ jobs:
 
       - name: Select sources
         run: |
-          if [ "${{ matrix.mode }}" = exact ]; then git checkout 54b4ca5c1 -- . && git diff --cached --stat HEAD; fi
-          git diff --stat 54b4ca5c1 -- . ':!.github'
+          if [ "${{ matrix.mode }}" = exact ]; then git fetch -q origin 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 && git checkout 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- nori-rs && git diff --cached --stat HEAD; fi
+          git diff --stat 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- nori-rs
           uname -sm
 
       - name: Free disk space
@@ -167,7 +163,7 @@ jobs:
           for p in tui-pty-e2e nori-harness nori-host-runtime nori-acp-host nori-config nori-tui nori-cli nori-auth-providers; do
             cargo test --profile ci-test --target ${{ matrix.target }} --package $p --no-fail-fast 2>&1 | tee $out/full-$p.txt | grep -E "^test result:" | sed "s/^/$p: /"
           done | tee $out/suites.txt
-          for r in $(seq 1 10); do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_startup --test host_new_session --test host_session_picker --test host_agent_switch 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $r: /"; done | tee $out/repeat.txt
+          for r in $(seq 1 10); do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_startup --test host_new_session --test host_session_picker --test host_agent_switch --test slash_menu_escape --test host_attach 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $r: /"; done | tee $out/repeat.txt
           echo "repeat: $(grep -c ' ok$' $out/repeat.txt) ok, $(grep -c FAILED $out/repeat.txt) failed" | tee -a $out/suites.txt
           ! grep -q FAILED $out/suites.txt $out/repeat.txt
       - name: Upload synthetic evidence
