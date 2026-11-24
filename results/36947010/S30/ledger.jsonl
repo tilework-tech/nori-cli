@@ -1,0 +1,16 @@
+{"t": 1795508852.1852896, "adapter": "codex", "pid": 77680, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S30/roots/beta/app", "argv": []}
+{"t": 1795508852.1854064, "adapter": "codex", "pid": 77680, "kind": "request", "method": "initialize"}
+{"t": 1795508852.186788, "adapter": "codex", "pid": 77680, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S30/roots/beta/app"}
+{"t": 1795508852.3769863, "adapter": "codex", "pid": 77680, "kind": "request", "method": "session/load", "cwd": "/tmp/nori-host-tui-acceptance/S30/roots/beta/app", "sessionId": "saved-orchard"}
+{"t": 1795508852.3828983, "adapter": "codex", "pid": 77680, "kind": "request", "method": "session/set_config_option", "sessionId": "saved-orchard", "configId": "mode", "value": "workspace-write"}
+{"t": 1795508852.430708, "adapter": "codex", "pid": 77680, "kind": "request", "method": "session/prompt", "sessionId": "saved-orchard", "text": "orchard check"}
+{"t": 1795508852.4310594, "adapter": "codex", "pid": 77680, "kind": "turn_end", "sessionId": "saved-orchard", "stopReason": "end_turn"}
+{"t": 1795508852.4914453, "adapter": "opencode", "pid": 77687, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S30/roots/beta/app", "argv": []}
+{"t": 1795508852.4915154, "adapter": "opencode", "pid": 77687, "kind": "request", "method": "initialize"}
+{"t": 1795508852.4923925, "adapter": "opencode", "pid": 77687, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S30/roots/beta/app"}
+{"t": 1795508852.6771772, "adapter": "opencode", "pid": 77687, "kind": "stdin_eof"}
+{"t": 1795508854.6993902, "adapter": "opencode", "pid": 77748, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S30/roots/beta/app", "argv": []}
+{"t": 1795508854.699456, "adapter": "opencode", "pid": 77748, "kind": "request", "method": "initialize"}
+{"t": 1795508854.700398, "adapter": "opencode", "pid": 77748, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S30/roots/beta/app"}
+{"t": 1795508854.8850975, "adapter": "opencode", "pid": 77748, "kind": "stdin_eof"}
+{"t": 1795508857.4057407, "adapter": "codex", "pid": 77680, "kind": "stdin_eof"}

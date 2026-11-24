@@ -1,0 +1,36 @@
+{"t": 1795508748.314247, "adapter": "claude-code", "pid": 75031, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S26b/roots/alpha/app", "argv": []}
+{"t": 1795508748.314328, "adapter": "claude-code", "pid": 75031, "kind": "request", "method": "initialize"}
+{"t": 1795508748.3153443, "adapter": "claude-code", "pid": 75031, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S26b/roots/alpha/app"}
+{"t": 1795508748.316577, "adapter": "claude-code", "pid": 75031, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance/S26b/roots/alpha/app"}
+{"t": 1795508749.5333717, "adapter": "claude-code", "pid": 75031, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nhold the lamp"}
+{"t": 1795508749.5339665, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 1}
+{"t": 1795508749.7341456, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 2}
+{"t": 1795508749.9343534, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 3}
+{"t": 1795508750.1345692, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 4}
+{"t": 1795508750.3347418, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 5}
+{"t": 1795508750.5349307, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 6}
+{"t": 1795508750.7351072, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 7}
+{"t": 1795508750.9353018, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 8}
+{"t": 1795508751.1355011, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 9}
+{"t": 1795508751.3356702, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 10}
+{"t": 1795508751.5358396, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 11}
+{"t": 1795508751.7360003, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 12}
+{"t": 1795508751.9361694, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 13}
+{"t": 1795508752.1363516, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 14}
+{"t": 1795508752.3365293, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 15}
+{"t": 1795508752.5366654, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 16}
+{"t": 1795508752.7368226, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 17}
+{"t": 1795508752.9369946, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 18}
+{"t": 1795508753.137152, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 19}
+{"t": 1795508753.3373168, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 20}
+{"t": 1795508753.5374951, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 21}
+{"t": 1795508753.7376485, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 22}
+{"t": 1795508753.9378262, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 23}
+{"t": 1795508754.138013, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 24}
+{"t": 1795508754.3381922, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 25}
+{"t": 1795508754.5383906, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 26}
+{"t": 1795508754.7385397, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 27}
+{"t": 1795508754.9386914, "adapter": "claude-code", "pid": 75031, "kind": "tick", "sessionId": "claude-code-0", "n": 28}
+{"t": 1795508755.0055609, "adapter": "claude-code", "pid": 75031, "kind": "request", "method": "session/cancel", "sessionId": "claude-code-0"}
+{"t": 1795508755.1388123, "adapter": "claude-code", "pid": 75031, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "cancelled", "ticks": 28}
+{"t": 1795508759.2859297, "adapter": "claude-code", "pid": 75031, "kind": "stdin_eof"}

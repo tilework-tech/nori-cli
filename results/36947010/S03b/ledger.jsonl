@@ -1,0 +1,23 @@
+{"t": 1795508345.6330266, "adapter": "claude-code", "pid": 56352, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S03b/roots/alpha/app", "argv": []}
+{"t": 1795508345.6331112, "adapter": "claude-code", "pid": 56352, "kind": "request", "method": "initialize"}
+{"t": 1795508345.6343873, "adapter": "claude-code", "pid": 56352, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S03b/roots/alpha/app"}
+{"t": 1795508345.6352806, "adapter": "claude-code", "pid": 56352, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance/S03b/roots/alpha/app"}
+{"t": 1795508345.6395967, "adapter": "claude-code", "pid": 56352, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795508347.404017, "adapter": "claude-code", "pid": 56352, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "hold the lamp"}
+{"t": 1795508347.4054224, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 1}
+{"t": 1795508347.6055894, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 2}
+{"t": 1795508347.8057299, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 3}
+{"t": 1795508348.005915, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 4}
+{"t": 1795508348.2061138, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 5}
+{"t": 1795508348.4062672, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 6}
+{"t": 1795508348.606493, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 7}
+{"t": 1795508348.8067148, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 8}
+{"t": 1795508349.0068815, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 9}
+{"t": 1795508349.2070541, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 10}
+{"t": 1795508349.407238, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 11}
+{"t": 1795508349.6074271, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 12}
+{"t": 1795508349.807615, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 13}
+{"t": 1795508350.0078025, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 14}
+{"t": 1795508350.2079685, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 15}
+{"t": 1795508350.4081414, "adapter": "claude-code", "pid": 56352, "kind": "tick", "sessionId": "claude-code-0", "n": 16}
+{"t": 1795508350.5408196, "adapter": "claude-code", "pid": 56352, "kind": "stdin_eof"}

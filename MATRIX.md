@@ -197,6 +197,10 @@ landed inside it, so the race is exercised on every run instead of depending on 
 | Refused `/close` shown once (attach) | S29b close_refusal.shown_once | screen | FAIL (three lines) | pass |
 | Two attached terminals, controller's `/close` refused: one `session/close` and one refusal at the adapter; controller shows it once, watcher at most once; session keeps answering in both | S29c close_refusal2.* | adapter, wire, screen | FAIL (controller three lines) | pass |
 
+Full matrix at `36947010`: 322/369. Against `c94867b1`, S29b and S29c now pass and no other check changed;
+the remaining S33 failures are `/new` features that arrive in #749. Linux CI and exact-commit native macOS
+(`verify/pr-746-36947010-native-host`) passed.
+
 Observation, not a finding: the watcher shows the adapter's bare stream error (`close declined by …`) without the
 `Failed to close the session:` prefix, because only the terminal that sent the close knows it is a close refusal.
 

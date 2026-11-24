@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance/S31d/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hello lantern
+
+
+• claude-code heard: hello lantern
+
+■ Failed to resume ACP session: Failed to load ACP session
+
+                                                                                                                [ auto ]
+› ! for shell commands
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

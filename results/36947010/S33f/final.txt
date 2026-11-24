@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+■ ACP agent did not respond
+
+■ no fresh lantern is available from claude-code
+
+■ Could not submit “early lantern word”: Failed to start ACP session: Failed to create ACP session
+
+  1 failed · 1 ready
+
+
+› ? for shortcuts
+
