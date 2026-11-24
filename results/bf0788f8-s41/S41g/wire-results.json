@@ -101,7 +101,7 @@
     "jsonrpc": "2.0",
     "id": 7,
     "result": {
-      "session_id": "71b47cf8-fe62-4ee9-b202-5b5a6ef5647b",
+      "session_id": "3a342e2f-2ed1-47f2-bf85-4766fc47899e",
       "cwd": "/tmp/nori-host-tui-acceptance-a/S41g/homes/host/spool/app"
     }
   },
@@ -117,7 +117,7 @@
     "jsonrpc": "2.0",
     "id": 9,
     "result": {
-      "session_id": "cbed4ef3-ef38-42ad-b1a9-40d0ec8b3ee5",
+      "session_id": "120598db-1806-4d0e-84e9-e8fde48977f2",
       "cwd": "/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app/docs"
     }
   },
@@ -173,6 +173,46 @@
           ]
         }
       ]
+    }
+  },
+  "git_skipped": {
+    "jsonrpc": "2.0",
+    "id": 13,
+    "result": {
+      "root": "/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app",
+      "matches": []
+    }
+  },
+  "folders_l": {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "result": {
+      "root": "/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app",
+      "matches": [
+        {
+          "path": "lantern_plain/"
+        }
+      ]
+    }
+  },
+  "folders_dot": {
+    "jsonrpc": "2.0",
+    "id": 15,
+    "result": {
+      "root": "/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app",
+      "matches": [
+        {
+          "path": ".lantern_hidden/"
+        }
+      ]
+    }
+  },
+  "malformed_kind": {
+    "jsonrpc": "2.0",
+    "id": 16,
+    "error": {
+      "code": -32602,
+      "message": "unknown variant `everything`, expected `files` or `folders`"
     }
   }
 }

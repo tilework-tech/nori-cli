@@ -364,11 +364,11 @@ folder limit constant; mixed-version lanes ran at `29e18411`.
 | S41c attach `--host`, no session: `@`, Tab, `./x` from host folder | 0/4 | 4/4 |
 | S41d plain: `/new ~/…`, Tab (`~`, `./`), after Alt+, | 0/6 | 6/6 |
 | S41e plain, no session: launch folder | 2/3 | 3/3 |
-| S41g wire: `find_paths`, `_nori/session/new` | 1/14 (no method) | 13/14: registry `session_id` refused (`sessionId` on wire) |
+| S41g wire: `find_paths`, `_nori/session/new` | 1/14 (no method) | 18/18 against #278 `c62bcc22` (`a0d3ba51` documented `session_id`, which the host refuses) |
 | S41f older host `d4c1353e` ← new client | — | 7/7 (local completion, `~` local, prompt delivered) |
 | S41f new host ← older client `d4c1353e` | — | 7/7 |
 | S38a–c mixed, all three directions | — | 24/24 each |
 | Full matrix | 511/531 | 519/533, no regressions, 6 newly passing (S06, S07, S33a/b) |
 | Linux PTY repeat (`host_attach`, `host_file_mentions`, `host_new_session`, `host_approvals`) | — | 130/130 over 5 rounds; `host_lifecycle` 137 passed |
 | macOS load loop (run 45445353172, `host_attach` ungated) | — | all #753 tests 10/10; inherited 0/10, 0/10, 5/10 |
-| Verdict | — | pass with one registry fix. See `results/bf0788f8/VERDICT.md` |
+| Verdict | — | pass (CLI `bf0788f8`, registry `c62bcc22`). See `results/bf0788f8/VERDICT.md` |

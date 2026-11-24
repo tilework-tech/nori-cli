@@ -1,13 +1,13 @@
-# #753 `bf0788f8` (registry: nori-monorepo #278 `a0d3ba51`) — independent verdict
+# #753 `bf0788f8` (registry: nori-monorepo #278 `c62bcc22`) — independent verdict
 
-**Pass for the CLI. One registry fix needed in nori-monorepo #278.**
+**Pass for CLI #753 `bf0788f8` and registry #278 `c62bcc22`.**
 
 Tested heads: CLI #753 `bf0788f89a2d7ff89ebfd2ed04f588052ce14f29` on #752
 `d4c1353e39d889645bdd7eab943ae1e116c60e1f`; first pass at `29e18411` (same
 behaviour; `bf0788f8` only changes the folder-limit constant from `usize` to `i32`).
 
-## Finding (registry, #278)
-The `_nori/session/find_paths` row gives params as `{session_id?, query, kind, limit?}`.
+## Registry (#278)
+At `a0d3ba51` the `_nori/session/find_paths` row gave params as `{session_id?, query, kind, limit?}`.
 The host takes `sessionId` (`FindPathsParams` is `camelCase` with `deny_unknown_fields`;
 the schema, TypeScript and `docs/remote-control.md` agree). With the registry's spelling
 the host answers `-32602 unknown field session_id, expected one of sessionId, query, kind, limit`
@@ -18,8 +18,14 @@ limit 0 is clamped to 1 and 100 is accepted, an unknown session gives `-32602`, 
 may call it, and the capability is advertised. `_nori/session/new` resolves `~/x` with the
 host home and `docs` against the host folder; `~nobody/x` is refused (`-32000`).
 
+The implementer independently respelled the row at `c62bcc22` (`sessionId`, camelCase,
+unknown fields refused) and added detail. Each added claim was checked on the wire at
+`bf0788f8`: `session_id` refused with `-32602`, `.git` skipped, dot-folders only when the
+typed name starts with `.`, folder names with whitespace skipped, malformed `kind` gives
+`-32602`. The client column is accurate (`app/file_mentions.rs` sends through `HostFileSearch`).
+
 ## Real-terminal results (Linux, tmux, synthetic agent servers)
-See `MATRIX.md`, section #753. S41: 44/45 at `bf0788f8` against 8/45 at `d4c1353e`.
+See `MATRIX.md`, section #753. S41: 49/49 at `bf0788f8` (S41g extended for `c62bcc22`) against 8/45 at `d4c1353e`.
 
 ## Inherited, not caused by #753
 - macOS `host_attach` (ungated, parallel load, 10 rounds): busy Enter fallback 0/10,

@@ -231,7 +231,7 @@
     "scenario": "S41g",
     "check": "g.new_tilde_host_home",
     "passed": true,
-    "detail": "{'jsonrpc': '2.0', 'id': 7, 'result': {'session_id': '71b47cf8-fe62-4ee9-b202-5b5a6ef5647b', 'cwd': '/tmp/nori-host-tui-acceptance-a/S41g/homes/host/spool/app'}}"
+    "detail": "{'jsonrpc': '2.0', 'id': 7, 'result': {'session_id': '3a342e2f-2ed1-47f2-bf85-4766fc47899e', 'cwd': '/tmp/nori-host-tui-acceptance-a/S41g/homes/host/spool/app'}}"
   },
   {
     "scenario": "S41g",
@@ -243,7 +243,7 @@
     "scenario": "S41g",
     "check": "g.new_relative_host_folder",
     "passed": true,
-    "detail": "{'jsonrpc': '2.0', 'id': 9, 'result': {'session_id': 'cbed4ef3-ef38-42ad-b1a9-40d0ec8b3ee5', 'cwd': '/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app/docs'}}"
+    "detail": "{'jsonrpc': '2.0', 'id': 9, 'result': {'session_id': '120598db-1806-4d0e-84e9-e8fde48977f2', 'cwd': '/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app/docs'}}"
   },
   {
     "scenario": "S41g",
@@ -253,8 +253,8 @@
   },
   {
     "scenario": "S41g",
-    "check": "g.registry_spelling_session_id_accepted",
-    "passed": false,
+    "check": "g.snake_session_id_refused",
+    "passed": true,
     "detail": "{'jsonrpc': '2.0', 'id': 11, 'error': {'code': -32602, 'message': 'unknown field `session_id`, expected one of `sessionId`, `query`, `kind`, `limit`'}}"
   },
   {
@@ -268,5 +268,29 @@
     "check": "g.watcher_allowed",
     "passed": true,
     "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {'root': '/tmp/nori-host-tui-acceptance-a/S41g/homes/host/spool/app', 'matches': [{'path': 'src/spool_thread.rs', 'indices': [4, 5, 6, 7, 8]}]}}"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g2.git_skipped",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 13, 'result': {'root': '/tmp/nori-host-tui-acceptance-a/S41g/roots/alpha/app', 'matches': []}}"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g2.whitespace_folder_skipped_dot_hidden",
+    "passed": true,
+    "detail": "['lantern_plain/']"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g2.dot_folder_when_typed",
+    "passed": true,
+    "detail": "['.lantern_hidden/']"
+  },
+  {
+    "scenario": "S41g",
+    "check": "g2.malformed_32602",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 16, 'error': {'code': -32602, 'message': 'unknown variant `everything`, expected `files` or `folders`'}}"
   }
 ]
