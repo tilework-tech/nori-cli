@@ -33,14 +33,34 @@ fn startup_activates_its_session_through_the_owned_host() {
     let (home, mut tui) = launch(&[], &[]);
     started_through_the_host(&tui);
     ask(&mut tui, "whoami");
-    if let Err(error) = tui.wait_for_text("amber is answering (1).", TIMEOUT) {
-        for entry in std::fs::read_dir(home.path().join("log")).unwrap().flatten() {
+    if let Err(error) = tui
+        .wait_for_text("amber is answering (1).", TIMEOUT)
+        .and_then(|_| {
+            if std::env::var("DBG_FORCE").is_ok() {
+                Err("forced".into())
+            } else {
+                Ok(())
+            }
+        })
+    {
+        for entry in std::fs::read_dir(home.path().join("log"))
+            .unwrap()
+            .flatten()
+        {
             let text = std::fs::read_to_string(entry.path()).unwrap_or_default();
-            for line in text.lines().filter(|l| l.contains("DBG") || l.contains("ERROR") || l.contains("WARN") || l.contains("prompt")) {
+            for line in text.lines().filter(|l| {
+                l.contains("DBG")
+                    || l.contains("ERROR")
+                    || l.contains("WARN")
+                    || l.contains("prompt")
+            }) {
                 eprintln!("DBGLOG {:?}: {line}", entry.file_name());
             }
         }
-        eprintln!("DBGTRACE {:?}", std::fs::read_to_string(home.path().join("fixture-traffic-amber")));
+        eprintln!(
+            "DBGTRACE {:?}",
+            std::fs::read_to_string(home.path().join("fixture-traffic-amber"))
+        );
         panic!("{error}");
     }
     assert_eq!(

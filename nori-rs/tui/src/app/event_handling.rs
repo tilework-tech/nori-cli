@@ -684,7 +684,11 @@ impl App {
                         };
                         let (initial_prompt, initial_images) =
                             self.chat_widget.take_initial_input();
-                        tracing::info!(?initial_prompt, ?purpose, "DBG candidate SessionStarted install");
+                        tracing::info!(
+                            ?initial_prompt,
+                            ?purpose,
+                            "DBG candidate SessionStarted install"
+                        );
                         let carried = purpose.starts_new().then(|| {
                             (
                                 self.chat_widget.take_composer_draft(),
