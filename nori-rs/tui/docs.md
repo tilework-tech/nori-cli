@@ -1607,6 +1607,18 @@ dropped, and the zero-width joiner stays so emoji sequences survive. Renames
 rewrite the title at once; a parked session never writes it, and the session
 brought on screen writes its own.
 
+The [program status](src/program_status.rs) (OSC 7501, the
+[Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status))
+tells the terminal what the active session is doing, as one root record with
+`app=nori`. A pending approval reports `blocked` with `kind=permission` and the
+approval title as its message, a running turn reports `working`, and otherwise
+the way the last turn ended decides: `done` after a clean end, `error` after a
+failure, `idle` after a cancel or before the first turn. The status is derived
+whenever the title refreshes and before each frame, and written only when it
+changes. A parked session never writes it, the session brought on screen
+writes its own, and the widget clears every record when it is dropped.
+Terminals that do not know the sequence ignore it.
+
 Custom formats are deliberately limited to literal text and built-in
 placeholders. `{{` and `}}` emit literal braces. Unknown placeholders,
 unbalanced braces, expressions, conditions, and format specifiers are rejected

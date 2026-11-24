@@ -54,6 +54,11 @@ pub(crate) trait BottomPaneView: Renderable {
         Some(request)
     }
 
+    /// Title of the approval this view is waiting on, if any.
+    fn pending_approval_title(&self) -> Option<&str> {
+        None
+    }
+
     /// Stop asking for a request that was answered elsewhere. Returns true
     /// when this view held it.
     fn dismiss_request(&mut self, _request_id: &nori_protocol::acp::v1::RequestId) -> bool {

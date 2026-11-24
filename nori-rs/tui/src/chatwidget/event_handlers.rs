@@ -190,6 +190,7 @@ impl ChatWidget {
         if self.proactive_turn_active {
             self.record_proactive_assistant_message();
             self.proactive_turn_active = false;
+            self.turn_end_status = crate::program_status::ProgramStatus::Done;
             self.finish_task_presentation(None, true);
         }
     }
@@ -1081,6 +1082,13 @@ impl ChatWidget {
             self.session_stats.record_assistant_message();
         }
         self.assistant_stream_seen_for_stats = false;
+        self.turn_end_status = if interrupted {
+            crate::program_status::ProgramStatus::Idle
+        } else if completed.failure.is_some() {
+            crate::program_status::ProgramStatus::Error
+        } else {
+            crate::program_status::ProgramStatus::Done
+        };
         self.on_task_complete(completed.last_agent_message);
         if interrupted {
             self.add_to_history(history_cell::new_error_event(

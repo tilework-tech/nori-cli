@@ -269,6 +269,15 @@ impl BottomPaneView for ApprovalOverlay {
         self.dismiss(request_id)
     }
 
+    fn pending_approval_title(&self) -> Option<&str> {
+        if self.done || self.current_complete {
+            return None;
+        }
+        self.current_request
+            .as_ref()
+            .map(|request| request.title.as_str())
+    }
+
     fn try_consume_approval_request(
         &mut self,
         request: ApprovalRequest,

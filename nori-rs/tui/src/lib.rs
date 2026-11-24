@@ -88,6 +88,7 @@ pub mod storybook;
 mod streaming;
 mod style;
 pub use style::session_list_shade;
+mod program_status;
 mod system_info;
 mod terminal_palette;
 mod terminal_title;

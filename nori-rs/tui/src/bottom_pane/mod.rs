@@ -203,6 +203,15 @@ impl BottomPane {
         !self.view_stack.is_empty()
     }
 
+    /// Title of the approval the user is asked for, from the topmost view
+    /// that waits on one.
+    pub(crate) fn pending_approval_title(&self) -> Option<&str> {
+        self.view_stack
+            .iter()
+            .rev()
+            .find_map(|view| view.pending_approval_title())
+    }
+
     pub(crate) fn view_captures_all_keys(&self) -> bool {
         self.view_stack
             .last()

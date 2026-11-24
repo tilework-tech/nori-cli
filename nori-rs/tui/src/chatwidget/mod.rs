@@ -70,6 +70,7 @@ mod helpers;
 mod key_handling;
 mod login;
 mod pickers;
+mod program_status;
 mod queue_list;
 mod queue_recall;
 mod session_close;
@@ -274,6 +275,11 @@ pub(crate) struct ChatWidget {
     terminal_title_animation_origin: Instant,
     // Terminal title state: cache to avoid redundant OSC writes.
     last_terminal_title: Option<String>,
+    /// Status reported once no turn is running: done, error, or idle after a
+    /// cancel. See `program_status`.
+    turn_end_status: crate::program_status::ProgramStatus,
+    /// Last OSC 7501 status written, to skip redundant writes.
+    last_program_status: Option<crate::program_status::ProgramStatus>,
     /// False while the session is parked behind another one. A parked
     /// session never writes the terminal title.
     foreground: bool,
@@ -327,6 +333,11 @@ impl Drop for ChatWidget {
             && let Err(err) = self.clear_managed_terminal_title()
         {
             tracing::debug!(error = %err, "failed to clear terminal title on drop");
+        }
+        if self.foreground
+            && let Err(err) = crate::program_status::clear_program_status()
+        {
+            tracing::debug!(error = %err, "failed to clear program status on drop");
         }
     }
 }
