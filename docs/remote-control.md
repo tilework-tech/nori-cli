@@ -674,9 +674,9 @@ To abandon the selection, send `_nori/host/discard_agent` with `{id}`.
 Preparing another agent or disconnecting also retires the unused selection.
 An adapter error during preparation is returned to the scoped list or
 activation request. Keep the foreground session until activation succeeds.
-The terminal picker still uses its existing preparation path. Its UI handoff
-is to route selection and activation through these requests and retain the
-ordinary host session list for live conversations.
+The foreground terminal's `/agent` switch uses these requests on the pipe to
+the host it owns. Its other pickers (startup, after `/close`, `/resume`) still
+prepare the agent in-process.
 
 ### Stdio transport
 

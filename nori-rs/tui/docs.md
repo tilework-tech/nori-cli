@@ -773,9 +773,10 @@ remains on its sessionless `/resume` or `/new` retry flow.
 
 `App` uses the session manager of the host it owns (see
 [Owned host](#owned-host)) and hands clones to every `ChatWidget` through
-`ChatWidgetInit`. `chatwidget/agent.rs` starts every
-session — new, resumed, from a prepared connection, and the hidden `/agent`
-switch candidate — through the manager. Sessions are user-sourced except a
+`ChatWidgetInit`. `chatwidget/agent.rs` starts every new, resumed, or
+prepared-connection session through the manager; the hidden `/agent` switch
+candidate is instead started by the owned host itself (see the agent-switch
+flow below) and lands in the same manager. Sessions are user-sourced except a
 fork to an earlier message (`/fork` rewind or Esc-Esc backtrack fork): `App`
 passes a `ForkOrigin` (fork context plus the current widget's managed
 conversation ID) into preparation, the preparation task tags the
@@ -794,9 +795,10 @@ through `BottomPane::dismiss_request`: every open view gets
 `BottomPaneView::dismiss_request`, and `ApprovalOverlay` drops the matching
 request from its current slot or queue, so an approval answered through
 another handle closes the TUI modal too. Views that hold no requests
-keep the default no-op. The `/agent` candidate's process is an
-ordinary manager session; `CandidateAgent` holds only UI flow state (picker,
-preparation, activation capture). The pre-session `PreparedAgent` that `App`
+keep the default no-op. The `/agent` candidate's ACP server belongs to the
+host's picker connection until activation and becomes an ordinary manager
+session afterwards; `CandidateAgent` holds only the host selection ID and UI
+flow state (picker, pending request, activation capture). The pre-session `PreparedAgent` that `App`
 keeps is held outside the manager until a session consumes it.
 
 Cloud startup and agent-switch candidates keep deferred activation as an
@@ -883,37 +885,67 @@ ownership rules live in
 
 An `AgentPrepared` result is accepted only when its generation still matches
 the owned preparation; a late successful result is explicitly shut down.
-Primary and switch-candidate preparation both use the same 20-second
-wall-clock bound in [`session_setup.rs`](src/app/session_setup.rs). Close,
+Primary preparation uses a 20-second wall-clock bound in
+[`session_setup.rs`](src/app/session_setup.rs); the host applies the same bound
+to a switch candidate's preparation in
+[`picker.rs`](../host-runtime/src/host/acp/picker.rs). Close,
 cancellation, timeout, and exit invalidate preparation and reap its subprocess.
 Together these rules keep a cancelled or hung initialize/list task from
 repopulating the picker, leaking its child, or displacing a usable session.
 
-Candidate state retains the candidate identity and opaque prepared connection;
-it does not separately snapshot the full `NoriConfig`. When the user chooses
-New or Resume, the TUI derives activation config from the latest `App` config
-and asks the harness to refresh the prepared agent. Session-time settings
-therefore include changes made while the picker was open. Agent identity,
-working directory, ACP proxy/wire-recording settings, and the resolved default
-model must still match preparation because they determine the existing process
-or transport; a mismatch tears down the candidate and asks the user to retry
-the switch. On `SessionStarted`, only the active-agent identity is committed
-into `App`, so other current settings are never overwritten by candidate-era
-state.
+Agent switching is transactional and runs through the host the App owns.
+Selecting an `/agent` row never changes the active `ChatWidget`; the private
+`CandidateAgent` state in [`host_candidate.rs`](src/app/host_candidate.rs)
+tracks each phase, and every host call goes over the in-process pipe through
+the [host session client](src/host_client/docs.md):
 
-Agent switching is transactional. Selecting an `/agent` row immediately starts
-a live candidate without changing the active `ChatWidget`; the private
-`CandidateAgent` state records preparation, picker-ready, and activation
-phases. The current and candidate subprocesses coexist while the candidate
-initializes and while its session picker is open. Choosing a session activates
-the candidate in a separate widget, and `SessionStarted` is the commit event:
-only then does `App` swap widgets, persist the selected agent, and park the
-replaced session. Until that event, positional or deferred input remains owned
-by the current widget; after commit it transfers to the candidate and is
-submitted once. Preparation failure, activation failure, picker dismissal,
-supersession, or application exit tears down only the candidate and leaves the
-current session promptable. Prompt submission always targets the current
-widget; there is no pending switch-on-next-prompt state.
+```text
+/agent row ──▶ Preparing ── _nori/host/prepare_agent {agent, cwd}
+                  │         session/list  _meta["nori/preparedAgent"].id
+                  ▼
+               Prepared ── adapter's saved sessions in the ACP resume picker
+                  │  pick (new or saved row)        dismiss ─▶ _nori/host/discard_agent
+                  ▼
+               Requested ─ session/new _meta["nori/preparedAgent"] {id, savedSessionId?}
+                  │  host replies with a live host conversation ID
+                  ▼
+               Activating ─ ChatWidget::from_host_activation follows that conversation
+                  │  SessionStarted
+                  ▼
+               commit: swap widgets, persist agent, park the replaced session
+```
+
+- The picker lists only the prepared adapter's own saved sessions; host
+  conversations are not mixed in. Saved-session IDs belong to the adapter and
+  travel as `savedSessionId`.
+- The request carries the agent slug and the cwd from `config_for_agent`. The
+  host resolves the session folder, builds the process config for it (agent,
+  folder, its default mode), and returns the folder, which the later list and
+  activation calls reuse. The candidate widget is built from the App's latest
+  config at activation, and `SessionStarted` commits only the active-agent
+  identity into `App`, so other current settings are never overwritten.
+- The widget subscribes to the session manager's journal from the start of the
+  new conversation, not from its tail, so history the adapter replayed
+  (`session/load`) before the host's reply still renders. It carries the saved
+  row's ACP session ID and title when restoring.
+- Promotion uses the existing `Activating` path: the current and candidate
+  sessions coexist, and until `SessionStarted` positional or deferred input
+  stays with the current widget; after commit it transfers and is submitted
+  once. Prompt submission always targets the current widget; there is no
+  pending switch-on-next-prompt state.
+- Each reply is matched against the current candidate by generation. A
+  preparation reply that arrives after the candidate changed discards its
+  selection; a late activation reply closes the conversation it started.
+  Discarding a candidate still `Preparing` or `Requested` sends nothing and
+  relies on that late-reply rule. A list failure discards the selection, and a
+  refused activation also discards it in case the host had not consumed it.
+- Failures leave the current session promptable: preparation shows
+  "Couldn't prepare <Agent>: …", a refused activation shows
+  "Couldn't activate <Agent>: …" with the host error (including the adapter's
+  message), and a failed journal subscription closes the new conversation.
+- Only `/agent` switching uses the host. Picker-first primary startup, the
+  post-`/close` picker, `/resume`, and `/new` still prepare in-process through
+  `AgentPrepared` and [`session_setup.rs`](src/app/session_setup.rs).
 
 Candidate activation classifies hidden candidate events in
 [`App`](src/app/event_handling.rs) before they reach the candidate widget. An
@@ -1536,7 +1568,8 @@ App::run
   goals, custom prompts, `/context`, queue reclaim) work through the host's
   manager on the same sessions. The pipe carries permission answers, idle-only
   composer submissions, turn-scoped follow-ups and interrupts for observed
-  agent-started turns. Startup and programmatic prompts keep their existing
+  agent-started turns, and `/agent` candidate preparation, listing,
+  activation, and discard. Startup and programmatic prompts keep their existing
   queue-on-busy admission. The widget receives the result of its own request.
 - Only the CLI's foreground launcher builds an `OwnedHost`, so the
   [attach frontend](src/attach/docs.md) never holds the in-process half.

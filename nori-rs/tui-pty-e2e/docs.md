@@ -69,7 +69,13 @@ list/resume/close/detach; transcript persistence and view-only selection; MCP an
 between streaming text and tool updates. Agent-switch coverage observes real
 child PIDs to prove that the current and prepared candidate coexist, activation
 reuses the prepared child, and cancellation or activation failure leaves the
-current session usable.
+current session usable. [Host agent-switch scenarios](tests/host_agent_switch.rs)
+drive `/agent` through the owned host with the
+[standard ACP fixture](../cli/tests/standard_acp/fixture.py), whose per-agent
+`fixture-traffic-<slug>` gate files trace each child's PID and methods. They
+check that a saved session of the selected agent is restored, and that
+dismissing the picker or a refused restore (`fixture-refuse-load`) keeps the
+current session.
 
 [Context scenarios](tests/context.rs) drive `/context` before, between, and
 during actual prompts using the mock agent's
