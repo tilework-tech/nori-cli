@@ -247,6 +247,21 @@ impl SessionManager {
         )
     }
 
+    /// Follow `session` from its first entry and every other conversation
+    /// from now on, so a fork of `session`, which continues under a new
+    /// conversation, is followed too. One lock covers both, so no
+    /// conversation registered meanwhile is replayed from its start.
+    pub fn subscribe_following(
+        &self,
+        session: ConversationId,
+        capacity: i32,
+    ) -> Result<nori_acp_host::remote::ManagedSubscription, ReplayError> {
+        let mut state = self.shared.state();
+        let mut cursors = state.journal.cursors();
+        cursors.remove(&session.to_string());
+        state.journal.subscribe_from(None, &cursors, capacity)
+    }
+
     /// Current cursors include ended conversations whose events remain replayable.
     pub fn replay_cursors(&self) -> HashMap<String, i64> {
         self.shared.state().journal.cursors()

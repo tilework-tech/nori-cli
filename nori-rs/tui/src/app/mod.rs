@@ -220,10 +220,7 @@ enum CandidateAgent {
         activation_error: Option<String>,
         /// The candidate resumes an existing session and replays its history.
         resumes: bool,
-        /// The candidate moves to another agent, which the screen announces.
-        announce_agent: bool,
-        /// `/new`: the composer draft and loop state move to the new session.
-        carries_draft: bool,
+        purpose: host_candidate::PickerPurpose,
     },
 }
 
@@ -359,12 +356,7 @@ impl App {
                     });
                     ChatWidget::new(init)
                 }
-                ResumeSelection::StartFresh | ResumeSelection::Exit => {
-                    if !cloud_mode && (initial_prompt.is_some() || !initial_images.is_empty()) {
-                        pending_session_activation = Some(PendingSessionActivation::New);
-                    }
-                    ChatWidget::new(init)
-                }
+                ResumeSelection::StartFresh | ResumeSelection::Exit => ChatWidget::new(init),
             }
         };
 
@@ -460,9 +452,8 @@ impl App {
         // that has not been prompted yet still says where it is running and
         // which agent it will run. Two entries opt out. A cloud session's card
         // names the broker session, which it only learns once attached. And a
-        // pending activation — an initial prompt, or a resume — replaces this
-        // widget before the user can read anything, so its card belongs to the
-        // widget that takes over.
+        // pending resume replaces this widget before the user can read
+        // anything, so its card belongs to the widget that takes over.
         if !cloud_mode && app.pending_session_activation.is_none() {
             app.chat_widget.emit_welcome_card();
             app.welcome_card_written = true;
@@ -475,9 +466,18 @@ impl App {
         // session.
         if skillset_per_session {
             app.chat_widget.handle_switch_skillset_command();
+        } else if !cloud_mode && app.pending_session_activation.is_none() {
+            // Plain local startup activates the session on its own so
+            // session-scoped features (model/config pickers, prompt history)
+            // work before the first prompt. The host this terminal owns
+            // prepares the agent and starts the session; a positional prompt
+            // waits in the composer's held input for it. The welcome card
+            // above already ran, so it still shows meanwhile.
+            app.begin_host_startup();
         } else if app.pending_session_activation.is_some() {
             app.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
-        } else if cloud_mode {
+        } else {
+            debug_assert!(cloud_mode);
             if cloud_onboard {
                 app.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Onboarding);
             } else {
@@ -487,13 +487,6 @@ impl App {
                     fallback_to_spawn: true,
                 });
             }
-        } else {
-            // Plain local startup activates the session on its own so
-            // session-scoped features (model/config pickers, prompt history)
-            // work before the first prompt. The welcome card above already ran,
-            // so it still shows while the agent resolves its configuration.
-            app.pending_session_activation = Some(PendingSessionActivation::New);
-            app.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
         }
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.

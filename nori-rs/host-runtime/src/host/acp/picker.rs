@@ -168,7 +168,9 @@ impl HostService {
             .iter()
             .any(|a| a.agent_name == agent)
         {
-            return Err(AcpError::invalid_params(format!("unknown agent {agent}")));
+            return Err(AcpError::invalid_params(format!(
+                "Unknown ACP agent: {agent}"
+            )));
         }
         config.active_agent.clone_from(&agent);
         config.cwd.clone_from(&folder);

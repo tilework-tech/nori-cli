@@ -12,6 +12,15 @@ use tui_pty_e2e::TuiSession;
 pub const PAUSE: Duration = Duration::from_millis(900);
 
 pub fn terminal(gates: &[&str]) -> (tempfile::TempDir, TuiSession) {
+    let (home, mut tui) = launch(gates, &[]);
+    ask(&mut tui, "whoami");
+    tui.wait_for_text("amber is answering (1).", TIMEOUT)
+        .unwrap();
+    (home, tui)
+}
+
+/// Plain `nori` with `args` after it, once its composer is on screen.
+pub fn launch(gates: &[&str], args: &[&str]) -> (tempfile::TempDir, TuiSession) {
     let home = tempfile::tempdir().unwrap();
     let folder = home.path().canonicalize().unwrap();
     for gate in ["fixture-traffic-amber", "fixture-traffic-birch"]
@@ -44,16 +53,53 @@ args = [{script:?}, "{slug}", {folder:?}]
         ),
     )
     .unwrap();
-    let config = SessionConfig::new()
+    let mut config = SessionConfig::new()
         .with_agent("amber".into())
         .with_cwd(&folder)
         .with_nori_home(&folder);
+    for arg in args {
+        config = config.with_arg(*arg);
+    }
     let mut tui = TuiSession::spawn_with_config(30, 110, config).unwrap();
     tui.wait_for_text("›", TIMEOUT).unwrap();
-    ask(&mut tui, "whoami");
-    tui.wait_for_text("amber is answering (1).", TIMEOUT)
-        .unwrap();
     (home, tui)
+}
+
+/// The ACP methods the owned host received from this terminal, in order.
+pub fn host_requests(tui: &TuiSession) -> Vec<String> {
+    let Some(path) = tui.acp_log_path() else {
+        return Vec::new();
+    };
+    fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter(|line| line.contains("host ACP request"))
+        .filter_map(|line| line.split(" method=").nth(1))
+        .map(|method| {
+            method
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .to_string()
+        })
+        .collect()
+}
+
+/// Wait until the owned host has received `method`.
+pub fn wait_for_host_request(tui: &TuiSession, method: &str) -> Vec<String> {
+    let deadline = std::time::Instant::now() + TIMEOUT;
+    loop {
+        let requests = host_requests(tui);
+        if requests.iter().any(|request| request == method) {
+            return requests;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the owned host never received {method}: {requests:?} (log {:?})",
+            tui.acp_log_path()
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
 }
 
 pub fn ask(tui: &mut TuiSession, text: &str) {

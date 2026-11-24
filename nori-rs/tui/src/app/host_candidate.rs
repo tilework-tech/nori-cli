@@ -5,7 +5,6 @@
 //! widget then follows that conversation through the host's journal, which
 //! still holds any history the server replayed before the answer.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::*;
@@ -35,6 +34,17 @@ pub(crate) enum PickerPurpose {
     Restore,
     /// `/new`: start a session on the current agent without a picker.
     New,
+    /// The terminal's first session, or the next one when none is open:
+    /// start a session on the current agent without a picker.
+    Startup,
+}
+
+impl PickerPurpose {
+    /// Starts a session at once instead of offering saved ones; its
+    /// composer draft and loop state move to that session.
+    pub(super) fn starts_new(self) -> bool {
+        matches!(self, Self::New | Self::Startup)
+    }
 }
 
 /// The saved session a switch restores, with the title its row showed.
@@ -77,6 +87,63 @@ impl App {
         self.chat_widget
             .add_info_message(format!("Listing {display_name} sessions…"), None);
         self.begin_host_picker(agent_name, display_name, PickerPurpose::Restore);
+    }
+
+    /// Start the terminal's session on a server the host prepares, with no
+    /// session on screen. Input typed meanwhile waits for it.
+    pub(crate) fn begin_host_startup(&mut self) {
+        // This is the session a deferred spawn would have started.
+        self.deferred_spawn_pending = false;
+        let agent_name = self.config.active_agent.clone();
+        let display_name = nori_harness::get_agent_display_name(&agent_name);
+        self.begin_host_picker(agent_name, display_name, PickerPurpose::Startup);
+    }
+
+    /// Whether a prompt or `/new` with no live session waits for the session
+    /// the host is starting, instead of starting another: always for the
+    /// terminal's own startup session, and for a typed prompt while any
+    /// other candidate is on its way.
+    pub(crate) fn host_start_holds_input(&self) -> bool {
+        if self.chat_widget.has_harness_session() {
+            return false;
+        }
+        let purpose = match &self.candidate_agent {
+            Some(
+                CandidateAgent::Preparing { purpose, .. }
+                | CandidateAgent::Requested { purpose, .. }
+                | CandidateAgent::Activating { purpose, .. },
+            ) => *purpose,
+            // A picker is open; a prompt typed past it starts afresh.
+            Some(CandidateAgent::Prepared { .. }) | None => return false,
+        };
+        purpose == PickerPurpose::Startup || self.chat_widget.holds_initial_input()
+    }
+
+    /// A start that held input failed or was dismissed with no session
+    /// open: return the held text to the composer, unsent.
+    pub(super) fn release_held_input(&mut self) {
+        if self.chat_widget.has_harness_session() {
+            return;
+        }
+        if let (Some(text), _images) = self.chat_widget.take_initial_input() {
+            self.chat_widget.set_composer_text(text);
+        }
+    }
+
+    /// `/resume` while the host still prepares the terminal's first server:
+    /// offer that server's saved sessions instead of starting one on it.
+    pub(super) fn offer_startup_catalog(&mut self) -> bool {
+        let Some(CandidateAgent::Preparing { purpose, .. }) = &mut self.candidate_agent else {
+            return false;
+        };
+        if *purpose != PickerPurpose::Startup {
+            return false;
+        }
+        *purpose = PickerPurpose::Restore;
+        let display_name = nori_harness::get_agent_display_name(&self.config.active_agent);
+        self.chat_widget
+            .add_info_message(format!("Listing {display_name} sessions…"), None);
+        true
     }
 
     /// Start a session beside the current one on a server the host prepares
@@ -161,7 +228,7 @@ impl App {
                     selection,
                     purpose,
                 });
-                if purpose == PickerPurpose::New {
+                if purpose.starts_new() {
                     self.activate_host_candidate(None);
                 } else {
                     self.chat_widget
@@ -173,9 +240,13 @@ impl App {
                     self.chat_widget.set_login_agent_override(Some(agent_name));
                 }
                 self.return_from_refused_new();
+                self.release_held_input();
                 self.chat_widget
                     .add_error_message(format!("Couldn't prepare {display_name}: {error}"));
                 self.hint_when_sessionless();
+                if purpose == PickerPurpose::Startup {
+                    self.chat_widget.open_agent_recovery_popup(&error);
+                }
             }
         }
     }
@@ -261,16 +332,16 @@ impl App {
                     self.chat_widget.set_login_agent_override(Some(agent_name));
                 }
                 self.return_from_refused_new();
+                self.release_held_input();
                 self.chat_widget
                     .add_error_message(format!("Couldn't activate {display_name}: {error}"));
                 return;
             }
         };
-        let subscription = match self.session_manager.subscribe_from(
-            Some(id),
-            &HashMap::new(),
-            ACTIVATION_REPLAY_CAPACITY,
-        ) {
+        let subscription = match self
+            .session_manager
+            .subscribe_following(id, ACTIVATION_REPLAY_CAPACITY)
+        {
             Ok(subscription) => subscription,
             Err(error) => {
                 drop(self.app_event_tx.host_receipt(HostCall::Close {
@@ -293,21 +364,25 @@ impl App {
         );
         init.config = config;
         let resumes = saved.is_some();
-        let widget = ChatWidget::from_host_activation(
+        let mut widget = ChatWidget::from_host_activation(
             init,
             id,
             self.session_manager.handle(&id),
             subscription,
             saved.map(|saved| (saved.id, saved.title)),
         );
+        if std::mem::take(&mut self.welcome_card_written) {
+            // The terminal wrote its welcome card at launch; the session
+            // announces the options its agent resolved on their own line.
+            widget.suppress_welcome_card();
+        }
         self.candidate_agent = Some(CandidateAgent::Activating {
             agent_name,
             display_name,
             widget: Box::new(widget),
             activation_error: None,
             resumes,
-            announce_agent: purpose == PickerPurpose::Switch,
-            carries_draft: purpose == PickerPurpose::New,
+            purpose,
         });
     }
 

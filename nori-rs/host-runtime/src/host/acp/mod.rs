@@ -262,6 +262,7 @@ impl AcpFace {
 impl HostService {
     pub(super) async fn acp_request(&self, client: i64, request: &Value) -> Value {
         let method = request["method"].as_str().unwrap_or_default();
+        tracing::debug!(client, %method, "host ACP request");
         let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
         match self.dispatch_acp(client, method, &params).await {
             Ok(result) => json!({"jsonrpc":"2.0","id":request["id"],"result":result}),

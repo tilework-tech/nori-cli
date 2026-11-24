@@ -36,7 +36,9 @@ A timed-out wait reports the child PID and status, elapsed wait and launch
 times, poll count, total PTY bytes, and when the fixture first read output.
 Text waits include the expected text. On panic, the fixture prints the final
 screen, the last 512 bytes of combined stdout and stderr with control bytes
-escaped, and the ACP log tail when available.
+escaped, and the ACP log tail when available. The launched `nori` logs
+`nori_host_runtime` at debug level, so that log also records every ACP request
+the owned host receives.
 
 The `Emulator` wraps a `vt100` parser with `SCROLLBACK_ROWS` lines of
 history. `vt100` ignores `ESC[3J`, which the TUI sends whenever it reprints a
@@ -72,16 +74,27 @@ reuses the prepared child, and cancellation or activation failure leaves the
 current session usable. [Host agent-switch scenarios](tests/host_agent_switch.rs)
 drive `/agent`, and [host session-picker scenarios](tests/host_session_picker.rs)
 drive `/resume` and the picker after the last `/close`, and
-[host new-session scenarios](tests/host_new_session.rs) drive `/new`, through
+[host new-session scenarios](tests/host_new_session.rs) drive `/new`, and
+[host startup scenarios](tests/host_startup.rs) drive plain startup, through
 the owned host. They share [`support/two_agents.rs`](tests/support/two_agents.rs), which launches
-plain `nori` with two synthetic adapters (Amber, the default, and Birch) on the
+plain `nori` (optionally with arguments, and with or without a first prompt)
+with two synthetic adapters (Amber, the default, and Birch) on the
 [standard ACP fixture](../cli/tests/standard_acp/fixture.py), whose per-agent
-`fixture-traffic-<slug>` gate files trace each child's PID and methods. They
+`fixture-traffic-<slug>` gate files trace each child's PID and methods, and
+whose `fixture-hold-init` gate writes `fixture-init-held` and blocks
+`initialize` until the gate is removed. The support module also reads the
+host's request log, so a test can wait for a host method and check its order
+(for example that `_nori/host/prepare_agent` precedes `session/new`). They
 check that a saved session is restored on a freshly prepared server, and that
 dismissing the picker or a refused restore (`fixture-refuse-load`) keeps the
 current session, that `/new` starts on a second freshly prepared child while
 the first keeps running, and that a refused `/new` (`fixture-refuse-new`)
-keeps the current session in front.
+keeps the current session in front. Startup scenarios check that the first
+session is prepared and started by the host on one server, that a prompt typed
+while `initialize` is held or a positional prompt reaches it exactly once, that
+a refused startup session is not retried until the next prompt (which also
+goes through the host), and that `/resume` during preparation restores a saved
+session on the startup server with no `session/new`.
 
 [Context scenarios](tests/context.rs) drive `/context` before, between, and
 during actual prompts using the mock agent's
@@ -116,7 +129,7 @@ then checks the reconnecting marker and replay of missed output without
 duplicates. Cleanup owns both clients and the host so a failed assertion does
 not leave background agents running.
 
-Prepared-startup scenarios wrap `mock-acp-agent` behind the exact registered
+Prepared-startup scenarios (startup now prepares through the owned host) wrap `mock-acp-agent` behind the exact registered
 `nori-handroll acp --type remote` argv while recording process identity. They
 prove that ordinary and remote-adapter startup initialize, optionally list, and
 then activate exactly one session on their own without any input, reusing the
