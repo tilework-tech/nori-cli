@@ -88,7 +88,9 @@ impl ChatComposer {
         if self.should_handle_vim_insert_escape(key_event) {
             return self.handle_input_basic(key_event);
         }
-        if in_vim_normal && key_event.code == KeyCode::Esc {
+        if key_event.code == KeyCode::Esc {
+            // Escape only closes the menu, and the menu stays closed for this
+            // text, so the next Escape reaches the turn or the draft.
             self.dismissed_command_popup_text = Some(
                 self.textarea
                     .text()
@@ -100,15 +102,7 @@ impl ChatComposer {
             self.active_popup = ActivePopup::None;
             return (InputResult::None, true);
         }
-        if key_event.code == KeyCode::Esc {
-            let next_mode = esc_hint_mode(self.footer_mode, self.is_task_running);
-            if next_mode != self.footer_mode {
-                self.footer_mode = next_mode;
-                return (InputResult::None, true);
-            }
-        } else {
-            self.footer_mode = reset_mode_after_activity(self.footer_mode);
-        }
+        self.footer_mode = reset_mode_after_activity(self.footer_mode);
         let ActivePopup::Command(popup) = &mut self.active_popup else {
             unreachable!();
         };
@@ -168,13 +162,6 @@ impl ChatComposer {
                 ..
             } => {
                 popup.move_down();
-                (InputResult::None, true)
-            }
-            KeyEvent {
-                code: KeyCode::Esc, ..
-            } => {
-                // Dismiss the slash popup; keep the current input untouched.
-                self.active_popup = ActivePopup::None;
                 (InputResult::None, true)
             }
             KeyEvent {

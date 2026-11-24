@@ -343,3 +343,23 @@ fn file_and_skill_pickers_close_in_normal_and_reopen_in_insert() {
         assert!(composer.popup_active());
     }
 }
+
+#[test]
+fn escape_closes_the_slash_menu_and_keeps_it_closed_for_that_text() {
+    for running in [true, false] {
+        let mut composer = make_composer();
+        composer.set_task_running(running);
+        type_char(&mut composer, '/');
+        assert!(composer.popup_active());
+
+        assert_eq!(
+            press(&mut composer, KeyCode::Esc, KeyModifiers::NONE),
+            InputResult::None
+        );
+        assert!(!composer.popup_active(), "running={running}");
+        assert_eq!(composer.current_text(), "/");
+
+        type_char(&mut composer, 'm');
+        assert!(composer.popup_active(), "typing more reopens the menu");
+    }
+}
