@@ -1,0 +1,13 @@
+{"t": 1795510228.9794388, "adapter": "claude-code", "pid": 137331, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S32b/roots/alpha/app", "argv": []}
+{"t": 1795510228.97952, "adapter": "claude-code", "pid": 137331, "kind": "request", "method": "initialize"}
+{"t": 1795510228.980448, "adapter": "claude-code", "pid": 137331, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S32b/roots/alpha/app"}
+{"t": 1795510228.9817915, "adapter": "claude-code", "pid": 137331, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance/S32b/roots/alpha/app"}
+{"t": 1795510230.200137, "adapter": "claude-code", "pid": 137331, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nhello lantern"}
+{"t": 1795510230.2004576, "adapter": "claude-code", "pid": 137331, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795510234.8406172, "adapter": "codex", "pid": 137482, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S32b/roots/alpha/app", "argv": []}
+{"t": 1795510234.8406909, "adapter": "codex", "pid": 137482, "kind": "request", "method": "initialize"}
+{"t": 1795510234.8416781, "adapter": "codex", "pid": 137482, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S32b/roots/alpha/app"}
+{"t": 1795510237.4506807, "adapter": "codex", "pid": 137482, "kind": "stdin_eof"}
+{"t": 1795510241.232728, "adapter": "claude-code", "pid": 137331, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "still lit"}
+{"t": 1795510241.2334986, "adapter": "claude-code", "pid": 137331, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795510242.5102, "adapter": "claude-code", "pid": 137331, "kind": "stdin_eof"}

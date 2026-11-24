@@ -1,0 +1,338 @@
+[
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.adapter_refused",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.shown_once",
+    "passed": true,
+    "detail": "['\u25a0 Failed to close the session: Failed to close ACP session: close declined by claude-code']"
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.session_keeps_working",
+    "passed": true,
+    "detail": "\u203a ? for shortcuts"
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.retry_reaches_adapter",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.no_cancel_sent",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.retry_leaves_terminal_open",
+    "passed": true,
+    "detail": "  \u2191\u2193/j/k move  / search  enter select  esc close"
+  },
+  {
+    "scenario": "S29a",
+    "check": "close_refusal.shown_once_after_retry",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.adapter_refused",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.shown_once",
+    "passed": true,
+    "detail": "['Failed to close the session: Failed to close ACP session: close declined by claude-code']"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.session_still_live_on_host",
+    "passed": true,
+    "detail": "[{'sessionId': 'a1a343ca-c8aa-4ebb-9b2e-0a4b523c6f8f', 'cwd': '/tmp/nori-host-tui-acceptance-mid/S29b/roots/alpha/app', 'title': 'first light', 'updatedAt': '2026-11-24T08:41:30.265Z', '_meta': {'nori/agent': 'claude-code', 'nori/session': {'live': True}}}]"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.session_keeps_working",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.retry_reaches_adapter",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.no_cancel_sent",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.retry_ends_session_on_host",
+    "passed": true,
+    "detail": "[{'sessionId': 'a1a343ca-c8aa-4ebb-9b2e-0a4b523c6f8f', 'cwd': '/tmp/nori-host-tui-acceptance-mid/S29b/roots/alpha/app', 'title': 'first light', 'updatedAt': '2026-11-24T08:41:35.929Z', '_meta': {'nori/agent': 'claude-code', 'nori/session': {'live': False}}}]"
+  },
+  {
+    "scenario": "S29b",
+    "check": "close_refusal.client_still_attached",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.adapter_got_one_close",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.adapter_refused_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.controller_shows_once",
+    "passed": true,
+    "detail": "['Failed to close the session: Failed to close ACP session: close declined by claude-code']"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.watcher_shows_at_most_once",
+    "passed": true,
+    "detail": "['close declined by claude-code']"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.session_still_live_on_host",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.session_keeps_working_in_both",
+    "passed": true,
+    "detail": "('   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task')"
+  },
+  {
+    "scenario": "S29c",
+    "check": "close_refusal2.counts_unchanged_after_next_turn",
+    "passed": true,
+    "detail": "(['Failed to close the session: Failed to close ACP session: close declined by claude-code'], ['close declined by claude-code'])"
+  },
+  {
+    "scenario": "S29d",
+    "check": "close_twice.second_sent_during_first",
+    "passed": true,
+    "detail": "{'second': 1795509725.5020654, 'first_reply': 1795509726.9037676}"
+  },
+  {
+    "scenario": "S29d",
+    "check": "close_twice.adapter_got_one_close",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S29d",
+    "check": "close_twice.refusal_shown_once",
+    "passed": true,
+    "detail": "['Failed to close the session: Failed to close ACP session: close declined by claude-code']"
+  },
+  {
+    "scenario": "S29d",
+    "check": "close_twice.session_still_live",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S29d",
+    "check": "close_twice.session_keeps_working",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  },
+  {
+    "scenario": "S29d",
+    "check": "close_twice.refusal_still_once_after_next_turn",
+    "passed": true,
+    "detail": "['Failed to close the session: Failed to close ACP session: close declined by claude-code']"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.lists_agent_server_saved_row",
+    "passed": true,
+    "detail": "['', '', '', '', '', '', '', '']"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.loaded_by_prepared_server",
+    "passed": true,
+    "detail": "{'loads': [(123472, 'session/load')], 'prepared': [123472]}"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.replayed_history_shown",
+    "passed": true,
+    "detail": "\u203a / for slash command menu"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.prompt_reaches_restored_session",
+    "passed": true,
+    "detail": "saved-orchard"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.exactly_one_load",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S31a",
+    "check": "restore.all_servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[123337, 123472]"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.lists_agent_server_saved_row",
+    "passed": true,
+    "detail": "['', '', '', '', '', '', '', '']"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.loaded_by_prepared_server",
+    "passed": true,
+    "detail": "{'loads': [(124240, 'session/load')], 'prepared': [124240]}"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.replayed_history_shown",
+    "passed": true,
+    "detail": "\u203a ? for shortcuts"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.prompt_reaches_restored_session",
+    "passed": true,
+    "detail": "saved-orchard"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.exactly_one_load",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S31b",
+    "check": "restore.all_servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[123989, 124240]"
+  },
+  {
+    "scenario": "S31c",
+    "check": "restore.lists_agent_server_saved_row",
+    "passed": true,
+    "detail": "['', '', '', '', '', '', '', '']"
+  },
+  {
+    "scenario": "S31c",
+    "check": "restore.loaded_by_prepared_server",
+    "passed": true,
+    "detail": "{'loads': [(124937, 'session/load')], 'prepared': [124937]}"
+  },
+  {
+    "scenario": "S31c",
+    "check": "restore.refusal_message_shown",
+    "passed": true,
+    "detail": "[\"\u25a0 Couldn't activate Lantern Claude: Failed to resume ACP session: Failed to load ACP session: the orchard ledger is\", 'sealed by claude-code']"
+  },
+  {
+    "scenario": "S31c",
+    "check": "restore.refusal_keeps_current_session",
+    "passed": true,
+    "detail": "(124860, 124860)"
+  },
+  {
+    "scenario": "S31c",
+    "check": "restore.all_servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[124860, 124937]"
+  },
+  {
+    "scenario": "S31d",
+    "check": "restore.lists_agent_server_saved_row",
+    "passed": true,
+    "detail": "['', '', '', '', '', '', '', '']"
+  },
+  {
+    "scenario": "S31d",
+    "check": "restore.loaded_by_prepared_server",
+    "passed": true,
+    "detail": "{'loads': [(125607, 'session/load')], 'prepared': [125607]}"
+  },
+  {
+    "scenario": "S31d",
+    "check": "restore.refusal_message_shown",
+    "passed": true,
+    "detail": "[\"\u25a0 Couldn't activate Lantern Codex: Failed to resume ACP session: Failed to load ACP session: the orchard ledger is\", 'sealed by codex']"
+  },
+  {
+    "scenario": "S31d",
+    "check": "restore.refusal_keeps_current_session",
+    "passed": true,
+    "detail": "(125451, 125451)"
+  },
+  {
+    "scenario": "S31d",
+    "check": "restore.all_servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[125451, 125607]"
+  },
+  {
+    "scenario": "S32a",
+    "check": "dismiss.prepared_server_started",
+    "passed": true,
+    "detail": "[126068]"
+  },
+  {
+    "scenario": "S32a",
+    "check": "dismiss.prepared_server_reaped",
+    "passed": true,
+    "detail": "[(126068, False)]"
+  },
+  {
+    "scenario": "S32a",
+    "check": "dismiss.current_session_keeps_working",
+    "passed": true,
+    "detail": "\u203a @ for file mentions"
+  },
+  {
+    "scenario": "S32b",
+    "check": "dismiss.prepared_server_started",
+    "passed": true,
+    "detail": "[126597]"
+  },
+  {
+    "scenario": "S32b",
+    "check": "dismiss.prepared_server_reaped",
+    "passed": true,
+    "detail": "[(126597, False)]"
+  },
+  {
+    "scenario": "S32b",
+    "check": "dismiss.current_session_keeps_working",
+    "passed": true,
+    "detail": "\u203a @ for file mentions"
+  }
+]

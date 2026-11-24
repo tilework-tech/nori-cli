@@ -201,6 +201,21 @@ Full matrix at `36947010`: 322/369. Against `c94867b1`, S29b and S29c now pass a
 the remaining S33 failures are `/new` features that arrive in #749. Linux CI and exact-commit native macOS
 (`verify/pr-746-36947010-native-host`) passed.
 
+| Second `/close` while the refused first is still in flight (adapter holds the close 5 s): one adapter close, refusal shown once, session keeps answering | S29d close_twice.* | adapter, wire, screen | not run | FAIL at `36947010` (refusal shown twice, plus "already in progress"); pass at `25c42dba` |
+
+### Restacked heads, 2026-11-24
+
+| PR | Head | Run | Result |
+|---|---|---|---|
+| #746 | `25c42dba` | S29a-d | 28/28 pass |
+| #747 | `735847f9` | S29a-d, S31a-d, S32a-b | 51/56; S31a, S31c and S32a fail as expected, first green at #748 |
+| #748 | `4c9e2407` | S29a-d, S31a-d, S32a-b | 56/56 pass |
+| #749 | `e86f3803` | full matrix | 317/353; no check regressed against `3b2010d4`; S29b-d and S33c-f pass; S33a/b `/new DIR` still fails (later cwd layer) |
+
+Native macOS at each exact head passed. Linux CI passed for #746, #748 and #749. For #747, Linux CI failed once in
+`nori-acp-host` `test_cancelled_spawn_reaps_child_during_initialization` (5 s pid-file timeout). #747 does not change `acp-host`.
+The test passed 8 of 8 runs locally, and the full lib suite passed 105/105.
+
 Observation, not a finding: the watcher shows the adapter's bare stream error (`close declined by …`) without the
 `Failed to close the session:` prefix, because only the terminal that sent the close knows it is a close refusal.
 

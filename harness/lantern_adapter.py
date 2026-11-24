@@ -13,8 +13,8 @@ Environment:
                    upcoming session/close requests to refuse ("close declined by <name>");
                    `load-refuse` does the same for session/load and session/resume,
                    `new-refuse` for session/new; `init-delay` holds seconds the next
-                   server to start waits before answering initialize, and `new-delay`
-                   seconds before answering the next session/new (one use each)
+                   server to start waits before answering initialize; `new-delay` and
+                   `close-delay` do the same for the next session/new and session/close
 
 Prompt words (first word of the prompt text):
   hold     stream a tick every 200 ms until cancelled (records ticks)
@@ -231,12 +231,12 @@ def main():
         if method == "session/prompt":
             summary["text"] = "".join(b.get("text", "") for b in params.get("prompt", []) if b.get("type") == "text")
         ledger("request", method=method, **summary)
-        if method == "session/new":
-            delay = take_delay("new-delay")
-            if delay:
-                ledger("new_delay_start", seconds=delay)
-                time.sleep(delay)
-                ledger("new_delay_end")
+        stage = {"session/new": "new", "session/close": "close"}.get(method)
+        delay = take_delay(f"{stage}-delay") if stage else 0.0
+        if delay:
+            ledger(f"{stage}_delay_start", seconds=delay)
+            time.sleep(delay)
+            ledger(f"{stage}_delay_end")
         if method == "initialize":
             delay = take_delay("init-delay")
             if delay:

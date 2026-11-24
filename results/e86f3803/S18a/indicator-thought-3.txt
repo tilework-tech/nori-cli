@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance/S18a/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› ponder the harbor
+
+
+│ Charting the breakwater
+│ Counting the pilings first.
+│
+│ Sorting the buoy colours
+│ Red to port.
+
+─ Worked for 4s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Midway note.
+
+• Listening for the foghorn cadence (4s • esc to interrupt)
+
+                                                                                                                [ auto ]
+› / for slash command menu
+
+
+
+
+
+
+
+
+
+

@@ -1585,6 +1585,45 @@ def s29c_close_refusal_two_clients(ctx):
     obs.close()
 
 
+def s29d_second_close_while_refusal_pending(ctx):
+    """A second /close sent while a refused first is in flight: one adapter close, the refusal shows once, the session keeps working."""
+    (ctx.fx["control"] / "close-refuse").write_text("1")
+    ctx.start_host()
+    t = start_attach(ctx, "attach")
+    obs = ctx.observer()
+    submit(t, "first light")
+    t.wait_for("heard: first light", 20)
+    (ctx.fx["control"] / "close-delay").write_text("5")
+    slash(t, "/close", settle=0.5)
+    wait_ledger(ctx, lambda r: r.get("kind") == "close_delay_start", timeout=10)
+    slash(t, "/close", settle=0.5)
+    sent_second_at = time.time()
+    t.capture("second-close-sent")
+    wait_ledger(ctx, lambda r: r.get("kind") == "close_refused", timeout=15)
+    time.sleep(4)
+    t.capture("after-both")
+    closes = ctx.ledger("request", "session/close")
+    end = ctx.ledger("close_delay_end")
+    ctx.check("close_twice.second_sent_during_first", bool(end) and sent_second_at < end[0]["t"],
+              {"second": sent_second_at, "first_reply": end and end[0]["t"]})
+    ctx.check("close_twice.adapter_got_one_close", len(closes) == 1, len(closes))
+    ctx.check("close_twice.refusal_shown_once", len(re.findall(r"close declined by", t.screen())) == 1,
+              [l.strip() for l in t.screen().splitlines() if "close" in l.lower()][-4:])
+    live = [s for s in obs.sessions() if (s.get("_meta") or {}).get("nori/session", {}).get("live")]
+    ctx.check("close_twice.session_still_live", len(live) == 1, len(live))
+    submit(t, "still lit")
+    try:
+        t.wait_for("heard: still lit", 20)
+        ok = True
+    except TimeoutError:
+        ok = False
+    ctx.check("close_twice.session_keeps_working", ok, last_nonblank(t.screen()))
+    ctx.check("close_twice.refusal_still_once_after_next_turn", len(re.findall(r"close declined by", t.screen())) == 1,
+              [l.strip() for l in t.screen().splitlines() if "declined" in l])
+    t.capture("final")
+    obs.close()
+
+
 def s30_prepared_agent(ctx):
     """A host client prepares an agent server, lists its saved sessions, and activates one on that connection."""
     ctx.start_host()
@@ -1901,6 +1940,7 @@ SCENARIOS = {
     "S29a": ("refused /close (plain)", lambda c: s29_close_refusal(c, "fg")),
     "S29b": ("refused /close (attach)", lambda c: s29_close_refusal(c, "attach")),
     "S29c": ("refused /close with two attached terminals", s29c_close_refusal_two_clients),
+    "S29d": ("second /close while a refused first is in flight", s29d_second_close_while_refusal_pending),
     "S30": ("prepared agent connection over the wire", s30_prepared_agent),
     "S31a": ("/resume restores an agent server's saved row via the host", lambda c: s31_restore_through_host(c, "/resume")),
     "S31b": ("/agent restores another server's saved row via the host", lambda c: s31_restore_through_host(c, "/agent")),

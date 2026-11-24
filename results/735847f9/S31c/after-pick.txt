@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Resuming session with Lantern Claude...
+
+■ the orchard ledger is sealed by claude-code
+
+  1 failed · 1 ready
+
+
+› ! for shell commands
+
