@@ -17,8 +17,11 @@ use crate::client_event_format::is_invocation_redundant;
 use crate::client_event_format::relativize_paths_in_text;
 use crate::client_event_format::strip_code_fences;
 use crate::diff_render::create_diff_summary;
+use crate::exec_cell::CappedLines;
+use crate::exec_cell::cap_lines;
 use crate::exec_cell::compact_command;
 use crate::exec_cell::full_command_lines;
+use crate::exec_cell::hidden_lines_marker;
 use crate::exec_cell::last_output_line;
 use crate::exec_cell::reads_files;
 use crate::exec_cell::spinner;
@@ -42,6 +45,7 @@ pub(crate) struct ClientToolCell {
     animations_enabled: bool,
     start_time: Option<Instant>,
     tool_output: ToolOutput,
+    output_max_lines: Option<i32>,
 }
 
 impl ClientToolCell {
@@ -64,11 +68,17 @@ impl ClientToolCell {
             animations_enabled,
             start_time,
             tool_output: ToolOutput::default(),
+            output_max_lines: None,
         }
     }
 
     pub(crate) fn with_tool_output(mut self, tool_output: ToolOutput) -> Self {
         self.tool_output = tool_output;
+        self
+    }
+
+    pub(crate) fn with_output_max_lines(mut self, output_max_lines: Option<i32>) -> Self {
+        self.output_max_lines = output_max_lines;
         self
     }
 
@@ -166,7 +176,10 @@ impl ClientToolCell {
         }
     }
 
-    fn render(&self, width: u16, full: bool) -> Vec<Line<'static>> {
+    /// `max_lines` caps command output and generic tool text; see
+    /// `exec_cell::cap_lines`. Diffs and Exploring rows ignore it, and
+    /// `display_lines` passes it only for the full view.
+    fn render(&self, width: u16, full: bool, max_lines: Option<i32>) -> Vec<Line<'static>> {
         if self.is_exploring() {
             return self.render_exploring_lines(width, full);
         }
@@ -176,7 +189,7 @@ impl ClientToolCell {
                     None => spinner(self.start_time, self.animations_enabled),
                     Some(_) => step_bullet(&self.snapshot),
                 };
-                execute_lines(&self.snapshot, bullet, width, full)
+                execute_lines(&self.snapshot, bullet, width, full, max_lines)
             }
             ToolKind::Create | ToolKind::Edit | ToolKind::Delete | ToolKind::Move => {
                 self.render_edit_lines(width, full)
@@ -185,7 +198,7 @@ impl ClientToolCell {
             | ToolKind::Search
             | ToolKind::Fetch
             | ToolKind::Think
-            | ToolKind::Other(_) => self.render_generic_lines(),
+            | ToolKind::Other(_) => self.render_generic_lines(max_lines),
         }
     }
 
@@ -242,7 +255,8 @@ impl ClientToolCell {
         }
         for step in steps {
             if step.kind == ToolKind::Execute {
-                let lines = execute_lines(step, step_bullet(step), width.saturating_sub(2), true);
+                let lines =
+                    execute_lines(step, step_bullet(step), width.saturating_sub(2), true, None);
                 out.extend(prefix_lines(lines, "  ".into(), "  ".into()));
                 continue;
             }
@@ -368,7 +382,7 @@ impl ClientToolCell {
         lines
     }
 
-    fn render_generic_lines(&self) -> Vec<Line<'static>> {
+    fn render_generic_lines(&self, max_lines: Option<i32>) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
         let bullet = if self.is_active() {
             spinner(self.start_time, self.animations_enabled)
@@ -417,10 +431,14 @@ impl ClientToolCell {
             }
         }
 
-        for (idx, detail) in details.into_iter().enumerate() {
-            let prefix = if idx == 0 { "  └ " } else { "    " };
-            lines.push(Line::from(vec![prefix.dim(), detail.dim()]));
-        }
+        let details: Vec<Line<'static>> = details.into_iter().map(|d| d.dim().into()).collect();
+        let detail_lines = match cap_lines(&details, max_lines) {
+            CappedLines::All(all) => all.to_vec(),
+            CappedLines::Split { head, hidden, tail } => {
+                [head, &[hidden_lines_marker(hidden)], tail].concat()
+            }
+        };
+        lines.extend(prefix_lines(detail_lines, "  └ ".dim(), "    ".dim()));
 
         lines
     }
@@ -435,12 +453,13 @@ fn step_bullet(step: &ToolSnapshot) -> Span<'static> {
 }
 
 /// `• Ran <command>` plus output: the last output line in compact form, all
-/// of it in full form.
+/// of it in full form, or its head and tail when `max_lines` caps it.
 fn execute_lines(
     snapshot: &ToolSnapshot,
     bullet: Span<'static>,
     width: u16,
     full: bool,
+    max_lines: Option<i32>,
 ) -> Vec<Line<'static>> {
     let verb = if is_active_phase(&snapshot.phase) {
         "Running"
@@ -475,9 +494,20 @@ fn execute_lines(
     );
     let output_opts = RtOptions::new(output_width).word_splitter(WordSplitter::NoHyphenation);
     let mut wrapped = Vec::new();
-    for raw in output.lines() {
-        let line = codex_ansi_escape::ansi_escape_line(raw).dim();
-        push_owned_lines(&word_wrap_line(&line, output_opts.clone()), &mut wrapped);
+    let wrap = |raws: &[&str], wrapped: &mut Vec<Line<'static>>| {
+        for raw in raws {
+            let line = codex_ansi_escape::ansi_escape_line(raw).dim();
+            push_owned_lines(&word_wrap_line(&line, output_opts.clone()), wrapped);
+        }
+    };
+    let raw_lines: Vec<&str> = output.lines().collect();
+    match cap_lines(&raw_lines, max_lines) {
+        CappedLines::All(all) => wrap(all, &mut wrapped),
+        CappedLines::Split { head, hidden, tail } => {
+            wrap(head, &mut wrapped);
+            wrapped.push(hidden_lines_marker(hidden));
+            wrap(tail, &mut wrapped);
+        }
     }
     lines.extend(prefix_lines(wrapped, "  └ ".dim(), "    ".into()));
     lines
@@ -672,11 +702,12 @@ fn create_contextual_patch(
 
 impl HistoryCell for ClientToolCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        self.render(width, self.tool_output == ToolOutput::Full)
+        let full = self.tool_output == ToolOutput::Full;
+        self.render(width, full, self.output_max_lines.filter(|_| full))
     }
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        self.render(width, true)
+        self.render(width, true, None)
     }
 }
 

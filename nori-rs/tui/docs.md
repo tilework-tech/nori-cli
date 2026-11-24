@@ -628,6 +628,22 @@ chat widget passes it in through `with_tool_output`. `nori attach` builds cells
 without that setting and does not resolve project settings, so it falls back
 to `ToolOutput::default()` and always renders full.
 
+The chat widget also passes `NoriConfig::tool_output_max_lines` through
+`with_output_max_lines`. This optional cap affects only `display_lines` in the
+full inline view: Execute output, and the invocation and artifact detail lines
+of Fetch, Think, and Other calls. Read and Search calls, ListFiles
+invocations, and read-only commands route to Exploring rows (see
+`is_exploring_snapshot`), so they are never capped. The compact view ignores the cap for
+every kind of call, as do diffs, Exploring groups and their Execute steps,
+`transcript_lines`, and `nori attach`, which never sets it. The
+cap counts logical lines before wrapping. [`cap_lines`](src/exec_cell/output_cap.rs)
+splits the text into a head and a tail, and `hidden_lines_marker` builds the
+faint italic `┄ N lines hidden` row placed between them. A cap of N gives N - 1
+content lines plus that marker; the head gets the smaller half, so an odd line
+goes to the tail. A cap of 1 shows only the marker, output that fits is not
+changed (so the marker always hides at least two lines), and empty output shows
+nothing.
+
 Compact output is one scannable line per call: a status dot that is the only
 status indicator (green, red, or a spinner), `Ran`/`Running` plus a command
 summary with bold command names and arguments elided to `…`, and one `└` line
@@ -658,7 +674,8 @@ long for a compact row falls back to its file name. Snapshot routing, the
 pending/completed bookkeeping, and exploring-group lifetime are described in
 [EXEC_CELL_LIFECYCLE.md](src/chatwidget/EXEC_CELL_LIFECYCLE.md).
 
-The transcript overlay ([`pager_overlay`](src/pager_overlay.rs)) caps each
+The transcript overlay ([`pager_overlay`](src/pager_overlay.rs)) keeps its own
+row cap, independent of `tool_output_max_lines`. It caps each
 cell's rows and marks the cut with a faint italic `┄ N more lines` row so it
 cannot be mistaken for output. The configured `open_transcript` key (Ctrl+T)
 and a fixed Ctrl+O alias open it. Ctrl+O is reserved for the transcript, so

@@ -82,18 +82,23 @@ impl NoriConfig {
                 matches!(path.as_str(), "approval_policy" | "sandbox_mode")
                     || path.starts_with("sandbox_workspace_write.")
             });
-        // `-c tui.tool_output` is merged into `toml.tui`, so it must also beat the project.
+        // `-c tui.<key>` is merged into `toml.tui`, so it must also beat the project.
         // A later `-c tui={...}` replaces the whole table, so the last such override decides.
-        let tool_output_from_command_line = overrides
-            .raw_overrides
-            .iter()
-            .rev()
-            .find_map(|(path, value)| match path.as_str() {
-                "tui.tool_output" => Some(true),
-                "tui" => Some(value.get("tool_output").is_some()),
-                _ => None,
-            })
-            .unwrap_or(false);
+        let tui_key_from_command_line = |key: &str| {
+            overrides
+                .raw_overrides
+                .iter()
+                .rev()
+                .find_map(|(path, value)| match path.strip_prefix("tui") {
+                    Some("") => Some(value.get(key).is_some()),
+                    Some(dotted) if dotted.strip_prefix('.') == Some(key) => Some(true),
+                    _ => None,
+                })
+                .unwrap_or(false)
+        };
+        let tool_output_from_command_line = tui_key_from_command_line("tool_output");
+        let tool_output_max_lines_from_command_line =
+            tui_key_from_command_line("tool_output_max_lines");
         // Keep command-line precedence until the registry can resolve custom agent aliases.
         // A whole-table assignment replaces every dotted assignment before it.
         let default_model_override_keys = overrides
@@ -132,6 +137,14 @@ impl NoriConfig {
             active_project.tool_output.or(toml.tui.tool_output)
         }
         .unwrap_or_default();
+        let tool_output_max_lines = if tool_output_max_lines_from_command_line {
+            toml.tui.tool_output_max_lines
+        } else {
+            active_project
+                .tool_output_max_lines
+                .or(toml.tui.tool_output_max_lines)
+        }
+        .filter(|limit| *limit > 0);
         let sandbox_mode = sandbox_mode_override
             .or(toml.sandbox_mode)
             .unwrap_or(SandboxMode::WorkspaceWrite);
@@ -261,6 +274,7 @@ impl NoriConfig {
             file_manager: toml.tui.file_manager,
             tool_output,
             tool_output_from_command_line,
+            tool_output_max_lines,
             pinned_plan_drawer: toml.tui.pinned_plan_drawer.unwrap_or(false),
             thoughts_in_history: toml.tui.thoughts_in_history.unwrap_or(true),
             custom_working_messages: toml.tui.custom_working_messages.unwrap_or(true),

@@ -1,0 +1,45 @@
+---
+source: tui/src/exec_cell/tests.rs
+expression: "format!(\"--- before (no cap) ---\\n{}\\n--- after (tool_output_max_lines = 7) ---\\n{}\",\ntext(&uncapped.display_lines(80), 80), text(&capped.display_lines(80), 80))"
+---
+--- before (no cap) ---
+• Ran cargo test -p nori-widgets
+  └ test layout::case_01 ... ok
+    test layout::case_02 ... ok
+    test layout::case_03 ... ok
+    test layout::case_04 ... ok
+    test layout::case_05 ... ok
+    test layout::case_06 ... ok
+    test layout::case_07 ... ok
+    test layout::case_08 ... ok
+    test layout::case_09 ... ok
+    test layout::case_10 ... ok
+    test layout::case_11 ... ok
+    test layout::case_12 ... ok
+    test layout::case_13 ... ok
+    test layout::case_14 ... ok
+    test layout::case_15 ... ok
+    test layout::case_16 ... ok
+    test layout::case_17 ... ok
+    test layout::case_18 ... ok
+    test layout::case_19 ... ok
+    test layout::case_20 ... ok
+    test layout::case_21 ... ok
+    test layout::case_22 ... ok
+    test layout::case_23 ... ok
+    test layout::case_24 ... ok
+    test layout::case_25 ... ok
+    test layout::case_26 ... ok
+    test layout::case_27 ... ok
+    test layout::case_28 ... ok
+    test layout::case_29 ... ok
+    test layout::case_30 ... ok
+--- after (tool_output_max_lines = 7) ---
+• Ran cargo test -p nori-widgets
+  └ test layout::case_01 ... ok
+    test layout::case_02 ... ok
+    test layout::case_03 ... ok
+    ┄ 24 lines hidden
+    test layout::case_28 ... ok
+    test layout::case_29 ... ok
+    test layout::case_30 ... ok

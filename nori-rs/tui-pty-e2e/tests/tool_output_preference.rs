@@ -1,4 +1,5 @@
-//! Inline tool output is full unless compact is chosen for a project or set globally.
+//! Inline tool output is full unless compact is chosen for a project or set globally,
+//! and a line cap keeps only the head and tail when one is set.
 #![cfg(target_os = "linux")]
 
 use std::path::Path;
@@ -255,4 +256,39 @@ fn unrelated_tui_override_keeps_the_project_compact_choice() {
     let mut overridden =
         workspace.launch_with_override(&project, Some("tui={pinned_plan_drawer=false}"));
     assert_compact(&run_command(&mut overridden));
+}
+
+fn capped_project(cap: &str) -> (tempfile::TempDir, PathBuf, Workspace) {
+    let root = tempfile::tempdir().expect("create project parent");
+    let project = std::fs::canonicalize(root.path()).expect("canonical path");
+    let workspace = Workspace::new(&format!(
+        "agent = \"mock-model\"\n\n[tui]\ntool_output_max_lines = 40\n\n[projects.{:?}]\ntrust_level = \"trusted\"\n{cap}\n",
+        project.display().to_string()
+    ));
+    (root, project, workspace)
+}
+
+#[test]
+fn project_line_cap_keeps_head_and_tail_of_full_output() {
+    let (_root, project, workspace) = capped_project("tool_output_max_lines = 3");
+
+    let mut session = workspace.launch(&project);
+    let screen = run_command(&mut session);
+    assert!(
+        screen.contains("running 3 tests")
+            && screen.contains("┄ 3 lines hidden")
+            && screen.contains(LAST_OUTPUT_LINE)
+            && !screen.contains(EARLY_OUTPUT_LINE),
+        "expected capped tool output:\n{screen}"
+    );
+}
+
+#[test]
+fn command_line_zero_lifts_a_project_line_cap() {
+    let (_root, project, workspace) = capped_project("tool_output_max_lines = 3");
+
+    let mut session = workspace.launch_with_override(&project, Some("tui.tool_output_max_lines=0"));
+    let screen = run_command(&mut session);
+    assert_full(&screen);
+    assert!(!screen.contains("lines hidden"), "{screen}");
 }
