@@ -173,6 +173,7 @@ jobs:
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
+          set +e +o pipefail
           sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/host_attach.rs
           for round in $(seq 1 10); do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/attach round $round: /"; done | tee attach-repeat.txt
           grep FAILED attach-repeat.txt | sed 's/^attach round [0-9]*: //' | sort | uniq -c
