@@ -181,12 +181,19 @@ impl App {
                     return Ok(true);
                 }
 
+                if self.new_session_return.is_some() {
+                    // The pending screen holds this prompt for the session
+                    // the host is starting.
+                    return Ok(true);
+                }
                 if !self.cloud_mode
                     && self.chat_widget.has_harness_session()
                     && self.primary_agent_preparation.is_none()
                     && self.prepared_agent.is_none()
                 {
                     self.begin_host_new_session();
+                    self.show_pending_new_session(tui.frame_requester());
+                    tui.frame_requester().schedule_frame();
                     return Ok(true);
                 }
                 self.discard_candidate();
@@ -672,6 +679,7 @@ impl App {
                         }
                         self.install_active_widget(*widget);
                         self.deferred_spawn_pending = false;
+                        self.new_session_return = None;
                         if let Some((composer_draft, loop_state)) = carried {
                             self.chat_widget.restore_composer_draft(composer_draft);
                             if let Some((remaining, total)) = loop_state {
