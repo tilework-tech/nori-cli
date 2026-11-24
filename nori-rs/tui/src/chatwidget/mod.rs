@@ -199,6 +199,9 @@ pub(crate) struct ChatWidget {
     // session-switching commands so the deferred NewSession can't clobber a
     // conversation the user switched to mid-close.
     session_close_in_flight: bool,
+    /// The refusal of the latest `/close`, which can arrive both from the
+    /// adapter and as the close command's error.
+    close_refusal: Option<session_close::CloseRefusal>,
     /// True once the user closed this session beside others, so its agent
     /// shutting down ends only this session, not Nori.
     closed_by_user: bool,

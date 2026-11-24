@@ -155,6 +155,7 @@ fn make_chatwidget_manual_for_mode(
 mod action_failures;
 mod agent_status;
 mod api_key;
+mod close_refusal;
 mod context;
 mod delegation;
 mod explore_details;

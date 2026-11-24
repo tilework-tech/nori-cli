@@ -1399,7 +1399,13 @@ local /close via owned host or cloud /close via agent ──> SessionEnded(Close
   `remove_session` drops it only when it is closed and not on screen.
 - **`/close`.** The local command sends `session/close` for the session on
   screen over its owned host connection. A refusal appears in the originating
-  session and permits retry. Cloud sends the request directly to its agent.
+  session and permits retry. Cloud sends the request directly to its agent and
+  reports failure with the full cause chain. A refusal arrives twice, as an
+  unowned adapter error on the event stream and as `SessionCloseFailed`, in
+  either order; the per-close `CloseRefusal` state in
+  [`session_close.rs`](src/chatwidget/session_close.rs) prints it once,
+  dropping the adapter error whose raw message the command error contains,
+  while unrelated errors still show.
   On `SessionEnded(Closed)`, the next open session comes on screen. Closing
   the last session opens the agent session picker. Cloud also displays the
   release confirmation there.
