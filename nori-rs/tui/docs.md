@@ -167,6 +167,25 @@ The application event loop matches `SessionEvent::Acp` and
 
 - ACP notifications drive private message, thought, plan, tool, usage, mode,
   live config, capability, and available-command presentation.
+- Live thought text sets the working indicator, not history. The indicator
+  shows the current thought block's latest complete `**heading**` that starts
+  a line, as Codex (`**Title**\n\nbody`) and Gemini (`**subject**\ndescription`)
+  write them. The thought text is kept exactly as the agent sent it. Gemini
+  sends each whole thought as one chunk with no separator, so the indicator's
+  own copy breaks the line before a chunk that is exactly one complete
+  heading alone on its line followed by a description. Token-streamed `**`
+  markers never break a line. While a
+  line-initial heading is still streaming, the indicator keeps its previous
+  text. Without headings it shows the first non-empty line with inline `**`
+  markers removed, so emphasis inside a plain sentence keeps the sentence.
+  Answer text or a tool update ends the block, so the next thought replaces
+  the indicator text. The header is shortened by terminal display columns at
+  grapheme boundaries, ending in `...`, so the elapsed time and interrupt hint
+  stay visible, unless fewer than 20 columns would remain for the header; then
+  the row clips at the terminal edge. The shimmer styles one grapheme cluster
+  per span, so emoji sequences render whole. The header rule is
+  `thought_status_header` in [`chatwidget/mod.rs`](src/chatwidget/mod.rs);
+  block boundaries are in [`event_handlers.rs`](src/chatwidget/event_handlers.rs).
 - User input is rendered from the harness's canonical ACP
   `user_message_chunk` notifications, not inserted by the submitting widget.
   Chunks with one message id are accumulated into one user history cell, and

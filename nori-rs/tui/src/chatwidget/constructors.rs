@@ -153,6 +153,7 @@ impl ChatWidget {
             replay_source: None,
             replay_message: None,
             reasoning_buffer: String::new(),
+            thought_status_text: String::new(),
             full_reasoning_buffer: String::new(),
             current_status_header: crate::status_indicator_widget::pick_status_message(
                 config.custom_working_messages,
@@ -343,6 +344,7 @@ impl ChatWidget {
             replay_source: None,
             replay_message: None,
             reasoning_buffer: String::new(),
+            thought_status_text: String::new(),
             full_reasoning_buffer: String::new(),
             current_status_header: crate::status_indicator_widget::pick_status_message(
                 config.custom_working_messages,

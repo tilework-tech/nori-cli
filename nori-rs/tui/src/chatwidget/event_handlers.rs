@@ -489,19 +489,31 @@ impl ChatWidget {
         self.handle_streaming_delta(delta);
     }
 
+    fn end_thought_block(&mut self) {
+        self.reasoning_buffer.clear();
+        self.thought_status_text.clear();
+    }
+
     pub(super) fn on_agent_reasoning_delta(&mut self, delta: String) {
         self.flush_answer_stream_with_separator();
 
-        // For reasoning deltas, do not stream to history. Accumulate the
-        // current reasoning block and extract the first bold element
-        // (between **/**) as the chunk header. Show this header as status.
+        // Thought text is not streamed to history. The working indicator shows
+        // the current thought block's header; any other agent output ends the
+        // block, so the next thought replaces it.
+        // `reasoning_buffer` keeps the agent's text exactly. The indicator's
+        // copy also breaks the line before a whole `**subject**\ndescription`
+        // thought, because Gemini sends those with no separator.
+        if is_whole_heading_thought(&delta)
+            && !self.thought_status_text.is_empty()
+            && !self.thought_status_text.ends_with('\n')
+        {
+            self.thought_status_text.push('\n');
+        }
         self.reasoning_buffer.push_str(&delta);
+        self.thought_status_text.push_str(&delta);
 
-        if let Some(header) = extract_first_bold(&self.reasoning_buffer) {
-            // Update the shimmer header to the extracted reasoning chunk header.
+        if let Some(header) = thought_status_header(&self.thought_status_text) {
             self.set_status_header(header);
-        } else {
-            // Fallback while we don't yet have a bold header: leave existing header as-is.
         }
         self.request_redraw();
     }
@@ -526,7 +538,7 @@ impl ChatWidget {
             &self.config.custom_working_message_list,
         ));
         self.full_reasoning_buffer.clear();
-        self.reasoning_buffer.clear();
+        self.end_thought_block();
         self.completed_client_tool_calls.clear();
         self.assistant_stream_seen_for_stats = false;
         self.request_redraw();
@@ -819,6 +831,7 @@ impl ChatWidget {
         match event {
             crate::presentation::ClientEvent::ApprovalRequest(_) => {}
             crate::presentation::ClientEvent::ToolSnapshot(tool_snapshot) => {
+                self.end_thought_block();
                 self.handle_client_tool_snapshot(tool_snapshot);
             }
             crate::presentation::ClientEvent::MessageDelta(message_delta) => {
@@ -935,6 +948,7 @@ impl ChatWidget {
                 self.request_redraw();
             }
             crate::presentation::MessageStream::Answer => {
+                self.end_thought_block();
                 self.assistant_stream_seen_for_stats = true;
                 self.on_agent_message_delta(message_delta.delta)
             }

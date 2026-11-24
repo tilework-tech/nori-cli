@@ -154,6 +154,8 @@ pub(crate) struct ChatWidget {
     replay_message: Option<ReplayMessage>,
     // Accumulates the current reasoning block text to extract a header
     reasoning_buffer: String,
+    /// The current thought block as the working indicator reads it.
+    thought_status_text: String,
     // Accumulates full reasoning content for transcript-only recording
     full_reasoning_buffer: String,
     // Current status header shown in the status indicator.
@@ -399,32 +401,53 @@ fn truncate_for_log(s: &str, max_len: usize) -> String {
     }
 }
 
-fn extract_first_bold(s: &str) -> Option<String> {
-    let bytes = s.as_bytes();
-    let mut i = 0usize;
-    while i + 1 < bytes.len() {
-        if bytes[i] == b'*' && bytes[i + 1] == b'*' {
-            let start = i + 2;
-            let mut j = start;
-            while j + 1 < bytes.len() {
-                if bytes[j] == b'*' && bytes[j + 1] == b'*' {
-                    // Found closing **
-                    let inner = &s[start..j];
-                    let trimmed = inner.trim();
-                    if !trimmed.is_empty() {
-                        return Some(trimmed.to_string());
-                    } else {
-                        return None;
-                    }
-                }
-                j += 1;
+/// Whether `delta` is one whole `**subject**\ndescription` thought, the form
+/// Gemini sends: a complete heading alone on its line, then a description.
+fn is_whole_heading_thought(delta: &str) -> bool {
+    let Some(after_open) = delta.strip_prefix("**") else {
+        return false;
+    };
+    let Some((heading, rest)) = after_open.split_once("**") else {
+        return false;
+    };
+    let Some((heading_line_rest, description)) = rest.split_once('\n') else {
+        return false;
+    };
+    !heading.trim().is_empty()
+        && !heading.contains('\n')
+        && heading_line_rest.trim().is_empty()
+        && !description.trim().is_empty()
+}
+
+/// The working-indicator header for the thought block in progress: its latest
+/// complete `**heading**` that starts a line, as Codex and Gemini write them.
+/// While a line-initial heading is still streaming, the indicator keeps its
+/// previous text. Without headings it is the first non-empty line with inline
+/// `**` emphasis markers removed.
+fn thought_status_header(block: &str) -> Option<String> {
+    let mut heading = None;
+    for line in block.lines() {
+        if let Some(after_open) = line.trim_start().strip_prefix("**")
+            && let Some(close) = after_open.find("**")
+        {
+            let inner = after_open[..close].trim();
+            if !inner.is_empty() {
+                heading = Some(inner.to_string());
             }
-            // No closing; stop searching (wait for more deltas)
-            return None;
         }
-        i += 1;
     }
-    None
+    let heading_streaming = block.lines().last().is_some_and(|line| {
+        line.trim_start()
+            .strip_prefix("**")
+            .is_some_and(|after_open| !after_open.contains("**"))
+    });
+    if heading.is_some() || heading_streaming {
+        return heading;
+    }
+    block
+        .lines()
+        .map(|line| line.replace("**", "").trim().to_string())
+        .find(|line| !line.is_empty())
 }
 
 #[cfg(test)]

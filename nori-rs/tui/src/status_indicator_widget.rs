@@ -9,6 +9,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
+use ratatui::text::Span;
 use ratatui::widgets::Widget;
 
 use rand::Rng;
@@ -20,6 +21,8 @@ use crate::key_hint;
 use crate::render::renderable::Renderable;
 use crate::shimmer::shimmer_spans;
 use crate::tui::FrameRequester;
+
+const MIN_HEADER_ROOM: usize = 20;
 
 pub(crate) const WHIMSICAL_STATUS_MESSAGES: &[&str] = &[
     "Mass-producing artisanal code",
@@ -209,24 +212,34 @@ impl Renderable for StatusIndicatorWidget {
         let elapsed_duration = self.elapsed_duration_at(now);
         let pretty_elapsed = fmt_elapsed_compact(elapsed_duration.as_secs());
 
-        let mut spans = Vec::with_capacity(5);
-        spans.push(spinner(Some(self.last_resume_at), self.animations_enabled));
-        spans.push(" ".into());
-        if self.animations_enabled {
-            spans.extend(shimmer_spans(&self.header));
-        } else if !self.header.is_empty() {
-            spans.push(self.header.clone().into());
-        }
-        spans.push(" ".into());
+        let mut hint: Vec<Span<'static>> = vec![" ".into()];
         if self.show_interrupt_hint {
-            spans.extend(vec![
+            hint.extend(vec![
                 format!("({pretty_elapsed} • ").dim(),
                 key_hint::plain(KeyCode::Esc).into(),
                 " to interrupt)".dim(),
             ]);
         } else {
-            spans.push(format!("({pretty_elapsed})").dim());
+            hint.push(format!("({pretty_elapsed})").dim());
         }
+        let spinner = spinner(Some(self.last_resume_at), self.animations_enabled);
+        let reserved = spinner.width() + 1 + hint.iter().map(Span::width).sum::<usize>();
+        let header_room = usize::from(area.width).saturating_sub(reserved);
+        // Below this width the header is worth more than the hint, so the row
+        // clips at the terminal edge instead.
+        let header = if header_room >= MIN_HEADER_ROOM {
+            crate::text_formatting::truncate_to_width(&self.header, header_room)
+        } else {
+            self.header.clone()
+        };
+
+        let mut spans = vec![spinner, " ".into()];
+        if self.animations_enabled {
+            spans.extend(shimmer_spans(&header));
+        } else if !header.is_empty() {
+            spans.push(header.into());
+        }
+        spans.extend(hint);
 
         Line::from(spans).render(area, buf);
     }
@@ -386,6 +399,37 @@ mod tests {
             .draw(|f| w.render(f.area(), f.buffer_mut()))
             .expect("draw");
         insta::assert_snapshot!(terminal.backend());
+    }
+
+    fn render_wide_header(width: u16) -> Terminal<TestBackend> {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut w = StatusIndicatorWidget::new(
+            tx,
+            crate::tui::FrameRequester::test_dummy(),
+            true,
+            true,
+            Vec::new(),
+        );
+        w.update_header(
+            "設定ローダーを読んでから既定値を変更します🧪次にテストを更新して👩‍💻確認します🚀優先順位も比較します"
+                .to_string(),
+        );
+        let mut terminal = Terminal::new(TestBackend::new(width, 1)).expect("terminal");
+        terminal
+            .draw(|f| w.render(f.area(), f.buffer_mut()))
+            .expect("draw");
+        terminal
+    }
+
+    #[test]
+    fn renders_wide_header_shortened_at_60_columns() {
+        insta::assert_snapshot!(render_wide_header(60).backend());
+    }
+
+    #[test]
+    fn renders_wide_header_shortened_at_100_columns() {
+        insta::assert_snapshot!(render_wide_header(100).backend());
     }
 
     #[test]
