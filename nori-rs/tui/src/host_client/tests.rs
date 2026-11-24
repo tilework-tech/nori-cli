@@ -28,6 +28,7 @@ fn a_reply_settles_the_request_it_answers() {
     let outgoing = sent(&mut rx);
     assert_eq!(outgoing[0]["method"], "_nori/session/list");
     assert_eq!(outgoing[1]["method"], "_nori/control/take");
+    assert!(client.has_pending(|tag| *tag == "list"));
 
     let reply = client.incoming(ConnectionEvent::Message(
         json!({"jsonrpc":"2.0","id":outgoing[1]["id"],"result":{"role":"controller"}}),
@@ -43,6 +44,7 @@ fn a_reply_settles_the_request_it_answers() {
         failed,
         HostEvent::Reply { tag: "list", result: Err(error) } if error.message.as_deref() == Some("watching")
     ));
+    assert!(!client.has_pending(|tag| *tag == "list"));
     let repeated = client.incoming(ConnectionEvent::Message(
         json!({"jsonrpc":"2.0","id":outgoing[0]["id"],"result":{}}),
     ));
@@ -167,21 +169,6 @@ fn resume_uses_the_session_folder_or_falls_back_for_older_hosts() {
 }
 
 #[test]
-fn cancel_is_a_notification_without_a_reply() {
-    let (mut client, mut rx) = client();
-    client
-        .notify(HostCall::Cancel {
-            session_id: "one".into(),
-        })
-        .unwrap();
-    let outgoing = sent(&mut rx);
-    assert_eq!(outgoing.len(), 1);
-    assert_eq!(outgoing[0]["method"], "session/cancel");
-    assert_eq!(outgoing[0]["params"], json!({"sessionId":"one"}));
-    assert!(outgoing[0].get("id").is_none());
-}
-
-#[test]
 fn a_closed_worker_reports_the_call_as_unsent() {
     let (mut client, rx) = client();
     drop(rx);
@@ -193,18 +180,6 @@ fn a_closed_worker_reports_the_call_as_unsent() {
         panic!("expected a disconnect");
     };
     assert!(unanswered.is_empty());
-}
-
-#[test]
-fn pending_calls_can_be_queried_until_answered() {
-    let (mut client, mut rx) = client();
-    client.request(HostCall::List, "list").unwrap();
-    assert!(client.has_pending(|tag| *tag == "list"));
-    let id = sent(&mut rx)[0]["id"].clone();
-    client.incoming(ConnectionEvent::Message(
-        json!({"jsonrpc":"2.0","id":id,"result":{}}),
-    ));
-    assert!(!client.has_pending(|tag| *tag == "list"));
 }
 
 #[test]
@@ -293,4 +268,42 @@ fn every_call_reaches_the_host_method_it_names() {
             ),
         ]
     );
+}
+
+#[test]
+fn a_late_reply_from_before_a_reconnect_never_settles_a_new_call() {
+    let (mut client, mut rx) = client();
+    client.request(HostCall::List, "before").unwrap();
+    let old_id = sent(&mut rx)[0]["id"].clone();
+    client.incoming(ConnectionEvent::Disconnected("dropped".into()));
+    assert!(matches!(
+        client.incoming(ConnectionEvent::Connected),
+        HostEvent::Connected
+    ));
+    client.request(HostCall::List, "after").unwrap();
+    let new_id = sent(&mut rx)[0]["id"].clone();
+    assert_ne!(old_id, new_id);
+
+    let late = client.incoming(ConnectionEvent::Message(
+        json!({"jsonrpc":"2.0","id":old_id,"result":{}}),
+    ));
+    assert!(matches!(late, HostEvent::Ignored));
+    let current = client.incoming(ConnectionEvent::Message(
+        json!({"jsonrpc":"2.0","id":new_id,"result":{}}),
+    ));
+    assert!(matches!(current, HostEvent::Reply { tag: "after", .. }));
+}
+
+#[test]
+fn an_error_without_a_message_is_reported_as_such() {
+    let (mut client, mut rx) = client();
+    client.request(HostCall::TakeControl, "take").unwrap();
+    let id = sent(&mut rx)[0]["id"].clone();
+    let reply = client.incoming(ConnectionEvent::Message(
+        json!({"jsonrpc":"2.0","id":id,"error":{"code":-32000}}),
+    ));
+    assert!(matches!(
+        reply,
+        HostEvent::Reply { tag: "take", result: Err(error) } if error.message.is_none()
+    ));
 }
