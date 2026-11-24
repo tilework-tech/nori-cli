@@ -341,9 +341,9 @@ fn the_screen_key_switches_views_and_leaves_an_unsent_draft_alone() {
     assert_eq!(count(&history, draft), 1, "sent exactly once:\n{history}");
 }
 
-#[test]
-#[cfg(target_os = "linux")]
-fn a_session_resumed_while_full_screen_shows_its_replayed_history() {
+/// Start full-screen against an agent that lists and reloads saved
+/// sessions, then resume one. Its reload replays two rows.
+fn resume_while_full_screen() -> TuiSession {
     let config = SessionConfig::new()
         .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1")
@@ -355,11 +355,21 @@ fn a_session_resumed_while_full_screen_shows_its_replayed_history() {
 
     session.submit_input("/resume").unwrap();
     session
-        .wait_for_text("First mock session", TIMEOUT)
+        .wait_for(
+            |screen| screen.contains("First mock session") && screen.contains("mock-session-2"),
+            TIMEOUT,
+        )
         .expect("the picker lists the agent's sessions");
+    // Row 0 is the pinned "Start a new session" action.
     session.send_key(Key::Down).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
+    session
+}
+
+#[test]
+fn a_session_resumed_while_full_screen_shows_its_replayed_history() {
+    let mut session = resume_while_full_screen();
 
     // Nothing else happens after the replay, so only the replay itself can
     // bring its rows on screen.
@@ -379,6 +389,27 @@ fn a_session_resumed_while_full_screen_shows_its_replayed_history() {
     session
         .wait_for_text("replay chunk 0", TIMEOUT)
         .expect("the inline view shows the replayed history");
+    let history = session.history_contents();
+    assert_eq!(count(&history, "loaded user activity"), 1, "{history}");
+    assert_eq!(count(&history, "replay chunk 0"), 1, "{history}");
+}
+
+#[test]
+fn quitting_full_screen_after_a_resume_leaves_the_resumed_history_in_the_scrollback() {
+    let mut session = resume_while_full_screen();
+    session
+        .wait_for(
+            |screen| screen.contains("loaded user activity") && screen.contains("replay chunk 0"),
+            TIMEOUT,
+        )
+        .expect("the full-screen view shows the replayed history");
+
+    session.submit_input("/quit").unwrap();
+    session
+        .wait_for_exit_status(TIMEOUT)
+        .unwrap()
+        .expect("/quit exits");
+    assert!(!session.is_alternate_screen());
     let history = session.history_contents();
     assert_eq!(count(&history, "loaded user activity"), 1, "{history}");
     assert_eq!(count(&history, "replay chunk 0"), 1, "{history}");
