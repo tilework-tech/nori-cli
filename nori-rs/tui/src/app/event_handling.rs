@@ -119,26 +119,41 @@ impl App {
                     self.chat_widget.handle_paste(pasted);
                 }
                 TuiEvent::Draw => {
+                    let t = std::time::Instant::now();
                     self.adopt_delegated_sessions(tui);
+                    let t1 = t.elapsed();
                     self.refresh_session_overview(tui.terminal.size()?.width);
+                    let t2 = t.elapsed();
                     self.chat_widget.pre_draw_tick();
+                    let t3 = t.elapsed();
                     self.chat_widget.maybe_post_pending_notification(tui);
                     self.post_parked_session_notifications(tui);
+                    let t4 = t.elapsed();
+                    if t4 > std::time::Duration::from_millis(40) {
+                        tracing::info!(?t1, ?t2, ?t3, ?t4, "DBG draw prelude");
+                    }
                     if self
                         .chat_widget
                         .handle_paste_burst_tick(tui.frame_requester())
                     {
                         return Ok(true);
                     }
-                    tui.draw(
-                        self.chat_widget.desired_height(tui.terminal.size()?.width),
-                        |frame| {
-                            self.chat_widget.render(frame.area(), frame.buffer);
-                            if let Some((x, y)) = self.chat_widget.cursor_pos(frame.area()) {
-                                frame.set_cursor_position((x, y));
-                            }
-                        },
-                    )?;
+                    let t5 = std::time::Instant::now();
+                    let desired = self.chat_widget.desired_height(tui.terminal.size()?.width);
+                    let t6 = t5.elapsed();
+                    if t6 > std::time::Duration::from_millis(40) {
+                        tracing::info!(?t6, "DBG desired_height");
+                    }
+                    tui.draw(desired, |frame| {
+                        self.chat_widget.render(frame.area(), frame.buffer);
+                        if let Some((x, y)) = self.chat_widget.cursor_pos(frame.area()) {
+                            frame.set_cursor_position((x, y));
+                        }
+                    })?;
+                    let t7 = t5.elapsed();
+                    if t7 > std::time::Duration::from_millis(40) {
+                        tracing::info!(?t7, "DBG tui.draw total");
+                    }
                 }
             }
         }
