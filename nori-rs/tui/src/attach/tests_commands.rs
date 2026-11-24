@@ -239,17 +239,27 @@ fn a_bare_agent_command_that_loosely_matches_a_builtin_still_reaches_the_agent()
 }
 
 #[test]
-fn esc_in_the_menu_never_cancels_the_running_turn() {
+fn the_first_escape_closes_the_menu_and_the_next_cancels_the_turn() {
     let (mut runtime, mut rx) = working_runtime();
     runtime.state.list_open = false;
     type_keys(&mut runtime, "/");
-    for _ in 0..2 {
+    let escape = |runtime: &mut super::runtime::Runtime| {
         runtime.key(crossterm::event::KeyEvent::new(
             KeyCode::Esc,
             KeyModifiers::NONE,
         ));
-    }
+    };
+    escape(&mut runtime);
+    let rendered = runtime_screen(&runtime, 30);
+    assert!(!rendered.contains("/delegate"), "{rendered}");
+    assert_eq!(runtime.composer.text(), "/");
     assert_eq!(sent_methods(&mut rx), Vec::<String>::new());
+
+    escape(&mut runtime);
+    assert_eq!(
+        sent_methods(&mut rx),
+        vec!["_nori/session/cancel_observed"]
+    );
 }
 
 #[test]

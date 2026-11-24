@@ -40,7 +40,7 @@ Path: @/nori-rs/tui/src/attach
 - Attach cannot list the agent's own commands, so Enter runs a highlighted
   builtin only when the typed name is the start of its name. `/review` stays
   a prompt even though the menu's loose match highlights `/resume-viewonly`.
-- Esc with a menu open goes to the composer and never cancels the turn.
+- With a menu open, the first Escape closes it and keeps the draft and the turn. The menu stays closed for that text, so the next Escape cancels as usual. Plain `nori` behaves the same.
 - Builtin names win over same-named agent commands, as in plain `nori`:
   `/compact` or `/model` typed in attach is refused with its reason instead
   of reaching the agent as text.
