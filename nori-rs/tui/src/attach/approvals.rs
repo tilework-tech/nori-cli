@@ -177,7 +177,7 @@ pub(super) fn render_mode_menu(state: &AttachState, area: Rect, buf: &mut Buffer
         if current == Some(mode) {
             name.push_str(" (current)");
         }
-        let name = format!("{name:<24}");
+        let name = format!("{name:<26}");
         let name = if index == menu.selected {
             name.cyan().bold()
         } else {

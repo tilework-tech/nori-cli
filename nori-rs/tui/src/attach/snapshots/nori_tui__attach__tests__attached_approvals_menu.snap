@@ -1,6 +1,6 @@
 ---
 source: tui/src/attach/tests_approvals.rs
-assertion_line: 47
+assertion_line: 50
 expression: menu
 ---
  Nori host  CONTROLLING
@@ -14,8 +14,8 @@ expression: menu
  Approvals for this session
  New sessions start in the host default. The sandbox is set separately.
 
-   Ask                  Ask before every edit and command.
- › Agent (current)      The agent asks when it judges it needs to.
-   Approve all          Nori approves every permission request.
+   Ask                    Ask before every edit and command.
+ › Agent (current)        The agent asks when it judges it needs to.
+   Approve all            Nori approves every permission request.
 
  ↑↓ move · enter choose · esc close
