@@ -211,8 +211,11 @@ schema and the TypeScript type carry `contract: string`. `version` is the
 `nori` version and is informational. `host_serves_contract(host, client)`
 decides compatibility with the semver caret rule `^client` (same major and a
 host no older than the client for `1.x`, same minor for `0.y`; build metadata
-ignored; unparsable means incompatible). `nori host` and `nori exec` both use
-it before reusing a running host; the bump rules are in
+ignored; unparsable means incompatible). `nori host`, `nori host --stdio`,
+and `nori exec` use it before reusing a running host. So after a minor bump,
+a newer stdio or exec client does not join a running older host and serves
+itself instead. `nori attach` does not check the contract; it adapts to the
+capabilities the host advertises. The bump rules are in
 [remote-control.md §12](../../docs/remote-control.md#handshake-and-discovery).
 
 `host_wire_schema()` publishes one JSON Schema (draft 2020-12) covering the

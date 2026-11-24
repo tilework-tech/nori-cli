@@ -160,6 +160,7 @@ mod close_refusal;
 mod context;
 mod delegation;
 mod explore_details;
+mod new_session_folder;
 mod part10;
 mod part8;
 mod queue_list;

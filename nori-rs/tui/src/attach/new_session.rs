@@ -1,30 +1,58 @@
 //! `/new [DIR] [AGENT]`: the folder a new host session starts in, and Tab
-//! completion of that folder. Folders are named from the attaching
-//! terminal's directory and completed against this machine's files.
+//! completion of that folder. Folders are named from the session on screen,
+//! or with none, from the attaching terminal's directory on a local host.
+//! Tab asks the host for the folders when it serves `find_paths`, so a
+//! remote host completes from its own disk; an older host completes
+//! against this machine's files. A host serving `find_paths` also names
+//! `~` from its own home and, with no session on screen, relative folders
+//! from its own folder, so those are sent as typed. An older host takes
+//! only absolute folders, so they are resolved here with this machine's
+//! home.
 
 use std::path::Path;
-use std::path::PathBuf;
 
 use serde_json::Value;
 use serde_json::json;
 
 const USAGE: &str = "Usage: /new [folder] [agent]";
 
+/// Where `/new` starts and resolves relative folders.
+pub(super) enum Base<'a> {
+    /// The folder of the session on screen, on the host's disk.
+    Session(&'a Path),
+    /// The attaching terminal's directory; a remote host does not have it.
+    Terminal(&'a Path),
+}
+
 /// `_nori/session/new` parameters for the arguments after `/new`. A lone
-/// argument names a folder when it looks like a path or is a folder under
-/// `base`, and an agent otherwise. Without a folder, a session on a local
-/// host that supports `folders` starts in `base`.
+/// argument names a folder when it looks like a path, or on a local host
+/// when it is a folder under the base, and an agent otherwise. Without a
+/// folder, a session starts in the session's folder, or for a local host
+/// in the terminal's; a remote host otherwise picks its own. `host_names`
+/// is whether the host resolves `~` and relative folders itself.
 pub(super) fn params(
     args: &str,
-    base: &Path,
+    base: Base<'_>,
     folders: bool,
+    host_names: bool,
     remote: bool,
 ) -> Result<Value, String> {
+    let on_terminal = matches!(base, Base::Terminal(_));
+    let (base, default) = match base {
+        Base::Session(folder) => (folder, Some(folder.to_path_buf())),
+        Base::Terminal(folder) => (folder, (!remote).then(|| folder.to_path_buf())),
+    };
+    let host_resolves = |folder: &str| {
+        host_names
+            && (folder.starts_with('~') || (on_terminal && remote && !folder.starts_with('/')))
+    };
     let words: Vec<&str> = args.split_whitespace().collect();
     let (folder, agent) = match words.as_slice() {
         [] => (None, None),
         [one]
-            if one.starts_with(['/', '~', '.']) || one.contains('/') || base.join(one).is_dir() =>
+            if one.starts_with(['/', '~', '.'])
+                || one.contains('/')
+                || (!remote && base.join(one).is_dir()) =>
         {
             (Some(*one), None)
         }
@@ -33,10 +61,12 @@ pub(super) fn params(
         _ => return Err(USAGE.into()),
     };
     let mut params = json!({});
-    // A remote host need not have this terminal's directory, so a session
-    // there starts in the host's own folder unless one is named.
-    let default = (!remote).then(|| base.to_path_buf());
-    if let Some(cwd) = folder.map(|folder| resolve(folder, base)).or(default)
+    if let Some(cwd) = folder
+        .map(|folder| match host_resolves(folder) {
+            true => std::path::PathBuf::from(folder),
+            false => crate::session_folder::resolve(folder, base),
+        })
+        .or(default)
         && folders
     {
         params["cwd"] = json!(cwd.to_str().ok_or("The folder is not valid UTF-8.")?);
@@ -49,67 +79,4 @@ pub(super) fn params(
         params["agent"] = json!(agent);
     }
     Ok(params)
-}
-
-/// `text` (a `/new` command) with its folder completed as far as the
-/// matching folders agree, and those folders when more than one matches.
-pub(super) fn complete(text: &str, base: &Path) -> Option<(String, Vec<String>)> {
-    let typed = text.strip_prefix("/new ")?;
-    if typed.contains(char::is_whitespace) {
-        return None;
-    }
-    let (parent, prefix) = typed
-        .rsplit_once('/')
-        .map_or(("", typed), |(parent, prefix)| {
-            (&typed[..=parent.len()], prefix)
-        });
-    let directory = if parent.is_empty() {
-        base.to_path_buf()
-    } else {
-        resolve(parent, base)
-    };
-    let mut names: Vec<String> = std::fs::read_dir(directory)
-        .ok()?
-        .flatten()
-        .filter(|entry| entry.path().is_dir())
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        // `/new` arguments split on whitespace, so such names cannot be typed.
-        .filter(|name| !name.contains(char::is_whitespace))
-        .filter(|name| {
-            name.starts_with(prefix) && (prefix.starts_with('.') || !name.starts_with('.'))
-        })
-        .collect();
-    names.sort();
-    let first = names.first()?;
-    let shared = names.iter().fold(first.as_str(), |shared, name| {
-        let end = shared
-            .char_indices()
-            .zip(name.chars())
-            .find(|((_, a), b)| a != b)
-            .map_or(shared.len().min(name.len()), |((at, _), _)| at);
-        &shared[..end]
-    });
-    let completed = if names.len() == 1 {
-        format!("/new {parent}{shared}/")
-    } else {
-        format!("/new {parent}{shared}")
-    };
-    let candidates = if names.len() > 1 {
-        names.iter().map(|name| format!("{name}/")).collect()
-    } else {
-        Vec::new()
-    };
-    Some((completed, candidates))
-}
-
-/// `folder` as an absolute path: `~` is the home directory and relative
-/// folders start from `base`.
-fn resolve(folder: &str, base: &Path) -> PathBuf {
-    let home = || dirs::home_dir().unwrap_or_default();
-    let path = match folder.strip_prefix('~') {
-        Some("") => home(),
-        Some(rest) if rest.starts_with('/') => home().join(rest.trim_start_matches('/')),
-        _ => base.join(folder),
-    };
-    path.components().collect()
 }

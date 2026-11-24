@@ -98,6 +98,7 @@ async fn run(
                 _ = refresh.tick() => runtime.refresh_list(),
             }
             runtime.composer.flush_paste_burst_if_due();
+            runtime.search_files();
             let height = tui.terminal.size()?.height;
             tui.draw(height, |frame| {
                 let area = frame.area();

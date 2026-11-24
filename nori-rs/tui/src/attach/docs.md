@@ -254,23 +254,53 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
 
 - [`/new [DIR] [AGENT]`](new_session.rs) starts a host session, and like
   other mutations requires control in this terminal. Plain `/new` starts in
-  the attaching terminal's directory, not the host's; on a host named with
-  `--host`, which may be another machine, it starts in the host's folder. A lone argument is a
-  folder when it starts with `/`, `~`, or `.`, contains `/`, or names an
-  existing folder under the attaching directory; otherwise it is an agent, so
-  `/new <agent>` keeps working. Folders are made absolute (`~` expanded,
-  relative ones joined to the attaching directory) before sending. `cwd` is
-  sent only when the host's `initialize` advertised
-  `capabilities.nori_sessions.session_cwd`; otherwise plain `/new` sends no
-  folder and a named folder is refused with a notice, keeping the draft.
-- Tab on a `/new <partial>` draft completes the folder like a shell, against
-  this machine's filesystem (so on a remote `--host` it sees local folders):
-  it fills the longest prefix the matching folders share, appends `/` to a
-  single match, expands `~`, hides dot-folders unless the typed prefix starts
-  with `.`, and lists several matches in the notice line.
+  the folder of the session on screen (its list row's `cwd`, or the folder
+  its `session_started` event reported). With no session on screen it starts
+  in the attaching terminal's directory, or on a host named with `--host`,
+  which may be another machine, in the host's own folder. A lone argument is a folder when it starts
+  with `/`, `~`, or `.`, or contains `/`; on a local host it is also a folder
+  when it names an existing folder under the base. Otherwise it is an agent,
+  so `/new <agent>` keeps working. A `--host` host never consults this
+  machine's disk for that rule. Who resolves the folder depends on the host:
+
+  | Typed folder | Host advertises `find_paths` | Older host |
+  | --- | --- | --- |
+  | `~` or `~/…` | Sent as typed; the host uses its own home | Expanded with this machine's home |
+  | Relative, session on screen | Joined to the session's folder here (already a host path) | Same |
+  | Relative, no session, `--host` host | Sent as typed; the host uses its own folder | Joined to the terminal's directory |
+  | Relative, no session, local host | Joined to the terminal's directory | Same |
+
+  A client cannot know a remote host's home, which is why a host with
+  `find_paths` names `~` itself. An older host accepts only absolute
+  folders, so on a remote older host whose home differs, name the folder
+  another way. Every other folder is made absolute here before sending.
+  `cwd` is sent only when the host's `initialize` advertised `capabilities.nori_sessions.session_cwd`;
+  otherwise plain `/new` sends no folder and a named folder is refused with a
+  notice, keeping the draft.
+- Tab on a `/new <partial>` draft completes the folder like a shell. When
+  the host advertised `capabilities.nori_sessions.find_paths`, Tab sends
+  `_nori/session/find_paths` (`kind: "folders"`, the session on screen, at
+  most 50 matches) and completes from the host's disk once it answers; a
+  reply that arrives after the draft changed is dropped. An older host is
+  completed against this machine's filesystem. Either way Tab fills the
+  longest prefix the matching folders share (a host list of 50, which may
+  have been cut short, is only listed), appends `/` to a single match,
+  hides dot-folders unless the typed prefix starts with `.`, and lists
+  several matches in the notice line. The completion helpers live in
+  [`session_folder.rs`](../session_folder.rs), shared with plain `nori`.
+- `@` file mentions use the same call with `kind: "files"` for the session
+  on screen (the host's folder with none), limit 20. The composer reports each
+  edit of its `@` token; one search is in flight at a time and only the newest
+  query typed meanwhile is sent when it lands
+  ([`HostFileSearch`](../host_client/file_search.rs)). Matches for a session
+  no longer on screen are dropped. A host without `find_paths` gets no
+  search and the popup stays empty.
 
 ### Things to Know
 
+- `nori attach` does not check the host contract version. It adapts to an
+  older host by the capabilities that host advertises (`session_cwd`,
+  `find_paths`), as with folder naming above.
 - Older `nori attach` builds decode `_nori/session/event` envelopes strictly
   and fail on `ApprovalModeChanged`, so they cannot follow a host new enough
   to send it.

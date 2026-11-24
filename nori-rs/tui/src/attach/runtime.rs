@@ -40,6 +40,12 @@ pub(super) enum Pending {
         message_id: String,
         draft: String,
     },
+    /// `@` matches for the composer.
+    FindFiles(crate::host_client::FileSearch),
+    /// `/new` folders to complete `text`, if it is still in the composer.
+    CompleteFolder {
+        text: String,
+    },
 }
 
 pub(super) struct Runtime {
@@ -65,6 +71,10 @@ pub(super) struct Runtime {
     pub(super) session_folders: bool,
     /// Whether the host was named with `--host` and may be another machine.
     pub(super) remote: bool,
+    /// Whether the host answers `@` mentions and `/new` folder completion
+    /// from its own disk.
+    pub(super) find_paths: bool,
+    pub(super) file_search: crate::host_client::HostFileSearch,
 }
 
 impl Runtime {
@@ -126,6 +136,8 @@ impl Runtime {
             cwd: std::env::current_dir().unwrap_or_default(),
             session_folders: false,
             remote: false,
+            find_paths: false,
+            file_search: Default::default(),
         };
         // A paste can open the `/` menu before the first key or host event.
         runtime.sync_command_menu();
@@ -181,7 +193,9 @@ impl Runtime {
             | Pending::Prompt { .. }
             | Pending::Mutation { .. }
             | Pending::Close { .. }
-            | Pending::FollowUp { .. } => None,
+            | Pending::FollowUp { .. }
+            | Pending::FindFiles(_)
+            | Pending::CompleteFolder { .. } => None,
         };
         if self.client.request(call, pending).is_err() {
             self.state
@@ -269,6 +283,7 @@ impl Runtime {
                 }
                 self.state.connected = false;
                 self.next_waiting_after_refresh = false;
+                self.file_search.reset();
                 let uncertain = unanswered.iter().any(|pending| {
                     matches!(
                         pending,
@@ -318,6 +333,31 @@ impl Runtime {
         }
         self.note_request_on_screen();
         Ok(())
+    }
+
+    /// Send the newest `@` query the composer reported, one at a time.
+    /// A host without `find_paths` gets none and the popup stays empty.
+    pub fn search_files(&mut self) {
+        let Some(query) = self.composer.take_file_search() else {
+            return;
+        };
+        if !self.find_paths || !self.state.connected {
+            return;
+        }
+        let search = crate::host_client::FileSearch {
+            session_id: self.state.selected.clone(),
+            query,
+        };
+        if let Some(search) = self.file_search.query(search) {
+            self.send(search.call(), Pending::FindFiles(search));
+        }
+    }
+
+    /// The search in flight was answered; send the one that waited.
+    fn search_next_file(&mut self) {
+        if let Some(search) = self.file_search.finished() {
+            self.send(search.call(), Pending::FindFiles(search));
+        }
     }
 
     pub(super) fn follow_up_notice(&mut self, session_id: &str, text: String) {
@@ -375,6 +415,10 @@ impl Runtime {
                 self.cancel_observed_reply(&session_id, &observed_turn_id, Err(reason));
                 return Ok(());
             }
+            (Err(_), Pending::FindFiles(_)) => {
+                self.search_next_file();
+                return Ok(());
+            }
             (Err(error), pending) => {
                 let text = error
                     .message
@@ -390,9 +434,32 @@ impl Runtime {
                 session_id,
                 observed_turn_id,
             } => self.cancel_observed_reply(&session_id, &observed_turn_id, Ok(result)),
+            Pending::FindFiles(search) => {
+                let found = crate::host_client::file_matches(result.clone());
+                // The next query goes out even when this reply was unusable.
+                self.search_next_file();
+                if search.session_id == self.state.selected {
+                    self.composer.on_file_search_result(search.query, found?);
+                }
+            }
+            Pending::CompleteFolder { text } => {
+                let found: nori_protocol::FindPathsResult = serde_json::from_value(result.clone())?;
+                let complete = found.matches.len() < super::input::FOLDER_MATCHES;
+                if self.composer.text() == text
+                    && let Some(typed) = crate::session_folder::typed_folder(&text)
+                    && let Some((completed, candidates)) =
+                        crate::session_folder::complete_from_host(typed, &found.matches, complete)
+                {
+                    self.composer.set_text(completed);
+                    if !candidates.is_empty() {
+                        self.state.show_notice(candidates.join("  "));
+                    }
+                }
+            }
             Pending::Initialize => {
                 self.session_folders =
                     result["capabilities"]["nori_sessions"]["session_cwd"] == true;
+                self.find_paths = result["capabilities"]["nori_sessions"]["find_paths"] == true;
                 self.state
                     .role_changed(result["control"]["role"].as_str().unwrap_or("watcher"));
                 self.state.connected = true;

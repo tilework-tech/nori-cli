@@ -38,7 +38,7 @@ pub(super) fn host_with(extra: &str, env: &[(&str, &str)]) -> Host {
 }
 
 /// Connect without initializing, so a test can send its own `initialize`.
-fn connect(host: &Host) -> ManagedClient {
+pub(super) fn connect(host: &Host) -> ManagedClient {
     let state: Value = serde_json::from_str(
         &std::fs::read_to_string(host.0.path().join("host/state.json")).unwrap(),
     )
