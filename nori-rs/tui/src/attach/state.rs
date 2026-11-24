@@ -426,6 +426,15 @@ impl AttachState {
             .conversations
             .entry(envelope.conversation_id.clone())
             .or_default();
+        if !matches!(
+            envelope.event,
+            SessionEvent::Acp(AcpEvent::Response {
+                response: Err(_),
+                ..
+            })
+        ) {
+            conversation.close_refusal.expire_report();
+        }
         match envelope.event {
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::AgentNotification::SessionNotification(notification),
