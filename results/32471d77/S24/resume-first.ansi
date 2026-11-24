@@ -1,0 +1,35 @@
+
+  [1mResume a previous session
+[0m[39m[49m  [38;5;8mSaved sessions for this working directory
+[39m                                                                                  [1mDetails
+[0m[39m[49m   [1m [0m[39m[49m [1mConversation[0m[39m[49m                             [1mUpdated[0m[39m[49m           [1mBranch
+[0m[39m[49m  [38;5;2m▏ [39m 93731cae-68d6-446a-825b-72fb0aa452c9     6 seconds ago     Not reported[38;5;2m▕[39m     [38;5;8mSession       [39m  93731cae-68d6-44…
+                                                                                  [38;5;8mProject       [39m  bf31c92a2890e6e7
+                                                                                  [38;5;8mAgent         [39m  claude-code
+                                                                                  [38;5;8mWorking direc…[39m  /tmp/nori-host-t…
+                                                                                  [38;5;8mBranch        [39m  Not reported
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  [38;5;2m↑↓/j/k[39m [38;5;8mbrowse  [38;5;2m/[39m [38;5;8msearch  [38;5;2menter[39m [38;5;8mresume  [38;5;2mesc[39m [38;5;8mstart new  [38;5;2mctrl+c[39m [38;5;8mquit

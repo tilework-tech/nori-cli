@@ -1,0 +1,8 @@
+24892 initialize - ''
+24892 session/list - ''
+24892 session/new - ''
+24974 initialize - ''
+24974 session/list - ''
+24974 session/new - ''
+24974 session/set_config_option claude-code-0 ''
+24974 session/prompt claude-code-0 'ession.\n</context>\n\nstartup lantern word'

@@ -1,0 +1,5 @@
+24172 initialize - ''
+24172 session/list - ''
+24172 session/new - ''
+24172 session/set_config_option claude-code-0 ''
+24172 session/prompt claude-code-0 ' the piped lantern\n\norchard context line'

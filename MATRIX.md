@@ -229,3 +229,40 @@ passed at all four.
 Observation, not a finding: the watcher shows the adapter's bare stream error (`close declined by …`) without the
 `Failed to close the session:` prefix, because only the terminal that sent the close knows it is a close refusal.
 
+
+## S34: plain startup through the owned host (#750)
+
+| ID | Scenario |
+|---|---|
+| S34a | plain startup: host `_nori/host/prepare_agent` then `session/new`, one server, session before any prompt |
+| S34b | prompt typed while the startup server is held in `initialize` (6 s `init-delay`) is sent once, after `session/new` |
+| S34c | positional prompt before readiness is sent once |
+| S34d | piped prompt (`printf … \| nori`) before readiness is sent once |
+| S34e | piped context plus `--stdin "instruction"` before readiness is sent once with both parts |
+| S34f | refused startup `session/new`: typed input stays unsent and back in the composer; Enter retries once |
+| S34g | refused startup: positional prompt stays unsent and back in the composer; Enter retries once |
+| S34h | `/new` typed during startup waits for the startup session (one server, one `session/new`) |
+| S34i | `/new` after a refused startup starts a session through the host |
+| S34j | `/resume` during startup lists and restores on the startup server: one adapter, one `session/load`, no `session/new` |
+| S34k/l | per-session skillset applied or dismissed, then the session starts through the host |
+| S34m | control: `nori resume --last` stays in-process (no host requests), while plain startup in the same home logs them |
+
+The host path shows in `$NORI_HOME/log/nori-acp.*` as `host ACP request … method=` (needs
+`RUST_LOG=nori_host_runtime=debug`; the line is new in #750, so the parent shows none). The adapter's own
+sequence (`initialize → session/list → session/new`) is the same on both heads, so S34m is the control
+that shows the log line separates the two paths.
+
+`harness/pty/verifier_host_children.rs` is a scratch tui-pty-e2e test (copy into the head under test):
+a `/new` session must follow its head fork and show a delegated child's result.
+
+| PR | Head | Run | Result |
+|---|---|---|---|
+| #749 | `541c65f6` | S34a-m | 60/77; host log line absent (expected), S34f/g drop the refused input (baseline gap fixed by #750) |
+| #749 | `541c65f6` | verifier_host_children | fork after `/new` fails: adapter `fork_session from=0 new_id=1`, TUI never shows `Session forked.`; delegation passes |
+| #750 | `32471d77` | S34a-m | 77/77 |
+| #750 | `32471d77` | full matrix | 394/430 = S34 77/77 + 317/353, identical check-by-check to `e86f3803` |
+| #750 | `32471d77` | tui-pty-e2e host_startup, delegation, session_lifecycle, startup, verifier_host_children | 47/47 |
+
+Native macOS: the author's pinned run 45373745120 omits `host_startup` and the #747-#749 host suites. Verifier
+run 45379653626 (`verify/pr-750-32471d77-native-startup`, checkout pinned to `32471d77`) adds `host_startup` 8/8,
+`host_new_session` 2/2, `host_session_picker` 5/5, `host_agent_switch` 4/4 and `delegation` 9/9; all green.

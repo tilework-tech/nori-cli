@@ -1,0 +1,35 @@
+shell$ PATH=/tmp/nori-host-tui-acceptance-a/S34k/skillsets-bin:$PATH RUST_LOG=nori_host_runtime=debug,nori_harness=debug
+ nori --skip-trust-directory
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/nori-host-tui-acceptance-a/S34k/roots/alpha/app[2m · [0m[39m[49mAgent approvals
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude
+
+
+[39m  [1mSelect skillset
+[0m[39m[49m  [38;5;8mNo session worktree - installing to your global skillset
+
+[39m  [38;5;2m▏1.[39m No Skillset                                                                                                    [38;5;2m▕
+[39m  [38;5;2m▏[39m   [38;5;8mStart without a skillset                                                                                       [38;5;2m▕
+[39m   2. default
+
+  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2m/[39m [38;5;8msearch  [38;5;2menter[39m [38;5;8mselect  [38;5;2mesc[39m [38;5;8mclose
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

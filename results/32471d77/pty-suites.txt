@@ -1,0 +1,52 @@
+test alt_up_in_a_top_level_session_leaves_the_prompt_alone ... ok
+test a_session_that_starts_with_a_delegation_is_titled_by_its_task ... ok
+test declining_different_kind_does_not_start_child ... ok
+test same_kind_child_starts_and_returns_without_approval_or_exiting_terminal ... ok
+test alt_down_reaches_a_waiting_child_even_with_a_draft_in_the_parent ... ok
+test different_kind_child_needs_start_and_its_permission_stays_in_child ... ok
+test delegation_reads_clearly_from_request_to_result ... ok
+test the_child_breadcrumb_fits_one_row_of_an_80_column_terminal ... ok
+test the_session_list_keeps_names_with_a_shared_prefix_apart_at_80_columns ... ok
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.58s
+test a_positional_prompt_start_writes_one_welcome_card ... ok
+test a_positional_prompt_whose_session_is_refused_returns_to_the_composer_unsent ... ok
+test a_positional_prompt_starts_through_the_owned_host_once ... ok
+test a_prompt_typed_while_resume_prepares_reaches_the_restored_session ... ok
+test a_prompt_typed_while_the_agent_prepares_reaches_the_startup_session_once ... ok
+test a_refused_startup_session_reports_the_agent_and_the_next_prompt_retries ... ok
+test startup_activates_its_session_through_the_owned_host ... ok
+test resume_while_the_agent_prepares_restores_on_the_startup_server ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.41s
+test a_new_session_starts_beside_a_busy_one_and_takes_the_next_prompt ... ok
+test a_long_title_keeps_the_request_line_on_one_row ... ok
+test a_same_process_head_fork_is_allowed_at_the_cap_but_a_transcript_fork_is_not ... ok
+test a_restarted_session_keeps_its_title ... ok
+test at_the_cap_a_transcript_fork_preserves_the_current_session ... ok
+test at_the_cap_resume_preserves_the_current_session_and_explains_how_to_make_room ... ok
+test at_the_cap_a_new_session_is_refused_with_how_to_close_one ... ok
+test closing_a_busy_session_asks_for_a_second_press ... ok
+test close_command_closes_the_session_on_screen_and_shows_the_next ... ok
+test a_loop_in_the_background_stays_in_its_own_row ... ok
+test preparing_another_agent_leaves_no_line_in_the_old_session ... ok
+test ctrl_d_in_the_list_closes_a_session_and_frees_its_slot ... ok
+test restarting_a_failed_parent_keeps_its_child_under_the_replacement ... ok
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.82s
+test skillset_per_session_activates_after_selection ... ok
+test skillsets_v2_per_session_activates_after_layering ... ok
+test model_command_works_before_first_prompt ... ok
+test picker_choice_supersedes_an_alias_override_in_the_next_session ... ok
+test startup_activates_session_without_input ... ok
+test skillsets_v2_per_session_activates_even_when_layering_fails ... ok
+test test_poll_does_not_block_when_no_data ... ok
+test test_startup_hides_install_hint_when_nori_installed ... ok
+test test_startup_shows_nori_banner ... ok
+test test_runs_in_temp_directory_by_default ... ok
+test test_startup_error_for_unregistered_model ... ok
+test test_startup_shows_welcome ... ok
+test test_startup_with_dimensions ... ok
+test test_trust_screen_is_skipped_with_default_config ... ok
+test test_trust_directory_saves_to_config ... ok
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.34s
+test a_new_session_shows_its_delegated_childs_result ... ok
+test a_new_session_follows_its_head_fork ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.65s

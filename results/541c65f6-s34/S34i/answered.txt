@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-b/S34i/roots/alpha/app · Agent approvals
+  Agent        Claude · auto
+
+
+› startup lantern word
+
+
+• claude-code heard: startup lantern word
+
+  1 failed · 1 ready
+
+                                                                                                         [ acceptEdits ]
+› @ for file mentions
+

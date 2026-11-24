@@ -1,0 +1,7 @@
+32425 initialize - ''
+32425 session/list - ''
+32425 session/new - ''
+32425 session/prompt claude-code-0 'ession.\n</context>\n\nstartup lantern word'
+32600 initialize - ''
+32600 session/list - ''
+32600 session/load claude-code-0 ''

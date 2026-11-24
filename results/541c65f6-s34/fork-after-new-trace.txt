@@ -1,0 +1,7 @@
+    2026-11-24T10:55:59.220768Z  WARN nori_acp_host::connection::acp_connection: ACP agent stderr: Mock agent: advertising session/fork capability
+    2026-11-24T10:55:59.796914Z  WARN nori_acp_host::connection::acp_connection: ACP agent stderr: Mock agent: advertising session/fork capability
+    2026-11-24T10:56:01.151394Z  WARN nori_acp_host::connection::acp_connection: ACP agent stderr: Mock agent: fork_session from=0 new_id=1
+    2026-11-24T10:56:01.152165Z DEBUG nori_harness::backend::session_swap: Swapped active ACP session: SessionId("1")
+test a_new_session_follows_its_head_fork ... FAILED
+    a_new_session_follows_its_head_fork
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 12.20s

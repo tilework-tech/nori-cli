@@ -1,0 +1,4 @@
+24164 initialize - ''
+24164 session/list - ''
+24164 session/new - ''
+24164 session/prompt claude-code-0 ' the piped lantern\n\norchard context line'

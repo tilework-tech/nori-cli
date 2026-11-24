@@ -1,0 +1,16 @@
+{"t": 1795517972.3364935, "adapter": "codex", "pid": 64617, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-f1/S30/roots/beta/app", "argv": []}
+{"t": 1795517972.33655, "adapter": "codex", "pid": 64617, "kind": "request", "method": "initialize"}
+{"t": 1795517972.3374414, "adapter": "codex", "pid": 64617, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-f1/S30/roots/beta/app"}
+{"t": 1795517972.531637, "adapter": "codex", "pid": 64617, "kind": "request", "method": "session/load", "cwd": "/tmp/nori-host-tui-acceptance-f1/S30/roots/beta/app", "sessionId": "saved-orchard"}
+{"t": 1795517972.5358098, "adapter": "codex", "pid": 64617, "kind": "request", "method": "session/set_config_option", "sessionId": "saved-orchard", "configId": "mode", "value": "workspace-write"}
+{"t": 1795517972.5812118, "adapter": "codex", "pid": 64617, "kind": "request", "method": "session/prompt", "sessionId": "saved-orchard", "text": "orchard check"}
+{"t": 1795517972.5815396, "adapter": "codex", "pid": 64617, "kind": "turn_end", "sessionId": "saved-orchard", "stopReason": "end_turn"}
+{"t": 1795517972.6370368, "adapter": "opencode", "pid": 64626, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-f1/S30/roots/beta/app", "argv": []}
+{"t": 1795517972.6371021, "adapter": "opencode", "pid": 64626, "kind": "request", "method": "initialize"}
+{"t": 1795517972.6380575, "adapter": "opencode", "pid": 64626, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-f1/S30/roots/beta/app"}
+{"t": 1795517972.8245704, "adapter": "opencode", "pid": 64626, "kind": "stdin_eof"}
+{"t": 1795517974.8428588, "adapter": "opencode", "pid": 64703, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-f1/S30/roots/beta/app", "argv": []}
+{"t": 1795517974.8429112, "adapter": "opencode", "pid": 64703, "kind": "request", "method": "initialize"}
+{"t": 1795517974.8437417, "adapter": "opencode", "pid": 64703, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-f1/S30/roots/beta/app"}
+{"t": 1795517975.0320504, "adapter": "opencode", "pid": 64703, "kind": "stdin_eof"}
+{"t": 1795517977.546659, "adapter": "codex", "pid": 64617, "kind": "stdin_eof"}

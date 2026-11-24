@@ -1891,6 +1891,321 @@ def s33_early_input(ctx, refuse=False, stage="init"):
     quit_fg(t)
 
 
+# ---------------------------------------------------------------------------
+# S34: plain `nori` startup through the owned host (#750)
+# ---------------------------------------------------------------------------
+HOST_LOG_ENV = "RUST_LOG=nori_host_runtime=debug,nori_harness=debug"
+STARTUP_WORD = "startup lantern word"
+SKILLSETS_MOCK = "#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in install|switch) exit 0 ;; esac; done\necho default\nexit 0\n"
+
+
+def host_requests(ctx):
+    """ACP methods the owned host received, from its debug log (present from #750)."""
+    out = []
+    lines = []
+    for log in sorted((ctx.fx["homes"]["host"] / "log").glob("nori-acp*")):
+        lines += log.read_text(errors="replace").splitlines()
+    for line in lines:
+        if "host ACP request" in line and " method=" in line:
+            out.append(line.split(" method=", 1)[1].split()[0])
+    return out
+
+
+def adapter_sequence(ctx, pid=None):
+    return [r.get("method") for r in ctx.ledger("request")
+            if (pid is None or r["pid"] == pid) and r.get("method")
+            and not r["method"].startswith("session/set_")]
+
+
+def record_startup_traces(ctx):
+    (ctx.dir).mkdir(parents=True, exist_ok=True)
+    (ctx.dir / "host-requests.txt").write_text("\n".join(host_requests(ctx)) + "\n")
+    rows = [f'{r["pid"]} {r.get("method")} {r.get("sessionId") or "-"} {r.get("text", "")[-40:]!r}'
+            for r in ctx.ledger("request")]
+    (ctx.dir / "adapter-trace.txt").write_text("\n".join(rows) + "\n")
+
+
+def startup_path(ctx, label):
+    """Check and record which path started the first session."""
+    reqs = host_requests(ctx)
+    prep = reqs.index("_nori/host/prepare_agent") if "_nori/host/prepare_agent" in reqs else None
+    new = reqs.index("session/new") if "session/new" in reqs else None
+    ctx.check(f"{label}.host_prepared_then_started", prep is not None and new is not None and prep < new, reqs[:8])
+
+
+def prompts_with(ctx, word):
+    return [r for r in ctx.ledger("request", "session/prompt") if word in r.get("text", "")]
+
+
+def launch_plain(ctx, args="", pre="", delay=None, refuse=False, name="fg"):
+    if delay:
+        (ctx.fx["control"] / "init-delay").write_text(str(delay))
+    if refuse:
+        (ctx.fx["control"] / "new-refuse").write_text("1")
+    t = ctx.term(name)
+    t.run(f"{pre}{HOST_LOG_ENV} {NORI} --skip-trust-directory {args}".strip())
+    return t
+
+
+def wait_text(t, needle, timeout=15):
+    try:
+        t.wait_for(needle, timeout)
+        return True
+    except TimeoutError:
+        return False
+
+
+def s34_plain_startup(ctx):
+    """Plain startup prepares the default server through the owned host and starts one session before any prompt."""
+    t = launch_plain(ctx)
+    wait_composer(t)
+    wait_ledger(ctx, lambda r: r.get("method") == "session/new", timeout=15)
+    time.sleep(1.5)
+    t.capture("ready")
+    spawns = ctx.ledger("spawn")
+    ctx.check("startup.one_server", len(spawns) == 1, [s["pid"] for s in spawns])
+    seq = adapter_sequence(ctx)
+    ctx.check("startup.session_started_before_any_prompt", seq.count("session/new") == 1 and "session/prompt" not in seq, seq)
+    startup_path(ctx, "startup")
+    submit(t, STARTUP_WORD)
+    ok = wait_text(t, f"heard: {STARTUP_WORD}", 20)
+    time.sleep(1.5)
+    rows = prompts_with(ctx, STARTUP_WORD)
+    ctx.check("startup.prompt_answered_once", ok and len(rows) == 1 and rows[0]["pid"] == spawns[0]["pid"], len(rows))
+    t.capture("answered")
+    record_startup_traces(ctx)
+    pids = {r["pid"] for r in ctx.ledger("spawn")}
+    quit_fg(t)
+    time.sleep(1)
+    ctx.check("startup.server_stopped_on_quit", not [p for p in pids if running(p)], sorted(pids))
+
+
+def s34_early_input(ctx, how):
+    """Input given before the startup server is ready (typed, positional or piped) reaches the startup session exactly once."""
+    pre, args, word = "", "", STARTUP_WORD
+    if how == "positional":
+        args = f'"{word}"'
+    elif how == "piped":
+        pre = f"printf '{word}' | "
+    elif how == "piped+arg":
+        pre, args, word = "printf 'orchard context line' | ", '--stdin "summarize the piped lantern"', "summarize the piped lantern"
+    t = launch_plain(ctx, args=args, pre=pre, delay=STAGE_DELAY)
+    started = wait_ledger(ctx, lambda r: r.get("kind") == "init_delay_start", timeout=15)
+    typed_at = None
+    if how == "typed":
+        wait_composer(t)
+        submit(t, word)
+        typed_at = time.time()
+    time.sleep(0.8)
+    t.capture("while-preparing")
+    ends = wait_ledger(ctx, lambda r: r.get("kind") == "init_delay_end", timeout=STAGE_DELAY + 5)
+    held = [r for r in ctx.ledger("request") if r["t"] < (ends[0]["t"] if ends else 0) and r.get("method", "").startswith("session/")]
+    ctx.check("early.server_held_in_initialize", bool(started and ends), {"start": bool(started), "end": bool(ends)})
+    if typed_at:
+        ctx.check("early.typed_during_hold", bool(started and ends) and started[0]["t"] < typed_at < ends[0]["t"],
+                  {"start": started and started[0]["t"], "typed": typed_at, "end": ends and ends[0]["t"]})
+    ctx.check("early.nothing_sent_before_initialize", not held, [r.get("method") for r in held])
+    wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and word in r.get("text", ""), timeout=20)
+    time.sleep(3)
+    rows = prompts_with(ctx, word)
+    news = ctx.ledger("request", "session/new")
+    spawns = ctx.ledger("spawn")
+    ctx.check("early.delivered_once", len(rows) == 1, [(r["pid"], r["t"]) for r in rows])
+    ctx.check("early.one_server_one_session", len(spawns) == 1 and len(news) == 1, (len(spawns), len(news)))
+    ctx.check("early.sent_after_session_new", bool(rows and news) and rows[0]["t"] > news[0]["t"],
+              {"prompt": rows and rows[0]["t"], "new": news and news[0]["t"]})
+    if how == "piped+arg":
+        ctx.check("early.piped_context_included", bool(rows) and "orchard context line" in rows[0].get("text", ""), rows and rows[0].get("text", "")[-120:])
+    screen = " ".join(t.screen().split())
+    ctx.check("early.answered_on_screen", f"heard:" in screen and word.split()[-1] in screen, last_nonblank(t.screen()))
+    startup_path(ctx, "early")
+    t.capture("answered")
+    record_startup_traces(ctx)
+    quit_fg(t)
+
+
+def composer_line(screen):
+    return [l.strip() for l in screen.splitlines() if l.strip().startswith("›")][-1:]
+
+
+def s34_refused_startup(ctx, how):
+    """A refused startup session keeps typed or positional input unsent and in the composer; the next Enter retries once."""
+    args = f'"{STARTUP_WORD}"' if how == "positional" else ""
+    t = launch_plain(ctx, args=args, delay=STAGE_DELAY if how == "typed" else None, refuse=True)
+    if how == "typed":
+        wait_ledger(ctx, lambda r: r.get("kind") == "init_delay_start", timeout=15)
+        wait_composer(t)
+        submit(t, STARTUP_WORD)
+    wait_ledger(ctx, lambda r: r.get("kind") == "new_refused", timeout=STAGE_DELAY + 10)
+    time.sleep(3)
+    t.capture("after-refusal")
+    screen = t.screen()
+    ctx.check("refused.adapter_refused_session_new", len(ctx.ledger("new_refused")) == 1, len(ctx.ledger("new_refused")))
+    ctx.check("refused.input_unsent", not prompts_with(ctx, STARTUP_WORD), len(prompts_with(ctx, STARTUP_WORD)))
+    ctx.check("refused.reason_shown", "no fresh lantern is available" in " ".join(screen.split()),
+              [l.strip() for l in screen.splitlines() if "lantern" in l.lower()][-3:])
+    ctx.check("refused.input_back_in_composer", composer_line(screen) == [f"› {STARTUP_WORD}"], composer_line(screen))
+    t.capture("composer")
+    time.sleep(1.0)
+    t.keys("Enter")
+    ok = wait_text(t, f"heard: {STARTUP_WORD}", 20)
+    time.sleep(2)
+    rows = prompts_with(ctx, STARTUP_WORD)
+    news_ok = [r for r in ctx.ledger("request", "session/new")]
+    ctx.check("refused.enter_retries_and_sends_once", ok and len(rows) == 1, [(r["pid"], r.get("sessionId")) for r in rows])
+    ctx.check("refused.retry_started_a_session", len(news_ok) == 2, len(news_ok))
+    t.capture("retried")
+    record_startup_traces(ctx)
+    pids = {r["pid"] for r in ctx.ledger("spawn")}
+    quit_fg(t)
+    time.sleep(1)
+    ctx.check("refused.servers_stopped_on_quit", not [p for p in pids if running(p)], sorted(pids))
+
+
+def s34_new_without_session(ctx, when):
+    """/new with no live session: during startup it waits for the startup session; after a refused start it starts one."""
+    if when == "during":
+        t = launch_plain(ctx, delay=STAGE_DELAY)
+        wait_ledger(ctx, lambda r: r.get("kind") == "init_delay_start", timeout=15)
+        wait_composer(t)
+        slash(t, "/new", settle=0.5)
+        t.capture("new-during-hold")
+        wait_ledger(ctx, lambda r: r.get("kind") == "init_delay_end", timeout=STAGE_DELAY + 5)
+    else:
+        t = launch_plain(ctx, refuse=True)
+        wait_ledger(ctx, lambda r: r.get("kind") == "new_refused", timeout=15)
+        time.sleep(2.5)
+        t.capture("refused")
+        t.keys("Escape")
+        time.sleep(0.5)
+        slash(t, "/new", settle=0.5)
+    target = 1 if when == "during" else 2
+    deadline = time.time() + 15
+    while time.time() < deadline and len(ctx.ledger("request", "session/new")) < target:
+        time.sleep(0.2)
+    time.sleep(3)
+    t.capture("after-new")
+    news = ctx.ledger("request", "session/new")
+    spawns = ctx.ledger("spawn")
+    expected_news = 1 if when == "during" else 2
+    ctx.check("new.one_session_started", len(news) == expected_news, [(r["pid"], r.get("cwd")) for r in news])
+    if when == "during":
+        ctx.check("new.reused_startup_server", len(spawns) == 1, [s["pid"] for s in spawns])
+    submit(t, STARTUP_WORD)
+    ok = wait_text(t, f"heard: {STARTUP_WORD}", 20)
+    time.sleep(1.5)
+    rows = prompts_with(ctx, STARTUP_WORD)
+    ctx.check("new.prompt_reaches_started_session_once", ok and len(rows) == 1 and rows[0]["pid"] == news[-1]["pid"],
+              [(r["pid"], news[-1]["pid"]) for r in rows])
+    reqs = host_requests(ctx)
+    ctx.check("new.started_through_host", reqs.count("session/new") == expected_news, reqs[:10])
+    t.capture("answered")
+    record_startup_traces(ctx)
+    pids = {r["pid"] for r in ctx.ledger("spawn")}
+    quit_fg(t)
+    time.sleep(1)
+    ctx.check("new.servers_stopped_on_quit", not [p for p in pids if running(p)], sorted(pids))
+
+
+def s34_resume_during_startup(ctx):
+    """/resume while the startup server initializes lists that server's saved rows and restores on it: one adapter, no fresh session."""
+    t = launch_plain(ctx, delay=STAGE_DELAY)
+    wait_ledger(ctx, lambda r: r.get("kind") == "init_delay_start", timeout=15)
+    wait_composer(t)
+    slash(t, "/resume", settle=0.5)
+    t.capture("resume-during-hold")
+    wait_ledger(ctx, lambda r: r.get("kind") == "init_delay_end", timeout=STAGE_DELAY + 5)
+    listed = wait_text(t, "Saved orchard survey", 15)
+    t.capture("rows")
+    ctx.check("resume.rows_from_startup_server", listed, last_nonblank(t.screen()))
+    if listed:
+        choose(t, "Saved orchard survey")
+        time.sleep(3.5)
+    t.capture("restored")
+    spawns = ctx.ledger("spawn")
+    loads = [r for r in ctx.ledger("request") if r.get("method") in ("session/load", "session/resume")]
+    news = ctx.ledger("request", "session/new")
+    ctx.check("resume.same_adapter_process", len(spawns) == 1 and bool(loads) and loads[0]["pid"] == spawns[0]["pid"],
+              {"spawns": [s["pid"] for s in spawns], "loads": [(l["pid"], l.get("sessionId")) for l in loads]})
+    ctx.check("resume.no_fresh_session_started", not news, [(r["pid"]) for r in news])
+    ctx.check("resume.exactly_one_load", len(loads) == 1 and loads[0].get("sessionId") == "saved-orchard", len(loads))
+    submit(t, STARTUP_WORD)
+    ok = wait_text(t, f"heard: {STARTUP_WORD}", 20)
+    time.sleep(1.5)
+    rows = prompts_with(ctx, STARTUP_WORD)
+    ctx.check("resume.prompt_reaches_restored_session", ok and len(rows) == 1 and rows[0].get("sessionId") == "saved-orchard",
+              [r.get("sessionId") for r in rows])
+    reqs = host_requests(ctx)
+    # The host restores a saved row through its own session/new carrying the selection; the adapter sees session/load.
+    ctx.check("resume.loaded_through_host", "_nori/host/prepare_agent" in reqs and "session/new" in reqs
+              and reqs.index("_nori/host/prepare_agent") < reqs.index("session/new") and bool(loads), reqs[:10])
+    t.capture("answered")
+    record_startup_traces(ctx)
+    quit_fg(t)
+
+
+def s34_deferred_skillset(ctx, action):
+    """Per-session skillset startup: the session starts through the owned host after the skillset choice."""
+    mock_dir = ctx.run_dir / "skillsets-bin"
+    mock_dir.mkdir(parents=True, exist_ok=True)
+    mock = mock_dir / "nori-skillsets"
+    mock.write_text(SKILLSETS_MOCK)
+    mock.chmod(0o755)
+    cfg = ctx.fx["homes"]["host"] / "config.toml"
+    cfg.write_text(cfg.read_text() + "\n[tui]\nskillset_per_session = true\n")
+    t = launch_plain(ctx, pre=f"PATH={mock_dir}:$PATH ")
+    shown = wait_text(t, "Select skillset", 20) and wait_text(t, "default", 10)
+    t.capture("picker")
+    ctx.check("skillset.picker_shown", shown, last_nonblank(t.screen()))
+    time.sleep(1.0)
+    ctx.check("skillset.no_session_before_choice", not ctx.ledger("request", "session/new"), len(ctx.ledger("request", "session/new")))
+    if action == "apply":
+        t.keys("Down")
+        time.sleep(0.3)
+        t.keys("Enter")
+    else:
+        t.keys("Escape")
+    wait_ledger(ctx, lambda r: r.get("method") == "session/new", timeout=15)
+    time.sleep(2.5)
+    t.capture("after-choice")
+    news = ctx.ledger("request", "session/new")
+    ctx.check("skillset.one_session_started_after_choice", len(news) == 1, len(news))
+    startup_path(ctx, "skillset")
+    submit(t, STARTUP_WORD)
+    ok = wait_text(t, f"heard: {STARTUP_WORD}", 20)
+    time.sleep(1.5)
+    rows = prompts_with(ctx, STARTUP_WORD)
+    ctx.check("skillset.prompt_answered_once", ok and len(rows) == 1, len(rows))
+    t.capture("answered")
+    record_startup_traces(ctx)
+    quit_fg(t)
+
+
+def s34_resume_id_control(ctx):
+    """Control: `nori resume <id>` stays in-process by design, so the host log must show no host requests for it."""
+    first = launch_plain(ctx, name="first")
+    wait_composer(first)
+    submit(first, STARTUP_WORD)
+    first.wait_for(f"heard: {STARTUP_WORD}", 20)
+    quit_fg(first)
+    ctx.check("control.first_launch_used_host", "_nori/host/prepare_agent" in host_requests(ctx), host_requests(ctx)[:4])
+    for log in (ctx.fx["homes"]["host"] / "log").glob("nori-acp*"):
+        log.unlink()
+    mark = len(ctx.ledger())
+    t = ctx.term("fg")
+    t.run(f"{HOST_LOG_ENV} {NORI} --skip-trust-directory resume --last")
+    wait_composer(t)
+    wait_ledger(ctx, lambda r: r.get("method") in ("session/load", "session/resume"), timeout=15)
+    time.sleep(2)
+    t.capture("resumed")
+    loads = [r for r in ctx.ledger()[mark:] if r.get("method") in ("session/load", "session/resume")]
+    ctx.check("control.last_session_loaded", len(loads) == 1, [(r.get("method"), r.get("sessionId")) for r in loads])
+    reqs = host_requests(ctx)
+    ctx.check("control.no_host_requests", not reqs, reqs[:6])
+    record_startup_traces(ctx)
+    quit_fg(t)
+
+
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
     "S02": ("foreground quit stops a running turn", s02_foreground_quit_stops_turn),
@@ -1956,6 +2271,19 @@ SCENARIOS = {
              lambda c: s33_early_input(c, refuse=True, stage="new")),
     "S32a": ("Esc on /resume rows reaps the prepared server", lambda c: s32_dismiss_reaps_prepared(c, "/resume")),
     "S32b": ("Esc on /agent rows reaps the prepared server", lambda c: s32_dismiss_reaps_prepared(c, "/agent")),
+    "S34a": ("plain startup prepares and starts through the owned host", s34_plain_startup),
+    "S34b": ("prompt typed before the startup server is ready is sent once", lambda c: s34_early_input(c, "typed")),
+    "S34c": ("positional prompt before readiness is sent once", lambda c: s34_early_input(c, "positional")),
+    "S34d": ("piped prompt before readiness is sent once", lambda c: s34_early_input(c, "piped")),
+    "S34e": ("piped context plus instruction before readiness is sent once", lambda c: s34_early_input(c, "piped+arg")),
+    "S34f": ("refused startup keeps typed input unsent", lambda c: s34_refused_startup(c, "typed")),
+    "S34g": ("refused startup keeps a positional prompt unsent", lambda c: s34_refused_startup(c, "positional")),
+    "S34h": ("/new during startup waits for the startup session", lambda c: s34_new_without_session(c, "during")),
+    "S34i": ("/new after a refused startup starts a session", lambda c: s34_new_without_session(c, "after-refusal")),
+    "S34j": ("/resume during startup reuses the startup server", s34_resume_during_startup),
+    "S34k": ("skillset choice then startup through the host", lambda c: s34_deferred_skillset(c, "apply")),
+    "S34l": ("skillset picker dismissed then startup through the host", lambda c: s34_deferred_skillset(c, "dismiss")),
+    "S34m": ("control: `nori resume --last` stays in-process", s34_resume_id_control),
 }
 
 

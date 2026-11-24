@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-f3/S33a/roots/alpha/app · Agent approvals
+  Agent        Claude · auto
+
+  2 ready
+
+                                                                                                         [ acceptEdits ]
+› ! for shell commands
+

@@ -1,0 +1,29 @@
+RUST_LOG=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory "startup lantern word"
+[?2004l[?2004h[>7u[?1004h[6n[?u[c]10;?\[?2026h[2;2H[0m[49m[K[3;2H[0m[49m[K[4;22H[0m[49m[K[5;2H[0m[49m[K[4;1H[1m›[4;3H[22m[2m[2m$ for skill listing[39m[49m[0m[?25h[4;3H[?2026l[?2026h[2;2H[0m[49m[K[3;2H[0m[49m[K[4;22H[0m[49m[K[5;2H[0m[49m[K[39m[49m[0m[?25h[4;3H[?2026l]0;\]0;Lantern Cla… · app · startup lantern word\[?2026h[2;2H[0m[49m[K[3;2H[0m[49m[K[4;22H[0m[49m[K[5;2H[0m[49m[K[4;3H[2m@[4;9Hfile mentio[4;21Hs[39m[49m[0m[?25h[4;3H[?2026l[?2026h[2;2H[0m[49m[K[3;2H[0m[49m[K[4;22H[0m[49m[K[5;2H[0m[49m[K[39m[49m[0m[?25h[4;3H[?2026l[?2026h[2;2H[0m[49m[K[4;22H[0m[49m[K[5;2H[0m[49m[K[3;113H[2m[ auto ][39m[49m[0m[?25h[4;3H[?2026l[?2026h[2;36r[2;1HMMMM[r[1;5r[1;1H
+[39m[49m[K[38;5;2m[49m  › [1m[39m[49mNori CLI[22m[2m[2m v0.0.0[39m[49m[0m
+[39m[49m[K[39m[49m[0m
+[39m[49m[K[2m  System       [22m/tmp/nori-host-tui-acceptance-b/S34c/roots/alpha/app[2m · [22mAgent approvals[39m[49m[0m
+[39m[49m[K[2m  Agent        [22m[38;2;255;158;100m[49mClaude[2m[39m[49m · [22mauto[39m[49m[0m[r[4;3H[6;2H[0m[49m[K[8;22H[0m[49m[K[9;2H[0m[49m[K[39m[49m[0m[?25h[8;3H[?2026l]0;⠋ Lantern Cla… · app · startup lantern word\]0;Lantern Cla… · app · startup lantern word\[?2026h[6;36r[6;1HMMMMMM[r[1;11r[5;1H
+[39m[49m[K[39m[49m[0m
+[39m[49m[K[39m[49m[0m
+[39m[49m[K[1m[2m› [22m[22mstartup lantern word[39m[49m[0m
+[39m[49m[K[39m[49m[0m
+[39m[49m[K[39m[49m[0m
+[39m[49m[K[2m• [22mclaude-code heard: startup lantern word[39m[49m[0m[r[8;3H[12;2H[0m[49m[K[14;22H[0m[49m[K[15;2H[0m[49m[K[39m[49m[0m[?25h[14;3H[?2026l[?2026h[12;2H[0m[49m[K[14;22H[0m[49m[K[15;2H[0m[49m[K[39m[49m[0m[?25h[14;3H[?2026l[?2026h[12;2H[0m[49m[K[14;22H[0m[49m[K[15;2H[0m[49m[K[39m[49m[0m[?25h[14;3H[?2026l[?2026h[12;2H[0m[49m[K[14;22H[0m[49m[K[15;2H[0m[49m[K[39m[49m[0m[?25h[14;3H[?2026l[?2026h[12;1H[J[12;2H[0m[49m[K[14;7H[0m[49m[K[15;2H[0m[49m[K[16;19H[0m[49m[K[13;113H[2m[ auto ][14;1H[22m[38;5;2;49m/[14;3H[39;49mquit[16;3H[1m[38;5;2;49m/quit  exit Nori[39m[49m[0m[?25h[14;7H[?2026l[?2026h[12;1H[J[12;2H[0m[49m[K[13;2H[0m[49m[K[14;11H[0m[49m[K[15;2H[0m[49m[K[14;1H[2m›[14;3HExiting…[39m[49m[0m[?25l[?2026l[?2026h[12;36r[12;1HMMMMMMMMMMMMMMM[r[1;26r[11;1H
+[39m[49m[K[39m[49m[0m
+[39m[49m[K[2m╭───────────────────────────────────────────────╮[39m[49m[0m
+[39m[49m[K[2m│ [22m[1m[38;5;2m[49mGoodbye! [22m[2m[2m[39m[49mThanks for using Nori.               │[39m[49m[0m
+[39m[49m[K[2m│                                               │[39m[49m[0m
+[39m[49m[K[2m│ Session: [22m1437e2ce-0174-4c9a-bd44-7e663dd9a7b5[2m │[39m[49m[0m
+[39m[49m[K[2m│                                               │[39m[49m[0m
+[39m[49m[K[2m│ [22m[1mMessages[22m[2m[2m      User: 1  Assistant: 1  Total: 2 │[39m[49m[0m
+[39m[49m[K[2m│ [22m[1mTool Calls[22m    [2m(none)                          │[39m[49m[0m
+[39m[49m[K[2m│                                               │[39m[49m[0m
+[39m[49m[K[2m│ [22m[1mSkills Used[22m[2m[2m                                   │[39m[49m[0m
+[39m[49m[K[2m│   (none)                                      │[39m[49m[0m
+[39m[49m[K[2m│                                               │[39m[49m[0m
+[39m[49m[K[2m│ [22m[1mSubagents Used[22m[2m[2m                                │[39m[49m[0m
+[39m[49m[K[2m│   (none)                                      │[39m[49m[0m
+[39m[49m[K[2m╰───────────────────────────────────────────────╯[39m[49m[0m[r[14;10H[27;2H[0m[49m[K[28;2H[0m[49m[K[29;11H[0m[49m[K[30;2H[0m[49m[K[39m[49m[0m[?25l[?2026l[27;1H[J]0;\[<1u[?2004l[?1004l[?25h[?25hTo continue this session, run:
+[36mnori resume 1437e2ce-0174-4c9a-bd44-7e663dd9a7b5[39m
+[?2004hshell$ 

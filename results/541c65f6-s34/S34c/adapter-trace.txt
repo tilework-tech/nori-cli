@@ -1,0 +1,4 @@
+23439 initialize - ''
+23439 session/list - ''
+23439 session/new - ''
+23439 session/prompt claude-code-0 'ession.\n</context>\n\nstartup lantern word'

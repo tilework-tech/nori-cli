@@ -1,0 +1,36 @@
+shell$ echo before-nori-marker
+before-nori-marker
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-f1/S01/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hello lantern
+
+
+• claude-code heard: hello lantern
+
+                                                                                                         [ acceptEdits ]
+› @ for file mentions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,464 @@
+[
+  {
+    "scenario": "S34a",
+    "check": "startup.one_server",
+    "passed": true,
+    "detail": "[22734]"
+  },
+  {
+    "scenario": "S34a",
+    "check": "startup.session_started_before_any_prompt",
+    "passed": true,
+    "detail": "['initialize', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34a",
+    "check": "startup.host_prepared_then_started",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34a",
+    "check": "startup.prompt_answered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34a",
+    "check": "startup.server_stopped_on_quit",
+    "passed": true,
+    "detail": "[22734]"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.server_held_in_initialize",
+    "passed": true,
+    "detail": "{'start': True, 'end': True}"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.typed_during_hold",
+    "passed": true,
+    "detail": "{'start': 1795517208.4702828, 'typed': 1795517209.7992842, 'end': 1795517214.4703577}"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.nothing_sent_before_initialize",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(23075, 1795517214.4789658)]"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.one_server_one_session",
+    "passed": true,
+    "detail": "(1, 1)"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.sent_after_session_new",
+    "passed": true,
+    "detail": "{'prompt': 1795517214.4789658, 'new': 1795517214.473322}"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a / for slash command menu"
+  },
+  {
+    "scenario": "S34b",
+    "check": "early.host_prepared_then_started",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.server_held_in_initialize",
+    "passed": true,
+    "detail": "{'start': True, 'end': True}"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.nothing_sent_before_initialize",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(23439, 1795517228.7266908)]"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.one_server_one_session",
+    "passed": true,
+    "detail": "(1, 1)"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.sent_after_session_new",
+    "passed": true,
+    "detail": "{'prompt': 1795517228.7266908, 'new': 1795517228.721976}"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a @ for file mentions"
+  },
+  {
+    "scenario": "S34c",
+    "check": "early.host_prepared_then_started",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.server_held_in_initialize",
+    "passed": true,
+    "detail": "{'start': True, 'end': True}"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.nothing_sent_before_initialize",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(23840, 1795517242.9068003)]"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.one_server_one_session",
+    "passed": true,
+    "detail": "(1, 1)"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.sent_after_session_new",
+    "passed": true,
+    "detail": "{'prompt': 1795517242.9068003, 'new': 1795517242.9009707}"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a $ for skill listing"
+  },
+  {
+    "scenario": "S34d",
+    "check": "early.host_prepared_then_started",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.server_held_in_initialize",
+    "passed": true,
+    "detail": "{'start': True, 'end': True}"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.nothing_sent_before_initialize",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.delivered_once",
+    "passed": true,
+    "detail": "[(24164, 1795517257.0865886)]"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.one_server_one_session",
+    "passed": true,
+    "detail": "(1, 1)"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.sent_after_session_new",
+    "passed": true,
+    "detail": "{'prompt': 1795517257.0865886, 'new': 1795517257.0808766}"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.piped_context_included",
+    "passed": true,
+    "detail": "ools such as update_goal, are unavailable in this session.\n</context>\n\nsummarize the piped lantern\n\norchard context line"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.answered_on_screen",
+    "passed": true,
+    "detail": "\u203a ! for shell commands"
+  },
+  {
+    "scenario": "S34e",
+    "check": "early.host_prepared_then_started",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.adapter_refused_session_new",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.input_unsent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.reason_shown",
+    "passed": true,
+    "detail": "['\u25a0 no fresh lantern is available from claude-code']"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.input_back_in_composer",
+    "passed": false,
+    "detail": "['\u203a / for slash command menu']"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.enter_retries_and_sends_once",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.retry_started_a_session",
+    "passed": false,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34f",
+    "check": "refused.servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[24486]"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.adapter_refused_session_new",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.input_unsent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.reason_shown",
+    "passed": true,
+    "detail": "['shell$ RUST_LOG=nori_host_runtime=debug,nori_harness=debug nori --skip-trust-directory \"startup lantern word\"', '\u25a0 no fresh lantern is available from claude-code']"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.input_back_in_composer",
+    "passed": false,
+    "detail": "['\u203a @ for file mentions']"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.enter_retries_and_sends_once",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.retry_started_a_session",
+    "passed": false,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34g",
+    "check": "refused.servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[25370]"
+  },
+  {
+    "scenario": "S34h",
+    "check": "new.one_session_started",
+    "passed": true,
+    "detail": "[(26125, '/tmp/nori-host-tui-acceptance-b/S34h/roots/alpha/app')]"
+  },
+  {
+    "scenario": "S34h",
+    "check": "new.reused_startup_server",
+    "passed": true,
+    "detail": "[26125]"
+  },
+  {
+    "scenario": "S34h",
+    "check": "new.prompt_reaches_started_session_once",
+    "passed": true,
+    "detail": "[(26125, 26125)]"
+  },
+  {
+    "scenario": "S34h",
+    "check": "new.started_through_host",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34h",
+    "check": "new.servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[26125]"
+  },
+  {
+    "scenario": "S34i",
+    "check": "new.one_session_started",
+    "passed": true,
+    "detail": "[(26559, '/tmp/nori-host-tui-acceptance-b/S34i/roots/alpha/app'), (26706, '/tmp/nori-host-tui-acceptance-b/S34i/roots/alpha/app')]"
+  },
+  {
+    "scenario": "S34i",
+    "check": "new.prompt_reaches_started_session_once",
+    "passed": true,
+    "detail": "[(26706, 26706)]"
+  },
+  {
+    "scenario": "S34i",
+    "check": "new.started_through_host",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34i",
+    "check": "new.servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[26559, 26706]"
+  },
+  {
+    "scenario": "S34k",
+    "check": "skillset.picker_shown",
+    "passed": true,
+    "detail": "  \u2191\u2193/j/k move  / search  enter select  esc close"
+  },
+  {
+    "scenario": "S34k",
+    "check": "skillset.no_session_before_choice",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S34k",
+    "check": "skillset.one_session_started_after_choice",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34k",
+    "check": "skillset.host_prepared_then_started",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34k",
+    "check": "skillset.prompt_answered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34l",
+    "check": "skillset.picker_shown",
+    "passed": true,
+    "detail": "  \u2191\u2193/j/k move  / search  enter select  esc close"
+  },
+  {
+    "scenario": "S34l",
+    "check": "skillset.no_session_before_choice",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S34l",
+    "check": "skillset.one_session_started_after_choice",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34l",
+    "check": "skillset.host_prepared_then_started",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34l",
+    "check": "skillset.prompt_answered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.rows_from_startup_server",
+    "passed": true,
+    "detail": "  \u2191\u2193/j/k move  / search  enter select  esc close"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.same_adapter_process",
+    "passed": true,
+    "detail": "{'spawns': [30584], 'loads': [(30584, 'saved-orchard')]}"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.no_fresh_session_started",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.exactly_one_load",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.prompt_reaches_restored_session",
+    "passed": true,
+    "detail": "['saved-orchard']"
+  },
+  {
+    "scenario": "S34j",
+    "check": "resume.loaded_through_host",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.first_launch_used_host",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.last_session_loaded",
+    "passed": true,
+    "detail": "[('session/load', 'claude-code-0')]"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.no_host_requests",
+    "passed": true,
+    "detail": "[]"
+  }
+]

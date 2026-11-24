@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-f1/S33e/roots/alpha/app · Agent approvals
+  Agent        Claude · auto
+
+
+› early lantern word
+
+
+• claude-code heard: early lantern word
+
+  2 ready
+
+                                                                                                         [ acceptEdits ]
+› $ for skill listing
+
