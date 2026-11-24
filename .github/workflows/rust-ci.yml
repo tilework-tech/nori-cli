@@ -1,8 +1,7 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/pr-757-17a955c0-screen-recheck']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +11,7 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: nori-rs
@@ -25,10 +24,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-4vcpu-ubuntu-2404
+            target: x86_64-unknown-linux-gnu
+            name: Linux checks
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: macOS checks
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: 17a955c0942d16831aee0363e3af4e588bf22841
+          persist-credentials: false
+
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = 17a955c0942d16831aee0363e3af4e588bf22841 && git rev-parse HEAD && uname -sm
 
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -140,6 +151,33 @@ jobs:
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-auth-providers
       - name: cargo clippy
         run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
+      - name: Resume and quit while full-screen, 15 rounds (5 under parallel load)
+        shell: bash
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          for round in $(seq 1 15); do
+            if [ "$round" -gt 10 ]; then cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_startup --test host_new_session > load-$round.txt 2>&1 & fi
+            cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test screen_toggle 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/screen round $round: /" || true
+            wait
+          done | tee screen-repeat.txt
+          echo "screen_toggle repeat FAILED: $(grep -c FAILED screen-repeat.txt) of $(grep -c "^screen round" screen-repeat.txt); resume: $(grep -c "a_session_resumed_while_full_screen.*ok" screen-repeat.txt) ok; quit: $(grep -c "quitting_full_screen_after_a_resume.*ok" screen-repeat.txt) ok"
+          ! grep -q FAILED screen-repeat.txt
+          test "$(grep -c "a_session_resumed_while_full_screen.*ok" screen-repeat.txt)" = 15
+          test "$(grep -c "quitting_full_screen_after_a_resume.*ok" screen-repeat.txt)" = 15
+      - name: host_attach ungated, 10 rounds (inherited baseline failures expected)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        shell: bash
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          set +e +o pipefail
+          sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/host_attach.rs
+          for round in $(seq 1 10); do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/attach round $round: /"; done | tee attach-repeat.txt
+          grep FAILED attach-repeat.txt | sed 's/^attach round [0-9]*: //' | sort | uniq -c
+          echo "host_attach repeat FAILED: $(grep -c FAILED attach-repeat.txt) of $(grep -c "^attach round" attach-repeat.txt)"
+          ! grep -q FAILED attach-repeat.txt
 
       # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache
