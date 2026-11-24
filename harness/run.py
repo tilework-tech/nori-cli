@@ -1741,6 +1741,30 @@ def s33_new_through_host(ctx, refuse=False):
     ctx.check("new.all_servers_stopped_on_quit", not [p for p in pids if running(p)], sorted(pids))
 
 
+def s33c_typed_right_after_new(ctx):
+    """A prompt typed while /new is still preparing reaches the new session exactly once."""
+    t = start_fg(ctx)
+    submit(t, "hello lantern")
+    t.wait_for("heard: hello lantern", 20)
+    first_pid = ctx.ledger("spawn")[0]["pid"]
+    t.type("/new")
+    time.sleep(1.0)
+    t.keys("Enter")
+    time.sleep(0.15)
+    if re.search(r"^\s*›?\s*/new\s*$", t.screen(), re.M):
+        t.keys("Enter")
+    time.sleep(0.2)
+    submit(t, "early lantern word")
+    rows = wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and "early lantern word" in r.get("text", ""), timeout=20)
+    time.sleep(3)
+    t.capture("early-word")
+    rows = [r for r in ctx.ledger("request", "session/prompt") if "early lantern word" in r.get("text", "")]
+    ctx.check("new.early_prompt_delivered_once", len(rows) == 1, len(rows))
+    ctx.check("new.early_prompt_reaches_new_session", rows and rows[0]["pid"] != first_pid, [(r["pid"], first_pid) for r in rows])
+    ctx.check("new.early_prompt_answered_on_screen", "heard: early lantern word" in t.screen(), last_nonblank(t.screen()))
+    quit_fg(t)
+
+
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
     "S02": ("foreground quit stops a running turn", s02_foreground_quit_stops_turn),
@@ -1796,6 +1820,7 @@ SCENARIOS = {
     "S31d": ("refused /agent restore keeps the current session", lambda c: s31_restore_through_host(c, "/agent", refuse=True)),
     "S33a": ("/new through the owned host in the session folder", s33_new_through_host),
     "S33b": ("refused /new keeps the current session", lambda c: s33_new_through_host(c, refuse=True)),
+    "S33c": ("prompt typed right after /new reaches the new session once", s33c_typed_right_after_new),
     "S32a": ("Esc on /resume rows reaps the prepared server", lambda c: s32_dismiss_reaps_prepared(c, "/resume")),
     "S32b": ("Esc on /agent rows reaps the prepared server", lambda c: s32_dismiss_reaps_prepared(c, "/agent")),
 }

@@ -1,0 +1,36 @@
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-Q1/S33b/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hello lantern
+
+
+• claude-code heard: hello lantern
+
+
+› /new /tmp/nori-host-tui-acceptance-Q1/S33b/roots/beta/app
+
+
+• claude-code heard: /new /tmp/nori-host-tui-acceptance-Q1/S33b/roots/beta/app
+
+
+› orchard word
+
+
+• claude-code heard: orchard word
+
+■ Couldn't activate Lantern Claude: Failed to start ACP session: Failed to create ACP session: no fresh lantern is
+available from claude-code
+
+                                                                                                                [ auto ]
+› ? for shortcuts
+

@@ -1,0 +1,70 @@
+    19 -buoy 19 = red
+    20 -buoy 20 = red
+    21 -buoy 21 = red
+    22 -buoy 22 = red
+    23 -buoy 23 = red
+    24 -buoy 24 = red
+    25 -buoy 25 = red
+    26 -buoy 26 = red
+    27 -buoy 27 = red
+    28 -buoy 28 = red
+    29 -buoy 29 = red
+    30 -buoy 30 = red
+    31 -buoy 31 = red
+    32 -buoy 32 = red
+    33 -buoy 33 = red
+    34 -buoy 34 = red
+    35 -buoy 35 = red
+    36 -buoy 36 = red
+    37 -buoy 37 = red
+    38 -buoy 38 = red
+    39 -buoy 39 = red
+    40 -buoy 40 = red
+     1 +buoy 01 = green
+     2 +buoy 02 = green
+     3 +buoy 03 = green
+     4 +buoy 04 = green
+     5 +buoy 05 = green
+     6 +buoy 06 = green
+     7 +buoy 07 = green
+     8 +buoy 08 = green
+     9 +buoy 09 = green
+    10 +buoy 10 = green
+    11 +buoy 11 = green
+    12 +buoy 12 = green
+    13 +buoy 13 = green
+    14 +buoy 14 = green
+    15 +buoy 15 = green
+    16 +buoy 16 = green
+    17 +buoy 17 = green
+    18 +buoy 18 = green
+    19 +buoy 19 = green
+    20 +buoy 20 = green
+    21 +buoy 21 = green
+    22 +buoy 22 = green
+    23 +buoy 23 = green
+    24 +buoy 24 = green
+    25 +buoy 25 = green
+    26 +buoy 26 = green
+    27 +buoy 27 = green
+    28 +buoy 28 = green
+    29 +buoy 29 = green
+    30 +buoy 30 = green
+    31 +buoy 31 = green
+    32 +buoy 32 = green
+    33 +buoy 33 = green
+    34 +buoy 34 = green
+    35 +buoy 35 = green
+    36 +buoy 36 = green
+    37 +buoy 37 = green
+    38 +buoy 38 = green
+    39 +buoy 39 = green
+    40 +buoy 40 = green
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• claude-code heard: patch the buoys
+
+                                                                                                                [ auto ]
+› ! for shell commands
+
