@@ -57,6 +57,7 @@ pub enum SlashCommand {
     SwitchSkillset,
     Fork,
     Browser,
+    Screen,
 }
 
 impl SlashCommand {
@@ -96,6 +97,7 @@ impl SlashCommand {
             SlashCommand::SwitchSkillset => "switch between available skillsets",
             SlashCommand::Fork => "rewind conversation to a previous message",
             SlashCommand::Browser => "open a Chrome browser the agent can control via CDP",
+            SlashCommand::Screen => "switch between the inline and the full-screen view",
         }
     }
 
@@ -139,7 +141,8 @@ impl SlashCommand {
             | SlashCommand::FirstPrompt
             | SlashCommand::Goal
             | SlashCommand::Quit
-            | SlashCommand::Exit => true,
+            | SlashCommand::Exit
+            | SlashCommand::Screen => true,
         }
     }
 
@@ -179,7 +182,8 @@ impl SlashCommand {
             | SlashCommand::Logout
             | SlashCommand::Quit
             | SlashCommand::Exit
-            | SlashCommand::Fork => CommandScope::Universal,
+            | SlashCommand::Fork
+            | SlashCommand::Screen => CommandScope::Universal,
         }
     }
 

@@ -1256,10 +1256,19 @@ impl MockAgent {
                 .filter(|chars| *chars > 0)
             {
                 Some(chunk_chars) => {
+                    // MOCK_AGENT_RESPONSE_CHUNK_DELAY_MS paces the chunks, so a
+                    // test can act while the turn is still streaming.
+                    let chunk_delay = std::env::var("MOCK_AGENT_RESPONSE_CHUNK_DELAY_MS")
+                        .ok()
+                        .and_then(|delay| delay.parse::<u64>().ok())
+                        .map(Duration::from_millis);
                     let characters = response.chars().collect::<Vec<_>>();
                     for chunk in characters.chunks(chunk_chars) {
                         self.send_text_chunk(session_id.clone(), &chunk.iter().collect::<String>())
                             .await?;
+                        if let Some(delay) = chunk_delay {
+                            sleep(delay).await;
+                        }
                     }
                 }
                 None => {

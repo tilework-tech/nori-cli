@@ -1,0 +1,22 @@
+---
+source: tui/src/app/full_screen_frame.rs
+expression: "frame(&cells, 60, 18).backend()"
+---
+"                                                            "
+"                                                            "
+"                                                            "
+"                                                            "
+"                                                            "
+"                                                            "
+"                                                            "
+"                                                            "
+"                                                            "
+"                                                            "
+"› what did the keeper count                                 "
+"                                                            "
+"                                                            "
+"• The lighthouse keeper counted nine gulls.                 "
+"                                                            "
+"                                                            "
+"› unsent draft about the gulls                              "
+"                                                            "

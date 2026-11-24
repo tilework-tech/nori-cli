@@ -310,6 +310,7 @@ impl ChatWidget {
                 self.open_settings_popup(None);
             }
             SlashCommand::Vim => self.open_vim_mode_picker(self.config.vim_mode, false),
+            SlashCommand::Screen => self.app_event_tx.send(AppEvent::ToggleScreenMode),
             SlashCommand::Goal => {
                 self.request_thread_goal_status();
             }

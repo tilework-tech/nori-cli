@@ -137,7 +137,7 @@ impl App {
             tui.frame_requester().schedule_frame();
             return Ok(true);
         }
-        self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
+        self.retiring_transcript = Some(self.transcript_cells.replace(Vec::new()));
         self.session_reprint_pending = true;
         self.cancel_primary_agent_preparation();
         self.discard_candidate();

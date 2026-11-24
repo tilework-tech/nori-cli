@@ -59,6 +59,11 @@ impl Emulator {
         self.parser.screen().contents()
     }
 
+    /// Whether the terminal is showing its alternate screen.
+    pub fn is_alternate_screen(&self) -> bool {
+        self.parser.screen().alternate_screen()
+    }
+
     /// Every scrollback line, oldest first, followed by the visible screen.
     pub fn history_contents(&mut self) -> String {
         self.parser.set_scrollback(usize::MAX);

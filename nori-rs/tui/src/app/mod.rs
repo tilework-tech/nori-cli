@@ -78,7 +78,7 @@ pub(crate) struct App {
     pub(crate) file_search: FileSearchManager,
     file_mentions: file_mentions::FileMentions,
 
-    pub(crate) transcript_cells: Vec<Arc<dyn HistoryCell>>,
+    pub(crate) transcript_cells: transcript_cells::TranscriptCells,
 
     /// Every session this TUI holds, in navigation order. Sessions that are
     /// not on screen are parked here with their own widget and transcript.
@@ -99,7 +99,9 @@ pub(crate) struct App {
 
     // Pager overlay state (Transcript or Static like Diff)
     pub(crate) overlay: Option<Overlay>,
-    pub(crate) deferred_history_lines: Vec<Line<'static>>,
+    /// Inline or full-screen view, and the history held while the screen is
+    /// covered by the full-screen view or an overlay.
+    pub(crate) screen: screen_mode::ScreenMode,
     has_emitted_history_lines: bool,
     pub(crate) transcript_reflow: crate::transcript_reflow::TranscriptReflowState,
 
@@ -239,10 +241,12 @@ mod config_persistence;
 mod delegation;
 mod event_handling;
 mod file_mentions;
+mod full_screen_frame;
 mod host_candidate;
 mod host_link;
 mod new_session_folder;
 mod resize_reflow;
+mod screen_mode;
 mod session_deck;
 mod session_keys;
 mod session_lifecycle;
@@ -251,6 +255,7 @@ mod session_resume;
 mod session_setup;
 mod session_view;
 mod thought_setting;
+mod transcript_cells;
 pub(crate) use host_candidate::PreparedCatalog;
 #[cfg(test)]
 pub(crate) use session_view::route_session_history_event;
@@ -390,7 +395,7 @@ impl App {
             file_search,
             file_mentions: Default::default(),
             enhanced_keys_supported,
-            transcript_cells: Vec::new(),
+            transcript_cells: Default::default(),
             session_deck: Default::default(),
             adopted_delegations: Default::default(),
             retiring_transcript: None,
@@ -399,7 +404,7 @@ impl App {
             session_previews: Default::default(),
             agent_display_names: Default::default(),
             overlay: None,
-            deferred_history_lines: Vec::new(),
+            screen: Default::default(),
             has_emitted_history_lines: false,
             transcript_reflow: Default::default(),
             commit_anim_running: Arc::new(AtomicBool::new(false)),
@@ -558,6 +563,9 @@ impl App {
         }
         .await;
 
+        if let Err(error) = app.return_inline_for_exit(tui) {
+            tracing::warn!(%error, "could not return to the inline view on exit");
+        }
         app.cancel_primary_agent_preparation();
         if let Some(agent) = app.prepared_agent.take() {
             agent.shutdown().await;
