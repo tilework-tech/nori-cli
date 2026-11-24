@@ -372,3 +372,19 @@ folder limit constant; mixed-version lanes ran at `29e18411`.
 | Linux PTY repeat (`host_attach`, `host_file_mentions`, `host_new_session`, `host_approvals`) | — | 130/130 over 5 rounds; `host_lifecycle` 137 passed |
 | macOS load loop (run 45445353172, `host_attach` ungated) | — | all #753 tests 10/10; inherited 0/10, 0/10, 5/10 |
 | Verdict | — | pass (CLI `bf0788f8`, registry `c62bcc22`). See `results/bf0788f8/VERDICT.md` |
+
+## #757 `/screen` and Ctrl+L, `768b2a64` → `7e648413` (on #753 `bf0788f8`), 2026-11-24
+
+S42a–n (screen switch) and S43a–f (Ctrl+L) in `harness/run.py`; the adapter's `relay N TAG` word streams numbered rows for once-and-in-order checks. Verdict: `results/7e648413/VERDICT.md`, changes requested.
+
+| Scenario | `768b2a64` | `7e648413` |
+|---|---|---|
+| S42a/S42g mid-turn both directions, plain nori / nori-tui | 19/19, 19/19 | 19/19, 19/19 |
+| S42b two sessions while full-screen | 15/15 | 15/15 |
+| S42c overlay, resizes, exit with overlay | 15/15 | 15/15 |
+| S42d/S42e /quit, Ctrl+C from full-screen | 7/7, 7/7 | 7/7, 7/7 |
+| S42f draft before the switch | 4/5 (no switch key) | 6/6 (Ctrl+L) |
+| S42i/j/k resize mid-turn, Ctrl+Z, permission | 10/10, 10/10, — | 10/10, 10/10, 13/13 |
+| S42l resume while full-screen | 1/1 | **fails 8 of 18**: stale frame (`results/7e648413-s42l-stale/`) |
+| S43a–f Ctrl+L | — | all pass except S43d `?` list hard-codes Ctrl+L |
+| S42m permission order (inherited, also `bf0788f8`) | — | recorded |
