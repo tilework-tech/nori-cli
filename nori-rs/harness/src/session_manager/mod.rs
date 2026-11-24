@@ -6,6 +6,7 @@ mod delegation;
 mod delegation_driver;
 mod delegation_state;
 pub use delegation::DelegationContext;
+mod explicit_close;
 mod registry;
 mod replay;
 
@@ -195,6 +196,7 @@ struct State {
     journal: replay::Journal,
     delegation: delegation::DelegationState,
     configs: HashMap<AgentProcessId, AcpBackendConfig>,
+    explicit_closes: HashMap<ConversationId, explicit_close::Closing>,
     primary: HashMap<ConversationId, mpsc::UnboundedSender<SessionEnvelope>>,
 }
 
@@ -223,6 +225,7 @@ impl SessionManager {
                     journal: replay::Journal::new(capacity),
                     delegation: delegation::DelegationState::default(),
                     configs: HashMap::new(),
+                    explicit_closes: HashMap::new(),
                     primary: HashMap::new(),
                 }),
             }),
@@ -319,20 +322,20 @@ impl SessionManager {
         start: SessionStart,
     ) -> Result<ManagedSession, StartError> {
         let conversation_id = settings.conversation_id;
-        let process = {
-            let mut state = self.shared.state();
-            if settings.source == SessionSource::Session
-                && let Some(parent) = settings.parent
-                && (state.registry.live_process(&parent).is_none()
-                    || state.delegation.closed.contains(&parent))
-            {
-                return Err(StartError::ParentEnded(parent));
-            }
-            let reservation = state.registry.reserve()?;
-            let process = state.registry.register(settings, reservation)?;
-            state.journal.register(conversation_id.to_string());
-            process
-        };
+        // Register the generation and its handle under one lock so a concurrent
+        // tree close always sees every process that has passed admission.
+        let mut state = self.shared.state();
+        if settings.source == SessionSource::Session
+            && let Some(parent) = settings.parent
+            && (state.registry.live_process(&parent).is_none()
+                || state.delegation.closed.contains(&parent))
+        {
+            return Err(StartError::ParentEnded(parent));
+        }
+        let reservation = state.registry.reserve()?;
+        let process = state.registry.register(settings, reservation)?;
+        state.delegation.closed.remove(&conversation_id);
+        state.journal.register(conversation_id.to_string());
 
         config.delegation_context = Some(DelegationContext::new(&self.shared, process));
         match &mut agent_source {
@@ -343,7 +346,7 @@ impl SessionManager {
             }
             SessionAgentSource::Prepare(activation) => **activation = config.clone(),
         }
-        self.shared.state().configs.insert(process, config);
+        state.configs.insert(process, config);
         let launched = launch_session_from(agent_source, start);
         // Answers are queued before they reach the agent, and the pump reads
         // this queue first, so an answer is numbered ahead of anything the
@@ -360,27 +363,10 @@ impl SessionManager {
                         },
                     )));
                 }));
-        let shutting_down = {
-            let mut state = self.shared.state();
-            state.handles.insert(process, handle.clone());
-            state.registry.admission_closed()
-        };
-        if shutting_down {
-            // `shutdown` began while this session was launching and could not
-            // see it.
-            let late = handle.clone();
-            tokio::spawn(async move {
-                if let Err(error) = late.shutdown().await {
-                    tracing::warn!(%error, "failed to shut down a session started during shutdown");
-                }
-            });
-        }
-
+        state.handles.insert(process, handle.clone());
         let (primary_tx, primary_rx) = mpsc::unbounded_channel();
-        self.shared
-            .state()
-            .primary
-            .insert(conversation_id, primary_tx.clone());
+        state.primary.insert(conversation_id, primary_tx.clone());
+        drop(state);
         let shared = Arc::clone(&self.shared);
         let mut events = launched.events;
         tokio::spawn(async move {
@@ -395,6 +381,7 @@ impl SessionManager {
                 };
                 {
                     let mut state = shared.state();
+                    state.observe_explicit_close(process, &event);
                     let envelopes = state.registry.observe_all(process, event);
                     for envelope in &envelopes {
                         state.journal.publish(envelope);

@@ -628,3 +628,6 @@ fn machine_transport_authenticates_before_upgrade() {
 
 #[path = "host_lifecycle/remote_transport.rs"]
 mod remote_transport;
+
+#[path = "host_lifecycle/explicit_close.rs"]
+mod explicit_close;

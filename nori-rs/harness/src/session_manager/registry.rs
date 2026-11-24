@@ -253,10 +253,6 @@ impl Registry {
         self.capacity.close();
     }
 
-    pub(crate) fn admission_closed(&self) -> bool {
-        self.capacity.is_closed()
-    }
-
     /// Register a new session or restart a failed identity on a new process.
     /// Restart admission and replacement happen in the same registry mutation.
     pub(crate) fn register(
