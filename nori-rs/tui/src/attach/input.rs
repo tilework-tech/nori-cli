@@ -463,7 +463,7 @@ impl Runtime {
                     expected_turn,
                     message_id: message_id.clone(),
                     intent,
-                    text: text.clone(),
+                    prompt: vec![acp::ContentBlock::Text(acp::TextContent::new(text.clone()))],
                 },
                 Pending::FollowUp {
                     session_id: id,

@@ -59,7 +59,7 @@ async fn the_pipe_client_and_the_tui_share_one_host() {
         &mut host,
         2,
         "session/new",
-        json!({"cwd": home.path(), "mcpServers": []}),
+        json!({"cwd": home.path(), "mcpServers": [], "_meta":{"nori/agent":"mock-model"}}),
     )
     .await;
     let session_id = created["result"]["sessionId"]
@@ -86,7 +86,7 @@ async fn stopping_the_host_ends_its_sessions() {
         &mut host,
         2,
         "session/new",
-        json!({"cwd": home.path(), "mcpServers": []}),
+        json!({"cwd": home.path(), "mcpServers": [], "_meta":{"nori/agent":"mock-model"}}),
     )
     .await;
     let manager = host.manager.clone();
@@ -185,5 +185,91 @@ async fn permission_on_the_foreground_pipe_is_answered_once_as_the_user() {
     .unwrap();
     assert_eq!(resolved.request_id, request);
     assert_eq!(resolved.answered_by, "client");
+    (host.stop)().await.unwrap();
+}
+
+#[tokio::test]
+async fn queued_text_from_the_foreground_pipe_can_be_taken_back_by_its_composer() {
+    let home = TempDir::new().unwrap();
+    let (config, overrides) = config(&home);
+    let mut host = launcher()(&config, &overrides).unwrap();
+    call(&mut host, 1, "initialize", json!({})).await;
+    let created = call(
+        &mut host,
+        2,
+        "_nori/session/new",
+        json!({"agent":"mock-model"}),
+    )
+    .await;
+    let id = created["result"]["session_id"].as_str().unwrap();
+    let turn = call(
+        &mut host,
+        3,
+        "_nori/session/prompt",
+        json!({
+            "session_id":id,"prompt":[{"type":"text","text":"mock:request-permission"}]
+        }),
+    )
+    .await;
+    let queued = call(&mut host, 4, "_nori/session/follow_up", json!({
+        "session_id":id,"expected_turn":turn["result"]["request_id"],"message_id":"sample-queued",
+        "intent":"queue","prompt":[{"type":"text","text":"revise this line"}]
+    })).await;
+    assert_eq!(queued["result"]["status"], "queued", "{queued}");
+    let handle = host
+        .manager
+        .handle(&nori_harness::ConversationId::from_string(id).unwrap())
+        .unwrap();
+    let recalled = handle
+        .reclaim_queued_prompt("sample-queued".into())
+        .await
+        .unwrap();
+    assert_eq!(recalled.as_deref(), Some("revise this line"));
+    (host.stop)().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_pending_foreground_prompt_keeps_the_pipe_responsive() {
+    let home = TempDir::new().unwrap();
+    let (mut config, overrides) = config(&home);
+    let gate = home.path().join("waiting.sh");
+    std::fs::write(
+        &gate,
+        r#"cd "$(dirname "$0")"
+touch entered
+while [ ! -e release ]; do sleep 0.02; done
+"#,
+    )
+    .unwrap();
+    config.pre_user_prompt_hooks.push(gate);
+    let mut host = launcher()(&config, &overrides).unwrap();
+    call(&mut host, 1, "initialize", json!({})).await;
+    let created = call(
+        &mut host,
+        2,
+        "_nori/session/new",
+        json!({"agent":"mock-model"}),
+    )
+    .await;
+    host.to_host.send(json!({"jsonrpc":"2.0","id":3,"method":"_nori/session/prompt",
+        "params":{"session_id":created["result"]["session_id"],"prompt":[{"type":"text","text":"sample"}]}}).to_string()).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !home.path().join("entered").exists() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("prompt reached its hook");
+    let listed = tokio::time::timeout(
+        Duration::from_secs(2),
+        call(&mut host, 4, "_nori/session/list", json!({})),
+    )
+    .await;
+    std::fs::write(home.path().join("release"), "").unwrap();
+    assert_eq!(
+        listed.expect("host must answer while a prompt hook is waiting")["result"]["sessions"][0]["session_id"],
+        created["result"]["session_id"]
+    );
     (host.stop)().await.unwrap();
 }

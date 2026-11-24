@@ -742,8 +742,11 @@ OwnedHost { manager, to_host, from_host, stop } ◀──────┘ ──�
   private controller pipe with foreground origin. Both reach
   the same sessions. Foreground features with no wire method yet (compaction,
   fork and undo, shell, history, goals, custom prompts, `/context`, queue
-  reclaim) use the manager directly. Permission answers go over the pipe
-  with the host session ID captured by the overlay. Only this launcher builds an `OwnedHost`, so
+  reclaim) use the manager directly. The pipe admits idle-only keyboard prompts
+  and follow-ups into each session's FIFO before reading the next frame.
+  Adapter receipts can complete independently, so a prompt hook leaves other
+  sessions reachable. Permission answers carry the host session ID captured
+  by the overlay. Only this launcher builds an `OwnedHost`, so
   `nori attach` never holds the in-process half.
 - **Private.** Like the in-process exec host, it binds no socket, writes no
   token or discovery files, and takes no lock. It and a background host in

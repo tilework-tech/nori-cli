@@ -91,6 +91,15 @@ pub trait ManagedAgent: Send + Sync + 'static {
         self.request(request)
     }
 
+    /// Admit input from the private terminal before reading its next frame.
+    /// Only waiting for the adapter receipt may run concurrently.
+    fn admit_foreground_input(
+        &self,
+        _request: &Value,
+    ) -> Option<futures::future::BoxFuture<'static, Value>> {
+        None
+    }
+
     /// Whether `method` may take long enough that it must not hold up the
     /// connection's other requests. Its response is delivered through the
     /// connection's outbound queue instead, and any subscription it returns

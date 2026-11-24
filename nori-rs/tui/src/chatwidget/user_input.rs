@@ -225,14 +225,29 @@ impl ChatWidget {
             }
         }
 
-        match (delivery, self.harness_handle.as_ref()) {
-            (crate::follow_up::Delivery::FollowUp { turn, intent }, Some(handle)) => {
+        match delivery {
+            crate::follow_up::Delivery::FollowUp { turn, intent } => {
+                let Some(session) = self.managed_conversation_id else {
+                    self.add_error_message("No active host session".into());
+                    return;
+                };
                 let id = uuid::Uuid::new_v4().to_string();
-                let receipt = handle.local_follow_up(id.clone(), turn, intent, content);
+                let receipt =
+                    self.app_event_tx
+                        .host_receipt(crate::host_client::HostCall::FollowUp {
+                            session_id: session.to_string(),
+                            expected_turn: turn,
+                            message_id: id.clone(),
+                            intent,
+                            prompt: content,
+                        });
                 let tx = self.app_event_tx.clone();
                 let submitted = text.clone();
                 tokio::spawn(async move {
-                    match receipt.await {
+                    match receipt.await.and_then(|value| {
+                        serde_json::from_value::<nori_harness::FollowUpReceipt>(value)
+                            .map_err(Into::into)
+                    }) {
                         Ok(receipt) => tx.send(AppEvent::InsertHistoryCell(Box::new(
                             history_cell::new_info_event(
                                 crate::follow_up::delivery_notice(receipt.status, &id, &submitted),
@@ -245,19 +260,30 @@ impl ChatWidget {
                     }
                 });
             }
-            (crate::follow_up::Delivery::IfIdle, Some(handle)) => {
-                let admitted = handle.submit_prompt_if_idle(content, None);
+            crate::follow_up::Delivery::IfIdle => {
+                let (Some(session), Some(handle)) =
+                    (self.managed_conversation_id, self.harness_handle.clone())
+                else {
+                    self.add_error_message("No active host session".into());
+                    return;
+                };
+                let admitted =
+                    self.app_event_tx
+                        .host_receipt(crate::host_client::HostCall::Prompt(
+                            serde_json::json!({"session_id":session, "prompt":content}),
+                        ));
                 let tx = self.app_event_tx.clone();
                 let submitted = text.clone();
                 tokio::spawn(async move {
-                    if let Err(error) = admitted.await {
-                        tx.send(AppEvent::HarnessActionFailed(format!(
+                    match admitted.await {
+                        Ok(_) => handle.record_host_prompt_started(),
+                        Err(error) => tx.send(AppEvent::HarnessActionFailed(format!(
                             "Could not submit “{submitted}”: {error}"
-                        )));
+                        ))),
                     }
                 });
             }
-            _ => self.submit_prompt(content),
+            crate::follow_up::Delivery::Default => self.submit_prompt(content),
         }
 
         // Persist the text to cross-session message history.

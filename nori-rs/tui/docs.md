@@ -1537,8 +1537,10 @@ App::run
   the loop's error is reported first, then any stop failure.
 - Features with no wire method yet (compaction, fork and undo, shell, history,
   goals, custom prompts, `/context`, queue reclaim) work through the host's
-  manager on the same sessions. Permission answers use the pipe. A rejected answer
-  reports its error to the widget that submitted it.
+  manager on the same sessions. The pipe carries permission answers, idle-only
+  composer submissions, turn-scoped follow-ups and interrupts for observed
+  agent-started turns. Startup and programmatic prompts keep their existing
+  queue-on-busy admission. The widget receives the result of its own request.
 - Only the CLI's foreground launcher builds an `OwnedHost`, so the
   [attach frontend](src/attach/docs.md) never holds the in-process half.
 

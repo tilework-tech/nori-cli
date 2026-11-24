@@ -4,6 +4,27 @@ use crate::app_event::AppEvent;
 use crate::app_event::SessionGeneration;
 use crate::session_log;
 
+#[derive(Debug)]
+pub(crate) enum HostReply {
+    ReportError(AppEventSender),
+    Receipt(tokio::sync::oneshot::Sender<anyhow::Result<serde_json::Value>>),
+}
+
+impl HostReply {
+    pub(crate) fn deliver(self, result: anyhow::Result<serde_json::Value>) {
+        match self {
+            Self::ReportError(tx) => {
+                if let Err(error) = result {
+                    tx.send(AppEvent::HarnessActionFailed(error.to_string()));
+                }
+            }
+            Self::Receipt(sender) => {
+                let _ = sender.send(result);
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct AppEventSender {
     pub app_event_tx: UnboundedSender<AppEvent>,
@@ -26,6 +47,24 @@ impl AppEventSender {
         Self {
             app_event_tx: self.app_event_tx.clone(),
             session: Some(generation),
+        }
+    }
+
+    /// Enqueue now to preserve the composer's submission order. The caller can
+    /// wait for admission while this widget continues receiving terminal input.
+    pub(crate) fn host_receipt(
+        &self,
+        call: crate::host_client::HostCall,
+    ) -> impl Future<Output = anyhow::Result<serde_json::Value>> + Send + 'static {
+        let (reply, receipt) = tokio::sync::oneshot::channel();
+        self.send(AppEvent::HostRequest {
+            call,
+            reply: HostReply::Receipt(reply),
+        });
+        async move {
+            receipt
+                .await
+                .map_err(|_| anyhow::anyhow!("Host stopped before replying."))?
         }
     }
 

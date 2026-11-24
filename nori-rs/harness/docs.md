@@ -755,7 +755,8 @@ Execute call is read-only.
   cap.
 - The harness uses the submission path to decide whether the local composer
   may reclaim a queued item. For follow-ups, `HarnessHandle::local_follow_up`
-  marks composer input as local. An authenticated controller uses
+  marks input from the host-established foreground pipe as local. An independently
+  attached controller uses
   `HarnessHandle::follow_up`; its queued input stays read-only even if its
   displayed sender is `local`. Delegated child results also stay read-only.
 - A queued prompt runs its `pre_user_prompt` hooks, consumes pending hook

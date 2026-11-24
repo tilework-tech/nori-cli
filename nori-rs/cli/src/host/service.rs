@@ -224,6 +224,16 @@ impl ManagedAgent for HostService {
         self.acp.closed(client);
     }
 
+    fn admit_foreground_input(
+        &self,
+        request: &Value,
+    ) -> Option<futures::future::BoxFuture<'static, Value>> {
+        self.managed.admit_input(
+            request,
+            nori_harness::remote_agent::HostClientOrigin::Foreground,
+        )
+    }
+
     fn runs_concurrently(&self, method: &str) -> bool {
         self.launches.is_none() && super::acp::runs_concurrently(method)
     }

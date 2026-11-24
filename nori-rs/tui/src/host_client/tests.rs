@@ -201,7 +201,9 @@ fn every_call_reaches_the_host_method_it_names() {
             expected_turn: nori_protocol::acp::v1::RequestId::Number(3),
             message_id: "m1".into(),
             intent: nori_harness::FollowUpIntent::Queue,
-            text: "and the docs".into(),
+            prompt: vec![nori_protocol::acp::v1::ContentBlock::Text(
+                nori_protocol::acp::v1::TextContent::new("and the docs"),
+            )],
         },
         HostCall::CancelObserved {
             session_id: "one".into(),
