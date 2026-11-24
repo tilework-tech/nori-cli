@@ -1,0 +1,44 @@
+[1m[32m   Compiling[0m tokio v1.51.6
+[1m[32m   Compiling[0m tokio-util v0.7.16
+[1m[32m   Compiling[0m tower v0.5.2
+[1m[32m   Compiling[0m tokio-rustls v0.26.2
+[1m[32m   Compiling[0m tokio-stream v0.1.17
+[1m[32m   Compiling[0m process-wrap v10.0.1
+[1m[32m   Compiling[0m tokio-tungstenite v0.26.2
+[1m[32m   Compiling[0m tower-http v0.6.11
+[1m[32m   Compiling[0m h2 v0.4.16
+[1m[32m   Compiling[0m hyper v1.7.0
+[1m[32m   Compiling[0m hyper-util v0.1.16
+[1m[32m   Compiling[0m hyper-rustls v0.27.7
+[1m[32m   Compiling[0m axum v0.8.4
+[1m[32m   Compiling[0m reqwest v0.12.24
+[1m[32m   Compiling[0m reqwest v0.13.4
+[1m[32m   Compiling[0m oauth2 v5.0.0
+[1m[32m   Compiling[0m rmcp v3.10.0
+[1m[32m   Compiling[0m codex-rmcp-client v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/rmcp-client)
+[1m[32m   Compiling[0m nori-acp-host v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/acp-host)
+[1m[32m   Compiling[0m nori-auth-providers v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/auth-providers)
+[1m[32m   Compiling[0m nori-harness v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/harness)
+[1m[32m   Compiling[0m nori-host-runtime v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/host-runtime)
+[1m[32m    Finished[0m `ci-test` profile [unoptimized + debuginfo] target(s) in 23.38s
+[1m[32m     Running[0m unittests src/lib.rs (target/aarch64-apple-darwin/ci-test/deps/nori_host_runtime-d11e1964439a127f)
+
+running 9 tests
+test host::recovery_history::tests::imported_history_is_idempotent_and_scoped_to_its_registry ... ok
+test host::recovery_control::tests::checkpoint_owns_the_binding_gate_until_its_reply_is_handed_off ... ok
+test host::recovery_control::tests::checkpoint_includes_output_arriving_after_session_load ... ok
+test host::tui_owned::tests::permission_on_the_foreground_pipe_is_answered_once_as_the_user ... ok
+test host::tui_owned::tests::a_pending_foreground_prompt_keeps_the_pipe_responsive ... ok
+test host::tui_owned::tests::queued_text_from_the_foreground_pipe_can_be_taken_back_by_its_composer ... ok
+test host::tui_owned::tests::the_pipe_client_and_the_tui_share_one_host ... ok
+test host::recovery_control::tests::launch_refusal_after_preflight_keeps_its_classification_on_restart ... ok
+test host::tui_owned::tests::stopping_the_host_ends_its_sessions ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+[1m[32m   Doc-tests[0m nori_host_runtime
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

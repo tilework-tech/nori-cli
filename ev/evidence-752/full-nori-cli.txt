@@ -1,0 +1,372 @@
+[1m[32m   Compiling[0m doc-comment v0.3.3
+[1m[32m   Compiling[0m predicates-core v1.0.9
+[1m[32m   Compiling[0m float-cmp v0.10.0
+[1m[32m   Compiling[0m assert_cmd v2.0.17
+[1m[32m   Compiling[0m normalize-line-endings v0.3.0
+[1m[32m   Compiling[0m difflib v0.4.0
+[1m[32m   Compiling[0m termtree v0.5.1
+[1m[32m   Compiling[0m wait-timeout v0.2.1
+[1m[32m   Compiling[0m nori-cli v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/cli)
+[1m[32m   Compiling[0m predicates v3.1.3
+[1m[32m   Compiling[0m predicates-tree v1.0.12
+[1m[32m    Finished[0m `ci-test` profile [unoptimized + debuginfo] target(s) in 4.12s
+[1m[32m     Running[0m unittests src/lib.rs (target/aarch64-apple-darwin/ci-test/deps/nori_cli-130e01a828c951e2)
+
+running 11 tests
+test cloud::tests::cloud_agent_pins_handroll_cloud_acp ... ok
+test cloud::tests::cloud_agent_translates_broker_url_to_env ... ok
+test cloud::tests::missing_binary_yields_actionable_install_error ... ok
+test cloud::tests::onboard_appends_the_cloud_acp_onboard_flag ... ok
+test cloud::tests::dangling_env_override_is_an_error_not_a_fallback ... ok
+test debug_sandbox::pid_tracker::tests::pid_is_alive_detects_current_process ... ok
+test cloud::tests::env_override_wins_over_path ... ok
+test cloud::tests::finds_handroll_on_path ... ok
+test debug_sandbox::pid_tracker::tests::list_child_pids_includes_spawned_child ... ok
+test debug_sandbox::pid_tracker::tests::pid_tracker_collects_spawned_children ... ok
+test debug_sandbox::pid_tracker::tests::pid_tracker_collects_bash_subshell_descendants ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+[1m[32m     Running[0m unittests src/main.rs (target/aarch64-apple-darwin/ci-test/deps/nori-3c56e235a8bacc0c)
+
+running 52 tests
+test host::session_lookup::tests::a_full_id_names_its_session ... ok
+test host::session_lookup::tests::a_full_id_in_any_spelling_names_its_session ... ok
+test host::session_lookup::tests::a_unique_start_of_an_id_names_that_session ... ok
+test host::session_lookup::tests::an_empty_id_matches_nothing ... ok
+test host::session_lookup::tests::a_start_shared_by_several_sessions_lists_them ... ok
+test host::session_lookup::tests::an_id_no_session_has_says_where_to_find_one ... ok
+test host::selection_tests::new_session_uses_the_nearest_explicit_agent ... ok
+test host::table::tests::a_waiting_rows_second_line_says_what_it_asks_for ... ok
+test host::table::tests::context_text_is_never_cut ... ok
+test host::table::tests::a_long_reply_and_title_stay_in_the_session_column ... ok
+test host::table::tests::piped_children_follow_their_parent_with_full_ids ... ok
+test host::table::tests::piped_rows_align_titles_after_full_folders_and_tolerate_older_hosts ... ok
+test host::table::tests::piped_rows_keep_full_agents_and_family_status ... ok
+test host::table::tests::piped_table_keeps_complete_plain_titles ... ok
+test host::table::tests::second_rows_are_faint ... ok
+test host::table::tests::rows_stay_within_a_very_narrow_terminal ... ok
+test host::table::tests::status_words_are_colored_by_what_the_session_needs ... ok
+test host::table::tests::session_lines_alternate_between_shaded_and_the_terminal_background ... ok
+test host::table::tests::the_second_row_holds_reply_model_and_last_activity ... ok
+test host::table::tests::titles_are_cut_by_display_columns_and_keep_graphemes_intact ... ok
+test stdin_prompt::tests::a_blank_pipe_leaves_the_argument_untouched ... ok
+test stdin_prompt::tests::argument_leads_and_piped_stdin_follows_as_context ... ok
+test stdin_prompt::tests::carriage_returns_are_normalized ... ok
+test host::table::tests::terminal_columns_sit_at_the_session_list_offsets ... ok
+test tests::cloud_merges_subcommand_flags_into_root ... ok
+test tests::cloud_onboard_flag_parses_and_defaults_off ... ok
+test tests::cloud_preserves_root_level_flags ... ok
+test tests::binary_name_is_nori ... ok
+test tests::completion_singular_treated_as_prompt ... ok
+test tests::completions_parsed_as_subcommand ... ok
+test tests::completions_requires_shell_argument ... ok
+test host::table::tests::long_titles_are_cut_where_the_session_lists_cut_them ... ok
+test tests::completions_subcommand_in_help ... ok
+test tests::config_example_shows_agent_claude_code ... ok
+test tests::format_exit_messages_applies_color_when_enabled ... ok
+test tests::format_exit_messages_includes_resume_hint_without_color ... ok
+test tests::format_exit_messages_includes_resume_hint_without_token_usage ... ok
+test tests::format_exit_messages_skips_resume_hint_without_activity ... ok
+test tests::format_exit_messages_skips_zero_usage ... ok
+test tests::resume_all_flag_sets_show_all ... ok
+test tests::config_help_references_nori_path ... ok
+test tests::resume_merges_resume_scoped_interactive_flags ... ok
+test tests::resume_picker_logic_last ... ok
+test tests::resume_picker_logic_none_and_not_last ... ok
+test tests::resume_picker_logic_with_session_id ... ok
+test tests::skillsets_subcommand_captures_trailing_args ... ok
+test tests::skillsets_subcommand_is_recognized ... ok
+test wsl_paths::tests::normalize_is_noop_on_unix_paths ... ok
+test wsl_paths::tests::win_to_wsl_basic ... ok
+test tests::skillsets_subcommand_passes_help_flag_through ... ok
+test tests::completions_generates_valid_output_for_all_shells ... ok
+test host::table::tests::a_terminal_gets_two_rows_per_session_at_each_layout_width ... ok
+
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+[1m[32m     Running[0m tests/analytics.rs (target/aarch64-apple-darwin/ci-test/deps/analytics-eaf97e5a153a8686)
+
+running 3 tests
+test unavailable_analytics_never_changes_exec_output_or_exit ... ok
+test exec_reports_one_authenticated_agent_session_without_changing_output ... ok
+test analytics_opt_out_and_ineligible_identities_emit_nothing ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.69s
+
+[1m[32m     Running[0m tests/auth.rs (target/aarch64-apple-darwin/ci-test/deps/auth-5c859b994097b19f)
+
+running 11 tests
+test auth_table_names_each_agent_and_its_status ... ok
+test auth_json_reports_a_codex_chatgpt_login ... ok
+test env_credentials_are_read_only_in_the_table ... ok
+test prefer_api_key_rejects_provider_names_and_agents_without_saved_keys ... ok
+test prefer_api_key_accepts_an_agent_named_like_its_provider ... ok
+test set_key_shows_only_the_known_prefix_and_flags_a_key_for_another_provider ... ok
+test set_key_takes_a_provider_and_points_agent_names_at_theirs ... ok
+test one_saved_openai_key_is_reported_for_every_openai_agent_and_can_be_removed ... ok
+test unreadable_store_is_reported_without_hiding_detection ... ok
+test preferring_api_keys_over_a_subscription_needs_confirmation_once ... ok
+test saved_key_reaches_the_launched_agent_only_while_it_prefers_api_keys ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.63s
+
+[1m[32m     Running[0m tests/exec_host_client.rs (target/aarch64-apple-darwin/ci-test/deps/exec_host_client-9bbab4a2a67f3a36)
+
+running 7 tests
+test exec_runs_on_a_running_host_of_a_newer_compatible_contract ... ok
+test exec_runs_on_its_own_host_when_the_running_one_speaks_another_contract ... ok
+test exec_runs_its_prompt_on_the_homes_running_host ... ok
+test exec_on_the_running_host_rejects_permission_requests_and_fails ... ok
+test exec_runs_on_its_own_host_while_another_client_controls_the_running_one ... ok
+test exec_with_configuration_overrides_runs_on_its_own_host ... ok
+test stopping_exec_ends_its_turn_on_the_running_host ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+[1m[32m     Running[0m tests/execpolicy.rs (target/aarch64-apple-darwin/ci-test/deps/execpolicy-0480650243b40e41)
+
+running 1 test
+test execpolicy_check_matches_expected_json ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+[1m[32m     Running[0m tests/headless_exec.rs (target/aarch64-apple-darwin/ci-test/deps/headless_exec-c11856f4a5196492)
+
+running 16 tests
+test cursor_startup::missing_cursor_executable_explains_installation ... ok
+test cursor_startup::session_creation_auth_failure_uses_the_selected_agents_hint ... ok
+test exec_launches_hermes_and_cursor_by_cli_alias ... ok
+test exec_composes_the_argument_and_piped_stdin_when_asked ... ok
+test exec_fails_closed_without_waiting_for_an_approval ... ok
+test exec_leaves_stdin_alone_when_given_a_prompt ... ok
+test exec_reads_the_prompt_from_stdin ... ok
+test exec_prints_only_the_final_agent_response ... ok
+test exec_reports_why_the_agent_could_not_start ... ok
+test exec_requires_a_prompt_from_some_source ... ok
+test exec_reads_the_prompt_from_the_stdin_sentinel ... ok
+test print_rejects_a_subcommand ... ok
+test print_rejects_images_it_cannot_attach ... ok
+test exec_reports_agent_prompt_failures_on_stderr ... ok
+test print_flag_is_an_alias_for_exec ... ok
+test exec_preserves_local_launch_inputs_for_two_stdio_servers ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.85s
+
+[1m[32m     Running[0m tests/host_lifecycle.rs (target/aarch64-apple-darwin/ci-test/deps/host_lifecycle-ca265464dcc541c1)
+
+running 130 tests
+test a_delegated_child_works_in_its_parents_folder ... ok
+test a_named_host_starts_in_its_own_folder_unless_one_is_given ... ok
+test a_host_in_another_home_runs_beside_an_incompatible_one_and_leaves_it_alone ... ok
+test acp_v1::a_closed_session_stays_listed_and_loads_again ... ok
+test acp_v1::a_deleted_session_is_gone_from_the_list ... ok
+test a_resumed_session_keeps_its_folder ... ok
+test acp_v1::a_new_session_needs_an_existing_absolute_folder ... ok
+test acp_v1::a_new_session_refuses_an_unknown_agent ... ok
+test acp_v1::a_new_session_runs_a_turn_in_its_folder ... ok
+test acp_v1::a_pending_permission_request_is_asked_again_after_reconnecting ... ok
+test acp_v1::a_second_prompt_during_a_turn_is_busy_and_cancel_ends_the_turn ... ok
+test acp_v1::initialize_negotiates_version_one_and_advertises_the_host_contract ... ok
+test acp_v1::list_rows_say_which_agent_runs_a_session_and_whether_it_is_live ... ok
+test acp_v1::an_agent_that_needs_sign_in_fails_with_auth_required ... ok
+test acp_v1::permission_requests_go_to_the_controller_only ... ok
+test acp_v1::the_adapter_can_reuse_a_permission_id_after_an_answer ... ok
+test acp_v1::a_prompt_waiting_on_an_agent_that_needs_sign_in_reports_why_it_failed ... ok
+test acp_v1::loading_a_session_does_not_ask_about_permissions_already_answered ... ok
+test acp_v1::the_host_publishes_host_json_beside_the_legacy_discovery_files ... ok
+test acp_v1::the_clients_mcp_servers_reach_the_agent_it_switches_to ... ok
+test acp_v1::the_hosts_default_mode_applies_to_new_sessions ... ok
+test ask_mode::a_claude_code_session_offers_all_three_modes ... ok
+test ask_mode::a_host_default_of_ask_applies_to_sessions_an_attached_terminal_starts ... ok
+test ask_mode::a_host_default_of_ask_makes_new_sessions_ask ... ok
+test ask_mode::a_default_of_ask_is_agent_for_an_adapter_that_cannot_ask_and_stays_agent ... ok
+test acp_v1::watchers_cannot_prompt_close_or_delete ... ok
+test ask_mode::a_session_started_without_an_acp_client_gets_its_adapter_mode ... ok
+test ask_mode::an_adapter_version_without_its_strict_mode_is_not_offered_ask ... ok
+test ask_mode::an_adapter_with_no_mode_that_asks_every_time_is_not_offered_ask ... ok
+test ask_mode::real_adapters_offer_ask ... ignored, starts the real Claude Code and Codex adapters
+test ask_mode::ask_makes_claude_code_ask_every_turn_and_agent_does_not ... ok
+test ask_mode::ask_makes_codex_ask_every_turn_and_agent_does_not ... ok
+test ask_mode::switching_agent_in_ask_keeps_asking_where_the_new_adapter_can ... ok
+test ask_mode::switching_agent_in_ask_to_an_adapter_that_cannot_ask_continues_in_agent ... ok
+test ask_mode::ask_still_asks_after_a_host_restart ... ok
+test explicit_close::explicit_close_honors_capability_and_an_already_released_session ... ok
+test explicit_close::explicit_close_preserves_a_permission_on_refusal_and_retries_once ... ok
+test explicit_close::refusal_preserves_a_delegated_child_and_acknowledgement_retires_it ... ok
+test detached_host_stays_alive_empty_and_stops_explicitly ... ok
+test explicit_close::reloading_after_acknowledgement_spares_the_new_process ... ok
+test external_cancel::controller_handoff_cancels_external_and_owned_turns_once ... ok
+test external_cancel::prompt_receipt_fences_successor_and_sibling_cancellation ... ok
+test external_cancel::observed_cancel_rejects_a_late_or_foreign_turn_and_only_the_controller_can_send_it ... ok
+test host_token_is_private_and_never_printed ... ok
+test host_can_be_stopped_even_if_configuration_was_broken_after_start ... ok
+test machine_transport_authenticates_before_upgrade ... ok
+test managed::a_managed_host_rejects_notifications ... ok
+test managed::concurrent_ensure_uses_one_slot_and_preserves_the_pinned_process ... ok
+test managed::exited_and_never_spawned_remain_distinct_on_retry ... ok
+test managed::descendants_see_only_their_binding_environment_and_roots ... ok
+test managed::explicit_off_keeps_local_session_creation_and_omits_managed_discovery ... ok
+test managed::dedicated_machine_matches_only_its_existing_roots_and_binding ... ok
+test managed::full_host_refuses_new_binding_with_capacity_code ... ok
+test managed::invalid_ensure_returns_invalid_params_even_on_a_full_host ... ok
+test managed::managed_roots_and_pins_fail_closed ... ok
+test managed::invalid_runtime_or_token_label_refuses_the_launch_before_spawn ... ok
+test managed::managed_wrapper_requires_its_own_pin_and_is_part_of_the_binding_identity ... ok
+test managed::removing_an_environment_key_in_one_binding_preserves_its_siblings_value ... ok
+test managed::prepared_runtimes_and_public_labels_follow_their_binding ... ok
+test managed::unusable_dedicated_layout_fails_before_discovery ... ok
+test modes::a_changed_mode_and_model_survive_a_host_restart ... ok
+test modes::an_attached_session_reports_its_agent_model_and_permission_mode ... ok
+test modes::approve_all_answers_permission_requests_until_the_mode_changes_back ... ok
+test modes::changing_the_model_reaches_every_attached_client ... ok
+test modes::watchers_and_unknown_modes_cannot_change_a_session ... ok
+test modes::the_agent_can_change_until_the_first_prompt ... ok
+test new_session_folder_defaults_to_and_resolves_against_the_callers_directory ... ok
+test new_session_in_a_missing_folder_or_a_file_fails_without_starting_one ... ok
+test remote_transport::a_missing_or_wrong_token_is_refused_before_the_upgrade ... ok
+test remote_transport::a_full_host_still_reports_itself_running_and_can_be_stopped ... ok
+test occupied_port_fails_without_publishing_a_host ... ok
+test remote_transport::a_session_stays_live_after_the_client_that_started_it_disconnects ... ok
+test remote_transport::binary_frames_are_ignored_and_batches_are_refused ... ok
+test remote_transport::clients_beyond_the_limit_are_refused_with_a_clear_error ... ok
+test remote_transport::every_connection_is_named_in_its_upgrade_response ... ok
+test remote_transport::the_acp_path_and_the_sessions_alias_reach_the_same_sessions ... ok
+test standard_acp::agent_can_accept_initialize_after_rejection_and_decides_close_retries ... ok
+test sessions_started_in_two_folders_each_work_in_their_own_folder ... ok
+test remote_transport::resuming_a_live_session_after_a_reconnect_does_not_replay_its_history ... ok
+test standard_acp::fork_side::a_fork_reply_after_parent_close_cannot_publish_or_leak_a_child ... ok
+test standard_acp::fork_side::an_adapter_leaving_read_only_mode_loses_just_that_side ... ok
+test standard_acp::fork_side::close_lifecycle_delivers_child_callbacks_through_refusal_and_stops_at_confirmation ... ok
+test standard_acp::fork_side::declined_fork_close_preserves_the_pending_permission_and_allows_retry ... ok
+test standard_acp::fork_side::close_lifecycle_retries_only_the_refused_child_after_parent_close ... ok
+test standard_acp::fork_side::declined_parent_close_keeps_its_fork_usable_until_the_parent_closes ... ok
+test standard_acp::fork_side::disabled_side_forks_preserve_ordinary_fork ... ok
+test standard_acp::fork_side::private_adapter_ids_and_duplicate_forks_leave_the_live_child_intact ... ok
+test standard_acp::fork_side::durable_parent_releases_the_shared_adapter_with_a_fork_permission_pending ... ok
+test standard_acp::fork_side::stopping_host_releases_shared_adapter_with_two_outstanding_fork_prompts ... ok
+test standard_acp::fork_side::two_forks_share_the_busy_agent_and_keep_their_traffic_private ... ok
+test standard_acp::local_host_keeps_managed_socket_disabled ... ok
+test standard_acp::malformed_machine_envelopes_leave_an_open_agent_usable ... ok
+test standard_acp::picker::picker_activates_new_and_saved_rows_on_their_original_connections ... ok
+test standard_acp::managed_switches_control_host_additions ... ok
+test standard_acp::picker::picker_replacement_discard_disconnect_and_errors_leave_other_sessions_running ... ok
+test standard_acp::side_sessions::a_provider_mode_change_closes_the_side_and_frees_its_slot ... ok
+test standard_acp::scoped_clients_preserve_agent_sessions_and_permissions ... ok
+test standard_acp::side_sessions::a_side_opens_without_os_confinement_when_the_boundary_is_unavailable ... ok
+test standard_acp::side_sessions::bypass_only_adapter_cannot_open_a_side_thread ... ok
+test standard_acp::side_sessions::config_options_only_adapter_uses_the_restrictive_mode_and_pinned_model ... ok
+test standard_acp::side_sessions::parent_close_acknowledges_both_side_process_trees_have_exited ... ok
+test standard_acp::fork_side::unsupported_or_unconfirmed_forks_offer_rebuilt_and_preserve_parent ... ok
+test standard_acp::side_sessions::recovery_checkpoints_and_releases_the_parent_with_a_side_permission_pending ... ok
+test standard_acp::side_sessions::side_process_trees_end_after_a_parent_crash ... ok
+test standard_acp::side_sessions::disabled_host_refuses_marked_opens_and_side_restoration_but_preserves_regular_sessions ... ok
+test standard_acp::side_sessions::rebuilt_opens_require_a_live_matching_parent_and_an_enforced_read_only_launch ... ok
+test standard_acp::side_sessions::simultaneous_rebuilt_threads_preserve_turns_permissions_capacity_and_history ... ok
+test standard_acp::side_sessions::unavailable_os_boundary_refuses_the_side_and_keeps_parent_usable ... ok
+test standard_acp::stdio::stdio_host_can_give_the_adapter_its_own_environment_but_not_its_home ... ok
+test standard_acp::stdio::stdio_admission_digest_tracks_retained_inherited_inputs_only ... ok
+test standard_acp::stdio::stdio_host_exits_and_ends_its_adapter_when_terminated_with_stdin_still_open ... ok
+test standard_acp::stdio::stdio_host_exits_with_an_error_and_a_clean_stdout_when_the_launch_is_refused ... ok
+test standard_acp::stdio::stdio_host_serves_the_pinned_adapter_and_a_side_session_as_plain_acp_until_stdin_closes ... ok
+test standard_acp::stdio::wrapped_launch_preserves_child_inputs_turns_cancellation_and_cleanup ... ok
+test starting_beside_a_host_of_a_compatible_contract_reuses_it ... ok
+test standard_acp::stdio::plain_env_and_wrapped_managed_launches_select_two_independent_acp_servers ... ok
+test starting_beside_a_host_of_another_contract_fails_and_leaves_it_running ... ok
+test the_host_refuses_a_malformed_new_session_without_starting_one ... ok
+test starting_beside_a_host_whose_contract_cannot_be_read_fails ... ok
+test token_symlink_is_refused_without_overwriting_target ... ok
+test transcripts::a_watcher_loading_a_live_session_sees_its_history_and_its_next_turn ... ok
+test transcripts::a_damaged_transcript_is_left_out_of_the_listing ... ok
+test transcripts::loading_a_stored_session_replays_its_history_before_answering_then_streams_live ... ok
+test transcripts::loading_in_another_folder_or_an_unknown_session_is_refused ... ok
+test transcripts::session_list_pages_through_every_session_with_its_cursor ... ok
+test transcripts::session_list_keeps_only_sessions_in_the_requested_folder ... ok
+test transcripts::resuming_a_stored_session_attaches_without_replaying_its_history ... ok
+test transcripts::session_list_shows_live_sessions_and_sessions_recorded_by_an_earlier_host ... ok
+test transcripts::the_legacy_resume_alias_still_resumes_a_stored_session ... ok
+test standard_acp::fork_side::parent_close_can_retry_an_unanswered_adapter_close ... ok
+
+test result: ok. 129 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 16.01s
+
+[1m[32m     Running[0m tests/host_stdio.rs (target/aarch64-apple-darwin/ci-test/deps/host_stdio-bd252e5f4a48b6c5)
+
+running 12 tests
+test a_managed_home_serves_stdio_only_with_a_launch_file ... ok
+approval_policy (on-request) and sandbox_mode (unset) match none of the retired approval presets, so they were left as is. /approvals now picks Ask, Agent or Approve all for one session; set `[host] default_mode` to choose how new sessions start.
+approval_policy (on-request) and sandbox_mode (unset) match none of the retired approval presets, so they were left as is. /approvals now picks Ask, Agent or Approve all for one session; set `[host] default_mode` to choose how new sessions start.
+test a_stale_discovery_file_leaves_the_stdio_client_a_host_of_its_own ... ok
+test a_stop_request_is_answered_before_the_host_exits ... ok
+approval_policy (on-request) and sandbox_mode (unset) match none of the retired approval presets, so they were left as is. /approvals now picks Ask, Agent or Approve all for one session; set `[host] default_mode` to choose how new sessions start.
+approval_policy (on-request) and sandbox_mode (unset) match none of the retired approval presets, so they were left as is. /approvals now picks Ask, Agent or Approve all for one session; set `[host] default_mode` to choose how new sessions start.
+Error: terminated
+test a_terminate_signal_stops_the_host_with_an_error ... ok
+test closing_stdin_ends_the_host_cleanly_with_only_acp_on_stdout ... ok
+approval_policy (on-request) and sandbox_mode (unset) match none of the retired approval presets, so they were left as is. /approvals now picks Ask, Agent or Approve all for one session; set `[host] default_mode` to choose how new sessions start.
+approval_policy (on-request) and sandbox_mode (unset) match none of the retired approval presets, so they were left as is. /approvals now picks Ask, Agent or Approve all for one session; set `[host] default_mode` to choose how new sessions start.
+test exec_acp_is_the_headless_host ... ok
+approval_policy (on-request) and sandbox_mode (unset) match none of the retired approval presets, so they were left as is. /approvals now picks Ask, Agent or Approve all for one session; set `[host] default_mode` to choose how new sessions start.
+test a_stdio_client_gets_a_host_of_its_own_while_another_client_controls_the_running_one ... ok
+test list_rows_say_whether_a_session_is_live ... ok
+test a_stdio_client_joins_the_homes_running_host_and_its_sessions_outlive_it ... ok
+approval_policy (on-request) and sandbox_mode (unset) match none of the retired approval presets, so they were left as is. /approvals now picks Ask, Agent or Approve all for one session; set `[host] default_mode` to choose how new sessions start.
+test the_stdio_client_answers_permission_requests_even_when_it_asks_to_observe ... ok
+test one_stdio_stream_runs_turns_in_several_sessions ... ok
+test requests_piped_before_stdin_closes_are_all_answered_by_the_joined_host ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+[1m[32m     Running[0m tests/host_wire_schema.rs (target/aarch64-apple-darwin/ci-test/deps/host_wire_schema-4c5232e880c27a62)
+
+running 2 tests
+test the_checked_in_host_wire_schema_matches_the_protocol_types ... ok
+test the_checked_in_host_wire_typescript_matches_the_schema ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s
+
+[1m[32m     Running[0m tests/managed_recovery.rs (target/aarch64-apple-darwin/ci-test/deps/managed_recovery-4343af42036bafd5)
+
+running 19 tests
+test a_checkpoint_cannot_report_a_completed_barrier_while_its_prompt_is_blocked ... ok
+test a_drained_release_can_finish_after_a_crash_before_ledger_completion ... ok
+test a_released_binding_restores_on_the_same_host_without_rolling_back_late_acks ... ok
+test a_checkpoint_imports_the_stable_identity_into_a_fresh_host_and_fences_old_commands ... ok
+test an_additional_acp_session_stays_out_of_the_bindings_recovery_replay ... ok
+test an_adapter_protocol_fault_after_a_completed_turn_fails_the_checkpoint_barrier ... ok
+test an_interrupted_prompt_never_repeats_its_side_effect ... ok
+test an_imported_command_receipt_cannot_select_another_bindings_private_checkpoint ... ok
+test attach_from_a_committed_cursor_delivers_detached_output_before_live_frames ... ok
+test local_mode_keeps_its_session_list_and_rejects_managed_checkpoint_requests ... ok
+test buffered_checkpoint_completion_identifies_its_binding_generation_and_attempt ... ok
+test disconnected_machine_output_is_saved_and_its_live_lane_can_reattach ... ok
+test cold_import_reports_limited_continuation_for_an_agent_without_load ... ok
+test rejected_import_leaves_the_resident_generation_usable ... ok
+test restart_replays_the_original_event_until_its_source_cursor_is_acknowledged ... ok
+test releasing_a_restored_done_child_preserves_its_delegation_and_resident_parent ... ok
+test releasing_one_binding_twice_leaves_a_siblings_in_flight_prompt_alive ... ok
+test upgrade_and_new_source_share_one_host_incarnation_across_restart ... ok
+test recovery::storage::a_full_journal_refuses_new_prompt_ids_with_a_storage_error ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.32s
+
+[1m[32m     Running[0m tests/nori_harness_crate.rs (target/aarch64-apple-darwin/ci-test/deps/nori_harness_crate-d810859f64768d87)
+
+running 1 test
+test nori_harness_crate_is_available_to_cli ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/token_provider.rs (target/aarch64-apple-darwin/ci-test/deps/token_provider-0e56fae711d0263c)
+
+running 2 tests
+test named_binding_reports_eligibility_and_adapter_failures_before_spawn ... ok
+test bound_exec_uses_only_the_explicit_responses_route ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+[1m[32m   Doc-tests[0m nori_cli
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

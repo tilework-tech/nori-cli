@@ -1,0 +1,241 @@
+[1m[32m   Compiling[0m tokio v1.51.6
+[1m[32m   Compiling[0m tracing-core v0.1.35
+[1m[32m   Compiling[0m crossbeam-utils v0.8.21
+[1m[32m   Compiling[0m chrono v0.4.42
+[1m[32m   Compiling[0m serde_json v1.0.145
+[1m[32m   Compiling[0m tungstenite v0.26.2
+[1m[32m   Compiling[0m tracing v0.1.43
+[1m[32m   Compiling[0m objc2-foundation v0.3.2
+[1m[32m   Compiling[0m rustls-platform-verifier v0.7.0
+[1m[32m   Compiling[0m schemars v1.0.4
+[1m[32m   Compiling[0m uuid v1.18.1
+[1m[32m   Compiling[0m regex-automata v0.4.13
+[1m[32m   Compiling[0m concurrent-queue v2.5.0
+[1m[32m   Compiling[0m rmcp-macros v3.10.0
+[1m[32m   Compiling[0m serde_with v3.21.0
+[1m[32m   Compiling[0m async-io v2.6.0
+[1m[32m   Compiling[0m async-signal v0.2.13
+[1m[32m   Compiling[0m async-channel v2.5.0
+[1m[32m   Compiling[0m ts-rs v11.0.1
+[1m[32m   Compiling[0m agent-client-protocol-schema v0.14.0
+[1m[32m   Compiling[0m keyring v3.6.3
+[1m[32m   Compiling[0m tokio-util v0.7.16
+[1m[32m   Compiling[0m tower v0.5.2
+[1m[32m   Compiling[0m tokio-rustls v0.26.2
+[1m[32m   Compiling[0m h2 v0.4.16
+[1m[32m   Compiling[0m objc2-app-kit v0.3.2
+[1m[32m   Compiling[0m tokio-tungstenite v0.26.2
+[1m[32m   Compiling[0m process-wrap v10.0.1
+[1m[32m   Compiling[0m tower-http v0.6.11
+[1m[32m   Compiling[0m tokio-stream v0.1.17
+[1m[32m   Compiling[0m blocking v1.6.2
+[1m[32m   Compiling[0m webbrowser v1.2.2
+[1m[32m   Compiling[0m tiny_http v0.12.0
+[1m[32m   Compiling[0m codex-keyring-store v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/keyring-store)
+[1m[32m   Compiling[0m mcp-types v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/mcp-types)
+[1m[32m   Compiling[0m async-process v2.5.0
+[1m[32m   Compiling[0m regex v1.12.2
+[1m[32m   Compiling[0m parking_lot v0.12.4
+[1m[32m   Compiling[0m serial_test v3.2.0
+[1m[32m   Compiling[0m nori-config v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/nori-config)
+[1m[32m   Compiling[0m hyper v1.7.0
+[1m[32m   Compiling[0m hyper-util v0.1.16
+[1m[32m   Compiling[0m hyper-rustls v0.27.7
+[1m[32m   Compiling[0m axum v0.8.4
+[1m[32m   Compiling[0m reqwest v0.12.24
+[1m[32m   Compiling[0m reqwest v0.13.4
+[1m[32m   Compiling[0m oauth2 v5.0.0
+[1m[32m   Compiling[0m rmcp v3.10.0
+[1m[32m   Compiling[0m nori-protocol v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/nori-protocol)
+[1m[32m   Compiling[0m agent-client-protocol v0.15.1
+[1m[32m   Compiling[0m codex-rmcp-client v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/rmcp-client)
+[1m[32m   Compiling[0m nori-acp-host v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/acp-host)
+[1m[32m    Finished[0m `ci-test` profile [unoptimized + debuginfo] target(s) in 5.28s
+[1m[32m     Running[0m unittests src/lib.rs (target/aarch64-apple-darwin/ci-test/deps/nori_acp_host-e6e51c0a39fa68e8)
+
+running 105 tests
+test connection::acp_connection_tests::authenticated_load_reports_both_attempts_with_their_wire_ids ... ok
+test connection::acp_connection_tests::test_cancelled_spawn_reaps_child_during_initialization ... ok
+test connection::acp_connection_tests::test_close_session_failure_categorizes_as_session_not_found ... ok
+test connection::acp_connection_tests::test_close_session_round_trips ... ok
+test connection::acp_connection_tests::test_cancel_during_prompt ... ok
+test connection::acp_connection_tests::test_approval_receiver_forwards_requests ... ok
+test connection::acp_connection_tests::test_codex_home_not_inherited ... ok
+test connection::acp_connection_tests::test_drop_kills_subprocess ... ok
+test connection::acp_connection_tests::test_event_receiver_forwards_session_updates ... ok
+test connection::acp_connection_tests::test_child_exit_emits_event_with_stderr_tail ... ok
+test connection::acp_connection_tests::test_event_receiver_preserves_update_then_approval_order ... ok
+test connection::acp_connection_tests::test_list_sessions_maps_agent_session_info ... ok
+test connection::acp_connection_tests::test_resume_session_failure_categorizes_as_session_not_found ... ok
+test connection::acp_connection_tests::test_list_sessions_preserves_session_meta ... ok
+test connection::acp_connection_tests::test_resume_session_reattaches_over_session_resume ... ok
+test connection::acp_connection_tests::test_prompt_receives_text_updates ... ok
+test connection::acp_connection_tests::test_proxy_logging_records_one_wire_log_per_child_subprocess ... ok
+test connection::acp_connection_tests::test_shutdown_closes_stdin_and_waits_for_child_exit ... ok
+test connection::acp_connection_tests::test_sequential_prompt_after_cancel_receives_response ... ok
+test connection::acp_connection_tests::test_session_config_options_after_session_creation ... ok
+test connection::acp_connection_tests::test_set_session_config_option_replaces_connection_state ... ok
+test connection::acp_connection_tests::test_spawn_and_create_session ... ok
+test connection::acp_connection_tests::test_shutdown_sweeps_descendant_after_group_leader_exits ... ok
+test connection::acp_connection_tests::test_tool_call_prompt_delivers_final_text_update ... ok
+test connection::mcp::tests::disabled_servers_are_excluded ... ok
+test connection::mcp::tests::empty_input_produces_empty_output ... ok
+test connection::mcp::tests::env_vars_are_resolved_from_process_env ... ok
+test connection::mcp::tests::http_server_with_bearer_token_is_converted ... ok
+test connection::mcp::tests::bearer_token_env_var_takes_precedence_over_stored_oauth ... ok
+test connection::mcp::tests::http_server_with_stored_oauth_tokens_gets_auth_header ... ok
+test connection::mcp::tests::missing_env_var_is_skipped_not_error ... ok
+test connection::mcp::tests::http_server_with_static_and_env_headers ... ok
+test connection::mcp::tests::stdio_server_is_converted ... ok
+test connection::tests::session_update_kind_labels_usage_update ... ok
+test connection::mcp::tests::multiple_servers_are_sorted_by_name ... ok
+test error_category::tests::auth_required_categorizes_as_authentication_with_login_detail ... ok
+test error_category::tests::broker_unreachable_and_busy_agents_are_retryable_but_session_states_are_not ... ok
+test error_category::tests::falls_back_to_string_heuristics_without_structured_error ... ok
+test error_category::tests::session_lifecycle_codes_map_to_dedicated_categories ... ok
+test error_category::tests::structured_code_takes_precedence_over_message_heuristics ... ok
+test patch::tests::create_patch_with_context_uses_new_text_when_file_is_already_updated ... ok
+test connection::acp_connection_tests::test_shutdown_kills_child_that_outlives_grace ... ok
+test recovery::journal::tests::a_lost_producer_interrupts_prompts_without_interrupting_other_commands ... ok
+test recovery::journal::tests::backpressure_blocks_new_turns_until_ack_without_losing_events ... ok
+test recovery::journal::tests::cold_import_keeps_identity_and_never_rewinds_completed_work_on_retry ... ok
+test recovery::journal::tests::failed_disk_write_closes_admission_and_preserves_last_durable_output ... ok
+test connection::acp_connection_tests::test_spawn_failure_surfaces_child_stderr ... ok
+test recovery::journal::tests::incomplete_final_frame_is_discarded_but_checksum_failure_stops_recovery ... ok
+test recovery::journal::tests::lost_ack_replays_original_source_and_raw_payload ... ok
+test recovery::journal::tests::only_one_launch_can_dispatch_per_generation ... ok
+test recovery::journal::tests::oversized_final_response_neither_completes_command_nor_advances_output ... ok
+test recovery::journal::tests::release_tombstone_survives_restart_and_is_scoped ... ok
+test recovery::journal::tests::reopening_waits_for_a_spawned_child_to_drop_its_inherited_lock ... ok
+test recovery::tests::abandoned_producer_prevents_a_successful_checkpoint ... ok
+test recovery::tests::invalid_request_id_is_rejected_without_wedging_the_checkpoint ... ok
+test recovery::journal::tests::retries_reconcile_without_dispatch_across_restart_and_import ... ok
+test recovery::tests::marked_sides_never_claim_the_recovery_session_or_hold_its_checkpoint_open ... ok
+test recovery::tests::only_the_primary_session_reaches_replay_and_load_history_is_excluded ... ok
+test recovery::tests::ordinary_acp_requests_keep_their_checkpoint_barrier_with_side_shaped_ids ... ok
+test recovery::tests::queued_follow_up_holds_checkpoint_until_its_own_turn_finishes ... ok
+test registry::tests::builtin_aliases_use_vendor_update_channels ... ok
+test registry::tests::claude_injects_model_via_anthropic_model_env ... ok
+test registry::tests::codex_config_preserves_existing_settings_while_disabling_native_goals ... ok
+test registry::tests::codex_config_rejects_invalid_ambient_json ... ok
+test registry::tests::codex_injects_model_into_codex_config_preserving_goals_flag ... ok
+test registry::tests::custom_agent_arg_override_appends_model_flag ... ok
+test registry::tests::custom_agent_env_override_injects_model ... ok
+test registry::tests::custom_agent_without_override_leaves_spawn_config_unchanged ... ok
+test registry::tests::hermes_launches_the_native_acp_server ... ok
+test registry::tests::native_providers_use_the_advertised_acp_model_options ... ok
+test registry::tests::opencode_uses_its_native_acp_command_and_provider_settings ... ok
+test registry::tests::test_agent_config_includes_auth_hint ... ok
+test registry::tests::test_agent_from_slug ... ok
+test registry::tests::test_agent_provider_relationship ... ok
+test registry::tests::test_agent_slugs ... ok
+test registry::tests::test_agent_transcript_base_dir ... ok
+test registry::tests::test_auth_hint_returns_actionable_instructions ... ok
+test registry::tests::test_build_default_agents_have_agent_kind ... ok
+test registry::tests::test_build_default_agents_have_correct_names ... ok
+test registry::tests::test_build_default_agents_returns_builtins ... ok
+test registry::tests::test_build_registry_appends_custom_agent ... ok
+test registry::tests::test_build_registry_custom_overrides_builtin ... ok
+test registry::tests::test_build_registry_rejects_duplicate_custom_slugs ... ok
+test registry::tests::test_build_registry_with_no_custom_agents ... ok
+test registry::tests::test_claude_code_context_window_is_1m ... ok
+test registry::tests::test_get_agent_config_normalizes_model_names ... ok
+test registry::tests::test_get_agent_config_resolves_custom_local_agent ... ok
+test registry::tests::test_get_agent_config_resolves_custom_uvx_agent ... ok
+test registry::tests::test_get_agent_display_name_custom_agent ... ok
+test registry::tests::test_get_claude_code_config ... ok
+test registry::tests::test_get_codex_config ... ok
+test registry::tests::test_get_gemini_config ... ok
+test registry::tests::test_get_mock_agent_alt_config ... ok
+test registry::tests::test_get_mock_agent_config ... ok
+test registry::tests::test_get_unknown_model_returns_error ... ok
+test registry::tests::test_legacy_model_names ... ok
+test registry::tests::test_list_available_agents_contains_production_agents ... ok
+test registry::tests::test_list_available_agents_debug_build ... ok
+test registry::tests::test_list_available_agents_includes_custom ... ok
+test registry::tests::test_package_manager_commands ... ok
+test registry::tests::test_provider_slugs ... ok
+test remote::standard_wire::tests::malformed_json_returns_an_unscoped_parse_error ... ok
+test recovery::tests::release_waits_for_a_registered_producer_and_receives_its_failure ... ok
+test recovery::journal::tests::repeated_acknowledged_output_stays_within_disk_limit ... ok
+test recovery::journal::tests::only_one_host_owns_the_journal_directory ... ok
+
+test result: ok. 105 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.90s
+
+[1m[32m     Running[0m tests/adapter_launch.rs (target/aarch64-apple-darwin/ci-test/deps/adapter_launch-74bbc4d46ddb81e7)
+
+running 18 tests
+test a_command_override_wins_over_a_version_pin ... ok
+test a_pin_on_an_agent_without_a_package_fails_its_launch ... ok
+test a_version_pin_applies_to_bunx_launches ... ok
+test a_pi_pin_applies_to_its_acp_adapter_package ... ok
+test a_version_pin_replaces_latest_for_npx_and_prefers_the_offline_cache ... ok
+test an_overridden_builtin_keeps_its_builtin_launch_behavior ... ok
+test an_unusable_env_command_is_an_error_naming_the_variable ... ok
+test config_command_replaces_the_adapter_and_env_wins_over_config ... ok
+test config_keys_accept_agent_aliases ... ok
+test config_toml_acp_adapters_table_drives_the_launch ... ok
+test env_command_replaces_the_resolved_adapter_command ... ok
+test first_bunx_fetch_carries_a_download_notice_until_the_package_is_cached ... ok
+test first_npx_fetch_carries_a_download_notice_until_the_package_is_cached ... ok
+test malformed_overrides_are_rejected ... ok
+test overridden_and_path_launched_agents_carry_no_download_notice ... ok
+test pinned_and_multi_package_npx_launches_check_their_own_cache_entry ... ok
+test the_override_applies_to_custom_agents_too ... ok
+test unpinned_adapters_keep_latest ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+[1m[32m     Running[0m tests/cursor.rs (target/aarch64-apple-darwin/ci-test/deps/cursor-09a530acdd41b5ba)
+
+running 1 test
+test cursor_alias_launches_acp_with_the_requested_model ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/managed_host.rs (target/aarch64-apple-darwin/ci-test/deps/managed_host-b5aadf0bbb3b2d58)
+
+running 10 tests
+test host_identity_is_stable_across_connections_but_not_host_lifetimes ... ok
+test loopback_requires_the_token_on_acp_and_sessions ... ok
+test blocked_agent_work_does_not_prevent_observer_initialize_list_or_host_stop ... ok
+test client_round_trips_requests_and_reports_watcher_errors ... ok
+test missing_or_malformed_host_identity_is_unavailable_for_safe_replay ... ok
+test slow_initialize_does_not_reserve_control_or_block_other_clients ... ok
+test observer_does_not_claim_control_and_disconnect_allows_a_new_controller ... ok
+test takeover_does_not_wait_for_admitted_work_and_refuses_later_old_owner_requests ... ok
+test watcher_cannot_mutate_and_takeover_notifies_both_without_disconnecting ... ok
+test watchers_and_observers_may_start_a_session_of_their_own ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[32m     Running[0m tests/pi_custom_override.rs (target/aarch64-apple-darwin/ci-test/deps/pi_custom_override-76d424630fe4ee6b)
+
+running 1 test
+test a_custom_pi_agent_is_not_offered_token_providers ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/pi_token_provider.rs (target/aarch64-apple-darwin/ci-test/deps/pi_token_provider-f404b84a306e12bf)
+
+running 8 tests
+test an_unbound_pi_keeps_its_own_configuration ... ok
+test a_missing_credential_stops_the_launch_and_names_the_variable ... ok
+
+running 1 test
+test a_named_connection_writes_only_the_selected_model_and_a_key_reference ... ok
+test messages_profiles_keep_a_gateway_prefix_without_duplicating_the_api_version ... ok
+test concurrent_profiles_keep_legacy_history_and_clean_up_independently ... ok
+test pi_is_a_built_in_that_runs_the_upstream_adapter_with_pi_on_path ... ok
+test profile_uses_the_protocol_resolved_for_the_saved_connection ... ok
+test a_crashed_launch_is_swept_when_an_unbound_agent_starts ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[32m     Running[0m tests/provider_model_preferences.rs (target/aarch64-apple-darwin/ci-test/deps/provider_model_preferences-2325eaec87b88396)
+
+running 1 test
+test custom_aliases_keep_their_own_models_and_canonical_keys_win ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

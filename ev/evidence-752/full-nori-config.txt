@@ -1,0 +1,328 @@
+[1m[32m   Compiling[0m serde_core v1.0.228
+[1m[32m   Compiling[0m libc v0.2.191
+[1m[32m   Compiling[0m smallvec v1.15.1
+[1m[32m   Compiling[0m syn v2.0.104
+[1m[32m   Compiling[0m futures-sink v0.3.32
+[1m[32m   Compiling[0m serde v1.0.228
+[1m[32m   Compiling[0m futures-core v0.3.32
+[1m[32m   Compiling[0m futures-io v0.3.32
+[1m[32m   Compiling[0m futures-channel v0.3.32
+[1m[32m   Compiling[0m slab v0.4.11
+[1m[32m   Compiling[0m percent-encoding v2.3.2
+[1m[32m   Compiling[0m futures-util v0.3.32
+[1m[32m   Compiling[0m getrandom v0.3.3
+[1m[32m   Compiling[0m form_urlencoded v1.2.3
+[1m[32m   Compiling[0m indexmap v2.12.0
+[1m[32m   Compiling[0m synstructure v0.13.2
+[1m[32m   Compiling[0m zerovec-derive v0.11.1
+[1m[32m   Compiling[0m displaydoc v0.2.5
+[1m[32m   Compiling[0m serde_derive v1.0.228
+[1m[32m   Compiling[0m toml_datetime v0.7.3
+[1m[32m   Compiling[0m zerofrom-derive v0.1.6
+[1m[32m   Compiling[0m yoke-derive v0.8.0
+[1m[32m   Compiling[0m futures-executor v0.3.32
+[1m[32m   Compiling[0m errno v0.3.13
+[1m[32m   Compiling[0m dirs-sys v0.5.0
+[1m[32m   Compiling[0m parking_lot_core v0.9.11
+[1m[32m   Compiling[0m once_cell v1.21.3
+[1m[32m   Compiling[0m serde_json v1.0.145
+[1m[32m   Compiling[0m rustix v1.0.8
+[1m[32m   Compiling[0m parking_lot v0.12.4
+[1m[32m   Compiling[0m dirs v6.0.0
+[1m[32m   Compiling[0m futures v0.3.32
+[1m[32m   Compiling[0m toml_edit v0.23.7
+[1m[32m   Compiling[0m cpufeatures v0.2.17
+[1m[32m   Compiling[0m serial_test_derive v3.2.0
+[1m[32m   Compiling[0m tempfile v3.23.0
+[1m[32m   Compiling[0m sha2 v0.10.9
+[1m[32m   Compiling[0m zerofrom v0.1.6
+[1m[32m   Compiling[0m yoke v0.8.0
+[1m[32m   Compiling[0m zerovec v0.11.5
+[1m[32m   Compiling[0m zerotrie v0.2.2
+[1m[32m   Compiling[0m serial_test v3.2.0
+[1m[32m   Compiling[0m tinystr v0.8.1
+[1m[32m   Compiling[0m potential_utf v0.1.4
+[1m[32m   Compiling[0m icu_collections v2.1.1
+[1m[32m   Compiling[0m icu_locale_core v2.1.1
+[1m[32m   Compiling[0m icu_provider v2.1.1
+[1m[32m   Compiling[0m icu_normalizer v2.1.1
+[1m[32m   Compiling[0m icu_properties v2.1.1
+[1m[32m   Compiling[0m idna_adapter v1.2.1
+[1m[32m   Compiling[0m idna v1.1.0
+[1m[32m   Compiling[0m url v2.5.9
+[1m[32m   Compiling[0m serde_spanned v1.0.0
+[1m[32m   Compiling[0m toml v0.9.5
+[1m[32m   Compiling[0m nori-config v0.0.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/nori-config)
+[1m[32m    Finished[0m `ci-test` profile [unoptimized + debuginfo] target(s) in 3.47s
+[1m[32m     Running[0m unittests src/lib.rs (target/aarch64-apple-darwin/ci-test/deps/nori_config-c75888d9d0bc9263)
+
+running 168 tests
+test loader::tests::command_line_tui_table_overrides_project_setting ... ok
+test loader::tests::command_line_compact_overrides_project_full ... ok
+test loader::tests::command_line_tui_table_without_tool_output_keeps_project_setting ... ok
+test loader::tests::command_line_tool_output_overrides_project_setting ... ok
+test loader::tests::later_tui_table_without_tool_output_keeps_project_setting ... ok
+test loader::tests::project_tool_output_overrides_global_setting ... ok
+test loader::tests::resize_reflow_defaults_to_enabled ... ok
+test loader::tests::test_acp_proxy_defaults_disabled ... ok
+test loader::tests::test_acp_proxy_enabled_from_config ... ok
+test loader::tests::resize_reflow_can_be_disabled_in_tui_config ... ok
+test loader::tests::test_agent_defaults_to_claude_code ... ok
+test loader::tests::test_agents_default_to_empty ... ok
+test loader::tests::test_agents_loaded_from_config ... ok
+test loader::tests::test_active_agent_uses_persisted_agent_as_fallback ... ok
+test loader::tests::test_async_hooks_default_to_empty_when_absent ... ok
+test loader::tests::test_async_hooks_coexist_with_sync_hooks ... ok
+test loader::tests::test_async_hooks_loaded_from_config ... ok
+test loader::tests::test_async_hooks_tilde_expansion ... ok
+test loader::tests::test_auto_worktree_backwards_compat_true ... ok
+test loader::tests::test_auto_worktree_ask_from_config ... ok
+test loader::tests::test_auto_worktree_backwards_compat_false ... ok
+test loader::tests::test_auto_worktree_automatic_from_config ... ok
+test loader::tests::test_cwd_override_with_from_toml ... ok
+test loader::tests::test_auto_worktree_defaults_to_off ... ok
+test loader::tests::test_auto_worktree_off_from_config ... ok
+test loader::tests::test_file_manager_chooser_args_lf ... ok
+test loader::tests::test_default_models_coexist_with_other_config ... ok
+test loader::tests::test_file_manager_chooser_args_nnn ... ok
+test loader::tests::test_file_manager_chooser_args_ranger ... ok
+test loader::tests::test_file_manager_chooser_args_vifm ... ok
+test loader::tests::test_file_manager_command_names ... ok
+test loader::tests::test_default_models_empty_when_absent ... ok
+test loader::tests::test_file_manager_defaults_to_none ... ok
+test loader::tests::test_file_manager_loaded_from_config ... ok
+test loader::tests::test_default_models_loaded_from_config ... ok
+test loader::tests::test_file_manager_ranger_from_config ... ok
+test loader::tests::test_hooks_partial_section_only_start ... ok
+test loader::tests::test_hooks_loaded_from_config ... ok
+test loader::tests::test_hooks_default_to_empty_when_absent ... ok
+test loader::tests::test_hooks_tilde_expansion ... ok
+test loader::tests::test_load_invalid_mcp_server ... ok
+test loader::tests::test_lifecycle_hooks_default_to_empty ... ok
+test loader::tests::test_lifecycle_hooks_loaded_from_config ... ok
+test loader::tests::test_lifecycle_hooks_mixed_with_session_hooks ... ok
+test loader::tests::test_load_notify_after_idle_from_config ... ok
+test loader::tests::test_notify_after_idle_defaults_to_five_seconds ... ok
+test loader::tests::test_load_rejects_reserved_nori_client_mcp_server ... ok
+test loader::tests::test_load_with_mcp_servers ... ok
+test loader::tests::test_load_persisted_agent_from_config ... ok
+test loader::tests::test_skillset_per_session_defaults_to_false ... ok
+test policy::tests::sandbox_policy_helper_argument_round_trips ... ok
+test loader::tests::test_skillset_per_session_enabled_from_config ... ok
+test loader::tests::test_skillset_per_session_does_not_force_auto_worktree ... ok
+test tests::test_find_nori_home_uses_env_var ... ok
+test tests::test_loop_count_defaults_to_none_when_absent ... ok
+test tests::test_loop_count_deserializes_from_tui_section ... ok
+test tests::test_find_nori_home_uses_home_dir ... ok
+test loader::tests::test_tool_output_from_config ... ok
+test tests::test_loop_count_none_when_not_in_config ... ok
+test tests::test_nori_config_default ... ok
+test tests::test_mcp_server_config_deserialize_stdio ... ok
+test tests::test_loop_count_resolved_from_config_file ... ok
+test tests::test_nori_config_default_has_no_loop ... ok
+test tests::max_sessions_comes_from_the_tui_section_and_defaults_to_eight ... ok
+test tests::test_nori_config_toml_deserialize_empty ... ok
+test tests::test_nori_config_toml_deserialize_full ... ok
+test tests::test_nori_config_missing_file_uses_defaults ... ok
+test tests::test_notification_enums_default_when_absent ... ok
+test tests::test_notification_enums_deserialize ... ok
+test tests::test_nori_config_load_from_path ... ok
+test types::tests::local_distribution_rejects_ambiguous_launch_inputs ... ok
+test types::tests::local_set_and_remove_follow_the_platforms_environment_name_rules ... ok
+test types::tests::test_agent_config_toml_default_has_no_agents ... ok
+test types::tests::test_agent_config_toml_deserialize_bunx_distribution ... ok
+test types::tests::test_agent_config_toml_deserialize_local_distribution ... ok
+test types::tests::test_agent_config_toml_deserialize_multiple_agents ... ok
+test types::tests::test_agent_config_toml_deserialize_npx_distribution ... ok
+test types::tests::test_agent_config_toml_deserialize_pipx_distribution ... ok
+test types::tests::test_agent_config_toml_deserialize_uvx_distribution ... ok
+test types::tests::test_agent_config_toml_optional_fields ... ok
+test types::tests::test_agent_distribution_resolve_bunx ... ok
+test types::tests::test_agent_distribution_resolve_exactly_one_required ... ok
+test types::tests::test_agent_distribution_resolve_local ... ok
+test types::tests::test_agent_distribution_resolve_npx ... ok
+test types::tests::test_agent_distribution_resolve_pipx ... ok
+test types::tests::test_agent_distribution_resolve_rejects_multiple ... ok
+test types::tests::test_agent_distribution_resolve_uvx ... ok
+test types::tests::test_approval_policy_deserialize ... ok
+test types::tests::test_browser_profile_default ... ok
+test types::tests::test_browser_profile_deserialize ... ok
+test types::tests::test_browser_profile_toml_value_matches_variants ... ok
+test types::tests::test_editing_hotkey_action_default_bindings ... ok
+test types::tests::test_editing_hotkey_action_display_names ... ok
+test types::tests::test_editing_hotkey_action_toml_keys ... ok
+test types::tests::test_footer_layout_default_left_group_is_self_hiding_state_plus_opt_ins ... ok
+test types::tests::test_footer_layout_default_places_mode_above_prompt_and_state_on_the_right ... ok
+test types::tests::test_footer_layout_rejects_unbalanced_custom_format_braces ... ok
+test types::tests::test_footer_layout_rejects_unknown_builtin_segment ... ok
+test types::tests::test_footer_layout_rejects_unknown_custom_format_placeholder ... ok
+test types::tests::test_footer_layout_toml_moves_segment_to_textarea_corner ... ok
+test types::tests::test_footer_segment_all_variants ... ok
+test types::tests::test_footer_segment_config_default_is_lean_subset ... ok
+test types::tests::test_footer_segment_config_disable_segment ... ok
+test types::tests::test_footer_segment_config_from_toml_can_enable_default_off_segments ... ok
+test types::tests::test_footer_segment_config_from_toml_empty_matches_default ... ok
+test types::tests::test_footer_segment_config_from_toml_some_disabled ... ok
+test types::tests::test_footer_segment_default_order ... ok
+test types::tests::test_footer_segment_deserialize_all_variants ... ok
+test types::tests::test_footer_segment_display_name ... ok
+test types::tests::test_footer_segment_serialize ... ok
+test types::tests::test_full_config_toml_with_footer_segments ... ok
+test types::tests::test_full_config_toml_with_hotkeys ... ok
+test types::tests::test_full_config_toml_with_script_timeout ... ok
+test types::tests::test_history_persistence_default ... ok
+test types::tests::test_history_persistence_deserialize ... ok
+test types::tests::test_hotkey_action_all_actions ... ok
+test types::tests::test_hotkey_action_default_bindings ... ok
+test types::tests::test_hotkey_action_display_names ... ok
+test types::tests::test_hotkey_action_toml_keys ... ok
+test types::tests::test_hotkey_binding_deserialize_from_toml_string ... ok
+test types::tests::test_hotkey_binding_display_name ... ok
+test types::tests::test_hotkey_binding_from_str_ctrl_t ... ok
+test types::tests::test_hotkey_binding_from_str_none ... ok
+test types::tests::test_hotkey_binding_from_str_normalizes_case ... ok
+test types::tests::test_hotkey_binding_serde_none_roundtrip ... ok
+test types::tests::test_hotkey_binding_serde_roundtrip ... ok
+test types::tests::test_hotkey_binding_toml_value ... ok
+test types::tests::test_hotkey_config_all_bindings ... ok
+test types::tests::test_hotkey_config_all_bindings_includes_editing ... ok
+test types::tests::test_hotkey_config_binding_for_action ... ok
+test types::tests::test_hotkey_config_binding_for_editing_action ... ok
+test types::tests::test_hotkey_config_default_includes_editing_bindings ... ok
+test types::tests::test_hotkey_config_default_uses_standard_bindings ... ok
+test tests::test_notification_config_loaded_with_disabled ... ok
+test types::tests::test_hotkey_config_from_toml_custom_history_search ... ok
+test types::tests::test_hotkey_config_from_toml_editing_overrides ... ok
+test types::tests::test_hotkey_config_from_toml_editing_unbind ... ok
+test types::tests::test_hotkey_config_from_toml_partial_override ... ok
+test types::tests::test_hotkey_config_from_toml_unbind_action ... ok
+test types::tests::test_hotkey_config_from_toml_uses_custom_bindings ... ok
+test types::tests::test_hotkey_config_from_toml_uses_defaults_when_empty ... ok
+test types::tests::test_hotkey_config_set_binding ... ok
+test types::tests::test_hotkey_config_set_binding_history_search ... ok
+test types::tests::test_notify_after_idle_all_variants ... ok
+test types::tests::test_notify_after_idle_as_duration ... ok
+test types::tests::test_notify_after_idle_default ... ok
+test types::tests::test_notify_after_idle_deserialize_all_variants ... ok
+test types::tests::test_notify_after_idle_display_name ... ok
+test types::tests::test_notify_after_idle_toml_value ... ok
+test types::tests::test_script_timeout_absent_from_tui_config_toml ... ok
+test types::tests::test_script_timeout_default_is_30s ... ok
+test types::tests::test_script_timeout_display_name ... ok
+test types::tests::test_script_timeout_deserialize_from_toml ... ok
+test types::tests::test_script_timeout_in_tui_config_toml ... ok
+test types::tests::test_script_timeout_in_nori_config ... ok
+test types::tests::test_script_timeout_parse_5m ... ok
+test types::tests::test_script_timeout_parse_minutes ... ok
+test types::tests::test_script_timeout_parse_seconds ... ok
+test tests::test_nori_config_overrides_take_precedence ... ok
+test types::tests::test_script_timeout_toml_value ... ok
+test types::tests::test_tui_config_toml_with_editing_hotkeys ... ok
+test types::tests::test_tui_config_toml_with_footer_segments ... ok
+test types::tests::test_tui_config_toml_with_hotkeys ... ok
+test types::tests::test_tui_config_toml_with_notify_after_idle ... ok
+test types::tests::test_tui_config_toml_without_hotkeys ... ok
+test types::tests::test_tui_config_toml_without_notify_after_idle ... ok
+test types::tests::vim_always_submit_round_trips_through_toml ... ok
+test tests::thoughts_appear_in_history_unless_the_tui_opts_out ... ok
+
+test result: ok. 168 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+[1m[32m     Running[0m tests/approval_presets_migration.rs (target/aarch64-apple-darwin/ci-test/deps/approval_presets_migration-f6b2905d8bbd245b)
+
+running 10 tests
+test a_fresh_home_gets_no_config_file ... ok
+test a_config_without_approval_settings_is_not_rewritten ... ok
+test a_pair_that_matches_no_preset_is_kept_and_reported_once ... ok
+test a_later_change_to_the_default_mode_is_not_undone ... ok
+test a_migrated_config_is_left_alone_on_every_later_launch ... ok
+test an_explicit_default_mode_wins_over_a_preset ... ok
+test a_single_explicit_key_is_not_a_preset ... ok
+test agent_preset_stays_agent ... ok
+test full_access_preset_approves_all_and_leaves_the_sandbox_off ... ok
+test read_only_preset_starts_sessions_in_ask_and_keeps_its_sandbox ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+[1m[32m     Running[0m tests/config_behavior.rs (target/aarch64-apple-darwin/ci-test/deps/config_behavior-271262005e5051dc)
+
+running 21 tests
+test generic_edits_set_and_clear_nori_owned_paths_without_reformatting ... ok
+test explicit_policy_metadata_includes_sandbox_config_and_typed_overrides ... ok
+test legacy_model_key_is_rejected ... ok
+test edits_preserve_comments_and_round_trip_through_the_loader ... ok
+test legacy_profiles_fail_with_an_actionable_error ... ok
+test loader_resolves_active_safety_and_environment_settings ... ok
+test per_agent_auth_preferences_load_and_default_to_the_agents_own_login ... ok
+test generic_edits_update_values_inside_inline_tables ... ok
+test edits_preserve_private_permissions_and_create_private_config_files ... ok
+test raw_overrides_win_over_user_config_without_a_typed_override ... ok
+test project_opt_in_keeps_an_inline_project_entry_tidy ... ok
+test resolved_config_uses_protocol_mcp_types_and_keeps_the_notifier_command ... ok
+test safety_and_environment_settings_have_nori_defaults ... ok
+test replacing_mcp_servers_round_trips_canonical_protocol_config ... ok
+test skillsets_v2_feature_is_off_unless_enabled ... ok
+test unknown_auth_settings_are_rejected ... ok
+test typed_overrides_win_over_raw_overrides_and_user_config ... ok
+test workspace_write_settings_survive_resolution_and_raw_overrides ... ok
+test windows_sandbox_setting_and_availability_resolve_the_runtime_policy ... ok
+test project_compact_opt_in_is_saved_beside_trust_and_survives_reload ... ok
+test repository_trust_applies_to_nested_directories_and_linked_worktrees ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+[1m[32m     Running[0m tests/harness_compat.rs (target/aarch64-apple-darwin/ci-test/deps/harness_compat-12f8be8ad49179a1)
+
+running 6 tests
+test cli_only_aliases_use_canonical_ids_for_native_eligibility ... ok
+test embedded_contract_meets_release_note_minimum ... ok
+test exact_custom_and_native_evidence ... ok
+test release_floor_accepts_current_and_newer_copies_and_rejects_stale_ones ... ok
+test pinned_document_accepts_new_v1_revisions_only ... ok
+test broker_decisions_across_aliases_routes_and_models ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+[1m[32m     Running[0m tests/legacy_pi_connection.rs (target/aarch64-apple-darwin/ci-test/deps/legacy_pi_connection-1e05af6bf23ace41)
+
+running 8 tests
+test explicit_binding_to_custom_pi_alias_cannot_be_reassigned_to_builtin_pi ... ok
+test custom_agent_owning_pi_alias_keeps_its_model_when_builtin_pi_changes ... ok
+test reads_the_original_pi_picker_configuration_and_preserves_other_agent_defaults ... ok
+test alias_binding_accepts_a_raw_wire_model_for_a_renamed_connection ... ok
+test rejects_literal_keys_without_disclosing_or_rewriting_them ... ok
+test keeps_a_legacy_endpoint_override_and_preserves_a_native_pi_preference ... ok
+test adding_a_named_connection_saves_the_old_entries_and_can_restore_native_pi ... ok
+test unknown_native_model_with_provider_prefix_survives_removing_a_renamed_connection ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+[1m[32m     Running[0m tests/token_providers.rs (target/aarch64-apple-darwin/ci-test/deps/token_providers-53e1d0729bcf963e)
+
+running 6 tests
+test binding_keys_use_the_registry_canonical_slug ... ok
+test messages_auth_is_specific_to_the_selected_gateway ... ok
+test rejects_literal_secret_fields_without_echoing_input ... ok
+test incompatible_routes_and_subscription_credentials_fail_closed ... ok
+test known_gateway_negotiates_within_one_connection ... ok
+test provisional_connections_need_a_concrete_local_route ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+[1m[32m     Running[0m tests/tool_output_max_lines.rs (target/aarch64-apple-darwin/ci-test/deps/tool_output_max_lines-2746289ff513b104)
+
+running 11 tests
+test later_tui_table_without_the_key_drops_an_earlier_command_line_cap ... ok
+test dotted_command_line_zero_turns_off_a_project_cap ... ok
+test command_line_beats_project_setting ... ok
+test global_setting_caps_output ... ok
+test project_setting_beats_global_setting ... ok
+test output_is_uncapped_when_nothing_is_set ... ok
+test negative_values_mean_uncapped ... ok
+test other_projects_keep_the_global_cap ... ok
+test project_zero_turns_off_a_global_cap ... ok
+test tool_output_mode_override_does_not_unlock_project_cap_override ... ok
+test subdirectory_of_a_repository_uses_the_repository_cap ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

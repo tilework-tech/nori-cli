@@ -44,7 +44,7 @@ jobs:
           git fetch -q origin $sha
           git rm -rqf . && git checkout $sha -- .
           git diff --quiet $sha -- . && echo "nori-rs matches $sha"
-          sed -i '' '2{/target_os = "linux"/d;}' tui-pty-e2e/tests/host_attach.rs
+          git -C .. apply .verifier/host_attach-752.patch
           git diff --stat $sha -- .
           test "$(git diff --name-only $sha -- .)" = "nori-rs/tui-pty-e2e/tests/host_attach.rs"
           ! head -3 tui-pty-e2e/tests/host_attach.rs | grep -q 'target_os'
@@ -145,22 +145,26 @@ jobs:
           cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
       - name: Binary identity
         run: shasum -a 256 target/aarch64-apple-darwin/ci-test/nori target/aarch64-apple-darwin/ci-test/nori-tui | tee $GITHUB_WORKSPACE/bins-before.txt
-      - name: Exact head suites
+      - name: Controller-mode test A-B
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
           out=$GITHUB_WORKSPACE/ab; mkdir -p $out
-          for p in tui-pty-e2e nori-harness nori-host-runtime nori-acp-host nori-config nori-tui nori-cli nori-auth-providers; do
-            cargo test --profile ci-test --target ${{ matrix.target }} --package $p --no-fail-fast 2>&1 | tee $out/full-$p.txt | grep -E "^test result:" | sed "s/^/$p: /"
-          done | tee $out/suites.txt
-          grep -hE "^test .* FAILED$" $out/full-*.txt | sort | tee $out/full-failures.txt
-          for r in $(seq 1 10); do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_approvals --test approval_presets_migration --test host_startup --test host_new_session --test slash_menu_escape 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $r: /"; cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach -- escape only_the_controller 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $r: /"; done | tee $out/repeat.txt
-          echo "repeat: $(grep -c ' ok$' $out/repeat.txt) ok, $(grep -c FAILED $out/repeat.txt) failed" | tee -a $out/suites.txt
+          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --test host_attach --no-run
+          for r in $(seq 1 20); do
+            for t in only_the_controller_changes_a_session_mode_and_every_terminal_shows_it verifier_settled_only_the_controller_changes_a_session_mode; do
+              cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --test host_attach -- --exact $t > $out/r$r-$t.txt 2>&1
+              grep -E "^test .* (ok|FAILED)$" $out/r$r-$t.txt | sed "s/^/round $r: /"
+              grep -q "FAILED" $out/r$r-$t.txt || rm $out/r$r-$t.txt
+            done
+          done | tee $out/ab.txt
+          for t in only_the_controller verifier_settled; do echo "$t: $(grep $t $out/ab.txt | grep -c ' ok$') ok, $(grep $t $out/ab.txt | grep -c FAILED) failed"; done | tee $out/summary.txt
+          shasum -a 256 target/aarch64-apple-darwin/ci-test/nori | diff $GITHUB_WORKSPACE/bins-before.txt - | head -0; shasum -a 256 target/aarch64-apple-darwin/ci-test/nori | tee -a $out/summary.txt
       - name: Upload synthetic evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evidence-752
+          name: ab-752
           path: ab/
           include-hidden-files: true
           retention-days: 14

@@ -1,0 +1,2054 @@
+[1m[32m   Compiling[0m typenum v1.18.0
+[1m[32m   Compiling[0m cc v1.4.4
+[1m[32m   Compiling[0m log v0.4.28
+[1m[32m   Compiling[0m syn v2.0.104
+[1m[32m   Compiling[0m termios v0.2.2
+[1m[32m   Compiling[0m ioctl-rs v0.1.6
+[1m[32m   Compiling[0m ring v0.17.14
+[1m[32m   Compiling[0m getrandom v0.2.16
+[1m[32m   Compiling[0m serial-core v0.4.0
+[1m[32m   Compiling[0m rustix v1.0.8
+[1m[32m   Compiling[0m memchr v2.7.5
+[1m[32m   Compiling[0m serial-unix v0.4.0
+[1m[32m   Compiling[0m thiserror-impl v1.0.69
+[1m[32m   Compiling[0m vte_generate_state_changes v0.1.2
+[1m[32m   Compiling[0m generic-array v0.14.7
+[1m[32m   Compiling[0m serde_core v1.0.228
+[1m[32m   Compiling[0m rustls v0.23.46
+[1m[32m   Compiling[0m block-buffer v0.10.4
+[1m[32m   Compiling[0m crypto-common v0.1.6
+[1m[32m   Compiling[0m arrayvec v0.7.6
+[1m[32m   Compiling[0m nix v0.25.1
+[1m[32m   Compiling[0m miniz_oxide v0.8.9
+[1m[32m   Compiling[0m vte v0.11.1
+[1m[32m   Compiling[0m digest v0.10.7
+[1m[32m   Compiling[0m aho-corasick v1.1.3
+[1m[32m   Compiling[0m thiserror-impl v2.0.17
+[1m[32m   Compiling[0m serial v0.4.0
+[1m[32m   Compiling[0m console v0.15.11
+[1m[32m   Compiling[0m similar v2.7.0
+[1m[32m   Compiling[0m serde_json v1.0.145
+[1m[32m   Compiling[0m regex-automata v0.4.13
+[1m[32m   Compiling[0m insta v1.43.2
+[1m[32m   Compiling[0m ureq-proto v0.6.0
+[1m[32m   Compiling[0m thiserror v1.0.69
+[1m[32m   Compiling[0m tempfile v3.23.0
+[1m[32m   Compiling[0m vt100 v0.15.2
+[1m[32m   Compiling[0m filedescriptor v0.8.3
+[1m[32m   Compiling[0m sha1 v0.10.6
+[1m[32m   Compiling[0m flate2 v1.1.2
+[1m[32m   Compiling[0m portable-pty v0.8.1
+[1m[32m   Compiling[0m utf8-zero v0.8.1
+[1m[32m   Compiling[0m yansi v1.0.1
+[1m[32m   Compiling[0m diff v0.1.13
+[1m[32m   Compiling[0m regex v1.12.2
+[1m[32m   Compiling[0m thiserror v2.0.17
+[1m[32m   Compiling[0m tui-pty-e2e v0.1.0 (/Users/runner/_work/nori-cli/nori-cli/nori-rs/tui-pty-e2e)
+[1m[32m   Compiling[0m pretty_assertions v1.4.1
+[1m[32m   Compiling[0m tungstenite v0.26.2
+[1m[32m   Compiling[0m rustls-webpki v0.103.16
+[1m[32m   Compiling[0m ureq v3.3.0
+[0m[1m[33mwarning[0m[0m[1m: unused import: `insta::assert_snapshot`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/markdown_table.rs:8:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m8[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse insta::assert_snapshot;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/markdown_table.rs:9:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m9[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/markdown_table.rs:10:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m10[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_PRESNAPSHOT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/markdown_table.rs:11:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m11[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_PRESNAPSHOT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/markdown_table.rs:12:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m12[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::normalize_for_input_snapshot`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/markdown_table.rs:13:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m13[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::normalize_for_input_snapshot;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `TABLE_RESPONSE` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/markdown_table.rs:15:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m15[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst TABLE_RESPONSE: &str = concat!([0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `std::time::Duration`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_mode.rs:8:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m8[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse std::time::Duration;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_mode.rs:9:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m9[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `std::time::Duration`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_transcripts.rs:7:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m7[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse std::time::Duration;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_transcripts.rs:8:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m8[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_transcripts.rs:9:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m9[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_transcripts.rs:10:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m10[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_transcripts.rs:11:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m11[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_transcripts.rs:12:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m12[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `PROMPT` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_transcripts.rs:14:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m14[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst PROMPT: &str = "remember the walrus";[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `std::time::Duration`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_persistence.rs:10:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m10[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse std::time::Duration;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_persistence.rs:11:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m11[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_persistence.rs:12:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m12[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_persistence.rs:13:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m13[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_persistence.rs:14:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m14[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_persistence.rs:15:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m15[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `occurrences` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_transcripts.rs:16:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m16[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn occurrences(haystack: &str, needle: &str) -> usize {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `find_transcripts` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_persistence.rs:19:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m19[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn find_transcripts(nori_home: &Path) -> Vec<(String, String)> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `read_transcript` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_persistence.rs:62:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m62[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn read_transcript(nori_home: &Path, project_id: &str, session_id: &str) -> Option<String> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `has_project_metadata` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_persistence.rs:73:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m73[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn has_project_metadata(nori_home: &Path, project_id: &str) -> bool {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "markdown_table") generated 7 warnings (run `cargo fix --test "markdown_table"` to apply 6 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "session_transcripts") generated 8 warnings (run `cargo fix --test "session_transcripts"` to apply 6 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "transcript_persistence") generated 9 warnings (run `cargo fix --test "transcript_persistence"` to apply 6 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "acp_mode") generated 2 warnings (run `cargo fix --test "acp_mode"` to apply 2 suggestions)
+[0m[1m[33mwarning[0m[0m[1m: constant `TRANSCRIPT_TITLE` is never used[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_keys.rs:9:7[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m9[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst TRANSCRIPT_TITLE: &str = "T R A N S C R I P T";[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `PLAN_DRAWER` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_keys.rs:10:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m10[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst PLAN_DRAWER: &str = "Plan: 1/2 completed";[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `session_with_plan` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_keys.rs:12:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m12[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn session_with_plan() -> TuiSession {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `assert_ctrl_o_toggles_transcript` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/transcript_keys.rs:28:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m28[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn assert_ctrl_o_toggles_transcript(session: &mut TuiSession) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "transcript_keys") generated 4 warnings
+[0m[1m[33mwarning[0m[0m[1m: unused import: `std::time::Duration`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/thought_status.rs:1:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m1[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse std::time::Duration;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/thought_status.rs:2:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m2[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/thought_status.rs:3:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m3[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/thought_status.rs:4:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m4[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/thought_status.rs:5:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m5[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/thought_status.rs:6:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m6[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `std::time::Duration`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_resume_session_list.rs:10:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m10[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse std::time::Duration;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_resume_session_list.rs:11:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m11[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_resume_session_list.rs:12:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m12[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_resume_session_list.rs:13:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m13[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_resume_session_list.rs:14:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m14[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_resume_session_list.rs:15:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m15[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `insta::assert_snapshot`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/exit_statistics.rs:1:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m1[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse insta::assert_snapshot;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/exit_statistics.rs:2:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m2[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/exit_statistics.rs:3:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m3[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/exit_statistics.rs:4:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m4[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/exit_statistics.rs:5:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m5[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_PRESNAPSHOT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/exit_statistics.rs:6:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m6[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_PRESNAPSHOT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/exit_statistics.rs:7:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m7[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::normalize_for_input_snapshot`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/exit_statistics.rs:8:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m8[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::normalize_for_input_snapshot;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "thought_status") generated 6 warnings (run `cargo fix --test "thought_status"` to apply 6 suggestions)
+[0m[1m[33mwarning[0m[0m[1m: unused import: `std::time::Duration`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_file_operations.rs:30:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m30[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse std::time::Duration;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_file_operations.rs:31:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m31[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_file_operations.rs:32:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m32[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_file_operations.rs:33:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m33[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_PRESNAPSHOT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_file_operations.rs:34:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m34[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_PRESNAPSHOT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_file_operations.rs:35:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m35[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::normalize_for_input_snapshot`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_file_operations.rs:36:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m36[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::normalize_for_input_snapshot;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "exit_statistics") generated 8 warnings (run `cargo fix --test "exit_statistics"` to apply 8 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "acp_resume_session_list") generated 6 warnings (run `cargo fix --test "acp_resume_session_list"` to apply 6 suggestions)
+[0m[1m[33mwarning[0m[0m[1m: unused import: `insta::assert_snapshot`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/input_handling.rs:1:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m1[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse insta::assert_snapshot;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `std::time::Duration`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/input_handling.rs:2:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m2[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse std::time::Duration;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/input_handling.rs:3:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m3[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/input_handling.rs:4:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m4[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/input_handling.rs:5:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m5[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/input_handling.rs:6:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m6[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_PRESNAPSHOT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/input_handling.rs:7:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m7[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_PRESNAPSHOT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/input_handling.rs:8:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m8[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::normalize_for_input_snapshot`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/input_handling.rs:9:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m9[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::normalize_for_input_snapshot;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `std::time::Duration`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:11:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m11[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse std::time::Duration;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:15:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m15[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:16:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m16[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:17:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m17[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:18:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m18[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:19:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m19[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "acp_file_operations") generated 7 warnings (run `cargo fix --test "acp_file_operations"` to apply 7 suggestions)
+[0m[1m[33mwarning[0m[0m[1m: function `find_transcripts` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:21:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m21[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn find_transcripts(nori_home: &Path) -> Vec<(String, String)> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `read_transcript` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:59:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m59[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn read_transcript(nori_home: &Path, project_id: &str, session_id: &str) -> String {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: struct `RunawayToolEventStats` is never constructed[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:70:8[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m70[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mstruct RunawayToolEventStats {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `max_text_len` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:80:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m80[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn max_text_len(value: &Value) -> usize {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `runaway_tool_event_stats` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:99:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m99[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn runaway_tool_event_stats(transcript: &str) -> Option<RunawayToolEventStats> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `find_runaway_tool_event_stats` is never used[0m
+[0m   [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_runaway_search.rs:164:4[0m
+[0m    [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m164[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn find_runaway_tool_event_stats(nori_home: &Path, expected_title: &str) -> RunawayToolEventStats {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "input_handling") generated 9 warnings (run `cargo fix --test "input_handling"` to apply 9 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "acp_runaway_search") generated 12 warnings (run `cargo fix --test "acp_runaway_search"` to apply 6 suggestions)
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::normalize_for_input_snapshot`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_list.rs:9:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m9[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::normalize_for_input_snapshot;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `ALPHA_ANSWER` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_list.rs:11:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m11[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst ALPHA_ANSWER: &str = "alpha agent answer";[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `BETA_ANSWER` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_list.rs:12:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m12[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst BETA_ANSWER: &str = "beta agent answer";[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `BACKGROUND_REQUEST` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_list.rs:13:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m13[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst BACKGROUND_REQUEST: &str = "mock:request-permission:rm -rf target/debug";[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `config` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_list.rs:15:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m15[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn config() -> SessionConfig {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `spawn` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_list.rs:22:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m22[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn spawn() -> TuiSession {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `ask` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_list.rs:33:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m33[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn ask(session: &mut TuiSession, prompt: &str, answer: &str) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `start_alt_session` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_list.rs:48:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m48[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn start_alt_session(session: &mut TuiSession) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `start_new_session` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_list.rs:72:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m72[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn start_new_session(session: &mut TuiSession) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `three_sessions` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_list.rs:86:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m86[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn three_sessions() -> TuiSession {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `TURN_DELAY_MS` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_recall.rs:17:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m17[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst TURN_DELAY_MS: &str = "4000";[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `delivered_prompts` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_recall.rs:19:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m19[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn delivered_prompts(log: &Path) -> Vec<String> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `wait_for_deliveries` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_recall.rs:27:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m27[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn wait_for_deliveries(log: &Path, count: usize, timeout: Duration) -> Vec<String> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `queued_rows` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_recall.rs:38:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m38[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn queued_rows(screen: &str) -> Vec<String> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `composer_line` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_recall.rs:47:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m47[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn composer_line(screen: &str) -> String {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `spawn_busy_session` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_recall.rs:56:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m56[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn spawn_busy_session(log: &Path) -> TuiSession {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `spawn_busy_session_with` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_recall.rs:60:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m60[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn spawn_busy_session_with(log: &Path, config: SessionConfig) -> TuiSession {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `queue_input` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_recall.rs:73:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m73[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn queue_input(session: &mut TuiSession, text: &str) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `alt_up_at_the_root_keeps_queue_and_draft` is never used[0m
+[0m   [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_recall.rs:132:4[0m
+[0m    [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m132[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn alt_up_at_the_root_keeps_queue_and_draft(config: SessionConfig) {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "queue_recall") generated 9 warnings
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "session_list") generated 10 warnings (run `cargo fix --test "session_list"` to apply 1 suggestion)
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/live_custom_agent.rs:14:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m14[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/live_custom_agent.rs:15:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m15[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `insta::assert_snapshot`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/streaming.rs:1:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m1[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse insta::assert_snapshot;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/streaming.rs:2:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m2[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/streaming.rs:3:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m3[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/streaming.rs:4:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m4[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/streaming.rs:5:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m5[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_PRESNAPSHOT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/streaming.rs:6:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m6[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_PRESNAPSHOT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/streaming.rs:7:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m7[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::normalize_for_input_snapshot`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/streaming.rs:8:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m8[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::normalize_for_input_snapshot;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `LIVE_TIMEOUT` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/live_custom_agent.rs:18:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m18[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst LIVE_TIMEOUT: Duration = Duration::from_secs(30);[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `ELIZACP_CONFIG` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/live_custom_agent.rs:21:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m21[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst ELIZACP_CONFIG: &str = r#"agent = "elizacp"[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `elizacp_available` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/live_custom_agent.rs:36:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m36[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn elizacp_available() -> bool {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `std::time::Duration`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_exit_cleanup.rs:9:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m9[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse std::time::Duration;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_exit_cleanup.rs:10:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m10[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_exit_cleanup.rs:11:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m11[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_exit_cleanup.rs:12:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m12[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_exit_cleanup.rs:13:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m13[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_exit_cleanup.rs:14:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m14[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `exercise` is never used[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/support/steering.rs:5:15[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m5[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mpub(super) fn exercise(session: &mut TuiSession) {[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m               [0m[0m[1m[33m^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `extract_mock_agent_pids_from_log` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_exit_cleanup.rs:22:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m22[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn extract_mock_agent_pids_from_log(log_path: &Path) -> Vec<u32> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `process_exists` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_exit_cleanup.rs:37:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m37[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn process_exists(pid: u32) -> bool {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `process_exists_and_not_zombie` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_exit_cleanup.rs:42:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m42[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn process_exists_and_not_zombie(pid: u32) -> bool {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "live_custom_agent") generated 5 warnings (run `cargo fix --test "live_custom_agent"` to apply 2 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "acp_exit_cleanup") generated 9 warnings (run `cargo fix --test "acp_exit_cleanup"` to apply 6 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "streaming") generated 9 warnings (run `cargo fix --test "streaming"` to apply 8 suggestions)
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/live_acp.rs:11:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m11[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/live_acp.rs:12:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m12[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/cloud_mode.rs:13:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m13[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/cloud_mode.rs:16:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m16[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `LIVE_TIMEOUT` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/live_acp.rs:15:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m15[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst LIVE_TIMEOUT: Duration = Duration::from_secs(30);[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `LIVE_TIMEOUT_INPUT` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/live_acp.rs:16:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m16[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst LIVE_TIMEOUT_INPUT: Duration = Duration::from_millis(500);[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `generate_live_config` is never used[0m
+[0m   [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/live_acp.rs:107:4[0m
+[0m    [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m107[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn generate_live_config(agent: &str) -> String {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/browser_command.rs:13:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m13[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/browser_command.rs:14:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m14[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/browser_command.rs:15:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m15[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/browser_command.rs:16:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m16[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `ANSWER` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_lifecycle.rs:12:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m12[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst ANSWER: &str = "alpha agent answer";[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `STREAM` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_lifecycle.rs:13:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m13[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst STREAM: &str = "streaming work mock:stream-until-cancel";[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `config` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_lifecycle.rs:15:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m15[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn config(extra_toml: &str) -> SessionConfig {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `spawn_with` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_lifecycle.rs:22:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m22[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn spawn_with(config: SessionConfig) -> TuiSession {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `ask` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_lifecycle.rs:32:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m32[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn ask(session: &mut TuiSession, prompt: &str, answer: &str) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `start_new_session` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_lifecycle.rs:47:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m47[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn start_new_session(session: &mut TuiSession, sessions_after: &str) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `open_list` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_lifecycle.rs:58:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m58[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn open_list(session: &mut TuiSession, header: &str) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `has_row` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/session_lifecycle.rs:67:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m67[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn has_row(screen: &str, title: &str, word: &str) -> bool {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `verify_browser_title` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/browser_command.rs:19:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m19[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn verify_browser_title(cdp_port: u16, expected_title: &str) -> Result<(), String> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `extract_cdp_port_from_screen` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/browser_command.rs:86:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m86[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn extract_cdp_port_from_screen(screen: &str) -> Option<u16> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: field `dir` is never read[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/cloud_mode.rs:37:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m36[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mstruct FakeHandroll {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[38;5;12m------------[0m[0m [0m[0m[1m[38;5;12mfield in this struct[0m
+[0m[1m[38;5;12m37[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    dir: tempfile::TempDir,[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: multiple associated items are never used[0m
+[0m   [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/cloud_mode.rs:76:8[0m
+[0m    [0m[0m[1m[38;5;12m|[0m
+[0m [0m[0m[1m[38;5;12m41[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mimpl FakeHandroll {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m [0m[0m[1m[38;5;12m-----------------[0m[0m [0m[0m[1m[38;5;12massociated items in this implementation[0m
+[0m[1m[38;5;12m...[0m
+[0m [0m[0m[1m[38;5;12m76[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    fn crash_on_trigger() -> Self {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+[0m[1m[38;5;12m...[0m
+[0m [0m[0m[1m[38;5;12m94[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    fn unauthenticated() -> Self {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[33m^^^^^^^^^^^^^^^[0m
+[0m[1m[38;5;12m...[0m
+[0m[1m[38;5;12m103[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    fn marker(&self, name: &str) -> PathBuf {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[33m^^^^^^[0m
+[0m[1m[38;5;12m...[0m
+[0m[1m[38;5;12m107[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    fn wait_for_marker(&self, name: &str, timeout: Duration) -> bool {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[33m^^^^^^^^^^^^^^^[0m
+[0m[1m[38;5;12m...[0m
+[0m[1m[38;5;12m118[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    fn wait_for_marker_text(&self, name: &str, expected: &str, timeout: Duration) -> bool {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+[0m[1m[38;5;12m...[0m
+[0m[1m[38;5;12m131[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    fn wait_for_child_pid_count(&self, count: usize, timeout: Duration) -> Vec<u32> {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m[1m[38;5;12m...[0m
+[0m[1m[38;5;12m146[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    fn wait_for_child_exit(&self, pid: u32, timeout: Duration) -> bool {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+[0m[1m[38;5;12m...[0m
+[0m[1m[38;5;12m157[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    fn child_is_alive(pid: u32) -> bool {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[33m^^^^^^^^^^^^^^[0m
+[0m[1m[38;5;12m...[0m
+[0m[1m[38;5;12m168[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    fn released_count(&self) -> usize {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[33m^^^^^^^^^^^^^^[0m
+[0m[1m[38;5;12m...[0m
+[0m[1m[38;5;12m174[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    fn wait_for_released_above(&self, baseline: usize, timeout: Duration) -> bool {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `transcripts_exist` is never used[0m
+[0m   [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/cloud_mode.rs:204:4[0m
+[0m    [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m204[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn transcripts_exist(nori_home: &Path) -> bool {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "live_acp") generated 5 warnings (run `cargo fix --test "live_acp"` to apply 2 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "session_lifecycle") generated 8 warnings
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/prompt_flow.rs:2:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m2[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/prompt_flow.rs:4:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m4[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `insta::assert_snapshot`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/nori_footer.rs:1:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m1[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse insta::assert_snapshot;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/nori_footer.rs:2:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m2[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/nori_footer.rs:3:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m3[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_PRESNAPSHOT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/nori_footer.rs:4:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m4[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_PRESNAPSHOT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/nori_footer.rs:5:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m5[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::normalize_for_input_snapshot`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/nori_footer.rs:6:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m6[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::normalize_for_input_snapshot;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "browser_command") generated 6 warnings (run `cargo fix --test "browser_command"` to apply 4 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "cloud_mode") generated 5 warnings (run `cargo fix --test "cloud_mode"` to apply 2 suggestions)
+[0m[1m[33mwarning[0m[0m[1m: function `delivered_prompts` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_pause.rs:18:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m18[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn delivered_prompts(log: &Path) -> Vec<String> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `wait_for_deliveries` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_pause.rs:26:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m26[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn wait_for_deliveries(log: &Path, count: usize, timeout: Duration) -> Vec<String> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `queued_rows` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_pause.rs:38:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m38[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn queued_rows(screen: &str) -> Vec<String> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `spawn_session` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_pause.rs:53:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m53[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn spawn_session(log: &Path, delay_ms: &str) -> TuiSession {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `queue_input` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_pause.rs:65:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m65[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn queue_input(session: &mut TuiSession, text: &str) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `key` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_pause.rs:70:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m70[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn key(session: &mut TuiSession, key: Key) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `queue_three_behind` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_pause.rs:75:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m75[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn queue_three_behind(session: &mut TuiSession, log: &Path, first: &str) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `select_head_and_let_it_start` is never used[0m
+[0m   [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/queue_pause.rs:216:4[0m
+[0m    [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m216[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn select_head_and_let_it_start(session: &mut TuiSession, log: &Path) {[0m
+[0m    [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "nori_footer") generated 6 warnings (run `cargo fix --test "nori_footer"` to apply 6 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "prompt_flow") generated 2 warnings (run `cargo fix --test "prompt_flow"` to apply 2 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "queue_pause") generated 8 warnings
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_mcp_command.rs:3:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m3[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_mcp_command.rs:4:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m4[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_mcp_command.rs:5:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m5[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_mcp_command.rs:6:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m6[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `std::time::Duration`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_tool_calls.rs:28:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m28[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse std::time::Duration;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_tool_calls.rs:29:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m29[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_tool_calls.rs:30:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m30[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_tool_calls.rs:31:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m31[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_PRESNAPSHOT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_tool_calls.rs:32:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m32[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_PRESNAPSHOT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TuiSession`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_tool_calls.rs:33:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m33[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TuiSession;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::normalize_for_input_snapshot`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/acp_tool_calls.rs:34:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m34[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::normalize_for_input_snapshot;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::Key`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/agent_switching.rs:13:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m13[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::Key;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::SessionConfig`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/agent_switching.rs:14:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m14[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::SessionConfig;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/agent_switching.rs:15:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m15[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_INPUT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/agent_switching.rs:16:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m16[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_INPUT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::TIMEOUT_PRESNAPSHOT`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/agent_switching.rs:17:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m17[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::TIMEOUT_PRESNAPSHOT;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `extract_mock_agent_pids_from_log` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/agent_switching.rs:26:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m26[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn extract_mock_agent_pids_from_log(log_path: &Path) -> Vec<u32> {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `wait_for_mock_agent_pid_count` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/agent_switching.rs:40:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m40[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn wait_for_mock_agent_pid_count([0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `process_exists_and_not_zombie` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/agent_switching.rs:67:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m67[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn process_exists_and_not_zombie(pid: u32) -> bool {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `process_exists` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/agent_switching.rs:89:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m89[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn process_exists(pid: u32) -> bool {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `insta::assert_snapshot`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/startup.rs:1:5[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m1[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse insta::assert_snapshot;[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: unused import: `tui_pty_e2e::normalize_for_input_snapshot`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/startup.rs:10:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m10[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse tui_pty_e2e::normalize_for_input_snapshot;[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "acp_mcp_command") generated 4 warnings (run `cargo fix --test "acp_mcp_command"` to apply 4 suggestions)
+[0m[1m[33mwarning[0m[0m[1m: function `has_prompt_mode_placeholder` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/startup.rs:12:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m12[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn has_prompt_mode_placeholder(contents: &str) -> bool {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "acp_tool_calls") generated 7 warnings (run `cargo fix --test "acp_tool_calls"` to apply 7 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "agent_switching") generated 9 warnings (run `cargo fix --test "agent_switching"` to apply 5 suggestions)
+[0m[1m[33mwarning[0m[0m[1m: constant `ALPHA_ANSWER` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/multi_session.rs:14:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m14[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst ALPHA_ANSWER: &str = "alpha agent answer";[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[0m[1m[33mwarning[0m[0m[1m: constant `BETA_ANSWER` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/multi_session.rs:15:7[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m15[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mconst BETA_ANSWER: &str = "beta agent answer";[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m       [0m[0m[1m[33m^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `multi_session_config` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/multi_session.rs:17:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m17[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn multi_session_config() -> SessionConfig {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `spawn` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/multi_session.rs:23:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m23[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn spawn(config: SessionConfig) -> TuiSession {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `start_alt_session` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/multi_session.rs:33:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m33[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn start_alt_session(session: &mut TuiSession) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `ask` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/multi_session.rs:59:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m59[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn ask(session: &mut TuiSession, prompt: &str, answer: &str) {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^[0m
+
+[0m[1m[33mwarning[0m[0m[1m: function `wait_for_history` is never used[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0mtui-pty-e2e/tests/multi_session.rs:75:4[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m75[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mfn wait_for_history(session: &mut TuiSession, pred: impl Fn(&str) -> bool, what: &str) -> String {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m    [0m[0m[1m[33m^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "startup") generated 3 warnings (run `cargo fix --test "startup"` to apply 2 suggestions)
+[1m[33mwarning[0m[1m:[0m `tui-pty-e2e` (test "multi_session") generated 7 warnings
+[1m[32m    Finished[0m `ci-test` profile [unoptimized + debuginfo] target(s) in 3.23s
+[1m[32m     Running[0m unittests src/lib.rs (target/aarch64-apple-darwin/ci-test/deps/tui_pty_e2e-9da778477e042ee1)
+
+running 18 tests
+test input::tests::a_shell_command_counts_once_the_composer_renders_its_sigil ... ok
+test emulator::tests::history_keeps_lines_scrolled_off_the_screen ... ok
+test emulator::tests::erase_scrollback_drops_history_and_keeps_the_screen ... ok
+test emulator::tests::an_erase_split_across_reads_still_applies ... ok
+test input::tests::a_slash_command_counts_once_the_composer_renders_it ... ok
+test input::tests::a_slash_popup_row_is_not_a_composer_echo ... ok
+test input::tests::plain_input_matches_across_a_wrap ... ok
+test terminal_queries::tests::drawing_and_incomplete_queries_generate_no_input ... ok
+test tests::activity_times_mask_to_one_token ... ok
+test terminal_queries::tests::startup_queries_receive_the_same_replies_at_every_read_boundary ... ok
+test tests::normalizes_canonical_macos_temp_directories ... ok
+test tests::test_normalize_platform_temp_directories ... ok
+test tests::test_normalize_prompt_capability_placeholders ... ok
+test tests::test_normalize_acp_error_messages ... ok
+test tests::test_normalize_version_and_skillset ... ok
+test tests::test_strip_git_stats_from_footer ... ok
+test tests::test_normalize_wrapped_skillset_init_header ... ok
+test tests::test_normalize_worked_for_line ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/acp_exit_cleanup.rs (target/aarch64-apple-darwin/ci-test/deps/acp_exit_cleanup-d934930956addf2a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/acp_file_operations.rs (target/aarch64-apple-darwin/ci-test/deps/acp_file_operations-92c3dcd14a02d75e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/acp_mcp_command.rs (target/aarch64-apple-darwin/ci-test/deps/acp_mcp_command-9a559fb0be7be0d1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/acp_message_draining.rs (target/aarch64-apple-darwin/ci-test/deps/acp_message_draining-079cd4a4fa4b0d27)
+
+running 1 test
+test test_interactive_debug_draining ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/acp_mode.rs (target/aarch64-apple-darwin/ci-test/deps/acp_mode-84381c070d23d20a)
+
+running 2 tests
+test test_acp_mode_startup_snapshot ... ignored
+test test_acp_mode_startup_with_mock_agent ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+[1m[32m     Running[0m tests/acp_prompt_errors.rs (target/aarch64-apple-darwin/ci-test/deps/acp_prompt_errors-51300d487dacc473)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/acp_resume_session_list.rs (target/aarch64-apple-darwin/ci-test/deps/acp_resume_session_list-501c017911f1915d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/acp_runaway_search.rs (target/aarch64-apple-darwin/ci-test/deps/acp_runaway_search-82579e230ae1abc8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/acp_tool_calls.rs (target/aarch64-apple-darwin/ci-test/deps/acp_tool_calls-3ccef19a39a48506)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/agent_switching.rs (target/aarch64-apple-darwin/ci-test/deps/agent_switching-16a3fe47b857b11d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/analytics.rs (target/aarch64-apple-darwin/ci-test/deps/analytics-15fdad40873508aa)
+
+running 2 tests
+test cloud_prompt_reports_cloud_mode_after_the_agent_connects ... ok
+test interactive_prompt_reports_authenticated_agent_session ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.25s
+
+[1m[32m     Running[0m tests/approval_presets_migration.rs (target/aarch64-apple-darwin/ci-test/deps/approval_presets_migration-bd42044a7517656a)
+
+running 3 tests
+test a_config_without_presets_is_untouched_across_launches ... ok
+test a_read_only_preset_starts_sessions_in_ask_on_this_and_every_later_launch ... ok
+test the_host_default_applies_to_the_first_session_and_to_new_ones ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.38s
+
+[1m[32m     Running[0m tests/attached_external_cancel.rs (target/aarch64-apple-darwin/ci-test/deps/attached_external_cancel-578f5cadb0dc061e)
+
+running 5 tests
+test early_escape_in_plain_nori_waits_for_its_admission ... ok
+test delayed_cancel_for_amber_does_not_interrupt_blue ... ok
+test escape_in_attach_reaches_the_terminal_submitted_prompt_once ... ok
+test attached_close_can_be_refused_and_retried ... ok
+test ctrl_c_cancels_once_and_preserves_the_attached_draft ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.14s
+
+[1m[32m     Running[0m tests/auth_command.rs (target/aarch64-apple-darwin/ci-test/deps/auth_command-926c1c86ed037b4b)
+
+running 2 tests
+test typed_and_pasted_key_shows_only_its_known_prefix ... ok
+test preferring_an_api_key_over_a_subscription_asks_first ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+[1m[32m     Running[0m tests/browser_command.rs (target/aarch64-apple-darwin/ci-test/deps/browser_command-542f5016732423fe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/cloud_mode.rs (target/aarch64-apple-darwin/ci-test/deps/cloud_mode-633542be1c57a056)
+
+running 3 tests
+test test_cloud_mode_bypasses_local_onboarding_and_trust ... ok
+test test_cloud_mode_bypasses_per_session_skillset_picker ... ok
+test test_cloud_mode_ignores_automatic_worktree ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+[1m[32m     Running[0m tests/context.rs (target/aarch64-apple-darwin/ci-test/deps/context-bf49af7b1142cc10)
+
+running 4 tests
+test context_command_renders_unknown_usage_without_prompting_the_agent ... ok
+test context_command_renders_agent_reported_usage ... ok
+test context_can_inspect_an_unfinished_turn_without_interrupting_it ... ok
+test context_grid_alternates_turn_segments_without_adding_a_prompt ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.21s
+
+[1m[32m     Running[0m tests/context_instructions.rs (target/aarch64-apple-darwin/ci-test/deps/context_instructions-8d9a63c79c08b7c7)
+
+running 1 test
+test repeated_context_with_real_claude_instructions_is_prompt_and_reads_edits ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.82s
+
+[1m[32m     Running[0m tests/cursor.rs (target/aarch64-apple-darwin/ci-test/deps/cursor-93a4b8a5a61d29eb)
+
+running 2 tests
+test standalone_cursor_accepts_a_prompt_and_explains_login ... ok
+test cursor_child_uses_sessions_executable_and_returns_to_its_parent ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.11s
+
+[1m[32m     Running[0m tests/delegation.rs (target/aarch64-apple-darwin/ci-test/deps/delegation-44ae24fa98f5de10)
+
+running 9 tests
+test alt_up_in_a_top_level_session_leaves_the_prompt_alone ... ok
+test a_session_that_starts_with_a_delegation_is_titled_by_its_task ... ok
+test declining_different_kind_does_not_start_child ... ok
+test same_kind_child_starts_and_returns_without_approval_or_exiting_terminal ... ok
+test alt_down_reaches_a_waiting_child_even_with_a_draft_in_the_parent ... ok
+test different_kind_child_needs_start_and_its_permission_stays_in_child ... ok
+test delegation_reads_clearly_from_request_to_result ... ok
+test the_child_breadcrumb_fits_one_row_of_an_80_column_terminal ... ok
+test the_session_list_keeps_names_with_a_shared_prefix_apart_at_80_columns ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.39s
+
+[1m[32m     Running[0m tests/exit_statistics.rs (target/aarch64-apple-darwin/ci-test/deps/exit_statistics-8e5ad85e927535eb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/explicit_host_close.rs (target/aarch64-apple-darwin/ci-test/deps/explicit_host_close-203627578126a29e)
+
+running 2 tests
+test quitting_stops_a_private_host_with_an_unanswered_close ... ok
+test refused_close_keeps_the_original_session_until_the_retry_releases_it ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+
+[1m[32m     Running[0m tests/host_agent_switch.rs (target/aarch64-apple-darwin/ci-test/deps/host_agent_switch-ac8052df0642f83b)
+
+running 4 tests
+test dismissing_the_switch_picker_keeps_the_current_session ... ok
+test switching_to_a_new_session_keeps_the_previous_one_running ... ok
+test a_refused_restore_keeps_the_current_session ... ok
+test switching_restores_a_saved_session_of_the_selected_agent ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.21s
+
+[1m[32m     Running[0m tests/host_approvals.rs (target/aarch64-apple-darwin/ci-test/deps/host_approvals-560b0a3b0b452958)
+
+running 2 tests
+test ask_is_refused_for_an_adapter_that_cannot_ask_and_the_mode_stays ... ok
+test the_footer_follows_the_session_on_screen_and_new_sessions_start_at_the_host_default ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.75s
+
+[1m[32m     Running[0m tests/host_attach.rs (target/aarch64-apple-darwin/ci-test/deps/host_attach-28817338eb1b3fe3)
+
+running 17 tests
+test attached_escape_closes_the_menu_first_and_then_interrupts_the_turn ... ok
+test attached_slash_menu_greys_what_this_terminal_cannot_run_and_refuses_it_with_the_same_reason ... ok
+test attached_enter_delivers_to_the_original_turn_then_tab_drains_once ... ok
+test cancel_in_an_attached_terminal_ends_the_running_turn ... ok
+test delegated_child_in_host_list_preserves_metadata_columns_and_can_be_opened ... ok
+test detach_and_named_reattach_keep_the_session_history_and_host_alive ... ok
+test host_starts_without_a_terminal_session_and_stops_explicitly ... ok
+test attached_busy_enter_reports_fallback_and_tab_explicitly_queues ... FAILED
+test new_sessions_start_in_the_attaching_folder_or_a_tab_completed_one ... ok
+test dropped_tcp_connection_shows_reconnecting_and_replays_missed_output_once ... ok
+test same_port_host_restart_stops_reconnecting_and_explains_session_loss ... ok
+test host_list_truncates_tty_title_without_losing_piped_title ... ok
+test only_the_controller_changes_a_session_mode_and_every_terminal_shows_it ... ok
+test watcher_cannot_delegate_a_child ... ok
+test two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt ... FAILED
+test silently_blackholed_connection_shows_reconnecting_and_replays_missed_output_once ... ok
+test watcher_cannot_answer_a_permission_request_but_controller_can ... FAILED
+
+failures:
+
+---- attached_busy_enter_reports_fallback_and_tab_explicitly_queues stdout ----
+
+thread 'attached_busy_enter_reports_fallback_and_tab_explicitly_queues' panicked at tui-pty-e2e/tests/host_attach.rs:1023:10:
+called `Result::unwrap()` on an `Err` value: "waiting for \"Steering unavailable\": Timed out after 10.007354708s (180 polls, 17.288549167s since spawn, 313013 PTY bytes, first output Some(56.092083ms), pid Some(27036), status Ok(None))"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+=== TUI Screen State at Panic ===
+     Nori host  CONTROLLING
+     mock-model · mock:stream-until-cancel · project · working · Approvals: Agent
+    
+     mock:stream-until-cancel
+    
+     D2 host agent
+     responseStreaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+     reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+     Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+     ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+     g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+     ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+     aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+     reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+     Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+     ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+     g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+     ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+     aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+     reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+     Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+     ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+     g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+     ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+     aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+     reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+     Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+     ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+     g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+     ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+     aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+     reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+     Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+     ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+     g...Streaming...Streaming...Streaming...Streaming...
+    
+     
+    › Send a prompt
+    
+       alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PTY output tail (escaped): 120H\x1b[0m\x1b[m\x1b[K\x1b[16;120H\x1b[0m\x1b[m\x1b[K\x1b[17;120H\x1b[0m\x1b[m\x1b[K\x1b[18;120H\x1b[0m\x1b[m\x1b[K\x1b[19;120H\x1b[0m\x1b[m\x1b[K\x1b[20;120H\x1b[0m\x1b[m\x1b[K\x1b[21;120H\x1b[0m\x1b[m\x1b[K\x1b[22;120H\x1b[0m\x1b[m\x1b[K\x1b[23;120H\x1b[0m\x1b[m\x1b[K\x1b[24;120H\x1b[0m\x1b[m\x1b[K\x1b[25;120H\x1b[0m\x1b[m\x1b[K\x1b[26;120H\x1b[0m\x1b[m\x1b[K\x1b[27;120H\x1b[0m\x1b[m\x1b[K\x1b[28;120H\x1b[0m\x1b[m\x1b[K\x1b[29;120H\x1b[0m\x1b[m\x1b[K\x1b[30;120H\x1b[0m\x1b[m\x1b[K\x1b[31;120H\x1b[0m\x1b[m\x1b[K\x1b[32;120H\x1b[0m\x1b[m\x1b[K\x1b[33;120H\x1b[0m\x1b[m\x1b[K\x1b[34;120H\x1b[0m\x1b[m\x1b[K\x1b[35;54H\x1b[0m\x1b[m\x1b[K\x1b[36;2H\x1b[0m\x1b[m\x1b[K\x1b[37;2H\x1b[0m\x1b[m\x1b[K\x1b[38;16H\x1b[0m\x1b[m\x1b[K\x1b[39;2H\x1b[0m\x1b[m\x1b[K\x1b[40;109H\x1b[0m\x1b[m\x1b[K\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;3H\x1b[?2026l
+=================================
+
+
+---- two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt stdout ----
+
+thread 'two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt' panicked at tui-pty-e2e/tests/host_attach.rs:303:9:
+watcher action must show an error:
+ Nori host  WATCHING · read-only · alt+t take control
+ mock-model · D2 shared session · project · ready · Approvals: Agent
+
+ › You
+ D2 shared session
+
+ D2 host agent response
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› D2 watcher must not ru
+ 
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+
+=== TUI Screen State at Panic ===
+     Nori host  WATCHING · read-only · alt+t take control
+     mock-model · D2 shared session · project · ready · Approvals: Agent
+    
+     › You
+     D2 shared session
+    
+     D2 host agent response
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    › D2 watcher must not ru
+     
+    
+       alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PTY output tail (escaped): [K\x1b[13;2H\x1b[0m\x1b[m\x1b[K\x1b[14;2H\x1b[0m\x1b[m\x1b[K\x1b[15;2H\x1b[0m\x1b[m\x1b[K\x1b[16;2H\x1b[0m\x1b[m\x1b[K\x1b[17;2H\x1b[0m\x1b[m\x1b[K\x1b[18;2H\x1b[0m\x1b[m\x1b[K\x1b[19;2H\x1b[0m\x1b[m\x1b[K\x1b[20;2H\x1b[0m\x1b[m\x1b[K\x1b[21;2H\x1b[0m\x1b[m\x1b[K\x1b[22;2H\x1b[0m\x1b[m\x1b[K\x1b[23;2H\x1b[0m\x1b[m\x1b[K\x1b[24;2H\x1b[0m\x1b[m\x1b[K\x1b[25;2H\x1b[0m\x1b[m\x1b[K\x1b[26;2H\x1b[0m\x1b[m\x1b[K\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;2H\x1b[0m\x1b[m\x1b[K\x1b[29;2H\x1b[0m\x1b[m\x1b[K\x1b[30;2H\x1b[0m\x1b[m\x1b[K\x1b[31;2H\x1b[0m\x1b[m\x1b[K\x1b[32;2H\x1b[0m\x1b[m\x1b[K\x1b[33;2H\x1b[0m\x1b[m\x1b[K\x1b[34;2H\x1b[0m\x1b[m\x1b[K\x1b[35;2H\x1b[0m\x1b[m\x1b[K\x1b[36;2H\x1b[0m\x1b[m\x1b[K\x1b[37;25H\x1b[0m\x1b[m\x1b[K\x1b[38;2H\x1b[0m\x1b[m\x1b[K\x1b[39;2H\x1b[0m\x1b[m\x1b[K\x1b[40;109H\x1b[0m\x1b[m\x1b[K\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;3H\x1b[?2026l
+=================================
+
+
+=== TUI Screen State at Panic ===
+     Nori host  CONTROLLING
+     mock-model · D2 shared session · project · ready · Approvals: Agent
+    
+     › You
+     D2 shared session
+    
+     D2 host agent response
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+     
+    
+    
+    
+    
+    
+    
+    
+     
+    › Send a prompt
+    
+       alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+PTY output tail (escaped): 4;7H\x1b[0m\x1b[m\x1b[K\x1b[5;19H\x1b[0m\x1b[m\x1b[K\x1b[6;2H\x1b[0m\x1b[m\x1b[K\x1b[7;24H\x1b[0m\x1b[m\x1b[K\x1b[8;2H\x1b[0m\x1b[m\x1b[K\x1b[9;2H\x1b[0m\x1b[m\x1b[K\x1b[10;2H\x1b[0m\x1b[m\x1b[K\x1b[11;2H\x1b[0m\x1b[m\x1b[K\x1b[12;2H\x1b[0m\x1b[m\x1b[K\x1b[13;2H\x1b[0m\x1b[m\x1b[K\x1b[14;2H\x1b[0m\x1b[m\x1b[K\x1b[15;2H\x1b[0m\x1b[m\x1b[K\x1b[16;2H\x1b[0m\x1b[m\x1b[K\x1b[17;2H\x1b[0m\x1b[m\x1b[K\x1b[18;2H\x1b[0m\x1b[m\x1b[K\x1b[19;2H\x1b[0m\x1b[m\x1b[K\x1b[20;2H\x1b[0m\x1b[m\x1b[K\x1b[21;2H\x1b[0m\x1b[m\x1b[K\x1b[22;2H\x1b[0m\x1b[m\x1b[K\x1b[23;2H\x1b[0m\x1b[m\x1b[K\x1b[24;2H\x1b[0m\x1b[m\x1b[K\x1b[25;2H\x1b[0m\x1b[m\x1b[K\x1b[26;2H\x1b[0m\x1b[m\x1b[K\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;2H\x1b[0m\x1b[m\x1b[K\x1b[29;2H\x1b[0m\x1b[m\x1b[K\x1b[30;2H\x1b[0m\x1b[m\x1b[K\x1b[31;2H\x1b[0m\x1b[m\x1b[K\x1b[32;2H\x1b[0m\x1b[m\x1b[K\x1b[33;2H\x1b[0m\x1b[m\x1b[K\x1b[34;2H\x1b
+=================================
+
+
+---- watcher_cannot_answer_a_permission_request_but_controller_can stdout ----
+
+thread 'watcher_cannot_answer_a_permission_request_but_controller_can' panicked at tui-pty-e2e/tests/host_attach.rs:479:10:
+called `Result::unwrap()` on an `Err` value: "waiting for \"Permission granted with option: allow\": Timed out after 10.000447417s (175 polls, 18.465476625s since spawn, 139742 PTY bytes, first output Some(54.392083ms), pid Some(27908), status Ok(None))"
+
+=== TUI Screen State at Panic ===
+     Nori host  WATCHING · read-only · alt+t take control
+     mock-model · D2 approval session · project · ready · Approvals: Agent
+    
+     › You
+     D2 approval session
+    
+     D2 host agent response
+    
+     › You
+     mock:request-permission:echo D2-permission
+    
+     D2 host agent response
+    
+     Read-only: take control with alt+t before sending prompts or permission answers.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+     Permission · Execute shell command
+     › 1  Allow
+       2  Reject
+     Watching · read-only · alt+t to take control
+    
+    
+     Read-only: take control with alt+t before sending prom
+    
+     
+PTY output tail (escaped): [m\x1b[K\x1b[31;12H\x1b[0m\x1b[m\x1b[K\x1b[32;13H\x1b[0m\x1b[m\x1b[K\x1b[33;46H\x1b[0m\x1b[m\x1b[K\x1b[34;2H\x1b[0m\x1b[m\x1b[K\x1b[35;2H\x1b[0m\x1b[m\x1b[K\x1b[36;82H\x1b[0m\x1b[m\x1b[K\x1b[37;2H\x1b[0m\x1b[m\x1b[K\x1b[38;2H\x1b[0m\x1b[m\x1b[K\x1b[39;2H\x1b[0m\x1b[m\x1b[K\x1b[40;2H\x1b[0m\x1b[m\x1b[K\x1b[14;2H\x1b[;mRead-only: take control with alt+t before sending prompts or permission answers.\x1b[30;2H\x1b[1m\x1b[;mPermission \xc2\xb7 Execute shell command\x1b[31;2H\x1b[22m\x1b[;m\xe2\x80\xba 1  \x1b[;mAllow\x1b[32;2H\x1b[;m \x1b[32;4H2\x1b[32;7H\x1b[;mReject\x1b[33;2H\x1b[;mWatching \xc2\xb7 read-only \xc2\xb7 alt+t to take control\x1b[36;1H\x1b[;m Read-only: take control with alt+t before sending prom
+=================================
+
+
+=== TUI Screen State at Panic ===
+     Nori host  CONTROLLING
+     mock-model · D2 approval session · project · waiting on you · Approvals: Agent
+    
+     › You
+     D2 approval session
+    
+     D2 host agent response
+    
+     › You
+     mock:request-permission:echo D2-permission
+    
+     D2 host agent response
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+     
+    
+     Permission · Execute shell command
+     › 1  Allow
+       2  Reject
+     ↑↓ choose · enter answer · number selects · esc reject · ctrl+c cancel
+    
+    
+     
+     
+PTY output tail (escaped): 0m\x1b[m\x1b[K\x1b[13;2H\x1b[0m\x1b[m\x1b[K\x1b[14;2H\x1b[0m\x1b[m\x1b[K\x1b[15;2H\x1b[0m\x1b[m\x1b[K\x1b[16;2H\x1b[0m\x1b[m\x1b[K\x1b[17;2H\x1b[0m\x1b[m\x1b[K\x1b[18;2H\x1b[0m\x1b[m\x1b[K\x1b[19;2H\x1b[0m\x1b[m\x1b[K\x1b[20;2H\x1b[0m\x1b[m\x1b[K\x1b[21;2H\x1b[0m\x1b[m\x1b[K\x1b[22;2H\x1b[0m\x1b[m\x1b[K\x1b[23;2H\x1b[0m\x1b[m\x1b[K\x1b[24;2H\x1b[0m\x1b[m\x1b[K\x1b[25;2H\x1b[0m\x1b[m\x1b[K\x1b[26;2H\x1b[0m\x1b[m\x1b[K\x1b[27;2H\x1b[0m\x1b[m\x1b[K\x1b[28;2H\x1b[0m\x1b[m\x1b[K\x1b[29;2H\x1b[0m\x1b[m\x1b[K\x1b[30;2H\x1b[0m\x1b[m\x1b[K\x1b[31;36H\x1b[0m\x1b[m\x1b[K\x1b[32;12H\x1b[0m\x1b[m\x1b[K\x1b[33;13H\x1b[0m\x1b[m\x1b[K\x1b[34;72H\x1b[0m\x1b[m\x1b[K\x1b[35;2H\x1b[0m\x1b[m\x1b[K\x1b[36;2H\x1b[0m\x1b[m\x1b[K\x1b[37;2H\x1b[0m\x1b[m\x1b[K\x1b[38;2H\x1b[0m\x1b[m\x1b[K\x1b[39;2H\x1b[0m\x1b[m\x1b[K\x1b[40;2H\x1b[0m\x1b[m\x1b[K\x1b[m\x1b[m\x1b[0m\x1b[?25l\x1b[?2026l
+=================================
+
+
+
+failures:
+    attached_busy_enter_reports_fallback_and_tab_explicitly_queues
+    two_terminals_watch_take_control_and_refuse_the_previous_controllers_prompt
+    watcher_cannot_answer_a_permission_request_but_controller_can
+
+test result: FAILED. 14 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 45.35s
+
+[1m[31merror[0m[1m:[0m test failed, to rerun pass `-p tui-pty-e2e --test host_attach`
+[1m[32m     Running[0m tests/host_new_session.rs (target/aarch64-apple-darwin/ci-test/deps/host_new_session-6a8a535d00f20683)
+
+running 2 tests
+test input_typed_right_after_new_goes_to_the_new_session ... ok
+test a_refused_new_session_returns_the_held_input_without_sending_it ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.83s
+
+[1m[32m     Running[0m tests/host_session_picker.rs (target/aarch64-apple-darwin/ci-test/deps/host_session_picker-68001b858c273082)
+
+running 5 tests
+test dismissing_resume_keeps_the_current_session_and_reaps_the_listing_server ... ok
+test dismissing_the_picker_after_the_last_close_says_how_to_continue ... ok
+test a_refused_resume_reports_the_agent_and_keeps_the_current_session ... ok
+test closing_the_last_session_offers_saved_sessions_to_restore ... ok
+test resume_restores_a_saved_session_on_a_freshly_prepared_server ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.70s
+
+[1m[32m     Running[0m tests/host_startup.rs (target/aarch64-apple-darwin/ci-test/deps/host_startup-4468f18e04500986)
+
+running 8 tests
+test a_positional_prompt_start_writes_one_welcome_card ... ok
+test a_positional_prompt_starts_through_the_owned_host_once ... ok
+test a_positional_prompt_whose_session_is_refused_returns_to_the_composer_unsent ... ok
+test a_prompt_typed_while_resume_prepares_reaches_the_restored_session ... ok
+test a_prompt_typed_while_the_agent_prepares_reaches_the_startup_session_once ... ok
+test a_refused_startup_session_reports_the_agent_and_the_next_prompt_retries ... ok
+test startup_activates_its_session_through_the_owned_host ... ok
+test resume_while_the_agent_prepares_restores_on_the_startup_server ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.72s
+
+[1m[32m     Running[0m tests/input_handling.rs (target/aarch64-apple-darwin/ci-test/deps/input_handling-e4e61d675bf294a7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/live_acp.rs (target/aarch64-apple-darwin/ci-test/deps/live_acp-19cca6bbf067df24)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/live_custom_agent.rs (target/aarch64-apple-darwin/ci-test/deps/live_custom_agent-e73aa50aa072606f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/markdown_table.rs (target/aarch64-apple-darwin/ci-test/deps/markdown_table-03fcd2612561a0d6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/multi_session.rs (target/aarch64-apple-darwin/ci-test/deps/multi_session-4b3d6fc9b18dbd1c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/nori_footer.rs (target/aarch64-apple-darwin/ci-test/deps/nori_footer-54b0ee3d90ce61cc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/pi_token_provider.rs (target/aarch64-apple-darwin/ci-test/deps/pi_token_provider-8fddcf58946c8a9a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/prepared_startup.rs (target/aarch64-apple-darwin/ci-test/deps/prepared_startup-75f617c4fba395d8)
+
+running 13 tests
+test agent_without_session_list_activates_a_session_on_startup ... ok
+kill: 34520: No such process
+kill: 34520: No such process
+test exit_reaps_in_flight_preparation ... ok
+test ordinary_agent_prepares_before_running_a_positional_prompt ... ok
+test both_foreground_launchers_own_one_inline_session_until_quit ... ok
+test positional_prompt_activates_after_preparation_exactly_once ... ok
+test first_prompt_waits_for_preparation_then_activates_once ... ok
+test remote_adapter_activates_a_session_on_startup ... ok
+test policy_change_is_applied_to_the_active_session ... ok
+test slash_new_reuses_in_flight_preparation ... ok
+test slash_resume_uses_resume_capability_on_the_prepared_connection ... ok
+test slash_resume_reuses_in_flight_preparation_catalog ... ok
+test startup_activates_and_local_status_renders ... ok
+kill: 37370: No such process
+kill: 37370: No such process
+test primary_preparation_timeout_reaps_the_child_without_activating ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.77s
+
+[1m[32m     Running[0m tests/prompt_flow.rs (target/aarch64-apple-darwin/ci-test/deps/prompt_flow-8f0a4074bb9bcb57)
+
+running 1 test
+test test_multiline_input ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.41s
+
+[1m[32m     Running[0m tests/queue_pause.rs (target/aarch64-apple-darwin/ci-test/deps/queue_pause-ed89978405077050)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/queue_recall.rs (target/aarch64-apple-darwin/ci-test/deps/queue_recall-ffbfdff39baae514)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/server_launch.rs (target/aarch64-apple-darwin/ci-test/deps/server_launch-b6e89cc37898fb2a)
+
+running 1 test
+test delegated_and_picked_servers_share_the_recipe_and_isolate_the_next_agent ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.37s
+
+[1m[32m     Running[0m tests/session_lifecycle.rs (target/aarch64-apple-darwin/ci-test/deps/session_lifecycle-3d4568670c3c39ae)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/session_list.rs (target/aarch64-apple-darwin/ci-test/deps/session_list-c6a1936ed44eff76)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/session_transcripts.rs (target/aarch64-apple-darwin/ci-test/deps/session_transcripts-ed969c6f1756992d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/slash_menu_escape.rs (target/aarch64-apple-darwin/ci-test/deps/slash_menu_escape-066b17aa39d1a8e6)
+
+running 1 test
+test the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.29s
+
+[1m[32m     Running[0m tests/startup.rs (target/aarch64-apple-darwin/ci-test/deps/startup-77d768c180d8f258)
+
+running 2 tests
+test test_poll_does_not_block_when_no_data ... ok
+test test_startup_error_for_unregistered_model ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s
+
+[1m[32m     Running[0m tests/startup_draft.rs (target/aarch64-apple-darwin/ci-test/deps/startup_draft-5d8861a2ee935f91)
+
+running 1 test
+test startup_preserves_draft_cursor_across_activation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+
+[1m[32m     Running[0m tests/streaming.rs (target/aarch64-apple-darwin/ci-test/deps/streaming-6eb52cc0077d20de)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/thought_status.rs (target/aarch64-apple-darwin/ci-test/deps/thought_status-9725171ce1dce6a7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/tool_output_preference.rs (target/aarch64-apple-darwin/ci-test/deps/tool_output_preference-92bf5c8c96403603)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/transcript_keys.rs (target/aarch64-apple-darwin/ci-test/deps/transcript_keys-ed892457843d7ea9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m     Running[0m tests/transcript_persistence.rs (target/aarch64-apple-darwin/ci-test/deps/transcript_persistence-ee5ed22382fee243)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[32m   Doc-tests[0m tui_pty_e2e
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[31merror[0m[1m:[0m 1 target failed:
+    `-p tui-pty-e2e --test host_attach`

@@ -1,0 +1,76 @@
+diff --git a/nori-rs/tui-pty-e2e/tests/host_attach.rs b/nori-rs/tui-pty-e2e/tests/host_attach.rs
+index 1d38054f0..126587e95 100644
+--- a/nori-rs/tui-pty-e2e/tests/host_attach.rs
++++ b/nori-rs/tui-pty-e2e/tests/host_attach.rs
+@@ -1,5 +1,4 @@
+ //! Detached hosts and independent attached terminal clients.
+-#![cfg(target_os = "linux")]
+ 
+ use std::io::Read;
+ use std::io::Seek;
+@@ -1201,3 +1200,65 @@ fn open_mode_menu(client: &mut Client) {
+         .wait_for_text("Approvals for this session", TIMEOUT)
+         .unwrap();
+ }
++
++/// Verifier-only: the same steps with a pause before each Enter.
++#[test]
++fn verifier_settled_only_the_controller_changes_a_session_mode() {
++    let host = Host::new();
++    host.start();
++    let mut first = host.create_session();
++    ask(&mut first, "approvals shared session");
++    let id = host.session_id();
++    let mut second = host.attach(Some(&id));
++    wait_controlling(&mut first);
++    wait_watching(&mut second);
++    wait_mode(&mut second, "Agent");
++
++    submit_settled(&mut first, "/approvals approve-all").unwrap();
++    first
++        .wait_for_text("Approve every request in this session?", TIMEOUT)
++        .unwrap();
++    first.send_key(Key::Enter).unwrap();
++    wait_mode(&mut first, "Approve all");
++    wait_mode(&mut second, "Approve all");
++
++    // Refused in the watcher, before anything is sent.
++    submit_settled(&mut second, "/approvals agent").unwrap();
++    second
++        .wait_for_text("/approvals: watching · Alt+T to take control", TIMEOUT)
++        .unwrap();
++
++    second.send_key(Key::Ctrl('u')).unwrap();
++    second.send_key(Key::Alt('t')).unwrap();
++    wait_controlling(&mut second);
++    wait_watching(&mut first);
++    open_mode_menu(&mut second);
++    assert!(
++        second.screen_contents().contains("Approve all (current)"),
++        "the watcher's choice never reached the host:\n{}",
++        second.screen_contents()
++    );
++    second.send_key(Key::Up).unwrap();
++    second.settle(Duration::from_millis(200));
++    second.send_key(Key::Enter).unwrap();
++    wait_mode(&mut second, "Agent");
++    wait_mode(&mut first, "Agent");
++
++    submit_settled(&mut first, "/approvals approve-all").unwrap();
++    first
++        .wait_for_text("/approvals: watching · Alt+T to take control", TIMEOUT)
++        .unwrap();
++    open_mode_menu(&mut second);
++    assert!(
++        second.screen_contents().contains("Agent (current)"),
++        "the former controller can no longer change the mode:\n{}",
++        second.screen_contents()
++    );
++    second.send_key(Key::Escape).unwrap();
++}
++
++fn submit_settled(client: &mut Client, text: &str) -> std::io::Result<()> {
++    client.send_str(text)?;
++    client.settle(Duration::from_millis(500));
++    client.send_key(Key::Enter)
++}
