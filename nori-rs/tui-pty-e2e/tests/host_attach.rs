@@ -76,6 +76,16 @@ impl Host {
     }
 
     fn terminal_in(&self, cwd: &std::path::Path, args: &[&str]) -> Client {
+        self.terminal_with(cwd, args, &[])
+    }
+
+    /// A terminal in `cwd` whose process also gets `env`.
+    fn terminal_with(
+        &self,
+        cwd: &std::path::Path,
+        args: &[&str],
+        env: &[(&str, &std::path::Path)],
+    ) -> Client {
         let home = self.home.path().to_string_lossy();
         let mut config = SessionConfig::new()
             .with_command_args(Self::args(args))
@@ -86,6 +96,9 @@ impl Host {
             .with_extra_path(self.binary.parent().unwrap().to_path_buf());
         if self.steering {
             config = config.with_agent_env("MOCK_AGENT_STEERING", "1");
+        }
+        for (key, value) in env {
+            config = config.with_agent_env(*key, value.to_string_lossy());
         }
         config.cwd = Some(cwd.to_path_buf());
         Client(TuiSession::spawn_with_config(40, 120, config).unwrap())
@@ -141,7 +154,16 @@ impl Host {
     }
 
     fn start(&self) {
-        let mut terminal = self.terminal(&["host", "--port", "0"]);
+        self.start_with(&[]);
+    }
+
+    /// Start the background host with `env` added to its environment.
+    fn start_with(&self, env: &[(&str, &std::path::Path)]) {
+        let mut terminal = self.terminal_with(
+            &self.home.path().join("project"),
+            &["host", "--port", "0"],
+            env,
+        );
         terminal
             .wait_for(|screen| screen.to_lowercase().contains("started"), TIMEOUT)
             .expect("nori host reports a ready background host");
@@ -1009,6 +1031,152 @@ fn new_sessions_start_in_the_attaching_folder_or_a_tab_completed_one() {
     client
         .wait_for_text(&format!("third-folder · {ANSWER}"), TIMEOUT)
         .expect("the list shows each session's folder before its reply");
+}
+
+#[test]
+fn mentions_and_new_folder_completion_come_from_the_sessions_folder_on_the_host() {
+    let host = Host::new();
+    host.start();
+    let terminal_folder = host.home.path().join("terminal-folder");
+    let workdir = host.home.path().join("workdir");
+    std::fs::create_dir(&terminal_folder).unwrap();
+    std::fs::create_dir_all(workdir.join("deep-folder")).unwrap();
+    std::fs::write(workdir.join("session-only-notes.md"), "notes").unwrap();
+    let mut client = host.terminal_in(&terminal_folder, &["attach"]);
+    client.wait_for_text("Sessions", TIMEOUT).unwrap();
+    client.send_key(Key::Escape).unwrap();
+    client
+        .wait_for(
+            |screen| screen.contains("No session selected. Use"),
+            TIMEOUT,
+        )
+        .unwrap();
+    client
+        .submit_input(&format!("/new {}", workdir.display()))
+        .unwrap();
+    client
+        .wait_for(
+            |screen| {
+                screen
+                    .lines()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .contains("workdir")
+            },
+            TIMEOUT,
+        )
+        .expect("the session starts in the named folder");
+    client.wait_for_text("ready", TIMEOUT).unwrap();
+
+    client.type_input("@session-only").unwrap();
+    client
+        .wait_for_text("session-only-notes.md", TIMEOUT)
+        .expect("@ lists files from the session's folder, not the terminal's");
+    client.send_key(Key::Ctrl('c')).unwrap();
+    client
+        .wait_for(|screen| !screen.contains("@session-only"), TIMEOUT)
+        .unwrap();
+
+    client.type_input("/new dee").unwrap();
+    client.send_key(Key::Tab).unwrap();
+    client
+        .wait_for_text("new deep-folder/", TIMEOUT)
+        .expect("Tab completes a folder that exists only in the session's folder");
+    client.settle(Duration::from_millis(300));
+    client.send_key(Key::Enter).unwrap();
+    client
+        .wait_for(
+            |screen| {
+                screen
+                    .lines()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .contains("deep-folder")
+            },
+            TIMEOUT,
+        )
+        .expect("plain folders resolve against the session's folder");
+}
+
+/// The running host's `/sessions` endpoint, for attaching with `--host`.
+fn host_endpoint(host: &Host) -> String {
+    let state: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(host.home.path().join("host/state.json")).unwrap())
+            .unwrap();
+    state["endpoint"].as_str().unwrap().to_owned()
+}
+
+#[test]
+fn a_named_host_names_and_completes_folders_from_its_own_home_and_folder() {
+    let host = Host::new();
+    let host_home = tempfile::tempdir().unwrap();
+    let client_home = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(host_home.path().join("orchard/pears")).unwrap();
+    std::fs::write(host_home.path().join("orchard/pear-notes.md"), "notes").unwrap();
+    std::fs::create_dir(client_home.path().join("orchid")).unwrap();
+    std::fs::create_dir(host.home.path().join("project/greenhouse")).unwrap();
+    let terminal_folder = tempfile::tempdir().unwrap();
+    host.start_with(&[("HOME", host_home.path())]);
+    let endpoint = host_endpoint(&host);
+    let token_path = host.home.path().join("host/token");
+    let mut client = host.terminal_with(
+        terminal_folder.path(),
+        &[
+            "attach",
+            "--host",
+            &endpoint,
+            "--token-file",
+            token_path.to_str().unwrap(),
+        ],
+        &[("HOME", client_home.path())],
+    );
+    client.wait_for_text("Sessions", TIMEOUT).unwrap();
+    client.send_key(Key::Escape).unwrap();
+    client
+        .wait_for(
+            |screen| screen.contains("No session selected. Use"),
+            TIMEOUT,
+        )
+        .unwrap();
+    let header_names = |client: &mut Client, folder: &str| {
+        client
+            .wait_for(
+                |screen| screen.lines().nth(1).unwrap_or_default().contains(folder),
+                TIMEOUT,
+            )
+            .unwrap_or_else(|error| panic!("the session starts in {folder}: {error}"));
+        client.wait_for_text("ready", TIMEOUT).unwrap();
+    };
+
+    // With no session on screen, a relative folder is under the host's own.
+    client.submit_input("/new ./greenhouse").unwrap();
+    header_names(&mut client, "greenhouse");
+
+    // `~` is the host's home: Tab completes from it, and the session starts
+    // there, although this terminal's home holds a different folder.
+    client.type_input("/new ~/or").unwrap();
+    client.send_key(Key::Tab).unwrap();
+    client
+        .wait_for_text("new ~/orchard/", TIMEOUT)
+        .expect("Tab completes from the host's home");
+    assert!(!client.screen_contents().contains("orchid"));
+    client.settle(Duration::from_millis(300));
+    client.send_key(Key::Enter).unwrap();
+    header_names(&mut client, "orchard");
+
+    client.type_input("@pear-no").unwrap();
+    client
+        .wait_for_text("pear-notes.md", TIMEOUT)
+        .expect("@ lists files from the new session's folder on the host");
+    client.send_key(Key::Ctrl('c')).unwrap();
+    client
+        .wait_for(|screen| !screen.contains("@pear-no"), TIMEOUT)
+        .unwrap();
+    client.type_input("/new pe").unwrap();
+    client.send_key(Key::Tab).unwrap();
+    client
+        .wait_for_text("new pears/", TIMEOUT)
+        .expect("Tab completes relative folders from the session's folder");
 }
 
 #[test]

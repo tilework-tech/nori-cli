@@ -74,7 +74,12 @@ reuses the prepared child, and cancellation or activation failure leaves the
 current session usable. [Host agent-switch scenarios](tests/host_agent_switch.rs)
 drive `/agent`, and [host session-picker scenarios](tests/host_session_picker.rs)
 drive `/resume` and the picker after the last `/close`, and
-[host new-session scenarios](tests/host_new_session.rs) drive `/new`, and
+[host new-session scenarios](tests/host_new_session.rs) drive `/new`,
+[host file-mention scenarios](tests/host_file_mentions.rs) check that `@`
+lists the files of the session on screen across Alt+, / Alt+. switches and
+that `/new DIR` starts there (the fixture traces into its working folder) or
+refuses a missing folder, and that Tab completes a `/new` folder from the
+session on screen as it changes, and
 [host startup scenarios](tests/host_startup.rs) drive plain startup, through
 the owned host. They share [`support/two_agents.rs`](tests/support/two_agents.rs), which launches
 plain `nori` (optionally with arguments, and with or without a first prompt)
@@ -129,7 +134,10 @@ migrated mode, and that a config without presets is never written.
 The [host attachment scenarios](tests/host_attach.rs) run a detached host and
 independent attached PTYs sharing a disposable Nori home. They cover the flat
 script-facing list, session creation (including `/new` in the attaching
-terminal's folder or a Tab-completed one), controller/watcher handoff, refused
+terminal's folder or a Tab-completed one), `@` mentions and `/new` Tab
+completion answered from the session's folder on the host, a `--host` attach
+whose host and terminal have different `HOME`s naming and completing `~` and
+relative folders from the host's home and folder, controller/watcher handoff, refused
 watcher prompts and permission answers, greyed `/` menu rows refused with
 the menu's reason, `/approvals` changing a session's mode from the controller
 and showing it in every terminal, detach/reattach, and host survival

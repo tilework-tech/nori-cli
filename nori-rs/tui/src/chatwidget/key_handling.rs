@@ -107,6 +107,18 @@ impl ChatWidget {
             {
                 return;
             }
+            KeyEvent {
+                code: KeyCode::Tab,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            } if !self.exiting
+                && !self.cloud_mode
+                && !self.bottom_pane.has_active_overlay_or_popup()
+                && self.complete_new_session_folder() =>
+            {
+                return;
+            }
             other if other.kind == KeyEventKind::Press => {
                 self.bottom_pane.clear_ctrl_c_quit_hint();
             }
@@ -175,6 +187,15 @@ impl ChatWidget {
     }
 
     pub(super) fn dispatch_command(&mut self, cmd: SlashCommand) {
+        self.dispatch_command_in(cmd, None);
+    }
+
+    /// Run `cmd`; `folder` is where `/new` starts its session.
+    pub(super) fn dispatch_command_in(
+        &mut self,
+        cmd: SlashCommand,
+        folder: Option<std::path::PathBuf>,
+    ) {
         // Once exit begins, the session is over: ignore repeated quit
         // commands and refuse everything else instead of racing teardown.
         if self.exiting {
@@ -232,9 +253,10 @@ impl ChatWidget {
             return;
         }
         match cmd {
-            SlashCommand::New => {
-                self.app_event_tx.send(AppEvent::NewSession);
-            }
+            SlashCommand::New => self.app_event_tx.send(match folder {
+                Some(folder) => AppEvent::NewSessionIn(folder),
+                None => AppEvent::NewSession,
+            }),
             SlashCommand::Delegate => {
                 self.handle_delegate_command("/delegate");
             }

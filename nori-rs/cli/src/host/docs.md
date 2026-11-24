@@ -173,6 +173,16 @@ plain nori TUI --pipe (controller)--> owned HostService --> its own SessionManag
   session creation. The reply still carries the managed-session keys
   `nori attach` reads. The host picks its instance ID at startup and announces the
   same value on upgrades and in `host.json`.
+- [Path search](../../../host-runtime/src/host/acp/find_paths.rs): `_nori/session/find_paths`
+  answers `@` file mentions and `/new` folder completion from the host's
+  filesystem, so a client on another machine sees the session's folder rather
+  than its own. It runs on the same ACP face, so plain `nori`'s owned host and
+  a background `nori host` behave alike, and watchers may call it because it
+  only reads. Folder completion names the typed parent folder with the same
+  `host_folder` helper as `_nori/session/new`, so both agree on `~` and
+  relative folders; a `~user` parent matches nothing. The walk runs on a blocking thread; matches whose resolved path
+  leaves the root through a link are dropped. `initialize` advertises it as
+  `capabilities.nori_sessions.find_paths`.
 - [Session lifecycle](../../../host-runtime/src/host/acp/session.rs): `session/new` loads the configuration
   of the requested folder as `_nori/session/new` does, adds the client's
   stdio and HTTP `mcpServers` (remembered in the session settings so an agent
@@ -242,9 +252,16 @@ plain nori TUI --pipe (controller)--> owned HostService --> its own SessionManag
   [remote-control.md §12](../../../../docs/remote-control.md#12-standard-acp-v1-on-the-background-host).
 - Lifecycle requests prepare agents using the host's configuration.
   `_nori/session/new` takes optional `cwd`, `agent`, and `prompt` strings and
-  replies `{session_id, cwd}`. A `cwd` must be absolute; [HostService](../../../host-runtime/src/host/service.rs)
-  canonicalizes it and refuses a relative path, a missing folder, or a
-  non-directory with a readable error. For a requested folder the host reloads
+  replies `{session_id, cwd}`. [HostService](../../../host-runtime/src/host/service.rs)
+  names the `cwd` on the host, with the `host_folder` helper in
+  [find_paths.rs](../../../host-runtime/src/host/acp/find_paths.rs): `~` and
+  `~/…` are under the host process's home, and another relative folder is
+  under the host's own folder (where it was launched). This is because a
+  client on another machine cannot know the host's home. `~user` is left
+  relative and refused. The host then canonicalizes the folder and refuses a
+  relative path ("must be an absolute path"), a missing folder, or a
+  non-directory with a readable error. ACP `session/new` does not do this
+  naming and still takes only an absolute `cwd`. For a requested folder the host reloads
   `NoriConfig` with that folder as cwd plus its own stored command-line
   overrides, so the folder's project trust and approval settings apply rather
   than the host's start folder's. Without `cwd` the host's own configuration is

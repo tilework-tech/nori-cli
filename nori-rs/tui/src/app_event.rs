@@ -96,6 +96,9 @@ pub(crate) enum AppEvent {
     /// Start a new session.
     NewSession,
 
+    /// `/new DIR`: start a new session in this existing folder.
+    NewSessionIn(std::path::PathBuf),
+
     /// A `/close` failed: surface the error and unblock the widget.
     SessionCloseFailed {
         generation: SessionGeneration,
@@ -180,6 +183,12 @@ pub(crate) enum AppEvent {
     FileSearchResult {
         query: String,
         matches: Vec<FileMatch>,
+    },
+
+    /// The host answered an `@` search sent for a session's folder.
+    HostFileSearchLanded {
+        search: crate::host_client::FileSearch,
+        result: Result<serde_json::Value, String>,
     },
 
     /// Result of background system info collection for the footer.

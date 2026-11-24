@@ -2150,6 +2150,59 @@
       },
       "type": "object"
     },
+    "FindPathsParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/session/find_paths`.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PathKind"
+        },
+        "limit": {
+          "description": "At most this many matches, clamped to 1..=50. Defaults to 20.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "query": {
+          "description": "For files, the fuzzy pattern. For folders, the folder as typed:\nrelative to the root, absolute, or under `~`.",
+          "type": "string"
+        },
+        "sessionId": {
+          "description": "Search this session's folder; the host's own folder when absent.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "FindPathsResult": {
+      "description": "Result of `_nori/session/find_paths`.",
+      "properties": {
+        "matches": {
+          "items": {
+            "$ref": "#/$defs/PathMatch"
+          },
+          "type": "array"
+        },
+        "root": {
+          "description": "The absolute folder on the host that was searched.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "matches"
+      ],
+      "type": "object"
+    },
     "ForkSessionResponse": {
       "description": "**UNSTABLE**\n\nThis capability is not part of the spec yet, and may be removed or changed at any point.\n\nResponse from forking an existing session.",
       "properties": {
@@ -4446,6 +4499,45 @@
           ]
         }
       },
+      "type": "object"
+    },
+    "PathKind": {
+      "description": "What `_nori/session/find_paths` looks for.",
+      "oneOf": [
+        {
+          "const": "files",
+          "description": "Files under the root whose paths fuzzy-match the query.",
+          "type": "string"
+        },
+        {
+          "const": "folders",
+          "description": "Folders completing the folder the query names.",
+          "type": "string"
+        }
+      ]
+    },
+    "PathMatch": {
+      "description": "One `_nori/session/find_paths` match.",
+      "properties": {
+        "indices": {
+          "description": "Character positions in `path` that matched the query, for files.",
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "For files, the path relative to the root. For folders, the query\ncompleted to one folder, in the form it was typed, ending in `/`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
       "type": "object"
     },
     "PermissionOption": {
@@ -8203,6 +8295,12 @@
     },
     {
       "$ref": "#/$defs/Delegation"
+    },
+    {
+      "$ref": "#/$defs/FindPathsParams"
+    },
+    {
+      "$ref": "#/$defs/FindPathsResult"
     }
   ],
   "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",

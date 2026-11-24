@@ -12,6 +12,7 @@
 pub(super) mod adapter_modes;
 mod attach;
 pub(super) mod config;
+pub(in crate::host) mod find_paths;
 pub(super) mod handshake;
 mod list;
 pub(super) mod picker;
@@ -39,6 +40,7 @@ pub(super) fn handles(method: &str) -> bool {
         method,
         picker::PREPARE
             | picker::DISCARD
+            | find_paths::FIND_PATHS
             | "session/new"
             | "session/list"
             | "session/load"
@@ -56,7 +58,8 @@ pub(super) fn handles(method: &str) -> bool {
 pub(super) fn runs_concurrently(method: &str) -> bool {
     matches!(
         method,
-        "session/new"
+        find_paths::FIND_PATHS
+            | "session/new"
             | "session/load"
             | "session/resume"
             | "session/prompt"
@@ -295,6 +298,7 @@ impl HostService {
         match method {
             picker::PREPARE => self.prepare_selection(client, params).await,
             picker::DISCARD => self.discard_selection(client, params).await,
+            find_paths::FIND_PATHS => self.find_paths(params).await,
             "session/new" => self.new_session(client, &params).await,
             "session/list" => self.list_sessions(&params).await,
             "session/load" => self.load_session(client, &params, true).await,

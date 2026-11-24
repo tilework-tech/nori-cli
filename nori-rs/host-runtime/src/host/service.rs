@@ -171,7 +171,10 @@ impl HostService {
             };
             let (cwd, agent, prompt) = (string("cwd")?, string("agent")?, string("prompt")?);
             let mut config = match cwd {
-                Some(cwd) => self.config_in(session_folder(Path::new(cwd))?).await?,
+                Some(cwd) => {
+                    let folder = super::acp::find_paths::host_folder(cwd, &self.config.cwd);
+                    self.config_in(session_folder(&folder)?).await?
+                }
                 None => (*self.config).clone(),
             };
             if let Some(agent) = agent {
@@ -415,6 +418,7 @@ impl ManagedAgent for HostService {
                     .pointer_mut("/result/capabilities/nori_sessions")
             {
                 sessions["session_cwd"] = json!(true);
+                sessions["find_paths"] = json!(true);
                 sessions["follow_up"] = json!(1);
             }
             if initialize && let Some(result) = reply.response.get_mut("result") {

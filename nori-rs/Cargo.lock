@@ -3946,6 +3946,8 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "codex-file-search",
+ "dirs",
  "futures",
  "libc",
  "nori-config",

@@ -178,6 +178,10 @@ impl App {
                 self.chat_widget
                     .handle_context_timeline(generation, conversation_id, result);
             }
+            AppEvent::NewSessionIn(folder) => {
+                self.new_session_in(folder, tui.frame_requester());
+                tui.frame_requester().schedule_frame();
+            }
             AppEvent::NewSession => {
                 if !matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. }))
                     && self.chat_widget.has_harness_session()
@@ -856,10 +860,9 @@ impl App {
                 ));
                 tui.frame_requester().schedule_frame();
             }
-            AppEvent::StartFileSearch(query) => {
-                if !query.is_empty() {
-                    self.file_search.on_user_query(query);
-                }
+            AppEvent::StartFileSearch(query) => self.start_file_search(query),
+            AppEvent::HostFileSearchLanded { search, result } => {
+                self.on_host_file_search_landed(search, result);
             }
             AppEvent::FileSearchResult { query, matches } => {
                 self.chat_widget.apply_file_search_result(query, matches);

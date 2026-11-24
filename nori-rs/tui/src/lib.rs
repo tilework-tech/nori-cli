@@ -77,6 +77,7 @@ mod presentation;
 pub mod public_widgets;
 mod render;
 mod resume_picker;
+mod session_folder;
 mod session_log;
 mod session_path;
 mod session_preview;

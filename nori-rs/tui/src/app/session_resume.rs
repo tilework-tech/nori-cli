@@ -30,7 +30,8 @@ impl App {
             return Ok(());
         };
         let title = self.session_title(generation, super::session_overview::WHOLE_NAME);
-        let config = self.config_for_agent(&record.agent);
+        let mut config = self.config_for_agent(&record.agent);
+        config.cwd.clone_from(&record.cwd);
         let session = match self
             .session_manager
             .resume(

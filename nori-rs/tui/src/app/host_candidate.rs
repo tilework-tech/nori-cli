@@ -76,7 +76,7 @@ impl App {
         }
         self.chat_widget
             .set_login_agent_override(Some(agent_name.clone()));
-        self.begin_host_picker(agent_name, display_name, PickerPurpose::Switch);
+        self.begin_host_picker(agent_name, display_name, PickerPurpose::Switch, None);
     }
 
     /// Offer the current agent's saved sessions from a server the host
@@ -86,7 +86,7 @@ impl App {
         let display_name = nori_harness::get_agent_display_name(&agent_name);
         self.chat_widget
             .add_info_message(format!("Listing {display_name} sessions…"), None);
-        self.begin_host_picker(agent_name, display_name, PickerPurpose::Restore);
+        self.begin_host_picker(agent_name, display_name, PickerPurpose::Restore, None);
     }
 
     /// Start the terminal's session on a server the host prepares, with no
@@ -96,7 +96,7 @@ impl App {
         self.deferred_spawn_pending = false;
         let agent_name = self.config.active_agent.clone();
         let display_name = nori_harness::get_agent_display_name(&agent_name);
-        self.begin_host_picker(agent_name, display_name, PickerPurpose::Startup);
+        self.begin_host_picker(agent_name, display_name, PickerPurpose::Startup, None);
     }
 
     /// Whether a prompt or `/new` with no live session waits for the session
@@ -151,18 +151,21 @@ impl App {
     pub(crate) fn begin_host_new_session(&mut self) {
         let agent_name = self.config.active_agent.clone();
         let display_name = nori_harness::get_agent_display_name(&agent_name);
-        self.begin_host_picker(agent_name, display_name, PickerPurpose::New);
+        self.begin_host_picker(agent_name, display_name, PickerPurpose::New, None);
     }
 
-    fn begin_host_picker(
+    /// Prepare `agent_name` on the host in `folder`, or without one in the
+    /// folder of the session on screen.
+    pub(super) fn begin_host_picker(
         &mut self,
         agent_name: String,
         display_name: String,
         purpose: PickerPurpose,
+        folder: Option<PathBuf>,
     ) {
         self.discard_candidate();
         let generation = crate::chatwidget::agent::next_session_generation();
-        let cwd = self.chat_widget.config_ref().cwd.clone();
+        let cwd = folder.unwrap_or_else(|| self.chat_widget.config_ref().cwd.clone());
         let cwd = nori_harness::managed_launch::session_folder(&cwd).unwrap_or(cwd);
         // One slot per host: a newer picker replaces both this config and
         // the candidate that would have used it.
@@ -353,7 +356,12 @@ impl App {
                 return;
             }
         };
-        let config = self.config_for_agent(&agent_name);
+        let mut config = self.config_for_agent(&agent_name);
+        // The session works where the host started it, which `/new DIR`
+        // or a restored session may put outside the launch folder.
+        if let Some(record) = self.session_manager.get(&id) {
+            config.cwd = record.cwd;
+        }
         let mut init = self.chat_widget_init(
             frame_requester,
             None,

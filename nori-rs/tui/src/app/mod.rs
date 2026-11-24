@@ -76,6 +76,7 @@ pub(crate) struct App {
     pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
 
     pub(crate) file_search: FileSearchManager,
+    file_mentions: file_mentions::FileMentions,
 
     pub(crate) transcript_cells: Vec<Arc<dyn HistoryCell>>,
 
@@ -237,8 +238,10 @@ mod auth_preference;
 mod config_persistence;
 mod delegation;
 mod event_handling;
+mod file_mentions;
 mod host_candidate;
 mod host_link;
+mod new_session_folder;
 mod resize_reflow;
 mod session_deck;
 mod session_keys;
@@ -385,6 +388,7 @@ impl App {
             cloud_mode,
             analytics,
             file_search,
+            file_mentions: Default::default(),
             enhanced_keys_supported,
             transcript_cells: Vec::new(),
             session_deck: Default::default(),

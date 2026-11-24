@@ -992,7 +992,30 @@ startup, /agent row, local /resume, last /close, local /new
   travel as `savedSessionId`.
 - The request carries the agent slug and the foreground session's cwd (the
   active widget's config), so `/new` and the pickers start in the folder of the
-  session on screen. Just before each prepare the TUI hands the host its
+  session on screen. `/new DIR` passes `DIR` instead
+  ([`app/new_session_folder.rs`](src/app/new_session_folder.rs)): the widget
+  resolves it against its own folder (absolute and `~` allowed, since the
+  owned host is on this machine) and refuses a missing folder with an error,
+  keeping the text in the composer. Cloud mode refuses `/new DIR`. Tab on a
+  `/new <partial>` draft completes the folder against the foreground session's
+  folder (`config.cwd`) from the local disk, since the owned host runs on
+  this machine
+  ([`chatwidget/new_session_folder.rs`](src/chatwidget/new_session_folder.rs)),
+  with the same shell-like rules as `nori attach`'s local completion
+  ([`session_folder.rs`](src/session_folder.rs)): the longest shared prefix,
+  `/` after a single match, dot-folders hidden unless the prefix starts with
+  `.`, and several matches listed as an info message in history. Tab is
+  consumed for any one-word `/new` draft, even with no match. It does not
+  complete in cloud mode or while a popup is open. A widget activated through the
+  host takes its folder from the host's session record (`SessionManager::get`),
+  as does resuming a failed session, so a session started or restored outside
+  the launch folder keeps working there.
+- `@` file mentions ([`app/file_mentions.rs`](src/app/file_mentions.rs)) for
+  a widget with a host session go to the owned host's
+  `_nori/session/find_paths` for that session, one search in flight with the
+  newest query sent when it lands, and only matches for the session still on
+  screen reach the popup. A widget without one (cloud mode, or before the first
+  session starts) uses the local `FileSearchManager` in the launch folder. Just before each prepare the TUI hands the host its
   current `config_for_agent(agent)` through `ForegroundConfig` (see
   [Owned host](#owned-host)); the host uses it as the base for agents this
   pipe prepares, so settings changed since launch (such as a model default
