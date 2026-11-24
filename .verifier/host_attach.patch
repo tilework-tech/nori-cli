@@ -1,0 +1,97 @@
+diff --git a/nori-rs/tui-pty-e2e/tests/host_attach.rs b/nori-rs/tui-pty-e2e/tests/host_attach.rs
+index 0470c058c..c79f5137e 100644
+--- a/nori-rs/tui-pty-e2e/tests/host_attach.rs
++++ b/nori-rs/tui-pty-e2e/tests/host_attach.rs
+@@ -1,5 +1,4 @@
+ //! Detached hosts and independent attached terminal clients.
+-#![cfg(target_os = "linux")]
+ 
+ use std::io::Read;
+ use std::io::Seek;
+@@ -1130,3 +1129,86 @@ fn cancel_in_an_attached_terminal_ends_the_running_turn() {
+         host.list()
+     );
+ }
++
++/// Verifier-only: the attach Escape sequence with every step recorded.
++#[test]
++fn verifier_attach_escape_trace() {
++    fn count_cancels(dir: &std::path::Path) -> usize {
++        let mut n = 0;
++        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
++            let path = entry.path();
++            if path.is_dir() {
++                n += count_cancels(&path);
++            } else if let Ok(bytes) = std::fs::read(&path) {
++                n += String::from_utf8_lossy(&bytes).matches("Mock agent: cancel").count();
++            }
++        }
++        n
++    }
++    let probe = std::env::var_os("PTY_PROBE_DIR").map(PathBuf::from);
++    let host = Host::new();
++    host.start();
++    let mut client = host.create_session();
++    let mut step = 0;
++    let mut record = |client: &mut Client, host: &Host, name: &str| {
++        step += 1;
++        let ls = host.list();
++        let cancels = count_cancels(host.home.path());
++        let screen = client.screen_contents();
++        eprintln!("VERIFIER step {step} {name}: cancels={cancels} row={:?}", ls.lines().nth(1).unwrap_or_default());
++        if let Some(dir) = &probe {
++            std::fs::create_dir_all(dir).unwrap();
++            std::fs::write(dir.join(format!("{step:02}-{name}.screen.txt")), &screen).unwrap();
++            std::fs::write(dir.join(format!("{step:02}-{name}.host-ls.txt")), &ls).unwrap();
++            std::fs::write(dir.join(format!("{step:02}-{name}.raw")), client.raw_output()).unwrap();
++            std::fs::write(dir.join(format!("{step:02}-{name}.cancels")), cancels.to_string()).unwrap();
++        }
++        (screen, ls, cancels)
++    };
++    let working = |host: &Host| {
++        host.list()
++            .lines()
++            .nth(1)
++            .is_some_and(|row| row.contains("working"))
++    };
++    client.submit_input("mock:stream-until-cancel").unwrap();
++    let deadline = Instant::now() + TIMEOUT;
++    while !working(&host) {
++        assert!(Instant::now() < deadline, "the turn never started");
++        client.settle(Duration::from_millis(50));
++    }
++    record(&mut client, &host, "turn-running");
++    client.send_str("/").unwrap();
++    client
++        .wait_for_text("not available in nori attach yet", TIMEOUT)
++        .expect("the menu opens");
++    client.settle(Duration::from_millis(500));
++    let (_, ls, cancels) = record(&mut client, &host, "menu-open");
++    assert!(ls.contains("working"));
++    assert_eq!(cancels, 0);
++
++    client.send_key(Key::Escape).unwrap();
++    client
++        .wait_for(|s| !s.contains("not available in nori attach yet"), TIMEOUT)
++        .expect("the first Escape closes the menu");
++    client.settle(Duration::from_millis(1500));
++    let (screen, ls, cancels) = record(&mut client, &host, "first-escape");
++    assert!(!screen.contains("not available in nori attach yet"), "menu stays closed");
++    assert!(
++        screen.lines().any(|l| l.trim_start().trim_start_matches('›').trim() == "/"),
++        "the draft keeps the slash: {screen}"
++    );
++    assert!(ls.lines().nth(1).unwrap().contains("working"), "turn still running: {ls}");
++    assert_eq!(cancels, 0, "the first Escape sends no cancel");
++
++    client.send_key(Key::Escape).unwrap();
++    let deadline = Instant::now() + TIMEOUT;
++    while working(&host) {
++        assert!(Instant::now() < deadline, "the second Escape ends the turn");
++        client.settle(Duration::from_millis(50));
++    }
++    client.settle(Duration::from_millis(2000));
++    let (_, ls, cancels) = record(&mut client, &host, "second-escape");
++    assert!(!ls.lines().nth(1).unwrap().contains("working"), "{ls}");
++    assert_eq!(cancels, 1, "exactly one cancel reaches the adapter");
++}

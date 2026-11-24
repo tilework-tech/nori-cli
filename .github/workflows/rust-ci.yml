@@ -1,7 +1,7 @@
 name: rust-ci
 on:
   push:
-    branches: ['verify/pr-751-5cb13fcd-native-drain']
+    branches: ['verify/pr-751-5cb13fcd-native-attach']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,7 +27,7 @@ jobs:
         include:
           - runner: blacksmith-6vcpu-macos-15
             target: aarch64-apple-darwin
-            name: macOS exact head
+            name: macOS attach PTY
             mode: exact
 
     steps:
@@ -43,6 +43,10 @@ jobs:
           git checkout 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- .
           git diff --quiet 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- . && echo "nori-rs matches 5cb13fcd"
           test -f tui-pty-e2e/tests/slash_menu_escape.rs
+          git -C .. apply .verifier/host_attach.patch
+          git diff --stat 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- .
+          test "$(git diff --name-only 5cb13fcd9f79caa15c7d56100f23f776ce3bf915 -- .)" = "nori-rs/tui-pty-e2e/tests/host_attach.rs"
+          ! head -3 tui-pty-e2e/tests/host_attach.rs | grep -q 'target_os'
           uname -sm
 
       - name: Free disk space
@@ -141,34 +145,18 @@ jobs:
           cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
       - name: Binary identity
         run: shasum -a 256 target/aarch64-apple-darwin/ci-test/nori target/aarch64-apple-darwin/ci-test/nori-tui | tee $GITHUB_WORKSPACE/bins-before.txt
-      - name: Driver A-B on one build
-        if: matrix.mode == 'ab'
+      - name: Attach PTY on macOS
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
+          set -o pipefail
           out=$GITHUB_WORKSPACE/ab; mkdir -p $out
-          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-run
-          suites="--test host_startup --test host_new_session --test host_session_picker --test host_agent_switch"
-          run() { d=$1; r=$2; mkdir -p $out/$d; env PTY_DRIVER=$d PTY_PROBE_DIR=$out/$d ${3:-PTY_NONE=1} cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast $suites 2>&1 | tee -a $out/$d/full.txt | grep -E "^test .* (ok|FAILED)$" | sed "s/^/$d round $r: /"; }
-          for r in $(seq 1 12); do
-            if [ $r -le 2 ]; then run sleep $r PTY_SAMPLE=1; else run sleep $r; fi
-            run drain $r
-            if [ $r -le 6 ]; then run human $r; fi
-          done | tee $out/results.txt
-          for d in sleep drain human; do echo "$d: $(grep -c "^$d .* ok$" $out/results.txt) ok, $(grep -c "^$d .*FAILED$" $out/results.txt) failed"; done | tee $out/summary.txt
-          shasum -a 256 target/aarch64-apple-darwin/ci-test/nori target/aarch64-apple-darwin/ci-test/nori-tui | diff $GITHUB_WORKSPACE/bins-before.txt - && echo "binaries unchanged across drivers" | tee -a $out/summary.txt
-      - name: Exact head full suites
-        if: matrix.mode == 'exact'
-        env:
-          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
-        run: |
-          out=$GITHUB_WORKSPACE/ab; mkdir -p $out
-          for p in tui-pty-e2e nori-harness nori-host-runtime nori-acp-host nori-config nori-tui nori-cli nori-auth-providers; do
-            cargo test --profile ci-test --target ${{ matrix.target }} --package $p --no-fail-fast 2>&1 | tee $out/full-$p.txt | grep -E "^test result:" | sed "s/^/$p: /"
-          done | tee $out/suites.txt
-          for r in $(seq 1 10); do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_startup --test host_new_session --test host_session_picker --test host_agent_switch --test slash_menu_escape --test host_attach 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $r: /"; done | tee $out/repeat.txt
-          echo "repeat: $(grep -c ' ok$' $out/repeat.txt) ok, $(grep -c FAILED $out/repeat.txt) failed" | tee -a $out/suites.txt
-          ! grep -q FAILED $out/suites.txt $out/repeat.txt
+          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --test host_attach --test slash_menu_escape --no-run
+          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach --test slash_menu_escape -- --nocapture 2>&1 | tee $out/full-attach.txt | grep -E "^test |^test result:|VERIFIER" || true
+          for r in $(seq 1 10); do PTY_PROBE_DIR=$out/probe-$r cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach --test slash_menu_escape -- --nocapture escape 2>&1 | tee $out/round-$r.txt | grep -E "^test .* (ok|FAILED)$|VERIFIER" | sed "s/^/round $r: /"; done | tee $out/repeat.txt
+          echo "repeat: $(grep -c ' ok$' $out/repeat.txt) ok, $(grep -c FAILED $out/repeat.txt) failed" | tee $out/summary.txt
+          grep -E "^test result:" $out/full-attach.txt | tee -a $out/summary.txt
+          ! grep -q FAILED $out/full-attach.txt $out/repeat.txt
       - name: Upload synthetic evidence
         if: always()
         uses: actions/upload-artifact@v4
