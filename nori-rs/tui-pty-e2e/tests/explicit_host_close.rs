@@ -59,6 +59,13 @@ fn refused_close_keeps_the_original_session_until_the_retry_releases_it() {
         TIMEOUT,
     )
     .unwrap();
+    tui.wait_for_text("Sample turn complete.", TIMEOUT).unwrap();
+    let screen = tui.screen_contents();
+    assert_eq!(
+        screen.matches("sample close declined").count(),
+        1,
+        "one refusal per refused close:\n{screen}"
+    );
     tui.submit_input("/close").unwrap();
     tui.wait_for_text("Start a new session", TIMEOUT).unwrap();
     let trace = fs::read_to_string(home.path().join("fixture-traffic")).unwrap();
