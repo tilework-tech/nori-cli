@@ -1,0 +1,27 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/lantern-lab · Agent approvals
+  Agent        Mock ACP · Mock Default Model · Medium
+
+
+› Count the lanterns
+
+
+• Six lanterns are lit.
+
+
+› $ for skill listing
+
