@@ -35,6 +35,9 @@ used in production.
   that host: it uses the home's running host when it can and an in-process
   host otherwise.
 - `tui/` renders events and forwards user intent through typed harness methods.
+  It never builds a session manager: the CLI hands it an in-process host that
+  it owns for its run and reaches through an ACP pipe plus that host's own
+  manager.
   Its [attach frontend](tui/src/attach/docs.md) instead consumes host-owned
   envelopes and sends managed commands; closing that terminal never ends the
   host's sessions.

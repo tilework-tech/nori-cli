@@ -4,25 +4,28 @@ Path: @/nori-rs/tui/src/host_client
 
 ### Overview
 
-- A client of a background `nori host`: one authenticated connection, JSON-RPC
-  request correlation, and the host's notifications, with no terminal state.
+- A client of a Nori host: one connection, JSON-RPC request correlation, and
+  the host's notifications, with no terminal state. The connection is either
+  an authenticated socket to a background `nori host` or an in-process pipe to
+  the host that plain `nori` owns.
 - Separates wire traffic from frontends. A frontend names what it wants as a
   `HostCall`, attaches its own tag, and gets back `HostEvent`s with replies
   matched to that tag.
-- Exists so more than one frontend can drive the host through the same code.
-  The [attach frontend](../attach/docs.md) is the first user; the plan is for
-  the normal `nori` TUI to become a host client through it too, because the
-  host contract says the TUI must not own its own session manager.
+- Exists so more than one frontend can drive a host through the same code,
+  because the host contract says the TUI must not own its own session manager.
+  The [attach frontend](../attach/docs.md) drives a background host over the
+  socket; the normal `nori` TUI drives its [owned host](../owned_host.rs) over
+  the pipe through [`HostLink`](../app/host_link.rs).
 
 ### How it fits into the larger codebase
 
 ```
 CLI host dispatch ──endpoint, token, refresh callback──▶ HostEndpoint
                                                           │
-frontend (attach Runtime) ──HostCall + tag──▶ HostSessionClient ──JSON──▶ drive()
-          ▲                                       │                        │
-          └────────────── HostEvent<tag> ◀────────┴──── ConnectionEvent ◀──┘
-                                                               ManagedClient socket
+attach Runtime ──HostCall + tag──▶ HostSessionClient ──JSON──▶ drive()      ── ManagedClient socket
+App (HostLink) ──HostCall + tag──▶ HostSessionClient ──JSON──▶ drive_pipe() ── OwnedHost line channels
+      ▲                                   │                        │
+      └──────── HostEvent<tag> ◀──────────┴──── ConnectionEvent ◀──┘
 ```
 
 - [CLI host dispatch](../../../cli/src/host/docs.md) resolves the endpoint and
@@ -33,10 +36,15 @@ frontend (attach Runtime) ──HostCall + tag──▶ HostSessionClient ──
   [ManagedClient](../../../acp-host/src/remote/client.rs). This module never
   touches the host's sessions or agent processes; the host keeps mutation
   policy and controller ownership.
-- The frontend owns two channels: it spawns [`drive`](connection.rs) with the
-  request receiver and event sender, and builds `HostSessionClient` over the
-  request sender. Each `ConnectionEvent` it receives goes through
-  `HostSessionClient::incoming`.
+- The frontend owns two channels: it spawns a driver ([`drive`](connection.rs)
+  for a socket, [`drive_pipe`](pipe.rs) for a pipe) with the request receiver
+  and event sender, and builds `HostSessionClient` over the request sender.
+  Each `ConnectionEvent` it receives goes through `HostSessionClient::incoming`,
+  so correlation and event mapping are identical for both transports.
+- The pipe's two line channels come from the CLI's
+  [owned TUI host](../../../cli/src/host/docs.md#owned-tui-host), which serves
+  them with `RemoteAcpServer::serve_host_pipe`. That server makes every pipe
+  client the controller.
 - Method names and parameter shapes follow the
   [host contract](../../../../docs/remote-control.md#11-background-host-and-attached-terminals).
   Calls cover initialize, session list, subscribe, take control, new, prompt,
@@ -77,6 +85,11 @@ frontend (attach Runtime) ──HostCall + tag──▶ HostSessionClient ──
 - On an authentication rejection the driver calls the local token refresh
   callback once and retries once with the new token. No callback, an
   unreadable token, or a second rejection stops the driver.
+- [Pipe driving](pipe.rs) has no token, liveness deadline, or reconnect. It
+  reports `Connected` at once, forwards each request as one JSON line, and
+  parses each host line. A line that is not JSON is logged and skipped. When
+  the host closes its end, or stops accepting lines, the driver reports
+  `Stopped` and ends for good.
 
 ### Things to Know
 
@@ -86,7 +99,7 @@ frontend (attach Runtime) ──HostCall + tag──▶ HostSessionClient ──
   `Disconnected`. Deciding whether an outcome is uncertain, and warning, is
   the frontend's job. Only event subscriptions resume, from the frontend's own
   cursors.
-- The liveness deadline assumes steady traffic from the host. The client does
+- The liveness deadline (socket only) assumes steady traffic from the host. The client does
   not generate it: the frontend must poll (attach refreshes the session list
   every second) or an idle but healthy connection times out.
 - After `Stopped` or `stop()` the client sends nothing and returns `Unsent`
@@ -97,7 +110,8 @@ frontend (attach Runtime) ──HostCall + tag──▶ HostSessionClient ──
   against the client's ids.
 - Unit [tests](tests.rs) cover correlation and wire mapping;
   [connection tests](connection_tests.rs) cover token refresh, refresh
-  rejection, remote auth failure, and host-restart detection. The
+  rejection, remote auth failure, and host-restart detection;
+  [pipe tests](pipe_tests.rs) cover the pipe driver. The
   [PTY scenarios](../../../tui-pty-e2e/tests/host_attach.rs) exercise dropped
   and silently stalled TCP connections end to end.
 

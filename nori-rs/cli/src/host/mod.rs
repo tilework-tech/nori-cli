@@ -13,6 +13,7 @@ mod state;
 mod stdio;
 mod table;
 mod transcripts;
+mod tui_owned;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -39,6 +40,7 @@ pub(crate) use self::oneshot::run as run_one_shot;
 use self::service::HostService;
 use self::state::HostFiles;
 use self::state::HostState;
+pub(crate) use self::tui_owned::launcher as tui_host;
 
 #[derive(Debug, Parser)]
 pub(crate) struct HostCommand {

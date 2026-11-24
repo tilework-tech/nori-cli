@@ -1,0 +1,125 @@
+use std::time::Duration;
+
+use nori_config::NoriConfig;
+use nori_config::NoriConfigOverrides;
+use nori_protocol::SessionStatus;
+use pretty_assertions::assert_eq;
+use serde_json::Value;
+use serde_json::json;
+use tempfile::TempDir;
+
+use super::launcher;
+
+/// A home whose default agent is the mock, which the registry finds beside
+/// the test binary.
+fn config(home: &TempDir) -> (NoriConfig, NoriConfigOverrides) {
+    let path = home.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "agent = \"mock-model\"\napproval_policy = \"on-request\"\n",
+    )
+    .unwrap();
+    let overrides = NoriConfigOverrides {
+        cwd: Some(home.path().to_owned()),
+        ..Default::default()
+    };
+    (
+        NoriConfig::load_from_path_with_overrides(&path, overrides.clone()).unwrap(),
+        overrides,
+    )
+}
+
+async fn call(host: &mut nori_tui::OwnedHost, id: i64, method: &str, params: Value) -> Value {
+    host.to_host
+        .send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}).to_string())
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            let line = host.from_host.recv().await.expect("host stopped answering");
+            let message: Value = serde_json::from_str(&line).unwrap();
+            if message["id"] == id && message.get("method").is_none() {
+                break message;
+            }
+        }
+    })
+    .await
+    .expect("host reply")
+}
+
+#[tokio::test]
+async fn the_pipe_client_and_the_tui_share_one_host() {
+    let home = TempDir::new().unwrap();
+    let (config, overrides) = config(&home);
+    let mut host = launcher()(&config, &overrides).unwrap();
+
+    let initialized = call(&mut host, 1, "initialize", json!({"protocolVersion":1})).await;
+    assert_eq!(initialized["result"]["control"]["role"], "controller");
+    let created = call(
+        &mut host,
+        2,
+        "session/new",
+        json!({"cwd": home.path(), "mcpServers": []}),
+    )
+    .await;
+    let session_id = created["result"]["sessionId"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no session: {created}"))
+        .to_owned();
+
+    let shared: Vec<String> = host
+        .manager
+        .list()
+        .into_iter()
+        .map(|record| record.conversation_id.to_string())
+        .collect();
+    assert_eq!(shared, vec![session_id]);
+}
+
+#[tokio::test]
+async fn stopping_the_host_ends_its_sessions() {
+    let home = TempDir::new().unwrap();
+    let (config, overrides) = config(&home);
+    let mut host = launcher()(&config, &overrides).unwrap();
+    call(&mut host, 1, "initialize", json!({"protocolVersion":1})).await;
+    call(
+        &mut host,
+        2,
+        "session/new",
+        json!({"cwd": home.path(), "mcpServers": []}),
+    )
+    .await;
+    let manager = host.manager.clone();
+    let mut from_host = host.from_host;
+    let draining = tokio::spawn(async move { while from_host.recv().await.is_some() {} });
+
+    (host.stop)().await.unwrap();
+
+    let live = |manager: &nori_harness::session_manager::SessionManager| {
+        manager
+            .list()
+            .into_iter()
+            .filter(|record| {
+                matches!(
+                    record.status,
+                    SessionStatus::Starting
+                        | SessionStatus::Working
+                        | SessionStatus::WaitingOnYou
+                        | SessionStatus::Ready
+                )
+            })
+            .count()
+    };
+    let settled = tokio::time::timeout(Duration::from_secs(5), async {
+        while live(&manager) > 0 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await;
+    assert!(
+        settled.is_ok(),
+        "sessions still running after stop: {:?}",
+        manager.list()
+    );
+    draining.await.unwrap();
+}

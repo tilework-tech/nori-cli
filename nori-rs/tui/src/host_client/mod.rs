@@ -8,6 +8,9 @@
 mod connection;
 #[cfg(test)]
 mod connection_tests;
+mod pipe;
+#[cfg(test)]
+mod pipe_tests;
 #[cfg(test)]
 mod tests;
 
@@ -15,6 +18,7 @@ use std::collections::HashMap;
 
 pub(crate) use connection::ConnectionEvent;
 pub(crate) use connection::drive;
+pub(crate) use pipe::drive_pipe;
 use serde_json::Value;
 use serde_json::json;
 use tokio::sync::mpsc;

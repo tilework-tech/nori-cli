@@ -437,6 +437,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 interactive,
                 codex_linux_sandbox_exe,
                 analytics_reporter(SessionMode::Interactive),
+                host::tui_host(),
             )
             .await?;
             handle_app_exit(exit_info)?;
@@ -497,6 +498,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 interactive,
                 codex_linux_sandbox_exe,
                 analytics_reporter(SessionMode::Interactive),
+                host::tui_host(),
             )
             .await?;
             handle_app_exit(exit_info)?;
@@ -544,6 +546,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 interactive,
                 codex_linux_sandbox_exe,
                 analytics_reporter(SessionMode::Cloud),
+                host::tui_host(),
             )
             .await?;
             handle_app_exit(exit_info)?;

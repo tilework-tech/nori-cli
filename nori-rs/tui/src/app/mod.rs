@@ -221,6 +221,7 @@ mod auth_preference;
 mod config_persistence;
 mod delegation;
 mod event_handling;
+mod host_link;
 mod resize_reflow;
 mod session_deck;
 mod session_keys;
@@ -234,6 +235,8 @@ mod thought_setting;
 pub(crate) use session_view::route_session_history_event;
 
 impl App {
+    /// Runs the TUI on `host`, which this terminal owns: the host stops when
+    /// the TUI returns, on every path.
     #[allow(clippy::too_many_arguments)]
     pub async fn run(
         tui: &mut tui::Tui,
@@ -246,6 +249,45 @@ impl App {
         cloud_mode: bool,
         cloud_onboard: bool,
         analytics: Option<nori_installed::AnalyticsReporter>,
+        host: crate::OwnedHost,
+    ) -> Result<AppExitInfo> {
+        // Sessions belong to the host the CLI built for this run.
+        let (session_manager, mut host) = host_link::HostLink::start(host);
+        let ran = Self::run_on_host(
+            tui,
+            auth_manager,
+            config,
+            initial_prompt,
+            initial_images,
+            resume_selection,
+            vertical_footer,
+            cloud_mode,
+            cloud_onboard,
+            analytics,
+            session_manager,
+            &mut host,
+        )
+        .await;
+        let stopped = host.stop().await;
+        let exit = ran?;
+        stopped.map_err(|error| color_eyre::eyre::eyre!(error))?;
+        Ok(exit)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn run_on_host(
+        tui: &mut tui::Tui,
+        auth_manager: Arc<AuthManager>,
+        config: NoriConfig,
+        initial_prompt: Option<String>,
+        initial_images: Vec<PathBuf>,
+        resume_selection: ResumeSelection,
+        vertical_footer: bool,
+        cloud_mode: bool,
+        cloud_onboard: bool,
+        analytics: Option<nori_installed::AnalyticsReporter>,
+        session_manager: nori_harness::session_manager::SessionManager,
+        host: &mut host_link::HostLink,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -258,12 +300,6 @@ impl App {
         // a later user/session decision, after any per-session skillset setup.
         let needs_deferred_spawn = true;
         let mut pending_session_activation = None;
-        let session_manager = nori_harness::session_manager::SessionManager::new(
-            nori_harness::session_manager::SessionManagerConfig {
-                max_sessions: config.max_sessions,
-                ..nori_harness::session_manager::SessionManagerConfig::default()
-            },
-        );
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -480,14 +516,22 @@ impl App {
 
         tui.frame_requester().schedule_frame();
 
-        while select! {
-            Some(event) = app_event_rx.recv() => {
-                app.handle_event(tui, event).await?
-            }
-            Some(event) = tui_events.next() => {
-                app.handle_tui_event(tui, event).await?
-            }
-        } {}
+        let ran = async {
+            while select! {
+                Some(event) = app_event_rx.recv() => {
+                    app.handle_event(tui, event).await?
+                }
+                Some(event) = tui_events.next() => {
+                    app.handle_tui_event(tui, event).await?
+                }
+                Some(event) = host.next() => {
+                    host.handle(event).map_err(|error| color_eyre::eyre::eyre!(error))?;
+                    true
+                }
+            } {}
+            Ok::<(), color_eyre::eyre::Report>(())
+        }
+        .await;
 
         app.cancel_primary_agent_preparation();
         if let Some(agent) = app.prepared_agent.take() {
@@ -495,6 +539,7 @@ impl App {
         }
         app.prepared_agent_initial_context = None;
         app.discard_candidate();
+        ran?;
 
         // Don't clear terminal to allow exit message to remain visible
         // tui.terminal.clear()?;

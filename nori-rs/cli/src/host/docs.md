@@ -21,6 +21,8 @@ Path: @/nori-rs/cli/src/host
   machine can serve one launch as plain ACP the
   [same way](#managed-launch-on-stdio). One-shot `nori exec "prompt"` is a
   [thin ACP client](#one-shot-exec) of a running host or of an in-process one.
+  The interactive TUI (`nori`, `nori resume`, `nori cloud`) runs on an
+  [in-process host it owns](#owned-tui-host) for exactly its own lifetime.
 - Owns Unix process lifetime and private host files; protocol framing remains
   in [acp-host](../../../acp-host/docs.md), and session policy remains in the
   [harness](../../../harness/docs.md).
@@ -49,6 +51,9 @@ attach TUI ------------------------+                             v
 host ls / stop / new --------------+                       SessionManager
 stdio client (joined) -------------+                             |
 remote ACP client (via TLS front) -+                       agent processes
+
+plain nori TUI --pipe (controller)--> owned HostService --> its own SessionManager
+        \------- same manager, in-process features ------------^
 ```
 
 ### Core Implementation
@@ -705,6 +710,52 @@ nori exec "prompt"
   whether or not the run succeeded.
 
 See the [exec host client cases](../../tests/exec_host_client.rs).
+
+#### Owned TUI host
+
+[`tui_owned.rs`](tui_owned.rs) builds the host that plain `nori` runs on, so
+the TUI never constructs a session manager of its own (host contract: the TUI
+must not own its own `SessionManager`) while keeping the foreground lifetime
+users expect. [CLI dispatch](../main.rs) passes `host::tui_host()`, a
+`nori_tui::HostLauncher`, to `nori_tui::run_main` on the interactive, resume,
+and cloud paths.
+
+```text
+nori_tui::run_main ──resolved config + overrides──▶ launcher()
+                                                       │
+                       fresh SessionManager (max_sessions) ─▶ host_service(...)
+                                                       │
+                     RemoteAcpServer::serve_host_pipe ◀┘
+                                                       │
+OwnedHost { manager, to_host, from_host, stop } ◀──────┘ ──▶ TUI App
+```
+
+- **Build.** The launcher runs after the TUI has resolved its configuration,
+  any onboarding, and automatic worktree creation (which rewrites the cwd
+  override, so the host's folder matches the TUI's). It sizes a fresh manager
+  by `max_sessions` and builds the same `HostService` as the other local hosts
+  through the shared `host_service` constructor, without managed launches or
+  recovery. It does not initialize the agent registry: the TUI already did,
+  including agents its caller injected (such as `nori cloud`'s), and
+  reloading from configuration would drop them.
+- **Two halves, one host.** The TUI receives the host's own manager plus an
+  ACP pipe that `serve_host_pipe` always treats as the controller. Both reach
+  the same sessions. Foreground features with no wire method yet (compaction,
+  fork and undo, shell, history, goals, custom prompts, `/context`, queue
+  reclaim) use the manager directly; in this layer session operations also
+  still go through the manager. Only this launcher builds an `OwnedHost`, so
+  `nori attach` never holds the in-process half.
+- **Private.** Like the in-process exec host, it binds no socket, writes no
+  token or discovery files, and takes no lock. It and a background host in
+  the same `NORI_HOME` never see each other's live sessions.
+- **Stop.** `stop` ends pipe serving, shuts every host session down with zero
+  grace, and fails if serving failed or any session timed out or failed to
+  stop. The TUI calls it once after its main loop, including when the loop
+  ended with an error, so agent processes never outlive the terminal.
+
+See the [owned host tests](tui_owned_tests.rs) and the PTY case in
+[exit cleanup](../../../tui-pty-e2e/tests/acp_exit_cleanup.rs) that quits
+mid-turn.
 
 #### Managed launch on stdio
 
