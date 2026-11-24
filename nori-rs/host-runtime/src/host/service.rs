@@ -65,6 +65,18 @@ struct LaunchScope {
 }
 
 impl HostService {
+    /// Give adapters time to clean up on EOF. The manager drains all sessions
+    /// concurrently; the remaining time in its five-second shutdown budget
+    /// lets the Unix child watcher kill and reap an uncooperative group.
+    pub async fn shutdown_sessions(&self) -> anyhow::Result<()> {
+        let report = self.manager.shutdown(Duration::from_secs(2)).await;
+        anyhow::ensure!(
+            report.timed_out.is_empty() && report.failed.is_empty(),
+            "some sessions did not stop cleanly: {report:?}"
+        );
+        Ok(())
+    }
+
     /// Build the single session manager served by every connection to this host.
     pub fn new(
         config: NoriConfig,

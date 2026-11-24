@@ -641,3 +641,6 @@ mod find_paths;
 
 #[path = "host_lifecycle/startup.rs"]
 mod startup;
+
+#[path = "host_lifecycle/shutdown.rs"]
+mod shutdown;

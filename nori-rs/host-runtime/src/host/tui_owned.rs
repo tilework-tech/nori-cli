@@ -10,7 +10,6 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
 
 use nori_config::NoriConfig;
 use nori_config::NoriConfigOverrides;
@@ -96,13 +95,9 @@ fn serve(host: Arc<HostService>) -> OwnedHost {
             Box::pin(async move {
                 let _ = stop.send(());
                 let served = served.await;
-                let report = host.manager.shutdown(Duration::ZERO).await;
+                let shutdown = host.shutdown_sessions().await;
                 served??;
-                anyhow::ensure!(
-                    report.timed_out.is_empty() && report.failed.is_empty(),
-                    "some sessions did not stop cleanly: {report:?}"
-                );
-                Ok(())
+                shutdown
             })
         }),
     }
