@@ -120,6 +120,7 @@ fn quitting_stops_a_private_host_with_an_unanswered_close() {
 }
 
 /// `nori host` and `nori attach` on the fixture home, with `args` after them.
+/// Background hosts are exercised on Linux only, like `host_attach.rs`.
 #[cfg(target_os = "linux")]
 fn host_terminal(folder: &std::path::Path, args: &[&str]) -> TuiSession {
     let binary = std::env::current_exe()
@@ -155,10 +156,10 @@ impl Drop for StopHost {
 fn attach_reports_a_refused_close_once_and_keeps_the_session_for_a_retry() {
     let (_home, folder) = fixture_home(&[]);
     let mut host = host_terminal(&folder, &["host", "--port", "0"]);
+    let _stop = StopHost(folder.clone());
     host.wait_for(|screen| screen.to_lowercase().contains("started"), TIMEOUT)
         .unwrap();
     assert!(host.wait_for_process_exit(TIMEOUT));
-    let _stop = StopHost(folder.clone());
 
     let mut tui = host_terminal(&folder, &["attach"]);
     tui.wait_for_text("Sessions", TIMEOUT).unwrap();
@@ -194,7 +195,8 @@ fn attach_reports_a_refused_close_once_and_keeps_the_session_for_a_retry() {
     tui.submit_input("/close").unwrap();
     tui.wait_for(|_| traffic().matches("session/close").count() == 2, TIMEOUT)
         .unwrap();
-    tui.wait_for_text("ended", TIMEOUT).unwrap();
+    tui.wait_for_text("Session ended. Use /new", TIMEOUT)
+        .unwrap();
     let calls: Vec<_> = traffic()
         .lines()
         .filter(|line| line.starts_with("session/close") || line.starts_with("session/prompt"))

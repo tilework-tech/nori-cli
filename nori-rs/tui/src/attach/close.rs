@@ -8,18 +8,28 @@ use crate::host_client::HostCall;
 
 impl Runtime {
     pub(super) fn close(&mut self, session_id: String) {
-        self.state
-            .conversations
-            .entry(session_id.clone())
-            .or_default()
-            .close_refusal
-            .start();
-        self.send(
+        if self.client.has_pending(
+            |pending| matches!(pending, Pending::Close { session_id: closing } if *closing == session_id),
+        ) {
+            self.state.show_notice("This session is already closing.");
+            return;
+        }
+        let sent = self.send(
             HostCall::Close {
                 session_id: session_id.clone(),
             },
-            Pending::Close { session_id },
+            Pending::Close {
+                session_id: session_id.clone(),
+            },
         );
+        if sent {
+            self.state
+                .conversations
+                .entry(session_id)
+                .or_default()
+                .close_refusal
+                .start();
+        }
     }
 
     /// The host refused the close with `text`, which carries the adapter's
@@ -37,8 +47,9 @@ impl Runtime {
         conversation
             .parts
             .push(Part::Notice(format!("Failed to close the session: {text}")));
-        self.state.notice = (self.state.selected.as_deref() != Some(session_id))
-            .then(|| format!("Failed to close session {session_id}: {text}"));
+        if self.state.selected.as_deref() != Some(session_id) && self.state.stopped.is_none() {
+            self.state.notice = Some(format!("Failed to close session {session_id}: {text}"));
+        }
     }
 
     /// The close was accepted, or the connection dropped before it was

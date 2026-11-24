@@ -162,9 +162,10 @@ impl Runtime {
         self.note_request_on_screen();
     }
 
-    pub fn send(&mut self, call: HostCall, pending: Pending) {
+    /// Whether the call was handed to the connection.
+    pub fn send(&mut self, call: HostCall, pending: Pending) -> bool {
         if self.state.stopped.is_some() {
-            return;
+            return false;
         }
         let awaiting_cancel = match &pending {
             Pending::CancelObserved { session_id, .. } => Some(session_id.clone()),
@@ -181,13 +182,14 @@ impl Runtime {
         if self.client.request(call, pending).is_err() {
             self.state
                 .show_notice("Host connection worker stopped. Detach and try again.");
-            return;
+            return false;
         }
         if let Some(session_id) = awaiting_cancel
             && let Some(conversation) = self.state.conversations.get_mut(&session_id)
         {
             conversation.cancel_delivery = CancelDelivery::AwaitingHost;
         }
+        true
     }
 
     /// `session/resume` for `id` in its folder; a host too old to report
@@ -244,6 +246,7 @@ impl Runtime {
             HostEvent::Disconnected { reason, unanswered } => {
                 for conversation in self.state.conversations.values_mut() {
                     conversation.submitted_prompt = None;
+                    conversation.close_refusal.expire_report();
                     if conversation.cancel_delivery == CancelDelivery::AwaitingHost {
                         conversation.cancel_delivery = CancelDelivery::Unknown;
                     }
