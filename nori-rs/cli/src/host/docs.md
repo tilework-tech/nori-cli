@@ -142,11 +142,12 @@ plain nori TUI --pipe (controller)--> owned HostService --> its own SessionManag
   in `host.json` and `state.json`; a managed host publishes `/sessions`
   instead. The listener is bound with `bind_host_with_limit` and
   `[host] max_clients` (at least 1), so one client past the limit gets HTTP
-  503. A full host still answers `nori host` with "already running"
-  ([start](start.rs) checks the host lock when its probe is refused), and
-  `nori host stop` sends SIGTERM to the locked host's PID when its connection
-  is refused. A
-  client's disconnect never ends sessions; it reconnects with a new
+  503. Readiness and [stop](stop.rs) use reserved authenticated connections.
+  Stop verifies the discovery instance on the connection and requests shutdown
+  there. It holds the open `state.json` file and waits for the host to release
+  its lock on that inode after cleanup. A replacement publishes a fresh inode.
+  Older hosts with unlocked state files are observed through the lifetime lock
+  and per-start token. A client's disconnect never ends sessions; it reconnects with a new
   `initialize` and `session/load` or `session/resume`.
   Managed mode (`[host] managed = true`) does not serve these methods and
   keeps its supervisor wire unchanged. The socket loop in

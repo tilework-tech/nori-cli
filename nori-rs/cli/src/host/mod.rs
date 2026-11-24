@@ -6,12 +6,12 @@ mod oneshot;
 mod session_lookup;
 mod start;
 mod stdio;
+mod stop;
 mod table;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::Duration;
-use std::time::Instant;
 
 use anyhow::Context;
 use clap::Parser;
@@ -248,48 +248,7 @@ pub(crate) async fn run(
             print!("{}", table::format_table(&listing, width, tty, shade));
             Ok(())
         }
-        Some(HostAction::Stop) => {
-            if !files.running()? {
-                println!("No host running.");
-                return Ok(());
-            }
-            match connect(&files).await {
-                Ok((mut client, _)) => {
-                    // Shutdown may close the socket before its reply. Ownership is
-                    // released only after session cleanup, so wait for the lock below.
-                    client
-                        .send(
-                            json!({"jsonrpc":"2.0","id":2,"method":"_nori/host/stop","params":{}}),
-                        )
-                        .await?;
-                }
-                // A host at its client limit refuses this connection; the
-                // host holding the lock stops the same way on SIGTERM.
-                #[cfg(unix)]
-                Err(error) => {
-                    let (host, _) = files.read()?;
-                    let pid = libc::pid_t::try_from(host.pid)?;
-                    anyhow::ensure!(
-                        unsafe { libc::kill(pid, libc::SIGTERM) } == 0,
-                        "could not reach the host ({error:#}) or signal it: {}",
-                        std::io::Error::last_os_error()
-                    );
-                }
-                #[cfg(not(unix))]
-                Err(error) => return Err(error),
-            }
-            let deadline = Instant::now() + Duration::from_secs(30);
-            while files.running()? {
-                anyhow::ensure!(
-                    Instant::now() < deadline,
-                    "host is still shutting down; check {}",
-                    files.directory.join("host.log").display()
-                );
-                tokio::time::sleep(Duration::from_millis(50)).await;
-            }
-            println!("Host stopped.");
-            Ok(())
-        }
+        Some(HostAction::Stop) => stop::stop(&files).await,
         None if command.stdio && command.launch.is_none() => {
             local_stdio::serve(config.context("host configuration is required")?).await
         }
@@ -444,7 +403,7 @@ async fn serve(
     }
     #[cfg(unix)]
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-    files.publish(&HostState { endpoint, pid })?;
+    let _generation = files.publish(&HostState { endpoint, pid })?;
     startup.ready(server.host_instance())?;
     drop(election);
     #[cfg(unix)]

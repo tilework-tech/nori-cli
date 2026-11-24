@@ -224,6 +224,7 @@ fn starting_beside_a_host_whose_contract_cannot_be_read_fails() {
     assert!(refused.contains(nori_protocol::HOST_CONTRACT), "{refused}");
     assert!(refused.contains("NORI_HOME"), "{refused}");
     success(host.run(&["host", "ls"]));
+    success(host.run(&["host", "stop"]));
 }
 
 #[test]
