@@ -235,6 +235,8 @@ mod thought_setting;
 pub(crate) use session_view::route_session_history_event;
 
 impl App {
+    /// Runs the TUI on `host`, which this terminal owns: the host stops when
+    /// the TUI returns, on every path.
     #[allow(clippy::too_many_arguments)]
     pub async fn run(
         tui: &mut tui::Tui,
@@ -249,6 +251,44 @@ impl App {
         analytics: Option<nori_installed::AnalyticsReporter>,
         host: crate::OwnedHost,
     ) -> Result<AppExitInfo> {
+        // Sessions belong to the host the CLI built for this run.
+        let (session_manager, mut host) = host_link::HostLink::start(host);
+        let ran = Self::run_on_host(
+            tui,
+            auth_manager,
+            config,
+            initial_prompt,
+            initial_images,
+            resume_selection,
+            vertical_footer,
+            cloud_mode,
+            cloud_onboard,
+            analytics,
+            session_manager,
+            &mut host,
+        )
+        .await;
+        let stopped = host.stop().await;
+        let exit = ran?;
+        stopped.map_err(|error| color_eyre::eyre::eyre!(error))?;
+        Ok(exit)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn run_on_host(
+        tui: &mut tui::Tui,
+        auth_manager: Arc<AuthManager>,
+        config: NoriConfig,
+        initial_prompt: Option<String>,
+        initial_images: Vec<PathBuf>,
+        resume_selection: ResumeSelection,
+        vertical_footer: bool,
+        cloud_mode: bool,
+        cloud_onboard: bool,
+        analytics: Option<nori_installed::AnalyticsReporter>,
+        session_manager: nori_harness::session_manager::SessionManager,
+        host: &mut host_link::HostLink,
+    ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
         let (app_event_tx, mut app_event_rx) = unbounded_channel();
@@ -260,8 +300,6 @@ impl App {
         // a later user/session decision, after any per-session skillset setup.
         let needs_deferred_spawn = true;
         let mut pending_session_activation = None;
-        // Sessions belong to the host the CLI built for this run.
-        let (session_manager, mut host) = host_link::HostLink::start(host);
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -501,10 +539,7 @@ impl App {
         }
         app.prepared_agent_initial_context = None;
         app.discard_candidate();
-        // The host lives exactly as long as this terminal, as before.
-        let stopped = host.stop().await;
         ran?;
-        stopped.map_err(|error| color_eyre::eyre::eyre!(error))?;
 
         // Don't clear terminal to allow exit message to remain visible
         // tui.terminal.clear()?;

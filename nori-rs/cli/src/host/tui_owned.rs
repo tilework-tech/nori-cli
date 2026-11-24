@@ -24,7 +24,8 @@ use super::service::HostService;
 
 /// Builds the TUI's host from the configuration the TUI resolved. The TUI
 /// has already loaded the agent registry, including agents its caller
-/// injected, so the host does not load it again.
+/// injected, so the host does not load it again. The host is private to
+/// the terminal: `[host] managed` does not apply, and only the TUI stops it.
 pub(crate) fn launcher() -> HostLauncher {
     Box::new(|config: &NoriConfig, overrides: &NoriConfigOverrides| {
         let manager = SessionManager::new(SessionManagerConfig {

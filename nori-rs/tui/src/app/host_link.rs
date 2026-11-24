@@ -48,6 +48,9 @@ impl HostLink {
         )
     }
 
+    /// The host only sends what this pipe attached; sessions the App runs
+    /// through the manager are not attached here, so the pipe stays quiet
+    /// apart from replies.
     pub async fn next(&mut self) -> Option<ConnectionEvent> {
         self.events.recv().await
     }
