@@ -2,6 +2,9 @@ use super::*;
 
 impl ChatWidget {
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
+        if key_event.code == KeyCode::Enter {
+            tracing::info!(text = %self.bottom_pane.composer_text(), burst = self.bottom_pane.is_in_paste_burst(), gen = ?self.session_generation, harness = self.harness_handle.is_some(), "DBG enter");
+        }
         // Alt+Up is reserved for moving to a parent session, which the app
         // does before the widget sees the key. Whatever reaches the widget
         // has no parent to move to, so it changes nothing: not the queue, its

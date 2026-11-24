@@ -205,6 +205,7 @@ impl ChatWidget {
 
     /// Move the full edit, including buffered input, before replacing this widget.
     pub(crate) fn take_composer_draft(&mut self) -> crate::bottom_pane::ComposerDraft {
+        tracing::info!(text = %self.bottom_pane.composer_text(), burst = self.bottom_pane.is_in_paste_burst(), "DBG take draft");
         self.bottom_pane.take_composer_draft()
     }
 
