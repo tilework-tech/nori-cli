@@ -1,8 +1,7 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/pr-757-9106afd8-linux']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -25,10 +24,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-4vcpu-ubuntu-2404
+            target: x86_64-unknown-linux-gnu
+            name: Linux checks
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: 9106afd80c302c9f45e26aeefb6aad016a41ecbe
+          persist-credentials: false
+
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = 9106afd80c302c9f45e26aeefb6aad016a41ecbe && git rev-parse HEAD && uname -sm
 
       - name: Free disk space
         if: runner.os == 'Linux'
