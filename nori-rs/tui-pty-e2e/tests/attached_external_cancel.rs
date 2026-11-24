@@ -442,5 +442,5 @@ args = [{script:?}, "external-turn"]
         .collect();
     assert_eq!(calls.len(), 2, "{traffic}");
     assert_eq!(calls[0].replace("prompt", "cancel"), calls[1]);
-    assert!(tui.screen_contents().contains("draft"));
+    tui.wait_for_text("draft", TIMEOUT).unwrap();
 }
