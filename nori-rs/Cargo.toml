@@ -29,6 +29,7 @@ members = [
     "utils/readiness",
     "utils/string",
     "harness",
+    "host-runtime",
     "auth-providers",
     "installed",
     "mock-acp-agent",
@@ -83,6 +84,7 @@ codex-windows-sandbox = { path = "windows-sandbox-rs" }
 core_test_support = { path = "core/tests/common" }
 mcp-types = { path = "mcp-types" }
 nori-harness = { path = "harness" }
+nori-host-runtime = { path = "host-runtime" }
 nori-installed = { path = "installed" }
 
 # External

@@ -413,15 +413,20 @@ async fn requests_piped_before_stdin_closes_are_all_answered_by_the_joined_host(
             .await;
     }
     let (status, lines) = host.close().await;
-    let answered: Vec<Value> = lines
+    let mut answered: Vec<i64> = lines
         .iter()
         .map(|line| serde_json::from_str::<Value>(line).unwrap())
         .filter(|frame| frame.get("method").is_none())
-        .map(|frame| frame["id"].clone())
+        .map(|frame| {
+            assert!(frame.get("result").is_some(), "request failed: {frame}");
+            frame["id"].as_i64().expect("numeric request ID")
+        })
         .collect();
 
     assert!(status.success(), "{status}");
-    assert_eq!(answered, vec![json!(1), json!(2), json!(3)], "{lines:#?}");
+    // Session creation may finish after the list request.
+    answered.sort_unstable();
+    assert_eq!(answered, vec![1, 2, 3], "{lines:#?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

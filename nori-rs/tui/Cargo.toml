@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "nori-tui"
+path = "src/main.rs"
+
 [lib]
 name = "nori_tui"
 path = "src/lib.rs"
@@ -33,6 +37,7 @@ base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive"] }
 nori-harness = { workspace = true }
+nori-host-runtime = { workspace = true }
 nori-config = { workspace = true }
 nori-auth-providers = { workspace = true }
 codex-ansi-escape = { workspace = true }

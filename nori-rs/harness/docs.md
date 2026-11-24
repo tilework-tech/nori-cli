@@ -44,8 +44,8 @@ ACP reduction remains private because it supports harness behavior; widget and
 display projection remains private to the TUI.
 
 `nori-tui` starts every session through the `SessionManager` of the host it
-owns: `nori-cli` builds that host for each TUI run and stops it when the TUI
-quits (see [the owned TUI host](../cli/src/host/docs.md#owned-tui-host)). The
+owns. The foreground runtime builds that host for each TUI run, and the TUI
+stops it on exit (see [the owned TUI host](../cli/src/host/docs.md#owned-tui-host)). The
 manager calls the same launch internals as `launch_session`, so a managed
 session behaves exactly like a directly launched one. The TUI serves no
 remote listener; the background host (including its stdio form,
@@ -371,7 +371,7 @@ pending permission: the continuing session can be controlled after reconnect.
 
 The [follow-up operation](../cli/src/host/docs.md#mid-turn-follow-ups) uses the same harness session driver for direct input and background-host controllers. It checks the expected turn, retains a receipt keyed by message ID and routes an explicit queue or guarded fallback through the existing prompt FIFO. A successful injection leaves the original prompt responsible for completion, usage and cancellation.
 
-The background [`HostService`](../cli/src/host/service.rs) composes this
+The background [`HostService`](../host-runtime/src/host/service.rs) composes this
 adapter with manager lifecycle operations for new, close, cancel, and resume,
 and finds stored sessions through `TranscriptLoader::list_stored_sessions` and
 `find_stored_session`, which scan `transcripts/by-project/*/sessions/*.jsonl`
