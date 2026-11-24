@@ -172,6 +172,7 @@ impl App {
                 if purpose == PickerPurpose::Switch {
                     self.chat_widget.set_login_agent_override(Some(agent_name));
                 }
+                self.return_from_refused_new();
                 self.chat_widget
                     .add_error_message(format!("Couldn't prepare {display_name}: {error}"));
                 self.hint_when_sessionless();
@@ -259,6 +260,7 @@ impl App {
                 if purpose == PickerPurpose::Switch {
                     self.chat_widget.set_login_agent_override(Some(agent_name));
                 }
+                self.return_from_refused_new();
                 self.chat_widget
                     .add_error_message(format!("Couldn't activate {display_name}: {error}"));
                 return;
@@ -274,7 +276,7 @@ impl App {
                 drop(self.app_event_tx.host_receipt(HostCall::Close {
                     session_id: id.to_string(),
                 }));
-                self.chat_widget.set_login_agent_override(Some(agent_name));
+                self.return_from_refused_new();
                 self.chat_widget
                     .add_error_message(format!("Couldn't show {display_name}: {error}"));
                 return;
@@ -314,6 +316,39 @@ impl App {
         if !self.chat_widget.has_harness_session() {
             self.chat_widget
                 .add_info_message(NO_SESSION_HINT.to_string(), None);
+        }
+    }
+
+    /// `/new` moves the screen to a blank session at once, so anything typed
+    /// waits for the requested session instead of reaching the current one,
+    /// which keeps running parked.
+    pub(super) fn show_pending_new_session(&mut self, frame_requester: crate::tui::FrameRequester) {
+        let previous = self.chat_widget.session_generation();
+        let draft = self.chat_widget.take_composer_draft();
+        let loop_state = self.chat_widget.loop_state();
+        self.shutdown_current_conversation();
+        let init = self.chat_widget_init(frame_requester, None, Vec::new(), None, true, None);
+        self.install_active_widget(ChatWidget::new(init));
+        self.configure_new_chat_widget();
+        self.chat_widget.restore_composer_draft(draft);
+        if let Some((remaining, total)) = loop_state {
+            self.chat_widget.set_loop_state(remaining, total);
+        }
+        self.new_session_return = Some(previous);
+    }
+
+    /// The host refused `/new`: bring the previous session back and leave
+    /// what the person typed meanwhile in its composer, unsent.
+    fn return_from_refused_new(&mut self) {
+        let Some(previous) = self.new_session_return.take() else {
+            return;
+        };
+        let (held, _images) = self.chat_widget.take_initial_input();
+        let draft = self.chat_widget.take_composer_draft();
+        self.show_session(previous);
+        match held {
+            Some(text) => self.chat_widget.set_composer_text(text),
+            None => self.chat_widget.restore_composer_draft(draft),
         }
     }
 
