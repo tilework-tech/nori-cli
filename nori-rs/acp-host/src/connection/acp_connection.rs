@@ -124,6 +124,7 @@ async fn establish_connection(
 ) -> Result<AcpConnection> {
     let connection_event_tx = event_tx.clone();
     let event_tx_for_notifications = event_tx.clone();
+    let event_tx_for_load = event_tx.clone();
     let event_tx_for_initialize = event_tx.clone();
     let session_config_state =
         std::sync::Arc::new(std::sync::RwLock::new(AcpSessionConfigState::new()));
@@ -338,6 +339,29 @@ async fn establish_connection(
                     }
                 },
                 agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_dispatch(
+                async move |message: agent_client_protocol::Dispatch, _connection| {
+                    // The SDK routes a response to its waiting task before that
+                    // task runs. Record the load boundary here, on the same
+                    // dispatch loop that delivers the adjacent notifications.
+                    if let agent_client_protocol::Dispatch::Response(Ok(value), router) = &message
+                        && router.method() == "session/load"
+                        && let Ok(loaded) = serde_json::from_value(value.clone())
+                    {
+                        let _ = event_tx_for_load
+                            .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
+                                request_id: schema_request_id(router.id()),
+                                response: Ok(acp::AgentResponse::LoadSessionResponse(loaded)),
+                            })))
+                            .await;
+                    }
+                    Ok(agent_client_protocol::Handled::No {
+                        message,
+                        retry: false,
+                    })
+                },
+                agent_client_protocol::on_receive_dispatch!(),
             )
             .connect_with(transport, |connection: ConnectionTo<Agent>| async move {
                 let request = connection.send_request(
@@ -795,15 +819,15 @@ impl AcpConnection {
         let (request_id, response) = self
             .session_request(|| self.cx.send_request(params.clone()), request_started)
             .await;
-        let _ = self
-            .event_tx
-            .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
-                request_id,
-                response: response
-                    .clone()
-                    .map(acp::AgentResponse::LoadSessionResponse),
-            })))
-            .await;
+        if let Err(error) = &response {
+            let _ = self
+                .event_tx
+                .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
+                    request_id,
+                    response: Err(error.clone()),
+                })))
+                .await;
+        }
         let response = response.context("Failed to load ACP session")?;
 
         if let Some(config_options) = response.config_options

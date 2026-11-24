@@ -54,9 +54,14 @@ pub(super) fn inject_default_model(
 async fn forward_setup_event(
     backend_event_tx: &mpsc::Sender<BackendEvent>,
     event: crate::connection::ConnectionEvent,
+    driver: &mut session_runtime_driver::SessionDriver,
+    session: Option<&acp::SessionId>,
 ) -> Result<bool> {
     match event {
         crate::connection::ConnectionEvent::Acp(event) => {
+            if let Some(session) = session {
+                let _ = driver.observe_live_acp(session, &event);
+            }
             let is_response = matches!(&*event, nori_protocol::AcpEvent::Response { .. });
             forward_public_acp_event(backend_event_tx, *event).await?;
             Ok(is_response)
@@ -87,13 +92,15 @@ async fn forward_setup_event(
 async fn forward_setup_events_through_response(
     event_rx: &mut mpsc::Receiver<crate::connection::ConnectionEvent>,
     backend_event_tx: &mpsc::Sender<BackendEvent>,
+    driver: &mut session_runtime_driver::SessionDriver,
+    session: Option<&acp::SessionId>,
 ) -> Result<()> {
     loop {
         let event = event_rx
             .recv()
             .await
             .ok_or_else(|| anyhow::anyhow!("ACP bootstrap event stream closed"))?;
-        if forward_setup_event(backend_event_tx, event).await? {
+        if forward_setup_event(backend_event_tx, event, driver, session).await? {
             return Ok(());
         }
     }
@@ -102,9 +109,11 @@ async fn forward_setup_events_through_response(
 async fn forward_available_setup_events(
     event_rx: &mut mpsc::Receiver<crate::connection::ConnectionEvent>,
     backend_event_tx: &mpsc::Sender<BackendEvent>,
+    driver: &mut session_runtime_driver::SessionDriver,
+    session: Option<&acp::SessionId>,
 ) -> Result<()> {
     while let Ok(event) = event_rx.try_recv() {
-        forward_setup_event(backend_event_tx, event).await?;
+        forward_setup_event(backend_event_tx, event, driver, session).await?;
     }
     Ok(())
 }
@@ -137,6 +146,14 @@ impl AcpBackend {
     pub async fn spawn(
         prepared: super::prepared::PreparedAgent,
         backend_event_tx: mpsc::Sender<BackendEvent>,
+    ) -> Result<Self> {
+        Self::spawn_with_cancel(prepared, backend_event_tx, CancelAdmission::default()).await
+    }
+
+    pub(crate) async fn spawn_with_cancel(
+        prepared: super::prepared::PreparedAgent,
+        backend_event_tx: mpsc::Sender<BackendEvent>,
+        cancel_admission: CancelAdmission,
     ) -> Result<Self> {
         let super::prepared::PreparedAgentParts {
             agent_config,
@@ -175,8 +192,14 @@ impl AcpBackend {
             server.commit(&goal_mcp_http_server).await;
         }
         let session_result = connection.create_session(&cwd, mcp_servers).await;
-        let setup_forward_result =
-            forward_setup_events_through_response(&mut event_rx, &backend_event_tx).await;
+        let mut driver = session_runtime_driver::SessionDriver::new();
+        let setup_forward_result = forward_setup_events_through_response(
+            &mut event_rx,
+            &backend_event_tx,
+            &mut driver,
+            session_result.as_ref().ok(),
+        )
+        .await;
         let session_id = match session_result {
             Ok(id) => {
                 setup_forward_result?;
@@ -202,15 +225,23 @@ impl AcpBackend {
             )
             .await;
         }
-        forward_available_setup_events(&mut event_rx, &backend_event_tx).await?;
+        forward_available_setup_events(
+            &mut event_rx,
+            &backend_event_tx,
+            &mut driver,
+            Some(&session_id),
+        )
+        .await?;
 
         let capabilities_update =
             nori_client_mcp::capabilities_update_for_session(&connection, &goal_mcp_connected);
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
-        let session_driver = Arc::new(Mutex::new(session_runtime_driver::SessionDriver::new()));
+        let startup_turn = driver.external.current(&session_id).cloned();
+        let session_driver = Arc::new(Mutex::new(driver));
         let (session_event_tx, mut session_event_rx) = mpsc::channel(128);
+        cancel_admission.activate(&session_event_tx);
         let (prompt_result_tx, prompt_result_rx) = mpsc::channel(128);
         let use_native_notifications =
             config.os_notifications == crate::config::OsNotifications::Enabled;
@@ -313,14 +344,6 @@ impl AcpBackend {
             relay_task_abort: Arc::new(Mutex::new(None)),
         };
 
-        let runtime_backend = backend.clone();
-        let runtime_task = tokio::spawn(async move {
-            while let Some(input) = session_event_rx.recv().await {
-                runtime_backend.apply_runtime_input(input).await;
-            }
-        });
-        *backend.runtime_task_abort.lock().await = Some(runtime_task.abort_handle());
-
         // Execute session_start hooks
         run_session_start_hooks(
             &config.session_start_hooks,
@@ -359,6 +382,18 @@ impl AcpBackend {
             )))
             .await
             .ok();
+
+        if let Some(turn) = startup_turn {
+            backend.publish_external_turn(turn).await;
+        }
+
+        let runtime_backend = backend.clone();
+        let runtime_task = tokio::spawn(async move {
+            while let Some(input) = session_event_rx.recv().await {
+                runtime_backend.apply_runtime_input(input).await;
+            }
+        });
+        *backend.runtime_task_abort.lock().await = Some(runtime_task.abort_handle());
 
         // Spawn reducer loop: processes all transport events and prompt
         // results through the serialized reducer/runtime pipeline.

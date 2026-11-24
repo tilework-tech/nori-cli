@@ -315,9 +315,19 @@ impl HostService {
             }
             if let Ok(id) = session_id(&message["params"])
                 && let Some(handle) = self.manager.handle(&id)
-                && let Err(error) = handle.cancel().await
             {
-                tracing::warn!(%error, "could not cancel the turn");
+                let receipt = match handle.submit_cancel_current_turn().await {
+                    Ok(receipt) => receipt,
+                    Err(error) => {
+                        tracing::debug!(%id, %error, "could not admit session cancellation");
+                        return;
+                    }
+                };
+                tokio::spawn(async move {
+                    if let Err(error) = receipt.await {
+                        tracing::debug!(%id, %error, "session cancellation was not forwarded");
+                    }
+                });
             }
             return;
         }

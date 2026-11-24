@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 
 use super::connection::ConnectionEvent;
 use super::state::AttachState;
+use super::state::CancelDelivery;
 
 pub(super) enum Pending {
     Initialize,
@@ -17,6 +18,14 @@ pub(super) enum Pending {
     },
     New,
     TakeControl,
+    CancelObserved {
+        session_id: String,
+        observed_turn_id: String,
+    },
+    Prompt {
+        session_id: String,
+        draft: String,
+    },
     Mutation {
         draft: Option<String>,
     },
@@ -155,7 +164,6 @@ impl Runtime {
         }
         self.next_id += 1;
         let id = self.next_id;
-        self.pending.insert(id, pending);
         if self
             .requests
             .send(json!({"jsonrpc":"2.0", "id":id, "method":method, "params":params}))
@@ -163,7 +171,14 @@ impl Runtime {
         {
             self.state
                 .show_notice("Host connection worker stopped. Detach and try again.");
+            return;
         }
+        if let Pending::CancelObserved { session_id, .. } = &pending
+            && let Some(conversation) = self.state.conversations.get_mut(session_id)
+        {
+            conversation.cancel_delivery = CancelDelivery::AwaitingHost;
+        }
+        self.pending.insert(id, pending);
     }
 
     /// Send a JSON-RPC notification, which has no reply.
@@ -238,12 +253,27 @@ impl Runtime {
                 self.send("initialize", json!({}), Pending::Initialize);
             }
             ConnectionEvent::Disconnected(reason) => {
+                for conversation in self.state.conversations.values_mut() {
+                    conversation.submitted_prompt = false;
+                    if conversation.cancel_delivery == CancelDelivery::AwaitingHost {
+                        conversation.cancel_delivery = CancelDelivery::Unknown;
+                    }
+                    if let Some(turn) = &mut conversation.external_turn
+                        && turn.state == nori_protocol::ExternalTurnState::CancelRequested
+                    {
+                        turn.state = nori_protocol::ExternalTurnState::Unconfirmed;
+                    }
+                }
                 self.state.connected = false;
                 self.next_waiting_after_refresh = false;
                 let uncertain = self.pending.values().any(|pending| {
                     matches!(
                         pending,
-                        Pending::New | Pending::Mutation { .. } | Pending::FollowUp { .. }
+                        Pending::New
+                            | Pending::Mutation { .. }
+                            | Pending::Prompt { .. }
+                            | Pending::CancelObserved { .. }
+                            | Pending::FollowUp { .. }
                     )
                 });
                 self.uncertain_delivery |= uncertain;
@@ -326,7 +356,9 @@ impl Runtime {
         let Some(pending) = self.pending.remove(&id) else {
             return Ok(());
         };
-        if let Some(error) = message.get("error") {
+        if let Some(error) = message.get("error")
+            && !matches!(pending, Pending::CancelObserved { .. })
+        {
             if matches!(pending, Pending::List) {
                 self.next_waiting_after_refresh = false;
             }
@@ -362,7 +394,13 @@ impl Runtime {
                 self.follow_up_notice(session_id, format!("{text} [{message_id}] {draft}"));
                 return Ok(());
             }
-            if let Pending::Mutation { draft: Some(draft) } = &pending
+            if let Pending::Prompt { session_id, .. } = &pending
+                && let Some(conversation) = self.state.conversations.get_mut(session_id)
+            {
+                conversation.submitted_prompt = false;
+            }
+            if let Pending::Mutation { draft: Some(draft) } | Pending::Prompt { draft, .. } =
+                &pending
                 && self.composer.is_empty()
             {
                 self.composer.handle_paste(draft.clone());
@@ -372,6 +410,35 @@ impl Runtime {
         }
         let result = &message["result"];
         match pending {
+            Pending::CancelObserved {
+                session_id,
+                observed_turn_id,
+            } => {
+                let Some(conversation) = self.state.conversations.get_mut(&session_id) else {
+                    return Ok(());
+                };
+                if let Some(turn) = &mut conversation.external_turn
+                    && turn.id == observed_turn_id
+                    && conversation.cancel_delivery == CancelDelivery::AwaitingHost
+                {
+                    conversation.cancel_delivery = CancelDelivery::Unsent;
+                    if let Some(error) = message.get("error") {
+                        let reason = error["message"]
+                            .as_str()
+                            .unwrap_or("Host rejected the request");
+                        conversation.parts.push(super::state::Part::Notice(format!(
+                            "Cancel request failed: {reason}"
+                        )));
+                    } else if result["sessionId"].as_str() == Some(session_id.as_str()) {
+                        turn.state = nori_protocol::ExternalTurnState::CancelRequested;
+                    } else {
+                        conversation.cancel_delivery = CancelDelivery::Unknown;
+                        conversation.parts.push(super::state::Part::Notice(
+                            "The host did not confirm receipt of the cancel request.".into(),
+                        ));
+                    }
+                }
+            }
             Pending::Initialize => {
                 self.session_folders =
                     result["capabilities"]["nori_sessions"]["session_cwd"] == true;
@@ -431,7 +498,9 @@ impl Runtime {
                     crate::follow_up::delivery_notice(status, &message_id, &draft),
                 );
             }
-            Pending::Subscribe { .. } | Pending::Mutation { .. } => self.refresh_list(),
+            Pending::Subscribe { .. } | Pending::Mutation { .. } | Pending::Prompt { .. } => {
+                self.refresh_list()
+            }
         }
         Ok(())
     }
