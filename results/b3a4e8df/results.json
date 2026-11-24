@@ -1834,5 +1834,65 @@
     "check": "restore.all_servers_stopped_on_quit",
     "passed": true,
     "detail": "[185345, 185562]"
+  },
+  {
+    "scenario": "S33a",
+    "check": "new.dir_argument_sets_session_folder",
+    "passed": false,
+    "detail": "/tmp/nori-host-tui-acceptance-P2/S33a/roots/alpha/app"
+  },
+  {
+    "scenario": "S33a",
+    "check": "new.on_a_fresh_server_process",
+    "passed": true,
+    "detail": "[(194707, 194182)]"
+  },
+  {
+    "scenario": "S33a",
+    "check": "new.prompt_reaches_new_session",
+    "passed": true,
+    "detail": "claude-code-0"
+  },
+  {
+    "scenario": "S33a",
+    "check": "new.previous_server_still_running",
+    "passed": true,
+    "detail": "194182"
+  },
+  {
+    "scenario": "S33a",
+    "check": "new.all_servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[194182, 194707]"
+  },
+  {
+    "scenario": "S33b",
+    "check": "new.dir_argument_sets_session_folder",
+    "passed": false,
+    "detail": "/tmp/nori-host-tui-acceptance-P2/S33b/roots/alpha/app"
+  },
+  {
+    "scenario": "S33b",
+    "check": "new.on_a_fresh_server_process",
+    "passed": true,
+    "detail": "[(195567, 195198)]"
+  },
+  {
+    "scenario": "S33b",
+    "check": "new.refusal_message_shown",
+    "passed": true,
+    "detail": "['\u25a0 no fresh lantern is available from claude-code']"
+  },
+  {
+    "scenario": "S33b",
+    "check": "new.refusal_keeps_current_session",
+    "passed": false,
+    "detail": "(195198, 195198)"
+  },
+  {
+    "scenario": "S33b",
+    "check": "new.all_servers_stopped_on_quit",
+    "passed": true,
+    "detail": "[195198, 195567]"
   }
 ]

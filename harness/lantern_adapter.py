@@ -11,7 +11,8 @@ Environment:
   LANTERN_SAVED    JSON file with a list of saved sessions {sessionId,cwd,title}
   LANTERN_CONTROL  directory of run-time switches; `close-refuse` holds how many
                    upcoming session/close requests to refuse ("close declined by <name>");
-                   `load-refuse` does the same for session/load and session/resume
+                   `load-refuse` does the same for session/load and session/resume,
+                   `new-refuse` for session/new
 
 Prompt words (first word of the prompt text):
   hold     stream a tick every 200 ms until cancelled (records ticks)
@@ -218,6 +219,9 @@ def main():
             send(id=rid, result={"protocolVersion": 1, "agentInfo": {"name": NAME, "version": "0.0.1"},
                                  "agentCapabilities": {"loadSession": True,
                                                        "sessionCapabilities": {"close": {}, "resume": {}, "list": {}}}})
+        elif method == "session/new" and take_switch("new-refuse"):
+            ledger("new_refused", cwd=params.get("cwd"))
+            send(id=rid, error={"code": -32603, "message": f"no fresh lantern is available from {NAME}"})
         elif method == "session/new":
             sid = f"{NAME}-{next_session[0]}"
             next_session[0] += 1

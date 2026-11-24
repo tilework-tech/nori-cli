@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-P1/S31b/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hello lantern
+
+
+• claude-code heard: hello lantern
+
+
+  Resume a live session or start a new one
+
+     Session                                    Source     Working directory         Updated           Turn status
+  ▏  Start a new session                        CLI        Not reported              now               ready         ▕
+     Saved orchard survey                       Local      /tmp/nori-host-tui-acce…  unknown           Not reported
+  ↑↓/j/k move  / search  enter select  esc close
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

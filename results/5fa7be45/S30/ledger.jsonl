@@ -1,0 +1,16 @@
+{"t": 1795505184.1757464, "adapter": "codex", "pid": 209448, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-P1/S30/roots/beta/app", "argv": []}
+{"t": 1795505184.1758363, "adapter": "codex", "pid": 209448, "kind": "request", "method": "initialize"}
+{"t": 1795505184.177185, "adapter": "codex", "pid": 209448, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-P1/S30/roots/beta/app"}
+{"t": 1795505184.3686874, "adapter": "codex", "pid": 209448, "kind": "request", "method": "session/load", "cwd": "/tmp/nori-host-tui-acceptance-P1/S30/roots/beta/app", "sessionId": "saved-orchard"}
+{"t": 1795505184.3737333, "adapter": "codex", "pid": 209448, "kind": "request", "method": "session/set_config_option", "sessionId": "saved-orchard", "configId": "mode", "value": "workspace-write"}
+{"t": 1795505184.4214845, "adapter": "codex", "pid": 209448, "kind": "request", "method": "session/prompt", "sessionId": "saved-orchard", "text": "orchard check"}
+{"t": 1795505184.4217184, "adapter": "codex", "pid": 209448, "kind": "turn_end", "sessionId": "saved-orchard", "stopReason": "end_turn"}
+{"t": 1795505184.4822114, "adapter": "opencode", "pid": 209455, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-P1/S30/roots/beta/app", "argv": []}
+{"t": 1795505184.4822783, "adapter": "opencode", "pid": 209455, "kind": "request", "method": "initialize"}
+{"t": 1795505184.4832475, "adapter": "opencode", "pid": 209455, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-P1/S30/roots/beta/app"}
+{"t": 1795505184.6685383, "adapter": "opencode", "pid": 209455, "kind": "stdin_eof"}
+{"t": 1795505186.6900072, "adapter": "opencode", "pid": 209517, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-P1/S30/roots/beta/app", "argv": []}
+{"t": 1795505186.690076, "adapter": "opencode", "pid": 209517, "kind": "request", "method": "initialize"}
+{"t": 1795505186.6913376, "adapter": "opencode", "pid": 209517, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-P1/S30/roots/beta/app"}
+{"t": 1795505186.8763266, "adapter": "opencode", "pid": 209517, "kind": "stdin_eof"}
+{"t": 1795505189.3960812, "adapter": "codex", "pid": 209448, "kind": "stdin_eof"}

@@ -1,0 +1,2 @@
+Host started (pid 202742)  ws://127.0.0.1:45889/acp
+Token: /tmp/nori-host-tui-acceptance-P1/S20b/homes/host/host/token (owner-only)

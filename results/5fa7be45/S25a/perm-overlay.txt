@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-P1/S25a/roots/alpha/app · Agent approvals
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› perm the boathouse
+
+
+
+  Would you like to allow edit: Paint the boathouse?
+
+  Paint the boathouse
+
+› 1. Allow once (y)
+  2. Reject (esc)
+
+  Press enter to confirm or esc to reject
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

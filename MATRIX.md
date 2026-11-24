@@ -167,3 +167,14 @@ Run several commits at once with `ACC_LANE=<name>` (own work dir and tmux socket
 
 Honest gap: in plain `nori` the owned host shares the process with the TUI, so whether `/agent`
 goes through the host or in-process is only visible through S31d's message and the repository tests.
+
+### Added 2026-11-24 (#749)
+
+| Requirement | Scenario / check | Observed by | #748 `b3a4e8df` | #749 `5fa7be45` |
+|---|---|---|---|---|
+| `/new` starts on a fresh server process; prompt reaches it; previous server keeps running | S33a new.* | adapter, process | pass | pass |
+| Refused `/new` shows the agent's message and keeps the current session answering | S33b new.refusal_* | adapter, screen | FAIL (current session lost) | pass |
+| `/new DIR` sets the new session's folder in plain `nori` | S33a/b new.dir_argument_sets_session_folder | adapter | FAIL | FAIL (later cwd layer) |
+
+`new.uses_foreground_session_folder` is recorded only when the foreground session is in a different folder
+from the launch folder; plain `nori` cannot reach that state until `/new DIR` works, so it is not yet evaluated.

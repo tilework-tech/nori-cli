@@ -1,0 +1,12 @@
+{"t": 1795504952.7618673, "adapter": "claude-code", "pid": 203287, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-P1/S21a/roots/alpha/app", "argv": []}
+{"t": 1795504952.7619517, "adapter": "claude-code", "pid": 203287, "kind": "request", "method": "initialize"}
+{"t": 1795504952.7629373, "adapter": "claude-code", "pid": 203287, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-P1/S21a/roots/alpha/app"}
+{"t": 1795504952.7641268, "adapter": "claude-code", "pid": 203287, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-P1/S21a/roots/alpha/app"}
+{"t": 1795504953.0866995, "adapter": "claude-code", "pid": 203287, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nhold the lamp"}
+{"t": 1795504953.0870879, "adapter": "claude-code", "pid": 203287, "kind": "tick", "sessionId": "claude-code-0", "n": 1}
+{"t": 1795504953.2872968, "adapter": "claude-code", "pid": 203287, "kind": "tick", "sessionId": "claude-code-0", "n": 2}
+{"t": 1795504953.4875112, "adapter": "claude-code", "pid": 203287, "kind": "tick", "sessionId": "claude-code-0", "n": 3}
+{"t": 1795504953.6876976, "adapter": "claude-code", "pid": 203287, "kind": "tick", "sessionId": "claude-code-0", "n": 4}
+{"t": 1795504953.8878758, "adapter": "claude-code", "pid": 203287, "kind": "tick", "sessionId": "claude-code-0", "n": 5}
+{"t": 1795504954.0880678, "adapter": "claude-code", "pid": 203287, "kind": "tick", "sessionId": "claude-code-0", "n": 6}
+{"t": 1795504954.288262, "adapter": "claude-code", "pid": 203287, "kind": "tick", "sessionId": "claude-code-0", "n": 7}

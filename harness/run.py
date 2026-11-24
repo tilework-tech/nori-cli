@@ -1690,6 +1690,57 @@ def s32_dismiss_reaps_prepared(ctx, cmd):
     quit_fg(t)
 
 
+def s33_new_through_host(ctx, refuse=False):
+    """/new starts the next session on a fresh server in the foreground session's folder; a refusal keeps the current one."""
+    t = start_fg(ctx)
+    submit(t, "hello lantern")
+    t.wait_for("heard: hello lantern", 20)
+    beta = str(ctx.fx["roots"]["beta"])
+    slash(t, f"/new {beta}", settle=4)
+    submit(t, "orchard word")
+    t.wait_for("heard: orchard word", 20)
+    fg_new = ctx.ledger("request", "session/new")[-1]
+    ctx.check("new.dir_argument_sets_session_folder", fg_new.get("cwd") == beta, fg_new.get("cwd"))
+    time.sleep(1.0)
+    if refuse:
+        (ctx.fx["control"] / "new-refuse").write_text("1")
+    mark = len(ctx.ledger())
+    slash(t, "/new", settle=4)
+    t.capture("after-new")
+    later = ctx.ledger()[mark:]
+    news = [r for r in later if r.get("method") == "session/new"]
+    restored_pid = fg_new["pid"]
+    if fg_new.get("cwd") == beta:  # otherwise the launch folder and the session folder are the same and the check is vacuous
+        ctx.check("new.uses_foreground_session_folder", news and news[-1].get("cwd") == beta, [r.get("cwd") for r in news])
+    ctx.check("new.on_a_fresh_server_process", news and news[-1]["pid"] != restored_pid, [(r["pid"], restored_pid) for r in news])
+    if refuse:
+        ctx.check("new.refusal_message_shown", "no fresh lantern is available" in " ".join(t.screen().split()),
+                  [l.strip() for l in t.screen().splitlines() if "lantern" in l][-3:])
+        submit(t, "still the orchard")
+        try:
+            t.wait_for("heard: still the orchard", 15)
+            ok = True
+        except TimeoutError:
+            ok = False
+        last = ctx.ledger("request", "session/prompt")[-1]
+        ctx.check("new.refusal_keeps_current_session", ok and last["pid"] == restored_pid, (last["pid"], restored_pid))
+    else:
+        submit(t, "first fresh word")
+        try:
+            t.wait_for("heard: first fresh word", 15)
+            ok = True
+        except TimeoutError:
+            ok = False
+        last = ctx.ledger("request", "session/prompt")[-1]
+        ctx.check("new.prompt_reaches_new_session", ok and news and last["pid"] == news[-1]["pid"], last.get("sessionId"))
+        ctx.check("new.previous_server_still_running", running(restored_pid), restored_pid)
+    t.capture("final")
+    pids = {r["pid"] for r in ctx.ledger("spawn")}
+    quit_fg(t)
+    time.sleep(1)
+    ctx.check("new.all_servers_stopped_on_quit", not [p for p in pids if running(p)], sorted(pids))
+
+
 SCENARIOS = {
     "S01": ("foreground launch and exit", s01_foreground_launch_exit),
     "S02": ("foreground quit stops a running turn", s02_foreground_quit_stops_turn),
@@ -1743,6 +1794,8 @@ SCENARIOS = {
     "S31b": ("/agent restores another server's saved row via the host", lambda c: s31_restore_through_host(c, "/agent")),
     "S31c": ("refused restore keeps the current session", lambda c: s31_restore_through_host(c, "/resume", refuse=True)),
     "S31d": ("refused /agent restore keeps the current session", lambda c: s31_restore_through_host(c, "/agent", refuse=True)),
+    "S33a": ("/new through the owned host in the session folder", s33_new_through_host),
+    "S33b": ("refused /new keeps the current session", lambda c: s33_new_through_host(c, refuse=True)),
     "S32a": ("Esc on /resume rows reaps the prepared server", lambda c: s32_dismiss_reaps_prepared(c, "/resume")),
     "S32b": ("Esc on /agent rows reaps the prepared server", lambda c: s32_dismiss_reaps_prepared(c, "/agent")),
 }
