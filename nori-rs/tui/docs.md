@@ -745,7 +745,12 @@ terminal's own scrollback above a bottom viewport. `/screen`
 full-screen view on the alternate screen and back, as often as the user
 likes, even during a turn. It changes presentation only; the host, sessions,
 a streaming turn, the transcript, and the composer draft are untouched.
-`nori attach` is always full-screen, so its `/` menu greys `/screen`.
+The `toggle_screen` key under `[tui.hotkeys]` (Ctrl+L by default) does the
+same switch without going through the composer, so an unsent draft stays as
+it is. Like the other App hotkeys it is ignored while a popup or view is
+open, and the `?` shortcut overlay and the Hotkeys view list it.
+`nori attach` is always full-screen, so its `/` menu greys `/screen` and
+Ctrl+L does nothing there.
 
 - **Frame.** [`full_screen_frame`](src/app/full_screen_frame.rs) draws the
   active session's transcript (the same rows inline mode prints)

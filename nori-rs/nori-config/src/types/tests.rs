@@ -294,7 +294,7 @@ fn test_hotkey_action_default_bindings() {
 #[test]
 fn test_hotkey_action_all_actions() {
     let actions = HotkeyAction::all_actions();
-    assert_eq!(actions.len(), 21);
+    assert_eq!(actions.len(), 22);
     assert_eq!(actions[0], HotkeyAction::OpenTranscript);
     assert_eq!(actions[1], HotkeyAction::OpenEditor);
     assert_eq!(actions[2], HotkeyAction::MoveBackwardChar);
@@ -388,7 +388,7 @@ fn test_hotkey_config_set_binding() {
 fn test_hotkey_config_all_bindings() {
     let config = HotkeyConfig::default();
     let bindings = config.all_bindings();
-    assert_eq!(bindings.len(), 21);
+    assert_eq!(bindings.len(), 22);
     assert_eq!(bindings[0].0, HotkeyAction::OpenTranscript);
     assert_eq!(bindings[1].0, HotkeyAction::OpenEditor);
 }
@@ -622,6 +622,7 @@ fn test_hotkey_config_from_toml_editing_overrides() {
         yank: None,
         history_search: None,
         toggle_plan_drawer: None,
+        toggle_screen: None,
         previous_session: None,
         next_session: None,
         next_waiting_session: None,
@@ -668,6 +669,7 @@ fn test_hotkey_config_from_toml_editing_unbind() {
         yank: None,
         history_search: None,
         toggle_plan_drawer: None,
+        toggle_screen: None,
         previous_session: None,
         next_session: None,
         next_waiting_session: None,
@@ -684,7 +686,7 @@ fn test_hotkey_config_from_toml_editing_unbind() {
 fn test_hotkey_config_all_bindings_includes_editing() {
     let config = HotkeyConfig::default();
     let bindings = config.all_bindings();
-    assert_eq!(bindings.len(), 21);
+    assert_eq!(bindings.len(), 22);
     // First two are app-level actions
     assert_eq!(bindings[0].0, HotkeyAction::OpenTranscript);
     assert_eq!(bindings[1].0, HotkeyAction::OpenEditor);
@@ -1609,4 +1611,50 @@ fn test_hotkey_config_set_binding_history_search() {
         config.binding_for(HotkeyAction::HistorySearch),
         &HotkeyBinding::from_str("alt+r")
     );
+}
+
+// ========================================================================
+// Screen Toggle Hotkey Tests
+// ========================================================================
+
+#[test]
+fn test_toggle_screen_defaults_to_ctrl_l() {
+    use pretty_assertions::assert_eq;
+    let config = HotkeyConfig::from_toml(&HotkeyConfigToml::default());
+    assert_eq!(
+        config.binding_for(HotkeyAction::ToggleScreen),
+        &HotkeyBinding::from_str("ctrl+l")
+    );
+    assert_eq!(HotkeyAction::ToggleScreen.toml_key(), "toggle_screen");
+    assert!(HotkeyAction::all_actions().contains(&HotkeyAction::ToggleScreen));
+}
+
+#[test]
+fn test_toggle_screen_override_from_config_toml() {
+    use pretty_assertions::assert_eq;
+    let config: NoriConfigToml = toml::from_str(
+        r#"
+[tui.hotkeys]
+toggle_screen = "alt+l"
+"#,
+    )
+    .unwrap();
+    let hotkeys = HotkeyConfig::from_toml(&config.tui.hotkeys);
+    assert_eq!(
+        hotkeys.binding_for(HotkeyAction::ToggleScreen),
+        &HotkeyBinding::from_str("alt+l")
+    );
+}
+
+#[test]
+fn test_toggle_screen_can_be_unbound() {
+    let config: NoriConfigToml = toml::from_str(
+        r#"
+[tui.hotkeys]
+toggle_screen = "none"
+"#,
+    )
+    .unwrap();
+    let hotkeys = HotkeyConfig::from_toml(&config.tui.hotkeys);
+    assert!(hotkeys.binding_for(HotkeyAction::ToggleScreen).is_none());
 }

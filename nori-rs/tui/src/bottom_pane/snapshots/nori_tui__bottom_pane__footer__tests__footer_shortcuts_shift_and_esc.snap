@@ -6,4 +6,4 @@ expression: terminal.backend()
 "  @ for file paths                          ctrl + v to paste images            "
 "  esc again to edit previous message        ctrl + g to open editor             "
 "  ctrl + c to exit                          ⌥ + p to toggle plan drawer         "
-"                                            ctrl + t to view transcript         "
+"  ctrl + l to toggle full screen            ctrl + t to view transcript         "

@@ -301,9 +301,12 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
 - `nori attach` does not check the host contract version. It adapts to an
   older host by the capabilities that host advertises (`session_cwd`,
   `find_paths`), as with folder naming above.
-- Older `nori attach` builds decode `_nori/session/event` envelopes strictly
-  and fail on `ApprovalModeChanged`, so they cannot follow a host new enough
-  to send it.
+- Older `nori attach` builds decode `_nori/session/event` envelopes strictly.
+  This build declares `capabilities.nori_sessions.approval_modes` in its
+  `initialize`. The host sends `approval_mode_changed` only to clients that
+  declare it. Any other client gets a `notice` under the same `seq`, live and
+  in replay, so an older client keeps its replay order and shows the change
+  as a notice.
 - [Input routing](input.rs) honors `hotkeys.open_session_list`, also opens the
   list with Left on an empty composer or `/sessions`, and resumes a highlighted
   failed session with Ctrl+R while retaining its conversation identity.
