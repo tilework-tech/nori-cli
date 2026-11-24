@@ -674,9 +674,10 @@ To abandon the selection, send `_nori/host/discard_agent` with `{id}`.
 Preparing another agent or disconnecting also retires the unused selection.
 An adapter error during preparation is returned to the scoped list or
 activation request. Keep the foreground session until activation succeeds.
-The foreground terminal's `/agent` switch uses these requests on the pipe to
-the host it owns. Its other pickers (startup, after `/close`, `/resume`) still
-prepare the agent in-process.
+The foreground terminal uses these requests on the pipe to the host it owns
+for `/agent` and, outside cloud mode, for `/resume` and the picker after the
+last `/close`. Startup, `/new`, a `/resume` while startup preparation is still
+in flight, and every cloud-mode picker still prepare the agent in-process.
 
 ### Stdio transport
 

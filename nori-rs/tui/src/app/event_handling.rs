@@ -395,12 +395,8 @@ impl App {
                         self.deferred_spawn_pending = false;
                         self.chat_widget
                             .add_error_message(format!("Couldn't prepare agent: {error}"));
-                        self.chat_widget.add_info_message(
-                            "No session is active - /resume retries the picker, /new starts a \
-                             fresh session."
-                                .to_string(),
-                            None,
-                        );
+                        self.chat_widget
+                            .add_info_message(host_candidate::NO_SESSION_HINT.to_string(), None);
                         if !self.cloud_mode && self.candidate_agent.is_none() {
                             self.chat_widget.open_agent_recovery_popup(&error);
                         }
@@ -466,6 +462,16 @@ impl App {
             }
             AppEvent::OpenAgentSessionPicker => {
                 if self.refuse_at_session_cap() {
+                    return Ok(true);
+                }
+                // The host prepares a server for the listing, except before
+                // the first session starts: the startup preparation's live
+                // catalog is reused below.
+                if !self.cloud_mode
+                    && self.primary_agent_preparation.is_none()
+                    && self.prepared_agent.is_none()
+                {
+                    self.begin_restore_picker();
                     return Ok(true);
                 }
                 if self.chat_widget.has_harness_session() {
@@ -637,6 +643,7 @@ impl App {
                             display_name,
                             widget,
                             resumes,
+                            announce_agent,
                             ..
                         }) = self.candidate_agent.take()
                         else {
@@ -649,6 +656,7 @@ impl App {
                             self.begin_replacing_session_transcript(tui)?;
                         }
                         self.install_active_widget(*widget);
+                        self.deferred_spawn_pending = false;
                         self.config.active_agent = agent_name.clone();
                         self.config.agent = agent_name;
                         self.configure_new_chat_widget();
@@ -666,10 +674,17 @@ impl App {
                         {
                             tracing::error!(%error, "failed to persist activated agent selection");
                         }
-                        self.chat_widget.add_info_message(
-                            format!("Started new conversation with agent: {display_name}"),
-                            None,
-                        );
+                        if announce_agent {
+                            self.chat_widget.add_info_message(
+                                format!("Started new conversation with agent: {display_name}"),
+                                None,
+                            );
+                        } else if resumes {
+                            self.chat_widget.add_info_message(
+                                format!("Resuming session with {display_name}..."),
+                                None,
+                            );
+                        }
                     } else if let Some(message) = ended_message {
                         let candidate = self.candidate_agent.take();
                         if let Some(CandidateAgent::Activating {
@@ -1053,9 +1068,20 @@ impl App {
                 self.begin_agent_candidate(agent_name, display_name);
             }
             AppEvent::CancelAgentCandidate => {
+                let switching = matches!(
+                    &self.candidate_agent,
+                    Some(CandidateAgent::Prepared {
+                        purpose: host_candidate::PickerPurpose::Switch,
+                        ..
+                    })
+                );
                 self.discard_candidate();
-                self.chat_widget
-                    .add_info_message("Agent switch cancelled.".to_string(), None);
+                if switching {
+                    self.chat_widget
+                        .add_info_message("Agent switch cancelled.".to_string(), None);
+                } else {
+                    self.hint_when_sessionless();
+                }
             }
             AppEvent::AgentSpawnFailed { agent_name, error } => {
                 tracing::warn!(
