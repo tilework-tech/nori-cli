@@ -285,8 +285,15 @@ impl App {
                 self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
                 tui.frame_requester().schedule_frame();
             }
-            AppEvent::SessionCloseFailed { message } => {
-                self.chat_widget.on_session_close_failed(message);
+            AppEvent::SessionCloseFailed {
+                generation,
+                message,
+            } => {
+                if generation == self.chat_widget.session_generation() {
+                    self.chat_widget.on_session_close_failed(message);
+                } else if let Some(parked) = self.session_deck.parked_mut(generation) {
+                    parked.widget.on_session_close_failed(message);
+                }
             }
             AppEvent::SessionClosed { generation } => {
                 return self.on_session_closed(tui, generation);

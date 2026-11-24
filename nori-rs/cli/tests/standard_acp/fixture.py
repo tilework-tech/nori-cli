@@ -13,6 +13,7 @@ ids = itertools.count()
 permissions = itertools.count(40)
 pending = {}
 cancels = 0
+held_close = None
 leases = []
 sessions = set()
 mode_file = Path("fixture-modes")
@@ -65,6 +66,9 @@ for line in sys.stdin:
     if method is None:
         if rid in pending:
             prompt, sid, metadata = pending.pop(rid)
+            if held_close is not None:
+                send(id=held_close, error={"code": -32004, "message": "sample close declined"})
+                held_close = None
             decision = frame["result"]["outcome"]
             update(sid, "agent_message_chunk", f"{name}/{sid}/{decision['outcome']}")
             send(id=prompt, result={"stopReason": "end_turn", "_meta": {"decision": decision, "receivedPromptMeta": metadata}})
@@ -73,6 +77,8 @@ for line in sys.stdin:
             send(id=rid, error={"code": -32603, "message": "fixture unavailable", "data": {"retry": True}})
             continue
         caps = {"close": {}, "resume": {}, "list": {}}
+        if Path("fixture-no-close").exists():
+            del caps["close"]
         if name == "orchid" or mode_file.exists():
             caps["fork"] = {}
         send(id=rid, result={"protocolVersion": 1, "agentInfo": {"name": name, "version": "1"},
@@ -126,6 +132,10 @@ for line in sys.stdin:
                        if text == "change-legacy-mode"
                        else {"sessionUpdate": "config_option_update", "configOptions": session_options(sid)})
             send(method="session/update", params={"sessionId": sid, "update": changed})
+            send(id=rid, result={"stopReason": "end_turn"})
+            continue
+        if name == "close-sample":
+            update(sid, "agent_message_chunk", "Sample turn complete.")
             send(id=rid, result={"stopReason": "end_turn"})
             continue
         if name == "external-turn":
@@ -215,6 +225,18 @@ for line in sys.stdin:
             send(id=rid, error={"code": -32020, "message": "unavailable mode",
                                 "data": {"requested": params["modeId"], "agent": name}})
     elif method == "session/close":
+        if Path("fixture-session-missing").exists():
+            send(id=rid, error={"code": -32002, "message": "session already released"})
+            continue
+        if Path("fixture-hold-close").exists():
+            Path("fixture-hold-close").unlink()
+            Path("fixture-close-started").write_text(str(os.getpid()))
+            held_close = rid
+            continue
+        if Path("fixture-refuse-close").exists():
+            Path("fixture-refuse-close").unlink()
+            send(id=rid, error={"code": -32004, "message": "sample close declined"})
+            continue
         if params.get("_meta", {}).get("fixture.rejectClose"):
             send(id=rid, error={"code": -32603, "message": "fixture declined close"})
             continue

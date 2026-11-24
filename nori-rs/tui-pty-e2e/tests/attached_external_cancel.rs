@@ -444,3 +444,30 @@ args = [{script:?}, "external-turn"]
     assert_eq!(calls[0].replace("prompt", "cancel"), calls[1]);
     tui.wait_for_text("draft", TIMEOUT).unwrap();
 }
+
+#[test]
+fn attached_close_can_be_refused_and_retried() {
+    let mut client = Attach::open();
+    let folder = client._host.home.path().to_owned();
+    fs::write(folder.join("fixture-traffic"), "").unwrap();
+    fs::write(folder.join("fixture-refuse-close"), "").unwrap();
+    client.tui.submit_input("/close").unwrap();
+    client.screen("sample close declined");
+    client.tui.submit_input("/close").unwrap();
+    client.until("session ended after retry", |c| {
+        c.host_frames.iter().any(|frame| {
+            frame.pointer("/params/event/event/event_type") == Some(&json!("session_ended"))
+                && frame.pointer("/params/event/event/event/reason") == Some(&json!("closed"))
+        })
+    });
+    let trace = fs::read_to_string(folder.join("fixture-traffic")).unwrap();
+    assert_eq!(
+        trace
+            .lines()
+            .filter(|line| line.starts_with("session/close "))
+            .count(),
+        2,
+        "{trace}"
+    );
+    assert!(!trace.contains("session/cancel"), "{trace}");
+}

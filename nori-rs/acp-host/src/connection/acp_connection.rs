@@ -916,11 +916,27 @@ impl AcpConnection {
 
     /// Close (release) a session via ACP `session/close`.
     pub async fn close_session(&self, session_id: &str) -> Result<()> {
+        self.close_session_request(session_id, false).await
+    }
+
+    /// An explicit host close can recover a lost acknowledgement when the
+    /// adapter reports that this session has already been released.
+    pub async fn close_host_session(&self, session_id: &str) -> Result<()> {
+        self.close_session_request(session_id, true).await
+    }
+
+    async fn close_session_request(&self, session_id: &str, accept_missing: bool) -> Result<()> {
         let request = self
             .cx
             .send_request(acp::CloseSessionRequest::new(session_id.to_string()));
         let request_id = schema_request_id(request.id());
         let response = request.block_task().await;
+        let response = match response {
+            Err(error) if accept_missing && i32::from(error.code) == -32002 => {
+                Ok(acp::CloseSessionResponse::new())
+            }
+            other => other,
+        };
         let _ = self
             .event_tx
             .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {

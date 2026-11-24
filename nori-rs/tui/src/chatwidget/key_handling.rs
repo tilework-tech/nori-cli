@@ -191,7 +191,12 @@ impl ChatWidget {
             cmd,
             SlashCommand::New | SlashCommand::Agent | SlashCommand::Resume
         );
-        if !cmd.available_during_task() && !starts_beside && self.bottom_pane.is_task_running() {
+        let closes_local_session = cmd == SlashCommand::Close && !self.cloud_mode;
+        if !cmd.available_during_task()
+            && !starts_beside
+            && !closes_local_session
+            && self.bottom_pane.is_task_running()
+        {
             let message = format!(
                 "'/{}' is disabled while a task is in progress.",
                 cmd.command()
@@ -244,9 +249,7 @@ impl ChatWidget {
             }
             SlashCommand::Close => {
                 if !self.cloud_mode {
-                    self.app_event_tx.send(AppEvent::CloseSession {
-                        generation: self.session_generation,
-                    });
+                    self.start_host_close();
                 } else {
                     self.start_cloud_close();
                 }

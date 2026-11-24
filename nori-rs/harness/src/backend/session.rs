@@ -887,6 +887,31 @@ impl AcpBackend {
         Ok(backend)
     }
 
+    pub(crate) async fn request_host_close(&self) -> Result<()> {
+        let session = self.session_id.read().await.clone();
+        self.connection
+            .close_host_session(&session.to_string())
+            .await
+    }
+
+    pub(crate) async fn finish_host_close(&self, acknowledged: bool) {
+        if acknowledged {
+            self.teardown(false, None).await;
+        } else {
+            // No close capability: release the private process using its existing cleanup.
+            self.teardown(true, Some(std::time::Duration::ZERO)).await;
+            let _ = self
+                .backend_event_tx
+                .send(BackendEvent::Public(SessionEvent::Nori(
+                    nori_protocol::NoriEvent::SessionEnded(nori_protocol::SessionEnded {
+                        reason: nori_protocol::SessionEndReason::Closed,
+                        message: None,
+                    }),
+                )))
+                .await;
+        }
+    }
+
     /// Close (release) the active session via ACP `session/close`.
     ///
     /// Used by the explicit close action; callers gate on the agent

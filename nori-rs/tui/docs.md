@@ -1365,14 +1365,14 @@ Session lifecycle lives in
 [`session_lifecycle.rs`](src/app/session_lifecycle.rs):
 
 ```text
-Ctrl+D (list) / local /close ──> AppEvent::CloseSession{generation}
+Ctrl+D (list) ──> AppEvent::CloseSession{generation}
         |                           App::close_session
         |                             mark_closed_by_user + SessionManager::close
         |                             on screen? show next open session
         v
 row reads `closed`/`done` ── Ctrl+D ──> AppEvent::RemoveSession ──> deck.remove
 
-cloud /close ──> session/close ──> SessionEnded(Closed)
+local /close via owned host or cloud /close via agent ──> SessionEnded(Closed)
         ──> AppEvent::SessionClosed{generation} ──> App::on_session_closed
               another open session? show it (released one stays listed closed)
               none? park it, open the agent session picker, and (cloud)
@@ -1390,25 +1390,19 @@ cloud /close ──> session/close ──> SessionEnded(Closed)
   cannot be assumed to remain available while the picker is open. An ACP
   branch at the current head reuses its process and remains allowed at the cap.
   The manager's own `CapacityReached` start error remains the backstop.
-- **Closing.** `close_session` refuses to close the last open session on screen
+- **List Ctrl+D.** `close_session` refuses to close the last open session on screen
   ("Use /quit"), ignores an already closed one, marks the widget
   `closed_by_user`, and shuts its process down through `SessionManager::close`
   (with the cloud detach grace in cloud mode). The `closed_by_user` flag stops
   that widget's `SessionEnded(Shutdown)` from being read as "exit Nori". The
   closed widget stays in the deck so its row and transcript remain;
   `remove_session` drops it only when it is closed and not on screen.
-- **`/close`.** A local `/close` bypasses the cloud-only gate in
-  [`goal.rs`](src/chatwidget/goal.rs) and sends `CloseSession` for the session
-  on screen. In cloud mode it still calls `session/close`
-  ([`session_close.rs`](src/chatwidget/session_close.rs)), which reports only
-  failure (`SessionCloseFailed`). The success confirmation is added by
-  `App::on_session_closed` to the fresh picker widget that replaces the
-  released session: a confirmation sent from the closing widget would be
-  tagged with that widget's generation and could arrive after the picker took
-  its place, filing it in the closed session's transcript where it is never
-  shown.
-  `AppEvent::SessionClosed` carries the closing widget's generation, and a
-  close from a session that is no longer on screen is ignored.
+- **`/close`.** The local command sends `session/close` for the session on
+  screen over its owned host connection. A refusal appears in the originating
+  session and permits retry. Cloud sends the request directly to its agent.
+  On `SessionEnded(Closed)`, the next open session comes on screen. Closing
+  the last session opens the agent session picker. Cloud also displays the
+  release confirmation there.
 - **Loop iterations.** `AppEvent::LoopIteration` carries the generation of the
   session whose turn finished. `run_loop_iteration` shuts that session down
   and starts the next iteration in a new widget in the same deck position. An

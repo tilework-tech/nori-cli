@@ -98,6 +98,7 @@ pub(crate) enum AppEvent {
 
     /// A `/close` failed: surface the error and unblock the widget.
     SessionCloseFailed {
+        generation: SessionGeneration,
         message: String,
     },
 
