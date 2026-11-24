@@ -149,6 +149,8 @@ impl HostService {
         start: SessionStart,
         servers: &[acp::McpServer],
     ) -> Result<Value, AcpError> {
+        let awaiting_replay = matches!((&agent, &start),
+            (SessionAgent::Prepared(agent), SessionStart::Resume(_)) if agent.capabilities().load_session);
         let session = self
             .manager
             .start(StartSession {
@@ -165,7 +167,7 @@ impl HostService {
                 error => AcpError::internal(error),
             })?;
         let id = session.conversation_id;
-        if let Err(error) = self.attach_new(client, &id).await {
+        if let Err(error) = self.attach_new(client, &id, awaiting_replay).await {
             // A session that never started is not the client's to see.
             let ended = self
                 .manager

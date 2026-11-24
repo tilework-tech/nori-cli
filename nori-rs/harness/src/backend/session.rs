@@ -365,9 +365,12 @@ impl AcpBackend {
                         None,
                         setup_session_events,
                         buffered_client_events,
-                        ReplayBatch::new(nori_protocol::ReplaySource::Agent, replay_session_events)
-                            .into_iter()
-                            .collect(),
+                        // A successful native load has a replay boundary even for an
+                        // empty session. Clients can finish attachment at that boundary.
+                        vec![ReplayBatch {
+                            source: nori_protocol::ReplaySource::Agent,
+                            events: replay_session_events,
+                        }],
                         recovered_rx,
                         session_driver,
                     )

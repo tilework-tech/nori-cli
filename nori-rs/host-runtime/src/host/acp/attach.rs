@@ -53,6 +53,9 @@ pub(super) struct Forwarder {
     skip_replays: bool,
     replaying: HashSet<String>,
     started: bool,
+    /// A picker loading a saved row must deliver its complete native replay
+    /// before acknowledging activation.
+    awaiting_replay: bool,
     /// The agent's own error while the session was starting.
     startup_error: Option<AcpError>,
     delivered: watch::Sender<i64>,
@@ -77,6 +80,7 @@ impl Forwarder {
             skip_replays: true,
             replaying: HashSet::new(),
             started: false,
+            awaiting_replay: false,
             startup_error: None,
             delivered: watch::channel(0).0,
             open: HashMap::new(),
@@ -105,6 +109,7 @@ impl Forwarder {
             }
             SessionEvent::Nori(NoriEvent::ReplayFinished) => {
                 self.replaying.remove(session);
+                self.awaiting_replay = false;
             }
             SessionEvent::Nori(NoriEvent::SessionStarted(_)) => {
                 self.started = true;
@@ -112,7 +117,7 @@ impl Forwarder {
             }
             SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
                 self.open.remove(session);
-                if self.started {
+                if self.started && !self.awaiting_replay {
                     return None;
                 }
                 // Keep the agent's own error code, with the harness's
@@ -275,7 +280,7 @@ impl Forwarder {
         &mut self,
         events: &mut mpsc::Receiver<SessionEnvelope>,
     ) -> Result<(), AcpError> {
-        while !self.started {
+        while !self.started || self.awaiting_replay {
             let Some(envelope) = events.recv().await else {
                 return Err(AcpError::internal("the session stopped reporting events"));
             };
@@ -509,10 +514,12 @@ impl HostService {
         &self,
         client: i64,
         id: &ConversationId,
+        awaiting_replay: bool,
     ) -> Result<(), AcpError> {
         let connection = self.acp.connection(client)?;
         let mut forwarder = Forwarder::new(&self.acp, &self.manager, connection);
         forwarder.skip_replays = false;
+        forwarder.awaiting_replay = awaiting_replay;
         let mut subscription = self
             .manager
             .subscribe_from(

@@ -15,7 +15,16 @@ const KEY: &str = "nori/preparedAgent";
 async fn picker_host() -> (Host, ManagedClient, ManagedClient) {
     let host = Host::new();
     let mut config = String::from("agent = 'maple'\n");
-    for name in ["maple", "elm", "waiting", "broken", "list-only", "declines"] {
+    for name in [
+        "maple",
+        "elm",
+        "waiting",
+        "broken",
+        "list-only",
+        "declines",
+        "empty",
+        "resume-only",
+    ] {
         config.push_str(&format!(
             "[[agents]]\nname = '{name}'\nslug = '{name}'\n[agents.distribution.local]\ncommand = 'python3'\nargs = ['{}/tests/standard_acp/picker_fixture.py','{name}','{}']\n",
             env!("CARGO_MANIFEST_DIR"), host.0.path().display()
@@ -76,7 +85,12 @@ async fn picker_activates_new_and_saved_rows_on_their_original_connections() {
     let (host, mut client, mut other) = picker_host().await;
     let cwd = host.0.path().canonicalize().unwrap();
     let mut live = Vec::new();
-    for (agent, saved) in [("maple", None), ("elm", Some("elm-saved"))] {
+    for (agent, saved) in [
+        ("maple", None),
+        ("elm", Some("elm-saved")),
+        ("empty", Some("empty-saved")),
+        ("resume-only", Some("resume-only-saved")),
+    ] {
         let selection = if saved.is_none() {
             json!({"cwd":cwd})
         } else {
@@ -97,8 +111,10 @@ async fn picker_activates_new_and_saved_rows_on_their_original_connections() {
         );
         assert_eq!(catalog["sessions"][0]["_meta"]["sample"], "picker");
         assert_eq!(
-            catalog["_meta"][KEY]["agentCapabilities"]["loadSession"],
-            true
+            catalog["_meta"][KEY]["agentCapabilities"]["loadSession"]
+                .as_bool()
+                .unwrap_or(false),
+            agent != "resume-only"
         );
         assert!(
             other
@@ -135,17 +151,24 @@ async fn picker_activates_new_and_saved_rows_on_their_original_connections() {
                         .unwrap_or_else(|| panic!("{frame}"))
                         .to_owned();
                 }
-                if frame.pointer("/params/update/content/text") == Some(&json!("saved history")) {
-                    replay.push(frame["params"]["sessionId"].clone());
+                if let Some(text) = frame
+                    .pointer("/params/update/content/text")
+                    .and_then(Value::as_str)
+                {
+                    replay.push((frame["params"]["sessionId"].clone(), text.to_string()));
                 }
             }
         })
         .await
         .unwrap();
         assert!(uuid::Uuid::parse_str(&id).is_ok());
-        if saved.is_some() {
-            assert_eq!(replay, vec![json!(id)]);
-        }
+        let history = if agent == "elm" { 64 } else { 0 };
+        assert_eq!(
+            replay,
+            (0..history)
+                .map(|i| (json!(id), format!("saved history {i}")))
+                .collect::<Vec<_>>()
+        );
         assert!(client.request("session/new", params).await.is_err());
         client
             .request(
@@ -170,10 +193,10 @@ async fn picker_activates_new_and_saved_rows_on_their_original_connections() {
             [
                 "initialize",
                 "session/list",
-                if saved.is_some() {
-                    "session/load"
-                } else {
-                    "session/new"
+                match (agent, saved) {
+                    ("resume-only", _) => "session/resume",
+                    (_, Some(_)) => "session/load",
+                    (_, None) => "session/new",
                 },
                 "session/prompt"
             ]

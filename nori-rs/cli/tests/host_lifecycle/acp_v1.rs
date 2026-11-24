@@ -120,11 +120,7 @@ async fn initialize_negotiates_version_one_and_advertises_the_host_contract() {
             "{capability} is advertised: {capabilities}"
         );
     }
-    assert_eq!(
-        capabilities.get("_meta"),
-        None,
-        "the handshake carries no Nori _meta: {capabilities}"
-    );
+    assert_eq!(capabilities["_meta"]["nori/preparedAgent"]["version"], 1);
     assert_eq!(result["authMethods"], json!([]));
     assert_eq!(
         result["capabilities"]["nori_sessions"]["version"], 1,
