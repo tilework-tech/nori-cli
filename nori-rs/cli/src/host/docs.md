@@ -152,7 +152,9 @@ plain nori TUI --pipe (controller)--> owned HostService --> its own SessionManag
   queue, its role watch, and a close token), runs the slow methods (new,
   load, resume, prompt, close, delete, config changes) concurrently, and
   passes client notifications (`session/cancel`) and permission answers to
-  `message_from`.
+  `message_from`. Each ACP request is logged at debug level as
+  `host ACP request` with its `client` and `method` (target
+  `nori_host_runtime`), which the PTY tests read to observe host traffic.
   [The handshake](../../../host-runtime/src/host/acp/handshake.rs) adds `protocolVersion: 1`, `agentInfo`
   (version `<nori version>+contract.<HOST_CONTRACT>`),
   ACP `agentCapabilities` (load, list, resume, close, delete; only the
