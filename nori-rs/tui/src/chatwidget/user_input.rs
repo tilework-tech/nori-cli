@@ -267,6 +267,11 @@ impl ChatWidget {
                     self.add_error_message("No active host session".into());
                     return;
                 };
+                let interrupt = crate::host_client::PromptInterrupt::new(session.to_string());
+                crate::host_client::PromptInterrupt::track_first(
+                    &mut self.submitted_prompt,
+                    &interrupt,
+                );
                 let admitted =
                     self.app_event_tx
                         .host_receipt(crate::host_client::HostCall::Prompt(
@@ -276,10 +281,23 @@ impl ChatWidget {
                 let submitted = text.clone();
                 tokio::spawn(async move {
                     match admitted.await {
-                        Ok(_) => handle.record_host_prompt_started(),
-                        Err(error) => tx.send(AppEvent::HarnessActionFailed(format!(
-                            "Could not submit “{submitted}”: {error}"
-                        ))),
+                        Ok(receipt) => {
+                            handle.record_host_prompt_started();
+                            if let Some(call) = interrupt.admitted(&receipt) {
+                                tx.send(AppEvent::HostRequest {
+                                    call,
+                                    reply: crate::app_event_sender::HostReply::ReportError(
+                                        tx.clone(),
+                                    ),
+                                });
+                            }
+                        }
+                        Err(error) => {
+                            interrupt.retire();
+                            tx.send(AppEvent::HarnessActionFailed(format!(
+                                "Could not submit “{submitted}”: {error}"
+                            )));
+                        }
                     }
                 });
             }

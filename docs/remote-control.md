@@ -374,7 +374,7 @@ per-session folders. Clients send `cwd` only when it is advertised.
 | `_nori/control/take` | Transfer control to the caller without closing another connection. |
 | `_nori/session/new` | Start a session; any authenticated initialized client may call it, since it changes no existing session; the new session becomes the host's selected session. Optional `cwd` (absolute; canonicalized, and refused when relative, missing, or not a directory) loads the host's configuration in that folder with the host's command-line overrides, so the folder's own project trust and approval settings apply; without it the host's start configuration is used. Optional `agent` selects the agent; optional `prompt` is sent as the first prompt after the session starts, without delaying the reply. Replies `{session_id, cwd}`. Resume reloads configuration from the record's cwd the same way. |
 | `_nori/session/close`, `_nori/session/cancel`, `_nori/session/resume` | Apply the operation to the required `session_id`; resume retains the Nori conversation ID. Resume also accepts the ID of a [stored session](#12-standard-acp-v1-on-the-background-host) and restarts it from its transcript. On the background host, `_nori/session/list` and `_nori/session/resume` are aliases kept for `nori attach` and `nori host ls`; new clients use `session/list` and `session/resume`. |
-| `_nori/session/cancel_observed` | A controller sends `{sessionId, observedTurnId}` using the observation ID from the session’s `external_turn_changed` event. The host replies with `{sessionId}`. The host rejects an expired observation and suppresses a second cancel for one already pending. A successful reply acknowledges the request. The agent can confirm cancellation later. |
+| `_nori/session/cancel_observed` | A controller sends `{sessionId, observedTurnId}` using either the ID from the session’s `external_turn_changed` event or the request UUID of its admitted prompt. The host replies with `{sessionId}`. The host rejects an expired observation and suppresses a second cancel for one already pending. A successful reply acknowledges the request. The agent can confirm cancellation later. |
 | `_nori/host/stop` | Request host shutdown; any authenticated initialized client may call it. |
 
 `_nori/control/changed` notifications carry the new `role` to terminals affected
@@ -617,10 +617,9 @@ without Node.js).
 `_nori/session/list`, `new`, `prompt`, `respond`, `cancel`, `close` and
 `resume` are deprecated aliases, kept for one more release.
 `_nori/session/follow_up` supports steering and queuing (contract C11).
-`nori attach` uses `_nori/session/cancel_observed` for agent-started work so
-a late keypress cannot interrupt the following turn. If the host rejects that
-request, attach reports the error. For a host-admitted prompt it sends the
-standard `session/cancel` notification. Attach also sends `session/close` and
+Both terminals use `_nori/session/cancel_observed` to interrupt the turn on
+screen. An interrupt typed before prompt admission waits for that submission’s
+receipt. The host rejects stale turn IDs. Attach also sends `session/close` and
 `session/resume` (with the row's folder; an older host that does not report
 the folder gets `_nori/session/resume`). It still uses `_nori/session/list`,
 `new`, `prompt` and `respond`, and `nori host ls`, `nori host new` and the

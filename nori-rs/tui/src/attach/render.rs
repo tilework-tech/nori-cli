@@ -383,7 +383,10 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
     if conversation.external_turn.is_none()
         && conversation.active_prompt().is_none()
         && !conversation.cancelling_prompt()
-        && !conversation.submitted_prompt
+        && !conversation
+            .submitted_prompt
+            .as_ref()
+            .is_some_and(crate::host_client::PromptInterrupt::live)
         && state.transcript_text(id).is_empty()
     {
         lines.push(Line::from("Ready. Send a prompt to begin.".dim()));

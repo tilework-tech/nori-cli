@@ -300,7 +300,7 @@ impl ManagedRemoteHost {
                     .handle(&id)
                     .ok_or_else(|| RemoteError::new(-32002, "session is not running"))?;
                 handle
-                    .cancel_external_turn(params.observed_turn_id)
+                    .cancel_observed_turn(params.observed_turn_id)
                     .await
                     .map_err(|error| RemoteError::new(-32000, error))?;
                 Ok((json!({"sessionId": id.to_string()}), None))

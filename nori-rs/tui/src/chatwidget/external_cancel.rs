@@ -26,6 +26,39 @@ impl ChatWidget {
         }
     }
 
+    pub(super) fn interrupt_host_prompt(&self) -> bool {
+        let Some(session) = self.managed_conversation_id.filter(|_| !self.cloud_mode) else {
+            return false;
+        };
+        if self.follow_only_attachment {
+            return self.bottom_pane.is_task_running();
+        }
+        let call = if let Some(nori_protocol::acp::v1::RequestId::Str(id)) =
+            &self.owned_prompt_request_id
+        {
+            Some(crate::host_client::HostCall::CancelObserved {
+                session_id: session.to_string(),
+                observed_turn_id: id.clone(),
+            })
+        } else if let Some(pending) = self
+            .submitted_prompt
+            .as_ref()
+            .filter(|pending| pending.live())
+        {
+            pending.interrupt()
+        } else {
+            // A status row can outlive its turn. Never retarget its key at a later prompt.
+            return self.bottom_pane.is_task_running();
+        };
+        if let Some(call) = call {
+            self.app_event_tx.send(AppEvent::HostRequest {
+                call,
+                reply: crate::app_event_sender::HostReply::ReportError(self.app_event_tx.clone()),
+            });
+        }
+        true
+    }
+
     pub(super) fn external_cancel_status(&self) -> Option<&'static str> {
         pending_label(self.external_turn.as_ref()?.state)
     }

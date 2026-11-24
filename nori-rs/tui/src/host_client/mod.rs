@@ -6,6 +6,8 @@
 //! the frontend's own tag for that call.
 
 mod connection;
+mod prompt_interrupt;
+pub(crate) use prompt_interrupt::PromptInterrupt;
 #[cfg(test)]
 mod connection_tests;
 mod pipe;
@@ -51,9 +53,6 @@ pub(crate) enum HostCall {
         message_id: String,
         intent: nori_harness::FollowUpIntent,
         prompt: Vec<nori_protocol::acp::v1::ContentBlock>,
-    },
-    Cancel {
-        session_id: String,
     },
     CancelObserved {
         session_id: String,
@@ -108,7 +107,6 @@ impl HostCall {
                     "message_id": message_id, "intent": intent,
                     "prompt": prompt}),
             ),
-            Self::Cancel { session_id } => ("session/cancel", json!({"sessionId": session_id})),
             Self::CancelObserved {
                 session_id,
                 observed_turn_id,
@@ -185,10 +183,6 @@ pub(crate) enum HostEvent<T> {
     Ignored,
 }
 
-/// Why a call was not handed to the connection.
-#[derive(Debug)]
-pub(crate) struct Unsent;
-
 pub(crate) struct HostSessionClient<T> {
     requests: mpsc::UnboundedSender<Value>,
     pending: HashMap<i64, T>,
@@ -222,17 +216,6 @@ impl<T> HostSessionClient<T> {
         }
         self.pending.insert(id, tag);
         Ok(())
-    }
-
-    /// Send a JSON-RPC notification, which has no reply.
-    pub fn notify(&mut self, call: HostCall) -> Result<(), Unsent> {
-        if self.stopped {
-            return Err(Unsent);
-        }
-        let (method, params) = call.into_wire();
-        self.requests
-            .send(json!({"jsonrpc": "2.0", "method": method, "params": params}))
-            .map_err(|_| Unsent)
     }
 
     pub fn has_pending(&self, matches: impl Fn(&T) -> bool) -> bool {
