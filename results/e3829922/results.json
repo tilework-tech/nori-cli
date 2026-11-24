@@ -1,0 +1,644 @@
+[
+  {
+    "scenario": "S01",
+    "check": "inline.no_alt_screen",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S01",
+    "check": "hint_row.exactly_one",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S01",
+    "check": "hint_row.at_bottom",
+    "passed": false,
+    "detail": "\u203a @ for file mentions"
+  },
+  {
+    "scenario": "S01",
+    "check": "exit.shell_prompt_returns",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "S01",
+    "check": "exit.alt_screen_off",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S01",
+    "check": "exit.cursor_visible",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S01",
+    "check": "exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 0, 'alt_off': 0, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 2, 'cursor_show': 15, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S01",
+    "check": "exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S01",
+    "check": "inline.transcript_in_scrollback",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S01",
+    "check": "lifetime.no_host_outlives_terminal",
+    "passed": true,
+    "detail": "Error: no host running; start one with `nori host`\n state.json=False"
+  },
+  {
+    "scenario": "S01",
+    "check": "lifetime.adapters_stopped",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S02",
+    "check": "exit.shell_prompt_returns",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "S02",
+    "check": "exit.alt_screen_off",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S02",
+    "check": "exit.cursor_visible",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S02",
+    "check": "exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 0, 'alt_off': 0, 'paste_on': 2, 'paste_off': 2, 'cursor_hide': 2, 'cursor_show': 36, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S02",
+    "check": "exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S02",
+    "check": "lifetime.turn_stopped_after_quit",
+    "passed": true,
+    "detail": "ticks 3->3"
+  },
+  {
+    "scenario": "S03a",
+    "check": "attach.alt_screen_on",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S03a",
+    "check": "hint_row.exactly_one",
+    "passed": true,
+    "detail": "['   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S03a",
+    "check": "hint_row.at_bottom",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  },
+  {
+    "scenario": "S03a",
+    "check": "detach.shell_prompt_returns",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "S03a",
+    "check": "detach.alt_screen_off",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S03a",
+    "check": "detach.cursor_visible",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S03a",
+    "check": "detach.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 0, 'cursor_show': 50, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S03a",
+    "check": "detach.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S03a",
+    "check": "alt.scrollback_untouched",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S03a",
+    "check": "detach.turn_keeps_running",
+    "passed": true,
+    "detail": "ticks 5->13"
+  },
+  {
+    "scenario": "S03a",
+    "check": "detach.session_still_on_host",
+    "passed": true,
+    "detail": "[{'sessionId': '23684318-707a-49d3-8a30-b6fa86503a89', 'cwd': '/tmp/nori-host-tui-acceptance/S03a/roots/alpha/app', 'title': 'hold the lamp', 'updatedAt': '2026-11-24T02:10:57.522Z', '_meta': {'nori/agent': 'claude-code', 'nori/session': {'live': True}}}]"
+  },
+  {
+    "scenario": "S03a",
+    "check": "detach.host_reports_working",
+    "passed": true,
+    "detail": "ID                                    AGENT             STATUS               AGE  CWD                                                 TITLE\n23684318-707a-49d3-8a30-b6fa86503a89  claude-code       working               4s  /tmp/nori-host-tui-acceptance/S03a/roots/alpha/app  hold the lamp\n"
+  },
+  {
+    "scenario": "S03a",
+    "check": "reattach.sees_live_turn",
+    "passed": true,
+    "detail": "24->30"
+  },
+  {
+    "scenario": "S03b",
+    "check": "attach.alt_screen_on",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S03b",
+    "check": "hint_row.exactly_one",
+    "passed": true,
+    "detail": "['   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S03b",
+    "check": "hint_row.at_bottom",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  },
+  {
+    "scenario": "S03b",
+    "check": "detach.shell_prompt_returns",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "S03b",
+    "check": "detach.alt_screen_off",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S03b",
+    "check": "detach.cursor_visible",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S03b",
+    "check": "detach.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 0, 'cursor_show': 58, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S03b",
+    "check": "detach.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S03b",
+    "check": "alt.scrollback_untouched",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S03b",
+    "check": "detach.turn_keeps_running",
+    "passed": true,
+    "detail": "ticks 8->16"
+  },
+  {
+    "scenario": "S03b",
+    "check": "detach.session_still_on_host",
+    "passed": true,
+    "detail": "[{'sessionId': '0bb96da9-a401-46a0-9740-a588f732459f', 'cwd': '/tmp/nori-host-tui-acceptance/S03b/roots/alpha/app', 'title': 'hold the lamp', 'updatedAt': '2026-11-24T02:11:08.954Z', '_meta': {'nori/agent': 'claude-code', 'nori/session': {'live': True}}}]"
+  },
+  {
+    "scenario": "S03b",
+    "check": "detach.host_reports_working",
+    "passed": true,
+    "detail": "ID                                    AGENT             STATUS               AGE  CWD                                                 TITLE\n0bb96da9-a401-46a0-9740-a588f732459f  claude-code       working               4s  /tmp/nori-host-tui-acceptance/S03b/roots/alpha/app  hold the lamp\n"
+  },
+  {
+    "scenario": "S03c",
+    "check": "attach.alt_screen_on",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S03c",
+    "check": "hint_row.exactly_one",
+    "passed": true,
+    "detail": "['   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S03c",
+    "check": "hint_row.at_bottom",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  },
+  {
+    "scenario": "S03c",
+    "check": "detach.client_exits_on_hangup",
+    "passed": true,
+    "detail": "['65274']"
+  },
+  {
+    "scenario": "S03c",
+    "check": "detach.turn_keeps_running",
+    "passed": true,
+    "detail": "ticks 11->18"
+  },
+  {
+    "scenario": "S03c",
+    "check": "detach.session_still_on_host",
+    "passed": true,
+    "detail": "[{'sessionId': '0a977126-6bdc-4158-9388-93181f1256a7', 'cwd': '/tmp/nori-host-tui-acceptance/S03c/roots/alpha/app', 'title': 'hold the lamp', 'updatedAt': '2026-11-24T02:11:17.335Z', '_meta': {'nori/agent': 'claude-code', 'nori/session': {'live': True}}}]"
+  },
+  {
+    "scenario": "S03c",
+    "check": "detach.host_reports_working",
+    "passed": true,
+    "detail": "ID                                    AGENT             STATUS               AGE  CWD                                                 TITLE\n0a977126-6bdc-4158-9388-93181f1256a7  claude-code       working               5s  /tmp/nori-host-tui-acceptance/S03c/roots/alpha/app  hold the lamp\n"
+  },
+  {
+    "scenario": "S04",
+    "check": "close.session_not_live_on_host",
+    "passed": true,
+    "detail": "{'before': [{'sessionId': 'd90f7349-ddee-43f3-8c78-3d7e94c47aa8', 'cwd': '/tmp/nori-host-tui-acceptance/S04/roots/alpha/app', 'title': 'first light', 'updatedAt': '2026-11-24T02:11:21.987Z', '_meta': {'nori/agent': 'claude-code', 'nori/session': {'live': True}}}], 'after': [{'sessionId': 'd90f7349-ddee-43f3-8c78-3d7e94c47aa8', 'cwd': '/tmp/nori-host-tui-acceptance/S04/roots/alpha/app', 'title': 'first light', 'updatedAt': '2026-11-24T02:11:22.865Z', '_meta': {'nori/agent': 'claude-code', 'nori/session': {'live': False}}}]}"
+  },
+  {
+    "scenario": "S04",
+    "check": "close.adapter_released_session",
+    "passed": true,
+    "detail": "{'tail': ['request:session/prompt', 'turn_end:', 'stdin_eof:'], 'adapter_running': []}"
+  },
+  {
+    "scenario": "S04",
+    "check": "close.client_still_attached",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S05",
+    "check": "slash.menu_opens_with_normal_commands",
+    "passed": false,
+    "detail": "missing ['/agent', '/model', '/config', '/approvals', '/new', '/sessions']"
+  },
+  {
+    "scenario": "S05",
+    "check": "slash.diff_listed_with_reason",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S05",
+    "check": "slash.browse_listed_with_reason",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S05",
+    "check": "slash.undo_listed_with_reason",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S05",
+    "check": "slash.unavailable_not_sent_as_prompt",
+    "passed": false,
+    "detail": "['/diff']"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.empty_remote_falls_back_to_host_folder",
+    "passed": true,
+    "detail": "[{'t': 1795486302.1949675, 'adapter': 'claude-code', 'pid': 66209, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance/S06/roots/alpha/app'}]"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.explicit_override",
+    "passed": true,
+    "detail": "{'t': 1795486303.9749339, 'adapter': 'claude-code', 'pid': 66245, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance/S06/roots/beta/app'}"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.plain_new_inherits_foreground",
+    "passed": false,
+    "detail": "{'t': 1795486306.2498386, 'adapter': 'claude-code', 'pid': 66279, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance/S06/roots/alpha/app'}"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.confirmation_names_folder",
+    "passed": false,
+    "detail": "[' claude-code \u00b7 new session \u00b7 app \u00b7 ready']"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.dir_completion_from_session_fs",
+    "passed": false,
+    "detail": "['/ new assets/laptop-only/']"
+  },
+  {
+    "scenario": "S07",
+    "check": "at.alpha_files_offered",
+    "passed": false,
+    "detail": " Nori host  CONTROLLING\n claude-code \u00b7 new session \u00b7 app \u00b7 ready\n\n Ready. Send a prompt to begin.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a @lan\n\n  loading...\n"
+  },
+  {
+    "scenario": "S07",
+    "check": "at.no_laptop_files",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S07",
+    "check": "at.laptop_file_not_found",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S07",
+    "check": "at.beta_files_offered_same_logical_path",
+    "passed": false,
+    "detail": " Nori host  CONTROLLING\n claude-code \u00b7 new session \u00b7 app \u00b7 ready\n\n Ready. Send a prompt to begin.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a @src/\n\n  loading...\n"
+  },
+  {
+    "scenario": "S07",
+    "check": "at.no_stale_alpha_results",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S08",
+    "check": "watcher.enter_not_delivered",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S08",
+    "check": "watcher.enter_shows_take_control_hint",
+    "passed": true,
+    "detail": "[' Read-only: take control with alt+t before sending prompts or permission answers.', ' Read-only: take control with alt+t before sending prompts or permission answers.']"
+  },
+  {
+    "scenario": "S08",
+    "check": "watcher.enter_notice_shown_once",
+    "passed": false,
+    "detail": "[' Read-only: take control with alt+t before sending prompts or permission answers.', ' Read-only: take control with alt+t before sending prompts or permission answers.']"
+  },
+  {
+    "scenario": "S08",
+    "check": "watcher.draft_kept",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S08",
+    "check": "host.observer_cannot_set_mode",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "scenario": "S08",
+    "check": "host.observer_cannot_prompt",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "scenario": "S08",
+    "check": "transfer.old_controller_sees_watching",
+    "passed": true,
+    "detail": " Nori host  WATCHING \u00b7 read-only \u00b7 alt+t take control\n claude-code \u00b7 first light \u00b7 app \u00b7 ready\n\n \u203a You\n first light\n\n claude-code heard: first light\n\n Control moved to another terminal. You are now watching; alt+t takes control.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n Control moved to another terminal. You are now w"
+  },
+  {
+    "scenario": "S08",
+    "check": "transfer.draft_survives_promotion",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S08",
+    "check": "transfer.no_automatic_promotion",
+    "passed": true,
+    "detail": " Nori host  WATCHING \u00b7 read-only \u00b7 alt+t take control\n claude-code \u00b7 first light \u00b7 app \u00b7 ready\n\n \u203a You\n first light\n\n claude-code heard: first light\n\n Control moved to another terminal. You are now wa"
+  },
+  {
+    "scenario": "S09",
+    "check": "reconnect.controller_draft_kept",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S10",
+    "check": "approvals.offers_host_modes",
+    "passed": false,
+    "detail": " Nori host  CONTROLLING\n claude-code \u00b7 /approvals \u00b7 app \u00b7 ready\n\n \u203a You\n /approvals\n\n claude-code heard: /approvals\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a Send a prompt\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task\n"
+  },
+  {
+    "scenario": "S10",
+    "check": "approvals.no_legacy_presets",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S10",
+    "check": "approvals.not_sent_as_prompt",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S11a",
+    "check": "home.thought_text_in_history",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S11a",
+    "check": "home.terminal_title_names_agent",
+    "passed": true,
+    "detail": "Lantern Cla\u2026 \u00b7 app \u00b7 think about the tide"
+  },
+  {
+    "scenario": "S11a",
+    "check": "home.read_range_shown",
+    "passed": true,
+    "detail": "['  \u2022 Read harbor/tides.md \u00b7 lines 12\u201319']"
+  },
+  {
+    "scenario": "S11a",
+    "check": "home.search_hits_shown",
+    "passed": true,
+    "detail": "['  \u2022 Search beacon \u00b7 3 matches in 2 files']"
+  },
+  {
+    "scenario": "S11b",
+    "check": "home.thought_text_in_history",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S11b",
+    "check": "home.terminal_title_names_agent",
+    "passed": false,
+    "detail": "modal"
+  },
+  {
+    "scenario": "S11b",
+    "check": "home.read_range_shown",
+    "passed": true,
+    "detail": "['   \u2022 Read harbor/tides.md \u00b7 lines 12\u201319']"
+  },
+  {
+    "scenario": "S11b",
+    "check": "home.search_hits_shown",
+    "passed": true,
+    "detail": "['   \u2022 Search beacon \u00b7 3 matches in 2 files']"
+  },
+  {
+    "scenario": "S12",
+    "check": "default.first_new_uses_host_default",
+    "passed": false,
+    "detail": "[('claude-code-0', 'acceptEdits')]"
+  },
+  {
+    "scenario": "S12",
+    "check": "approvals.controller_can_pick_approve_all",
+    "passed": false,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  },
+  {
+    "scenario": "S12",
+    "check": "default.second_new_does_not_copy_foreground",
+    "passed": false,
+    "detail": "[('claude-code-0', 'acceptEdits'), ('claude-code-0', 'acceptEdits')]"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.ask_hidden_for_adapter_without_ask",
+    "passed": false,
+    "detail": " Nori host  CONTROLLING\n opencode \u00b7 /approvals \u00b7 app \u00b7 ready\n\n \u203a You\n /approvals\n\n opencode heard: /approvals\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a Send a prompt\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task\n"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.change_reaches_only_foreground",
+    "passed": false,
+    "detail": "[('claude-code-0', 'acceptEdits')]"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.footer_shows_foreground_mode",
+    "passed": false,
+    "detail": "['', '\u203a Send a prompt', '', '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task']"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.watcher_sees_greyed_with_take_control",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S14",
+    "check": "picker.excludes_other_hosts",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S14",
+    "check": "resume.lists_agent_server_saved_sessions",
+    "passed": false,
+    "detail": " Nori host  CONTROLLING\n claude-code \u00b7 new session \u00b7 app \u00b7 ready\n\n Ready. Send a prompt to begin.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a Send a prompt\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task\n"
+  },
+  {
+    "scenario": "S14",
+    "check": "resume.adapter_loaded_saved_session_on_host",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S15a",
+    "check": "migration.full-access_maps_to_approve-all",
+    "passed": false,
+    "detail": "['  \u258f3. Agent (full access) (current)                                                                                  \u2595']"
+  },
+  {
+    "scenario": "S15a",
+    "check": "migration.sandbox_setting_unchanged",
+    "passed": true,
+    "detail": "sandbox_mode = \"danger-full-access\""
+  },
+  {
+    "scenario": "S15a",
+    "check": "migration.runs_once",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S15b",
+    "check": "migration.read-only_maps_to_ask",
+    "passed": false,
+    "detail": "['  \u258f1. Read Only (current)                                                                                            \u2595']"
+  },
+  {
+    "scenario": "S15b",
+    "check": "migration.sandbox_setting_unchanged",
+    "passed": true,
+    "detail": "sandbox_mode = \"read-only\""
+  },
+  {
+    "scenario": "S15b",
+    "check": "migration.runs_once",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S15c",
+    "check": "migration.read-only-no-ask_maps_to_agent",
+    "passed": false,
+    "detail": "['  \u258f1. Read Only (current)                                                                                            \u2595']"
+  },
+  {
+    "scenario": "S15c",
+    "check": "migration.sandbox_setting_unchanged",
+    "passed": true,
+    "detail": "sandbox_mode = \"read-only\""
+  },
+  {
+    "scenario": "S15c",
+    "check": "migration.runs_once",
+    "passed": true,
+    "detail": ""
+  }
+]

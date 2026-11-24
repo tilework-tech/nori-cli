@@ -1,0 +1,8 @@
+{"t": 1795486346.4383626, "adapter": "claude-code", "pid": 67340, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S10/roots/alpha/app", "argv": []}
+{"t": 1795486346.4384463, "adapter": "claude-code", "pid": 67340, "kind": "request", "method": "initialize"}
+{"t": 1795486346.4394364, "adapter": "claude-code", "pid": 67340, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S10/roots/alpha/app"}
+{"t": 1795486346.4403524, "adapter": "claude-code", "pid": 67340, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance/S10/roots/alpha/app"}
+{"t": 1795486346.4450593, "adapter": "claude-code", "pid": 67340, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795486348.2062232, "adapter": "claude-code", "pid": 67340, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "/approvals"}
+{"t": 1795486348.2064474, "adapter": "claude-code", "pid": 67340, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795486349.972815, "adapter": "claude-code", "pid": 67340, "kind": "stdin_eof"}

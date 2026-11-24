@@ -1,0 +1,12 @@
+{
+  "nori": "nori",
+  "passed": 79,
+  "failed": 28,
+  "checks": 107,
+  "commit": "e3829922c38b1b41ea477a68467305b4c06d0367",
+  "pr": "https://github.com/tilework-tech/nori-cli/pull/738",
+  "binary": "cargo build --bin nori (debug)",
+  "nori_sha256": "999cc56e0038d7edff0e871f0799fd80910143b9ae7e8cde7833c207a15708b1",
+  "note": "Run with the 7b95d4b5 build; the e3829922 nori binary is byte-identical (only host_client/tests.rs changed).",
+  "same_as_baseline": true
+}
