@@ -216,6 +216,12 @@ Native macOS at each exact head passed. Linux CI passed for #746, #748 and #749.
 `nori-acp-host` `test_cancelled_spawn_reaps_child_during_initialization` (5 s pid-file timeout). #747 does not change `acp-host`.
 The test passed 8 of 8 runs locally, and the full lib suite passed 105/105.
 
+Later heads (09:00): #746 `35297393` adds only a test fix (script agents run through their interpreter, which avoids
+ETXTBSY). #747 `5fbb7cf6`, #748 `2fb8b41a` and #749 `c476d07d` have the same patches as the heads above, by `git patch-id`.
+The results above carry over, and native macOS passed at all four. Linux #747 then failed
+`managed_recovery::disconnected_machine_output_is_saved_and_its_live_lane_can_reattach` (`_nori/host/replay` -> -32016
+watcher is read-only). That failure predates the stack change (also seen at #743 `6ed85ffb` and on a #739 macOS run) and was routed on #747.
+
 Observation, not a finding: the watcher shows the adapter's bare stream error (`close declined by …`) without the
 `Failed to close the session:` prefix, because only the terminal that sent the close knows it is a close refusal.
 
