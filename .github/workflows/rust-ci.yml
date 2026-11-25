@@ -140,6 +140,33 @@ jobs:
         run: |
           cargo test --profile ci-test --target ${{ matrix.target }} -p nori-protocol
           cargo test --profile ci-test --target ${{ matrix.target }} -p nori-tui --lib
+      - name: Diagnose the controller's answer on macOS
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/host_attach.rs
+          python3 - <<'PY'
+          p = 'tui-pty-e2e/tests/host_attach.rs'
+          s = open(p).read()
+          old = """    controller.send_key(Key::Enter).unwrap();
+              controller
+                  .wait_for_text("Permission granted with option: allow", TIMEOUT)
+                  .unwrap();"""
+          new = """    eprintln!("DIAG before Enter:\\n{}", controller.screen_contents());
+              controller.send_key(Key::Enter).unwrap();
+              controller.settle(Duration::from_millis(1500));
+              eprintln!("DIAG 1.5s after Enter:\\n{}", controller.screen_contents());
+              controller.send_key(Key::Enter).unwrap();
+              controller.settle(Duration::from_millis(1500));
+              eprintln!("DIAG after second Enter:\\n{}", controller.screen_contents());
+              controller
+                  .wait_for_text("Permission granted with option: allow", TIMEOUT)
+                  .unwrap();"""
+          assert old in s, "pattern"
+          open(p, 'w').write(s.replace(old, new))
+          PY
+          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --test host_attach watcher_cannot_answer -- --nocapture 2>&1 | grep -v '^\s*$' | sed -n '/DIAG before/,$p' | head -150 || true
+          git checkout -- tui-pty-e2e/tests
       - name: Attach PTY suites on macOS, three rounds
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
