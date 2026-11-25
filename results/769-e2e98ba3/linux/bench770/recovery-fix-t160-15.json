@@ -1,0 +1,42 @@
+{
+  "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+  "binary_sha256": "741fd6ab2349139b07905b6699614163979ef470ea6d47a21a8ff9437462066d",
+  "terminal": "120x40 tmux loopback via diagnostic wire probe",
+  "samples": [
+    {
+      "sections": 160,
+      "mode": "transcript",
+      "ctrl_r_to_ready_row_ms": 39.247,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 16.722,
+      "enter_to_first_latest_ms": 35.214,
+      "enter_to_first_tool_ms": 35.216,
+      "enter_to_new_reply_ms": 238.389,
+      "audited_sections": 160,
+      "audited_lines": 2413,
+      "history_watermark": 1764,
+      "applied_after_probe": 3236,
+      "enter_to_wire_watermark_ms": 16.997,
+      "enter_to_replay_finished_wire_ms": 24.798,
+      "enter_to_confirmed_cursor_ms": 2945.399,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 26.155,
+      "ctrl_r_to_agent_session_new_ms": 26.547,
+      "fixture": {
+        "sessions": 1,
+        "sections": 160,
+        "acp_updates": 1603,
+        "update_types": {
+          "user_message_chunk": 160,
+          "agent_message_chunk": 1122,
+          "tool_call": 161,
+          "tool_call_update": 160
+        },
+        "saved_session_events": 1613,
+        "transcript_bytes": 640278,
+        "text_bytes": 27799
+      }
+    }
+  ]
+}

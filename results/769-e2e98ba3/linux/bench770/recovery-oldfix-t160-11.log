@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/tmp/clean770.ZNP5/c/scripts/attach_perf/recovery.py", line 174, in <module>
+    main()
+  File "/tmp/clean770.ZNP5/c/scripts/attach_perf/recovery.py", line 166, in main
+    sample_data = sample(binary, length, mode == "native", args.tmux_wrapper, audit=index == 0)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/clean770.ZNP5/c/scripts/attach_perf/recovery.py", line 92, in sample
+    check_exactly_once(history, turns, f.first_marker, f.last_marker)
+  File "/tmp/clean770.ZNP5/c/scripts/attach_perf/audit.py", line 39, in check_exactly_once
+    raise AuditError(f"connection notice in restored history: {notices[0]!r}")
+audit.AuditError: connection notice in restored history: ' Connection lost. Reconnecting… host connection closed'

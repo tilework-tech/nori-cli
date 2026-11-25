@@ -1,0 +1,52 @@
+Traceback (most recent call last):
+  File "/tmp/clean770.ZNP5/c/scripts/attach_perf/recovery.py", line 174, in <module>
+    main()
+  File "/tmp/clean770.ZNP5/c/scripts/attach_perf/recovery.py", line 166, in main
+    sample_data = sample(binary, length, mode == "native", args.tmux_wrapper, audit=index == 0)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/clean770.ZNP5/c/scripts/attach_perf/recovery.py", line 75, in sample
+    term.wait(lambda s: "Synthetic acknowledgement." in s)
+  File "/tmp/clean770.ZNP5/c/scripts/attach_perf/replay.py", line 70, in wait
+    raise RuntimeError(f"Timed out observing terminal:\n{screen}")
+RuntimeError: Timed out observing terminal:
+ Nori host  CONTROLLING
+ synthetic · Replay benchmark target · ~/project · ready · Approvals: Agent
+
+
+ ### SectionBeacon0159
+
+ Read sample 159 and compare its measured range.
+
+ - Input: example-159.dat
+ - Output: accepted
+
+ let sample = 159;
+
+ • Explored 1 read
+   • Read sample-159.dat
+
+ › You
+ Inspect sample 160.
+
+ ### SectionBeacon0160
+
+ Read sample 160 and compare its measured range.
+
+ - Input: example-160.dat
+ - Output: accepted
+
+ let sample = 160;
+
+ • Explored 1 read
+   • Read sample-160.dat
+
+ Summary for 160 inspected samples. FinalReplayBeacon
+
+ • Explored 1 read
+   • Read CompleteReplayBeacon.txt
+
+
+› RecoveryProbe
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task
+

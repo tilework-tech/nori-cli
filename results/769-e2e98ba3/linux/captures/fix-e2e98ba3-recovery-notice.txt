@@ -1,0 +1,30 @@
+ Nori host  CONTROLLING
+ kiln · kiln seed history · workbench · ready · Approvals: Agent
+
+     return 61
+
+ Connection lost. Reconnecting… host connection closed
+
+ - 3
+
+
+ • Explored 1 read
+   • Read kiln-61.log
+
+ › You
+ Check kiln batch 62 please.
+
+ ## KilnMark0062
+
+ Batch 62 fired at cone 3; glaze celadon-62 held.
+
+ shelf  temp
+ ━━━━━  ━━━━
+ 62     1262
+
+ 1. Loaded
+ 2. Fired
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg

@@ -1,0 +1,62 @@
+{"launch_to_list_ms": 8.41, "ctrl_r_to_ready_row_ms": 31.91, "enter_to_first_content_ms": 11.46, "draft_ms": 18.9, "enter_to_latest_reply_ms": 45.03, "enter_to_final_tool_ms": 45.03, "frames_to_catchup": 51, "bytes_to_catchup": 71639, "enter_to_new_answer_ms": 268.51, "new_answer_seen": true, "answered_by_replacement": true, "replacement_ledger_ms_from_enter": [["request", "initialize", -10.0], ["response", "initialize", -9.9], ["request", "session/new", -9.6], ["response", "session/new", -8.7], ["request", "session/prompt", 224.2], ["prompt", "", 224.4], ["response", "session/prompt", 224.4]], "settled_key_ms": 12.36, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 3.55, "page_up_ms_median": 6.09, "page_up_ms_max": 61.15, "page_up_ms_last5_median": 7.99, "page_ups": 151, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1532, "sha256": "f5f828fb3c34a9976aa9f12dddf0ac50101d5b0cb9b7a7fa13e12c031ff82607"}, "disconnect_notices": 0, "restored_notices": 0, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "fix", "index": 0}
+{"launch_to_list_ms": 9.14, "ctrl_r_to_ready_row_ms": 36.47, "enter_to_first_content_ms": 10.96, "draft_ms": 24.63, "enter_to_latest_reply_ms": 827.52, "enter_to_final_tool_ms": 827.53, "frames_to_catchup": 59, "bytes_to_catchup": 78752, "enter_to_new_answer_ms": 1053.59, "new_answer_seen": true, "answered_by_replacement": true, "replacement_ledger_ms_from_enter": [["request", "initialize", -10.9], ["response", "initialize", -10.8], ["request", "session/new", -10.3], ["response", "session/new", -10.2], ["request", "session/prompt", 1007.4], ["prompt", "", 1007.5], ["response", "session/prompt", 1007.5]], "settled_key_ms": 14.67, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 1.98, "page_up_ms_median": 5.86, "page_up_ms_max": 12.4, "page_up_ms_last5_median": 9.03, "page_ups": 152, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1536, "sha256": "de786fae9ddde0eea0607a4f3df0893b0f909a718b86b5d9766bbd1ef08251fe"}, "disconnect_notices": 7, "restored_notices": 0, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "oldfix", "index": 0}
+{"launch_to_list_ms": 9.58, "ctrl_r_to_ready_row_ms": 35.46, "enter_to_first_content_ms": 12.25, "draft_ms": 15.07, "enter_to_latest_reply_ms": 3255.33, "enter_to_final_tool_ms": 3261.47, "frames_to_catchup": 1412, "bytes_to_catchup": 1656958, "enter_to_new_answer_ms": 6582.6, "new_answer_seen": true, "answered_by_replacement": true, "replacement_ledger_ms_from_enter": [["request", "initialize", -11.4], ["response", "initialize", -11.4], ["request", "session/new", -10.9], ["response", "session/new", -10.9], ["request", "session/prompt", 3490.4], ["prompt", "", 3490.5], ["response", "session/prompt", 3490.5]], "settled_key_ms": 22.16, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 7.79, "page_up_ms_median": 8.75, "page_up_ms_max": 10.97, "page_up_ms_last5_median": 7.78, "page_ups": 151, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1532, "sha256": "f5f828fb3c34a9976aa9f12dddf0ac50101d5b0cb9b7a7fa13e12c031ff82607"}, "disconnect_notices": 0, "restored_notices": 0, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "parent", "index": 0}
+Traceback (most recent call last):
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 292, in <module>
+    main()
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 283, in main
+    row = open_sample(binary, args, Path(d))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 241, in open_sample
+    full, lat, top = stitch(pane, args.sections * 30 + 60)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 77, in stitch
+    raise AssertionError("page does not overlap previous page by a scroll step:\n"
+AssertionError: page does not overlap previous page by a scroll step:
+ Closing note 066 for the run.
+ Closing note 067 for the run.
+ Closing note 068 for the run.
+ Closing note 069 for the run.
+ Closing note 070 for the run.
+ Closing note 071 for the run.
+ Closing note 072 for the run.
+ Closing note 073 for the run.
+ Closing note 074 for the run.
+ Closing note 075 for the run.
+ Closing note 076 for the run.
+ Closing note 077 for the run.
+ Closing note 078 for the run.
+ Closing note 079 for the run.
+ Closing note 080 for the run.
+ Closing note 081 for the run.
+ Closing note 082 for the run.
+ Closing note 083 for the run.
+ Closing note 084 for the run.
+ Closing note 085 for the run.
+ Closing note 086 for the run.
+ Connection restored. A previous request may have reached the host and was not retried; check the
+conversation before submitting again.
+---
+ Closing note 076 for the run.
+ Closing note 077 for the run.
+ Closing note 078 for the run.
+ Closing note 079 for the run.
+ Closing note 080 for the run.
+ Closing note 081 for the run.
+ Closing note 082 for the run.
+ Closing note 083 for the run.
+ Closing note 084 for the run.
+ Closing note 085 for the run.
+ Closing note 086 for the run.
+ Closing note 087 for the run.
+ Closing note 088 for the run.
+ Closing note 089 for the run.
+ Closing note 090 for the run.
+
+ KilnLatestEnd
+
+ • Explored 1 read
+   • Read final.txt
+
+ Connection restored. A previous request may have reached the host and was not retried; check the
+conversation before submitting again.

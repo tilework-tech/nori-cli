@@ -3,7 +3,7 @@ sys.path.insert(0, "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/
 from kiln import KilnHost, Pane
 from replay769 import history_text
 out = sys.argv[2]
-for attempt in range(1, 25):
+for attempt in range(1, int(sys.argv[3]) + 1 if len(sys.argv) > 3 else 25):
     with KilnHost(sys.argv[1], 64, native_load=attempt % 2 == 0) as h, tempfile.TemporaryDirectory() as d:
         pid = next(e["pid"] for e in h.ledger() if e["event"] == "seeded")
         os.kill(pid, signal.SIGTERM)

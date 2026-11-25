@@ -1,0 +1,30 @@
+[1m Nori host  [0m[38;5;2m[49mCONTROLLING[39m
+ [2mkiln · [0;1m[39m[49mkiln seed history[0;2m[39m[49m · workbench · ready · Approvals: Agent
+
+[0m[39m[49m [38;2;205;214;244m    [38;2;203;166;247mreturn[38;2;205;214;244m [38;2;250;179;135m61[39m
+
+ [38;5;6mConnection lost. Reconnecting… host connection closed
+[39m
+ - 3
+
+
+ [1m[38;5;2m•[0m[39m[49m [1mExplored[0m[39m[49m [2m1 read[0m[39m[49m
+   [1m[38;5;2m•[0m[39m[49m [38;5;6mRead[39m kiln-61.log
+
+ [1m› You[0m[39m[49m
+ Check kiln batch 62 please.
+
+ [1m## KilnMark0062[0m[39m[49m
+
+ Batch 62 fired at [3mcone 3[0m[39m[49m; glaze [38;5;6mceladon-62[39m held.
+
+ [1mshelf[0m[39m[49m  [1mtemp[0m[39m[49m
+ [38;5;8m━━━━━  ━━━━[39m
+ 62     1262
+
+ [38;5;12m1. [39mLoaded
+ [38;5;12m2. [39mFired
+
+[1m›[0m[39m[49m [2mSend a prompt
+
+[0m[39m[49m   [1malt+s[0m[39m[49m sessions    [1malt+down[0m[39m[49m next waiting    [1malt+t[0m[39m[49m take control    [1mctrl+d[0m[39m[49m detach    [1m/delegate[0m[39m[49m deleg
