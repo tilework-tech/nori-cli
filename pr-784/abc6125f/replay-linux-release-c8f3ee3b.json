@@ -1,0 +1,149 @@
+{
+  "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+  "binary_sha256": "4bc6c8a53f81c138e1a6d9a8fe7416ed560862fbdfb11b0bb05049fd374fe8cc",
+  "sessions": 1,
+  "turns": 64,
+  "live": true,
+  "samples": [
+    {
+      "launch_to_list_ms": 49.179,
+      "selection_to_content_ms": 12.777,
+      "selection_to_draft_ms": 15.091,
+      "selection_to_latest_ms": 73.102,
+      "selection_to_fence_ms": 73.11,
+      "selection_to_live_ms": 73.111,
+      "catchup_key_ms": 2.309,
+      "replay_draws": 50,
+      "replay_terminal_bytes": 72605,
+      "body_sha256": "0e9b15c3decf0ffa08889edc93d5a969bab6b820d62b20e065597029dfdd6e53",
+      "settled_key_ms": 6.319,
+      "page_up_ms": 5.115,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 257622,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "launch_to_list_ms": 46.282,
+      "selection_to_content_ms": 13.353,
+      "selection_to_draft_ms": 15.306,
+      "selection_to_latest_ms": 56.288,
+      "selection_to_fence_ms": 56.293,
+      "selection_to_live_ms": 59.41,
+      "catchup_key_ms": 1.949,
+      "replay_draws": 49,
+      "replay_terminal_bytes": 83114,
+      "body_sha256": "0e9b15c3decf0ffa08889edc93d5a969bab6b820d62b20e065597029dfdd6e53",
+      "settled_key_ms": 5.101,
+      "page_up_ms": 5.97,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 257622,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "launch_to_list_ms": 50.242,
+      "selection_to_content_ms": 13.267,
+      "selection_to_draft_ms": 15.685,
+      "selection_to_latest_ms": 53.086,
+      "selection_to_fence_ms": 53.093,
+      "selection_to_live_ms": 69.541,
+      "catchup_key_ms": 2.411,
+      "replay_draws": 49,
+      "replay_terminal_bytes": 78849,
+      "body_sha256": "0e9b15c3decf0ffa08889edc93d5a969bab6b820d62b20e065597029dfdd6e53",
+      "settled_key_ms": 5.351,
+      "page_up_ms": 5.216,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 257622,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "launch_to_list_ms": 46.572,
+      "selection_to_content_ms": 14.885,
+      "selection_to_draft_ms": 17.445,
+      "selection_to_latest_ms": 61.361,
+      "selection_to_fence_ms": 61.364,
+      "selection_to_live_ms": 61.366,
+      "catchup_key_ms": 2.555,
+      "replay_draws": 46,
+      "replay_terminal_bytes": 70185,
+      "body_sha256": "0e9b15c3decf0ffa08889edc93d5a969bab6b820d62b20e065597029dfdd6e53",
+      "settled_key_ms": 5.062,
+      "page_up_ms": 6.176,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 257622,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "launch_to_list_ms": 50.64,
+      "selection_to_content_ms": 12.088,
+      "selection_to_draft_ms": 18.69,
+      "selection_to_latest_ms": 59.102,
+      "selection_to_fence_ms": 59.108,
+      "selection_to_live_ms": 59.11,
+      "catchup_key_ms": 6.595,
+      "replay_draws": 51,
+      "replay_terminal_bytes": 80348,
+      "body_sha256": "0e9b15c3decf0ffa08889edc93d5a969bab6b820d62b20e065597029dfdd6e53",
+      "settled_key_ms": 6.177,
+      "page_up_ms": 5.44,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 257622,
+        "text_bytes": 11042
+      }
+    }
+  ]
+}

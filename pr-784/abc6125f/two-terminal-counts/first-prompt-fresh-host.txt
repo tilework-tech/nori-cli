@@ -1,0 +1,12 @@
+run 1 id=f45cea19: prompts=1 reply=1
+• Test message 1Test message 2
+› $ for skill listing
+  controlling · project · mock-model · ready · Approvals: Agent · ctrl+d detach                                   ⎇ main
+run 2 id=f3dffff9: prompts=1 reply=1
+• Test message 1Test message 2
+› $ for skill listing
+  controlling · project · mock-model · ready · Approvals: Agent · ctrl+d detach                                   ⎇ main
+run 3 id=05f0d984: prompts=1 reply=1
+• Test message 1Test message 2
+› ! for shell commands
+  controlling · project · mock-model · ready · Approvals: Agent · ctrl+d detach                                   ⎇ main

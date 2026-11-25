@@ -1,0 +1,36 @@
+== B after watcher Ctrl+C/Esc/Ctrl+C: B requests: 0 
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+• sudo make me a sandwich (3s • esc to interrupt)
+› synthetic watcher draft
+  watching · read-only · project · mock-model · working · Approvals: Agent · alt+t take control · ctrl+d detach   ⎇ main
+== A still streaming:
+• Turning it off and on again (3s • esc to interrupt)
+› ? for shortcuts
+  controlling · project · mock-model · working · Approvals: Agent · ctrl+d detach                                 ⎇ main
+== A after controller Ctrl+C: A requests: 
+https://github.com/tilework-tech/nori-cli/issues
+› mock:stream-until-cancel
+• Turning it off and on again (6s • esc to interrupt)
+› ? for shortcuts
+  ctrl + c again to interrupt
+== A after second Ctrl+C:
+  treaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming..
+  .Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming
+  ...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streami
+  ng...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Strea
+  ming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Str
+  eaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...S
+  treaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming..
+  .Streaming...
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+› ? for shortcuts
+  ctrl + c again to quit
+A requests now: _nori/session/cancel_observed 
+== A after Ctrl+C on an idle empty prompt:
+can't find pane: ttA
+== B still watching:
+› synthetic watcher draft
+  watching · read-only · project · mock-model · ready · Approvals: Agent · alt+t take control · ctrl+d detach     ⎇ main

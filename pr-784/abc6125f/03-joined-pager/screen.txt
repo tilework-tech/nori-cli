@@ -1,0 +1,40 @@
+/ T R A N S C R I P T / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+
+› Survey the synthetic orchard
+
+
+• Test message 1Test message 2
+
+
+› mock:stream-until-cancel
+
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+~
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────── 100% ─
+ ↑/↓ to scroll   pgup/pgdn to page   home/end to jump
+ q/esc to quit
+

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Survey the synthetic orchard
+
+
+• Test message 1Test message 2
+
+
+› mock:stream-until-cancel
+
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+
+• Aligning the neural pathways (2s • esc to interrupt)
+
+
+› Synthetic watcher draft
+
+  watching · read-only · project · mock-model · working · Approvals: Agent · alt+t take control · ctrl+d detach   ⎇ main

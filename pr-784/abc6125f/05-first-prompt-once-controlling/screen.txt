@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Synthetic first prompt
+
+
+• Test message 1Test message 2
+
+
+› ! for shell commands
+
+  controlling · project · mock-model · ready · Approvals: Agent · ctrl+d detach                                   ⎇ main

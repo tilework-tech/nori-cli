@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Survey the synthetic orchard
+
+
+• Test message 1Test message 2
+
+
+› mock:stream-until-cancel
+
+
+• Consulting the ancient texts (5s • esc to interrupt)
+
+
+› $ for skill listing
+
+  controlling · project · mock-model · working · Approvals: Agent · ctrl+d detach                                 ⎇ main

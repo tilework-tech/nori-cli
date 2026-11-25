@@ -1,0 +1,9 @@
+FAIL: Timed out waiting for 'controlling'
+Screen dumped to ttA_failure.log
+run 1: prompts=1 A_sees=1
+FAIL: Timed out waiting for 'controlling'
+Screen dumped to ttA_failure.log
+run 2: prompts=1 A_sees=1
+FAIL: Timed out waiting for 'controlling'
+Screen dumped to ttA_failure.log
+run 3: prompts=1 A_sees=1
