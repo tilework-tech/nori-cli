@@ -67,6 +67,7 @@ mod event_handlers;
 mod external_cancel;
 mod goal;
 mod helpers;
+mod history_host;
 mod key_handling;
 mod login;
 mod new_session_folder;

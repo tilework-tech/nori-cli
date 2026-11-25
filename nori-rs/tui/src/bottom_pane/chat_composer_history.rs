@@ -51,6 +51,18 @@ impl ChatComposerHistory {
         self.last_history_text = None;
     }
 
+    /// Take the persistent history's current size, as reported again later
+    /// in the session. Unchanged metadata keeps this session's own entries;
+    /// a grown history already holds them. Browsing is left undisturbed.
+    pub fn refresh_metadata(&mut self, log_id: u64, entry_count: usize) {
+        let unchanged =
+            self.history_log_id == Some(log_id) && self.history_entry_count == entry_count;
+        if unchanged || self.history_cursor.is_some() {
+            return;
+        }
+        self.set_metadata(log_id, entry_count);
+    }
+
     /// Record a message submitted by the user in the current session so it can
     /// be recalled later.
     pub fn record_local_submission(&mut self, text: &str) {

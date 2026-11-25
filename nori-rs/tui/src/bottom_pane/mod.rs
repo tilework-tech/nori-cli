@@ -927,6 +927,10 @@ impl BottomPane {
         self.composer.set_history_metadata(log_id, entry_count);
     }
 
+    pub(crate) fn refresh_history_metadata(&mut self, log_id: u64, entry_count: usize) {
+        self.composer.refresh_history_metadata(log_id, entry_count);
+    }
+
     pub(crate) fn record_local_history_submission(&mut self, text: &str) {
         self.composer.record_local_history_submission(text);
     }

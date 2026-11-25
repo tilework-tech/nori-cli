@@ -459,7 +459,9 @@ prompt does not answer it. When several requests wait, the newest shows first.
   that runs it. Without a host session, Nori searches the launch folder. Tab or Enter inserts
   the path, quoted if it contains spaces. An image file is attached.
 - **History search:** Ctrl+R searches up to 500 earlier prompts from
-  `$NORI_HOME/history.jsonl`.
+  `$NORI_HOME/history.jsonl`. For a session on a host, that is the host's
+  file, so Up and Ctrl+R also find prompts sent from another terminal on the
+  same host. Up sees those after the next turn ends.
 - **Paste:** a paste over 1000 characters shows as
   `[Pasted Content N chars]` and expands on send. A pasted image path becomes
   an attachment.
