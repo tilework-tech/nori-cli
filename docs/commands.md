@@ -219,7 +219,7 @@ configuration.
 |---|---|
 | `nori host` | When a host already runs for this `NORI_HOME`, print its PID and endpoint and exit 0. Fail when its `host.json` does not satisfy this build's host contract. Otherwise start `nori host ... --foreground` detached in a new session, with output appended to `$NORI_HOME/host/host.log`, wait up to 15 seconds for it to answer, and print its PID, endpoint, and token path. |
 | `nori host --foreground` | Run the background host in this process until `_nori/host/stop`, Ctrl-C, or SIGTERM. |
-| `nori host --stdio` | Join the running background host when the client brings no configuration (no `--agent`, `--add-dir`, `--yolo`, or `-c`) and the host makes the client the controller. Otherwise serve a private host on stdio. Fails when `[host] managed = true`. A private stdio host exits with an error on SIGINT or SIGTERM. |
+| `nori host --stdio` | Join the running background host when the client brings no configuration (no `--agent`, `--add-dir`, `--yolo`, or `-c`) and the host makes the client the controller. A joined client still copies the replies to requests it already forwarded after stdin closes. Replies are correlated by `id` and can arrive out of request order; `initialize` is always answered first. Otherwise serve a private host on stdio. Fails when `[host] managed = true`. A private stdio host exits with an error on SIGINT or SIGTERM. |
 | `nori host --stdio --launch FILE` | Serve one managed launch as plain ACP on stdio. Needs `[host] managed = true` and `[host.dedicated_roots]`. |
 
 Only one background host runs per `NORI_HOME`. Background hosts need Unix.
