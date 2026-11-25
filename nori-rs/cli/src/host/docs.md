@@ -178,9 +178,10 @@ plain nori TUI --pipe (controller)--> owned HostService --> its own SessionManag
   turn's ACP prompt response, and answers only after this connection's
   forwarder has delivered up to that journal sequence (a delivered-sequence
   watch, bounded wait), so clients see the turn's updates before its
-  `stopReason`. `session/close` closes the manager session (it stays listed
-  and restarts through `SessionManager::reopen` on load or resume);
-  `session/delete` closes it, removes its transcript only when it lies under
+  `stopReason`. `session/close` uses `SessionManager::close_explicitly`.
+  A capable adapter can decline. An accepted session stays listed and can
+  restart through `SessionManager::reopen` on load or resume.
+  `session/delete` forces shutdown, removes its transcript only when it lies under
   `NORI_HOME`, clears remembered settings, and records the ID in
   `HostService.deleted`, which hides it from list, load and prompt for the
   rest of the host's life.

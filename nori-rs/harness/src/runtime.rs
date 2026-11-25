@@ -183,6 +183,9 @@ enum HarnessCommand {
         response_tx: oneshot::Sender<anyhow::Result<Vec<acp::v1::SessionInfo>>>,
     },
     /// Close (release) the active session via ACP `session/close`.
+    HostClose {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
     CloseSession {
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
@@ -802,6 +805,11 @@ impl HarnessHandle {
             .map_err(|_| anyhow::Error::new(HarnessTransportClosed("ACP agent did not respond")))?
     }
 
+    pub(crate) async fn close_from_host(&self) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::HostClose { response_tx })
+            .await
+    }
+
     /// Subscribe to the ordered public event stream as an additional bounded
     /// consumer. The primary receiver from [`launch_session`] is unaffected.
     /// A subscriber that falls a full queue behind is dropped and its
@@ -1231,14 +1239,47 @@ pub(crate) fn launch_session_from(
         let event_fanout = event_tx.clone();
         let command_normal_shutdown = Arc::clone(&normal_shutdown);
         tokio::spawn(async move {
+            // Keep answering permissions and forced shutdown while the adapter
+            // decides whether to release the session.
+            let mut close_requests = futures::stream::FuturesUnordered::new();
             loop {
-                let cmd = match pending_commands.pop_front() {
-                    Some(command) => command,
-                    None => match agent_cmd_rx.recv().await {
-                        Some(command) => command,
-                        None => break,
-                    },
+                let cmd = if close_requests.is_empty()
+                    && let Some(command) = pending_commands.pop_front()
+                {
+                    command
+                } else {
+                    tokio::select! {
+                        biased;
+                        Some((reply, result)) = futures::StreamExt::next(&mut close_requests), if !close_requests.is_empty() => {
+                            let reply: oneshot::Sender<anyhow::Result<()>> = reply;
+                            match result {
+                                Ok(()) => {
+                                    command_normal_shutdown.store(true, Ordering::Release);
+                                    backend_for_agent.finish_host_close(true).await;
+                                    let _ = reply.send(Ok(()));
+                                    break;
+                                }
+                                Err(error) => { let _ = reply.send(Err(error)); }
+                            }
+                            continue;
+                        }
+                        command = agent_cmd_rx.recv() => match command {
+                            Some(command) => command,
+                            None => break,
+                        }
+                    }
                 };
+                if !close_requests.is_empty()
+                    && !matches!(
+                        cmd,
+                        HarnessCommand::RespondToAgent { .. }
+                            | HarnessCommand::Shutdown { .. }
+                            | HarnessCommand::SubscribeEvents { .. }
+                    )
+                {
+                    pending_commands.push_back(cmd);
+                    continue;
+                }
                 match cmd {
                     HarnessCommand::Prompt {
                         content,
@@ -1381,6 +1422,23 @@ pub(crate) fn launch_session_from(
                     HarnessCommand::ListSessions { cwd, response_tx } => {
                         let result = backend_for_agent.connection().list_sessions(&cwd).await;
                         let _ = response_tx.send(result);
+                    }
+                    HarnessCommand::HostClose { response_tx } => {
+                        if backend_for_agent
+                            .connection()
+                            .capabilities()
+                            .session_capabilities
+                            .close
+                            .is_none()
+                        {
+                            command_normal_shutdown.store(true, Ordering::Release);
+                            backend_for_agent.finish_host_close(false).await;
+                            let _ = response_tx.send(Ok(()));
+                            break;
+                        }
+                        let backend = Arc::clone(&backend_for_agent);
+                        close_requests
+                            .push(async move { (response_tx, backend.request_host_close().await) });
                     }
                     HarnessCommand::CloseSession { response_tx } => {
                         command_normal_shutdown.store(true, Ordering::Release);

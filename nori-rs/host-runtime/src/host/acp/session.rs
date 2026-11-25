@@ -281,7 +281,7 @@ impl HostService {
         if self.manager.get(id).is_none() || self.is_deleted(id) {
             return Err(AcpError::not_found("unknown session"));
         }
-        self.manager.close(id, Duration::ZERO).await?;
+        self.manager.close_explicitly(*id).await?;
         Ok(json!({}))
     }
 

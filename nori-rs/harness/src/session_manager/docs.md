@@ -148,7 +148,12 @@ Path: @/nori-rs/harness/src/session_manager
   A previously live session appears interrupted (`Failed`). Import consumes
   no process slot and submits no prompts. Provider continuation and durable
   cross-machine delegation result delivery require their own owning paths.
-- **Close and shutdown.** `close(id, child_grace)` cancels delegated descendants and shuts the
+- [Explicit close](explicit_close.rs) waits for a capable adapter’s acknowledgement.
+  Permission answers and forced shutdown remain available during the wait.
+  The event pump binds a successful close to the original process and captures
+  its descendants before publishing the closed row. Cleanup retries address
+  those process generations. A refusal leaves the tree and pending work live.
+- **Forced close and shutdown.** `close(id, child_grace)` cancels delegated descendants and shuts the
   target session down, bounded by `shutdown_timeout`. An ended target has no
   process to stop, but its running descendants and pending approvals still
   require cancellation.
@@ -162,9 +167,7 @@ Path: @/nori-rs/harness/src/session_manager
   session keeps that same lineage target. `shutdown(child_grace)` stops
   admission, then shuts every live session down in parallel, each with the same
   timeout, and returns a
-  `ShutdownReport` of closed, timed-out, and failed sessions. A session whose
-  launch was in flight when admission closed is shut down as soon as it
-  registers its handle.
+  `ShutdownReport` of closed, timed-out, and failed sessions. Registration and handle installation share one lock, so shutdown sees every admitted process.
 - **Handle lifetime.** The manager drops its handle to a session as soon as the
   session ends. A dead agent process therefore does not keep the session's
   runtime alive: once clients drop their handles too, the session's event
@@ -273,8 +276,7 @@ remote /session/delegate ----------+         |
   resume. The held result queue belongs to the live manager. Managed checkpoints
   can carry historical delegation metadata as described above. A child crash produces a failure
   result without failing its parent.
-- Admission and explicit close share a mutex so a start cannot escape a parent
-  close. Result work is claimed under manager state, then prompts and process
+- Child registration and tree retirement share the registry lock. Result work is claimed under manager state, then prompts and process
   shutdown run outside that lock. Prompt request IDs, outstanding descendants,
   and in-flight result submissions determine completion; an idle phase alone
   does not prove that a delegated task has finished. The MCP authority follows

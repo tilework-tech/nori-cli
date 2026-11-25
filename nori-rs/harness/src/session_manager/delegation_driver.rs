@@ -175,7 +175,7 @@ pub(super) fn wake(shared: &Arc<Shared>) {
     }
 }
 
-async fn wait_process_end(shared: &Arc<Shared>, process: AgentProcessId) {
+pub(super) async fn wait_process_end(shared: &Arc<Shared>, process: AgentProcessId) {
     loop {
         let ended = shared.process_ended.notified();
         tokio::pin!(ended);

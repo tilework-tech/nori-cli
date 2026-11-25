@@ -4,6 +4,28 @@ use super::ChatWidget;
 use crate::app_event::AppEvent;
 
 impl ChatWidget {
+    /// The host decides whether to ask the adapter or close its private process.
+    pub(super) fn start_host_close(&mut self) {
+        let Some(session) = self.managed_conversation_id else {
+            self.add_error_message("No live host session to close.".into());
+            return;
+        };
+        self.session_close_in_flight = true;
+        let tx = self.app_event_tx.clone();
+        let generation = self.session_generation;
+        let reply = tx.host_receipt(crate::host_client::HostCall::Close {
+            session_id: session.to_string(),
+        });
+        tokio::spawn(async move {
+            if let Err(error) = reply.await {
+                tx.send(AppEvent::SessionCloseFailed {
+                    generation,
+                    message: error.to_string(),
+                });
+            }
+        });
+    }
+
     /// Release this cloud session through the agent's `session/close`.
     pub(crate) fn start_cloud_close(&mut self) {
         let Some(handle) = self.harness_handle.clone() else {
@@ -12,11 +34,13 @@ impl ChatWidget {
         };
         self.session_close_in_flight = true;
         let tx = self.app_event_tx.clone();
+        let generation = self.session_generation;
         tokio::spawn(async move {
             // Success ends the session; the app confirms the release on
             // the screen that replaces it.
             if let Err(e) = handle.close_session().await {
                 tx.send(AppEvent::SessionCloseFailed {
+                    generation,
                     message: format!("{e}"),
                 });
             }
