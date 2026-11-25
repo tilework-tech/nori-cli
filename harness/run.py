@@ -5427,9 +5427,34 @@ def r12_partial_line_live(ctx):
 SCENARIOS.update({"R12": ("restack: a live line without a newline, attach vs plain nori", r12_partial_line_live)})
 
 
+def r13_plain_shell(ctx):
+    """#789: plain nori runs ! in its session folder (launched from beta), output shown once, nothing sent to the agent."""
+    run = ctx.fx["run"]
+    canaries = lambda: sorted(str(p.relative_to(run)) for p in Path(run).rglob("shell-canary-*"))
+    t = ctx.term("plain", cwd="beta")
+    t.run(f"{NORI} --skip-trust-directory")
+    wait_composer(t)
+    t.type("!echo plain-in-$(basename $(dirname $PWD)) && touch shell-canary-plain")
+    time.sleep(0.3)
+    t.keys("Enter")
+    try:
+        t.wait_for("plain-in-beta", 15)
+    except TimeoutError:
+        pass
+    time.sleep(1)
+    t.capture("plain-shell")
+    ctx.check("plain.output_from_session_folder", "plain-in-beta" in t.screen(), t.screen()[-300:])
+    ctx.check("plain.ran_once_in_session_folder", canaries() == ["roots/beta/app/shell-canary-plain"], canaries())
+    ctx.check("plain.not_sent_to_agent", not r_sent(ctx, "shell-canary"), len(r_sent(ctx, "shell-canary")))
+    k_quit(t)
+
+
+SCENARIOS.update({"R13": ("#789: plain nori ! runs in the session folder", r13_plain_shell)})
+
+
 CAP = "[tui]\ntool_output_max_lines = 10"
 NO_UPDATE = "check_for_update_on_startup = false"
-FIXTURE_ARGS = {"S34m": {"top_extra": NO_UPDATE}, "R12": {"top_extra": NO_UPDATE}, "K01": {"top_extra": NO_UPDATE}, "S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
+FIXTURE_ARGS = {"S34m": {"top_extra": NO_UPDATE}, "R12": {"top_extra": NO_UPDATE}, "R13": {"top_extra": NO_UPDATE}, "K01": {"top_extra": NO_UPDATE}, "S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
                 "S37b": {"host_extra": 'default_mode = "ask"', "top_extra": 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}
 
 
