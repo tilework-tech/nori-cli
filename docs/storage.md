@@ -164,7 +164,8 @@ differs.
 
 A session on a host keeps its prompts in the host's `$NORI_HOME`, not the
 terminal's: every terminal attached to that host records into, recalls from and
-searches the same file, through `_nori/host/history/*`.
+searches the same file, through `_nori/host/history/*`. The host records a
+prompt only for a session it knows; any other session ID gets `-32002`.
 
 ## Files outside `NORI_HOME`
 

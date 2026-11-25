@@ -1,7 +1,7 @@
 //! `_nori/host/history/*`: the prompts terminals send, kept in the host's
 //! own `NORI_HOME`, so every terminal on the host recalls and searches the
-//! same list wherever its own home is. Recording is the controller's;
-//! anyone may read.
+//! same list wherever its own home is. Recording is the controller's, for a
+//! session the host knows; anyone may read.
 
 use nori_harness::ConversationId;
 use nori_harness::HistoryEntry;
@@ -44,7 +44,12 @@ impl HostService {
                 let HistoryAddParams { session_id, text } =
                     serde_json::from_value(params).map_err(AcpError::invalid_params)?;
                 let session = ConversationId::from_string(&session_id)
-                    .map_err(|_| AcpError::invalid_params("unknown session"))?;
+                    .ok()
+                    .filter(|session| self.manager.get(session).is_some())
+                    .ok_or_else(|| AcpError {
+                        code: -32002,
+                        message: "unknown session id".into(),
+                    })?;
                 message_history::append_entry(
                     &text,
                     &session,
