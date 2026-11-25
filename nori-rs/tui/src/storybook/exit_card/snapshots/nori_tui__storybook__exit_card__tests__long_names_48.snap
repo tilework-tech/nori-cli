@@ -4,18 +4,29 @@ expression: "framed.join(\"\\n\")"
 ---
   › Nori CLI  session ended                     |
                                                 |
-  Resume       nori resume 019a7c3e-5b21-7f4d-  |
-               9e08-6c2a1d4b8f37                |
+  Session      019a7c3e-5b21-7f4d-9e08-         |
+               6c2a1d4b8f37                     |
+               Title  Redesign the exit card    |
+               Agent  Claude Code               |
   Messages     14 prompts · 19 replies          |
-  Tokens       412K total · 388K in             |
-               301K cached · 24.1K out          |
-  Tools        Read 9                           |
-               mcp__acme-observability__query_  |
-               trace_spans_by_service_and_      |
-               window 6 · Bash 4                |
-               Exampletoolnamewithoutanyseparato|
-               rsatall 2                        |
+  Tools        9  Read                          |
+               6  mcp__acme-observability__     |
+                  query_trace_spans_by_service_ |
+                  and_window                    |
+               4  Bash                          |
+               2  Exampletoolnamewithoutanysepar|
+                  atorsatall                    |
   Skills       test-driven-development          |
                writing-plans                    |
   Subagents    nori-code-researcher             |
                nori-web-researcher              |
+                                                |
+  Context      164,208 of 1,000,000 · 16% full  |
+  Tokens       2,204,330  total                 |
+                  18,420  input                 |
+               2,071,850  cached read           |
+                  72,100  cached write          |
+                  41,960  output                |
+  Cost         $3.42 · reported by the agent    |
+                                                |
+nori resume 019a7c3e-5b21-7f4d-9e08-6c2a1d4b8f37|

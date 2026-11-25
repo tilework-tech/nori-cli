@@ -6,52 +6,89 @@
 //!
 //! Layout rules, shared with the intro and `/status` cards:
 //! - no border and no block-drawing characters;
-//! - a two-cell inset, an 11-cell label column, a two-cell gutter;
-//! - each row is a list of items. Rows break only between items, and every
-//!   continuation line starts at the value column;
-//! - an item wider than the value column breaks after `_`, `-`, `/`, `.` or
-//!   `:`, then at a space, and is cut at the column edge only when it has
-//!   none of those;
+//! - a two-cell inset, an 11-cell label column, a two-cell gutter, and every
+//!   continuation line starting at the value column;
+//! - two sections: what happened (session, messages, tools, skills,
+//!   subagents), then what it used (context, tokens, cost);
+//! - counts are right-justified in their own column with names
+//!   left-justified after them. Tools fill up to three columns on wide
+//!   terminals;
+//! - skills and subagents take one line each, unless a wide terminal fits a
+//!   few on one line;
+//! - a name wider than its column breaks after `_`, `-`, `/`, `.` or `:`,
+//!   then at a space, and is cut at the column edge only when it has none;
 //! - below [`MIN_COLUMN_WIDTH`] cells each label sits on its own line with its
 //!   values indented beneath it;
 //! - rows with nothing to show are left out;
+//! - the last line is the bare resume command, unindented and unwrapped, so
+//!   a triple-click selects exactly the command. Every other line fits the
+//!   terminal width;
 //! - shading is an optional band blended from the terminal background. A
-//!   terminal without a known background gets no band.
+//!   terminal without a known background gets no band. The resume command
+//!   sits outside the band.
 
-use ratatui::style::Color;
-use ratatui::style::Modifier;
-use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
-use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
+use crate::nori::token_count::format_with_thousands_separator;
 use crate::session_stats::SessionStats;
-use crate::ui_types::TokenUsage;
-use crate::ui_types::format_si_suffix;
 
-const INSET: usize = 2;
-const LABEL_WIDTH: usize = 11;
-const GUTTER: usize = 2;
-const VALUE_OFFSET: usize = INSET + LABEL_WIDTH + GUTTER;
-const MIN_VALUE_WIDTH: usize = 12;
+mod fixtures;
+mod layout;
 
-/// Narrowest width that keeps labels and values side by side.
-pub const MIN_COLUMN_WIDTH: usize = VALUE_OFFSET + MIN_VALUE_WIDTH;
+use layout::Body;
+use layout::Row;
+use layout::Spans;
 
-const SEPARATOR: &str = " · ";
-const BREAK_AFTER: [char; 5] = ['_', '-', '/', '.', ':'];
+pub use fixtures::ExitFieldsFixture;
+pub use fixtures::ExitToolsFixture;
+pub use fixtures::exit_card_fixture;
+pub use layout::MIN_COLUMN_WIDTH;
+
+/// Context window usage from the agent's last usage update.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExitContext {
+    pub used: i64,
+    pub size: i64,
+}
+
+/// Session token totals summed from the agent's per-turn usage reports.
+/// Optional fields are the ones agents may leave out.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ExitTokens {
+    pub total: i64,
+    pub input: i64,
+    pub output: i64,
+    pub cached_read: Option<i64>,
+    pub cached_write: Option<i64>,
+    pub reasoning: Option<i64>,
+}
+
+/// Cumulative session cost, when the agent reports one.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExitCost {
+    pub amount: f64,
+    /// ISO 4217 code, such as `USD`.
+    pub currency: String,
+}
 
 /// Everything the exit card can show. Every field is optional in practice:
 /// a session that never started has no ID, a quiet one has no tools.
 #[derive(Clone, Debug, Default)]
 pub struct ExitCardModel {
     pub session_id: Option<String>,
+    /// Session title from the agent's session info updates.
+    pub title: Option<String>,
+    /// Display name of the agent the session ran with.
+    pub agent: Option<String>,
     /// Whether `nori resume` can reopen this session.
     pub resumable: bool,
     pub stats: SessionStats,
-    pub token_usage: Option<TokenUsage>,
+    pub context: Option<ExitContext>,
+    pub tokens: Option<ExitTokens>,
+    pub cost: Option<ExitCost>,
 }
 
 /// How the card is painted.
@@ -73,8 +110,13 @@ impl ExitCardPaint {
     }
 }
 
-/// Render the proposed exit card at `width` terminal cells. No returned line
-/// is wider than `width`, so the terminal never soft-wraps the card.
+/// The shell command that reopens a session.
+#[must_use]
+pub fn resume_command(session_id: &str) -> String {
+    format!("nori resume {session_id}")
+}
+
+/// Render the proposed exit card at `width` terminal cells.
 #[must_use]
 pub fn exit_card_lines(
     model: &ExitCardModel,
@@ -85,37 +127,44 @@ pub fn exit_card_lines(
     if width == 0 {
         return Vec::new();
     }
-    let mut lines = header_lines(width);
-    let rows = rows(model);
-    if !rows.is_empty() {
-        lines.push(Line::default());
+    let mut card = header_lines(width);
+    for section in [activity_rows(model, width), usage_rows(model)] {
+        if section.is_empty() {
+            continue;
+        }
+        card.push(Line::default());
+        for row in &section {
+            card.extend(layout::row_lines(row, width));
+        }
     }
-    for row in rows {
-        lines.extend(row_lines(&row, width));
-    }
-    if !paint.color {
-        lines = lines.into_iter().map(strip_color).collect();
-    }
-    match paint.shade_from {
-        Some(bg) => shade(lines, width, crate::style::user_message_bg(bg)),
-        None => lines,
-    }
-}
 
-struct Row {
-    label: &'static str,
-    items: Vec<Vec<Span<'static>>>,
+    let mut resume = match (&model.session_id, model.resumable) {
+        (Some(id), true) => vec![
+            Line::default(),
+            Line::from(Span::from(resume_command(id)).green()),
+        ],
+        (Some(_), false) | (None, _) => Vec::new(),
+    };
+    if !paint.color {
+        card = card.into_iter().map(layout::strip_color).collect();
+        resume = resume.into_iter().map(layout::strip_color).collect();
+    }
+    if let Some(bg) = paint.shade_from {
+        card = layout::shade(card, width, crate::style::user_message_bg(bg));
+    }
+    card.extend(resume);
+    card
 }
 
 fn header_lines(width: usize) -> Vec<Line<'static>> {
-    let inset = inset_for(width);
+    let inset = layout::inset_for(width);
     let marker = "› ";
     let items = vec![
         vec![Span::from("Nori CLI").bold()],
         vec![Span::from("session ended").dim()],
     ];
     let avail = width.saturating_sub(inset + marker.width()).max(1);
-    flow(&items, avail, "  ")
+    layout::flow_with(&items, avail, "  ")
         .into_iter()
         .enumerate()
         .map(|(index, spans)| {
@@ -131,47 +180,36 @@ fn header_lines(width: usize) -> Vec<Line<'static>> {
         .collect()
 }
 
-fn rows(model: &ExitCardModel) -> Vec<Row> {
+fn activity_rows(model: &ExitCardModel, width: usize) -> Vec<Row> {
     let mut rows = Vec::new();
     let stats = &model.stats;
+    let wide = width >= layout::WIDE_WIDTH;
 
-    match (&model.session_id, model.resumable) {
-        (Some(id), true) => rows.push(Row {
-            label: "Resume",
-            items: vec![vec![Span::from(format!("nori resume {id}")).cyan()]],
-        }),
-        (Some(id), false) => rows.push(Row {
+    if let Some(id) = &model.session_id {
+        let fields = [("Title", &model.title), ("Agent", &model.agent)]
+            .into_iter()
+            .filter_map(|(label, value)| {
+                value
+                    .as_ref()
+                    .map(|value| (label, vec![Span::from(value.clone())]))
+            })
+            .collect();
+        rows.push(Row {
             label: "Session",
-            items: vec![vec![Span::from(id.clone())]],
-        }),
-        (None, _) => {}
+            body: Body::Detail {
+                main: vec![Span::from(id.clone())],
+                fields,
+            },
+        });
     }
 
     if stats.user_messages + stats.assistant_messages > 0 {
         rows.push(Row {
             label: "Messages",
-            items: vec![
+            body: Body::Inline(vec![
                 counted(stats.user_messages, "prompt", "prompts"),
                 counted(stats.assistant_messages, "reply", "replies"),
-            ],
-        });
-    }
-
-    if let Some(usage) = model.token_usage.as_ref().filter(|usage| !usage.is_zero()) {
-        let mut items = vec![
-            tokens(usage.total_tokens, "total"),
-            tokens(usage.input_tokens, "in"),
-        ];
-        if usage.cached_input_tokens > 0 {
-            items.push(tokens(usage.cached_input_tokens, "cached"));
-        }
-        items.push(tokens(usage.output_tokens, "out"));
-        if usage.reasoning_output_tokens > 0 {
-            items.push(tokens(usage.reasoning_output_tokens, "reasoning"));
-        }
-        rows.push(Row {
-            label: "Tokens",
-            items,
+            ]),
         });
     }
 
@@ -180,15 +218,18 @@ fn rows(model: &ExitCardModel) -> Vec<Row> {
         tools.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
         rows.push(Row {
             label: "Tools",
-            items: tools
-                .into_iter()
-                .map(|(name, count)| {
-                    vec![
-                        Span::from(format!("{name} ")),
-                        Span::from(count.to_string()).dim(),
-                    ]
-                })
-                .collect(),
+            body: Body::Counts {
+                rows: tools
+                    .into_iter()
+                    .map(|(name, count)| {
+                        (
+                            vec![Span::from(count.to_string()).dim()],
+                            vec![Span::from(name.clone())],
+                        )
+                    })
+                    .collect(),
+                columns: wide,
+            },
         });
     }
 
@@ -199,226 +240,89 @@ fn rows(model: &ExitCardModel) -> Vec<Row> {
         if !names.is_empty() {
             rows.push(Row {
                 label,
-                items: names
-                    .iter()
-                    .map(|name| vec![Span::from(name.clone())])
-                    .collect(),
+                body: Body::List {
+                    items: names
+                        .iter()
+                        .map(|name| vec![Span::from(name.clone())])
+                        .collect(),
+                    one_line: wide && names.len() <= 3,
+                },
             });
         }
     }
     rows
 }
 
-fn counted(count: u32, one: &str, many: &str) -> Vec<Span<'static>> {
+fn usage_rows(model: &ExitCardModel) -> Vec<Row> {
+    let mut rows = Vec::new();
+
+    if let Some(context) = model.context.filter(|context| context.size > 0) {
+        let percent = context.used * 100 / context.size;
+        rows.push(Row {
+            label: "Context",
+            body: Body::Inline(vec![
+                vec![
+                    Span::from(format_with_thousands_separator(context.used)),
+                    Span::from(" of ").dim(),
+                    Span::from(format_with_thousands_separator(context.size)),
+                ],
+                vec![Span::from(format!("{percent}%")), Span::from(" full").dim()],
+            ]),
+        });
+    }
+
+    if let Some(tokens) = model.tokens.filter(|tokens| tokens.total > 0) {
+        let mut lines: Vec<(Spans, Spans)> = vec![(
+            vec![Span::from(format_with_thousands_separator(tokens.total)).bold()],
+            vec![Span::from("total").bold()],
+        )];
+        let parts = [
+            ("input", Some(tokens.input)),
+            ("cached read", tokens.cached_read),
+            ("cached write", tokens.cached_write),
+            ("output", Some(tokens.output)),
+            ("reasoning", tokens.reasoning),
+        ];
+        for (label, value) in parts {
+            if let Some(value) = value.filter(|value| *value > 0) {
+                lines.push((
+                    vec![Span::from(format_with_thousands_separator(value))],
+                    vec![Span::from(label).dim()],
+                ));
+            }
+        }
+        rows.push(Row {
+            label: "Tokens",
+            body: Body::Counts {
+                rows: lines,
+                columns: false,
+            },
+        });
+    }
+
+    if let Some(cost) = &model.cost {
+        let amount = match cost.currency.as_str() {
+            "USD" => format!("${:.2}", cost.amount),
+            currency => format!("{:.2} {currency}", cost.amount),
+        };
+        rows.push(Row {
+            label: "Cost",
+            body: Body::Inline(vec![
+                vec![Span::from(amount)],
+                vec![Span::from("reported by the agent").dim()],
+            ]),
+        });
+    }
+    rows
+}
+
+fn counted(count: u32, one: &str, many: &str) -> Spans {
     let noun = if count == 1 { one } else { many };
     vec![
         Span::from(count.to_string()),
         Span::from(format!(" {noun}")).dim(),
     ]
 }
-
-fn tokens(value: i64, label: &str) -> Vec<Span<'static>> {
-    vec![
-        Span::from(format_si_suffix(value)),
-        Span::from(format!(" {label}")).dim(),
-    ]
-}
-
-fn inset_for(width: usize) -> usize {
-    if width >= 12 { INSET } else { 0 }
-}
-
-fn row_lines(row: &Row, width: usize) -> Vec<Line<'static>> {
-    if width >= MIN_COLUMN_WIDTH {
-        let avail = width - VALUE_OFFSET;
-        let label = format!(
-            "{}{:<LABEL_WIDTH$}{}",
-            " ".repeat(INSET),
-            row.label,
-            " ".repeat(GUTTER)
-        );
-        let indent = " ".repeat(VALUE_OFFSET);
-        flow(&row.items, avail, SEPARATOR)
-            .into_iter()
-            .enumerate()
-            .map(|(index, spans)| {
-                let lead = if index == 0 {
-                    Span::from(label.clone()).dim()
-                } else {
-                    Span::from(indent.clone())
-                };
-                Line::from([vec![lead], spans].concat())
-            })
-            .collect()
-    } else {
-        let inset = inset_for(width);
-        let value_indent = if width >= 8 { inset + 2 } else { inset };
-        let mut lines: Vec<Line<'static>> = flow(
-            &[vec![Span::from(row.label).dim()]],
-            width - inset,
-            SEPARATOR,
-        )
-        .into_iter()
-        .map(|spans| Line::from([vec![Span::from(" ".repeat(inset))], spans].concat()))
-        .collect();
-        lines.extend(
-            flow(&row.items, width - value_indent, SEPARATOR)
-                .into_iter()
-                .map(|spans| {
-                    Line::from([vec![Span::from(" ".repeat(value_indent))], spans].concat())
-                }),
-        );
-        lines
-    }
-}
-
-/// Pack atomic items into lines no wider than `avail` cells.
-fn flow(
-    items: &[Vec<Span<'static>>],
-    avail: usize,
-    separator: &'static str,
-) -> Vec<Vec<Span<'static>>> {
-    let avail = avail.max(1);
-    let sep_width = separator.width();
-    let mut lines = Vec::new();
-    let mut current: Vec<Span<'static>> = Vec::new();
-    let mut used = 0;
-    for item in items {
-        let item_width: usize = item.iter().map(|span| span.content.width()).sum();
-        if !current.is_empty() && used + sep_width + item_width <= avail {
-            current.push(Span::from(separator).dim());
-            current.extend(item.iter().cloned());
-            used += sep_width + item_width;
-            continue;
-        }
-        if !current.is_empty() {
-            lines.push(std::mem::take(&mut current));
-        }
-        if item_width <= avail {
-            current = item.clone();
-            used = item_width;
-        } else {
-            let mut pieces = break_item(item, avail);
-            let last = pieces.pop().unwrap_or_default();
-            lines.extend(pieces);
-            used = last.iter().map(|span| span.content.width()).sum();
-            current = last;
-        }
-    }
-    if !current.is_empty() {
-        lines.push(current);
-    }
-    lines
-}
-
-/// Split one item wider than `avail` into pieces that each fit, preferring to
-/// break after a name separator so the parts stay readable.
-fn break_item(item: &[Span<'static>], avail: usize) -> Vec<Vec<Span<'static>>> {
-    let cells: Vec<(char, Style)> = item
-        .iter()
-        .flat_map(|span| span.content.chars().map(move |ch| (ch, span.style)))
-        .collect();
-    let mut pieces = Vec::new();
-    let mut start = 0;
-    while start < cells.len() {
-        let mut end = start;
-        let mut used = 0;
-        let mut after_separator = None;
-        let mut after_space = None;
-        while end < cells.len() {
-            let ch_width = cells[end].0.width().unwrap_or(0);
-            if used + ch_width > avail && end > start {
-                break;
-            }
-            used += ch_width;
-            end += 1;
-            match cells[end - 1].0 {
-                ' ' => after_space = Some(end),
-                ch if BREAK_AFTER.contains(&ch) => after_separator = Some(end),
-                _ => {}
-            }
-        }
-        // A name separator beats a space, so a count stays with its name.
-        let cut = if end < cells.len() {
-            after_separator.or(after_space).unwrap_or(end)
-        } else {
-            end
-        };
-        pieces.push(spans_from_cells(&cells[start..cut]));
-        start = cut;
-        while start < cells.len() && cells[start].0 == ' ' {
-            start += 1;
-        }
-    }
-    pieces
-}
-
-fn spans_from_cells(cells: &[(char, Style)]) -> Vec<Span<'static>> {
-    let mut spans: Vec<Span<'static>> = Vec::new();
-    for &(ch, style) in cells {
-        match spans.last_mut() {
-            Some(span) if span.style == style => span.content.to_mut().push(ch),
-            _ => spans.push(Span::styled(ch.to_string(), style)),
-        }
-    }
-    // A trailing space at a break point carries no meaning on screen.
-    if let Some(span) = spans.last_mut() {
-        let trimmed = span.content.trim_end().to_string();
-        span.content = trimmed.into();
-    }
-    spans.retain(|span| !span.content.is_empty());
-    spans
-}
-
-fn strip_color(line: Line<'static>) -> Line<'static> {
-    let spans = line
-        .spans
-        .into_iter()
-        .map(|span| {
-            let mut style = Style::default();
-            style.add_modifier = span.style.add_modifier & (Modifier::BOLD | Modifier::DIM);
-            Span::styled(span.content, style)
-        })
-        .collect::<Vec<_>>();
-    Line::from(spans)
-}
-
-/// Paint every line as one band hugging the widest line, with a blank band
-/// row above and below.
-fn shade(lines: Vec<Line<'static>>, width: usize, band: Color) -> Vec<Line<'static>> {
-    let content = lines.iter().map(Line::width).max().unwrap_or(0);
-    let band_width = (content + INSET).min(width);
-    let pad_row = || {
-        Line::from(Span::styled(
-            " ".repeat(band_width),
-            Style::default().bg(band),
-        ))
-    };
-    let mut shaded = vec![pad_row()];
-    for line in lines {
-        let pad = band_width.saturating_sub(line.width());
-        let mut spans: Vec<Span<'static>> = line
-            .spans
-            .into_iter()
-            .map(|span| {
-                let style = span.style.bg(band);
-                Span::styled(span.content, style)
-            })
-            .collect();
-        if pad > 0 {
-            spans.push(Span::styled(" ".repeat(pad), Style::default().bg(band)));
-        }
-        shaded.push(Line::from(spans));
-    }
-    shaded.push(pad_row());
-    shaded
-}
-
-mod fixtures;
-
-pub use fixtures::ExitFieldsFixture;
-pub use fixtures::ExitToolsFixture;
-pub use fixtures::exit_card_fixture;
 
 #[cfg(test)]
 mod tests;

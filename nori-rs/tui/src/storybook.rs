@@ -26,11 +26,15 @@ mod exit_card;
 
 pub use exit_card::ExitCardModel;
 pub use exit_card::ExitCardPaint;
+pub use exit_card::ExitContext;
+pub use exit_card::ExitCost;
 pub use exit_card::ExitFieldsFixture;
+pub use exit_card::ExitTokens;
 pub use exit_card::ExitToolsFixture;
 pub use exit_card::MIN_COLUMN_WIDTH;
 pub use exit_card::exit_card_fixture;
 pub use exit_card::exit_card_lines;
+pub use exit_card::resume_command;
 
 /// Render fixture context data using the same history cell as `/context`.
 pub fn context_specimen_lines(used: Option<i64>, width: u16) -> Vec<Line<'static>> {

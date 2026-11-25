@@ -1,9 +1,10 @@
 //! Synthetic exit-card fixtures. Every value here is invented.
 
-use crate::session_stats::SessionStats;
-use crate::ui_types::TokenUsage;
-
 use super::ExitCardModel;
+use super::ExitContext;
+use super::ExitCost;
+use super::ExitTokens;
+use crate::session_stats::SessionStats;
 
 const SESSION_ID: &str = "019a7c3e-5b21-7f4d-9e08-6c2a1d4b8f37";
 
@@ -87,9 +88,11 @@ impl ExitToolsFixture {
 /// Which of the other fields are present.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ExitFieldsFixture {
-    /// Resumable, with tokens, skills, and subagents.
+    /// A Claude session: every field, including cost.
     #[default]
     Full,
+    /// A Codex session: reasoning tokens and no cost.
+    Codex,
     /// Resumable, but only messages and tools were recorded.
     Minimal,
     /// The session has an ID but nothing to resume.
@@ -109,7 +112,8 @@ impl ExitFieldsFixture {
     #[must_use]
     pub fn next(self) -> Self {
         match self {
-            Self::Full => Self::Minimal,
+            Self::Full => Self::Codex,
+            Self::Codex => Self::Minimal,
             Self::Minimal => Self::NotResumable,
             Self::NotResumable => Self::NoSession,
             Self::NoSession => Self::Full,
@@ -119,7 +123,8 @@ impl ExitFieldsFixture {
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            Self::Full => "all fields",
+            Self::Full => "Claude, all fields",
+            Self::Codex => "Codex, no cost",
             Self::Minimal => "messages and tools only",
             Self::NotResumable => "not resumable",
             Self::NoSession => "no session ID",
@@ -130,30 +135,64 @@ impl ExitFieldsFixture {
 /// Build the fixture model for one tools/fields combination.
 #[must_use]
 pub fn exit_card_fixture(tools: ExitToolsFixture, fields: ExitFieldsFixture) -> ExitCardModel {
+    use ExitFieldsFixture::*;
+
     let mut stats = SessionStats::new();
     for (name, count) in tools.tools() {
         stats.tool_calls.insert((*name).to_string(), *count);
     }
-    let active = matches!(fields, ExitFieldsFixture::Full | ExitFieldsFixture::Minimal);
+    let active = matches!(fields, Full | Codex | Minimal);
     if active {
         stats.user_messages = 14;
         stats.assistant_messages = 19;
     }
-    let full = fields == ExitFieldsFixture::Full;
-    if full {
+    let rich = matches!(fields, Full | Codex);
+    if rich {
         stats.skills_used = vec!["test-driven-development".into(), "writing-plans".into()];
         stats.subagents_used = vec!["nori-code-researcher".into(), "nori-web-researcher".into()];
     }
+    let (agent, tokens, cost) = match fields {
+        Full => (
+            Some("Claude Code"),
+            Some(ExitTokens {
+                total: 2_204_330,
+                input: 18_420,
+                output: 41_960,
+                cached_read: Some(2_071_850),
+                cached_write: Some(72_100),
+                reasoning: None,
+            }),
+            Some(ExitCost {
+                amount: 3.42,
+                currency: "USD".into(),
+            }),
+        ),
+        Codex => (
+            Some("Codex"),
+            Some(ExitTokens {
+                total: 1_386_204,
+                input: 1_302_118,
+                output: 37_516,
+                cached_read: Some(1_164_288),
+                cached_write: None,
+                reasoning: Some(46_570),
+            }),
+            None,
+        ),
+        Minimal => (Some("Claude Code"), None, None),
+        NotResumable | NoSession => (None, None, None),
+    };
     ExitCardModel {
-        session_id: (fields != ExitFieldsFixture::NoSession).then(|| SESSION_ID.to_string()),
+        session_id: (fields != NoSession).then(|| SESSION_ID.to_string()),
+        title: rich.then(|| "Redesign the exit card".to_string()),
+        agent: agent.map(str::to_string),
         resumable: active,
         stats,
-        token_usage: full.then_some(TokenUsage {
-            input_tokens: 388_200,
-            cached_input_tokens: 301_400,
-            output_tokens: 24_100,
-            reasoning_output_tokens: 0,
-            total_tokens: 412_300,
+        context: rich.then_some(ExitContext {
+            used: 164_208,
+            size: if fields == Codex { 272_000 } else { 1_000_000 },
         }),
+        tokens,
+        cost,
     }
 }

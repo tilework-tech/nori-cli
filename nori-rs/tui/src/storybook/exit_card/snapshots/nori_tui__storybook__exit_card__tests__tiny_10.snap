@@ -6,35 +6,34 @@ expression: "framed.join(\"\\n\")"
   session |
   ended   |
           |
-Resume    |
-  nori    |
-  resume  |
+Session   |
   019a7c3e|
   -5b21-  |
   7f4d-   |
   9e08-   |
   6c2a1d4b|
   8f37    |
+  Title   |
+  Redesign|
+  the     |
+  exit    |
+  card    |
+  Agent   |
+  Claude  |
+  Code    |
 Messages  |
   14      |
   prompts |
   19      |
   replies |
-Tokens    |
-  412K    |
-  total   |
-  388K in |
-  301K    |
-  cached  |
-  24.     |
-  1K out  |
 Tools     |
-  Read 37 |
-  Bash 29 |
-  Edit 18 |
-  Grep 12 |
-  Glob 6  |
-  Write 3 |
+  37  Read|
+  29  Bash|
+  18  Edit|
+  12  Grep|
+   6  Glob|
+   3  Writ|
+      e   |
 Skills    |
   test-   |
   driven- |
@@ -51,3 +50,38 @@ Subagents |
   web-    |
   research|
   er      |
+          |
+Context   |
+  164,208 |
+  of      |
+  1,000,00|
+  0       |
+  16% full|
+Tokens    |
+  2,204,33|
+  0       |
+  total   |
+  18,420  |
+  input   |
+  2,071,85|
+  0       |
+  cached  |
+  read    |
+  72,100  |
+  cached  |
+  write   |
+  41,960  |
+  output  |
+Cost      |
+  $3.42   |
+  reported|
+  by the  |
+  agent   |
+          |
+nori      |
+resume    |
+019a7c3e- |
+5b21-     |
+7f4d-9e08-|
+6c2a1d4b8f|
+37        |
