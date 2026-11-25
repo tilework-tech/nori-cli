@@ -451,7 +451,9 @@ impl Runtime {
             .filter(|args| args.is_empty() || args.starts_with(' '))
         {
             match super::new_session::params(args, &self.cwd, self.session_folders, self.remote) {
-                Ok(params) => self.send(HostCall::NewSession(params), Pending::New),
+                Ok(params) => {
+                    self.send(HostCall::NewSession(params), Pending::New);
+                }
                 Err(message) => {
                     self.composer.handle_paste(text);
                     self.state.show_notice(message);
@@ -467,23 +469,22 @@ impl Runtime {
         };
         if let Some(command) = crate::delegation::parse_command(command) {
             match command {
-                Ok((agent, task)) => self.send(
-                    HostCall::Delegate {
-                        session_id: id,
-                        agent,
-                        task,
-                    },
-                    Pending::Mutation { draft: Some(text) },
-                ),
+                Ok((agent, task)) => {
+                    self.send(
+                        HostCall::Delegate {
+                            session_id: id,
+                            agent,
+                            task,
+                        },
+                        Pending::Mutation { draft: Some(text) },
+                    );
+                }
                 Err(message) => self.state.show_notice(message),
             }
             return true;
         }
         if command == "/close" {
-            self.send(
-                HostCall::Close { session_id: id },
-                Pending::Mutation { draft: None },
-            );
+            self.close(id);
         } else if command == "/resume" {
             self.resume(&id);
         } else if let Some(expected_turn) = active_turn {

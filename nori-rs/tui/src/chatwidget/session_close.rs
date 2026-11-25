@@ -11,6 +11,7 @@ impl ChatWidget {
             return;
         };
         self.session_close_in_flight = true;
+        self.close_refusal.start();
         let tx = self.app_event_tx.clone();
         let generation = self.session_generation;
         let reply = tx.host_receipt(crate::host_client::HostCall::Close {
@@ -33,6 +34,7 @@ impl ChatWidget {
             return;
         };
         self.session_close_in_flight = true;
+        self.close_refusal.start();
         let tx = self.app_event_tx.clone();
         let generation = self.session_generation;
         tokio::spawn(async move {
@@ -41,10 +43,28 @@ impl ChatWidget {
             if let Err(e) = handle.close_session().await {
                 tx.send(AppEvent::SessionCloseFailed {
                     generation,
-                    message: format!("{e}"),
+                    message: format!("{e:#}"),
                 });
             }
         });
+    }
+
+    /// A `/close` failed: surface the (already enhanced) error and unblock the
+    /// session-switching commands that were held while the close was in flight.
+    pub(crate) fn on_session_close_failed(&mut self, message: String) {
+        self.session_close_in_flight = false;
+        for error in self.close_refusal.refused(&message) {
+            self.on_error(error);
+        }
+        self.add_error_message(format!("Failed to close the session: {message}"));
+    }
+
+    /// The adapter released the session, so errors held for a refusal
+    /// belong to something else.
+    pub(super) fn release_held_close_errors(&mut self) {
+        for error in self.close_refusal.released() {
+            self.on_error(error);
+        }
     }
 
     /// Mark this session as closed by the user, so its agent shutting down

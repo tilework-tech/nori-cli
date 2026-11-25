@@ -32,6 +32,9 @@ pub(super) enum Pending {
     Mutation {
         draft: Option<String>,
     },
+    Close {
+        session_id: String,
+    },
     FollowUp {
         session_id: String,
         message_id: String,
@@ -159,9 +162,10 @@ impl Runtime {
         self.note_request_on_screen();
     }
 
-    pub fn send(&mut self, call: HostCall, pending: Pending) {
+    /// Whether the call was handed to the connection.
+    pub fn send(&mut self, call: HostCall, pending: Pending) -> bool {
         if self.state.stopped.is_some() {
-            return;
+            return false;
         }
         let awaiting_cancel = match &pending {
             Pending::CancelObserved { session_id, .. } => Some(session_id.clone()),
@@ -172,18 +176,20 @@ impl Runtime {
             | Pending::TakeControl
             | Pending::Prompt { .. }
             | Pending::Mutation { .. }
+            | Pending::Close { .. }
             | Pending::FollowUp { .. } => None,
         };
         if self.client.request(call, pending).is_err() {
             self.state
                 .show_notice("Host connection worker stopped. Detach and try again.");
-            return;
+            return false;
         }
         if let Some(session_id) = awaiting_cancel
             && let Some(conversation) = self.state.conversations.get_mut(&session_id)
         {
             conversation.cancel_delivery = CancelDelivery::AwaitingHost;
         }
+        true
     }
 
     /// `session/resume` for `id` in its folder; a host too old to report
@@ -240,6 +246,7 @@ impl Runtime {
             HostEvent::Disconnected { reason, unanswered } => {
                 for conversation in self.state.conversations.values_mut() {
                     conversation.submitted_prompt = None;
+                    conversation.close_refusal.expire_report();
                     if conversation.cancel_delivery == CancelDelivery::AwaitingHost {
                         conversation.cancel_delivery = CancelDelivery::Unknown;
                     }
@@ -256,6 +263,7 @@ impl Runtime {
                         pending,
                         Pending::New
                             | Pending::Mutation { .. }
+                            | Pending::Close { .. }
                             | Pending::Prompt { .. }
                             | Pending::CancelObserved { .. }
                             | Pending::FollowUp { .. }
@@ -263,6 +271,9 @@ impl Runtime {
                 });
                 self.uncertain_delivery |= uncertain;
                 for pending in unanswered {
+                    if let Pending::Close { session_id } = &pending {
+                        self.close_settled(session_id);
+                    }
                     if let Pending::FollowUp {
                         session_id,
                         message_id,
@@ -439,6 +450,10 @@ impl Runtime {
                 {
                     self.send(call, Pending::Mutation { draft: None });
                 }
+                self.refresh_list();
+            }
+            Pending::Close { session_id } => {
+                self.close_settled(&session_id);
                 self.refresh_list();
             }
             Pending::Subscribe { .. } | Pending::Mutation { .. } => self.refresh_list(),

@@ -107,6 +107,8 @@ pub(super) struct Conversation {
     pub permissions: Vec<Permission>,
     pub delegations: Vec<nori_protocol::Delegation>,
     pub cwd: std::path::PathBuf,
+    /// This terminal's `/close` of the session, shown once if refused.
+    pub close_refusal: crate::close_refusal::CloseRefusal,
     normalizer: ClientEventNormalizer,
     message_boundary: bool,
 }
@@ -424,6 +426,15 @@ impl AttachState {
             .conversations
             .entry(envelope.conversation_id.clone())
             .or_default();
+        if !matches!(
+            envelope.event,
+            SessionEvent::Acp(AcpEvent::Response {
+                response: Err(_),
+                ..
+            })
+        ) {
+            conversation.close_refusal.expire_report();
+        }
         match envelope.event {
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::AgentNotification::SessionNotification(notification),
@@ -463,8 +474,13 @@ impl AttachState {
                 response: Err(error),
                 ..
             }) => {
-                conversation.parts.push(Part::Notice(error.message));
-                conversation.message_boundary = true;
+                if !conversation
+                    .close_refusal
+                    .absorb(&error.message, &error.message)
+                {
+                    conversation.parts.push(Part::Notice(error.message));
+                    conversation.message_boundary = true;
+                }
             }
             SessionEvent::Nori(NoriEvent::DelegationChanged(delegation)) => {
                 if delegation.parent_id == envelope.conversation_id {

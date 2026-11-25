@@ -116,6 +116,10 @@ impl ChatWidget {
                 });
             }
             nori_protocol::AcpEvent::Response {
+                response: Ok(nori_protocol::acp::v1::AgentResponse::CloseSessionResponse(_)),
+                ..
+            } => self.release_held_close_errors(),
+            nori_protocol::AcpEvent::Response {
                 request_id,
                 response: Err(error),
             } => {
@@ -130,7 +134,9 @@ impl ChatWidget {
                     if !self.unpaired_prompt_error_ids.remove(&request_id) {
                         self.unpaired_prompt_error_ids.insert(request_id);
                     }
-                } else if !self.unpaired_prompt_error_ids.remove(&request_id) {
+                } else if !self.unpaired_prompt_error_ids.remove(&request_id)
+                    && !self.close_refusal.absorb(&error.message, &message)
+                {
                     self.on_error(message);
                 }
             }

@@ -453,6 +453,7 @@ include!("tests_list.rs");
 
 include!("tests_folders.rs");
 include!("tests_acp.rs");
+include!("tests_close.rs");
 
 fn working_runtime() -> (
     super::runtime::Runtime,

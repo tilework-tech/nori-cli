@@ -387,6 +387,12 @@ async fn disconnected_machine_output_is_saved_and_its_live_lane_can_reattach() {
     drop(first);
     binding.unblock();
     let mut reconnected = host.connect().await;
+    // The host may not have seen the old controller leave yet.
+    reconnected
+        .client
+        .request("_nori/control/take", json!({}))
+        .await
+        .unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(10), async {
         loop {
             if reconnected

@@ -62,13 +62,6 @@ impl ChatWidget {
         self.bottom_pane.set_cloud_session(cloud_session);
     }
 
-    /// A `/close` failed: surface the (already enhanced) error and unblock the
-    /// session-switching commands that were held while the close was in flight.
-    pub(crate) fn on_session_close_failed(&mut self, message: String) {
-        self.session_close_in_flight = false;
-        self.add_error_message(format!("Failed to close the session: {message}"));
-    }
-
     /// Begin exiting: immediate feedback, input refused, and bounded backend
     /// cleanup. Idempotent.
     ///
