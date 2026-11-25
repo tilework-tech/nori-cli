@@ -44,6 +44,7 @@ mod client_tool_cell;
 mod clipboard_paste;
 mod close_refusal;
 mod color;
+mod command_availability;
 mod context_view;
 pub mod custom_terminal;
 mod delegation;

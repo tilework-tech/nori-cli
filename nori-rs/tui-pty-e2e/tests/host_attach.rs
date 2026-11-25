@@ -290,7 +290,10 @@ fn refusal_count(client: &mut Client) -> usize {
         .to_lowercase()
         .lines()
         .filter(|line| {
-            line.contains("read-only") || line.contains("not allowed") || line.contains("cannot")
+            line.contains("read-only")
+                || line.contains("not allowed")
+                || line.contains("cannot")
+                || line.contains("alt+t to take control")
         })
         .count()
 }
@@ -903,6 +906,48 @@ fn watcher_cannot_delegate_a_child() {
 }
 
 #[test]
+fn attached_slash_menu_greys_what_this_terminal_cannot_run_and_refuses_it_with_the_same_reason() {
+    let host = Host::new();
+    host.start();
+    let mut controller = host.create_session();
+    ask(&mut controller, "shared command menu");
+    let id = host.session_id();
+    let mut watcher = host.attach(Some(&id));
+    wait_watching(&mut watcher);
+
+    controller.send_str("/").unwrap();
+    controller
+        .wait_for_text("not available in nori attach yet", TIMEOUT)
+        .expect("the controller's menu greys commands attach has no screen for");
+    controller.send_str("comp").unwrap();
+    controller
+        .wait_for_text("not available on this host yet", TIMEOUT)
+        .expect("the menu names commands the host has no method for");
+    controller.settle(Duration::from_millis(1000));
+    controller.send_key(Key::Enter).unwrap();
+    controller
+        .wait_for_text("/compact: not available on this host yet", TIMEOUT)
+        .expect("Enter on a greyed row refuses it with the menu's reason");
+
+    watcher.send_str("/").unwrap();
+    watcher
+        .wait_for_text("watching · Alt+T to take control", TIMEOUT)
+        .expect("a watcher's menu greys controller commands");
+    let before = host.list().lines().count();
+    watcher.send_str("new").unwrap();
+    watcher.settle(Duration::from_millis(1000));
+    watcher.send_key(Key::Enter).unwrap();
+    watcher
+        .wait_for_text("/new: watching · Alt+T to take control", TIMEOUT)
+        .expect("a watcher's /new is refused with the menu's reason");
+    assert_eq!(
+        host.list().lines().count(),
+        before,
+        "the watcher started nothing"
+    );
+}
+
+#[test]
 fn new_sessions_start_in_the_attaching_folder_or_a_tab_completed_one() {
     let host = Host::new();
     host.start();
@@ -994,6 +1039,57 @@ fn attached_enter_delivers_to_the_original_turn_then_tab_drains_once() {
     host.start();
     let mut client = host.create_session();
     steering::exercise(&mut client);
+}
+
+#[test]
+fn attached_escape_closes_the_menu_first_and_then_interrupts_the_turn() {
+    let host = Host::new();
+    host.start();
+    let mut client = host.create_session();
+    client.submit_input("mock:stream-until-cancel").unwrap();
+    let working = |host: &Host| {
+        host.list()
+            .lines()
+            .nth(1)
+            .is_some_and(|row| row.contains("working"))
+    };
+    let deadline = Instant::now() + TIMEOUT;
+    while !working(&host) {
+        assert!(Instant::now() < deadline, "the turn never started");
+        client.settle(Duration::from_millis(50));
+    }
+
+    client.send_str("/").unwrap();
+    client
+        .wait_for_text("not available in nori attach yet", TIMEOUT)
+        .expect("the menu opens");
+    client.settle(Duration::from_millis(500));
+    client.send_key(Key::Escape).unwrap();
+    client
+        .wait_for(
+            |screen| !screen.contains("not available in nori attach yet"),
+            TIMEOUT,
+        )
+        .expect("the first Escape closes the menu");
+    client.settle(Duration::from_millis(1000));
+    assert!(
+        !client
+            .screen_contents()
+            .contains("not available in nori attach yet"),
+        "the menu stays closed"
+    );
+    assert!(working(&host), "the first Escape leaves the turn running");
+
+    client.send_key(Key::Escape).unwrap();
+    let deadline = Instant::now() + TIMEOUT;
+    while working(&host) {
+        assert!(
+            Instant::now() < deadline,
+            "the second Escape ends the turn: {}",
+            host.list()
+        );
+        client.settle(Duration::from_millis(50));
+    }
 }
 
 #[test]

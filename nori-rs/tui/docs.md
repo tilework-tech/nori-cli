@@ -405,6 +405,27 @@ history, prompt discovery, compaction, branching, undo, shell, goals, session
 config, session listing, close, and shutdown. The old generic operation bus is
 gone.
 
+Whether a builtin slash command can run is decided in one place,
+[`command_availability`](src/command_availability.rs), shared by plain `nori`
+and `nori attach`. Both list every builtin in the `/` menu; a command that
+cannot run is greyed with a reason, and running it anyway is refused with the
+same reason, so the menu and execution never disagree. Enter on a highlighted
+greyed row returns that command to the frontend (rather than submitting the
+typed fragment) so the frontend refuses it with the menu's reason. Each command
+has a route (terminal-only, a host method that may need control, or an
+in-process session), and the verdict depends on the `Surface`:
+
+| Surface | Used by | Reasons a command is greyed |
+| --- | --- | --- |
+| `Owned { cloud_mode, agent_session_close }` | plain `nori` (owns its host, always controller) | `LocalOnly` commands in cloud mode; cloud `/close` without the agent's `session/close`. A local `/close` closes the session on screen. |
+| `Attached { watching, connected }` | `nori attach` | `not available on this host yet` (needs plain `nori`'s in-process session, e.g. `/compact`, `/diff`), `not available in nori attach yet` (host could run it but attach has no screen, e.g. `/model`, `/settings`), `watching · Alt+T to take control` (controller-only `/new`, `/close`, `/resume`, `/delegate`), `reconnecting` |
+
+`/quit`, `/exit`, and (attached) `/sessions` always run. In plain `nori` the
+chat widget's merged verdict takes an explicit server verdict first and falls
+back to the `Owned` reason. `parse_builtin` maps a submitted line to a builtin;
+other slash names (agent commands, custom prompts) are not builtins and reach
+the agent unchanged.
+
 The `/approvals` preset chooser and the replace-goal confirmation are bounded
 bottom-pane actions and therefore use the overlay-menu presentation. Warning
 tone is carried only by the consequential action; selection, number shortcuts,
@@ -1646,9 +1667,11 @@ re-export and is meant to serve other host frontends too. It does not construct 
 local process-owning `App`, launch agents, or shut down sessions when its
 terminal closes. Its session list and selected conversation are terminal-local;
 the host remains authoritative for session lifecycle and controller ownership.
-The attachment composer submits raw slash commands to this frontend rather
-than the local app's command router; that mode is disabled for ordinary TUI
-composers. It honors the configured session-list hotkey and resumes highlighted
+The attachment composer shows the same `/` menu as the local TUI, greyed from
+the shared [command availability](src/command_availability.rs) verdict, and
+returns builtin commands for this frontend to run; unknown slash names are
+submitted as text for the agent (the composer's `pass_unknown_commands` flag,
+off for ordinary TUI composers, which refuse them as unrecognized). It honors the configured session-list hotkey and resumes highlighted
 failed sessions with Ctrl+R under the existing conversation ID.
 
 The status line keeps control, watch/read-only, and reconnecting states visible.

@@ -1,6 +1,7 @@
 //! A terminal attachment observes host-owned sessions without owning their lifetime.
 
 mod close;
+mod commands;
 mod input;
 mod new_session;
 mod render;

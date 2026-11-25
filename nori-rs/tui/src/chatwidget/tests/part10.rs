@@ -382,6 +382,25 @@ fn cloud_mode_disables_local_commands_when_load_session_is_supported() {
 }
 
 #[test]
+fn enter_on_a_greyed_menu_row_explains_why_the_command_cannot_run() {
+    let (mut chat, mut rx, _op_rx) = make_cloud_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.handle_session_event(generation, initialize_agent_with_load_and_resume());
+    chat.handle_session_event(generation, session_started_event("cloud-session"));
+    let _ = history_text(&mut rx);
+
+    type_text(&mut chat, "/brows");
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let rendered = history_text(&mut rx);
+    assert!(
+        rendered.contains("/browse is unavailable.")
+            && rendered.contains("unavailable in cloud sessions"),
+        "{rendered}"
+    );
+}
+
+#[test]
 fn cloud_quit_remains_a_detach_when_load_session_is_supported() {
     let (mut chat, mut rx, _op_rx) = make_cloud_chatwidget_manual();
     let generation = chat.session_generation;

@@ -1,0 +1,35 @@
+---
+source: tui/src/attach/tests_commands.rs
+assertion_line: 127
+expression: rendered
+---
+ Nori host  WATCHING · read-only · alt+t take control
+ Sessions · /new starts a session · ctrl+d detaches
+
+ No session selected. Use /sessions to browse or /new to start.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/
+
+  /agent            not available in nori attach yet
+  /model            not available in nori attach yet
+  /config           not available in nori attach yet
+  /approvals        not available in nori attach yet
+  /settings         not available in nori attach yet
+  /vim              not available in nori attach yet
+  /goal             not available on this host yet
+  /new              watching · Alt+T to take control
+  /sessions         list sessions and move between them
+  /delegate         watching · Alt+T to take control

@@ -195,31 +195,6 @@ fn host_session_list_renders_titles_agents_and_status() {
 }
 
 #[test]
-fn attachment_composer_submits_frontend_commands_as_text() {
-    for text in [
-        "/new",
-        "/new custom-agent",
-        "/close",
-        "/resume",
-        "/cancel",
-        "/detach",
-        "/quit",
-        "/sessions",
-    ] {
-        let mut composer = crate::ComposerInput::for_attachment();
-        composer.handle_paste(text.into());
-        let action = composer.input(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Enter,
-            crossterm::event::KeyModifiers::NONE,
-        ));
-        assert!(
-            matches!(action, crate::ComposerAction::Submitted(actual) if actual == text),
-            "{text} must reach the attachment frontend"
-        );
-    }
-}
-
-#[test]
 fn resumed_transcript_replaces_the_existing_presentation_without_repeating_turns() {
     let mut state = AttachState::default();
     state.apply(message("one", 1, "Original answer")).unwrap();
@@ -454,6 +429,7 @@ include!("tests_list.rs");
 include!("tests_folders.rs");
 include!("tests_acp.rs");
 include!("tests_close.rs");
+include!("tests_commands.rs");
 
 fn working_runtime() -> (
     super::runtime::Runtime,
