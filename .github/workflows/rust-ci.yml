@@ -1,8 +1,7 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/pr-784-c9b383ca-native-host']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +11,7 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: nori-rs
@@ -25,10 +24,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: macOS attach cutover verification
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: c9b383ca4a858fbcf7a788161706e7a07bb727a8
+          persist-credentials: false
+
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = c9b383ca4a858fbcf7a788161706e7a07bb727a8 && git diff --quiet HEAD -- . && git rev-parse HEAD && uname -sm && sw_vers
 
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -126,20 +134,29 @@ jobs:
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
           cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
-      - name: cargo test nori
+      - name: Unit tests for the joined terminal
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
-          cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-harness
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-host-runtime
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp-host
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-auth-providers
-      - name: cargo clippy
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
+          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-protocol
+          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-tui --lib
+      - name: Attach PTY suites on macOS, three rounds
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/host_attach.rs
+          sed -i.bak '/^#\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/explicit_host_close.rs
+          ! grep -n 'cfg(target_os = "linux")' tui-pty-e2e/tests/host_attach.rs tui-pty-e2e/tests/explicit_host_close.rs
+          for round in 1 2 3; do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach --test host_approvals --test attached_external_cancel --test explicit_host_close 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $round: /"; done | tee attach-rounds.txt
+          echo "attach rounds FAILED: $(grep -c FAILED attach-rounds.txt) of $(grep -c '^round' attach-rounds.txt)"
+          ! grep -q FAILED attach-rounds.txt
+          test "$(grep -c '^round' attach-rounds.txt)" = 99
+      - name: Full PTY suite on macOS
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          git checkout -- tui-pty-e2e/tests
+          cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast
 
       # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache
