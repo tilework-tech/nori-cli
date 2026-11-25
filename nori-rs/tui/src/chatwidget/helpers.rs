@@ -341,6 +341,9 @@ impl ChatWidget {
     }
 
     pub(crate) fn submit_harness_action(&self, action: crate::app_event::HarnessAction) {
+        let Some(action) = self.history_action_on_host(action) else {
+            return;
+        };
         let Some(handle) = self.harness_handle.clone() else {
             use crate::app_event::HarnessAction;
             match action {

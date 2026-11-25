@@ -788,6 +788,10 @@ impl ChatComposer {
                 modifiers: KeyModifiers::CONTROL,
                 ..
             } => {
+                let recalls_older = matches!(key_event.code, KeyCode::Up | KeyCode::Char('p'));
+                if recalls_older && self.textarea.text().is_empty() && !self.history.has_entries() {
+                    self.history.defer_recall();
+                }
                 if self
                     .history
                     .should_handle_navigation(self.textarea.text(), self.textarea.cursor())

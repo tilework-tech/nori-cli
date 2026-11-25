@@ -72,6 +72,9 @@ pub(crate) struct HostFeatures {
     pub remote: bool,
     /// `_nori/session/queue/*` resumes a paused queue and takes prompts back.
     pub queue: bool,
+    /// `_nori/host/history/*` records, recalls and searches the host's
+    /// prompt history.
+    pub history: bool,
 }
 
 impl HostConnection {
@@ -86,6 +89,7 @@ impl HostConnection {
                 find_paths: true,
                 remote: false,
                 queue: true,
+                history: true,
             },
         }
     }
@@ -187,6 +191,22 @@ pub(crate) enum HostCall {
         /// Asking again with this key returns the same answer.
         request_key: String,
     },
+    /// Keep a sent prompt in the host's history. Only a controller may.
+    AddHistory {
+        session_id: String,
+        text: String,
+    },
+    /// One prompt of the host's history, counted from the oldest.
+    HistoryEntry {
+        log_id: i64,
+        offset: i64,
+    },
+    /// The host's most recent distinct prompts, newest first.
+    SearchHistory {
+        max_results: i32,
+    },
+    /// How many prompts the host's history holds now.
+    HistoryMetadata,
 }
 
 impl HostCall {
@@ -319,6 +339,19 @@ impl HostCall {
                     request_key,
                 }),
             ),
+            Self::AddHistory { session_id, text } => (
+                "_nori/host/history/add",
+                json!(nori_protocol::HistoryAddParams { session_id, text }),
+            ),
+            Self::HistoryEntry { log_id, offset } => (
+                "_nori/host/history/entry",
+                json!(nori_protocol::HistoryEntryParams { log_id, offset }),
+            ),
+            Self::SearchHistory { max_results } => (
+                "_nori/host/history/search",
+                json!(nori_protocol::HistorySearchParams { max_results }),
+            ),
+            Self::HistoryMetadata => ("_nori/host/history/metadata", json!({})),
         }
     }
 }

@@ -261,6 +261,23 @@ impl ChatComposer {
     /// that the composer can navigate cross-session history.
     pub(crate) fn set_history_metadata(&mut self, log_id: u64, entry_count: usize) {
         self.history.set_metadata(log_id, entry_count);
+        self.recall_deferred_history();
+    }
+
+    pub(crate) fn refresh_history_metadata(&mut self, log_id: u64, entry_count: usize) {
+        self.history.refresh_metadata(log_id, entry_count);
+        self.recall_deferred_history();
+    }
+
+    /// An Up pressed before the history's size was known recalls the newest
+    /// prompt now, unless a draft has been typed since.
+    fn recall_deferred_history(&mut self) {
+        if !self.history.take_deferred_recall() || !self.textarea.text().is_empty() {
+            return;
+        }
+        if let Some(text) = self.history.navigate_up(&self.app_event_tx) {
+            self.set_history_content(text);
+        }
     }
 
     pub(crate) fn record_local_history_submission(&mut self, text: &str) {
