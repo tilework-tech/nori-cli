@@ -22,11 +22,11 @@ UI strings keep that word.
 |---|---|
 | `lib.rs` | `run_main`: config, onboarding, automatic worktree, `nori_host_runtime::launch`, `App::run`; `run_joined_app`: `App::run_joined` on a running host |
 | `app/` | `App`: main `select!` loop (`run_loop.rs`), session deck, session lifecycle and resume, delegation, `host_link.rs` (owned or joined host link), joined session view (`joined_sessions.rs`, `joined_feed.rs`) |
-| `chatwidget/` | `ChatWidget`: one session's view, composer submit, approvals, goals, pickers, queue list and recall (a host session's queue is resumed and reclaimed through the host, `queue_host.rs`; its prompt history is recorded, recalled and searched on the host, `history_host.rs`; its custom prompts are listed from the host and their scripts run there, `prompts_host.rs`; its goal is read when the session comes on screen and changed on the host, `goal_host.rs`; `/compact` asks its host to compact it, `compact_host.rs`; `!` commands run on its host, and every `user_shell` event, live or replayed, shows as a `Ran` command cell with its output, `shell_host.rs`; its `/context` report and footer usage come from the host, `context_host.rs`) |
+| `chatwidget/` | `ChatWidget`: one session's view, composer submit, approvals, goals, pickers, queue list and recall (a host session's queue is resumed and reclaimed through the host, `queue_host.rs`; its prompt history is recorded, recalled and searched on the host, `history_host.rs`; its custom prompts are listed from the host and their scripts run there, `prompts_host.rs`; its goal is read when the session comes on screen and changed on the host, `goal_host.rs`; `/compact` asks its host to compact it, `compact_host.rs`; `!` commands run on its host when this terminal is local to it, a remote terminal gets the gray `-32018` hint instead, and every `user_shell` event, live or replayed, shows as a `Ran` command cell with its output, `shell_host.rs`; its `/context` report and footer usage come from the host, `context_host.rs`) |
 | `bottom_pane/` | Composer, footer, popups, approval overlay |
 | `presentation/` | Private projection of ACP updates into display items |
 | `history_cell/`, `exec_cell/`, `client_tool_cell.rs`, `markdown*`, `diff_render.rs` | History cells and their rendering |
-| `host_client/` | Client of a `nori host`: connection, reconnect, reply matching; `drive` (WebSocket) and `drive_pipe` (owned host); `AttachOptions`; `HostFeatures` read from the host's `initialize` capabilities |
+| `host_client/` | Client of a `nori host`: connection, reconnect, reply matching; `drive` (WebSocket) and `drive_pipe` (owned host); `AttachOptions`; `HostEndpoint` keeps the local token and presents it on every reconnect; `HostError` carries the JSON-RPC `code`; `HostFeatures` read from the host's `initialize` capabilities |
 | `program_status/` | OSC 7501 terminal status: `ProgramStatusTracker` (fold over one session's events) and `ProgramStatusReporter` (encode and write) |
 | `nori/` | Nori pickers (agent, config, fork, resume, skillset, hotkey, MCP), onboarding, session header, update prompt |
 | `resume_picker/`, `session_*.rs`, `viewonly_transcript.rs` | Resume picker, session preview and stats, view-only transcripts |
@@ -129,6 +129,10 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   brought forward already knows its state. `App` reports only `chat_widget`'s
   status after each main-loop event; background sessions never write. A
   joined App reports the same way.
+- A host operation's error reaches its widget as a typed `HostError`, so a
+  widget can branch on the JSON-RPC code. `shell_host.rs` does: `-32018`
+  shows `history_cell::new_hint_event` (dark gray) rather than a red error.
+  Either way the refused `!cmd` goes back to the prompt.
 - `ProgramStatusReporter` writes only when the bytes change, never when
   stdout is not a TTY, and clears once if it ever reported.
 - The session list view asks for a redraw only when its rows change, not on

@@ -29,19 +29,29 @@ impl RemoteAcpServer {
         managed: Arc<M>,
         token: String,
     ) -> anyhow::Result<Self> {
-        Self::bind_host_with_limit(addr, managed, token, nori_config::DEFAULT_MAX_CLIENTS).await
+        Self::bind_host_with_limit(addr, managed, token, None, nori_config::DEFAULT_MAX_CLIENTS)
+            .await
     }
 
     /// Bind an authenticated background host that serves at most
     /// `max_clients` WebSocket clients at once and refuses more with `503`.
+    /// A client that also presents `local_token` runs on the host's machine,
+    /// and only such clients may run `!` commands.
     pub async fn bind_host_with_limit<M: super::ManagedAgent>(
         addr: SocketAddr,
         managed: Arc<M>,
         token: String,
+        local_token: Option<String>,
         max_clients: i32,
     ) -> anyhow::Result<Self> {
         anyhow::ensure!(!token.trim().is_empty(), "host token must not be empty");
         anyhow::ensure!(max_clients >= 1, "the host must allow at least one client");
+        anyhow::ensure!(
+            local_token
+                .as_deref()
+                .is_none_or(|local| !local.trim().is_empty() && local != token),
+            "the host's local token must be its own non-empty secret"
+        );
         let listener = tokio::net::TcpListener::bind(addr).await?;
         let local_addr = listener.local_addr()?;
         let shutdown = CancellationToken::new();
@@ -60,6 +70,7 @@ impl RemoteAcpServer {
         let router = super::host_wire::router(
             managed,
             token,
+            local_token,
             instance.clone(),
             control.clone(),
             max_clients,

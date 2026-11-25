@@ -86,6 +86,23 @@ on the ACP SDK (`nori-cli` uses it only as a dev-dependency for tests).
   `nori-monorepo: docs/acp-extensions.md`. Change the contract first.
 - A host has at most one controller. Watchers receive updates only. Mutation
   admission is serialized in `remote/host_control.rs`.
+- `host_wire.rs` decides per connection whether the client is local, that is
+  on the host's machine. Local means the foreground in-process pipe, or a
+  WebSocket client whose `x-nori-local-token` upgrade header matches the
+  host's local token (`ManagedClient::connect_local`; compared in constant
+  time, like the bearer token). Every other client is remote: other
+  WebSockets, the lifecycle socket, and every other stdio client, which may be
+  relayed from anywhere. A wrong local token connects as remote, not `401`.
+  Peer addresses cannot decide this, as the host listens only on `127.0.0.1`
+  and tunnels and relays arrive from there too.
+- Only local clients may run `_nori/session/shell`. For a remote client
+  `host_wire.rs` sets `capabilities.nori_sessions.shell` to `false` in its
+  `initialize` reply and answers the method with `-32018`
+  (`nori_protocol::REMOTE_SHELL_UNSUPPORTED`) after controller admission
+  (watchers still get `-32016`) and before the call reaches `ManagedAgent`,
+  so nothing runs and no session is looked up. `bind_host_with_limit` takes
+  the local token as an option; with none, every WebSocket client is remote,
+  and it rejects a local token that is empty or equal to the bearer token.
 - While `host_wire.rs` writes a subscription's replay, it moves live events
   off the subscriber's bounded queue into a backlog of up to
   `REPLAY_BACKLOG_EVENTS` (4,096) and sends them after the replay, in order.

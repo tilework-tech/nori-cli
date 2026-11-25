@@ -455,6 +455,17 @@ pub struct CompactParams {
     pub session_id: String,
 }
 
+/// The error code of `_nori/session/shell` from a client the host cannot
+/// prove runs on its own machine. The host runs nothing for it.
+pub const REMOTE_SHELL_UNSUPPORTED: i32 = -32018;
+
+/// The message that accompanies [`REMOTE_SHELL_UNSUPPORTED`].
+pub const REMOTE_SHELL_UNSUPPORTED_MESSAGE: &str = "Remote shell commands are not yet supported.";
+
+/// The upgrade header with which a client on the host's machine presents
+/// the host's private local token, `host/local-token`.
+pub const LOCAL_TOKEN_HEADER: &str = "x-nori-local-token";
+
 /// Params of `_nori/session/shell`: a `!` command for the host to run in
 /// that session's folder.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

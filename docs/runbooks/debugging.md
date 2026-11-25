@@ -122,6 +122,7 @@ discovery files and their contract are owned by
 | `host.json` | Discovery record: endpoint, token, PID, instance ID, version, contract, who started it. |
 | `state.json` | Endpoint and PID. |
 | `token` | Bearer token. New on every start. |
+| `local-token` | Proves a client runs on this machine, so it may run `!` commands. New on every start. Never copy it. |
 | `host.log` | The host's stdout and stderr. |
 
 Plain `nori` never uses these files. Its private host lives in the `nori`
@@ -158,6 +159,7 @@ tail -n 100 ~/.nori/cli/host/host.log
 | Attach shows `Authentication failed; host may have restarted. Re-run nori attach.` | The token was rejected and could not be refreshed. | Run `nori attach` again. |
 | Attach shows `Host identity unavailable; cannot safely resume. Re-run nori attach.` | The host sent no instance ID. | Run `nori attach` again. |
 | Attach shows `Host stopped responding` | No message for 10 s. Attach reconnects every 750 ms. | Check that the host process runs; read `host.log`. |
+| `!cmd` shows the gray hint `Remote shell commands are not yet supported.` | The client is remote to the host: `--host`/`--token-file` attach, a stdio client, or a local attach whose `local-token` was missing or wrong. | Run `nori attach` without `--host` on the host's machine, or use plain `nori`. |
 | Attach shows `Read-only: take control with alt+t ...` | This client is a watcher. | Press `alt+t`. |
 
 ### How `nori host stop` works

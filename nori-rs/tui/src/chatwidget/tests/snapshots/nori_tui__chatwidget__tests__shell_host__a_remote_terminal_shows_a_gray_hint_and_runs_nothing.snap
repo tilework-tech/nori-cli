@@ -1,0 +1,5 @@
+---
+source: tui/src/chatwidget/tests/shell_host.rs
+expression: "lines_to_single_string(&hints[0])"
+---
+• Remote shell commands are not yet supported.

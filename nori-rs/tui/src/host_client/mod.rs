@@ -34,6 +34,9 @@ use tokio::sync::mpsc;
 pub(crate) struct HostEndpoint {
     pub endpoint: String,
     pub token: String,
+    /// The host's local token, from local discovery only: it shows the host
+    /// this terminal runs on its machine, so `!` commands run.
+    pub local_token: Option<String>,
     /// Secure local discovery only; explicit remote credentials are never refreshed.
     pub refresh_local_token: Option<Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>>,
 }
@@ -44,6 +47,8 @@ pub struct AttachOptions {
     pub endpoint: String,
     pub token: String,
     pub session_id: Option<String>,
+    /// The host's local token, from local discovery only.
+    pub local_token: Option<String>,
     /// Secure local discovery only; explicit remote credentials are never refreshed.
     pub refresh_local_token: Option<Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>>,
 }
@@ -84,6 +89,20 @@ impl HostConnection {
                 find_paths: true,
                 remote: false,
             },
+        }
+    }
+}
+
+impl HostEndpoint {
+    /// Open an authenticated connection, presenting the local token if this
+    /// terminal has one.
+    pub(crate) async fn connect(
+        &self,
+    ) -> anyhow::Result<nori_harness::remote_agent::ManagedClient> {
+        use nori_harness::remote_agent::ManagedClient;
+        match &self.local_token {
+            Some(local) => ManagedClient::connect_local(&self.endpoint, &self.token, local).await,
+            None => ManagedClient::connect(&self.endpoint, &self.token).await,
         }
     }
 }
@@ -429,8 +448,17 @@ impl HostCall {
 /// A host error reply. The message is absent when the host sent none.
 #[derive(Debug)]
 pub(crate) struct HostError {
+    pub code: Option<i64>,
     pub message: Option<String>,
 }
+
+impl std::fmt::Display for HostError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.message.as_deref().unwrap_or("Host request failed."))
+    }
+}
+
+impl std::error::Error for HostError {}
 
 /// What the connection delivered, with replies matched to their tags.
 pub(crate) enum HostEvent<T> {
@@ -532,6 +560,7 @@ impl<T> HostSessionClient<T> {
                     };
                     let result = match message.get("error") {
                         Some(error) => Err(HostError {
+                            code: error["code"].as_i64(),
                             message: error["message"].as_str().map(str::to_owned),
                         }),
                         None => Ok(message["result"].take()),

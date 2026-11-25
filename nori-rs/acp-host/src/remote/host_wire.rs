@@ -28,10 +28,16 @@ use super::managed::ManagedSubscription;
 use super::managed::managed_event;
 use super::managed_wire::send_frame;
 
+/// Runs a `!` command on the host, so only local clients may call it.
+const SHELL: &str = "_nori/session/shell";
+
 struct HostState<M> {
     host: Arc<M>,
     lanes: super::standard_wire::Lanes,
     token: Arc<str>,
+    /// The secret only clients on the host's machine hold; `None` treats
+    /// every WebSocket client as remote.
+    local_token: Option<Arc<str>>,
     instance: Arc<str>,
     control: Arc<Mutex<HostControl>>,
     generation: Arc<AtomicI64>,
@@ -47,6 +53,7 @@ impl<M> Clone for HostState<M> {
             host: self.host.clone(),
             lanes: self.lanes.clone(),
             token: self.token.clone(),
+            local_token: self.local_token.clone(),
             instance: self.instance.clone(),
             control: self.control.clone(),
             generation: self.generation.clone(),
@@ -61,6 +68,7 @@ impl<M> Clone for HostState<M> {
 pub(super) fn router<M: ManagedAgent>(
     host: Arc<M>,
     token: String,
+    local_token: Option<String>,
     instance: String,
     control: Arc<Mutex<HostControl>>,
     max_clients: i32,
@@ -76,6 +84,7 @@ pub(super) fn router<M: ManagedAgent>(
         host,
         lanes: Default::default(),
         token: token.into(),
+        local_token: local_token.map(Into::into),
         instance: instance.into(),
         control,
         generation: Arc::new(AtomicI64::new(0)),
@@ -95,14 +104,7 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|header| header.to_str().ok())
         .and_then(|header| header.strip_prefix("Bearer "));
-    let authorized = supplied.is_some_and(|supplied| {
-        supplied.len() == state.token.len()
-            && supplied
-                .bytes()
-                .zip(state.token.bytes())
-                .fold(0, |difference, (left, right)| difference | (left ^ right))
-                == 0
-    });
+    let authorized = supplied.is_some_and(|supplied| same_secret(supplied, &state.token));
     if !authorized {
         return (
             StatusCode::UNAUTHORIZED,
@@ -145,6 +147,12 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
         };
         Some(slot)
     };
+    let local = state.local_token.as_deref().is_some_and(|local_token| {
+        headers
+            .get(nori_protocol::LOCAL_TOKEN_HEADER)
+            .and_then(|header| header.to_str().ok())
+            .is_some_and(|supplied| same_secret(supplied, local_token))
+    });
     let instance = state.instance.to_string();
     let connection = uuid::Uuid::new_v4().to_string();
     let response = upgrade
@@ -163,7 +171,11 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
                 return;
             }
             let client = state.generation.fetch_add(1, Ordering::Relaxed);
-            let transport = if lifecycle { Transport::Lifecycle } else { Transport::WebSocket };
+            let transport = if lifecycle {
+                Transport::Lifecycle
+            } else {
+                Transport::WebSocket { local }
+            };
             let (sink, incoming) = socket.split();
             tokio::select! {
                 _ = cancel.cancelled() => {},
@@ -195,15 +207,42 @@ const REPLAY_BACKLOG_EVENTS: usize = 4096;
 /// too slow and is closed.
 const OUTBOUND_CAPACITY: usize = 16384;
 
+/// Compare a supplied secret with the host's in constant time.
+fn same_secret(supplied: &str, secret: &str) -> bool {
+    supplied.len() == secret.len()
+        && supplied
+            .bytes()
+            .zip(secret.bytes())
+            .fold(0, |difference, (left, right)| difference | (left ^ right))
+            == 0
+}
+
 /// How a connection's transport differs from a WebSocket's.
 #[derive(Clone, Copy)]
 pub(super) enum Transport {
-    WebSocket,
+    /// `local` when the client presented the host's local token, so it runs
+    /// on the host's machine.
+    WebSocket {
+        local: bool,
+    },
     Lifecycle,
     /// The host's own stdin and stdout: its one client always controls, and
     /// an ended subscription is reported in band, as the stream cannot close
     /// and reopen.
     Lines(super::HostClientOrigin),
+}
+
+impl Transport {
+    /// Whether the client runs on the host's machine, as only the terminal's
+    /// own pipe and a WebSocket client holding the local token can show.
+    /// Every other client is remote, including a stdio client, which may be
+    /// relayed from anywhere.
+    fn local(self) -> bool {
+        matches!(
+            self,
+            Self::WebSocket { local: true } | Self::Lines(super::HostClientOrigin::Foreground)
+        )
+    }
 }
 
 /// Lines of this process's stdin, without their newlines, until it closes.
@@ -302,6 +341,7 @@ async fn serve_lines<M: ManagedAgent, T>(
         host,
         lanes: Default::default(),
         token: "".into(),
+        local_token: None,
         instance: instance.into(),
         control: Default::default(),
         generation: Arc::new(AtomicI64::new(0)),
@@ -450,13 +490,20 @@ where
                             }
                             let reply = if request["method"] == "initialize" {
                                 let observe = match transport {
-                                    Transport::WebSocket => request["params"]["observe"] == true,
+                                    Transport::WebSocket { .. } => request["params"]["observe"] == true,
                                     Transport::Lifecycle => true,
                                     Transport::Lines(_) => false,
                                 };
                                 let declares_approval_modes = request["params"]["capabilities"]["nori_sessions"]["approval_modes"] == true;
                                 let mut reply = state.host.request_from(client, request).await;
                                 if reply.response.get("error").is_none() {
+                                    if !transport.local()
+                                        && let Some(shell) = reply
+                                            .response
+                                            .pointer_mut("/result/capabilities/nori_sessions/shell")
+                                    {
+                                        *shell = Value::Bool(false);
+                                    }
                                     reply.response["result"]["control"] = state.control.lock().await.register(client, &changes, observe);
                                     // The client learns its first role from this reply,
                                     // not from a change notification.
@@ -467,7 +514,7 @@ where
                                         state.host.connection_opened(super::managed::HostConnection {
                                             client,
                                             origin: match transport {
-                                                Transport::WebSocket | Transport::Lifecycle => super::HostClientOrigin::Independent,
+                                                Transport::WebSocket { .. } | Transport::Lifecycle => super::HostClientOrigin::Independent,
                                                 Transport::Lines(origin) => origin,
                                             },
                                             outbound: outbound.clone(),
@@ -481,6 +528,15 @@ where
                                 let admitted = state.control.lock().await.admit(client, &changes, request);
                                 match admitted {
                                     HostRequest::Reply(reply) => reply,
+                                    HostRequest::Forward(request)
+                                        if request["method"] == SHELL && !transport.local() =>
+                                    {
+                                        failure(
+                                            request["id"].clone(),
+                                            nori_protocol::REMOTE_SHELL_UNSUPPORTED,
+                                            nori_protocol::REMOTE_SHELL_UNSUPPORTED_MESSAGE,
+                                        )
+                                    }
                                     HostRequest::Forward(request) => {
                                         if matches!(transport, Transport::Lines(super::HostClientOrigin::Foreground))
                                             && let Some(receipt) = state.host.admit_foreground_input(&request)
@@ -539,7 +595,7 @@ where
                 } => {
                     let Some(envelope) = event else {
                         match transport {
-                            Transport::WebSocket | Transport::Lifecycle => break,
+                            Transport::WebSocket { .. } | Transport::Lifecycle => break,
                             Transport::Lines(_) => {
                                 subscription = None;
                                 send_frame(&mut sink, Message::Text(json!({"jsonrpc":"2.0","method":"_nori/session/subscription_ended","params":{"reason":"replay_required"}}).to_string().into())).await?;
