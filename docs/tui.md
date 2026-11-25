@@ -365,7 +365,11 @@ Other popup entries:
 
 - `/prompts:<name>`: a custom prompt from `$NORI_HOME/commands/`. A prompt is a
   Markdown template (`.md`) or a script (`.sh`, `.py`, `.js`). Templates fill
-  `$1` to `$9`, `$ARGUMENTS`, and named `$NAME` placeholders.
+  `$1` to `$9`, `$ARGUMENTS`, and named `$NAME` placeholders. For a session on
+  a host, the list comes from the host's own `$NORI_HOME/commands/`, so every
+  terminal on that host, attached ones included, offers the same prompts.
+  Templates are filled in by the terminal. Scripts run on the host, in the
+  session's folder, and only the controller may run one.
 - `/<prefix>:<name>`: a command the agent advertises. Nori sends it without the
   prefix.
 - An agent command whose name matches a built-in is not shown.

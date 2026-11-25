@@ -330,7 +330,10 @@ impl ChatWidget {
     }
 
     pub(crate) fn submit_harness_action(&self, action: crate::app_event::HarnessAction) {
-        let Some(action) = self.history_action_on_host(action) else {
+        let Some(action) = self
+            .history_action_on_host(action)
+            .and_then(|action| self.prompts_action_on_host(action))
+        else {
             return;
         };
         let Some(handle) = self.harness_handle.clone() else {

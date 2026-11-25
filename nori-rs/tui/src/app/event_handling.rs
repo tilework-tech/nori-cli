@@ -1454,9 +1454,13 @@ impl App {
                 let name = prompt.name.clone();
                 self.chat_widget
                     .add_info_message(format!("Running script '{name}'..."), None);
+                let Some((prompt, args)) = self.chat_widget.run_script_on_host(prompt, args) else {
+                    return Ok(true);
+                };
                 tokio::spawn(async move {
                     let result =
-                        nori_harness::custom_prompts::execute_script(&prompt, &args, timeout).await;
+                        nori_harness::custom_prompts::execute_script(&prompt, &args, timeout, None)
+                            .await;
                     tx.send(AppEvent::ScriptExecutionComplete {
                         name: prompt.name.clone(),
                         result,

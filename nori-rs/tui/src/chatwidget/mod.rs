@@ -72,6 +72,7 @@ mod key_handling;
 mod login;
 mod new_session_folder;
 mod pickers;
+mod prompts_host;
 mod queue_host;
 mod queue_list;
 mod queue_recall;

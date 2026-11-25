@@ -122,7 +122,7 @@ pub struct HostDiscovery {
 /// methods, and `host.json`. A change that a client of the previous contract
 /// could not use bumps the major; an addition such clients can ignore bumps
 /// the minor; a fix that changes no message bumps the patch.
-pub const HOST_CONTRACT: &str = "1.4.0";
+pub const HOST_CONTRACT: &str = "1.5.0";
 
 /// Whether a host advertising contract `host` serves a client built for
 /// contract `client`: `host` must satisfy the caret requirement `^client`.
@@ -353,6 +353,65 @@ pub struct HistoryMetadata {
     pub entry_count: i64,
 }
 
+/// Params of `_nori/host/prompts`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptsListParams {
+    /// The session the list is for. The list is the host's either way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+}
+
+/// How a custom prompt is used.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum HostPromptKind {
+    /// `content` is sent as the prompt once the client fills in its
+    /// arguments.
+    Markdown,
+    /// Run on the host with `_nori/session/prompts/run`; its output is sent
+    /// as the prompt.
+    Script { interpreter: String },
+}
+
+/// One custom prompt from the host's `$NORI_HOME/commands`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HostPrompt {
+    /// Invoked as `/prompts:<name>`.
+    pub name: String,
+    pub description: Option<String>,
+    pub argument_hint: Option<String>,
+    pub kind: HostPromptKind,
+    /// The prompt's body without its frontmatter; empty for a script.
+    pub content: String,
+}
+
+/// Result of `_nori/host/prompts`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct PromptsListResult {
+    /// Sorted by name.
+    pub prompts: Vec<HostPrompt>,
+}
+
+/// Params of `_nori/session/prompts/run`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptRunParams {
+    /// The session whose folder the script runs in.
+    pub session_id: String,
+    /// A script prompt's name from `_nori/host/prompts`.
+    pub name: String,
+    /// Positional arguments passed to the script.
+    pub args: Vec<String>,
+}
+
+/// Result of `_nori/session/prompts/run`: a script that exited zero.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct PromptRunResult {
+    pub stdout: String,
+}
+
 /// JSON Schema (draft 2020-12) of the types exchanged with `nori host`: the
 /// ACP v1 messages it serves and Nori's additions, with every type under
 /// `$defs` and keys sorted so the output is stable.
@@ -416,6 +475,10 @@ pub fn host_wire_schema() -> Value {
         generator.subschema_for::<HistorySearchParams>(),
         generator.subschema_for::<HistorySearchResult>(),
         generator.subschema_for::<HistoryMetadata>(),
+        generator.subschema_for::<PromptsListParams>(),
+        generator.subschema_for::<PromptsListResult>(),
+        generator.subschema_for::<PromptRunParams>(),
+        generator.subschema_for::<PromptRunResult>(),
     ];
     let definitions = generator.take_definitions(true);
     sorted(json!({
@@ -456,6 +519,8 @@ mod contract_tests {
             ("1.0.0", "1.0.3", false),
             ("1.4.0", "1.2.0", true),
             ("1.2.0", "1.4.0", false),
+            ("1.5.0", "1.4.0", true),
+            ("1.4.0", "1.5.0", false),
             ("2.0.0", "1.9.0", false),
             ("1.9.0", "2.0.0", false),
             ("0.3.1", "0.3.0", true),

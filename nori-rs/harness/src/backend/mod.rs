@@ -444,7 +444,7 @@ fn public_nori_capabilities(
     }
 }
 
-use hooks::commands_dir;
+use crate::custom_prompts::commands_dir;
 use hooks::generate_id;
 use hooks::route_hook_results;
 use hooks::run_prompt_summary;

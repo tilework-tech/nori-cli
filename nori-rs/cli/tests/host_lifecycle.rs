@@ -642,6 +642,9 @@ mod queue;
 #[path = "host_lifecycle/history.rs"]
 mod history;
 
+#[path = "host_lifecycle/prompts.rs"]
+mod prompts;
+
 #[path = "host_lifecycle/find_paths.rs"]
 mod find_paths;
 
