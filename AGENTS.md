@@ -111,6 +111,7 @@ every CLI doc across repos.
 | `docs/tui.md` | Using the TUI: slash commands, keybindings, attach |
 | `docs/release-artifacts.md` | Tags, dist-tags, release assets (Sessions depends on these) |
 | `docs/runbooks/releasing.md`, `docs/runbooks/debugging.md` | Releasing and debugging |
+| `docs/spec-gaps.md` | Open mismatches between the specs and `main`, one work item each. Delete an item when it lands. |
 
 Module docs (`docs.md`) exist for `cli`, `host-runtime`, `harness` (the session
 runtime), `acp-host`, `tui`, `nori-config`, and `nori-protocol`. Other crates:
