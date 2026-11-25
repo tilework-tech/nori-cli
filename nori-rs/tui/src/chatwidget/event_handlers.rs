@@ -427,6 +427,7 @@ impl ChatWidget {
                 .is_some_and(|record| record.status.is_closed());
         if !historical_child {
             self.submit_harness_action(crate::app_event::HarnessAction::LoadCustomPrompts);
+            self.load_host_goal_quietly();
         }
         self.bottom_pane.hide_status_indicator();
         self.update_approval_mode_label();

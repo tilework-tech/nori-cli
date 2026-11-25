@@ -645,6 +645,9 @@ mod history;
 #[path = "host_lifecycle/prompts.rs"]
 mod prompts;
 
+#[path = "host_lifecycle/goal.rs"]
+mod goal;
+
 #[path = "host_lifecycle/find_paths.rs"]
 mod find_paths;
 

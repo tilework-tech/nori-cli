@@ -198,6 +198,14 @@ pub(crate) enum AppEvent {
     CustomPromptsLoaded(Vec<nori_harness::CustomPrompt>),
     UndoSnapshotsLoaded(Vec<nori_harness::UndoSnapshot>),
     GoalLoaded(Option<nori_protocol::ThreadGoal>),
+    /// A host session's goal, for whichever widget shows that session.
+    /// `asked` when the user asked to see it, rather than the widget
+    /// learning it when the session came on screen.
+    HostGoalLoaded {
+        session_id: String,
+        goal: Option<nori_protocol::ThreadGoal>,
+        asked: bool,
+    },
     HarnessActionFailed(String),
 
     /// Kick off an asynchronous file search for the given query (text after

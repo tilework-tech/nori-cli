@@ -224,6 +224,25 @@ since it was set. Suspended time does not count.
 
 - Nori puts the goal context and the `nori-client` instructions in front of
   every prompt.
+
+### The goal on a host
+
+Each session on a host has its own goal, kept by the host. Every terminal on
+the host shows the goal of the session on screen and never another
+session's.
+
+- Any client reads a session's goal with `_nori/session/goal/get`
+  {sessionId}, follows changes in `goal_changed` session events, and finds
+  the latest goal on each `_nori/session/list` row (`goal`). The row keeps it
+  after its event has left the replay window.
+- Only the controller changes it, with `_nori/session/goal/set` {sessionId,
+  op}, where `op` is `{"set": {"objective": …}}`, `"pause"`, `"resume"` or
+  `"clear"`. Watchers get `-32016`. Both reply `{goal}`, which is null when
+  the session has no goal. An unknown session gets `-32002`.
+- The host advertises these as `capabilities.nori_sessions.goal`.
+- The plain TUI and `nori attach` use these methods for any session on a
+  host. A widget reads its session's goal when the session comes on screen,
+  so `/goal edit` and the replace prompt use that session's goal.
 - After a turn ends normally, if the goal is active, the session is idle, and
   the queue is empty, Nori queues a hidden goal continuation.
 - A user turn can always start one continuation. A continuation can follow a
