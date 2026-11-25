@@ -22,6 +22,16 @@ use crate::nori::session_header::SkillsetStatus;
 use crate::nori::session_header::StatusViewModel;
 use crate::nori::token_count::TokenCount;
 
+mod exit_card;
+
+pub use exit_card::ExitCardModel;
+pub use exit_card::ExitCardPaint;
+pub use exit_card::ExitFieldsFixture;
+pub use exit_card::ExitToolsFixture;
+pub use exit_card::MIN_COLUMN_WIDTH;
+pub use exit_card::exit_card_fixture;
+pub use exit_card::exit_card_lines;
+
 /// Render fixture context data using the same history cell as `/context`.
 pub fn context_specimen_lines(used: Option<i64>, width: u16) -> Vec<Line<'static>> {
     crate::context_view::ContextView {

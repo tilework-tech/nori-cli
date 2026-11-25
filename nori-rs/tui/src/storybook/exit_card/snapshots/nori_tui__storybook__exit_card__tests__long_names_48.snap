@@ -1,0 +1,21 @@
+---
+source: tui/src/storybook/exit_card/tests.rs
+expression: "framed.join(\"\\n\")"
+---
+  › Nori CLI  session ended                     |
+                                                |
+  Resume       nori resume 019a7c3e-5b21-7f4d-  |
+               9e08-6c2a1d4b8f37                |
+  Messages     14 prompts · 19 replies          |
+  Tokens       412K total · 388K in             |
+               301K cached · 24.1K out          |
+  Tools        Read 9                           |
+               mcp__acme-observability__query_  |
+               trace_spans_by_service_and_      |
+               window 6 · Bash 4                |
+               Exampletoolnamewithoutanyseparato|
+               rsatall 2                        |
+  Skills       test-driven-development          |
+               writing-plans                    |
+  Subagents    nori-code-researcher             |
+               nori-web-researcher              |
