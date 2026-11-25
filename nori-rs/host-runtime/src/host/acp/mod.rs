@@ -17,6 +17,7 @@ pub(super) mod handshake;
 mod history;
 mod list;
 pub(super) mod picker;
+mod prompts;
 mod session;
 
 use std::collections::HashMap;
@@ -46,6 +47,8 @@ pub(super) fn handles(method: &str) -> bool {
             | history::ENTRY
             | history::SEARCH
             | history::METADATA
+            | prompts::LIST
+            | prompts::RUN
             | "session/new"
             | "session/list"
             | "session/load"
@@ -67,6 +70,8 @@ pub(super) fn runs_concurrently(method: &str) -> bool {
             | history::ADD
             | history::ENTRY
             | history::SEARCH
+            | prompts::LIST
+            | prompts::RUN
             | "session/new"
             | "session/load"
             | "session/resume"
@@ -310,6 +315,8 @@ impl HostService {
             history::ADD | history::ENTRY | history::SEARCH | history::METADATA => {
                 self.history(client, method, params).await
             }
+            prompts::LIST => self.list_prompts(params).await,
+            prompts::RUN => self.run_prompt(client, params).await,
             "session/new" => self.new_session(client, &params).await,
             "session/list" => self.list_sessions(&params).await,
             "session/load" => self.load_session(client, &params, true).await,
