@@ -90,7 +90,8 @@ on the ACP SDK (`nori-cli` uses it only as a dev-dependency for tests).
   off the subscriber's bounded queue into a backlog of up to
   `REPLAY_BACKLOG_EVENTS` (4,096) and sends them after the replay, in order.
   A long replay therefore does not count against the live queue. A client
-  too slow to read still fills the queue and is dropped.
+  too slow to read still fills the queue and is dropped. The managed host
+  sizes that queue to its journal's retention (see `nori-rs/harness/docs.md`).
 - MCP forwarding and OAuth behavior are owned by [`docs/mcp.md`](../../docs/mcp.md).
 
 ## Tests

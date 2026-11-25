@@ -516,6 +516,70 @@ async fn invalid_cursors_are_errors_and_overflow_drops_only_subscriber() {
     fixture.stop().await;
 }
 
+/// Waits until the session has published `count` envelopes after `cursor`.
+async fn wait_published(fixture: &Fixture, id: ConversationId, cursor: i64, count: i64) {
+    tokio::time::timeout(WAIT, async {
+        while fixture.manager.replay_cursors()[&id.to_string()] < cursor + count {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_subscriber_may_pause_until_it_is_one_journal_behind() {
+    const RETAINED: i32 = 400;
+    // More than a 256-event live queue, within what the journal retains.
+    const PAUSED_THROUGH: i64 = 300;
+    let fixture = Fixture::new(RETAINED).await;
+    let id = fixture.ids[0];
+    let cursor = fixture.manager.replay_cursors()[&id.to_string()];
+    let reply = fixture
+        .host
+        .request(
+            json!({"jsonrpc":"2.0","id":1,"method":"_nori/session/subscribe",
+            "params":{"session_id":id.to_string(),"cursors":{id.to_string():cursor}}}),
+        )
+        .await;
+    let mut events = reply.subscription.unwrap().events;
+    fixture
+        .manager
+        .handle(&id)
+        .unwrap()
+        .prompt(vec![nori_protocol::acp::v1::ContentBlock::Text(
+            nori_protocol::acp::v1::TextContent::new("mock:stream-until-cancel"),
+        )])
+        .await
+        .unwrap();
+
+    wait_published(&fixture, id, cursor, PAUSED_THROUGH).await;
+    let mut seqs = Vec::new();
+    for _ in 0..PAUSED_THROUGH {
+        let envelope = tokio::time::timeout(WAIT, events.recv()).await.unwrap();
+        seqs.push(envelope.expect("the paused subscriber was dropped").seq);
+    }
+    assert_eq!(
+        seqs,
+        (cursor + 1..=cursor + PAUSED_THROUGH).collect::<Vec<_>>()
+    );
+
+    // Falling further behind than a reconnect could replay still closes it.
+    let read_through = cursor + PAUSED_THROUGH;
+    wait_published(&fixture, id, read_through, i64::from(RETAINED) + 1).await;
+    let mut delivered = 0;
+    while tokio::time::timeout(WAIT, events.recv())
+        .await
+        .unwrap()
+        .is_some()
+    {
+        delivered += 1;
+    }
+    assert_eq!(delivered, RETAINED);
+    fixture.manager.handle(&id).unwrap().cancel().await.unwrap();
+    fixture.stop().await;
+}
+
 #[tokio::test]
 async fn managed_endpoint_requires_initialize_first() {
     let fixture = Fixture::new(4096).await;
