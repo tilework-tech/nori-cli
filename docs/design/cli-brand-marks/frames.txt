@@ -1,26 +1,20 @@
-Nori CLI face, study 02. Plain-text frames. Synthetic content.
-〉 (U+3009) and 〈 (U+3008) take 2 cells. Eyes are green, the mouth is foreground.
+Nori CLI face, study 03. Plain-text frames. Synthetic content.
+〉 (U+3009) takes 2 cells. Eyes are green, the mouth is foreground.
 
 FACE      〉_ ▐              (5 cells)
 WORDMARK  〉nori CLI v0.42.0  (version dim)
 
-BLINK, both eyes, after a 900 ms rest
-  B1 dash        - _ -                      80 ms
-  B2 dot         · _ ·                      80 ms
-  B3 squash      › _ ▗   - _ ▁   › _ ▗      40 ms each
-  B4 flat        _ _ _                      80 ms
+CHOSEN
+  B3 blink   〉_ ▐   › _ ▗   - _ ▁   › _ ▗        40 ms each
+  W1 wink    〉_ ▐   〉_ -                         240 ms
+  R1 retype  〉_ ▐  〉n_ ▐  〉no_ ▐ ... 〉nori CLI_ ▐  〉nori CLI  〉nori CLI v0.42.0   60 ms per letter
 
-WINK, right eye
-  W1 dash        〉_ -                      240 ms
-  W2 squash      〉_ ▗   〉_ ▁   〉_ ▗      40, 240, 40 ms
-  W3 underscore  〉_ _                      240 ms
+LOOK, both eyes move together, mouth fixed (7-cell field, mouth in cell 4)
+                 rest       left       right
+  K1 glance      ·〉_ ▐·    〉 _▐··    ·· >_  ▐     500 ms holds, stops at centre
+  K2 dart        same cells as K1, 160 ms each side, no stop at centre
+  K3 side-eye    ·〉_ ▐·    ·< _ ▌·                 no cell moves
+  (· marks an empty cell)
 
-LOOK (left, right), 7-cell field, 500 ms holds
-  L1 glyph swap      〉_ ▌      〈_ ▐
-  L2 one-cell shift 〉_ ▐         〉_ ▐
-  L3 eyes only       〉_ ▌       >_ ▐
-
-RETYPE, face into wordmark, 60 ms per letter
-  R1 mouth types   〉_ ▐  〉n_ ▐  〉no_ ▐  ...  〉nori CLI_ ▐  〉nori CLI  〉nori CLI v0.42.0
-  R2 eye types     〉_ ▐  〉▐  〉n▐  〉no▐  ...  〉nori CLI▐  〉nori CLI  〉nori CLI v0.42.0
-  R3 overwrite     〉_ ▐  〉n ▐  〉no▐  〉nor  〉nori  ...  〉nori CLI  〉nori CLI v0.42.0
+EXTRA
+  H1 hum     〉_ ▐   〉- ▐   〉‾ ▐   〉- ▐            120 ms each, loops while working

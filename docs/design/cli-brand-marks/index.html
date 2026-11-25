@@ -67,32 +67,27 @@ function typing(build) {            // build(i, typedText) -> frame string
 }
 
 const GROUPS = [
- {key:'blink', title:'Blink · both eyes · 40 to 80 ms frames', rest:REST, opts:[
-  {id:'B1', name:'Dash', note:'One frame. Eyes become dashes.', f:[fr(REST,900), fr('{g}- {f}_ {g}-',80)]},
-  {id:'B2', name:'Dot', note:'One frame. Eyes shrink to dots.', f:[fr(REST,900), fr('{g}· {f}_ {g}·',80)]},
+ {key:'blink', title:'Blink · chosen', rest:REST, opts:[
   {id:'B3', name:'Squash', note:'Three frames. Eyes get smaller, close, reopen.', f:[fr(REST,900), fr('{g}› {f}_ {g}▗',40), fr('{g}- {f}_ {g}▁',40), fr('{g}› {f}_ {g}▗',40)]},
-  {id:'B4', name:'Flat', note:'One frame. Eyes drop to the mouth line.', f:[fr(REST,900), fr('{g}_ {f}_ {g}_',80)]},
  ]},
- {key:'wink', title:'Wink · right eye only', rest:REST, opts:[
+ {key:'wink', title:'Wink · chosen', rest:REST, opts:[
   {id:'W1', name:'Dash', note:'Block becomes a dash, holds 240 ms.', f:[fr(REST,900), fr('{g}〉{f}_ {g}-',240)]},
-  {id:'W2', name:'Squash', note:'Block shrinks to a low bar, holds, reopens.', f:[fr(REST,900), fr('{g}〉{f}_ {g}▗',40), fr('{g}〉{f}_ {g}▁',240), fr('{g}〉{f}_ {g}▗',40)]},
-  {id:'W3', name:'Underscore', note:'Eye joins the mouth line.', f:[fr(REST,900), fr('{g}〉{f}_ {g}_',240)]},
  ]},
- {key:'look', title:'Look · left, centre, right', rest:' '+REST+' ', opts:[
-  {id:'L1', name:'Glyph swap', note:'Left: ▐ to ▌. Right: 〉 to 〈. Nothing shifts; the bracket flips.',
-    f:[fr(' '+REST+' ',700), fr(' {g}〉{f}_ {g}▌ ',500), fr(' '+REST+' ',300), fr(' {g}〈{f}_ {g}▐ ',500)]},
-  {id:'L2', name:'One-cell shift', note:'The whole face moves one cell.',
-    f:[fr(' '+REST+' ',700), fr(REST+'  ',500), fr(' '+REST+' ',300), fr('  '+REST,500)]},
-  {id:'L3', name:'Eyes only', note:'Left: ▐ to ▌. Right: the chevron steps one cell as a narrow >.',
-    f:[fr(' '+REST+' ',700), fr(' {g}〉{f}_ {g}▌ ',500), fr(' '+REST+' ',300), fr(' {g} >{f}_ {g}▐ ',500)]},
+ {key:'look', title:'Look · both eyes move together · mouth fixed', rest:' '+REST+' ', opts:[
+  {id:'K1', name:'Glance', note:'Both eyes slide one cell. Left, centre, right, 500 ms holds.',
+    f:[fr(' '+REST+' ',700), fr('{g}〉 {f}_{g}▐  ',500), fr(' '+REST+' ',300), fr('{g}  >{f}_{g}  ▐',500)]},
+  {id:'K2', name:'Dart', note:'Same cells as K1, quick: 160 ms each side, no stop at centre.',
+    f:[fr(' '+REST+' ',700), fr('{g}〉 {f}_{g}▐  ',160), fr('{g}  >{f}_{g}  ▐',160), fr('{g}〉 {f}_{g}▐  ',160), fr('{g}  >{f}_{g}  ▐',160)]},
+  {id:'K3', name:'Side-eye', note:'No cell moves. Both eyes flip to face left, then back.',
+    f:[fr(' '+REST+' ',700), fr(' {g}< {f}_ {g}▌ ',600)]},
  ]},
- {key:'retype', title:'Retype · face into wordmark · 60 ms per letter', rest:WORD, opts:[
+ {key:'extra', title:'One extra · working hum · eyes fixed, mouth moves', rest:REST, opts:[
+  {id:'H1', name:'Hum', note:'While the agent works the mouth steps low, mid, high, mid at 120 ms.',
+    f:[fr(REST,120), fr('{g}〉{f}- {g}▐',120), fr('{g}〉{f}‾ {g}▐',120), fr('{g}〉{f}- {g}▐',120), fr(REST,120), fr('{g}〉{f}- {g}▐',120), fr('{g}〉{f}‾ {g}▐',120), fr('{g}〉{f}- {g}▐',120)]},
+ ]},
+ {key:'retype', title:'Retype into the wordmark · chosen', rest:WORD, opts:[
   {id:'R1', name:'Mouth types', note:'The underscore is the cursor. It pushes the right eye along.',
     f:[fr(REST,700), ...typing((i,t)=>`{g}〉{b}${t}{f}_ {g}▐`), fr('{g}〉{b}nori CLI{f}_ {g}▐',240), fr('{g}〉{b}nori CLI',120), fr(WORD,1600)]},
-  {id:'R2', name:'Eye types', note:'The mouth goes. The right eye is the block cursor.',
-    f:[fr(REST,700), fr('{g}〉▐',120), ...typing((i,t)=>`{g}〉{b}${t}{g}▐`), fr('{g}〉{b}nori CLI{g}▐',240), fr('{g}〉{b}nori CLI',120), fr(WORD,1600)]},
-  {id:'R3', name:'Overwrite', note:'Letters replace the face in place. No cursor.',
-    f:[fr(REST,700), fr('{g}〉{b}n{f} {g}▐',60), fr('{g}〉{b}no{g}▐',60), fr('{g}〉{b}nor',60), fr('{g}〉{b}nori',60), fr('{g}〉{b}nori C',60), fr('{g}〉{b}nori CL',60), fr('{g}〉{b}nori CLI',240), fr(WORD,1600)]},
  ]},
 ];
 // Pad every option in a group to the same loop length, ending on the rest frame.

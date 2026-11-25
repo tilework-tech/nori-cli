@@ -1,4 +1,4 @@
-# Nori CLI face: study 02
+# Nori CLI face: study 03
 
 Design study only. Nothing here changes product code. All content is synthetic.
 
@@ -11,18 +11,18 @@ Open `index.html` to play every option (speed, size, all-frames view).
 
 ![All frames](img/all-frames.png)
 
-| Group | Options | Preview |
+Chosen by Cliff: blink B3 (squash), wink W1 (dash), retype R1 (mouth types).
+
+| Open | Options | Preview |
 |---|---|---|
-| Blink, both eyes | B1 dash, B2 dot, B3 squash, B4 flat | ![](img/blink.gif) |
-| Wink, right eye | W1 dash, W2 squash, W3 underscore | ![](img/wink.gif) |
-| Look left and right | L1 glyph swap, L2 one-cell shift, L3 eyes only | ![](img/look.gif) |
-| Retype into the wordmark | R1 mouth types, R2 eye types, R3 overwrite | ![](img/retype.gif) |
+| Look: both eyes move together, mouth fixed | K1 glance, K2 dart, K3 side-eye | ![](img/look.gif) |
+| One extra: working hum | H1 | ![](img/extra.gif) |
 
 ## Notes
 
 - Every option changes glyphs in place. No frame changes the width of the cells it uses,
   except the retype, which grows to the wordmark.
-- `〈` (U+3008) is drawn in the right cell of its pair and `〉` in the left, so swapping
-  them moves the eye one cell and flips it.
+- `〉` cannot sit in the cell next to the mouth on the right-look frame, because it is 2 cells
+  wide. That frame uses the 1-cell `>`, which is smaller.
 - `▗` and `▁` need a font with block elements. `-`, `·` and `_` are the safe choices.
-- Study 01 (a different face) is in this branch's history.
+- Earlier studies are in this branch's history.
