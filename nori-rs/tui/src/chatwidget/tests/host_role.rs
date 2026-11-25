@@ -83,7 +83,10 @@ fn input_while_reconnecting_keeps_its_draft() {
     assert_eq!(chat.composer_text(), "synthetic draft during an outage");
     let (text, events) = printed(&mut rx);
     assert!(text.contains("Reconnecting to the host"), "{text}");
-    assert!(!asks_host(&events, |call| matches!(call, HostCall::Prompt(_))));
+    assert!(!asks_host(&events, |call| matches!(
+        call,
+        HostCall::Prompt(_)
+    )));
 }
 
 #[test]

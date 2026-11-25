@@ -309,7 +309,11 @@ mod tests {
             (SlashCommand::Screen, joined(false, true), None),
             (SlashCommand::New, joined(false, true), None),
             (SlashCommand::Close, joined(false, true), None),
-            (SlashCommand::Close, joined(false, false), Some(RECONNECTING)),
+            (
+                SlashCommand::Close,
+                joined(false, false),
+                Some(RECONNECTING),
+            ),
             (SlashCommand::Approvals, joined(false, true), None),
             (SlashCommand::Sessions, joined(true, true), None),
             (SlashCommand::New, joined(true, true), Some(WATCHING)),
