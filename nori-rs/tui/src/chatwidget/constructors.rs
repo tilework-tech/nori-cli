@@ -239,6 +239,7 @@ impl ChatWidget {
             pinned_plan: None,
             terminal_title_animation_origin: std::time::Instant::now(),
             last_terminal_title: None,
+            program_status: Default::default(),
             foreground: true,
             session_lines: Vec::new(),
         };
@@ -426,6 +427,7 @@ impl ChatWidget {
             pinned_plan: None,
             terminal_title_animation_origin: std::time::Instant::now(),
             last_terminal_title: None,
+            program_status: Default::default(),
             foreground: true,
             session_lines: Vec::new(),
         };

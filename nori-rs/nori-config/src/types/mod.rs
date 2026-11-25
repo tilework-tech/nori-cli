@@ -2223,6 +2223,16 @@ pub struct TuiConfigToml {
     /// thoughts appear only in the working indicator.
     pub thoughts_in_history: Option<bool>,
 
+    /// Report the foreground session's status (idle, working, blocked, done,
+    /// error) to the terminal with OSC 7501. Off by default because the
+    /// sequence is not standard.
+    pub program_status: Option<bool>,
+
+    /// Put the real approval title in blocked reports instead of the generic
+    /// "Approval needed". Titles can contain command text, and terminals may
+    /// show them in tab tooltips and desktop notifications.
+    pub program_status_approval_titles: Option<bool>,
+
     /// Show rotating custom messages while the agent is working.
     pub custom_working_messages: Option<bool>,
 
@@ -2485,6 +2495,12 @@ pub struct NoriConfig {
     /// thoughts appear only in the working indicator.
     pub thoughts_in_history: bool,
 
+    /// Report the foreground session's status to the terminal (OSC 7501).
+    pub program_status: bool,
+
+    /// Blocked reports carry the approval title instead of "Approval needed".
+    pub program_status_approval_titles: bool,
+
     /// Show rotating custom messages while the agent is working.
     pub custom_working_messages: bool,
 
@@ -2622,6 +2638,8 @@ impl Default for NoriConfig {
             file_manager: None,
             pinned_plan_drawer: false,
             thoughts_in_history: true,
+            program_status: false,
+            program_status_approval_titles: false,
             tool_output: ToolOutput::default(),
             tool_output_from_command_line: false,
             tool_output_max_lines: None,

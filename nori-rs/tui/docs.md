@@ -28,6 +28,7 @@ UI strings keep that word.
 | `history_cell/`, `exec_cell/`, `client_tool_cell.rs`, `markdown*`, `diff_render.rs` | History cells and their rendering |
 | `host_client/` | Client of a `nori host`: connection, reconnect, reply matching; `drive` (WebSocket) and `drive_pipe` (owned host) |
 | `attach/` | `run_attach`, `AttachOptions`: the `nori attach` frontend |
+| `program_status/` | OSC 7501 terminal status: `ProgramStatusTracker` (fold over one session's events) and `ProgramStatusReporter` (encode and write) |
 | `nori/` | Nori pickers (agent, config, fork, resume, skillset, hotkey, MCP), onboarding, session header, update prompt |
 | `resume_picker/`, `session_*.rs`, `viewonly_transcript.rs` | Resume picker, session preview and stats, view-only transcripts |
 | `tui.rs`, `custom_terminal.rs`, `insert_history.rs`, `render/` | Terminal setup, inline viewport, scrollback insertion |
@@ -81,6 +82,15 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   delegated children.
 - History from a widget reaches `App` through its session-scoped sender. Do not
   print a parked session's history directly.
+- `ProgramStatusTracker` is a pure fold over one session's `SessionEvent`s.
+  It settles a turn from the prompt's own response, matched by request ID.
+  Every `ChatWidget`, parked ones included, folds its events, so a session
+  brought forward already knows its state. `App` reports only `chat_widget`'s
+  status after each main-loop event; background sessions never write.
+  `nori attach` reports the selected `Conversation` once its event channel is
+  drained, so a replay burst writes one report.
+- `ProgramStatusReporter` writes only when the bytes change, never when
+  stdout is not a TTY, and clears once if it ever reported.
 - Approval and sandbox policy come from `nori-config`. ACP session config
   options stay ACP schema values.
 - "Fork" means ACP fork; going back to an earlier message is rewind. "Queue"

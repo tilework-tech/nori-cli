@@ -1124,6 +1124,34 @@ fn mask_activity_times(text: &str) -> String {
     masked
 }
 
+/// The body of every OSC 7501 program status report in `raw`, in the order
+/// written, such as `state=working:app=nori`.
+pub fn program_status_reports(raw: &[u8]) -> Vec<String> {
+    let raw = String::from_utf8_lossy(raw);
+    raw.split("\u{1b}]7501;")
+        .skip(1)
+        .map(|rest| rest.split("\u{1b}\\").next().unwrap_or(rest).to_string())
+        .collect()
+}
+
+/// Wait until the last program status report `session` wrote is `expected`.
+pub fn wait_for_program_status(session: &mut TuiSession, expected: &str) {
+    let deadline = Instant::now() + TIMEOUT;
+    while program_status_reports(session.raw_output())
+        .last()
+        .map(String::as_str)
+        != Some(expected)
+    {
+        assert!(
+            Instant::now() < deadline,
+            "expected a {expected:?} report, saw {:?}:\n{}",
+            program_status_reports(session.raw_output()),
+            session.screen_contents()
+        );
+        session.settle(Duration::from_millis(50));
+    }
+}
+
 /// Normalize dynamic content in screen output for snapshot testing
 pub fn normalize_for_snapshot(contents: String) -> String {
     let mut normalized = mask_activity_times(&contents);

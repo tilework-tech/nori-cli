@@ -37,6 +37,7 @@ impl ChatWidget {
         if generation != self.session_generation {
             return;
         }
+        self.program_status.observe(&event);
         match event {
             nori_protocol::SessionEvent::Acp(event) => self.handle_acp_event(event),
             nori_protocol::SessionEvent::Nori(event) => self.handle_nori_event(event),

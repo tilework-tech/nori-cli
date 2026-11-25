@@ -163,6 +163,7 @@ mod explore_details;
 mod new_session_folder;
 mod part10;
 mod part8;
+mod program_status;
 mod queue_list;
 mod queue_recall;
 mod session_title_envelope;

@@ -154,6 +154,8 @@ Applies only to `nori sandbox`.
 | `resize_reflow` | boolean | `true` | Rebuild scrollback when the terminal width changes. |
 | `terminal_notifications` | `"enabled"`, `"disabled"` | `"enabled"` | Terminal notifications (OSC 9). |
 | `os_notifications` | `"enabled"`, `"disabled"` | `"enabled"` | Desktop notifications. |
+| `program_status` | boolean | `false` | Report the foreground session's status to the terminal (OSC 7501). Off by default because the sequence is not standard. See [tui.md](tui.md#terminal-status). |
+| `program_status_approval_titles` | boolean | `false` | Put the real approval title in a blocked status report instead of "Approval needed". Titles can contain command text that terminals may show in tab tooltips and notifications. |
 | `notify_after_idle` | `"5s"`, `"10s"`, `"30s"`, `"60s"`, `"disabled"` | `"5s"` | Idle time before a notification. |
 | `vertical_footer` | boolean | `false` | Stack footer segments vertically. |
 | `vim_mode` | `"newline"`, `"submit"`, `"always_submit"`, `"off"`, or boolean | `"off"` | Vim keys in the prompt box and what Enter does. `newline`: Enter adds a line in INSERT, submits in NORMAL. `submit`: the reverse. `always_submit`: Enter submits in both. `true` means `submit`, `false` means `off`. |
