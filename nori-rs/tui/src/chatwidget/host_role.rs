@@ -5,6 +5,21 @@ use super::*;
 use crate::host_client::HostConnection;
 use nori_protocol::ControlRole;
 
+/// Typed on a joined host, leaves it like Ctrl+D; its sessions keep running.
+pub(crate) const DETACH_COMMAND: &str = "/detach";
+/// Typed on a joined host, interrupts the turn on screen like Esc.
+pub(crate) const CANCEL_COMMAND: &str = "/cancel";
+/// Typed commands with arguments that a joined terminal refuses with the
+/// reason their menu row shows, rather than as typed input.
+pub(crate) fn refuses_with_its_own_reason(text: &str) -> bool {
+    ["/new ", "/approvals "]
+        .iter()
+        .any(|command| text.starts_with(command))
+}
+
+/// Commands only a joined host's terminal takes, without the slash.
+pub(crate) const JOINED_COMMANDS: [&str; 2] = ["detach", "cancel"];
+
 /// Why a watcher's prompt stays in the composer.
 pub(crate) const WATCHER_INPUT: &str = "Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.";
 const TAKE_CONTROL_RECONNECTING: &str =
@@ -14,7 +29,42 @@ impl ChatWidget {
     /// Follow a joined host's standing for this terminal.
     pub(crate) fn set_host_connection(&mut self, connection: HostConnection) {
         self.host_connection = Some(connection);
+        self.refresh_host_status();
         self.refresh_builtin_command_availability();
+    }
+
+    pub(crate) fn host_connection(&self) -> Option<HostConnection> {
+        self.host_connection.clone()
+    }
+
+    /// The host's latest status for the session this widget shows.
+    pub(crate) fn set_host_session_status(&mut self, status: nori_protocol::SessionStatus) {
+        if self.host_session_status != Some(status) {
+            self.host_session_status = Some(status);
+            self.refresh_host_status();
+        }
+    }
+
+    pub(super) fn refresh_host_status(&mut self) {
+        let Some(connection) = &self.host_connection else {
+            return;
+        };
+        let folder = self
+            .follows_host_session()
+            .then(|| self.config.cwd.file_name())
+            .flatten()
+            .map(|name| name.to_string_lossy().into_owned());
+        let approvals = self
+            .follows_host_session()
+            .then(|| format!("Approvals: {}", self.approval_mode_name()));
+        let status = host_status_line(
+            connection,
+            folder.as_deref(),
+            &self.config.active_agent,
+            self.host_session_status,
+            approvals.as_deref(),
+        );
+        self.bottom_pane.set_host_status(Some(status));
     }
 
     /// Whether this widget shows a joined host's session, which runs on the
@@ -51,6 +101,64 @@ impl ChatWidget {
         (connection.role == ControlRole::Watcher).then(|| WATCHER_INPUT.to_string())
     }
 
+    /// `/cancel`: interrupt the turn on screen, whoever started it.
+    pub(super) fn cancel_host_turn(&mut self) {
+        if let Some(refusal) = self.host_input_refusal() {
+            self.add_error_message(format!("{CANCEL_COMMAND}: {refusal}"));
+            return;
+        }
+        if self.can_control_external_turn() {
+            self.request_external_cancel();
+        } else if !self.interrupt_host_prompt() {
+            self.add_info_message("Nothing is running in this session.".to_string(), None);
+        }
+    }
+
+    /// Ctrl+C on a joined host, before the draft or the exit sees it.
+    /// Returns whether the key was handled here.
+    ///
+    /// Only a connected controller interrupts; any other terminal is told
+    /// why while a turn runs, and keeps its draft. On a stopped host the key
+    /// clears the draft or leaves. A turn someone else started
+    /// is cancelled before the draft, which stays for the next prompt. Once
+    /// that cancel is on its way it is never resent: the key keeps a typed
+    /// draft and, with nothing typed, leaves the host as it does when idle.
+    pub(super) fn joined_ctrl_c(&mut self) -> bool {
+        if self.host_connection.is_none() || self.bottom_pane.has_active_view() {
+            return false;
+        }
+        // A stopped host runs nothing this terminal could still interrupt.
+        if self
+            .host_connection
+            .as_ref()
+            .is_some_and(|connection| connection.stopped.is_some())
+        {
+            if !self.bottom_pane.composer_is_empty() {
+                return false;
+            }
+            self.begin_exit();
+            return true;
+        }
+        if let Some(refusal) = self.host_input_refusal() {
+            let turn_running = self.external_turn.is_some() || self.bottom_pane.is_task_running();
+            if turn_running {
+                self.add_error_message(refusal);
+            }
+            return turn_running;
+        }
+        if !self.can_control_external_turn() {
+            return false;
+        }
+        if self.external_cancel_status().is_some() {
+            if self.bottom_pane.composer_is_empty() {
+                self.begin_exit();
+            }
+        } else {
+            self.request_external_cancel();
+        }
+        true
+    }
+
     /// Alt+T. False when this terminal owns its host and the key is not ours.
     pub(super) fn take_host_control(&mut self) -> bool {
         let Some(connection) = &self.host_connection else {
@@ -66,4 +174,49 @@ impl ChatWidget {
         }
         true
     }
+}
+
+/// The footer's first segment on a joined host: this terminal's standing,
+/// the session's agent, and the key that changes or leaves it.
+fn host_status_line(
+    connection: &HostConnection,
+    folder: Option<&str>,
+    agent: &str,
+    session: Option<nori_protocol::SessionStatus>,
+    approvals: Option<&str>,
+) -> Line<'static> {
+    use ratatui::style::Stylize;
+    let (standing, rest): (ratatui::text::Span<'static>, Vec<&str>) =
+        if connection.stopped.is_some() {
+            ("DISCONNECTED".red().bold(), vec!["ctrl+d detach"])
+        } else if !connection.connected {
+            (
+                "RECONNECTING".cyan().bold(),
+                vec!["draft kept", "ctrl+d detach"],
+            )
+        } else if connection.role == ControlRole::Watcher {
+            (
+                "watching · read-only".cyan(),
+                vec!["alt+t take control", "ctrl+d detach"],
+            )
+        } else {
+            ("controlling".green(), vec!["ctrl+d detach"])
+        };
+    let mut spans = vec![standing];
+    if let Some(folder) = folder {
+        spans.push(format!(" · {folder}").dim());
+    }
+    if !agent.is_empty() {
+        spans.push(format!(" · {agent}").dim());
+    }
+    if let Some(status) = session {
+        spans.push(format!(" · {}", crate::session_status::status_label(status)).dim());
+    }
+    if let Some(approvals) = approvals {
+        spans.push(format!(" · {approvals}").dim());
+    }
+    for hint in rest {
+        spans.push(format!(" · {hint}").dim());
+    }
+    Line::from(spans)
 }

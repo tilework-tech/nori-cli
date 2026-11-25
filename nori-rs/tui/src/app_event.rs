@@ -105,6 +105,17 @@ pub(crate) enum AppEvent {
         result: Result<(), String>,
     },
 
+    /// A joined host started this session for `/new`; show it once listed.
+    JoinedSessionStarted(String),
+
+    /// A joined host's folders for the `/new` Tab typed in `generation`'s
+    /// composer when it held `text`.
+    HostFoldersFound {
+        generation: SessionGeneration,
+        text: String,
+        found: serde_json::Value,
+    },
+
     /// `/screen`: switch between the inline and the full-screen view.
     ToggleScreenMode,
 

@@ -187,7 +187,8 @@ it.
 ## Attach from a second terminal
 
 `nori host` runs a background host. It owns its sessions, so they survive
-when a terminal closes. `nori attach` is a terminal client of that host.
+when a terminal closes. `nori attach` opens the same TUI as plain `nori`,
+joined to that host instead of owning one.
 
 ```bash
 nori host                         # start the host (or report the running one)
@@ -202,8 +203,15 @@ Rules:
 
 - There is at most one background host per `NORI_HOME`.
 - Detaching never stops the host or its sessions.
-- The attach screen uses the alternate screen. It skips the welcome, trust,
-  update, and worktree steps.
+- `nori attach` starts on the alternate screen. `/screen` or Ctrl+L switches
+  to the inline view, printing the history once, and back. Leaving from the
+  alternate screen prints no transcript and no exit summary. It skips the
+  welcome, trust, update, and worktree steps.
+- Without a session ID, the session list opens, even when the host has no
+  sessions. If it closes with nothing open, the screen says "No session
+  selected. Use /new…".
+- When a session on the host ends, the terminal stays: it shows the next
+  session, or "Session ended. Use /new…".
 - `nori attach --host <ws-url> --token-file <path>` attaches to a host that is
   not the local one. Both flags are required together.
 
@@ -218,10 +226,10 @@ Each client of a host is a **controller** or a **watcher**.
 - `alt+t` takes control. The previous controller becomes a watcher.
 - When the controller disconnects, no client is promoted. Work keeps running.
 
-The header shows the role: `CONTROLLING`, or
-`WATCHING · read-only · alt+t take control`. While the connection is down it
-shows `RECONNECTING · sessions continue on the host`, and after a fatal error
-`DISCONNECTED · ctrl+d to detach`.
+One hint row above the footer shows this terminal's standing (`controlling`,
+`watching · read-only`, `RECONNECTING`, or `DISCONNECTED`), the session's
+folder, agent, and host status, `Approvals: <mode>`, and the keys that apply
+(`ctrl+d detach`, `alt+t take control`).
 
 ### Attach keys and commands
 
@@ -229,30 +237,33 @@ shows `RECONNECTING · sessions continue on the host`, and after a fatal error
 |---|---|
 | Enter | Send. During a turn, steer. |
 | Tab | During a turn, queue. In `/new`, complete a folder name. |
-| Ctrl+C | Clear the draft. With an empty draft, cancel the turn. |
-| Ctrl+D, `/quit`, `/exit`, `/detach` | Detach. |
+| Ctrl+C | As the controller, cancel the running turn, also one another terminal started; the draft is kept. Once that cancel is pending, Ctrl+C is not resent: it keeps a typed draft and on an empty prompt detaches. A watcher or a reconnecting terminal never cancels, with Ctrl+C or Esc: during a turn it prints why and keeps the draft. On a stopped host, or when nothing runs, clear the draft; on an empty prompt, detach. |
+| Ctrl+D, `/quit`, `/exit`, `/detach` | Detach. In the session list, Ctrl+D closes the selected session; in an empty list it detaches. |
 | `alt+t` | Take control. |
 | `alt+s`, Left on an empty prompt, `/sessions` | Open the session list. |
 | `alt+down` | Next session that waits on you. |
 | `alt+up` | Go to the parent session. |
 | Ctrl+R (in the list) | Resume a failed session. |
-| PgUp / PgDn | Scroll 10 lines. |
-| `/new [folder] [agent]` | Start a session. Without a folder, it uses the folder of the session on screen. With no session, a local host uses the terminal's folder and a `--host` host uses its own folder. |
+| PgUp, Ctrl+T | Open the transcript (PgUp: in the full-screen view, a page above the screen); Esc or q closes it. |
+| `/new [folder] [agent]` | Start a session. Without a folder, it uses the folder of the session on screen. With no session, a local host uses the terminal's folder and a `--host` host uses its own folder. A host that lists paths resolves the folder and completes it on Tab. The new session comes on screen once the host lists it. |
 | `/delegate <agent> <task>` | Delegate a task from the session on screen. |
 | `/close` | Close the session on screen. |
-| `/resume` | Resume the session on screen. |
-| `/cancel` | Cancel the turn. |
+| `/approvals ask\|agent\|approve-all` | Set the permission mode of the session on screen. `approve-all` asks first. An unknown mode keeps the typed command. |
+| `/cancel` | Cancel the turn on screen. |
 
-A permission request takes the keyboard: Up/Down and Enter choose, 1-9 choose
-by number, Esc rejects, Ctrl+C cancels. A delegation request: 1 or Enter
-approves; 2, Esc, or Ctrl+C declines.
+Esc does not edit an earlier prompt in `nori attach`. Other commands are
+greyed with "not available in nori attach yet" or "not available on this
+host yet"; a typed one is refused as `/<command>: <reason>`.
+
+Permission and delegation requests open the same overlays as in plain `nori`
+(see [Approval overlay](#approval-overlay)); only the controller can answer.
 
 ### When the connection drops
 
 - The client reconnects every 750 ms. Requests that were in flight are not
   sent again.
-- If the host restarted, attach stops with "Host restarted; sessions were
-  lost." Run `nori attach` again.
+- If the host restarted, the terminal shows "Host restarted; sessions were
+  lost." and stays `DISCONNECTED`. Detach and run `nori attach` again.
 - On a 401 or 403 from the local host, attach rereads the token once.
 
 Host troubleshooting: [runbooks/debugging.md](runbooks/debugging.md#host).
@@ -334,7 +345,7 @@ Columns:
 | `/approvals` | no | all | Choose what Nori can do without approval, for this session. See [permissions.md](permissions.md). |
 | `/settings` | no | all | Open the Nori settings, including hotkeys and footer segments. |
 | `/vim` | no | all | Choose Vim mode and what Enter does. |
-| `/screen` | yes | all | Switch between the inline and the full-screen view. Greyed in `nori attach`, which is always full-screen. |
+| `/screen` | yes | all | Switch between the inline and the full-screen view. |
 | `/goal [text\|pause\|resume\|clear\|edit]` | yes | all | Show, set, replace, pause, resume, clear, or edit the session goal. See [turns.md](turns.md). |
 | `/new` | beside | all | Start a session. |
 | `/sessions` | yes | all | Open the session list. |
@@ -406,8 +417,7 @@ already bound swaps the two.
 | `parent_session` | `alt+up` |
 | `toggle_screen` | `ctrl+l` |
 
-`nori attach` uses `next_waiting_session`, `parent_session`, and
-`open_session_list` too.
+`nori attach` uses the same keys.
 
 ### Fixed keys
 

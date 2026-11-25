@@ -4,13 +4,13 @@ expression: menu
 ---
 /
 
-  /agent            not available on this host yet
-  /model            not available on this host yet
-  /config           not available on this host yet
+  /agent            not available in nori attach yet
+  /model            not available in nori attach yet
+  /config           not available in nori attach yet
   /approvals        watching · Alt+T to take control
   /settings         configure Nori CLI settings (theme, hotkeys, layout, …)
   /vim              configure Vim mode and Enter key behavior
   /goal             not available on this host yet
   /new              watching · Alt+T to take control
   /sessions         list sessions and move between them
-  /delegate         not available on this host yet
+  /delegate         watching · Alt+T to take control

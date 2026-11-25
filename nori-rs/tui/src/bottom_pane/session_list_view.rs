@@ -92,11 +92,14 @@ impl SessionListView {
     }
 
     /// Replace the rows, keeping the selection on the same session.
-    pub(crate) fn replace_rows(&mut self, rows: Vec<SessionRow>) {
-        if rows != self.rows {
-            self.state.replace_items(items(&rows));
-            self.rows = rows;
+    /// Show `rows`. Returns whether they differ from the rows shown.
+    pub(crate) fn replace_rows(&mut self, rows: Vec<SessionRow>) -> bool {
+        if rows == self.rows {
+            return false;
         }
+        self.state.replace_items(items(&rows));
+        self.rows = rows;
+        true
     }
 
     fn header(&self) -> Line<'static> {
@@ -123,6 +126,10 @@ impl SessionListView {
     /// busy session needs the key twice.
     fn close_selected(&mut self) {
         let Some(row) = self.selected_row() else {
+            // With nothing to close, Ctrl+D leaves as it does from the composer.
+            if self.rows.is_empty() {
+                self.app_event_tx.send(AppEvent::BeginExit);
+            }
             return;
         };
         let generation = row.generation;
@@ -287,8 +294,7 @@ impl BottomPaneView for SessionListView {
     }
 
     fn update_session_list(&mut self, rows: &[SessionRow]) -> bool {
-        self.replace_rows(rows.to_vec());
-        true
+        self.replace_rows(rows.to_vec())
     }
 }
 
@@ -424,6 +430,26 @@ mod tests {
             .draw(|frame| view.render(frame.area(), frame.buffer_mut()))
             .expect("draw");
         terminal.backend().to_string()
+    }
+
+    #[test]
+    fn the_list_asks_for_a_redraw_only_when_its_rows_change() {
+        let mut view = view(rich_rows());
+        assert!(
+            !view.update_session_list(&rich_rows()),
+            "unchanged rows need no redraw"
+        );
+        let mut changed = rich_rows();
+        changed[2].status = SessionStatus::Ready;
+        assert!(view.update_session_list(&changed), "a changed row redraws");
+    }
+
+    #[test]
+    fn ctrl_d_in_an_empty_list_leaves() {
+        let (tx, mut rx) = unbounded_channel();
+        let mut view = SessionListView::new(Vec::new(), AppEventSender::new(tx));
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL));
+        assert!(matches!(rx.try_recv(), Ok(AppEvent::BeginExit)));
     }
 
     #[test]

@@ -103,6 +103,9 @@ impl ChatWidget {
             return;
         }
 
+        if image_paths.is_empty() && self.handle_approvals_with_mode(&text) {
+            return;
+        }
         if image_paths.is_empty() && self.handle_new_in_folder(&text) {
             return;
         }

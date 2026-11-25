@@ -204,7 +204,7 @@ pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow
         }
         None => None,
     };
-    nori_tui::run_attach(
+    nori_tui::run_joined_app(
         config,
         nori_tui::AttachOptions {
             endpoint,
@@ -214,6 +214,8 @@ pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow
         },
     )
     .await
+    .map_err(|e| anyhow::anyhow!("{e}"))?;
+    Ok(())
 }
 
 pub(crate) async fn run(

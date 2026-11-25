@@ -64,7 +64,11 @@ impl App {
                 let widget = self.widget_for(*generation)?;
                 let conversation_id = widget.managed_conversation_id();
                 let on_screen = *generation == active;
-                // A blank session that has not started is not counted.
+                // A blank session that has not started is not counted. On a
+                // joined host every session has the ID the host gave it.
+                if conversation_id.is_none() && self.joined.is_some() {
+                    return None;
+                }
                 if conversation_id.is_none()
                     && !widget.has_harness_session()
                     && !(on_screen && self.session_setup_pending())
@@ -199,6 +203,19 @@ impl App {
         }
     }
 
+    /// On a joined host each session can run in its own folder, so its row
+    /// names the folder before the reply.
+    fn with_joined_folder(&self, widget: Option<&ChatWidget>, reply: String) -> String {
+        let folder = widget
+            .filter(|_| self.joined.is_some())
+            .and_then(|widget| widget.config_ref().cwd.file_name())
+            .map(|name| name.to_string_lossy().into_owned());
+        match folder {
+            Some(folder) => format!("{folder} · {reply}"),
+            None => reply,
+        }
+    }
+
     fn session_row(&self, fact: &SessionFacts, depth: i32) -> SessionRow {
         let agent_name = fact.agent.clone();
         let widget = self.widget_for(fact.generation);
@@ -232,7 +249,8 @@ impl App {
                     self.listed_session(fact.conversation_id?)?
                         .reply_preview
                         .clone()
-                }),
+                })
+                .map(|reply| self.with_joined_folder(widget, reply)),
             model: widget.and_then(ChatWidget::model_name),
             idle_seconds: self
                 .session_previews

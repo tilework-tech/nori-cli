@@ -933,6 +933,9 @@ impl ChatComposer {
                 if let Some((name, _rest)) = parse_slash_name(&text) {
                     let treat_as_plain_text = input_starts_with_space
                         || name.contains('/')
+                        || (self.joined_host
+                            && crate::chatwidget::JOINED_COMMANDS.contains(&name)
+                            && _rest.is_empty())
                         || (self.pass_unknown_commands
                             && !built_in_slash_commands()
                                 .into_iter()

@@ -113,7 +113,9 @@ impl App {
         } else {
             match event {
                 TuiEvent::Key(key_event) => {
-                    self.handle_key_event(tui, key_event).await;
+                    if !self.page_up_into_joined_transcript(tui, key_event).await? {
+                        self.handle_key_event(tui, key_event).await;
+                    }
                 }
                 TuiEvent::Paste(pasted) => {
                     self.chat_widget.handle_paste(pasted);
@@ -121,6 +123,7 @@ impl App {
                 TuiEvent::Draw => {
                     self.adopt_delegated_sessions(tui);
                     self.refresh_session_overview(tui.terminal.size()?.width);
+                    self.refresh_joined_session_status();
                     self.chat_widget.pre_draw_tick();
                     self.chat_widget.maybe_post_pending_notification(tui);
                     self.post_parked_session_notifications(tui);
@@ -185,6 +188,12 @@ impl App {
             AppEvent::ToggleScreenMode => self.toggle_screen_mode(tui)?,
             AppEvent::TakeHostControl => host.take_control(),
             AppEvent::JoinedSubscribed { id, result } => self.on_joined_subscribed(id, result),
+            AppEvent::JoinedSessionStarted(id) => self.open_when_listed(id),
+            AppEvent::HostFoldersFound {
+                generation,
+                text,
+                found,
+            } => self.on_host_folders_found(generation, &text, found),
             AppEvent::NewSessionIn(folder) => {
                 self.new_session_in(folder, tui.frame_requester());
                 tui.frame_requester().schedule_frame();
@@ -561,6 +570,10 @@ impl App {
                 request_id,
                 approved,
             } => {
+                if self.joined.is_some() {
+                    self.resolve_delegation_on_host(host, parent, request_id, approved);
+                    return Ok(true);
+                }
                 let Some(manager) = self.session_manager.clone() else {
                     self.chat_widget
                         .add_error_message(crate::chatwidget::NEEDS_OWN_HOST_MESSAGE.to_string());
@@ -774,6 +787,12 @@ impl App {
                 self.close_parked_sessions().await;
                 self.prepared_agent_initial_context = None;
                 self.discard_candidate();
+                // Leaving a joined host ends no session, so there is no
+                // session summary to print.
+                if self.joined.is_some() {
+                    tui.terminal.clear()?;
+                    return Ok(false);
+                }
                 // Create and insert exit message cell before exiting
                 let exit_cell = self.chat_widget.create_exit_message_cell();
 
@@ -1932,9 +1951,7 @@ impl App {
             if matches_binding(transcript_binding, &key_event)
                 || crate::key_hint::ctrl(KeyCode::Char('o')).is_press(key_event)
             {
-                let _ = tui.enter_alt_screen();
-                self.overlay = Some(Overlay::new_transcript(self.transcript_cells.clone()));
-                tui.frame_requester().schedule_frame();
+                self.open_transcript_overlay(tui);
                 return;
             }
 
@@ -2008,7 +2025,10 @@ impl App {
     }
 
     pub(super) fn should_handle_backtrack_esc(&self, key_event: KeyEvent) -> bool {
-        self.chat_widget.is_normal_backtrack_mode()
+        // Editing an earlier prompt forks the in-process session; a joined
+        // host's sessions run elsewhere.
+        self.joined.is_none()
+            && self.chat_widget.is_normal_backtrack_mode()
             && self.chat_widget.composer_is_empty()
             && !self.chat_widget.should_handle_vim_insert_escape(key_event)
     }

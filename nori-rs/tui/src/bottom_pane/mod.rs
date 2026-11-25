@@ -42,7 +42,7 @@ pub(crate) mod picker_keys;
 pub mod popup_consts;
 mod queued_user_messages;
 mod scroll_state;
-mod session_list_view;
+pub(crate) mod session_list_view;
 pub(crate) use session_list_view::SessionRow;
 #[cfg(test)]
 mod request_key_tests;
@@ -762,6 +762,11 @@ impl BottomPane {
     }
 
     /// Update the cloud session id displayed in the footer (None hides it).
+    pub(crate) fn set_host_status(&mut self, status: Option<ratatui::text::Line<'static>>) {
+        self.composer.set_host_status(status);
+        self.request_redraw();
+    }
+
     pub(crate) fn set_cloud_session(&mut self, cloud_session: Option<String>) {
         self.composer.set_cloud_session(cloud_session);
         self.request_redraw();

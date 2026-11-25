@@ -275,6 +275,13 @@ impl ChatWidget {
                     self.bottom_pane.hide_status_indicator();
                 }
                 match ended.reason {
+                    // A joined host's session ending leaves this terminal
+                    // on the host, like a closed one.
+                    nori_protocol::SessionEndReason::Shutdown if self.host_connection.is_some() => {
+                        self.app_event_tx.send(AppEvent::SessionClosed {
+                            generation: self.session_generation,
+                        });
+                    }
                     nori_protocol::SessionEndReason::Shutdown => {
                         if !self.closed_by_user && !self.delegated_child {
                             self.app_event_tx.send(AppEvent::ExitRequest);
@@ -852,6 +859,9 @@ impl ChatWidget {
         // Ctrl+C bypasses BottomPane key routing, so gate it here: once exit
         // is in progress it must not interrupt, clear, or re-hint anything.
         if self.exiting {
+            return;
+        }
+        if self.joined_ctrl_c() {
             return;
         }
         if self.bottom_pane.on_ctrl_c() == CancellationEvent::Handled {

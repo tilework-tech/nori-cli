@@ -1,4 +1,4 @@
-//! `/new [DIR] [AGENT]`: the folder a new host session starts in, and Tab
+//! `/new [DIR] [AGENT]` on a joined host: the folder a new host session starts in, and Tab
 //! completion of that folder. Folders are named from the session on screen,
 //! or with none, from the attaching terminal's directory on a local host.
 //! Tab asks the host for the folders when it serves `find_paths`, so a
@@ -17,7 +17,7 @@ use serde_json::json;
 const USAGE: &str = "Usage: /new [folder] [agent]";
 
 /// Where `/new` starts and resolves relative folders.
-pub(super) enum Base<'a> {
+pub(crate) enum Base<'a> {
     /// The folder of the session on screen, on the host's disk.
     Session(&'a Path),
     /// The attaching terminal's directory; a remote host does not have it.
@@ -30,7 +30,7 @@ pub(super) enum Base<'a> {
 /// folder, a session starts in the session's folder, or for a local host
 /// in the terminal's; a remote host otherwise picks its own. `host_names`
 /// is whether the host resolves `~` and relative folders itself.
-pub(super) fn params(
+pub(crate) fn params(
     args: &str,
     base: Base<'_>,
     folders: bool,

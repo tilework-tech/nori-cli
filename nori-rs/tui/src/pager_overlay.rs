@@ -33,8 +33,14 @@ pub(crate) enum Overlay {
 }
 
 impl Overlay {
-    pub(crate) fn new_transcript(cells: Vec<Arc<dyn HistoryCell>>) -> Self {
-        Self::Transcript(TranscriptOverlay::new(cells))
+    /// `edits` offers editing a previous message from the transcript.
+    pub(crate) fn new_transcript(cells: Vec<Arc<dyn HistoryCell>>, edits: bool) -> Self {
+        let overlay = TranscriptOverlay::new(cells);
+        Self::Transcript(if edits {
+            overlay
+        } else {
+            overlay.without_edits()
+        })
     }
 
     pub(crate) fn new_static_with_lines(lines: Vec<Line<'static>>, title: String) -> Self {
@@ -394,6 +400,7 @@ pub(crate) struct TranscriptOverlay {
     view: PagerView,
     cells: Vec<Arc<dyn HistoryCell>>,
     highlight_cell: Option<usize>,
+    edits: bool,
     is_done: bool,
 }
 
@@ -407,6 +414,7 @@ impl TranscriptOverlay {
             ),
             cells: transcript_cells,
             highlight_cell: None,
+            edits: true,
             is_done: false,
         }
     }
@@ -469,6 +477,15 @@ impl TranscriptOverlay {
         }
     }
 
+    /// A transcript whose messages cannot be edited, such as a session that
+    /// runs on a host this terminal joined.
+    pub(crate) fn without_edits(self) -> Self {
+        Self {
+            edits: false,
+            ..self
+        }
+    }
+
     pub(crate) fn set_highlight_cell(&mut self, cell: Option<usize>) {
         self.highlight_cell = cell;
         self.view.renderables = Self::render_cells(&self.cells, self.highlight_cell);
@@ -482,11 +499,17 @@ impl TranscriptOverlay {
         let line2 = Rect::new(area.x, area.y.saturating_add(1), area.width, 1);
         render_key_hints(line1, buf, PAGER_KEY_HINTS);
 
-        let mut pairs: Vec<(&[KeyBinding], &str)> =
-            vec![(&[KEY_Q], "to quit"), (&[KEY_ESC], "to edit prev")];
-        if self.highlight_cell.is_some() {
-            pairs.push((&[KEY_ENTER], "to edit message"));
-        }
+        let pairs: Vec<(&[KeyBinding], &str)> = if !self.edits {
+            vec![(&[KEY_Q, KEY_ESC], "to quit")]
+        } else if self.highlight_cell.is_some() {
+            vec![
+                (&[KEY_Q], "to quit"),
+                (&[KEY_ESC], "to edit prev"),
+                (&[KEY_ENTER], "to edit message"),
+            ]
+        } else {
+            vec![(&[KEY_Q], "to quit"), (&[KEY_ESC], "to edit prev")]
+        };
         render_key_hints(line2, buf, &pairs);
     }
 
@@ -646,6 +669,32 @@ mod tests {
                 .collect::<Vec<_>>(),
         );
         Box::new(Paragraph::new(text)) as Box<dyn Renderable>
+    }
+
+    #[test]
+    fn a_transcript_without_edits_offers_only_closing() {
+        let mut overlay = TranscriptOverlay::new(vec![Arc::new(TestCell {
+            lines: vec![Line::from("synthetic joined reply")],
+        })])
+        .without_edits();
+        overlay.set_highlight_cell(Some(0));
+
+        let area = Rect::new(0, 0, 60, 8);
+        let mut buf = Buffer::empty(area);
+        overlay.render(area, &mut buf);
+
+        let footer: String = (area.bottom() - 3..area.bottom())
+            .map(|y| {
+                (area.x..area.right())
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_owned()
+                    + "\n"
+            })
+            .collect();
+        assert!(!footer.contains("edit"), "{footer}");
+        insta::assert_snapshot!(footer.trim_end());
     }
 
     #[test]

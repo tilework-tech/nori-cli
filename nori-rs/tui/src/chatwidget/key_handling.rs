@@ -2,6 +2,17 @@ use super::*;
 
 impl ChatWidget {
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
+        // Ctrl+D leaves a joined host whatever the composer holds; a popup
+        // such as the session list keeps its own Ctrl+D.
+        if self.host_connection.is_some()
+            && key_event.code == KeyCode::Char('d')
+            && key_event.modifiers == KeyModifiers::CONTROL
+            && key_event.kind == KeyEventKind::Press
+            && !self.bottom_pane.has_active_view()
+        {
+            self.begin_exit();
+            return;
+        }
         if key_event.code == KeyCode::Char('t')
             && key_event.modifiers == KeyModifiers::ALT
             && key_event.kind == KeyEventKind::Press
@@ -36,11 +47,16 @@ impl ChatWidget {
             && !self.exiting
             && self.bottom_pane.can_interrupt_with_escape(key_event)
         {
-            if self.can_control_external_turn() {
+            // Only a joined host's controller interrupts; others are told why.
+            if let Some(refusal) = self.host_input_refusal() {
+                if self.external_turn.is_some() || self.bottom_pane.is_task_running() {
+                    self.add_error_message(refusal);
+                    return;
+                }
+            } else if self.can_control_external_turn() {
                 self.request_external_cancel();
                 return;
-            }
-            if self.interrupt_host_prompt() {
+            } else if self.interrupt_host_prompt() {
                 return;
             }
         }
@@ -151,8 +167,23 @@ impl ChatWidget {
                 self.bottom_pane.restore_composer_submission(text);
                 return;
             }
+            // Leaving a joined host is always allowed, even while watching
+            // or reconnecting.
+            InputResult::Submitted(text)
+                if self.host_connection.is_some() && text.trim() == host_role::DETACH_COMMAND =>
+            {
+                self.begin_exit();
+                return;
+            }
+            InputResult::Submitted(text)
+                if self.host_connection.is_some() && text.trim() == host_role::CANCEL_COMMAND =>
+            {
+                self.cancel_host_turn();
+                return;
+            }
             InputResult::Submitted(text) | InputResult::Queued(text)
-                if self.host_input_refusal().is_some() =>
+                if self.host_input_refusal().is_some()
+                    && !host_role::refuses_with_its_own_reason(&text) =>
             {
                 self.bottom_pane.restore_composer_submission(text);
                 if let Some(refusal) = self.host_input_refusal() {
@@ -269,6 +300,9 @@ impl ChatWidget {
             return;
         }
         match cmd {
+            SlashCommand::New if self.host_connection.is_some() => {
+                self.start_host_session("");
+            }
             SlashCommand::New => self.app_event_tx.send(match folder {
                 Some(folder) => AppEvent::NewSessionIn(folder),
                 None => AppEvent::NewSession,

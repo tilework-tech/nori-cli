@@ -15,6 +15,10 @@ use crate::app_event::SessionGeneration;
 use crate::chatwidget::ChatWidget;
 use crate::tui;
 
+/// What a joined terminal shows once the session on screen has closed.
+pub(super) const SESSION_ENDED: &str =
+    "Session ended. Use /new to start one on this host, or Alt+S to pick one.";
+
 impl App {
     /// With several sessions, refuse to start another one at the cap and say
     /// how to make room. Returns true when the start was refused.
@@ -155,6 +159,11 @@ impl App {
         }
         self.retiring_transcript = Some(self.transcript_cells.replace(Vec::new()));
         self.session_reprint_pending = true;
+        if self.joined.is_some() {
+            self.show_joined_placeholder(tui.frame_requester(), SESSION_ENDED);
+            tui.frame_requester().schedule_frame();
+            return Ok(true);
+        }
         self.cancel_primary_agent_preparation();
         self.discard_candidate();
         self.pending_session_activation = None;

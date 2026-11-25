@@ -60,12 +60,6 @@ impl HostFileSearch {
         self.in_flight = next.is_some();
         next
     }
-
-    /// The connection dropped: nothing is in flight and a repeated query
-    /// is searched again.
-    pub fn reset(&mut self) {
-        *self = Self::default();
-    }
 }
 
 /// The popup's matches from a `_nori/session/find_paths` reply.
@@ -124,11 +118,6 @@ mod tests {
         );
         assert_eq!(searches.finished(), None);
         assert_eq!(searches.query(search("one", "ma")), None);
-        assert_eq!(
-            searches.query(search("two", "ma")),
-            Some(search("two", "ma"))
-        );
-        searches.reset();
         assert_eq!(
             searches.query(search("two", "ma")),
             Some(search("two", "ma"))

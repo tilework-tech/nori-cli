@@ -40,7 +40,7 @@ cli_main: MultitoolCli::parse, init $NORI_HOME/log/nori-acp.*
    +-- (none) / resume / cloud -----> nori_tui::run_main --> OwnedHost (nori-host-runtime)
    +-- -p / exec "prompt" ----------> host::run_one_shot --> running host or in-process host
    +-- exec --acp / host --stdio ---> host::serve_stdio  --> relay or private host
-   +-- host [stop|ls|new], attach --> host::run / host::attach --> nori_tui::run_attach
+   +-- host [stop|ls|new], attach --> host::run / host::attach --> nori_tui::run_joined_app
    +-- auth ------------------------> auth::run (blocking task)
    +-- sandbox, skillsets, completions, execpolicy, stdio-to-uds
 ```

@@ -114,6 +114,12 @@ impl App {
         } else {
             // A blank session that never started has nothing to come back to.
             self.session_deck.remove(current);
+            // On a joined host that is the placeholder shown before a pick;
+            // keys typed while the pick lands belong to the picked session.
+            if self.joined.is_some() && self.chat_widget.composer_text().is_empty() {
+                self.chat_widget
+                    .restore_composer_draft(previous.take_composer_draft());
+            }
         }
         self.backtrack = crate::app_backtrack::BacktrackState::default();
         self.chat_widget.set_foreground(true);

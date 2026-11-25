@@ -68,6 +68,7 @@ mod external_cancel;
 mod goal;
 mod helpers;
 mod host_role;
+pub(crate) use host_role::JOINED_COMMANDS;
 mod key_handling;
 mod login;
 mod new_session_folder;
@@ -205,6 +206,8 @@ pub(crate) struct ChatWidget {
     /// This terminal's standing on a host it joined; `None` when it owns
     /// its host.
     host_connection: Option<crate::host_client::HostConnection>,
+    /// The joined host's status for the session on screen, from its list.
+    host_session_status: Option<nori_protocol::SessionStatus>,
     /// The modes the host says this session accepts; unknown until announced.
     available_approval_modes: Option<Vec<nori_protocol::ApprovalMode>>,
     // True while /close awaits the agent's session/close response. Blocks

@@ -88,13 +88,16 @@ impl ChatWidget {
             return true;
         }
 
-        self.add_error_message(format!(
-            "/{} is unavailable. {}",
-            command.command(),
-            availability
-                .reason
-                .unwrap_or_else(|| default_command_unavailable_reason(command))
-        ));
+        let reason = availability
+            .reason
+            .unwrap_or_else(|| default_command_unavailable_reason(command));
+        // A joined terminal refuses with the reason its menu shows.
+        let message = if self.host_connection.is_some() {
+            format!("/{}: {reason}", command.command())
+        } else {
+            format!("/{} is unavailable. {reason}", command.command())
+        };
+        self.add_error_message(message);
         self.request_redraw();
         false
     }

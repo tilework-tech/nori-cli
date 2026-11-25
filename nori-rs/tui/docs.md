@@ -6,10 +6,10 @@ Path: `nori-rs/tui`
 
 `nori-tui` is the Ratatui frontend of the Nori CLI. It owns terminal input and
 rendering, presentation state, pickers and overlays, approvals, and the
-terminal lifecycle. It has two frontends. The foreground TUI (`run_main`)
-serves plain `nori`, `nori resume`, and `nori cloud`; it owns a private host
-for its whole run. The attach frontend (`run_attach`) serves `nori attach`; it
-observes sessions on another host and never owns them. The crate also builds
+terminal lifecycle. One `App` serves two entries. `run_main` serves plain
+`nori`, `nori resume`, and `nori cloud`; it owns a private host for its whole
+run. `run_joined_app` serves `nori attach`; it joins sessions on another host
+and never owns them. The crate also builds
 the standalone `nori-tui` binary, which runs the same `run_main`. Using the
 TUI (sessions, keys, slash commands) is owned by
 [`docs/tui.md`](../../docs/tui.md). Terms follow
@@ -26,8 +26,7 @@ UI strings keep that word.
 | `bottom_pane/` | Composer, footer, popups, approval overlay |
 | `presentation/` | Private projection of ACP updates into display items |
 | `history_cell/`, `exec_cell/`, `client_tool_cell.rs`, `markdown*`, `diff_render.rs` | History cells and their rendering |
-| `host_client/` | Client of a `nori host`: connection, reconnect, reply matching; `drive` (WebSocket) and `drive_pipe` (owned host) |
-| `attach/` | `run_attach`, `AttachOptions`: the `nori attach` frontend |
+| `host_client/` | Client of a `nori host`: connection, reconnect, reply matching; `drive` (WebSocket) and `drive_pipe` (owned host); `AttachOptions`; `HostFeatures` read from the host's `initialize` capabilities |
 | `program_status/` | OSC 7501 terminal status: `ProgramStatusTracker` (fold over one session's events) and `ProgramStatusReporter` (encode and write) |
 | `nori/` | Nori pickers (agent, config, fork, resume, skillset, hotkey, MCP), onboarding, session header, update prompt |
 | `resume_picker/`, `session_*.rs`, `viewonly_transcript.rs` | Resume picker, session preview and stats, view-only transcripts |
@@ -38,13 +37,13 @@ UI strings keep that word.
 ```text
 nori / nori-tui                          nori attach
       |                                       |
- run_main                                 run_attach
+ run_main                                 run_joined_app
       |  nori_host_runtime::launch            |  ManagedClient (WebSocket, token)
       v                                       v
- App::run --HostLink--> OwnedHost         host_client::drive --> remote nori host
-   |  manager  -> ChatWidgets (in-process features)
-   |  pipe     -> host_client::drive_pipe (controller)
-   v
+ App::run --HostLink::start--> OwnedHost  App::run_joined --HostLink::join-->
+   |  manager  -> ChatWidgets               host_client::drive --> running nori host
+   |  pipe     -> host_client::drive_pipe     |  JoinedFeed -> parked ChatWidgets
+   v                                          v
  SessionEvent::{Acp, Nori} --presentation--> history cells, bottom pane
 ```
 
@@ -64,7 +63,7 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
 
 - Never construct a `SessionManager` here. Sessions belong to the owned host,
   so they end when it stops.
-- Only `run_main` builds an `OwnedHost`. The attach frontend never holds the
+- Only `run_main` builds an `OwnedHost`. A joined App never holds the
   in-process half and never ends a session when its terminal closes.
 - The App has two entries that share one loop: `App::run` on an owned host
   (plain `nori`, `SessionManager` in-process) and `App::run_joined`
@@ -78,9 +77,11 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   every session after the loop, even on error.
 - A joined link re-sends `initialize` on every connection, takes its role
   from the reply, and lists sessions every second while connected as the
-  heartbeat. Disconnects, role changes, stops, and a refused initialize
-  become `HostUpdate`s that never end the loop; a stop or refused
-  initialize ends the connection for good. Calls made while
+  heartbeat. A session event that is a delegation change, a notice, or an
+  agent request also lists at once (unless a list is pending), so Alt+Down
+  reaches a child as soon as the parent's notice names it. Disconnects, role
+  changes, stops, and a refused initialize become `HostUpdate`s that never
+  end the loop; a stop or refused initialize ends the connection for good. Calls made while
   disconnected or after a stop are refused at once; calls unanswered when
   the connection drops fail as possibly applied. Leaving a joined host only
   closes the connection; its sessions keep running.
@@ -93,14 +94,33 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   every switch, so it replays exactly what this terminal has not applied.
   Parked sessions take status, title, and preview from the 1 s list. Feed
   events take the same delivery path as `AppEvent::SessionEvent`.
-- In joined mode, leaving sends no `Shutdown` and closes no session; prompts
-  go through host calls. Actions that need an in-process session show "This
-  needs a session running in this terminal's own host."
+- In joined mode, leaving (Ctrl+D, `/detach`, `/quit`) sends no `Shutdown`
+  and closes no session; prompts and session actions go through host calls
+  (`_nori/session/*`). Actions that need an in-process session show "This
+  needs a session running in this terminal's own host." A host session that
+  ends with reason Shutdown is treated as closed, not as the end of the
+  terminal; the next session or a placeholder comes on screen, and only
+  "Session ended…" prints. Esc-backtrack is off: the joined transcript pager
+  (PgUp in `app/joined_pager.rs`, or Ctrl+T) opens with
+  `TranscriptOverlay::without_edits`, offers only "q/esc to quit", and Esc
+  closes it.
+- A joined App starts on the alternate screen; `/screen` and Ctrl+L switch to
+  the inline view and back. Leaving from the alternate screen prints no
+  transcript and no exit summary.
 - `ChatWidget` holds the joined link's `HostConnection` (none for an owned
   host) and picks its command `Surface` from it: `Owned` without one,
-  `Joined` with one. The `attach/` frontend uses `Attached`. A joined
-  watcher's submission is refused with the draft kept, and Alt+T sends
-  `AppEvent::TakeHostControl`.
+  `Joined` with one. `Joined` refuses host commands it has no screen for
+  with "not available in nori attach yet" and in-process-only commands with
+  "not available on this host yet". `HostConnection.features` gates what the
+  host serves, such as folders for `/new` and `find_paths` completion. A
+  joined watcher's submission is refused with the draft kept, and Alt+T sends
+  `AppEvent::TakeHostControl`. Ctrl+C goes to `ChatWidget::joined_ctrl_c`
+  first: only a connected controller cancels, including a turn another
+  terminal started, and never resends a pending cancel (an empty prompt then
+  detaches). A watcher or a reconnecting terminal sends no cancel on Ctrl+C
+  or Esc; during a turn either key prints the refusal and keeps the draft. On
+  a stopped host Ctrl+C clears the draft or detaches. A `/new` session refused while another was being set up is retried
+  at the next list.
 - Match `SessionEvent::Acp` and `SessionEvent::Nori` first, then project. Keep
   display inference private in `presentation/`. Never add a public normalized
   ACP enum for rendering.
@@ -118,18 +138,13 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   It settles a turn from the prompt's own response, matched by request ID.
   Every `ChatWidget`, parked ones included, folds its events, so a session
   brought forward already knows its state. `App` reports only `chat_widget`'s
-  status after each main-loop event; background sessions never write.
-  `nori attach` reports the selected `Conversation` once its event channel is
-  drained, so a replay burst writes one report.
+  status after each main-loop event; background sessions never write. A
+  joined App reports the same way.
 - `ProgramStatusReporter` writes only when the bytes change, never when
   stdout is not a TTY, and clears once if it ever reported.
-- During catch-up, the attach event loop applies queued host events in
-  arrival order and draws once per bounded batch, handling keys and list
-  refreshes between batches. The attach renderer formats transcript parts
-  from newest to oldest only until they cover the scroll offset and the
-  visible rows, then shows those rows in reading order. Scrolling past the
-  start keeps the first page on screen. An idle conversation with no
-  transcript text shows the ready prompt.
+- The session list view asks for a redraw only when its rows change, not on
+  every frame while it is open; otherwise the full-screen view repaints
+  continuously.
 - Approval and sandbox policy come from `nori-config`. ACP session config
   options stay ACP schema values.
 - "Fork" means ACP fork; going back to an earlier message is rewind. "Queue"
@@ -169,7 +184,6 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
 | What | Where | Run |
 |---|---|---|
 | Unit and render tests, `insta` snapshots | `#[cfg(test)]` modules, `src/**/snapshots/` | `cargo test -p nori-tui` |
-| Attach frontend | `src/attach/tests*.rs` | `cargo test -p nori-tui attach` |
 | vt100 emulator suite | `tests/all.rs`, `tests/suite/` | `cargo test -p nori-tui --features vt100-tests` |
 | Real binary in a PTY | `nori-rs/tui-pty-e2e` | `just test e2e` (repository root) |
 | Visual specimens | `examples/` | `cargo run -p nori-tui --features storybook --example context_storybook` |

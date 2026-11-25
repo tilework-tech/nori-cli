@@ -1,0 +1,16 @@
+---
+source: tui/src/app/joined_sessions_tests.rs
+assertion_line: 297
+expression: screen
+---
+Sessions 2 · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+  Session                                           Agent         Status
+› ○ synthetic amber                                 mock-model    ready
+    orchard · Pruned the pear trees.                              42s ago
+  ○ synthetic birch                                 mock-model    ready
+    harbor · Counted the gulls.                                   42s ago
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close

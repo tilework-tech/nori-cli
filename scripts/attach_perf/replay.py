@@ -19,6 +19,7 @@ from fixture import HostFixture
 CLOCK = time.monotonic_ns
 SYNC = b"\x1b[?2026h"
 SECTION = re.compile(r"SectionBeacon(\d{4})(?!\d)")
+PAGER_TITLE = "T R A N S C R I P T"
 
 
 def elapsed(start):
@@ -154,8 +155,10 @@ def measure(fix, binary, args, directory):
             row["page_up_ms"] = elapsed(start)
         if args.stream:
             if row["page_up_ms"] is not None:
-                term.send("PageDown")
-                term.wait(lambda s: fix.fence_marker in s)
+                # A client that pages through a transcript pager closes it with q;
+                # one that scrolls in place scrolls back down.
+                term.send("q" if PAGER_TITLE in page else "PageDown")
+                term.wait(lambda s: PAGER_TITLE not in s and fix.fence_marker in s)
             stream_start = CLOCK()
             stream_marker = fix.stream(24, 20)
             term.wait(lambda s: "step 1 " in s)
