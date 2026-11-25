@@ -57,7 +57,11 @@ export type NoriHostWire =
   | HistoryEntryResult
   | HistorySearchParams
   | HistorySearchResult
-  | HistoryMetadata;
+  | HistoryMetadata
+  | PromptsListParams
+  | PromptsListResult
+  | PromptRunParams
+  | PromptRunResult;
 /**
  * The encoding used for character offsets in positions.
  *
@@ -602,6 +606,17 @@ export type ApprovalMode = "ask" | "agent" | "approve-all";
  * What `_nori/session/find_paths` looks for.
  */
 export type PathKind = "files" | "folders";
+/**
+ * How a custom prompt is used.
+ */
+export type HostPromptKind =
+  | {
+      type: "markdown";
+    }
+  | {
+      interpreter: string;
+      type: "script";
+    };
 
 /**
  * Request parameters for the initialize method.
@@ -4324,4 +4339,61 @@ export interface HistoryMetadata {
    * Identifies the history file; it changes when the file is replaced.
    */
   logId: number;
+}
+/**
+ * Params of `_nori/host/prompts`.
+ */
+export interface PromptsListParams {
+  /**
+   * The session the list is for. The list is the host's either way.
+   */
+  sessionId?: string | null;
+}
+/**
+ * Result of `_nori/host/prompts`.
+ */
+export interface PromptsListResult {
+  /**
+   * Sorted by name.
+   */
+  prompts: HostPrompt[];
+}
+/**
+ * One custom prompt from the host's `$NORI_HOME/commands`.
+ */
+export interface HostPrompt {
+  argumentHint?: string | null;
+  /**
+   * The prompt's body without its frontmatter; empty for a script.
+   */
+  content: string;
+  description?: string | null;
+  kind: HostPromptKind;
+  /**
+   * Invoked as `/prompts:<name>`.
+   */
+  name: string;
+}
+/**
+ * Params of `_nori/session/prompts/run`.
+ */
+export interface PromptRunParams {
+  /**
+   * Positional arguments passed to the script.
+   */
+  args: string[];
+  /**
+   * A script prompt's name from `_nori/host/prompts`.
+   */
+  name: string;
+  /**
+   * The session whose folder the script runs in.
+   */
+  sessionId: string;
+}
+/**
+ * Result of `_nori/session/prompts/run`: a script that exited zero.
+ */
+export interface PromptRunResult {
+  stdout: string;
 }

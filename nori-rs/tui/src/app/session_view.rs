@@ -374,6 +374,9 @@ pub(crate) fn route_session_history_event(
         AppEvent::AgentSpawnFailed { agent_name, error } => {
             parked.widget.on_agent_spawn_failed(&agent_name, &error);
         }
+        AppEvent::ScriptExecutionComplete { name, result } => {
+            parked.widget.on_script_finished(name, result);
+        }
         other => return Some(other),
     }
     None

@@ -52,7 +52,7 @@ $NORI_HOME/
 | `log/session-<YYYYMMDDTHHMMSSZ>.jsonl` | umask | TUI, when `CODEX_TUI_RECORD_SESSION` is set | One per TUI run. `CODEX_TUI_SESSION_LOG_PATH` moves it. |
 | `acp-wire/<timestamp>-<pid>-<agent>.jsonl` | | Each agent process, when `[acp_proxy] enabled = true` | One per agent process. Holds raw ACP JSON-RPC, which can include prompts and secrets. Nori never deletes it. |
 | `host/` | `0700` | Background host | See [Host files](#host-files). |
-| `commands/` | | You | Custom prompts: `.md` files are prompt text; `.sh`, `.py`, and `.js` files are scripts limited by `[tui] script_timeout`. |
+| `commands/` | | You | Custom prompts: `.md` files are prompt text; `.sh`, `.py`, and `.js` files are scripts limited by `[tui] script_timeout`. A host lists its own to every terminal on it and runs their scripts in the session's folder. |
 | `browser-profile/` | | `/browser` with `browser_profile = "persistent"` | Permanent; keeps logins. The default `throwaway` profile is a temporary folder outside `NORI_HOME`, deleted on exit. |
 | `token-providers/<name>-pi-acp/sessions/` | `0700` | Pi agent launches bound to a token provider | Permanent; the Pi agent's own session history. |
 | `.pi-launches/` | `0700` | Pi agent launches bound to a token provider | One folder per launch, holding `models.json` and `settings.json` (`0600`), with a `.lease` lock file and a `.lock` file. A later launch deletes a folder once no process holds its lease. |

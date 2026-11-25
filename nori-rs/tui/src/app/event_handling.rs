@@ -633,6 +633,9 @@ impl App {
                     Some(AppEvent::AgentSpawnFailed { agent_name, error }) => {
                         self.chat_widget.on_agent_spawn_failed(&agent_name, &error);
                     }
+                    Some(AppEvent::ScriptExecutionComplete { name, result }) => {
+                        self.chat_widget.on_script_finished(name, result);
+                    }
                     Some(_) | None => {}
                 }
             }
@@ -1476,40 +1479,31 @@ impl App {
                 }
             }
             AppEvent::ExecuteScript { prompt, args } => {
-                let tx = self.app_event_tx.clone();
+                // The result belongs to the session that ran the script, even
+                // if another one is on screen by the time it finishes.
+                let tx = self
+                    .app_event_tx
+                    .for_session(self.chat_widget.session_generation());
                 let timeout = self.config.script_timeout.as_duration();
                 let name = prompt.name.clone();
                 self.chat_widget
                     .add_info_message(format!("Running script '{name}'..."), None);
+                let Some((prompt, args)) = self.chat_widget.run_script_on_host(prompt, args) else {
+                    return Ok(true);
+                };
                 tokio::spawn(async move {
                     let result =
-                        nori_harness::custom_prompts::execute_script(&prompt, &args, timeout).await;
+                        nori_harness::custom_prompts::execute_script(&prompt, &args, timeout, None)
+                            .await;
                     tx.send(AppEvent::ScriptExecutionComplete {
                         name: prompt.name.clone(),
                         result,
                     });
                 });
             }
-            AppEvent::ScriptExecutionComplete { name, result } => match result {
-                Ok(stdout) => {
-                    if stdout.trim().is_empty() {
-                        self.chat_widget.add_info_message(
-                            format!("Script '{name}' completed with no output."),
-                            None,
-                        );
-                    } else {
-                        let message = format!("Output from script '{name}':\n{stdout}");
-                        self.chat_widget.queue_text_as_user_message(message);
-                    }
-                }
-                Err(err) => {
-                    self.chat_widget
-                        .add_error_message(format!("Script '{name}' failed: {err}"));
-                    let error_context =
-                        format!("Script '{name}' failed with the following error:\n{err}");
-                    self.chat_widget.queue_text_as_user_message(error_context);
-                }
-            },
+            AppEvent::ScriptExecutionComplete { name, result } => {
+                self.chat_widget.on_script_finished(name, result);
+            }
             AppEvent::ShowViewonlySessionPicker {
                 sessions,
                 nori_home,

@@ -75,6 +75,9 @@ pub(crate) struct HostFeatures {
     /// `_nori/host/history/*` records, recalls and searches the host's
     /// prompt history.
     pub history: bool,
+    /// `_nori/host/prompts` lists the host's custom prompts and
+    /// `_nori/session/prompts/run` runs their scripts there.
+    pub prompts: bool,
 }
 
 impl HostConnection {
@@ -90,6 +93,7 @@ impl HostConnection {
                 remote: false,
                 queue: true,
                 history: true,
+                prompts: true,
             },
         }
     }
@@ -207,6 +211,15 @@ pub(crate) enum HostCall {
     },
     /// How many prompts the host's history holds now.
     HistoryMetadata,
+    /// The custom prompts kept in the host's home.
+    ListPrompts,
+    /// Run a script prompt on the host, in the session's folder. Only a
+    /// controller may.
+    RunPrompt {
+        session_id: String,
+        name: String,
+        args: Vec<String>,
+    },
 }
 
 impl HostCall {
@@ -352,6 +365,22 @@ impl HostCall {
                 json!(nori_protocol::HistorySearchParams { max_results }),
             ),
             Self::HistoryMetadata => ("_nori/host/history/metadata", json!({})),
+            Self::ListPrompts => (
+                "_nori/host/prompts",
+                json!(nori_protocol::PromptsListParams::default()),
+            ),
+            Self::RunPrompt {
+                session_id,
+                name,
+                args,
+            } => (
+                "_nori/session/prompts/run",
+                json!(nori_protocol::PromptRunParams {
+                    session_id,
+                    name,
+                    args
+                }),
+            ),
         }
     }
 }
