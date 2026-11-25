@@ -15,6 +15,7 @@ const QUERIES: &[(&[u8], &[u8])] = &[
 #[derive(Default)]
 pub(super) struct TerminalQueries {
     pending: Vec<u8>,
+    pub(super) withhold_palette: bool,
 }
 
 impl TerminalQueries {
@@ -31,8 +32,10 @@ impl TerminalQueries {
                 .find(|(query, _)| query.starts_with(&self.pending))
             {
                 if self.pending.len() == query.len() {
-                    writer.write_all(reply)?;
-                    writer.flush()?;
+                    if !(self.withhold_palette && query.starts_with(b"\x1b]")) {
+                        writer.write_all(reply)?;
+                        writer.flush()?;
+                    }
                     self.pending.clear();
                 }
             } else {

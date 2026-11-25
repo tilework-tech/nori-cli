@@ -94,6 +94,7 @@ impl App {
     /// is held, so the held history and the exit message reach the inline
     /// scrollback.
     pub(super) fn return_inline_for_exit(&mut self, tui: &mut tui::Tui) -> Result<()> {
+        tui.release_input();
         if self.overlay.is_some() {
             self.close_transcript_overlay(tui);
         }

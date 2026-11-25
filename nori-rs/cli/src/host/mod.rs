@@ -239,12 +239,8 @@ pub(crate) async fn run(
             let tty = std::io::stdout().is_terminal();
             let width = tty
                 .then(|| crossterm::terminal::size().map_or(80, |(width, _)| usize::from(width)));
-            // Reading the terminal's background answers on stdin.
-            let shade = if tty && std::io::stdin().is_terminal() {
-                nori_tui::session_list_shade()
-            } else {
-                None
-            };
+            // One-shot output may use cached colours but must leave typeahead for the shell.
+            let shade = tty.then(nori_tui::session_list_shade).flatten();
             print!("{}", table::format_table(&listing, width, tty, shade));
             Ok(())
         }

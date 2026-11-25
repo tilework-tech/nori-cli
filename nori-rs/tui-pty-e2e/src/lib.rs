@@ -479,6 +479,11 @@ trust_level = "trusted"
         self.wait_for_process_exit(timeout)
     }
 
+    /// Leave OSC color queries unanswered until the test sends its own terminal replies.
+    pub fn withhold_palette_replies(&mut self) {
+        self.terminal_queries.withhold_palette = true;
+    }
+
     /// Read any available output and update screen state
     ///
     /// This method attempts to read available data without blocking.
