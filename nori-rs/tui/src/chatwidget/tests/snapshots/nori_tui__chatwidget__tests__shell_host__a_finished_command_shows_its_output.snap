@@ -1,0 +1,9 @@
+---
+source: tui/src/chatwidget/tests/shell_host.rs
+assertion_line: 178
+expression: transcript(&mut rx)
+---
+• Ran ls
+  └ Cargo.toml
+    README.md
+    src

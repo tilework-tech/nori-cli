@@ -7721,6 +7721,23 @@
       "x-method": "session/set_mode",
       "x-side": "agent"
     },
+    "ShellParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/session/shell`: a `!` command for the host to run in\nthat session's folder.",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "command"
+      ],
+      "type": "object"
+    },
     "StartNesResponse": {
       "description": "Response to `nes/start`.",
       "properties": {
@@ -9010,6 +9027,9 @@
     },
     {
       "$ref": "#/$defs/CompactParams"
+    },
+    {
+      "$ref": "#/$defs/ShellParams"
     }
   ],
   "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",

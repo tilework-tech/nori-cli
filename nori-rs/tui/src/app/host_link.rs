@@ -294,6 +294,7 @@ impl HostLink {
                 self.connection.features.goal = sessions["goal"] == true;
                 self.connection.features.context = sessions["context"] == true;
                 self.connection.features.compact = sessions["compact"] == true;
+                self.connection.features.shell = sessions["shell"] == true;
                 // List at once rather than at the next heartbeat, so the
                 // picker opens as soon as the host lets this terminal in.
                 if !self.client.has_pending(|tag| matches!(tag, HostTag::List)) {

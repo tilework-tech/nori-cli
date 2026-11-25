@@ -84,6 +84,8 @@ pub(crate) struct HostFeatures {
     pub context: bool,
     /// `_nori/session/compact` compacts a session on the host.
     pub compact: bool,
+    /// `_nori/session/shell` runs `!` commands on the host.
+    pub shell: bool,
 }
 
 impl HostConnection {
@@ -103,6 +105,7 @@ impl HostConnection {
                 goal: true,
                 context: true,
                 compact: true,
+                shell: true,
             },
         }
     }
@@ -246,6 +249,12 @@ pub(crate) enum HostCall {
     /// Compact the session. Only a controller may.
     Compact {
         session_id: String,
+    },
+    /// Run a `!` command on the host in the session's folder. Only a
+    /// controller may.
+    Shell {
+        session_id: String,
+        command: String,
     },
 }
 
@@ -429,6 +438,16 @@ impl HostCall {
             Self::Compact { session_id } => (
                 "_nori/session/compact",
                 json!(nori_protocol::CompactParams { session_id }),
+            ),
+            Self::Shell {
+                session_id,
+                command,
+            } => (
+                "_nori/session/shell",
+                json!(nori_protocol::ShellParams {
+                    session_id,
+                    command
+                }),
             ),
         }
     }

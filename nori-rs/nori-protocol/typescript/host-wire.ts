@@ -67,7 +67,8 @@ export type NoriHostWire =
   | GoalResult
   | ContextParams
   | ContextReport
-  | CompactParams;
+  | CompactParams
+  | ShellParams;
 /**
  * The encoding used for character offsets in positions.
  *
@@ -4568,5 +4569,13 @@ export interface ContextUsage {
  * Params of `_nori/session/compact`.
  */
 export interface CompactParams {
+  sessionId: string;
+}
+/**
+ * Params of `_nori/session/shell`: a `!` command for the host to run in
+ * that session's folder.
+ */
+export interface ShellParams {
+  command: string;
   sessionId: string;
 }
