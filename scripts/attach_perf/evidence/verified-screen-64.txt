@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ synthetic · Replay benchmark target · ~/project · ready · Approvals: Agent
+
+
+ Read sample 63 and compare its measured range.
+
+ - Input: example-63.dat
+ - Output: accepted
+
+ let sample = 63;
+
+ • Explored 1 read
+   • Read sample-63.dat
+
+ › You
+ Inspect sample 64.
+
+ ### SectionBeacon0064
+
+ Read sample 64 and compare its measured range.
+
+ - Input: example-64.dat
+ - Output: accepted
+
+ let sample = 64;
+
+ • Explored 1 read
+   • Read sample-64.dat
+
+ Summary for 64 inspected samples. FinalReplayBeacon
+
+ • Explored 1 read
+   • Read CompleteReplayBeacon.txt
+
+ LiveReplayBeacon0001
+
+
+› §
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

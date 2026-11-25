@@ -1,0 +1,90 @@
+{
+  "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+  "binary_sha256": "671118f076a6e47e64b742603178aec2f0ea9865f4ef7f4895f996612205aace",
+  "sessions": 1,
+  "turns": 1,
+  "live": false,
+  "samples": [
+    {
+      "launch_to_list_ms": 2009.683,
+      "selection_to_content_ms": 52.889,
+      "selection_to_latest_ms": 67.858,
+      "selection_to_fence_ms": 73.212,
+      "selection_to_draft_ms": 73.217,
+      "catchup_key_ms": 20.319,
+      "replay_draws": 27,
+      "replay_terminal_bytes": 23068,
+      "body_sha256": "17f6f66ab0cf9ccad08a00db496b062c6880146e0877e0cd68e8cd70a55a40ac",
+      "settled_key_ms": 6.699,
+      "page_up_ms": null,
+      "fixture": {
+        "sessions": 1,
+        "sections": 1,
+        "acp_updates": 13,
+        "update_types": {
+          "user_message_chunk": 1,
+          "agent_message_chunk": 9,
+          "tool_call": 2,
+          "tool_call_update": 1
+        },
+        "saved_session_events": 23,
+        "transcript_bytes": 9487,
+        "text_bytes": 237
+      }
+    },
+    {
+      "launch_to_list_ms": 2011.926,
+      "selection_to_content_ms": 13.287,
+      "selection_to_draft_ms": 19.345,
+      "selection_to_latest_ms": 67.092,
+      "selection_to_fence_ms": 67.1,
+      "catchup_key_ms": 6.05,
+      "replay_draws": 27,
+      "replay_terminal_bytes": 23054,
+      "body_sha256": "17f6f66ab0cf9ccad08a00db496b062c6880146e0877e0cd68e8cd70a55a40ac",
+      "settled_key_ms": 6.068,
+      "page_up_ms": null,
+      "fixture": {
+        "sessions": 1,
+        "sections": 1,
+        "acp_updates": 13,
+        "update_types": {
+          "user_message_chunk": 1,
+          "agent_message_chunk": 9,
+          "tool_call": 2,
+          "tool_call_update": 1
+        },
+        "saved_session_events": 23,
+        "transcript_bytes": 9506,
+        "text_bytes": 237
+      }
+    },
+    {
+      "launch_to_list_ms": 2009.303,
+      "selection_to_content_ms": 18.418,
+      "selection_to_draft_ms": 28.277,
+      "selection_to_latest_ms": 34.24,
+      "selection_to_fence_ms": 34.246,
+      "catchup_key_ms": 9.85,
+      "replay_draws": 26,
+      "replay_terminal_bytes": 22249,
+      "body_sha256": "17f6f66ab0cf9ccad08a00db496b062c6880146e0877e0cd68e8cd70a55a40ac",
+      "settled_key_ms": 5.784,
+      "page_up_ms": null,
+      "fixture": {
+        "sessions": 1,
+        "sections": 1,
+        "acp_updates": 13,
+        "update_types": {
+          "user_message_chunk": 1,
+          "agent_message_chunk": 9,
+          "tool_call": 2,
+          "tool_call_update": 1
+        },
+        "saved_session_events": 23,
+        "transcript_bytes": 9506,
+        "text_bytes": 237
+      }
+    }
+  ]
+}

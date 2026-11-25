@@ -1,0 +1,383 @@
+{
+  "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+  "binary_sha256": "4b7fe6aa295fa529df92a6d55bd0abbe63cca04f7de6d31e2215c7825ec6e38d",
+  "terminal": "120x40 tmux loopback via diagnostic wire probe",
+  "samples": [
+    {
+      "sections": 4,
+      "mode": "transcript",
+      "ctrl_r_to_ready_row_ms": 34.07,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 12.455,
+      "enter_to_first_latest_ms": 52.145,
+      "enter_to_first_tool_ms": 52.146,
+      "enter_to_new_reply_ms": 269.305,
+      "audited_sections": 4,
+      "history_watermark": 109,
+      "applied_after_probe": 116,
+      "enter_to_wire_watermark_ms": 5.26,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 25.69,
+      "ctrl_r_to_agent_session_new_ms": 26.535,
+      "fixture": {
+        "sessions": 1,
+        "sections": 4,
+        "acp_updates": 43,
+        "update_types": {
+          "user_message_chunk": 4,
+          "agent_message_chunk": 30,
+          "tool_call": 5,
+          "tool_call_update": 4
+        },
+        "saved_session_events": 53,
+        "transcript_bytes": 21297,
+        "text_bytes": 741
+      }
+    },
+    {
+      "sections": 4,
+      "mode": "transcript",
+      "ctrl_r_to_ready_row_ms": 32.358,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 13.125,
+      "enter_to_first_latest_ms": 61.828,
+      "enter_to_first_tool_ms": 61.83,
+      "enter_to_new_reply_ms": 281.963,
+      "history_watermark": 109,
+      "applied_after_probe": 116,
+      "enter_to_wire_watermark_ms": 6.429,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 25.749,
+      "ctrl_r_to_agent_session_new_ms": 25.827,
+      "fixture": {
+        "sessions": 1,
+        "sections": 4,
+        "acp_updates": 43,
+        "update_types": {
+          "user_message_chunk": 4,
+          "agent_message_chunk": 30,
+          "tool_call": 5,
+          "tool_call_update": 4
+        },
+        "saved_session_events": 53,
+        "transcript_bytes": 21297,
+        "text_bytes": 741
+      }
+    },
+    {
+      "sections": 4,
+      "mode": "transcript",
+      "ctrl_r_to_ready_row_ms": 31.866,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 55.268,
+      "enter_to_first_latest_ms": 95.466,
+      "enter_to_first_tool_ms": 95.467,
+      "enter_to_new_reply_ms": 262.22,
+      "history_watermark": 99,
+      "applied_after_probe": 116,
+      "enter_to_wire_watermark_ms": 43.792,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 25.716,
+      "ctrl_r_to_agent_session_new_ms": 26.214,
+      "fixture": {
+        "sessions": 1,
+        "sections": 4,
+        "acp_updates": 43,
+        "update_types": {
+          "user_message_chunk": 4,
+          "agent_message_chunk": 30,
+          "tool_call": 5,
+          "tool_call_update": 4
+        },
+        "saved_session_events": 53,
+        "transcript_bytes": 21297,
+        "text_bytes": 741
+      }
+    },
+    {
+      "sections": 4,
+      "mode": "native",
+      "ctrl_r_to_ready_row_ms": 33.398,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 14.597,
+      "enter_to_first_latest_ms": 50.379,
+      "enter_to_first_tool_ms": 55.878,
+      "enter_to_new_reply_ms": 295.098,
+      "audited_sections": 4,
+      "history_watermark": 95,
+      "applied_after_probe": 115,
+      "enter_to_wire_watermark_ms": 4.772,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 25.706,
+      "ctrl_r_to_agent_session_load_ms": 26.455,
+      "fixture": {
+        "sessions": 1,
+        "sections": 4,
+        "acp_updates": 43,
+        "update_types": {
+          "user_message_chunk": 4,
+          "agent_message_chunk": 30,
+          "tool_call": 5,
+          "tool_call_update": 4
+        },
+        "saved_session_events": 53,
+        "transcript_bytes": 21296,
+        "text_bytes": 741
+      }
+    },
+    {
+      "sections": 4,
+      "mode": "native",
+      "ctrl_r_to_ready_row_ms": 34.128,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 10.281,
+      "enter_to_first_latest_ms": 71.995,
+      "enter_to_first_tool_ms": 71.996,
+      "enter_to_new_reply_ms": 289.063,
+      "history_watermark": 108,
+      "applied_after_probe": 115,
+      "enter_to_wire_watermark_ms": 49.536,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 25.07,
+      "ctrl_r_to_agent_session_load_ms": 25.487,
+      "fixture": {
+        "sessions": 1,
+        "sections": 4,
+        "acp_updates": 43,
+        "update_types": {
+          "user_message_chunk": 4,
+          "agent_message_chunk": 30,
+          "tool_call": 5,
+          "tool_call_update": 4
+        },
+        "saved_session_events": 53,
+        "transcript_bytes": 21296,
+        "text_bytes": 741
+      }
+    },
+    {
+      "sections": 4,
+      "mode": "native",
+      "ctrl_r_to_ready_row_ms": 35.178,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 14.295,
+      "enter_to_first_latest_ms": 55.312,
+      "enter_to_first_tool_ms": 55.313,
+      "enter_to_new_reply_ms": 261.955,
+      "history_watermark": 108,
+      "applied_after_probe": 115,
+      "enter_to_wire_watermark_ms": 47.422,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 24.023,
+      "ctrl_r_to_agent_session_load_ms": 24.701,
+      "fixture": {
+        "sessions": 1,
+        "sections": 4,
+        "acp_updates": 43,
+        "update_types": {
+          "user_message_chunk": 4,
+          "agent_message_chunk": 30,
+          "tool_call": 5,
+          "tool_call_update": 4
+        },
+        "saved_session_events": 53,
+        "transcript_bytes": 21296,
+        "text_bytes": 741
+      }
+    },
+    {
+      "sections": 64,
+      "mode": "transcript",
+      "ctrl_r_to_ready_row_ms": 53.312,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 18.658,
+      "enter_to_first_latest_ms": 2582.769,
+      "enter_to_first_tool_ms": 2588.062,
+      "enter_to_new_reply_ms": 5345.371,
+      "audited_sections": 64,
+      "history_watermark": 722,
+      "applied_after_probe": 1316,
+      "enter_to_wire_watermark_ms": 16.807,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 34.893,
+      "ctrl_r_to_agent_session_new_ms": 35.322,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258271,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "sections": 64,
+      "mode": "transcript",
+      "ctrl_r_to_ready_row_ms": 47.81,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 25.247,
+      "enter_to_first_latest_ms": 2605.98,
+      "enter_to_first_tool_ms": 2615.977,
+      "enter_to_new_reply_ms": 5347.778,
+      "history_watermark": 1102,
+      "applied_after_probe": 1316,
+      "enter_to_wire_watermark_ms": 21.623,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 33.973,
+      "ctrl_r_to_agent_session_new_ms": 34.375,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258271,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "sections": 64,
+      "mode": "transcript",
+      "ctrl_r_to_ready_row_ms": 51.4,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 25.042,
+      "enter_to_first_latest_ms": 2626.239,
+      "enter_to_first_tool_ms": 2631.374,
+      "enter_to_new_reply_ms": 5416.336,
+      "history_watermark": 927,
+      "applied_after_probe": 1316,
+      "enter_to_wire_watermark_ms": 25.069,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 32.875,
+      "ctrl_r_to_agent_session_new_ms": 33.186,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258271,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "sections": 64,
+      "mode": "native",
+      "ctrl_r_to_ready_row_ms": 71.877,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 22.407,
+      "enter_to_first_latest_ms": 2591.131,
+      "enter_to_first_tool_ms": 2596.828,
+      "enter_to_new_reply_ms": 5421.788,
+      "audited_sections": 64,
+      "history_watermark": 831,
+      "applied_after_probe": 1315,
+      "enter_to_wire_watermark_ms": 16.089,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 36.411,
+      "ctrl_r_to_agent_session_load_ms": 46.057,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258270,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "sections": 64,
+      "mode": "native",
+      "ctrl_r_to_ready_row_ms": 71.719,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 26.943,
+      "enter_to_first_latest_ms": 2633.531,
+      "enter_to_first_tool_ms": 2640.246,
+      "enter_to_new_reply_ms": 5499.211,
+      "history_watermark": 726,
+      "applied_after_probe": 1315,
+      "enter_to_wire_watermark_ms": 16.988,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 37.952,
+      "ctrl_r_to_agent_session_load_ms": 48.271,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258270,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "sections": 64,
+      "mode": "native",
+      "ctrl_r_to_ready_row_ms": 72.714,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 33.744,
+      "enter_to_first_latest_ms": 2632.071,
+      "enter_to_first_tool_ms": 2638.928,
+      "enter_to_new_reply_ms": 5474.382,
+      "history_watermark": 962,
+      "applied_after_probe": 1315,
+      "enter_to_wire_watermark_ms": 23.43,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 37.651,
+      "ctrl_r_to_agent_session_load_ms": 45.423,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258270,
+        "text_bytes": 11042
+      }
+    }
+  ]
+}
