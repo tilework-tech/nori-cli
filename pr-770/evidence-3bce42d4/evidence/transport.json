@@ -1,0 +1,80 @@
+{
+  "method": "Loopback wire diagnostic in a 120x40 tmux terminal. All times start immediately before Enter on the selected picker row. Wire times mark receipt of a websocket read by the relay. Reselect cursor confirms contiguous application through that sequence by the UI. Native replay_finished can be absent for journal catch-up.",
+  "builds": {
+    "release": {
+      "binary_sha256": "671118f076a6e47e64b742603178aec2f0ea9865f4ef7f4895f996612205aace",
+      "turns": 32,
+      "acp_updates": 323,
+      "events": 338,
+      "out_of_sequence": 0,
+      "saved_journal_watermark": 333,
+      "marker_seq": {
+        "FirstReplayBeacon": 9,
+        "FinalReplayBeacon": 329,
+        "CompleteReplayBeacon": 330,
+        "LiveReplayBeacon0001": 336
+      },
+      "selection_to_subscribe_ms": 2.755,
+      "selection_to_first_wire_event_ms": 5.381,
+      "selection_to_saved_watermark_on_wire_ms": 10.252,
+      "selection_to_native_replay_finished_on_wire_ms": null,
+      "selection_to_live_request_ms": 3.175,
+      "selection_to_live_on_wire_ms": 10.252,
+      "selection_to_live_visible_and_ready_ms": 745.023,
+      "selection_to_reselect_request_ms": 756.514,
+      "initial_cursor": 0,
+      "reselect_cursor": 338,
+      "delivered_at_reselect": 338
+    },
+    "stack": {
+      "binary_sha256": "4b7fe6aa295fa529df92a6d55bd0abbe63cca04f7de6d31e2215c7825ec6e38d",
+      "turns": 32,
+      "acp_updates": 323,
+      "events": 339,
+      "out_of_sequence": 0,
+      "saved_journal_watermark": 334,
+      "marker_seq": {
+        "FirstReplayBeacon": 10,
+        "FinalReplayBeacon": 330,
+        "CompleteReplayBeacon": 331,
+        "LiveReplayBeacon0001": 337
+      },
+      "selection_to_subscribe_ms": 2.943,
+      "selection_to_first_wire_event_ms": 5.623,
+      "selection_to_saved_watermark_on_wire_ms": 63.162,
+      "selection_to_native_replay_finished_on_wire_ms": null,
+      "selection_to_live_request_ms": 4.185,
+      "selection_to_live_on_wire_ms": 63.162,
+      "selection_to_live_visible_and_ready_ms": 775.66,
+      "selection_to_reselect_request_ms": 788.199,
+      "initial_cursor": 0,
+      "reselect_cursor": 339,
+      "delivered_at_reselect": 339
+    },
+    "fixed": {
+      "binary_sha256": "2227787aab425c0fde18bce12b95240ae86feeaaf4f1fac736e730a061e9de2d",
+      "turns": 32,
+      "acp_updates": 323,
+      "events": 339,
+      "out_of_sequence": 0,
+      "saved_journal_watermark": 334,
+      "marker_seq": {
+        "FirstReplayBeacon": 10,
+        "FinalReplayBeacon": 330,
+        "CompleteReplayBeacon": 331,
+        "LiveReplayBeacon0001": 337
+      },
+      "selection_to_subscribe_ms": 2.97,
+      "selection_to_first_wire_event_ms": 4.422,
+      "selection_to_saved_watermark_on_wire_ms": 8.9,
+      "selection_to_native_replay_finished_on_wire_ms": null,
+      "selection_to_live_request_ms": 3.972,
+      "selection_to_live_on_wire_ms": 8.9,
+      "selection_to_live_visible_and_ready_ms": 36.841,
+      "selection_to_reselect_request_ms": 45.948,
+      "initial_cursor": 0,
+      "reselect_cursor": 339,
+      "delivered_at_reselect": 339
+    }
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+  "binary_sha256": "4b7fe6aa295fa529df92a6d55bd0abbe63cca04f7de6d31e2215c7825ec6e38d",
+  "sessions": 1,
+  "turns": 64,
+  "live": true,
+  "samples": [
+    {
+      "launch_to_list_ms": 8.48,
+      "selection_to_content_ms": 14.189,
+      "selection_to_draft_ms": 35.98,
+      "selection_to_latest_ms": 2558.551,
+      "selection_to_fence_ms": 2568.216,
+      "selection_to_live_ms": 2622.548,
+      "catchup_key_ms": 21.783,
+      "replay_draws": 663,
+      "replay_terminal_bytes": 1037478,
+      "body_sha256": "ee5a2c42719895f0ce1c00bdf7091e451a99e7ea90b898b89b34bb39d1d1f27f",
+      "settled_key_ms": 15.377,
+      "page_up_ms": 16.42,
+      "stream_key_ms": 15.483,
+      "stream_total_ms": 474.069,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 257622,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "launch_to_list_ms": 9.378,
+      "selection_to_content_ms": 14.804,
+      "selection_to_draft_ms": 38.251,
+      "selection_to_latest_ms": 2590.456,
+      "selection_to_fence_ms": 2599.917,
+      "selection_to_live_ms": 2652.267,
+      "catchup_key_ms": 23.44,
+      "replay_draws": 663,
+      "replay_terminal_bytes": 1037498,
+      "body_sha256": "ee5a2c42719895f0ce1c00bdf7091e451a99e7ea90b898b89b34bb39d1d1f27f",
+      "settled_key_ms": 16.04,
+      "page_up_ms": 15.248,
+      "stream_key_ms": 15.312,
+      "stream_total_ms": 474.148,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 257622,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "launch_to_list_ms": 12.219,
+      "selection_to_content_ms": 11.558,
+      "selection_to_draft_ms": 33.047,
+      "selection_to_latest_ms": 2555.256,
+      "selection_to_fence_ms": 2564.615,
+      "selection_to_live_ms": 2618.036,
+      "catchup_key_ms": 21.483,
+      "replay_draws": 663,
+      "replay_terminal_bytes": 1037477,
+      "body_sha256": "ee5a2c42719895f0ce1c00bdf7091e451a99e7ea90b898b89b34bb39d1d1f27f",
+      "settled_key_ms": 16.296,
+      "page_up_ms": 15.476,
+      "stream_key_ms": 15.6,
+      "stream_total_ms": 473.131,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258271,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "launch_to_list_ms": 13.223,
+      "selection_to_content_ms": 14.272,
+      "selection_to_draft_ms": 34.107,
+      "selection_to_latest_ms": 2573.568,
+      "selection_to_fence_ms": 2578.512,
+      "selection_to_live_ms": 2633.052,
+      "catchup_key_ms": 19.83,
+      "replay_draws": 663,
+      "replay_terminal_bytes": 1037479,
+      "body_sha256": "ee5a2c42719895f0ce1c00bdf7091e451a99e7ea90b898b89b34bb39d1d1f27f",
+      "settled_key_ms": 11.348,
+      "page_up_ms": 15.304,
+      "stream_key_ms": 16.021,
+      "stream_total_ms": 475.341,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258271,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "launch_to_list_ms": 9.77,
+      "selection_to_content_ms": 17.711,
+      "selection_to_draft_ms": 36.858,
+      "selection_to_latest_ms": 2562.102,
+      "selection_to_fence_ms": 2567.18,
+      "selection_to_live_ms": 2619.664,
+      "catchup_key_ms": 19.138,
+      "replay_draws": 663,
+      "replay_terminal_bytes": 1037478,
+      "body_sha256": "ee5a2c42719895f0ce1c00bdf7091e451a99e7ea90b898b89b34bb39d1d1f27f",
+      "settled_key_ms": 14.934,
+      "page_up_ms": 14.873,
+      "stream_key_ms": 12.237,
+      "stream_total_ms": 474.664,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258271,
+        "text_bytes": 11042
+      }
+    }
+  ]
+}
