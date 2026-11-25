@@ -1,0 +1,38 @@
+{
+  "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+  "binary_sha256": "2227787aab425c0fde18bce12b95240ae86feeaaf4f1fac736e730a061e9de2d",
+  "sessions": 1,
+  "turns": 64,
+  "live": true,
+  "samples": [
+    {
+      "launch_to_list_ms": 11.078,
+      "selection_to_content_ms": 7.826,
+      "selection_to_draft_ms": 38.712,
+      "selection_to_latest_ms": 58.687,
+      "selection_to_fence_ms": 58.692,
+      "selection_to_live_ms": 58.693,
+      "catchup_key_ms": 30.877,
+      "replay_draws": 16,
+      "replay_terminal_bytes": 28016,
+      "body_sha256": "ee5a2c42719895f0ce1c00bdf7091e451a99e7ea90b898b89b34bb39d1d1f27f",
+      "settled_key_ms": 6.074,
+      "page_up_ms": 5.9,
+      "audited_sections": 64,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 257622,
+        "text_bytes": 11042
+      }
+    }
+  ]
+}
