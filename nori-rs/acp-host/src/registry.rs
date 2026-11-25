@@ -11,6 +11,7 @@
 //! - `opencode` - OpenCode with its configured providers
 //! - `cursor` - Cursor Agent
 //! - `hermes` - Nous Research Hermes Agent
+//! - `pi` - Earendil's Pi, through the pi-acp adapter
 //!
 //! ## Provider Names
 //! - `anthropic` - Anthropic
@@ -19,6 +20,7 @@
 //! - `xai` - xAI
 //! - `cursor` - Cursor
 //! - `nous-research` - Nous Research
+//! - `earendil` - Earendil
 
 use anyhow::Context;
 use anyhow::Result;

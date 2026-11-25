@@ -1,0 +1,138 @@
+# nori-tui
+
+Path: `nori-rs/tui`
+
+## Purpose
+
+`nori-tui` is the Ratatui frontend of the Nori CLI. It owns terminal input and
+rendering, presentation state, pickers and overlays, approvals, and the
+terminal lifecycle. It has two frontends. The foreground TUI (`run_main`)
+serves plain `nori`, `nori resume`, and `nori cloud`; it owns a private host
+for its whole run. The attach frontend (`run_attach`) serves `nori attach`; it
+observes sessions on another host and never owns them. The crate also builds
+the standalone `nori-tui` binary, which runs the same `run_main`. Using the
+TUI (sessions, keys, slash commands) is owned by
+[`docs/tui.md`](../../docs/tui.md). Terms follow
+[`GLOSSARY.md`](../../GLOSSARY.md). The UI lists **sessions** (ACP sessions);
+UI strings keep that word.
+
+## Main modules
+
+| Module | Role |
+|---|---|
+| `lib.rs` | `run_main`: config, onboarding, automatic worktree, `nori_host_runtime::launch`, `App::run` |
+| `app/` | `App`: main `select!` loop, session deck, session lifecycle and resume, delegation, `host_link.rs` (owned-host pipe and stop) |
+| `chatwidget/` | `ChatWidget`: one session's view, composer submit, approvals, goals, pickers, queue list and recall |
+| `bottom_pane/` | Composer, footer, popups, approval overlay |
+| `presentation/` | Private projection of ACP updates into display items |
+| `history_cell/`, `exec_cell/`, `client_tool_cell.rs`, `markdown*`, `diff_render.rs` | History cells and their rendering |
+| `host_client/` | Client of a `nori host`: connection, reconnect, reply matching; `drive` (WebSocket) and `drive_pipe` (owned host) |
+| `attach/` | `run_attach`, `AttachOptions`: the `nori attach` frontend |
+| `nori/` | Nori pickers (agent, config, fork, resume, skillset, hotkey, MCP), onboarding, session header, update prompt |
+| `resume_picker/`, `session_*.rs`, `viewonly_transcript.rs` | Resume picker, session preview and stats, view-only transcripts |
+| `tui.rs`, `custom_terminal.rs`, `insert_history.rs`, `render/` | Terminal setup, inline viewport, scrollback insertion |
+| `style.rs`, `color.rs`, `terminal_palette.rs`, `shimmer.rs` | Styles and terminal colors |
+| `storybook` (feature `storybook`) | Production view specimens for `examples/` |
+
+```text
+nori / nori-tui                          nori attach
+      |                                       |
+ run_main                                 run_attach
+      |  nori_host_runtime::launch            |  ManagedClient (WebSocket, token)
+      v                                       v
+ App::run --HostLink--> OwnedHost         host_client::drive --> remote nori host
+   |  manager  -> ChatWidgets (in-process features)
+   |  pipe     -> host_client::drive_pipe (controller)
+   v
+ SessionEvent::{Acp, Nori} --presentation--> history cells, bottom pane
+```
+
+## Dependency direction
+
+```text
+nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
+                 \------> nori-harness, nori-config, nori-protocol,
+                          nori-tui-components, nori-skillsets, nori-installed,
+                          nori-auth-providers, codex-* support crates
+```
+
+`nori-tui` must not depend on `nori-cli`. Wire mechanics stay in
+`nori-acp-host`; the TUI adds no protocol vocabulary of its own.
+
+## Invariants
+
+- Never construct a `SessionManager` here. Sessions belong to the owned host,
+  so they end when it stops.
+- Only `run_main` holds an `OwnedHost`. The attach frontend never holds the
+  in-process half and never ends a session when its terminal closes.
+- The App sends `initialize` on the owned pipe before it reads UI events. A
+  failed initialize or a stopped pipe ends the loop with an error. The App
+  stops the host after the loop, even on error.
+- Match `SessionEvent::Acp` and `SessionEvent::Nori` first, then project. Keep
+  display inference private in `presentation/`. Never add a public normalized
+  ACP enum for rendering.
+- Replace the active widget only through `shutdown_current_conversation` and
+  then `install_active_widget`. A direct assignment to `App.chat_widget` loses
+  or leaks a session.
+- Session-scoped `AppEvent`s that can arrive late carry a `SessionGeneration`.
+  Act on that generation, not on "the active widget".
+- A `Closed` or `Done` session stays in the deck. Filter with
+  `SessionStatus::is_closed()`; a check for `Closed` alone misses finished
+  delegated children.
+- History from a widget reaches `App` through its session-scoped sender. Do not
+  print a parked session's history directly.
+- Approval and sandbox policy come from `nori-config`. ACP session config
+  options stay ACP schema values.
+- "Fork" means ACP fork; going back to an earlier message is rewind. "Queue"
+  and "pause" in user-facing text mean the prompt queue only.
+- `-p` belongs to the top-level CLI as `--print`; the TUI flag set must not
+  claim it.
+- The library denies `print_stdout`, `print_stderr`, and the methods listed in
+  `nori-rs/clippy.toml`.
+
+## Styles
+
+- Headers: bold. Primary text: default foreground. Secondary text: `dim`.
+- Use ANSI colors only. `Color::Rgb` and `Color::Indexed` are disallowed by
+  `clippy.toml`; `shimmer.rs` is the exception, because it only adjusts the
+  default colors.
+- Green: pointers and focus (row pointer, shortcut key, focused border,
+  overlay rail), success, and additions. Keep selected text in the default
+  foreground.
+- Cyan: targeted information accents (a marker, key, value, status). Do not
+  color whole paragraphs.
+- Red: errors, failures, and deletions.
+- Agent identity colors only on explicitly typed category tabs or cells:
+  yellow or orange for Claude, white for Codex, blue for Gemini and
+  Antigravity, green for Nori. The status block uses `#ff9e64` on the Claude
+  agent name only.
+- Avoid `black`, general-purpose `white`, `blue`, and `yellow` foregrounds.
+  Use `reset` for the default. Identity, warning, and contrast over a fixed
+  background are the exceptions.
+- Shared pickers get their styles from `nori-tui-components` through
+  `component_theme` in `style.rs`.
+
+## Tests
+
+| What | Where | Run |
+|---|---|---|
+| Unit and render tests, `insta` snapshots | `#[cfg(test)]` modules, `src/**/snapshots/` | `cargo test -p nori-tui` |
+| Attach frontend | `src/attach/tests*.rs` | `cargo test -p nori-tui attach` |
+| vt100 emulator suite | `tests/all.rs`, `tests/suite/` | `cargo test -p nori-tui --features vt100-tests` |
+| Real binary in a PTY | `nori-rs/tui-pty-e2e` | `just test e2e` (repository root) |
+| Visual specimens | `examples/` | `cargo run -p nori-tui --features storybook --example context_storybook` |
+
+Run commands from `nori-rs/` unless noted. Review snapshot changes with
+`cargo insta pending-snapshots -p nori-tui`, then
+`cargo insta accept -p nori-tui`. Any user-visible UI change needs snapshot
+coverage.
+
+## Where `main` differs
+
+- c06: Approve all in `/approvals` still opens the full-access
+  confirmation behind `notices.hide_full_access_warning`, and
+  `codex_common::approval_presets` remains for the Windows sandbox prompt.
+- c03: the picker titled "Fork conversation" (`nori/fork_picker.rs`) offers
+  both ACP fork ("Branch from current point") and rewind to a message.
+  Internal rewind code is named "backtrack" (`app_backtrack.rs`).
+- c04: goal commands and status use "pause" (`/goal pause`, "paused").

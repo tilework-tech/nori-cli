@@ -3,11 +3,14 @@
 [![CI](https://github.com/tilework-tech/nori-cli/actions/workflows/rust-ci.yml/badge.svg?branch=main)](https://github.com/tilework-tech/nori-cli/actions/workflows/rust-ci.yml)
 [![npm version](https://img.shields.io/npm/v/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
 [![License](https://img.shields.io/npm/l/nori-ai-cli)](https://github.com/tilework-tech/nori-cli/blob/main/LICENSE)
-[![npm downloads](https://img.shields.io/npm/dm/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
 
-Nori brings Claude Code, Codex, Antigravity, and Grok Build into one terminal. You can select OpenCode, Cursor Agent, Hermes Agent, or Pi. You can also bring your own ACP agent.
+Nori runs coding agents in one terminal. It starts Claude Code, Codex,
+Antigravity, Grok Build, OpenCode, Cursor Agent, Hermes Agent, Pi, or your own
+ACP agent, and drives it over the
+[Agent Client Protocol](https://agentclientprotocol.com). The agent keeps its
+own tools, settings, and sign-in.
 
-![Nori TUI Screenshot](https://raw.githubusercontent.com/tilework-tech/nori-cli/refs/heads/main/assets/nori-cli_2026-01-13.png)
+![Nori TUI](https://raw.githubusercontent.com/tilework-tech/nori-cli/refs/heads/main/assets/nori-cli_2026-01-13.png)
 
 ## Install
 
@@ -15,95 +18,79 @@ Nori brings Claude Code, Codex, Antigravity, and Grok Build into one terminal. Y
 npm install -g nori-ai-cli
 ```
 
-Or download binaries from [GitHub Releases](https://github.com/tilework-tech/nori-cli/releases/latest).
+Bun works too: `bun install -g nori-ai-cli`. The package needs Node.js 16 or
+later. It contains a native `nori` binary for each supported platform.
 
-## Quick Start
+You can also download an archive from
+[GitHub Releases](https://github.com/tilework-tech/nori-cli/releases/latest).
+Each archive holds one binary at `nori/nori`.
+
+## Supported platforms
+
+| OS | Architecture | npm | Release archive |
+|---|---|---|---|
+| Linux (static musl) | x86_64 | yes | `nori-<version>-linux-x86_64.tar.gz` |
+| Linux (static musl) | arm64 | yes | `nori-<version>-linux-arm64.tar.gz` |
+| macOS | Apple silicon | yes | `nori-<version>-darwin-arm64.tar.gz` |
+| macOS | Intel | yes | `nori-<version>-darwin-x86_64.tar.gz` |
+
+Windows and Android have no release build. `nori host` and `nori attach` need
+Unix file permissions.
+
+## Update
 
 ```bash
-nori
+npm install -g nori-ai-cli@latest
 ```
 
-Use `/agent` to switch agents, or select one at launch with `nori --agent grok-build`. To start a session on a running Nori host, use `nori host new --agent grok-build`. Aliases use the same provider ID in the session list and share its saved model. An exact `[[agents]]` slug keeps its own settings.
+When a newer stable release exists, Nori offers to run this command at startup
+(with `bun` if Bun installed it). To try the newest build from `main`, install
+the `next` channel:
 
-## Providers
-
-Claude Code and Codex use `npx` or `bunx` to resolve the upstream `@latest` release. Grok Build uses `npx` so its native executable is installed by the upstream npm package. Pi always uses `npx`, which installs the `pi-acp` adapter together with Earendil's Pi coding agent so the adapter finds `pi` on `PATH`. To pin an adapter version or substitute your own adapter command, see [adapter launch](nori-rs/config.md#adapter-launch-acp_adapters). The adapters use their upstream dependencies and authentication settings. For Antigravity, install Google's CLI and make `agy` available on the host's `PATH`. [Antigravity CLI installation](https://antigravity.google/cli)
-
-| Agent | ID for `--agent` or `config.toml` | ACP launch | Sign in |
-| --- | --- | --- | --- |
-| Claude Code | `claude-code` | `@agentclientprotocol/claude-agent-acp@latest` | Use your Claude Code login or set `ANTHROPIC_API_KEY`. |
-| Codex | `codex` | `@agentclientprotocol/codex-acp@latest` | Use `/login` for ChatGPT or set `OPENAI_API_KEY`. |
-| Antigravity | `gemini` (also `antigravity` or `agy`) | `agy acp --disable-telemetry` | Open `agy` for Google sign-in or set `GEMINI_API_KEY`. |
-| Grok Build | `grok-build` (also `grok`) | `@xai-official/grok@latest agent stdio` | Use `/login` for the Grok sign-in command or set `XAI_API_KEY`. |
-| Cursor Agent | `cursor` (also `cursor-agent`) | `cursor-agent acp` if available, otherwise `agent acp` | Use your existing `agent login` session or export a Cursor-issued user API key as `CURSOR_API_KEY`. |
-| Hermes Agent | `hermes` (also `hermes-agent`) | `hermes acp` | Run `hermes model` in another terminal to choose a provider and configure credentials. |
-| Pi | `pi` (also `pi-acp`) | `pi-acp@latest` with `@earendil-works/pi-coding-agent@latest` | Use Pi's own settings in `~/.pi/agent` or select a [named API connection](nori-rs/config.md#pi-connections) in Nori's configuration. |
-
-Install Cursor CLI on the machine that runs Nori. If only `agent` is on `PATH`, Nori assumes it belongs to Cursor. If another program uses that name, add Cursor’s `cursor-agent` executable to `PATH` or put Cursor’s directory first. To use an API key with a local host, export `CURSOR_API_KEY` before starting `nori host`. Then use `nori host new --agent cursor`. Use `/delegate cursor <task>` to open a Cursor child from another agent. [Cursor CLI installation](https://cursor.com/docs/cli/installation) · [Cursor CLI authentication](https://cursor.com/docs/cli/reference/authentication)
-
-OpenCode is also built in. Install OpenCode 2 on the host's `PATH` and use `nori --agent opencode` or `nori host new --agent opencode`. Try `/delegate opencode Summarize the README` from another agent. All three launch `opencode acp`. OpenCode reads its own provider configuration and credentials. To connect an account, run `opencode auth login` in a terminal. [Model selection and ChatGPT-plan restrictions](nori-rs/config.md#default-models-default_models) · [OpenCode ACP guide](https://opencode.ai/docs/cli/acp/)
-
-Run `nori auth` to see which agents are signed in and which credential each will use (`--json` for the full report). An agent's own login (such as a Claude or ChatGPT subscription) always wins by default. To give Nori an API key, save it once per model provider with `nori auth set-key openai` (or `anthropic`, `google`, `xai`, `cursor`); at a terminal the key is typed or pasted hidden, and it can also be piped in. Remove it with `nori auth remove-key openai`. Then opt each agent in with `nori auth prefer-api-key <agent>` (or `/api-key` in the TUI); `nori auth prefer-login <agent>` switches back. An opted-in agent receives the key at launch in its own variable, so one OpenAI key can serve Codex, OpenCode, and Pi. Nori keeps keys in a private file, `$NORI_HOME/credentials.json`, or in the OS keychain when `NORI_CREDENTIALS_STORE=keyring` is set. Any credential variable the agent honours for that provider that is already set in your environment (for example `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`) wins over a saved key. A saved key is also withheld while that provider's base-URL variable (such as `ANTHROPIC_BASE_URL`) is set, so it is never sent to a gateway or proxy. Opting an agent such as Claude Code or Codex in while it is signed in with a subscription moves billing to the API account, so Nori warns and asks once before saving the choice. [Saved API keys](nori-rs/config.md#saved-api-keys)
-
-The `gemini` ID keeps existing configs and Nori history associated with the Google provider. Each agent supplies its own model choices through `/model`.
-
-### Hermes Agent
-
-Install Hermes and its ACP extra on the machine running Nori. Make `hermes` available on that machine’s `PATH` and run `hermes acp --check`. [Nous Research’s ACP installation guide for v0.23.3](https://github.com/NousResearch/hermes-agent/blob/v0.23.3/website/docs/user-guide/features/acp.md#installation)
-
-Start it with `nori --agent hermes` or create a session on a running host with `nori host new --agent hermes`. Enter `/delegate hermes Read README.md and summarize the setup steps` from another agent’s conversation. Approve the child when prompted. Its result returns to the parent conversation.
-
-## Bring Your Own Agent
-
-Have your own ACP agent? Add it to Nori CLI! Any agent that speaks [Agent Client Protocol](https://github.com/agentclientprotocol/agent-client-protocol) over stdin/stdout can be registered in `~/.nori/cli/config.toml` and used alongside the built-in providers.
-
-Add one or more `[[agents]]` entries to your config:
-
-```toml
-[[agents]]
-name = "Mistral Vibe"
-slug = "vibe-acp"
-
-[agents.distribution.local]
-command = "vibe-acp"
-
-[[agents]]
-name = "ElizACP"
-slug = "elizacp"
-
-[agents.distribution.local]
-command = "elizacp"
-args = ["acp"]
+```bash
+npm install -g nori-ai-cli@next
 ```
 
-Select the registered server in `/agent`, run `nori --agent elizacp exec "hello"`, or use `nori host new --agent elizacp` on a locally configured host. A local distribution also accepts a wrapper, child environment, and path to prepared runtime files. [Launch configuration](nori-rs/config.md#acp-server-launch)
+Channels and version numbers: [docs/release-artifacts.md](docs/release-artifacts.md).
 
-**Example agents to try:**
+## Quick start
 
-| Agent                                                                     | Install                                                 | Notes                                                                              |
-| ------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [Mistral Vibe](https://docs.mistral.ai/mistral-vibe/introduction/install) | `curl -LsSf https://mistral.ai/vibe/install.sh \| bash` | Installs both `vibe` and `vibe-acp`. Run `vibe --setup` to configure your API key. |
-| [ElizACP](https://github.com/agentclientprotocol/symposium-acp)           | `cargo install --locked elizacp`                        | Minimal Eliza chatbot, useful for testing.                                         |
-| [Kimi](https://github.com/nicepkg/kimi-cli)                               | No install needed — uses `uvx`                          | First-time auth: run `uvx --python 3.13 kimi-cli`, then `/login`.                  |
+```bash
+nori                          # open the TUI with the default agent (claude-code)
+nori --agent codex            # pick an agent
+nori "explain this repo"      # start with a prompt
+nori resume                   # reopen an earlier session
+nori exec "fix the failing test"   # run one prompt without the TUI
+nori auth                     # see which agents are signed in
+```
 
-Want your AI agent to configure this automatically? Point it at [Custom agents](nori-rs/config.md#custom-agents-agents). An agent running inside Nori can also use the built-in `register_custom_acp_agent` prompt, which reads the `nori://help/custom-acp-agent` resource.
+Inside the TUI, type `/` for commands and `?` for keyboard shortcuts.
+`/agent` switches agents.
 
-## Features
+## Surfaces
 
-- **Multi-provider**: Switch between built-in and custom ACP agents from the same CLI.
-- **Fast native interface**: Incremental Ratatui rendering, double-buffered scrollback history, and a Rust core keep long sessions responsive.
-- **Solid ACP client support**: Nori supports ACP session listing, loading, resume, context and usage metadata.
-- **Agent Integrations**: Your agents keep their configurations, whether that's slash commands, skills, and MCP server forwarding.
-- **Session continuity**: Pick up prior work with resume, and rewind agent changes with escape-to-undo.
-- **Project context**: Reference files with `@`, flip between an editor or a file picker, and keep useful context visible without leaving the terminal.
+| Surface | What it does | Docs |
+|---|---|---|
+| `nori` | Interactive terminal UI. Runs many sessions at once. | [docs/tui.md](docs/tui.md) |
+| `nori exec` | Runs one prompt headlessly and exits. | [docs/commands.md](docs/commands.md) |
+| `nori host`, `nori attach` | Runs sessions in a background host. Terminals attach and detach without stopping work. | [docs/tui.md](docs/tui.md#attach-from-a-second-terminal) |
+| `nori cloud` | The TUI connected to a Nori Sessions machine. | [docs/tui.md](docs/tui.md#nori-cloud) |
+| `nori auth` | Sign-in status and saved API keys. | [docs/auth.md](docs/auth.md) |
 
-See the [ACP roadmap](ROADMAP.md) for what is done, what is in progress, and what is planned next.
+More reference:
+
+- Agents, IDs, and custom ACP agents: [docs/agents.md](docs/agents.md)
+- Every command and flag: [docs/commands.md](docs/commands.md)
+- `config.toml`: [docs/configuration.md](docs/configuration.md)
+- Approvals and sandboxing: [docs/permissions.md](docs/permissions.md)
+- MCP servers: [docs/mcp.md](docs/mcp.md)
+- Files Nori writes: [docs/storage.md](docs/storage.md)
+- Terms: [GLOSSARY.md](GLOSSARY.md)
 
 ## Attribution
 
-Nori CLI is built on the great work within [OpenAI Codex CLI](https://github.com/openai/codex).
-
-Nori CLI relies on the great contributions within the [ACP project](https://github.com/agentclientprotocol/agent-client-protocol), from Zed Editor, JetBrains, and others.
+Nori CLI is built on [OpenAI Codex CLI](https://github.com/openai/codex) and
+the [ACP project](https://github.com/agentclientprotocol/agent-client-protocol).
 
 ## License
 

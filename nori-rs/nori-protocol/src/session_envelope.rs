@@ -13,7 +13,7 @@ use crate::SessionEvent;
 /// therefore a new sequence.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SessionEnvelope {
-    /// Nori's conversation ID for the session (see `docs/glossary.md`).
+    /// Nori's conversation ID for the session (see `GLOSSARY.md`).
     pub conversation_id: String,
     /// Name of the agent that the session runs on, as in the agent registry.
     pub agent: String,

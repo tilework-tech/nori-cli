@@ -2,7 +2,8 @@
 //! [Streamable HTTP & WebSocket Transport RFD].
 //!
 //! Hosts expose authenticated `/acp` connections (with `/sessions` as an
-//! alias), with one controller and any number of watchers. See `docs/remote-control.md`.
+//! alias), with one controller and any number of watchers. See the host
+//! contract (`nori-monorepo: docs/specs/nori-cli/host-contract.md`).
 //!
 //! [Streamable HTTP & WebSocket Transport RFD]:
 //!     https://agentclientprotocol.com/rfds/streamable-http-websocket-transport
