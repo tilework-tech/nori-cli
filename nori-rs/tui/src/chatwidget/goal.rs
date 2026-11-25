@@ -91,13 +91,14 @@ impl ChatWidget {
         let reason = availability
             .reason
             .unwrap_or_else(|| default_command_unavailable_reason(command));
-        // A joined terminal refuses with the reason its menu shows.
-        let message = if self.host_connection.is_some() {
-            format!("/{}: {reason}", command.command())
+        // A joined terminal refuses with the reason its menu shows, and
+        // keeps the command in the composer as it keeps a refused prompt.
+        if self.host_connection.is_some() {
+            self.add_error_message(format!("/{}: {reason}", command.command()));
+            self.set_composer_text(format!("/{}", command.command()));
         } else {
-            format!("/{} is unavailable. {reason}", command.command())
-        };
-        self.add_error_message(message);
+            self.add_error_message(format!("/{} is unavailable. {reason}", command.command()));
+        }
         self.request_redraw();
         false
     }

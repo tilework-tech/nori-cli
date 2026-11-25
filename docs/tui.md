@@ -253,7 +253,9 @@ folder, agent, and host status, `Approvals: <mode>`, and the keys that apply
 
 Esc does not edit an earlier prompt in `nori attach`. Other commands are
 greyed with "not available in nori attach yet" or "not available on this
-host yet"; a typed one is refused as `/<command>: <reason>`.
+host yet"; a typed one is refused as `/<command>: <reason>` and stays in the
+prompt. A command this terminal does not know, such as an agent's `/review`,
+is sent to the agent as a prompt.
 
 Permission and delegation requests open the same overlays as in plain `nori`
 (see [Approval overlay](#approval-overlay)); only the controller can answer.
@@ -470,7 +472,9 @@ prompt does not answer it. When several requests wait, the newest shows first.
 ### Composer features
 
 - **`@` file mention:** fuzzy search in the session's folder, on the host
-  that runs it. Without a host session, Nori searches the launch folder. Tab or Enter inserts
+  that runs it, following the session on screen. Without a host session, Nori
+  searches the launch folder; in `nori attach`, a host that lists paths
+  searches its own folder. Tab or Enter inserts
   the path, quoted if it contains spaces. An image file is attached.
 - **History search:** Ctrl+R searches up to 500 earlier prompts from
   `$NORI_HOME/history.jsonl`. For a session on a host, that is the host's

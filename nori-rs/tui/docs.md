@@ -30,7 +30,7 @@ UI strings keep that word.
 | `program_status/` | OSC 7501 terminal status: `ProgramStatusTracker` (fold over one session's events) and `ProgramStatusReporter` (encode and write) |
 | `nori/` | Nori pickers (agent, config, fork, resume, skillset, hotkey, MCP), onboarding, session header, update prompt |
 | `resume_picker/`, `session_*.rs`, `viewonly_transcript.rs` | Resume picker, session preview and stats, view-only transcripts |
-| `tui.rs`, `custom_terminal.rs`, `insert_history.rs`, `render/` | Terminal setup, inline viewport, scrollback insertion |
+| `tui.rs`, `frame_scheduler.rs`, `custom_terminal.rs`, `insert_history.rs`, `render/` | Terminal setup, frame scheduling, inline viewport, scrollback insertion |
 | `style.rs`, `color.rs`, `terminal_palette.rs`, `shimmer.rs` | Styles and terminal colors |
 | `storybook` (feature `storybook`) | Production view specimens for `examples/` |
 
@@ -115,7 +115,11 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   host serves, such as folders for `/new` and `find_paths` completion.
   In-process commands the host serves a method for run joined once the host
   advertises it (`command_availability::served_by_host`): `/goal` with
-  `goal`, `/context` with `context`, `/compact` with `compact`. Older hosts keep the refusal. A
+  `goal`, `/context` with `context`, `/compact` with `compact`. Older hosts keep the refusal.
+  A refused builtin command stays in the composer as `/command`; a command
+  the composer does not know goes to the agent as a prompt. With no session
+  on screen, `@` asks a joined host that serves `find_paths` to search its own
+  folder (`app/file_mentions.rs`); otherwise it searches the session on screen. A
   joined watcher's submission is refused with the draft kept, and Alt+T sends
   `AppEvent::TakeHostControl`. Ctrl+C goes to `ChatWidget::joined_ctrl_c`
   first: only a connected controller cancels, including a turn another
@@ -145,6 +149,17 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   joined App reports the same way.
 - `ProgramStatusReporter` writes only when the bytes change, never when
   stdout is not a TTY, and clears once if it ever reported.
+- `frame_scheduler.rs` keeps at least 8 ms between draws: a lone request
+  draws at once, a burst of requests draws a few frames, not one per request.
+- The full-screen view (`TranscriptRows` in `app/full_screen_frame.rs`)
+  renders each cell once, again only on a width change or a generation bump. Consolidating a finished agent reply into one
+  Markdown cell goes through `TranscriptCells::replace_tail`, so only the
+  replaced cells re-wrap; bumping the transcript generation instead re-wraps
+  the whole history and made a long `nori attach` replay crawl.
+- `transcript_reflow::agent_message_consolidation` replaces a reply's cells
+  only when the trailing run reaches the reply's first cell. If another cell
+  (such as a plan update) cut into the stream, the cells stay as streamed, so
+  the inline reprint after Ctrl+L or `/screen` repeats no text.
 - The session list view asks for a redraw only when its rows change, not on
   every frame while it is open; otherwise the full-screen view repaints
   continuously.

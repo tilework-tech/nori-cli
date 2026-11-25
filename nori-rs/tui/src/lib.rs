@@ -54,6 +54,7 @@ mod exec_command;
 mod external_cancel;
 mod file_search;
 mod follow_up;
+mod frame_scheduler;
 mod frames;
 mod get_git_diff;
 mod git_marker;

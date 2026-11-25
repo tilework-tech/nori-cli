@@ -529,10 +529,11 @@ impl ChatComposer {
         self.cloud_session = cloud_session;
     }
 
-    /// A joined host's terminal: `/detach` and `/cancel` are commands, and `status` leads
-    /// the footer.
+    /// A joined host's terminal: `/detach` and `/cancel` are commands, `status` leads
+    /// the footer, and a command this terminal does not know goes to the agent.
     pub(crate) fn set_host_status(&mut self, status: Option<Line<'static>>) {
         self.joined_host = status.is_some();
+        self.pass_unknown_commands = status.is_some();
         self.host_status = status;
     }
 

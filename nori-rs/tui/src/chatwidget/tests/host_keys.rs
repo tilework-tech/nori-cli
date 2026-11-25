@@ -191,3 +191,51 @@ fn ctrl_c_on_an_empty_composer_leaves_a_stopped_host() {
     assert_eq!(requests, 0);
     assert!(text.contains("Left the host"), "{text}");
 }
+
+#[test]
+fn a_refused_command_keeps_what_was_typed() {
+    for (role, connected, typed) in [
+        (ControlRole::Watcher, true, "/new"),
+        (ControlRole::Controller, false, "/new"),
+        (ControlRole::Controller, true, "/compact"),
+        (ControlRole::Controller, true, "/agent"),
+    ] {
+        let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+        chat.managed_conversation_id = Some(nori_harness::ConversationId::new());
+        chat.set_host_connection(joined(role, connected));
+
+        chat.set_composer_text(typed.to_owned());
+        press(&mut chat, KeyCode::Enter, KeyModifiers::NONE);
+
+        let (text, _) = outcome(&mut rx);
+        assert_eq!(chat.composer_text(), typed, "{typed}: {text}");
+        assert!(text.contains(typed), "{typed}: {text}");
+    }
+}
+
+#[tokio::test]
+async fn an_agent_command_the_terminal_does_not_know_goes_to_the_host() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.managed_conversation_id = Some(nori_harness::ConversationId::new());
+    chat.set_host_connection(joined(ControlRole::Controller, true));
+
+    chat.set_composer_text("/review the synthetic orchard".to_owned());
+    press(&mut chat, KeyCode::Enter, KeyModifiers::NONE);
+
+    let mut prompts = Vec::new();
+    let mut text = String::new();
+    while let Ok(event) = rx.try_recv() {
+        match event {
+            AppEvent::HostRequest {
+                call: crate::host_client::HostCall::Prompt(params),
+                ..
+            } => prompts.push(params["prompt"][0]["text"].clone()),
+            AppEvent::InsertHistoryCell(cell) => {
+                text.push_str(&lines_to_single_string(&cell.display_lines(80)));
+            }
+            _ => {}
+        }
+    }
+    assert!(!text.contains("Unrecognized"), "{text}");
+    assert_eq!(prompts, ["/review the synthetic orchard"]);
+}
