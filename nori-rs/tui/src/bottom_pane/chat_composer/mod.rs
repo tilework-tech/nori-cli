@@ -263,6 +263,10 @@ impl ChatComposer {
         self.history.set_metadata(log_id, entry_count);
     }
 
+    pub(crate) fn refresh_history_metadata(&mut self, log_id: u64, entry_count: usize) {
+        self.history.refresh_metadata(log_id, entry_count);
+    }
+
     pub(crate) fn record_local_history_submission(&mut self, text: &str) {
         self.history.record_local_submission(text);
     }

@@ -162,6 +162,10 @@ so it can hold any record type. The other types are read for older files.
 processes do not interleave lines. Nori resets the file mode to `0600` when it
 differs.
 
+A session on a host keeps its prompts in the host's `$NORI_HOME`, not the
+terminal's: every terminal attached to that host records into, recalls from and
+searches the same file, through `_nori/host/history/*`.
+
 ## Files outside `NORI_HOME`
 
 | Path | Written by | Lifetime |

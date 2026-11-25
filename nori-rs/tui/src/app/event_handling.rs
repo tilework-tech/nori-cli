@@ -872,6 +872,12 @@ impl App {
             AppEvent::HistorySearchLoaded(entries) => {
                 self.chat_widget.on_history_search_loaded(entries);
             }
+            AppEvent::HistoryMetadataLoaded {
+                log_id,
+                entry_count,
+            } => self
+                .chat_widget
+                .on_history_metadata_loaded(log_id, entry_count),
             AppEvent::CustomPromptsLoaded(prompts) => {
                 self.chat_widget.on_custom_prompts_loaded(prompts);
             }
