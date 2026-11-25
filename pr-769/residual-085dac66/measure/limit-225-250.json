@@ -1,0 +1,36 @@
+{
+  "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+  "binary_sha256": "0b45f02287cd94e19f44fcd50222ff1826226d43f63c78df113b1dbb6f6b662f",
+  "terminal": "120x40 tmux loopback via diagnostic wire probe",
+  "samples": [
+    {
+      "sections": 225,
+      "mode": "transcript",
+      "audited": true,
+      "outcome": "replay_unavailable",
+      "conclusive": true,
+      "failure": "Timed out observing terminal:\n Nori host  CONTROLLING\n synthetic \u00b7 Replay benchmark target \u00b7 ~/project \u00b7 ready \u00b7 Approvals: Agent\n\n cursor for session 89c9c540-4309-4e88-bb67-7bd4bcac4169 has expired; first available sequence is 292; list sessions to\n choose a newer cursor explicitly\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n Replay unavailable: cursor for session 89c9c540-4309-4e88-bb67-7bd4bcac4169 has expired; first available sequence is\n292; list sessions to choose a newer cursor explicitly. Existing conversation retained.\n\n\u203a Send a prompt\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task\n"
+    },
+    {
+      "sections": 240,
+      "mode": "transcript",
+      "audited": true,
+      "outcome": "replay_unavailable",
+      "conclusive": true,
+      "failure": "Timed out observing terminal:\n Nori host  CONTROLLING\n synthetic \u00b7 Replay benchmark target \u00b7 ~/project \u00b7 ready \u00b7 Approvals: Agent\n\n cursor for session 9b3d194d-d2d1-4579-970f-2deeb4c78fa6 has expired; first available sequence is 24; list sessions to\n choose a newer cursor explicitly\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n Replay unavailable: cursor for session 9b3d194d-d2d1-4579-970f-2deeb4c78fa6 has expired; first available sequence is\n24; list sessions to choose a newer cursor explicitly. Existing conversation retained.\n\n\u203a Send a prompt\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task\n"
+    },
+    {
+      "sections": 250,
+      "mode": "transcript",
+      "audited": true,
+      "outcome": "replay_unavailable",
+      "conclusive": true,
+      "failure": "Timed out observing terminal:\n Nori host  CONTROLLING\n synthetic \u00b7 Replay benchmark target \u00b7 ~/project \u00b7 ready \u00b7 Approvals: Agent\n\n cursor for session 1d72701b-00ab-44b0-a332-428f58062c30 has expired; first available sequence is 111; list sessions to\n choose a newer cursor explicitly\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n Replay unavailable: cursor for session 1d72701b-00ab-44b0-a332-428f58062c30 has expired; first available sequence is\n111; list sessions to choose a newer cursor explicitly. Existing conversation retained.\n\n\u203a Send a prompt\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task\n"
+    }
+  ],
+  "tally": {
+    "225 transcript replay_unavailable": 1,
+    "240 transcript replay_unavailable": 1,
+    "250 transcript replay_unavailable": 1
+  }
+}

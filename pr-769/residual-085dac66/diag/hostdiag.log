@@ -1,0 +1,1084 @@
+1795609952859521 pid=22666 client=13 replay start n=2815 qlen=0
+1795609952867778 pid=22666 client=13 replay done n=2815 taken=0 el=8.278624ms qlen=0
+1795609952868142 pid=22666 client=13 arm=incoming el=12.429543ms qlen_at_start=0
+1795609975743327 pid=25681 client=13 replay start n=2815 qlen=0
+1795609975751668 pid=25681 client=13 replay done n=2815 taken=0 el=8.344543ms qlen=0
+1795609975751848 pid=25681 client=13 arm=incoming el=12.87441ms qlen_at_start=0
+1795609998778655 pid=28799 client=14 replay start n=2663 qlen=1
+1795609998787355 pid=28799 client=14 replay done n=2663 taken=152 el=8.701859ms qlen=0
+1795609998787687 pid=28799 client=14 arm=incoming el=13.234201ms qlen_at_start=0
+1795610021745268 pid=31888 client=12 replay start n=2815 qlen=0
+1795610021753533 pid=31888 client=12 replay done n=2815 taken=0 el=8.268138ms qlen=0
+1795610021753867 pid=31888 client=12 arm=incoming el=12.784737ms qlen_at_start=0
+1795610044787047 pid=2636 client=14 replay start n=2815 qlen=0
+1795610044795439 pid=2636 client=14 replay done n=2815 taken=0 el=8.401369ms qlen=0
+1795610044795592 pid=2636 client=14 arm=incoming el=13.029915ms qlen_at_start=0
+1795610060776786 pid=4822 client=13 replay start n=2531 qlen=1
+1795610060786840 pid=4822 client=13 replay done n=2531 taken=283 el=10.058555ms qlen=0
+1795610060787800 pid=4822 client=13 arm=incoming el=15.08622ms qlen_at_start=0
+1795610067561868 pid=6590 client=14 replay start n=2815 qlen=0
+1795610067570429 pid=6590 client=14 replay done n=2815 taken=0 el=8.564994ms qlen=0
+1795610067570707 pid=6590 client=14 arm=incoming el=13.210915ms qlen_at_start=0
+1795610083769469 pid=10767 client=12 replay start n=2814 qlen=0
+1795610083778116 pid=10767 client=12 replay done n=2814 taken=0 el=8.649841ms qlen=0
+1795610083778369 pid=10767 client=12 arm=incoming el=13.594913ms qlen_at_start=0
+1795610090639772 pid=12535 client=13 replay start n=2156 qlen=4
+1795610090648691 pid=12535 client=13 replay done n=2156 taken=659 el=8.92308ms qlen=0
+1795610090649000 pid=12535 client=13 arm=incoming el=12.457856ms qlen_at_start=0
+1795610106811197 pid=16596 client=13 replay start n=2814 qlen=0
+1795610106821376 pid=16596 client=13 replay done n=2814 taken=0 el=10.182952ms qlen=0
+1795610106821839 pid=16596 client=13 arm=incoming el=15.949767ms qlen_at_start=0
+1795610113681480 pid=18397 client=13 replay start n=2685 qlen=1
+1795610113690963 pid=18397 client=13 replay done n=2685 taken=130 el=9.487218ms qlen=0
+1795610113691244 pid=18397 client=13 arm=incoming el=14.585199ms qlen_at_start=0
+1795610129838443 pid=22416 client=13 replay start n=2245 qlen=17
+1795610129850010 pid=22416 client=13 replay done n=2245 taken=569 el=11.575061ms qlen=0
+1795610129850421 pid=22416 client=13 arm=incoming el=17.646753ms qlen_at_start=0
+1795610136709679 pid=24220 client=13 replay start n=2815 qlen=0
+1795610136717957 pid=24220 client=13 replay done n=2815 taken=0 el=8.281828ms qlen=0
+1795610136718217 pid=24220 client=13 arm=incoming el=12.332919ms qlen_at_start=0
+1795610152850379 pid=28250 client=13 replay start n=2766 qlen=0
+1795610152859719 pid=28250 client=13 replay done n=2766 taken=48 el=9.344204ms qlen=0
+1795610152860021 pid=28250 client=13 arm=incoming el=14.889966ms qlen_at_start=0
+1795610159593418 pid=29995 client=13 replay start n=2815 qlen=0
+1795610159601890 pid=29995 client=13 replay done n=2815 taken=0 el=8.476762ms qlen=0
+1795610159602216 pid=29995 client=13 arm=incoming el=13.036755ms qlen_at_start=0
+1795610175871998 pid=1745 client=14 replay start n=2814 qlen=0
+1795610175880199 pid=1745 client=14 replay done n=2814 taken=0 el=8.204092ms qlen=0
+1795610175880574 pid=1745 client=14 arm=incoming el=11.993259ms qlen_at_start=0
+1795610181966811 pid=29995 DROP seq=2823 full=false Backtrace []
+1795610181967264 pid=29995 DROP seq=2823 full=false Backtrace []
+1795610182347080 pid=3468 client=13 replay start n=2815 qlen=0
+1795610182356456 pid=3468 client=13 replay done n=2815 taken=0 el=9.378745ms qlen=0
+1795610182356837 pid=3468 client=13 arm=incoming el=13.76011ms qlen_at_start=0
+1795610198506955 pid=1745 DROP seq=2822 full=false Backtrace []
+1795610198507269 pid=1745 DROP seq=2822 full=false Backtrace []
+1795610198947244 pid=7697 client=13 replay start n=2814 qlen=0
+1795610198955686 pid=7697 client=13 replay done n=2814 taken=0 el=8.445785ms qlen=0
+1795610198955941 pid=7697 client=13 arm=incoming el=12.999129ms qlen_at_start=0
+1795610205386719 pid=9406 client=13 replay start n=2815 qlen=0
+1795610205395738 pid=9406 client=13 replay done n=2815 taken=0 el=9.02241ms qlen=0
+1795610205396163 pid=9406 client=13 arm=incoming el=13.962153ms qlen_at_start=0
+1795610221600210 pid=7697 DROP seq=2822 full=false Backtrace []
+1795610221600606 pid=7697 DROP seq=2822 full=false Backtrace []
+1795610222050780 pid=13312 client=11 replay start n=2814 qlen=0
+1795610222065244 pid=13312 client=11 replay done n=2814 taken=0 el=14.467031ms qlen=0
+1795610222065569 pid=13312 client=11 arm=incoming el=18.684881ms qlen_at_start=0
+1795610228563925 pid=14778 client=12 replay start n=2815 qlen=0
+1795610228573891 pid=14778 client=12 replay done n=2815 taken=0 el=9.970092ms qlen=0
+1795610228574360 pid=14778 client=12 arm=incoming el=16.226261ms qlen_at_start=0
+1795610245145374 pid=18417 client=11 replay start n=2814 qlen=0
+1795610245154082 pid=18417 client=11 replay done n=2814 taken=0 el=8.710752ms qlen=0
+1795610245154374 pid=18417 client=11 arm=incoming el=12.530796ms qlen_at_start=0
+1795610251671707 pid=19925 client=11 replay start n=2815 qlen=0
+1795610251685137 pid=19925 client=11 replay done n=2815 taken=0 el=13.433681ms qlen=0
+1795610251685590 pid=19925 client=11 arm=incoming el=19.0569ms qlen_at_start=0
+1795610268388229 pid=23571 client=13 replay start n=2750 qlen=64
+1795610268404110 pid=23571 client=13 replay done n=2750 taken=64 el=15.88555ms qlen=0
+1795610268404410 pid=23571 client=13 arm=incoming el=21.387297ms qlen_at_start=0
+1795610274750965 pid=25065 client=12 replay start n=2815 qlen=0
+1795610274761269 pid=25065 client=12 replay done n=2815 taken=0 el=10.307709ms qlen=0
+1795610274761576 pid=25065 client=12 arm=incoming el=16.137919ms qlen_at_start=0
+1795610291597081 pid=28790 client=11 replay start n=2814 qlen=0
+1795610291621841 pid=28790 client=11 replay done n=2814 taken=0 el=24.761991ms qlen=0
+1795610291622173 pid=28790 client=11 arm=incoming el=28.71936ms qlen_at_start=0
+1795610297404679 pid=25065 DROP seq=2823 full=false Backtrace []
+1795610297405030 pid=25065 DROP seq=2823 full=false Backtrace []
+1795610297828511 pid=30220 client=11 replay start n=2815 qlen=0
+1795610297844476 pid=30220 client=11 replay done n=2815 taken=0 el=15.968073ms qlen=0
+1795610297846747 pid=30220 client=11 arm=incoming el=23.382281ms qlen_at_start=0
+1795610314670261 pid=1456 client=11 replay start n=2814 qlen=0
+1795610314683373 pid=1456 client=11 replay done n=2814 taken=0 el=13.115413ms qlen=0
+1795610314683654 pid=1456 client=11 arm=incoming el=17.97147ms qlen_at_start=0
+1795610320921075 pid=2926 client=12 replay start n=2815 qlen=0
+1795610320929965 pid=2926 client=12 replay done n=2815 taken=0 el=8.893387ms qlen=0
+1795610320930239 pid=2926 client=12 arm=incoming el=15.15236ms qlen_at_start=0
+1795610337791249 pid=6640 client=13 replay start n=2814 qlen=0
+1795610337810152 pid=6640 client=13 replay done n=2814 taken=0 el=18.905102ms qlen=0
+1795610337810490 pid=6640 client=13 arm=incoming el=22.533718ms qlen_at_start=0
+1795610344046807 pid=8145 client=11 replay start n=2815 qlen=0
+1795610344055345 pid=8145 client=11 replay done n=2815 taken=0 el=8.541478ms qlen=0
+1795610344055596 pid=8145 client=11 arm=incoming el=13.255924ms qlen_at_start=0
+1795610360423548 pid=6640 DROP seq=2822 full=false Backtrace []
+1795610360424139 pid=6640 DROP seq=2822 full=false Backtrace []
+1795610360875767 pid=11906 client=12 replay start n=2814 qlen=0
+1795610360884421 pid=11906 client=12 replay done n=2814 taken=0 el=8.656892ms qlen=0
+1795610360884662 pid=11906 client=12 arm=incoming el=13.279789ms qlen_at_start=0
+1795610367124216 pid=13372 client=11 replay start n=2815 qlen=0
+1795610367133440 pid=13372 client=11 replay done n=2815 taken=0 el=9.22832ms qlen=0
+1795610367133661 pid=13372 client=11 arm=incoming el=14.196666ms qlen_at_start=0
+1795610383965241 pid=17069 client=12 replay start n=2814 qlen=0
+1795610383983289 pid=17069 client=12 replay done n=2814 taken=0 el=18.051541ms qlen=0
+1795610383983653 pid=17069 client=12 arm=incoming el=24.68801ms qlen_at_start=0
+1795610389767187 pid=13372 DROP seq=2823 full=false Backtrace []
+1795610389767764 pid=13372 DROP seq=2823 full=false Backtrace []
+1795610390243770 pid=18496 client=12 replay start n=2815 qlen=0
+1795610390260929 pid=18496 client=12 replay done n=2815 taken=0 el=17.161645ms qlen=0
+1795610390261214 pid=18496 client=12 arm=incoming el=21.748378ms qlen_at_start=0
+1795610407119979 pid=22175 client=12 replay start n=2814 qlen=0
+1795610407131840 pid=22175 client=12 replay done n=2814 taken=0 el=11.864315ms qlen=0
+1795610407132156 pid=22175 client=12 arm=incoming el=16.696617ms qlen_at_start=0
+1795610413365873 pid=23612 client=11 replay start n=2815 qlen=0
+1795610413380040 pid=23612 client=11 replay done n=2815 taken=0 el=14.170516ms qlen=0
+1795610413380271 pid=23612 client=11 arm=incoming el=18.332172ms qlen_at_start=0
+1795610430200872 pid=27338 client=12 replay start n=2814 qlen=0
+1795610430219420 pid=27338 client=12 replay done n=2814 taken=0 el=18.550749ms qlen=0
+1795610430219656 pid=27338 client=12 arm=incoming el=23.192515ms qlen_at_start=0
+1795610436007375 pid=23612 DROP seq=2823 full=false Backtrace []
+1795610436007827 pid=23612 DROP seq=2823 full=false Backtrace []
+1795610436458610 pid=28813 client=12 replay start n=2815 qlen=0
+1795610436477011 pid=28813 client=12 replay done n=2815 taken=0 el=18.403689ms qlen=0
+1795610436477270 pid=28813 client=12 arm=incoming el=24.236623ms qlen_at_start=0
+1795610452824030 pid=27338 DROP seq=2822 full=false Backtrace []
+1795610452824731 pid=27338 DROP seq=2822 full=false Backtrace []
+1795610453305567 pid=32507 client=13 replay start n=2814 qlen=0
+1795610453314263 pid=32507 client=13 replay done n=2814 taken=0 el=8.699576ms qlen=0
+1795610453314476 pid=32507 client=13 arm=incoming el=13.372148ms qlen_at_start=0
+1795610459065448 pid=28813 DROP seq=2823 full=false Backtrace []
+1795610459065728 pid=28813 DROP seq=2823 full=false Backtrace []
+1795610459486806 pid=1581 client=12 replay start n=2815 qlen=0
+1795610459499336 pid=1581 client=12 replay done n=2815 taken=0 el=12.531316ms qlen=0
+1795610459499517 pid=1581 client=12 arm=incoming el=16.919652ms qlen_at_start=0
+1795610476389778 pid=5355 client=11 replay start n=2814 qlen=0
+1795610476398621 pid=5355 client=11 replay done n=2814 taken=0 el=8.845886ms qlen=0
+1795610476398819 pid=5355 client=11 arm=incoming el=12.784787ms qlen_at_start=0
+1795610482602475 pid=6808 client=12 replay start n=2815 qlen=0
+1795610482623928 pid=6808 client=12 replay done n=2815 taken=0 el=21.45631ms qlen=0
+1795610482624172 pid=6808 client=12 arm=incoming el=25.464375ms qlen_at_start=0
+1795610499485588 pid=10565 client=13 replay start n=2814 qlen=0
+1795610499495624 pid=10565 client=13 replay done n=2814 taken=0 el=10.039117ms qlen=0
+1795610499495855 pid=10565 client=13 arm=incoming el=14.542164ms qlen_at_start=0
+1795610505659398 pid=12036 client=12 replay start n=2815 qlen=0
+1795610505675350 pid=12036 client=12 replay done n=2815 taken=0 el=15.953862ms qlen=0
+1795610505675593 pid=12036 client=12 arm=incoming el=19.981377ms qlen_at_start=0
+1795610522587830 pid=15796 client=12 replay start n=2814 qlen=0
+1795610522622769 pid=15796 client=12 replay done n=2814 taken=0 el=34.943161ms qlen=0
+1795610522623134 pid=15796 client=12 arm=incoming el=43.807374ms qlen_at_start=0
+1795610528755359 pid=17264 client=11 replay start n=2815 qlen=0
+1795610528770480 pid=17264 client=11 replay done n=2815 taken=0 el=15.124828ms qlen=0
+1795610528770716 pid=17264 client=11 arm=incoming el=26.444997ms qlen_at_start=0
+1795610545624401 pid=21029 client=12 replay start n=2814 qlen=0
+1795610545640082 pid=21029 client=12 replay done n=2814 taken=0 el=15.684349ms qlen=0
+1795610545640339 pid=21029 client=12 arm=incoming el=19.855057ms qlen_at_start=0
+1795610551820519 pid=22490 client=12 replay start n=2815 qlen=0
+1795610551831328 pid=22490 client=12 replay done n=2815 taken=0 el=10.812386ms qlen=0
+1795610551831597 pid=22490 client=12 arm=incoming el=15.813021ms qlen_at_start=0
+1795610568721767 pid=26200 client=11 replay start n=2814 qlen=0
+1795610568733022 pid=26200 client=11 replay done n=2814 taken=0 el=11.266978ms qlen=0
+1795610568733224 pid=26200 client=11 arm=incoming el=17.378561ms qlen_at_start=0
+1795610574478088 pid=22490 DROP seq=2823 full=false Backtrace []
+1795610574480138 pid=22490 DROP seq=2823 full=false Backtrace []
+1795610574936271 pid=27635 client=11 replay start n=2815 qlen=0
+1795610574950396 pid=27635 client=11 replay done n=2815 taken=0 el=14.127351ms qlen=0
+1795610574950668 pid=27635 client=11 arm=incoming el=18.800835ms qlen_at_start=0
+1795610591336080 pid=26200 DROP seq=2822 full=false Backtrace []
+1795610591336381 pid=26200 DROP seq=2822 full=false Backtrace []
+1795610591832767 pid=31348 client=12 replay start n=2814 qlen=0
+1795610591843862 pid=31348 client=12 replay done n=2814 taken=0 el=11.098196ms qlen=0
+1795610591844115 pid=31348 client=12 arm=incoming el=16.209026ms qlen_at_start=0
+1795610597583627 pid=27635 DROP seq=2823 full=false Backtrace []
+1795610597583970 pid=27635 DROP seq=2823 full=false Backtrace []
+1795610598098932 pid=314 client=11 replay start n=2815 qlen=0
+1795610598113567 pid=314 client=11 replay done n=2815 taken=0 el=14.637286ms qlen=0
+1795610598113781 pid=314 client=11 arm=incoming el=19.43715ms qlen_at_start=0
+1795610614454475 pid=31348 DROP seq=2822 full=false Backtrace []
+1795610614454768 pid=31348 DROP seq=2822 full=false Backtrace []
+1795610614929250 pid=4167 client=12 replay start n=2814 qlen=0
+1795610614947210 pid=4167 client=12 replay done n=2814 taken=0 el=17.963639ms qlen=0
+1795610614947558 pid=4167 client=12 arm=incoming el=23.227158ms qlen_at_start=0
+1795610621246631 pid=5615 client=14 replay start n=2815 qlen=0
+1795610621262697 pid=5615 client=14 replay done n=2815 taken=0 el=16.069527ms qlen=0
+1795610621262944 pid=5615 client=14 arm=incoming el=21.155288ms qlen_at_start=0
+1795610638042868 pid=9377 client=12 replay start n=2814 qlen=0
+1795610638058025 pid=9377 client=12 replay done n=2814 taken=0 el=15.15934ms qlen=0
+1795610638058363 pid=9377 client=12 arm=incoming el=20.480016ms qlen_at_start=0
+1795610643891571 pid=5615 DROP seq=2823 full=false Backtrace []
+1795610643892113 pid=5615 DROP seq=2823 full=false Backtrace []
+1795610661077583 pid=12907 client=12 replay start n=2814 qlen=0
+1795610661085566 pid=12907 client=12 replay done n=2814 taken=0 el=7.985724ms qlen=0
+1795610661085743 pid=12907 client=12 arm=incoming el=11.96064ms qlen_at_start=0
+1795610684142631 pid=15729 client=13 replay start n=2814 qlen=0
+1795610684151188 pid=15729 client=13 replay done n=2814 taken=0 el=8.560307ms qlen=0
+1795610684151418 pid=15729 client=13 arm=incoming el=12.631987ms qlen_at_start=0
+1795610707197664 pid=18528 client=11 replay start n=2814 qlen=0
+1795610707224091 pid=18528 client=11 replay done n=2814 taken=0 el=26.430455ms qlen=0
+1795610707224332 pid=18528 client=11 arm=incoming el=30.623569ms qlen_at_start=0
+1795610730198029 pid=21294 client=12 replay start n=2814 qlen=0
+1795610730206411 pid=21294 client=12 replay done n=2814 taken=0 el=8.384834ms qlen=0
+1795610730206612 pid=21294 client=12 arm=incoming el=11.563214ms qlen_at_start=0
+1795610934410924 pid=26860 client=13 replay start n=2815 qlen=0
+1795610934415225 pid=26858 client=13 replay start n=2726 qlen=24
+1795610934419263 pid=26852 client=13 replay start n=2815 qlen=0
+1795610934431561 pid=26860 client=13 replay done n=2815 taken=0 el=20.639605ms qlen=0
+1795610934431775 pid=26858 client=13 replay done n=2726 taken=89 el=16.551579ms qlen=0
+1795610934432198 pid=26858 client=13 arm=incoming el=22.063752ms qlen_at_start=0
+1795610934432226 pid=26860 client=13 arm=incoming el=26.933391ms qlen_at_start=0
+1795610934433431 pid=26852 client=13 replay done n=2815 taken=0 el=14.170757ms qlen=0
+1795610934433740 pid=26852 client=13 arm=incoming el=20.494587ms qlen_at_start=0
+1795610935206995 pid=27453 client=13 replay start n=2705 qlen=109
+1795610935208933 pid=27433 client=14 replay start n=2462 qlen=0
+1795610935215353 pid=27417 client=14 replay start n=2736 qlen=0
+1795610935217483 pid=27453 client=13 replay done n=2705 taken=109 el=10.492157ms qlen=0
+1795610935217801 pid=27453 client=13 arm=incoming el=18.025162ms qlen_at_start=0
+1795610935228238 pid=27433 client=14 replay done n=2462 taken=352 el=19.308347ms qlen=0
+1795610935228741 pid=27433 client=14 arm=incoming el=24.167519ms qlen_at_start=0
+1795610935230155 pid=27417 client=14 replay done n=2736 taken=78 el=14.803546ms qlen=0
+1795610935230497 pid=27417 client=14 arm=incoming el=23.240978ms qlen_at_start=0
+1795610935975319 pid=27971 client=13 arm=incoming el=7.999005ms qlen_at_start=0
+1795610935982624 pid=27993 client=13 replay start n=2815 qlen=0
+1795610935985335 pid=27983 client=12 replay start n=2788 qlen=0
+1795610935988917 pid=27971 client=13 replay start n=2815 qlen=0
+1795610936001148 pid=27993 client=13 replay done n=2815 taken=0 el=18.528015ms qlen=0
+1795610936001502 pid=27993 client=13 arm=incoming el=23.44161ms qlen_at_start=0
+1795610936003965 pid=27983 client=12 replay done n=2788 taken=27 el=18.632803ms qlen=0
+1795610936004305 pid=27983 client=12 arm=incoming el=26.371958ms qlen_at_start=0
+1795610936006969 pid=27971 client=13 replay done n=2815 taken=0 el=18.052463ms qlen=0
+1795610936007408 pid=27971 client=13 arm=incoming el=25.996314ms qlen_at_start=0
+1795610936760632 pid=28494 client=12 replay start n=2814 qlen=0
+1795610936769280 pid=28494 client=12 replay done n=2814 taken=0 el=8.652375ms qlen=0
+1795610936769613 pid=28494 client=12 arm=incoming el=12.990615ms qlen_at_start=0
+1795610936863005 pid=28508 client=13 replay start n=2814 qlen=0
+1795610936865364 pid=28522 client=13 replay start n=2814 qlen=0
+1795610936873709 pid=28522 client=13 replay done n=2814 taken=0 el=8.347708ms qlen=0
+1795610936874058 pid=28522 client=13 arm=incoming el=12.750796ms qlen_at_start=0
+1795610936877376 pid=28508 client=13 replay done n=2814 taken=0 el=14.373361ms qlen=0
+1795610936877701 pid=28508 client=13 arm=incoming el=19.602438ms qlen_at_start=0
+1795610937592064 pid=29072 client=13 replay start n=2815 qlen=0
+1795610937600354 pid=29072 client=13 replay done n=2815 taken=0 el=8.293317ms qlen=0
+1795610937600637 pid=29072 client=13 arm=incoming el=12.597045ms qlen_at_start=0
+1795610937672317 pid=29141 client=13 replay start n=2815 qlen=0
+1795610937683942 pid=29141 client=13 replay done n=2815 taken=0 el=11.628371ms qlen=0
+1795610937684223 pid=29141 client=13 arm=incoming el=16.183887ms qlen_at_start=0
+1795610937692540 pid=29140 client=13 replay start n=2815 qlen=0
+1795610937700920 pid=29140 client=13 replay done n=2815 taken=0 el=8.383782ms qlen=0
+1795610937701230 pid=29140 client=13 arm=incoming el=12.955582ms qlen_at_start=0
+1795610938424635 pid=29600 client=13 replay start n=2814 qlen=0
+1795610938434099 pid=29600 client=13 replay done n=2814 taken=0 el=9.469481ms qlen=0
+1795610938434448 pid=29600 client=13 arm=incoming el=14.280792ms qlen_at_start=0
+1795610938539900 pid=29659 client=13 replay start n=2814 qlen=0
+1795610938545530 pid=29671 DROP seq=2322 full=true Backtrace []
+1795610938546559 pid=29671 client=13 replay start n=2065 qlen=256
+1795610938552266 pid=29659 client=13 replay done n=2814 taken=0 el=12.369383ms qlen=0
+1795610938552585 pid=29659 client=13 arm=incoming el=16.873482ms qlen_at_start=0
+1795610938557514 pid=29671 client=13 replay done n=2065 taken=256 el=10.956703ms qlen=0
+1795610938557831 pid=29671 client=13 arm=incoming el=17.867985ms qlen_at_start=0
+1795610938558160 pid=29671 client=13 subscription closed
+1795610938783718 pid=29600 DROP seq=2815 full=false Backtrace []
+1795610938784216 pid=29600 DROP seq=2815 full=false Backtrace []
+1795610938911955 pid=29659 DROP seq=2815 full=false Backtrace []
+1795610938912805 pid=29659 DROP seq=2815 full=false Backtrace []
+1795610939187805 pid=30173 client=11 replay start n=2815 qlen=0
+1795610939198301 pid=30173 client=11 replay done n=2815 taken=0 el=10.499517ms qlen=0
+1795610939198590 pid=30173 client=11 arm=incoming el=14.75239ms qlen_at_start=0
+1795610939315064 pid=29671 client=14 replay start n=493 qlen=0
+1795610939316696 pid=29671 client=14 replay done n=493 taken=0 el=1.631549ms qlen=0
+1795610939379910 pid=30311 client=13 replay start n=2815 qlen=0
+1795610939388448 pid=30311 client=13 replay done n=2815 taken=0 el=8.541718ms qlen=0
+1795610939388773 pid=30311 client=13 arm=incoming el=12.980209ms qlen_at_start=0
+1795610939986757 pid=30730 client=12 replay start n=2814 qlen=0
+1795610940000579 pid=30730 client=12 replay done n=2814 taken=0 el=13.824848ms qlen=0
+1795610940000946 pid=30730 client=12 arm=incoming el=17.695466ms qlen_at_start=0
+1795610940165900 pid=30823 client=13 replay start n=2814 qlen=0
+1795610940174630 pid=30823 client=13 replay done n=2814 taken=0 el=8.734588ms qlen=0
+1795610940174972 pid=30823 client=13 arm=incoming el=12.350795ms qlen_at_start=0
+1795610940238057 pid=30872 client=13 replay start n=2815 qlen=0
+1795610940246780 pid=30872 client=13 replay done n=2815 taken=0 el=8.727257ms qlen=0
+1795610940247118 pid=30872 client=13 arm=incoming el=13.593171ms qlen_at_start=0
+1795610940346278 pid=30730 DROP seq=2815 full=false Backtrace []
+1795610940346659 pid=30730 DROP seq=2815 full=false Backtrace []
+1795610940612754 pid=30872 DROP seq=2816 full=false Backtrace []
+1795610940613108 pid=30872 DROP seq=2816 full=false Backtrace []
+1795610940731067 pid=31241 client=13 replay start n=2815 qlen=0
+1795610940740665 pid=31241 client=13 replay done n=2815 taken=0 el=9.600548ms qlen=0
+1795610940741000 pid=31241 client=13 arm=incoming el=14.17264ms qlen_at_start=0
+1795610940941208 pid=31351 client=13 replay start n=2815 qlen=0
+1795610940949680 pid=31351 client=13 replay done n=2815 taken=0 el=8.473927ms qlen=0
+1795610940950089 pid=31351 client=13 arm=incoming el=12.686169ms qlen_at_start=0
+1795610941030470 pid=31419 client=13 replay start n=2814 qlen=0
+1795610941038983 pid=31419 client=13 replay done n=2814 taken=0 el=8.516461ms qlen=0
+1795610941039311 pid=31419 client=13 arm=incoming el=12.844636ms qlen_at_start=0
+1795610941521052 pid=31833 client=12 replay start n=2814 qlen=0
+1795610941530456 pid=31833 client=12 replay done n=2814 taken=0 el=9.407369ms qlen=0
+1795610941530802 pid=31833 client=12 arm=incoming el=14.183836ms qlen_at_start=0
+1795610941729011 pid=31942 client=13 replay start n=2609 qlen=0
+1795610941739578 pid=31942 client=13 replay done n=2609 taken=205 el=10.570454ms qlen=0
+1795610941739937 pid=31942 client=13 arm=incoming el=14.749386ms qlen_at_start=0
+1795610941808395 pid=32004 client=13 replay start n=2815 qlen=0
+1795610941818115 pid=32004 client=13 replay done n=2815 taken=0 el=9.722391ms qlen=0
+1795610941818437 pid=32004 client=13 arm=incoming el=13.723104ms qlen_at_start=0
+1795610942304869 pid=32392 client=13 replay start n=2815 qlen=0
+1795610942313403 pid=32392 client=13 replay done n=2815 taken=0 el=8.537112ms qlen=0
+1795610942313736 pid=32392 client=13 arm=incoming el=12.562163ms qlen_at_start=0
+1795610942506242 pid=32504 client=13 replay start n=2058 qlen=0
+1795610942517933 pid=32504 client=13 replay done n=2058 taken=757 el=11.69388ms qlen=0
+1795610942518223 pid=32504 client=13 arm=incoming el=15.281854ms qlen_at_start=0
+1795610942607854 pid=32569 client=13 replay start n=2814 qlen=0
+1795610942616341 pid=32569 client=13 replay done n=2814 taken=0 el=8.489871ms qlen=0
+1795610942616643 pid=32569 client=13 arm=incoming el=13.096214ms qlen_at_start=0
+1795610942972954 pid=32569 DROP seq=2815 full=false Backtrace []
+1795610942973357 pid=32569 DROP seq=2815 full=false Backtrace []
+1795610943076300 pid=462 client=13 replay start n=2814 qlen=0
+1795610943085190 pid=462 client=13 replay done n=2814 taken=0 el=8.893006ms qlen=0
+1795610943085475 pid=462 client=13 arm=incoming el=12.950605ms qlen_at_start=0
+1795610943280464 pid=580 client=13 replay start n=2814 qlen=0
+1795610943288686 pid=580 client=13 replay done n=2814 taken=0 el=8.224883ms qlen=0
+1795610943288984 pid=580 client=13 arm=incoming el=12.008281ms qlen_at_start=0
+1795610943363990 pid=654 client=13 replay start n=2815 qlen=0
+1795610943372550 pid=654 client=13 replay done n=2815 taken=0 el=8.563903ms qlen=0
+1795610943372859 pid=654 client=13 arm=incoming el=13.434892ms qlen_at_start=0
+1795610943847688 pid=1130 client=13 replay start n=2815 qlen=0
+1795610943859277 pid=1130 client=13 replay done n=2815 taken=0 el=11.593049ms qlen=0
+1795610943859756 pid=1130 client=13 arm=incoming el=16.117669ms qlen_at_start=0
+1795610944079549 pid=1241 client=13 replay start n=2815 qlen=0
+1795610944088283 pid=1241 client=13 replay done n=2815 taken=0 el=8.73582ms qlen=0
+1795610944088639 pid=1241 client=13 arm=incoming el=12.761481ms qlen_at_start=0
+1795610944160079 pid=1305 client=13 replay start n=2814 qlen=0
+1795610944175984 pid=1305 client=13 replay done n=2814 taken=0 el=15.908665ms qlen=0
+1795610944176325 pid=1305 client=13 arm=incoming el=20.161517ms qlen_at_start=0
+1795610944696921 pid=1707 client=13 replay start n=2150 qlen=0
+1795610944710959 pid=1707 client=13 replay done n=2150 taken=664 el=14.041843ms qlen=0
+1795610944711306 pid=1707 client=13 arm=incoming el=17.528005ms qlen_at_start=0
+1795610944826456 pid=1807 client=12 replay start n=2814 qlen=0
+1795610944835587 pid=1807 client=12 replay done n=2814 taken=0 el=9.134539ms qlen=0
+1795610944836766 pid=1807 client=12 arm=incoming el=13.623936ms qlen_at_start=0
+1795610944942303 pid=1894 client=13 replay start n=1766 qlen=0
+1795610944953988 pid=1894 client=13 replay done n=1766 taken=1049 el=11.690574ms qlen=0
+1795610944954105 pid=1894 client=13 arm=incoming el=13.882264ms qlen_at_start=0
+1795610945298726 pid=1894 DROP seq=2816 full=false Backtrace []
+1795610945298980 pid=1894 DROP seq=2816 full=false Backtrace []
+1795610945520416 pid=2255 client=13 replay start n=2514 qlen=1
+1795610945529586 pid=2255 client=13 replay done n=2514 taken=301 el=9.172465ms qlen=0
+1795610945529870 pid=2255 client=13 arm=incoming el=13.334001ms qlen_at_start=0
+1795610945644336 pid=2379 client=13 replay start n=2485 qlen=5
+1795610945653551 pid=2379 client=13 replay done n=2485 taken=330 el=9.218575ms qlen=0
+1795610945653857 pid=2379 client=13 arm=incoming el=12.956153ms qlen_at_start=0
+1795610945746034 pid=2451 DROP seq=2729 full=true Backtrace []
+1795610945746654 pid=2451 client=13 replay start n=2472 qlen=256
+1795610945763239 pid=2451 client=13 replay done n=2472 taken=256 el=16.606983ms qlen=0
+1795610945763623 pid=2451 client=13 arm=incoming el=22.665174ms qlen_at_start=0
+1795610945763814 pid=2451 client=13 subscription closed
+1795610946320841 pid=2865 client=13 replay start n=2814 qlen=0
+1795610946330324 pid=2865 client=13 replay done n=2814 taken=0 el=9.486607ms qlen=0
+1795610946330707 pid=2865 client=13 arm=incoming el=13.264747ms qlen_at_start=0
+1795610946427279 pid=2959 client=13 replay start n=2814 qlen=0
+1795610946436306 pid=2959 client=13 replay done n=2814 taken=0 el=9.030583ms qlen=0
+1795610946436669 pid=2959 client=13 arm=incoming el=13.325678ms qlen_at_start=0
+1795610946517617 pid=2451 client=14 replay start n=86 qlen=0
+1795610946517893 pid=2451 client=14 replay done n=86 taken=0 el=276.285µs qlen=0
+1795610946692778 pid=2865 DROP seq=2815 full=false Backtrace []
+1795610946693207 pid=2865 DROP seq=2815 full=false Backtrace []
+1795610947144233 pid=3405 client=13 replay start n=2815 qlen=0
+1795610947155115 pid=3405 client=13 replay done n=2815 taken=0 el=10.886368ms qlen=0
+1795610947155474 pid=3405 client=13 arm=incoming el=17.205892ms qlen_at_start=0
+1795610947246186 pid=3477 client=13 replay start n=2592 qlen=2
+1795610947258307 pid=3477 client=13 replay done n=2592 taken=223 el=12.125898ms qlen=0
+1795610947258695 pid=3477 client=13 arm=incoming el=16.95225ms qlen_at_start=0
+1795610947481660 pid=3625 client=13 replay start n=2815 qlen=0
+1795610947490068 pid=3625 client=13 replay done n=2815 taken=0 el=8.411834ms qlen=0
+1795610947490376 pid=3625 client=13 arm=incoming el=12.616404ms qlen_at_start=0
+1795610947985057 pid=3999 client=13 replay start n=2814 qlen=0
+1795610947995787 pid=3999 client=13 replay done n=2814 taken=0 el=10.73438ms qlen=0
+1795610947996150 pid=3999 client=13 arm=incoming el=16.174663ms qlen_at_start=0
+1795610948046675 pid=4052 client=13 replay start n=2792 qlen=0
+1795610948055037 pid=4052 client=13 replay done n=2792 taken=22 el=8.365074ms qlen=0
+1795610948055308 pid=4052 client=13 arm=incoming el=12.524947ms qlen_at_start=0
+1795610948289985 pid=4210 client=13 replay start n=2814 qlen=0
+1795610948298425 pid=4210 client=13 replay done n=2814 taken=0 el=8.443752ms qlen=0
+1795610948298779 pid=4210 client=13 arm=incoming el=12.588332ms qlen_at_start=0
+1795610948758444 pid=4540 client=13 replay start n=2815 qlen=0
+1795610948767936 pid=4540 client=13 replay done n=2815 taken=0 el=9.494749ms qlen=0
+1795610948768262 pid=4540 client=13 arm=incoming el=14.522364ms qlen_at_start=0
+1795610948823739 pid=4588 client=13 replay start n=2815 qlen=0
+1795610948833164 pid=4588 client=13 replay done n=2815 taken=0 el=9.42819ms qlen=0
+1795610948833446 pid=4588 client=13 arm=incoming el=13.562273ms qlen_at_start=0
+1795610949042685 pid=4741 client=13 replay start n=2815 qlen=0
+1795610949051113 pid=4741 client=13 replay done n=2815 taken=0 el=8.431414ms qlen=0
+1795610949051331 pid=4741 client=13 arm=incoming el=12.623745ms qlen_at_start=0
+1795610949529780 pid=5061 client=13 replay start n=2814 qlen=0
+1795610949537953 pid=5061 client=13 replay done n=2814 taken=0 el=8.176972ms qlen=0
+1795610949538136 pid=5061 client=13 arm=incoming el=11.513959ms qlen_at_start=0
+1795610949627493 pid=5120 client=13 replay start n=2814 qlen=0
+1795610949637797 pid=5120 client=13 replay done n=2814 taken=0 el=10.308481ms qlen=0
+1795610949638152 pid=5120 client=13 arm=incoming el=14.841033ms qlen_at_start=0
+1795610949824249 pid=5331 client=13 replay start n=2814 qlen=0
+1795610949832612 pid=5331 client=13 replay done n=2814 taken=0 el=8.366766ms qlen=0
+1795610949832900 pid=5331 client=13 arm=incoming el=12.711406ms qlen_at_start=0
+1795610950331191 pid=5677 DROP seq=2657 full=true Backtrace []
+1795610950332131 pid=5677 client=13 replay start n=2400 qlen=256
+1795610950342345 pid=5677 client=13 replay done n=2400 taken=256 el=10.215081ms qlen=0
+1795610950342745 pid=5677 client=13 arm=incoming el=16.313242ms qlen_at_start=0
+1795610950342843 pid=5677 client=13 subscription closed
+1795610950434232 pid=5739 client=13 replay start n=2815 qlen=0
+1795610950444142 pid=5739 client=13 replay done n=2815 taken=0 el=9.914029ms qlen=0
+1795610950444431 pid=5739 client=13 arm=incoming el=13.963965ms qlen_at_start=0
+1795610950618092 pid=5869 client=13 replay start n=2815 qlen=0
+1795610950626945 pid=5869 client=13 replay done n=2815 taken=0 el=8.855971ms qlen=0
+1795610950627291 pid=5869 client=13 arm=incoming el=13.410355ms qlen_at_start=0
+1795610951100819 pid=5677 client=14 replay start n=159 qlen=0
+1795610951101327 pid=5677 client=14 replay done n=159 taken=0 el=507.341µs qlen=0
+1795610951197524 pid=6328 client=13 replay start n=2814 qlen=0
+1795610951206761 pid=6328 client=13 replay done n=2814 taken=0 el=9.240698ms qlen=0
+1795610951207114 pid=6328 client=13 arm=incoming el=13.448754ms qlen_at_start=0
+1795610951381995 pid=6465 client=13 replay start n=2440 qlen=2
+1795610951394604 pid=6465 client=13 replay done n=2440 taken=374 el=12.614081ms qlen=0
+1795610951395196 pid=6465 client=13 arm=incoming el=16.832621ms qlen_at_start=0
+1795610951919344 pid=6902 client=13 replay start n=2815 qlen=0
+1795610951928489 pid=6902 client=13 replay done n=2815 taken=0 el=9.148319ms qlen=0
+1795610951928791 pid=6902 client=13 arm=incoming el=13.794211ms qlen_at_start=0
+1795610951978918 pid=6949 client=13 replay start n=2814 qlen=0
+1795610951991713 pid=6949 client=13 replay done n=2814 taken=0 el=12.796965ms qlen=0
+1795610951992082 pid=6949 client=13 arm=incoming el=16.956727ms qlen_at_start=0
+1795610952081610 pid=7061 client=12 replay start n=2815 qlen=0
+1795610952091039 pid=7061 client=12 replay done n=2815 taken=0 el=9.432035ms qlen=0
+1795610952091338 pid=7061 client=12 arm=incoming el=13.168753ms qlen_at_start=0
+1795610952697316 pid=7428 client=13 replay start n=1941 qlen=2
+1795610952698688 pid=7428 DROP seq=2200 full=true Backtrace []
+1795610952708599 pid=7428 client=13 replay done n=1941 taken=258 el=11.285957ms qlen=0
+1795610952708860 pid=7428 client=13 arm=incoming el=14.117578ms qlen_at_start=0
+1795610952709044 pid=7428 client=13 subscription closed
+1795610952740944 pid=7469 client=13 replay start n=2815 qlen=0
+1795610952749147 pid=7469 client=13 replay done n=2815 taken=0 el=8.204834ms qlen=0
+1795610952749453 pid=7469 client=13 arm=incoming el=12.256354ms qlen_at_start=0
+1795610952829153 pid=7552 client=13 replay start n=2814 qlen=0
+1795610952838428 pid=7552 client=13 replay done n=2814 taken=0 el=9.278605ms qlen=0
+1795610952838685 pid=7552 client=13 arm=incoming el=12.53352ms qlen_at_start=0
+1795610953466453 pid=7428 client=14 replay start n=615 qlen=0
+1795610953469440 pid=7428 client=14 replay done n=615 taken=0 el=2.986763ms qlen=0
+1795610953518847 pid=8064 client=13 replay start n=2814 qlen=0
+1795610953529072 pid=8064 client=13 replay done n=2814 taken=0 el=10.22788ms qlen=0
+1795610953529401 pid=8064 client=13 arm=incoming el=14.57906ms qlen_at_start=0
+1795610953572933 pid=8152 client=13 replay start n=2815 qlen=0
+1795610953582261 pid=8152 client=13 replay done n=2815 taken=0 el=9.330102ms qlen=0
+1795610953582602 pid=8152 client=13 arm=incoming el=13.835404ms qlen_at_start=0
+1795610953963842 pid=7428 DROP seq=2815 full=false Backtrace []
+1795610953963938 pid=7428 DROP seq=2815 full=false Backtrace []
+1795610954309532 pid=8645 client=14 replay start n=1950 qlen=3
+1795610954310888 pid=8645 DROP seq=2260 full=true Backtrace []
+1795610954320533 pid=8645 client=14 replay done n=1950 taken=309 el=11.002992ms qlen=0
+1795610954320783 pid=8645 client=14 arm=incoming el=13.494993ms qlen_at_start=0
+1795610954320861 pid=8645 client=14 subscription closed
+1795610954366597 pid=8701 client=13 replay start n=2814 qlen=0
+1795610954377343 pid=8701 client=13 replay done n=2814 taken=0 el=10.749753ms qlen=0
+1795610954377771 pid=8701 client=13 arm=incoming el=14.973772ms qlen_at_start=0
+1795610954402444 pid=8721 client=13 replay start n=2815 qlen=0
+1795610954411928 pid=8721 client=13 replay done n=2815 taken=0 el=9.486608ms qlen=0
+1795610954412252 pid=8721 client=13 arm=incoming el=13.062594ms qlen_at_start=0
+1795610955080038 pid=8645 client=15 replay start n=556 qlen=0
+1795610955081726 pid=8645 client=15 replay done n=556 taken=0 el=1.688815ms qlen=0
+1795610955265240 pid=9282 client=13 replay start n=2815 qlen=0
+1795610955274494 pid=9282 client=13 replay done n=2815 taken=0 el=9.256752ms qlen=0
+1795610955274843 pid=9282 client=13 arm=incoming el=14.812259ms qlen_at_start=0
+1795610955290683 pid=9321 client=13 replay start n=2814 qlen=0
+1795610955302257 pid=9321 client=13 replay done n=2814 taken=0 el=11.577555ms qlen=0
+1795610955302681 pid=9321 client=13 arm=incoming el=16.05945ms qlen_at_start=0
+1795610955631114 pid=9282 DROP seq=2816 full=false Backtrace []
+1795610955631417 pid=9282 DROP seq=2816 full=false Backtrace []
+1795610956055945 pid=9858 client=11 replay start n=2814 qlen=0
+1795610956065333 pid=9858 client=11 replay done n=2814 taken=0 el=9.390683ms qlen=0
+1795610956065657 pid=9858 client=11 arm=incoming el=13.964888ms qlen_at_start=0
+1795610956149067 pid=9880 client=13 replay start n=2814 qlen=0
+1795610956161002 pid=9880 client=13 replay done n=2814 taken=0 el=11.936874ms qlen=0
+1795610956161345 pid=9880 client=13 arm=incoming el=16.544489ms qlen_at_start=0
+1795610956215852 pid=9922 client=13 replay start n=2815 qlen=0
+1795610956224443 pid=9922 client=13 replay done n=2815 taken=0 el=8.593746ms qlen=0
+1795610956224712 pid=9922 client=13 arm=incoming el=12.996815ms qlen_at_start=0
+1795610956874399 pid=10368 client=13 replay start n=2815 qlen=0
+1795610956883527 pid=10368 client=13 replay done n=2815 taken=0 el=9.131033ms qlen=0
+1795610956883849 pid=10368 client=13 arm=incoming el=13.494181ms qlen_at_start=0
+1795610956951413 pid=10425 client=13 replay start n=2815 qlen=0
+1795610956959856 pid=10425 client=13 replay done n=2815 taken=0 el=8.446295ms qlen=0
+1795610956960160 pid=10425 client=13 arm=incoming el=12.738327ms qlen_at_start=0
+1795610958041572 pid=10473 client=13 replay start n=2814 qlen=0
+1795610958050915 pid=10473 client=13 replay done n=2814 taken=0 el=9.346236ms qlen=0
+1795610958051181 pid=10473 client=13 arm=incoming el=13.305328ms qlen_at_start=0
+1795610958478219 pid=11294 client=14 replay start n=2814 qlen=0
+1795610958488745 pid=11294 client=14 replay done n=2814 taken=0 el=10.530173ms qlen=0
+1795610958489345 pid=11294 client=14 arm=incoming el=15.038299ms qlen_at_start=0
+1795610958505032 pid=11295 client=14 replay start n=2814 qlen=0
+1795610958515386 pid=11295 client=14 replay done n=2814 taken=0 el=10.358235ms qlen=0
+1795610958515704 pid=11295 client=14 arm=incoming el=13.910927ms qlen_at_start=0
+1795610958803741 pid=11596 client=13 replay start n=2815 qlen=0
+1795610958812974 pid=11596 client=13 replay done n=2815 taken=0 el=9.23553ms qlen=0
+1795610958813306 pid=11596 client=13 arm=incoming el=13.183575ms qlen_at_start=0
+1795610959286144 pid=11857 client=14 replay start n=2815 qlen=0
+1795610959296770 pid=11857 client=14 replay done n=2815 taken=0 el=10.628962ms qlen=0
+1795610959297217 pid=11857 client=14 arm=incoming el=14.894683ms qlen_at_start=0
+1795610959299796 pid=11872 client=14 replay start n=2762 qlen=53
+1795610959309618 pid=11872 client=14 replay done n=2762 taken=53 el=9.823774ms qlen=0
+1795610959309934 pid=11872 client=14 arm=incoming el=14.337626ms qlen_at_start=0
+1795610959581853 pid=12078 client=14 replay start n=2814 qlen=0
+1795610959590519 pid=12078 client=14 replay done n=2814 taken=0 el=8.669491ms qlen=0
+1795610959590843 pid=12078 client=14 arm=incoming el=12.585137ms qlen_at_start=0
+1795610960049748 pid=12424 client=13 replay start n=2814 qlen=0
+1795610960060468 pid=12424 client=13 replay done n=2814 taken=0 el=10.723303ms qlen=0
+1795610960060819 pid=12424 client=13 arm=incoming el=15.42537ms qlen_at_start=0
+1795610960118721 pid=12446 client=14 replay start n=2814 qlen=0
+1795610960128710 pid=12446 client=14 replay done n=2814 taken=0 el=9.991695ms qlen=0
+1795610960129049 pid=12446 client=14 arm=incoming el=14.033011ms qlen_at_start=0
+1795610960351824 pid=12650 client=13 replay start n=2815 qlen=0
+1795610960361853 pid=12650 client=13 replay done n=2815 taken=0 el=10.032045ms qlen=0
+1795610960362200 pid=12650 client=13 arm=incoming el=14.473541ms qlen_at_start=0
+1795610960426829 pid=12424 DROP seq=2815 full=false Backtrace []
+1795610960427230 pid=12424 DROP seq=2815 full=false Backtrace []
+1795610960813027 pid=13039 client=13 replay start n=2815 qlen=0
+1795610960825416 pid=13039 client=13 replay done n=2815 taken=0 el=12.393059ms qlen=0
+1795610960826105 pid=13039 client=13 arm=incoming el=17.299842ms qlen_at_start=0
+1795610960893784 pid=13087 client=14 replay start n=2815 qlen=0
+1795610960902866 pid=13087 client=14 replay done n=2815 taken=0 el=9.084794ms qlen=0
+1795610960903244 pid=13087 client=14 arm=incoming el=13.218407ms qlen_at_start=0
+1795610961120366 pid=13260 client=13 replay start n=2814 qlen=0
+1795610961129871 pid=13260 client=13 replay done n=2814 taken=0 el=9.507157ms qlen=0
+1795610961130127 pid=13260 client=13 arm=incoming el=13.001352ms qlen_at_start=0
+1795610961255113 pid=13087 DROP seq=2816 full=false Backtrace []
+1795610961255461 pid=13087 DROP seq=2816 full=false Backtrace []
+1795610961596132 pid=13585 client=13 replay start n=2814 qlen=0
+1795610961605556 pid=13585 client=13 replay done n=2814 taken=0 el=9.427078ms qlen=0
+1795610961605903 pid=13585 client=13 arm=incoming el=13.52605ms qlen_at_start=0
+1795610961649707 pid=13634 client=13 replay start n=2228 qlen=9
+1795610961661712 pid=13634 client=13 replay done n=2228 taken=586 el=12.00759ms qlen=0
+1795610961662056 pid=13634 client=13 arm=incoming el=15.417708ms qlen_at_start=0
+1795610961884093 pid=13801 client=13 replay start n=2815 qlen=0
+1795610961896412 pid=13801 client=13 replay done n=2815 taken=0 el=12.335303ms qlen=0
+1795610961896773 pid=13801 client=13 arm=incoming el=16.993123ms qlen_at_start=0
+1795610962369941 pid=14106 client=13 replay start n=2815 qlen=0
+1795610962378831 pid=14106 client=13 replay done n=2815 taken=0 el=8.891734ms qlen=0
+1795610962379174 pid=14106 client=13 arm=incoming el=12.973039ms qlen_at_start=0
+1795610962446136 pid=14157 client=13 replay start n=2407 qlen=0
+1795610962456337 pid=14157 client=13 replay done n=2407 taken=408 el=10.204645ms qlen=0
+1795610962456676 pid=14157 client=13 arm=incoming el=14.416084ms qlen_at_start=0
+1795610962668740 pid=14374 client=13 replay start n=2814 qlen=0
+1795610962678374 pid=14374 client=13 replay done n=2814 taken=0 el=9.638124ms qlen=0
+1795610962678687 pid=14374 client=13 arm=incoming el=13.675063ms qlen_at_start=0
+1795610963172355 pid=14705 client=13 replay start n=2814 qlen=0
+1795610963184925 pid=14705 client=13 replay done n=2814 taken=0 el=12.572418ms qlen=0
+1795610963185277 pid=14705 client=13 arm=incoming el=17.179341ms qlen_at_start=0
+1795610963232511 pid=14755 client=13 replay start n=2814 qlen=0
+1795610963241134 pid=14755 client=13 replay done n=2814 taken=0 el=8.626356ms qlen=0
+1795610963241450 pid=14755 client=13 arm=incoming el=12.155062ms qlen_at_start=0
+1795610963440768 pid=14912 client=13 replay start n=2815 qlen=0
+1795610963449443 pid=14912 client=13 replay done n=2815 taken=0 el=8.677803ms qlen=0
+1795610963449745 pid=14912 client=13 arm=incoming el=12.992379ms qlen_at_start=0
+1795610963651428 pid=14755 DROP seq=2815 full=false Backtrace []
+1795610963651866 pid=14755 DROP seq=2815 full=false Backtrace []
+1795610963809516 pid=14912 DROP seq=2816 full=false Backtrace []
+1795610963809821 pid=14912 DROP seq=2816 full=false Backtrace []
+1795610964042607 pid=15245 client=13 replay start n=2815 qlen=0
+1795610964051098 pid=15245 client=13 replay done n=2815 taken=0 el=8.494799ms qlen=0
+1795610964051358 pid=15245 client=13 arm=incoming el=12.803704ms qlen_at_start=0
+1795610964121745 pid=15293 client=13 replay start n=2815 qlen=0
+1795610964130108 pid=15293 client=13 replay done n=2815 taken=0 el=8.366316ms qlen=0
+1795610964130379 pid=15293 client=13 arm=incoming el=12.821332ms qlen_at_start=0
+1795610964217005 pid=15373 client=13 replay start n=2814 qlen=0
+1795610964225741 pid=15373 client=13 replay done n=2814 taken=0 el=8.740377ms qlen=0
+1795610964226093 pid=15373 client=13 arm=incoming el=13.523095ms qlen_at_start=0
+1795610964588365 pid=15373 DROP seq=2815 full=false Backtrace []
+1795610964589107 pid=15373 DROP seq=2815 full=false Backtrace []
+1795610964923246 pid=15852 client=13 replay start n=2717 qlen=0
+1795610964933323 pid=15852 client=13 replay done n=2717 taken=97 el=10.080468ms qlen=0
+1795610964933654 pid=15852 client=13 arm=incoming el=14.329594ms qlen_at_start=0
+1795610965043392 pid=15892 client=13 replay start n=2105 qlen=0
+1795610965044955 pid=15892 DROP seq=2362 full=true Backtrace []
+1795610965054191 pid=15892 client=13 replay done n=2105 taken=256 el=10.80148ms qlen=0
+1795610965054475 pid=15892 client=13 arm=incoming el=16.463267ms qlen_at_start=0
+1795610965054665 pid=15892 client=13 subscription closed
+1795610965076540 pid=15936 client=13 replay start n=2815 qlen=0
+1795610965088361 pid=15936 client=13 replay done n=2815 taken=0 el=11.824746ms qlen=0
+1795610965088677 pid=15936 client=13 arm=incoming el=15.90545ms qlen_at_start=0
+1795610965729067 pid=16440 client=13 replay start n=2815 qlen=0
+1795610965737530 pid=16440 client=13 replay done n=2815 taken=0 el=8.466787ms qlen=0
+1795610965737852 pid=16440 client=13 arm=incoming el=12.739189ms qlen_at_start=0
+1795610965815508 pid=15892 client=14 replay start n=453 qlen=0
+1795610965816814 pid=15892 client=14 replay done n=453 taken=0 el=1.306109ms qlen=0
+1795610965853371 pid=16548 client=13 replay start n=2814 qlen=0
+1795610965861728 pid=16548 client=13 replay done n=2814 taken=0 el=8.360127ms qlen=0
+1795610965862038 pid=16548 client=13 arm=incoming el=12.438837ms qlen_at_start=0
+1795610966213087 pid=16548 DROP seq=2815 full=false Backtrace []
+1795610966213440 pid=16548 DROP seq=2815 full=false Backtrace []
+1795610966829199 pid=17037 client=12 replay start n=2815 qlen=0
+1795610966834905 pid=16969 client=13 replay start n=2814 qlen=0
+1795610966840575 pid=17172 client=13 replay start n=2815 qlen=0
+1795610966843119 pid=17037 client=12 replay done n=2815 taken=0 el=13.923826ms qlen=0
+1795610966843441 pid=17037 client=12 arm=incoming el=18.323448ms qlen_at_start=0
+1795610966852043 pid=17172 client=13 replay done n=2815 taken=0 el=11.471426ms qlen=0
+1795610966852192 pid=16969 client=13 replay done n=2814 taken=0 el=17.290439ms qlen=0
+1795610966852415 pid=17172 client=13 arm=incoming el=19.754657ms qlen_at_start=0
+1795610966852521 pid=16969 client=13 arm=incoming el=22.772586ms qlen_at_start=0
+1795610968269542 pid=17791 client=14 replay start n=2216 qlen=0
+1795610968272211 pid=17791 DROP seq=2473 full=true Backtrace []
+1795610968273151 pid=17803 client=14 replay start n=2815 qlen=0
+1795610968273822 pid=17779 client=14 replay start n=2814 qlen=0
+1795610968284126 pid=17779 client=14 replay done n=2814 taken=0 el=10.312727ms qlen=0
+1795610968284444 pid=17779 client=14 arm=incoming el=15.421824ms qlen_at_start=0
+1795610968289015 pid=17803 client=14 replay done n=2815 taken=0 el=15.866271ms qlen=0
+1795610968289343 pid=17803 client=14 arm=incoming el=21.228298ms qlen_at_start=0
+1795610968291010 pid=17791 client=14 replay done n=2216 taken=256 el=21.471153ms qlen=0
+1795610968291309 pid=17791 client=14 arm=incoming el=25.367581ms qlen_at_start=0
+1795610968291399 pid=17791 client=14 subscription closed
+1795610968645717 pid=17779 DROP seq=2815 full=false Backtrace []
+1795610968646158 pid=17779 DROP seq=2815 full=false Backtrace []
+1795610968649321 pid=17803 DROP seq=2816 full=false Backtrace []
+1795610968649688 pid=17803 DROP seq=2816 full=false Backtrace []
+1795610969047104 pid=17791 client=15 replay start n=342 qlen=0
+1795610969052305 pid=17791 client=15 replay done n=342 taken=0 el=5.201226ms qlen=0
+1795610969052332 pid=17791 client=15 arm=incoming el=5.966784ms qlen_at_start=0
+1795610969391305 pid=18786 client=13 replay start n=2814 qlen=0
+1795610969394512 pid=18772 client=13 replay start n=2815 qlen=0
+1795610969400447 pid=18786 client=13 replay done n=2814 taken=0 el=9.144253ms qlen=0
+1795610969400752 pid=18786 client=13 arm=incoming el=13.150475ms qlen_at_start=0
+1795610969408745 pid=18772 client=13 replay done n=2815 taken=0 el=14.237277ms qlen=0
+1795610969409112 pid=18772 client=13 arm=incoming el=19.352453ms qlen_at_start=0
+1795610969753967 pid=18786 DROP seq=2815 full=false Backtrace []
+1795610969754404 pid=18786 DROP seq=2815 full=false Backtrace []
+1795610969772068 pid=18772 DROP seq=2816 full=false Backtrace []
+1795610969772412 pid=18772 DROP seq=2816 full=false Backtrace []
+1795610969794521 pid=19195 client=13 replay start n=2482 qlen=0
+1795610969805064 pid=19195 client=13 replay done n=2482 taken=333 el=10.547158ms qlen=0
+1795610969805434 pid=19195 client=13 arm=incoming el=14.518569ms qlen_at_start=0
+1795610970214463 pid=19406 DROP seq=2567 full=true 1795610970214696 pid=19406 client=13 replay start n=2310 qlen=256
+Backtrace []
+1795610970227083 pid=19426 client=13 replay start n=2155 qlen=61
+1795610970229387 pid=19406 client=13 replay done n=2310 taken=256 el=14.694483ms qlen=0
+1795610970229732 pid=19406 client=13 arm=incoming el=20.702909ms qlen_at_start=0
+1795610970229868 pid=19406 client=13 subscription closed
+1795610970240240 pid=19426 client=13 replay done n=2155 taken=659 el=13.16082ms qlen=0
+1795610970240617 pid=19426 client=13 arm=incoming el=18.258712ms qlen_at_start=0
+1795610970603624 pid=19717 client=13 replay start n=2814 qlen=0
+1795610970612526 pid=19717 client=13 replay done n=2814 taken=0 el=8.905555ms qlen=0
+1795610970612891 pid=19717 client=13 arm=incoming el=13.782584ms qlen_at_start=0
+1795610970614140 pid=19426 DROP seq=2815 full=false Backtrace []
+1795610970614449 pid=19426 DROP seq=2815 full=false Backtrace []
+1795610970984025 pid=19406 client=14 replay start n=249 qlen=0
+1795610970984803 pid=19406 client=14 replay done n=249 taken=0 el=777.637µs qlen=0
+1795610970995714 pid=20101 client=13 replay start n=2446 qlen=2
+1795610971006186 pid=20101 client=13 replay done n=2446 taken=369 el=10.476182ms qlen=0
+1795610971006527 pid=20101 client=13 arm=incoming el=14.304357ms qlen_at_start=0
+1795610971369216 pid=20101 DROP seq=2816 full=false Backtrace []
+1795610971369485 pid=20101 DROP seq=2816 full=false Backtrace []
+1795610971389553 pid=20379 client=14 replay start n=2815 qlen=0
+1795610971398180 pid=20379 client=14 replay done n=2815 taken=0 el=8.62938ms qlen=0
+1795610971398510 pid=20379 client=14 arm=incoming el=12.89394ms qlen_at_start=0
+1795610971809896 pid=20609 client=14 replay start n=2508 qlen=4
+1795610971820707 pid=20609 client=14 replay done n=2508 taken=306 el=10.813608ms qlen=0
+1795610971821035 pid=20609 client=14 arm=incoming el=14.335684ms qlen_at_start=0
+1795610971873437 pid=20666 client=14 replay start n=2814 qlen=0
+1795610971885136 pid=20666 client=14 replay done n=2814 taken=0 el=11.701351ms qlen=0
+1795610971885456 pid=20666 client=14 arm=incoming el=18.483639ms qlen_at_start=0
+1795610972189632 pid=20609 DROP seq=2815 full=false Backtrace []
+1795610972189908 pid=20609 DROP seq=2815 full=false Backtrace []
+1795610972195184 pid=20917 client=13 replay start n=2746 qlen=6
+1795610972203547 pid=20917 client=13 replay done n=2746 taken=68 el=8.365665ms qlen=0
+1795610972203839 pid=20917 client=13 arm=incoming el=12.382182ms qlen_at_start=0
+1795610972236959 pid=20666 DROP seq=2815 full=false Backtrace []
+1795610972237224 pid=20666 DROP seq=2815 full=false Backtrace []
+1795610972531213 pid=21192 client=12 replay start n=2815 qlen=0
+1795610972542552 pid=21192 client=12 replay done n=2815 taken=0 el=11.342141ms qlen=0
+1795610972542875 pid=21192 client=12 arm=incoming el=15.807803ms qlen_at_start=0
+1795610972610498 pid=21244 client=12 replay start n=1704 qlen=62
+1795610972624045 pid=21244 client=12 replay done n=1704 taken=1111 el=13.549864ms qlen=0
+1795610972624439 pid=21244 client=12 arm=incoming el=17.407094ms qlen_at_start=0
+1795610972905441 pid=21192 DROP seq=2816 full=false Backtrace []
+1795610972905817 pid=21192 DROP seq=2816 full=false Backtrace []
+1795610972968260 pid=21567 client=13 replay start n=2815 qlen=0
+1795610972976972 pid=21567 client=13 replay done n=2815 taken=0 el=8.717583ms qlen=0
+1795610972977328 pid=21567 client=13 arm=incoming el=13.247921ms qlen_at_start=0
+1795610973324837 pid=21762 client=13 replay start n=2814 qlen=0
+1795610973333289 pid=21762 client=13 replay done n=2814 taken=0 el=8.45561ms qlen=0
+1795610973333592 pid=21762 client=13 arm=incoming el=12.462823ms qlen_at_start=0
+1795610973342254 pid=21567 DROP seq=2816 full=false Backtrace []
+1795610973342535 pid=21567 DROP seq=2816 full=false Backtrace []
+1795610973414057 pid=21825 client=13 replay start n=2814 qlen=0
+1795610973424787 pid=21825 client=13 replay done n=2814 taken=0 el=10.732227ms qlen=0
+1795610973425126 pid=21825 client=13 arm=incoming el=14.573442ms qlen_at_start=0
+1795610973952071 pid=22086 client=13 replay start n=2435 qlen=6
+1795610973961360 pid=22086 client=13 replay done n=2435 taken=379 el=9.291905ms qlen=0
+1795610973961696 pid=22086 client=13 arm=incoming el=12.902012ms qlen_at_start=0
+1795610974063589 pid=22285 client=13 replay start n=2418 qlen=2
+1795610974072587 pid=22285 client=13 replay done n=2418 taken=397 el=9.001379ms qlen=0
+1795610974072919 pid=22285 client=13 arm=incoming el=12.504416ms qlen_at_start=0
+1795610974304953 pid=22351 client=13 replay start n=2536 qlen=3
+1795610974314097 pid=22351 client=13 replay done n=2536 taken=279 el=9.147698ms qlen=0
+1795610974314425 pid=22351 client=13 arm=incoming el=13.04693ms qlen_at_start=0
+1795610974964473 pid=22727 client=14 replay start n=2815 qlen=0
+1795610974968017 pid=22799 client=12 replay start n=2814 qlen=0
+1795610974974960 pid=22727 client=14 replay done n=2815 taken=0 el=10.491215ms qlen=0
+1795610974975276 pid=22727 client=14 arm=incoming el=16.505971ms qlen_at_start=0
+1795610974976446 pid=22799 client=12 replay done n=2814 taken=0 el=8.431264ms qlen=0
+1795610974976716 pid=22799 client=12 arm=incoming el=13.122884ms qlen_at_start=0
+1795610975321668 pid=23048 client=13 replay start n=2814 qlen=0
+1795610975332200 pid=23048 client=13 replay done n=2814 taken=0 el=10.534489ms qlen=0
+1795610975332513 pid=23048 client=13 arm=incoming el=14.131227ms qlen_at_start=0
+1795610975775551 pid=23478 client=13 replay start n=2600 qlen=1
+1795610975787218 pid=23478 client=13 replay done n=2600 taken=214 el=11.669894ms qlen=0
+1795610975787531 pid=23478 client=13 arm=incoming el=15.365259ms qlen_at_start=0
+1795610975807142 pid=23492 client=13 replay start n=2806 qlen=3
+1795610975818145 pid=23492 client=13 replay done n=2806 taken=9 el=11.005727ms qlen=0
+1795610975818454 pid=23492 client=13 arm=incoming el=15.190918ms qlen_at_start=0
+1795610976153486 pid=23734 client=14 replay start n=2815 qlen=0
+1795610976158271 pid=23478 DROP seq=2815 full=false Backtrace []
+1795610976158559 pid=23478 DROP seq=2815 full=false Backtrace []
+1795610976162324 pid=23734 client=14 replay done n=2815 taken=0 el=8.839977ms qlen=0
+1795610976162607 pid=23734 client=14 arm=incoming el=13.288212ms qlen_at_start=0
+1795610976674601 pid=24035 client=13 replay start n=2815 qlen=0
+1795610976686323 pid=24035 client=13 replay done n=2815 taken=0 el=11.725908ms qlen=0
+1795610976686692 pid=24035 client=13 arm=incoming el=16.2986ms qlen_at_start=0
+1795610976726610 pid=24053 client=13 replay start n=2814 qlen=0
+1795610976738671 pid=24053 client=13 replay done n=2814 taken=0 el=12.064676ms qlen=0
+1795610976739051 pid=24053 client=13 arm=incoming el=19.242539ms qlen_at_start=0
+1795610976987445 pid=24234 client=13 replay start n=2814 qlen=0
+1795610976998475 pid=24234 client=13 replay done n=2814 taken=0 el=11.033508ms qlen=0
+1795610976998875 pid=24234 client=13 arm=incoming el=14.909415ms qlen_at_start=0
+1795610977535299 pid=24646 client=13 replay start n=2814 qlen=0
+1795610977546675 pid=24646 client=13 replay done n=2814 taken=0 el=11.378666ms qlen=0
+1795610977547052 pid=24646 client=13 arm=incoming el=15.719471ms qlen_at_start=0
+1795610977563341 pid=24686 client=13 replay start n=2815 qlen=0
+1795610977575572 pid=24686 client=13 replay done n=2815 taken=0 el=12.234191ms qlen=0
+1795610977575923 pid=24686 client=13 arm=incoming el=17.056097ms qlen_at_start=0
+1795610977833678 pid=24855 client=13 replay start n=2815 qlen=0
+1795610977842446 pid=24855 client=13 replay done n=2815 taken=0 el=8.771734ms qlen=0
+1795610977842787 pid=24855 client=13 arm=incoming el=13.367662ms qlen_at_start=0
+1795610977909844 pid=24646 DROP seq=2815 full=false Backtrace []
+1795610977910215 pid=24646 DROP seq=2815 full=false Backtrace []
+1795610978409296 pid=25205 client=14 replay start n=2040 qlen=0
+1795610978410423 pid=25205 DROP seq=2297 full=true Backtrace []
+1795610978414138 pid=25220 client=14 replay start n=2814 qlen=0
+1795610978422833 pid=25205 client=14 replay done n=2040 taken=256 el=13.53956ms qlen=0
+1795610978423121 pid=25205 client=14 arm=incoming el=15.831479ms qlen_at_start=0
+1795610978423297 pid=25205 client=14 subscription closed
+1795610978433090 pid=25220 client=14 replay done n=2814 taken=0 el=18.955467ms qlen=0
+1795610978433447 pid=25220 client=14 arm=incoming el=23.552557ms qlen_at_start=0
+1795610978630494 pid=25384 client=13 replay start n=2299 qlen=1
+1795610978640748 pid=25384 client=13 replay done n=2299 taken=515 el=10.257573ms qlen=0
+1795610978640961 pid=25384 client=13 arm=incoming el=13.95355ms qlen_at_start=0
+1795610978797327 pid=25220 DROP seq=2815 full=false Backtrace []
+1795610978797632 pid=25220 DROP seq=2815 full=false Backtrace []
+1795610979177658 pid=25205 client=15 replay start n=519 qlen=0
+1795610979179166 pid=25205 client=15 replay done n=519 taken=0 el=1.507331ms qlen=0
+1795610979272253 pid=25910 client=13 replay start n=2054 qlen=2
+1795610979282680 pid=25910 client=13 replay done n=2054 taken=761 el=10.430013ms qlen=0
+1795610979283005 pid=25910 client=13 arm=incoming el=13.721352ms qlen_at_start=0
+1795610979405485 pid=26047 client=13 replay start n=2815 qlen=0
+1795610979413939 pid=26047 client=13 replay done n=2815 taken=0 el=8.457312ms qlen=0
+1795610979414256 pid=26047 client=13 arm=incoming el=12.475112ms qlen_at_start=0
+1795610980073207 pid=26446 DROP seq=2672 full=true Backtrace []
+1795610980074191 pid=26446 client=14 replay start n=2415 qlen=256
+1795610980084581 pid=26446 client=14 replay done n=2415 taken=256 el=10.390874ms qlen=0
+1795610980084874 pid=26446 client=14 arm=incoming el=15.501673ms qlen_at_start=0
+1795610980084978 pid=26446 client=14 subscription closed
+1795610980125487 pid=26459 client=14 replay start n=2814 qlen=0
+1795610980136163 pid=26459 client=14 replay done n=2814 taken=0 el=10.679167ms qlen=0
+1795610980136522 pid=26459 client=14 arm=incoming el=14.830486ms qlen_at_start=0
+1795610980189790 pid=26539 client=13 replay start n=2814 qlen=0
+1795610980198482 pid=26539 client=13 replay done n=2814 taken=0 el=8.694869ms qlen=0
+1795610980198816 pid=26539 client=13 arm=incoming el=12.843395ms qlen_at_start=0
+1795610980842569 pid=26446 client=15 replay start n=143 qlen=0
+1795610980843387 pid=26446 client=15 replay done n=143 taken=0 el=818.078µs qlen=0
+1795610981099231 pid=27159 client=13 replay start n=2568 qlen=6
+1795610981110157 pid=27159 client=13 replay done n=2568 taken=247 el=10.929653ms qlen=0
+1795610981110464 pid=27159 client=13 arm=incoming el=15.021292ms qlen_at_start=0
+1795610981158984 pid=27103 client=14 replay start n=2815 qlen=0
+1795610981168098 pid=27103 client=14 replay done n=2815 taken=0 el=9.118164ms qlen=0
+1795610981168404 pid=27103 client=14 arm=incoming el=13.568403ms qlen_at_start=0
+1795610981323469 pid=26446 DROP seq=2815 full=false Backtrace []
+1795610981323641 pid=26446 DROP seq=2815 full=false Backtrace []
+1795610981469415 pid=27159 DROP seq=2816 full=false Backtrace []
+1795610981469805 pid=27159 DROP seq=2816 full=false Backtrace []
+1795610981818860 pid=27685 client=8 replay start n=2815 qlen=0
+1795610981828015 pid=27685 client=8 replay done n=2815 taken=0 el=9.157142ms qlen=0
+1795610981828680 pid=27685 client=8 arm=incoming el=13.431928ms qlen_at_start=0
+1795610982194176 pid=27685 DROP seq=2816 full=false Backtrace []
+1795610982194447 pid=27685 DROP seq=2816 full=false Backtrace []
+1795610982203558 pid=27777 client=14 replay start n=2749 qlen=0
+1795610982214942 pid=27777 client=14 replay done n=2749 taken=65 el=11.38734ms qlen=0
+1795610982215275 pid=27777 client=14 arm=incoming el=14.965309ms qlen_at_start=0
+1795610982310200 pid=27820 client=14 replay start n=2701 qlen=1
+1795610982318981 pid=27820 client=14 replay done n=2701 taken=113 el=8.784303ms qlen=0
+1795610982319262 pid=27820 client=14 arm=incoming el=12.76024ms qlen_at_start=0
+1795610982715989 pid=28163 client=13 replay start n=2312 qlen=0
+1795610982726437 pid=28163 client=13 replay done n=2312 taken=502 el=10.451475ms qlen=0
+1795610982726774 pid=28163 client=13 arm=incoming el=14.31273ms qlen_at_start=0
+1795610982978348 pid=28362 client=13 replay start n=2815 qlen=0
+1795610982987581 pid=28362 client=13 replay done n=2815 taken=0 el=9.237072ms qlen=0
+1795610982987932 pid=28362 client=13 arm=incoming el=13.771668ms qlen_at_start=0
+1795610983090528 pid=28470 client=13 replay start n=2815 qlen=0
+1795610983098661 pid=28470 client=13 replay done n=2815 taken=0 el=8.13547ms qlen=0
+1795610983098898 pid=28470 client=13 arm=incoming el=12.223774ms qlen_at_start=0
+1795610983496153 pid=28833 client=13 replay start n=2815 qlen=0
+1795610983504594 pid=28833 client=13 replay done n=2815 taken=0 el=8.444704ms qlen=0
+1795610983504877 pid=28833 client=13 arm=incoming el=12.80711ms qlen_at_start=0
+1795610983756265 pid=28986 client=13 replay start n=2814 qlen=0
+1795610983764858 pid=28986 client=13 replay done n=2814 taken=0 el=8.595189ms qlen=0
+1795610983765184 pid=28986 client=13 arm=incoming el=13.2341ms qlen_at_start=0
+1795610983871338 pid=28833 DROP seq=2816 full=false Backtrace []
+1795610983871894 pid=28833 DROP seq=2816 full=false Backtrace []
+1795610983882459 pid=29087 client=14 replay start n=2814 qlen=0
+1795610983891479 pid=29087 client=14 replay done n=2814 taken=0 el=9.037503ms qlen=0
+1795610983891727 pid=29087 client=14 arm=incoming el=13.409534ms qlen_at_start=0
+1795610984285957 pid=29390 client=14 replay start n=2758 qlen=1
+1795610984294416 pid=29390 client=14 replay done n=2758 taken=56 el=8.461127ms qlen=0
+1795610984302708 pid=29390 client=14 arm=incoming el=19.633255ms qlen_at_start=0
+1795610984470483 pid=29525 client=12 replay start n=2815 qlen=0
+1795610984478745 pid=29525 client=12 replay done n=2815 taken=0 el=8.264262ms qlen=0
+1795610984479018 pid=29525 client=12 arm=incoming el=12.388121ms qlen_at_start=0
+1795610984641171 pid=29656 client=13 replay start n=2616 qlen=9
+1795610984650158 pid=29390 DROP seq=2815 full=false Backtrace []
+1795610984650473 pid=29390 DROP seq=2815 full=false Backtrace []
+1795610984652813 pid=29656 client=13 replay done n=2616 taken=199 el=11.644515ms qlen=0
+1795610984653148 pid=29656 client=13 arm=incoming el=16.19198ms qlen_at_start=0
+1795610985030819 pid=29943 client=12 replay start n=2770 qlen=4
+1795610985038971 pid=29943 client=12 replay done n=2770 taken=45 el=8.15557ms qlen=0
+1795610985039179 pid=29943 client=12 arm=incoming el=11.719679ms qlen_at_start=0
+1795610985275388 pid=30060 client=14 replay start n=2814 qlen=0
+1795610985284891 pid=30060 client=14 replay done n=2814 taken=0 el=9.505605ms qlen=0
+1795610985285175 pid=30060 client=14 arm=incoming el=12.522834ms qlen_at_start=0
+1795610985396222 pid=30274 client=13 replay start n=2050 qlen=0
+1795610985406252 pid=30274 client=13 replay done n=2050 taken=764 el=10.032506ms qlen=0
+1795610985406538 pid=30274 client=13 arm=incoming el=17.087965ms qlen_at_start=0
+1795610985650231 pid=30060 DROP seq=2815 full=false Backtrace []
+1795610985650566 pid=30060 DROP seq=2815 full=false Backtrace []
+1795610985768018 pid=30274 DROP seq=2815 full=false Backtrace []
+1795610985768461 pid=30274 DROP seq=2815 full=false Backtrace []
+1795610985791744 pid=30564 client=13 replay start n=2814 qlen=0
+1795610985800456 pid=30564 client=13 replay done n=2814 taken=0 el=8.716371ms qlen=0
+1795610985800761 pid=30564 client=13 arm=incoming el=13.018718ms qlen_at_start=0
+1795610986046903 pid=30698 client=13 replay start n=2815 qlen=0
+1795610986060564 pid=30698 client=13 replay done n=2815 taken=0 el=13.664176ms qlen=0
+1795610986060878 pid=30698 client=13 arm=incoming el=17.653793ms qlen_at_start=0
+1795610986168163 pid=30809 client=14 replay start n=2815 qlen=0
+1795610986176638 pid=30809 client=14 replay done n=2815 taken=0 el=8.478935ms qlen=0
+1795610986176894 pid=30809 client=14 arm=incoming el=12.645398ms qlen_at_start=0
+1795610986524716 pid=31103 client=13 replay start n=2815 qlen=0
+1795610986534125 pid=31103 client=13 replay done n=2815 taken=0 el=9.410753ms qlen=0
+1795610986534427 pid=31103 client=13 arm=incoming el=13.501974ms qlen_at_start=0
+1795610986835874 pid=31246 client=14 replay start n=2814 qlen=0
+1795610986845013 pid=31246 client=14 replay done n=2814 taken=0 el=9.142771ms qlen=0
+1795610986845319 pid=31246 client=14 arm=incoming el=13.129865ms qlen_at_start=0
+1795610986938106 pid=31367 client=13 replay start n=2814 qlen=0
+1795610986948996 pid=31367 client=13 replay done n=2814 taken=0 el=10.892737ms qlen=0
+1795610986949333 pid=31367 client=13 arm=incoming el=14.954623ms qlen_at_start=0
+1795610987274179 pid=31634 client=12 replay start n=2814 qlen=0
+1795610987283486 pid=31634 client=12 replay done n=2814 taken=0 el=9.309702ms qlen=0
+1795610987283702 pid=31634 client=12 arm=incoming el=13.286299ms qlen_at_start=0
+1795610987637274 pid=31897 client=13 replay start n=2815 qlen=0
+1795610987647613 pid=31897 client=13 replay done n=2815 taken=0 el=10.3412ms qlen=0
+1795610987647939 pid=31897 client=13 arm=incoming el=14.752389ms qlen_at_start=0
+1795610987722030 pid=31975 client=13 replay start n=2815 qlen=0
+1795610987731202 pid=31975 client=13 replay done n=2815 taken=0 el=9.174638ms qlen=0
+1795610987731546 pid=31975 client=13 arm=incoming el=13.596845ms qlen_at_start=0
+1795610988016404 pid=32221 client=12 replay start n=2815 qlen=0
+1795610988029734 pid=32221 client=12 replay done n=2815 taken=0 el=13.333641ms qlen=0
+1795610988030112 pid=32221 client=12 arm=incoming el=17.696658ms qlen_at_start=0
+1795610988419103 pid=32461 client=12 replay start n=2814 qlen=0
+1795610988429639 pid=32461 client=12 replay done n=2814 taken=0 el=10.539477ms qlen=0
+1795610988429964 pid=32461 client=12 arm=incoming el=14.59267ms qlen_at_start=0
+1795610988502105 pid=32508 client=13 replay start n=2814 qlen=0
+1795610988510519 pid=32508 client=13 replay done n=2814 taken=0 el=8.417463ms qlen=0
+1795610988510789 pid=32508 client=13 arm=incoming el=12.708752ms qlen_at_start=0
+1795610988795447 pid=32461 DROP seq=2815 full=false Backtrace []
+1795610988795704 pid=32461 DROP seq=2815 full=false Backtrace []
+1795610988813997 pid=32731 client=14 replay start n=2641 qlen=1
+1795610988823459 pid=32731 client=14 replay done n=2641 taken=173 el=9.464864ms qlen=0
+1795610988823824 pid=32731 client=14 arm=incoming el=13.382753ms qlen_at_start=0
+1795610988866987 pid=32508 DROP seq=2815 full=false Backtrace []
+1795610988867852 pid=32508 DROP seq=2815 full=false Backtrace []
+1795610989191344 pid=540 client=14 replay start n=2755 qlen=60
+1795610989199785 pid=540 client=14 replay done n=2755 taken=60 el=8.444233ms qlen=0
+1795610989200098 pid=540 client=14 arm=incoming el=12.584276ms qlen_at_start=0
+1795610989278482 pid=596 client=14 replay start n=2815 qlen=0
+1795610989288214 pid=596 client=14 replay done n=2815 taken=0 el=9.734378ms qlen=0
+1795610989288545 pid=596 client=14 arm=incoming el=13.712249ms qlen_at_start=0
+1795610989561558 pid=932 client=13 replay start n=2214 qlen=39
+1795610989563489 pid=540 DROP seq=2816 full=false Backtrace []
+1795610989563811 pid=540 DROP seq=2816 full=false Backtrace []
+1795610989571638 pid=932 client=13 replay done n=2214 taken=601 el=10.082221ms qlen=0
+1795610989571946 pid=932 client=13 arm=incoming el=13.774141ms qlen_at_start=0
+1795610989646923 pid=596 DROP seq=2816 full=false Backtrace []
+1795610989647256 pid=596 DROP seq=2816 full=false Backtrace []
+1795610989981144 pid=1220 client=13 replay start n=2814 qlen=0
+1795610989989325 pid=1220 client=13 replay done n=2814 taken=0 el=8.18291ms qlen=0
+1795610989989637 pid=1220 client=13 arm=incoming el=12.076032ms qlen_at_start=0
+1795610990070985 pid=1280 client=14 replay start n=2814 qlen=0
+1795610990081094 pid=1280 client=14 replay done n=2814 taken=0 el=10.111424ms qlen=0
+1795610990081416 pid=1280 client=14 arm=incoming el=13.630475ms qlen_at_start=0
+1795610990356155 pid=1220 DROP seq=2815 full=false Backtrace []
+1795610990356452 pid=1220 DROP seq=2815 full=false Backtrace []
+1795610990384993 pid=1493 client=14 replay start n=2814 qlen=0
+1795610990395333 pid=1493 client=14 replay done n=2814 taken=0 el=10.343352ms qlen=0
+1795610990395673 pid=1493 client=14 arm=incoming el=14.892801ms qlen_at_start=0
+1795610990770860 pid=1827 client=14 replay start n=2815 qlen=0
+1795610990779611 pid=1827 client=14 replay done n=2815 taken=0 el=8.753727ms qlen=0
+1795610990779989 pid=1827 client=14 arm=incoming el=15.87855ms qlen_at_start=0
+1795610990782637 pid=1889 client=12 replay start n=2815 qlen=0
+1795610990793639 pid=1889 client=12 replay done n=2815 taken=0 el=11.005456ms qlen=0
+1795610990793962 pid=1889 client=12 arm=incoming el=15.479661ms qlen_at_start=0
+1795610991150932 pid=1889 DROP seq=2816 full=false 1795610991151025 pid=1827 DROP seq=2816 full=false Backtrace []
+1795610991152842 pid=1889 DROP seq=2816 full=false Backtrace []
+Backtrace []
+1795610991155713 pid=1827 DROP seq=2816 full=false Backtrace []
+1795610991157726 pid=2157 client=13 replay start n=2286 qlen=5
+1795610991159335 pid=2157 DROP seq=2570 full=true Backtrace []
+1795610991167392 pid=2157 client=13 replay done n=2286 taken=283 el=9.668981ms qlen=0
+1795610991167640 pid=2157 client=13 arm=incoming el=17.913423ms qlen_at_start=0
+1795610991167729 pid=2157 client=13 subscription closed
+1795610991542946 pid=2455 client=12 replay start n=2814 qlen=0
+1795610991560321 pid=2455 client=12 replay done n=2814 taken=0 el=17.379011ms qlen=0
+1795610991560751 pid=2455 client=12 arm=incoming el=23.99467ms qlen_at_start=0
+1795610991574544 pid=2454 client=13 replay start n=2814 qlen=0
+1795610991583870 pid=2454 client=13 replay done n=2814 taken=0 el=9.329671ms qlen=0
+1795610991584175 pid=2454 client=13 arm=incoming el=12.635022ms qlen_at_start=0
+1795610991925699 pid=2455 DROP seq=2815 full=false Backtrace []
+1795610991926058 pid=2455 DROP seq=2815 full=false Backtrace []
+1795610991926116 pid=2157 client=14 replay start n=246 qlen=0
+1795610991927372 pid=2157 client=14 replay done n=246 taken=0 el=1.256185ms qlen=0
+1795610992310439 pid=3025 client=13 replay start n=2546 qlen=4
+1795610992323650 pid=3025 client=13 replay done n=2546 taken=269 el=13.21352ms qlen=0
+1795610992324175 pid=3025 client=13 arm=incoming el=17.51173ms qlen_at_start=0
+1795610992350083 pid=3048 client=13 replay start n=2815 qlen=0
+1795610992361431 pid=3048 client=13 replay done n=2815 taken=0 el=11.351066ms qlen=0
+1795610992361808 pid=3048 client=13 arm=incoming el=16.514614ms qlen_at_start=0
+1795610992838895 pid=3379 client=12 replay start n=2814 qlen=0
+1795610992847683 pid=3379 client=12 replay done n=2814 taken=0 el=8.790552ms qlen=0
+1795610992848052 pid=3379 client=12 arm=incoming el=12.999398ms qlen_at_start=0
+1795610993107244 pid=3505 client=13 replay start n=2814 qlen=0
+1795610993118404 pid=3505 client=13 replay done n=2814 taken=0 el=11.163834ms qlen=0
+1795610993118697 pid=3505 client=13 arm=incoming el=15.39268ms qlen_at_start=0
+1795610993135363 pid=3564 client=13 replay start n=2814 qlen=0
+1795610993144697 pid=3564 client=13 replay done n=2814 taken=0 el=9.337213ms qlen=0
+1795610993144973 pid=3564 client=13 arm=incoming el=12.581982ms qlen_at_start=0
+1795610993578990 pid=3989 client=13 replay start n=2040 qlen=0
+1795610993583855 pid=3989 DROP seq=2766 full=true Backtrace []
+1795610993599515 pid=3989 client=13 replay done n=2040 taken=725 el=20.528287ms qlen=0
+1795610993599861 pid=3989 client=13 arm=incoming el=22.929943ms qlen_at_start=0
+1795610993599930 pid=3989 client=13 subscription closed
+1795610993890610 pid=4159 client=14 replay start n=2815 qlen=0
+1795610993901497 pid=4159 client=14 replay done n=2815 taken=0 el=10.889933ms qlen=0
+1795610993901867 pid=4159 client=14 arm=incoming el=15.217427ms qlen_at_start=0
+1795610993922803 pid=4195 client=14 replay start n=2815 qlen=0
+1795610993933771 pid=4195 client=14 replay done n=2815 taken=0 el=10.972035ms qlen=0
+1795610993934125 pid=4195 client=14 arm=incoming el=16.513953ms qlen_at_start=0
+1795610994283652 pid=4195 DROP seq=2816 full=false Backtrace []
+1795610994283944 pid=4195 DROP seq=2816 full=false Backtrace []
+1795610994352928 pid=3989 client=14 replay start n=50 qlen=0
+1795610994353089 pid=3989 client=14 replay done n=50 taken=0 el=160.832µs qlen=0
+1795610994668807 pid=4776 client=13 replay start n=2814 qlen=0
+1795610994683417 pid=4776 client=13 replay done n=2814 taken=0 el=14.61257ms qlen=0
+1795610994683822 pid=4776 client=13 arm=incoming el=18.527064ms qlen_at_start=0
+1795610994721253 pid=4800 client=14 replay start n=2814 qlen=0
+1795610994729462 pid=4800 client=14 replay done n=2814 taken=0 el=8.211844ms qlen=0
+1795610994729725 pid=4800 client=14 arm=incoming el=12.42007ms qlen_at_start=0
+1795610995231306 pid=5187 client=13 replay start n=2814 qlen=0
+1795610995239566 pid=5187 client=13 replay done n=2814 taken=0 el=8.26283ms qlen=0
+1795610995239883 pid=5187 client=13 arm=incoming el=12.666549ms qlen_at_start=0
+1795610995448161 pid=5301 client=13 replay start n=2815 qlen=0
+1795610995459402 pid=5301 client=13 replay done n=2815 taken=0 el=11.245226ms qlen=0
+1795610995459889 pid=5301 client=13 arm=incoming el=16.071159ms qlen_at_start=0
+1795610995477760 pid=5345 client=13 replay start n=2815 qlen=0
+1795610995487609 pid=5345 client=13 replay done n=2815 taken=0 el=9.852085ms qlen=0
+1795610995487864 pid=5345 client=13 arm=incoming el=14.111839ms qlen_at_start=0
+1795610995602387 pid=5187 DROP seq=2815 full=false Backtrace []
+1795610995602683 pid=5187 DROP seq=2815 full=false Backtrace []
+1795610995982312 pid=5806 client=13 replay start n=2815 qlen=0
+1795610995990890 pid=5806 client=13 replay done n=2815 taken=0 el=8.58171ms qlen=0
+1795610995991209 pid=5806 client=13 arm=incoming el=12.838728ms qlen_at_start=0
+1795610996229011 pid=5935 client=13 replay start n=2814 qlen=0
+1795610996240321 pid=5935 client=13 replay done n=2814 taken=0 el=11.313999ms qlen=0
+1795610996240630 pid=5935 client=13 arm=incoming el=16.399682ms qlen_at_start=0
+1795610996255371 pid=5948 client=14 replay start n=2814 qlen=0
+1795610996265060 pid=5948 client=14 replay done n=2814 taken=0 el=9.692666ms qlen=0
+1795610996265374 pid=5948 client=14 arm=incoming el=14.553271ms qlen_at_start=0
+1795610996631127 pid=5948 DROP seq=2815 full=false Backtrace []
+1795610996631472 pid=5948 DROP seq=2815 full=false Backtrace []
+1795610996762906 pid=6349 client=13 replay start n=2814 qlen=0
+1795610996771513 pid=6349 client=13 replay done n=2814 taken=0 el=8.60987ms qlen=0
+1795610996771839 pid=6349 client=13 arm=incoming el=12.701872ms qlen_at_start=0
+1795610997071571 pid=6497 client=13 replay start n=2815 qlen=0
+1795610997081093 pid=6497 client=13 replay done n=2815 taken=0 el=9.524604ms qlen=0
+1795610997081389 pid=6497 client=13 arm=incoming el=13.991878ms qlen_at_start=0
+1795610997123816 pid=6517 client=13 replay start n=2815 qlen=0
+1795610997133280 pid=6517 client=13 replay done n=2815 taken=0 el=9.467167ms qlen=0
+1795610997133585 pid=6517 client=13 arm=incoming el=13.723345ms qlen_at_start=0
+1795610997136956 pid=6349 DROP seq=2815 full=false Backtrace []
+1795610997137381 pid=6349 DROP seq=2815 full=false Backtrace []
+1795610997596690 pid=6901 client=14 replay start n=2815 qlen=0
+1795610997605016 pid=6901 client=14 replay done n=2815 taken=0 el=8.328128ms qlen=0
+1795610997605329 pid=6901 client=14 arm=incoming el=12.446709ms qlen_at_start=0
+1795610997907653 pid=7146 client=14 replay start n=2814 qlen=0
+1795610997916775 pid=7146 client=14 replay done n=2814 taken=0 el=9.125175ms qlen=0
+1795610997917055 pid=7146 client=14 arm=incoming el=13.257396ms qlen_at_start=0
+1795610997977689 pid=7217 client=14 replay start n=2417 qlen=6
+1795610997986449 pid=7217 client=14 replay done n=2417 taken=397 el=8.76252ms qlen=0
+1795610997986760 pid=7217 client=14 arm=incoming el=13.347551ms qlen_at_start=0
+1795610998379237 pid=7555 client=14 replay start n=2814 qlen=0
+1795610998387470 pid=7555 client=14 replay done n=2814 taken=0 el=8.23596ms qlen=0
+1795610998387719 pid=7555 client=14 arm=incoming el=12.055903ms qlen_at_start=0
+1795610998625543 pid=7719 client=13 replay start n=2815 qlen=0
+1795610998636362 pid=7719 client=13 replay done n=2815 taken=0 el=10.822051ms qlen=0
+1795610998636670 pid=7719 client=13 arm=incoming el=14.833452ms qlen_at_start=0
+1795610998711294 pid=7826 client=13 replay start n=2734 qlen=3
+1795610998719523 pid=7826 client=13 replay done n=2734 taken=81 el=8.230873ms qlen=0
+1795610998719809 pid=7826 client=13 arm=incoming el=12.303084ms qlen_at_start=0
+1795610999149443 pid=8122 client=14 replay start n=2815 qlen=0
+1795610999159840 pid=8122 client=14 replay done n=2815 taken=0 el=10.400638ms qlen=0
+1795610999160161 pid=8122 client=14 arm=incoming el=14.661423ms qlen_at_start=0
+1795610999403209 pid=8266 client=13 replay start n=2814 qlen=0
+1795610999415500 pid=8266 client=13 replay done n=2814 taken=0 el=12.29385ms qlen=0
+1795610999415901 pid=8266 client=13 arm=incoming el=15.960282ms qlen_at_start=0
+1795610999494172 pid=8333 client=14 replay start n=2814 qlen=0
+1795610999504481 pid=8333 client=14 replay done n=2814 taken=0 el=10.313047ms qlen=0
+1795610999504809 pid=8333 client=14 arm=incoming el=13.906199ms qlen_at_start=0
+1795610999779497 pid=8266 DROP seq=2815 full=false Backtrace []
+1795610999779855 pid=8266 DROP seq=2815 full=false Backtrace []
+1795610999887414 pid=8333 DROP seq=2815 full=false Backtrace []
+1795610999887734 pid=8333 DROP seq=2815 full=false Backtrace []
+1795610999966780 pid=8768 client=13 replay start n=2814 qlen=0
+1795610999975349 pid=8768 client=13 replay done n=2814 taken=0 el=8.571984ms qlen=0
+1795610999975691 pid=8768 client=13 arm=incoming el=12.724736ms qlen_at_start=0
+1795611000267786 pid=8892 client=14 replay start n=2815 qlen=0
+1795611000276232 pid=8892 client=14 replay done n=2815 taken=0 el=8.450301ms qlen=0
+1795611000276576 pid=8892 client=14 arm=incoming el=13.45998ms qlen_at_start=0
+1795611000296285 pid=8980 client=14 replay start n=2815 qlen=0
+1795611000308093 pid=8980 client=14 replay done n=2815 taken=0 el=11.812327ms qlen=0
+1795611000308395 pid=8980 client=14 arm=incoming el=16.554985ms qlen_at_start=0
+1795611000683738 pid=8980 DROP seq=2816 full=false Backtrace []
+1795611000684118 pid=8980 DROP seq=2816 full=false Backtrace []
+1795611000751622 pid=9319 client=13 replay start n=2815 qlen=0
+1795611000766902 pid=9319 client=13 replay done n=2815 taken=0 el=15.282816ms qlen=0
+1795611000767284 pid=9319 client=13 arm=incoming el=20.551092ms qlen_at_start=0
+1795611001065743 pid=9470 client=14 replay start n=2814 qlen=0
+1795611001078296 pid=9470 client=14 replay done n=2814 taken=0 el=12.556293ms qlen=0
+1795611001078621 pid=9470 client=14 arm=incoming el=16.609707ms qlen_at_start=0
+1795611001099534 pid=9535 client=13 replay start n=2814 qlen=0
+1795611001113780 pid=9535 client=13 replay done n=2814 taken=0 el=14.248803ms qlen=0
+1795611001114233 pid=9535 client=13 arm=incoming el=18.768287ms qlen_at_start=0
+1795611001509932 pid=9867 client=13 replay start n=2411 qlen=183
+1795611001527836 pid=9867 client=13 replay done n=2411 taken=403 el=17.907895ms qlen=0
+1795611001528209 pid=9867 client=13 arm=incoming el=22.252095ms qlen_at_start=0
+1795611001841746 pid=10138 client=13 replay start n=2586 qlen=9
+1795611001852825 pid=10138 client=13 replay done n=2586 taken=229 el=11.08141ms qlen=0
+1795611001853172 pid=10138 client=13 arm=incoming el=15.108153ms qlen_at_start=0
+1795611001900142 pid=9867 DROP seq=2815 full=false Backtrace []
+1795611001900420 pid=9867 DROP seq=2815 full=false Backtrace []
+1795611001909799 pid=10174 client=14 replay start n=2815 qlen=0
+1795611001918541 pid=10174 client=14 replay done n=2815 taken=0 el=8.744593ms qlen=0
+1795611001918732 pid=10174 client=14 arm=incoming el=12.617626ms qlen_at_start=0
+1795611002286181 pid=10174 DROP seq=2816 full=false Backtrace []
+1795611002286484 pid=10174 DROP seq=2816 full=false Backtrace []
+1795611002290705 pid=10490 client=13 replay start n=2322 qlen=4
+1795611002303690 pid=10490 client=13 replay done n=2322 taken=493 el=12.987892ms qlen=0
+1795611002305065 pid=10490 client=13 arm=incoming el=18.181586ms qlen_at_start=0
+1795611002651640 pid=10704 client=13 replay start n=2814 qlen=0
+1795611002662771 pid=10704 client=13 replay done n=2814 taken=0 el=11.133869ms qlen=0
+1795611002663110 pid=10704 client=13 arm=incoming el=15.367453ms qlen_at_start=0
+1795611002725497 pid=10766 client=13 replay start n=2814 qlen=0
+1795611002734763 pid=10766 client=13 replay done n=2814 taken=0 el=9.268881ms qlen=0
+1795611002735062 pid=10766 client=13 arm=incoming el=13.861102ms qlen_at_start=0
+1795611003103176 pid=10766 DROP seq=2815 full=false Backtrace []
+1795611003103485 pid=10766 DROP seq=2815 full=false Backtrace []
+1795611003108181 pid=11053 client=13 replay start n=2814 qlen=0
+1795611003118915 pid=11053 client=13 replay done n=2814 taken=0 el=10.739036ms qlen=0
+1795611003119377 pid=11053 client=13 arm=incoming el=15.596506ms qlen_at_start=0
+1795611003412533 pid=11251 client=13 replay start n=2815 qlen=0
+1795611003420930 pid=11251 client=13 replay done n=2815 taken=0 el=8.400937ms qlen=0
+1795611003421172 pid=11251 client=13 arm=incoming el=12.604596ms qlen_at_start=0
+1795611004198637 pid=11575 client=13 replay start n=2814 qlen=0
+1795611004206918 pid=11575 client=13 replay done n=2814 taken=0 el=8.283872ms qlen=0
+1795611004207202 pid=11575 client=13 arm=incoming el=12.570315ms qlen_at_start=0

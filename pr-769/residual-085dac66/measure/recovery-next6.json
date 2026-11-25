@@ -1,0 +1,120 @@
+{
+  "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+  "binary_sha256": "671118f076a6e47e64b742603178aec2f0ea9865f4ef7f4895f996612205aace",
+  "terminal": "120x40 tmux loopback via diagnostic wire probe",
+  "samples": [
+    {
+      "sections": 64,
+      "mode": "transcript",
+      "audited": true,
+      "outcome": "pass",
+      "conclusive": true,
+      "ctrl_r_to_ready_row_ms": 28.359,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 9.389,
+      "enter_to_first_latest_ms": 1253.223,
+      "enter_to_first_tool_ms": 1259.407,
+      "enter_to_new_reply_ms": 2591.396,
+      "audited_sections": 64,
+      "audited_lines": 973,
+      "history_watermark": 803,
+      "applied_after_probe": 1314,
+      "enter_to_wire_watermark_ms": 7.727,
+      "enter_to_replay_finished_wire_ms": 52.69,
+      "enter_to_confirmed_cursor_ms": 3896.211,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 19.527,
+      "ctrl_r_to_agent_session_new_ms": 19.776,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258279,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "sections": 64,
+      "mode": "transcript",
+      "audited": false,
+      "outcome": "pass",
+      "conclusive": true,
+      "ctrl_r_to_ready_row_ms": 28.091,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 5.541,
+      "enter_to_first_latest_ms": 1228.513,
+      "enter_to_first_tool_ms": 1231.574,
+      "enter_to_new_reply_ms": 2501.75,
+      "history_watermark": 900,
+      "applied_after_probe": 1314,
+      "enter_to_wire_watermark_ms": 9.098,
+      "enter_to_replay_finished_wire_ms": 50.441,
+      "enter_to_confirmed_cursor_ms": 2523.995,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 20.737,
+      "ctrl_r_to_agent_session_new_ms": 21.03,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258279,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "sections": 64,
+      "mode": "transcript",
+      "audited": false,
+      "outcome": "pass",
+      "conclusive": true,
+      "ctrl_r_to_ready_row_ms": 29.938,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 5.723,
+      "enter_to_first_latest_ms": 1234.482,
+      "enter_to_first_tool_ms": 1237.421,
+      "enter_to_new_reply_ms": 2554.06,
+      "history_watermark": 1041,
+      "applied_after_probe": 1314,
+      "enter_to_wire_watermark_ms": 8.889,
+      "enter_to_replay_finished_wire_ms": 52.891,
+      "enter_to_confirmed_cursor_ms": 2562.967,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 21.222,
+      "ctrl_r_to_agent_session_new_ms": 21.483,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 258279,
+        "text_bytes": 11042
+      }
+    }
+  ],
+  "tally": {
+    "64 transcript pass": 3
+  }
+}

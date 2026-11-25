@@ -1,0 +1,105 @@
+diff --git a/nori-rs/acp-host/src/remote/host_wire.rs b/nori-rs/acp-host/src/remote/host_wire.rs
+index eb15f9b1a..006f68c34 100644
+--- a/nori-rs/acp-host/src/remote/host_wire.rs
++++ b/nori-rs/acp-host/src/remote/host_wire.rs
+@@ -187,6 +187,17 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
+         .into_response()
+ }
+ 
++
++pub(crate) fn diag(msg: std::fmt::Arguments) {
++    use std::io::Write;
++    static FILE: std::sync::Mutex<Option<std::fs::File>> = std::sync::Mutex::new(None);
++    let mut g = FILE.lock().unwrap();
++    if g.is_none() { *g = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/hostdiag.log").ok(); }
++    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros();
++    if let Some(f) = g.as_mut() { let _ = writeln!(f, "{t} pid={} {msg}", std::process::id()); }
++}
++macro_rules! diag { ($($a:tt)*) => { crate::remote::host_wire::diag(format_args!($($a)*)) } }
++
+ /// Envelopes a subscription may hold back while its replay is written: the
+ /// host journal's retention, beyond which a replay would have expired anyway.
+ const REPLAY_BACKLOG_EVENTS: usize = 4096;
+@@ -393,10 +404,14 @@ where
+                 }
+                 message = queued.recv() => {
+                     let Some(message) = message else { break; };
++                    let t0 = std::time::Instant::now();
+                     send_frame(&mut sink, Message::Text(message.to_string().into())).await?;
++                    if let Some(s) = subscription.as_ref() && s.events.len() > 128 { diag!("client={client} arm=queued el={:?} qlen={}", t0.elapsed(), s.events.len()); }
+                 }
+                 frame = incoming.next() => {
+                     let Some(frame) = frame else { break; };
++                    let t0 = std::time::Instant::now();
++                    let _g = ArmGuard(t0, client, subscription.as_ref().map(|s| s.events.len()).unwrap_or(0));
+                     match frame? {
+                         Message::Text(text) => {
+                             let request: Value = match serde_json::from_str(&text) {
+@@ -513,14 +528,17 @@ where
+                                 // counting against that queue; a client too slow to read the
+                                 // replay still fills it once the backlog is full.
+                                 let mut pending = std::collections::VecDeque::from(std::mem::take(&mut next.replay));
++                                let rt0 = std::time::Instant::now(); let rn = pending.len(); let mut taken = 0usize;
++                                diag!("client={client} replay start n={rn} qlen={}", next.events.len());
+                                 while let Some(envelope) = pending.pop_front() {
+                                     send_frame(&mut sink, Message::Text(managed_event(&envelope, approval_modes).to_string().into())).await?;
+                                     while pending.len() < REPLAY_BACKLOG_EVENTS
+                                         && let Ok(live) = next.events.try_recv()
+                                     {
+-                                        pending.push_back(live);
++                                        pending.push_back(live); taken += 1;
+                                     }
+                                 }
++                                diag!("client={client} replay done n={rn} taken={taken} el={:?} qlen={}", rt0.elapsed(), next.events.len());
+                                 subscription = Some(next);
+                             }
+                         }
+@@ -538,6 +556,7 @@ where
+                     }
+                 } => {
+                     let Some(envelope) = event else {
++                        diag!("client={client} subscription closed");
+                         match transport {
+                             Transport::WebSocket | Transport::Lifecycle => break,
+                             Transport::Lines(_) => {
+@@ -547,7 +566,10 @@ where
+                             }
+                         }
+                     };
++                    let t0 = std::time::Instant::now();
++                    let ql = subscription.as_ref().map(|s| s.events.len()).unwrap_or(0);
+                     send_frame(&mut sink, Message::Text(managed_event(&envelope, approval_modes).to_string().into())).await?;
++                    if t0.elapsed() > std::time::Duration::from_millis(5) || ql > 192 { diag!("client={client} arm=event seq={} el={:?} qlen={ql}", envelope.seq, t0.elapsed()); }
+                 }
+             }
+         }
+@@ -558,3 +580,6 @@ where
+     let _ = send_frame(&mut sink, Message::Close(None)).await;
+     result
+ }
++
++struct ArmGuard(std::time::Instant, i64, usize);
++impl Drop for ArmGuard { fn drop(&mut self) { if self.0.elapsed() > std::time::Duration::from_millis(5) || self.2 > 128 { diag!("client={} arm=incoming el={:?} qlen_at_start={}", self.1, self.0.elapsed(), self.2); } } }
+diff --git a/nori-rs/harness/src/session_manager/replay.rs b/nori-rs/harness/src/session_manager/replay.rs
+index 61133d722..2f0bb4874 100644
+--- a/nori-rs/harness/src/session_manager/replay.rs
++++ b/nori-rs/harness/src/session_manager/replay.rs
+@@ -171,7 +171,17 @@ impl Journal {
+             {
+                 return !subscriber.tx.is_closed();
+             }
+-            subscriber.tx.try_send(envelope.clone()).is_ok()
++            match subscriber.tx.try_send(envelope.clone()) {
++                Ok(()) => true,
++                Err(e) => {
++                    use std::io::Write;
++                    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros();
++                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/hostdiag.log") {
++                        let _ = writeln!(f, "{t} pid={} DROP seq={} full={} {:?}", std::process::id(), envelope.seq, matches!(e, mpsc::error::TrySendError::Full(_)), std::backtrace::Backtrace::force_capture());
++                    }
++                    false
++                }
++            }
+         });
+     }
+ 

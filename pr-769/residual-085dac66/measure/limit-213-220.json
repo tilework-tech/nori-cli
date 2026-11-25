@@ -1,0 +1,96 @@
+{
+  "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+  "binary_sha256": "0b45f02287cd94e19f44fcd50222ff1826226d43f63c78df113b1dbb6f6b662f",
+  "terminal": "120x40 tmux loopback via diagnostic wire probe",
+  "samples": [
+    {
+      "sections": 213,
+      "mode": "transcript",
+      "audited": true,
+      "outcome": "pass",
+      "conclusive": true,
+      "ctrl_r_to_ready_row_ms": 35.857,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 12.396,
+      "enter_to_first_latest_ms": 59.241,
+      "enter_to_first_tool_ms": 59.242,
+      "enter_to_new_reply_ms": 252.732,
+      "audited_sections": 213,
+      "audited_lines": 3210,
+      "history_watermark": 2329,
+      "applied_after_probe": 4296,
+      "enter_to_wire_watermark_ms": 17.378,
+      "enter_to_replay_finished_wire_ms": 28.009,
+      "enter_to_confirmed_cursor_ms": 3850.671,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 27.504,
+      "ctrl_r_to_agent_session_new_ms": 27.789,
+      "fixture": {
+        "sessions": 1,
+        "sections": 213,
+        "acp_updates": 2133,
+        "update_types": {
+          "user_message_chunk": 213,
+          "agent_message_chunk": 1493,
+          "tool_call": 214,
+          "tool_call_update": 213
+        },
+        "saved_session_events": 2143,
+        "transcript_bytes": 846887,
+        "text_bytes": 37127
+      }
+    },
+    {
+      "sections": 216,
+      "mode": "transcript",
+      "audited": true,
+      "outcome": "replay_unavailable",
+      "conclusive": true,
+      "failure": "Timed out observing terminal:\n Nori host  CONTROLLING\n synthetic \u00b7 Replay benchmark target \u00b7 ~/project \u00b7 ready \u00b7 Approvals: Agent\n\n cursor for session b3eca890-3370-4fa8-a0e7-3dfe44d4ec71 has expired; first available sequence is 38; list sessions to\n choose a newer cursor explicitly\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n Replay unavailable: cursor for session b3eca890-3370-4fa8-a0e7-3dfe44d4ec71 has expired; first available sequence is\n38; list sessions to choose a newer cursor explicitly. Existing conversation retained.\n\n\u203a Send a prompt\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task\n"
+    },
+    {
+      "sections": 220,
+      "mode": "transcript",
+      "audited": true,
+      "outcome": "pass",
+      "conclusive": true,
+      "ctrl_r_to_ready_row_ms": 35.957,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 15.861,
+      "enter_to_first_latest_ms": 63.992,
+      "enter_to_first_tool_ms": 63.992,
+      "enter_to_new_reply_ms": 246.241,
+      "audited_sections": 220,
+      "audited_lines": 3313,
+      "history_watermark": 2603,
+      "applied_after_probe": 4436,
+      "enter_to_wire_watermark_ms": 22.732,
+      "enter_to_replay_finished_wire_ms": 32.3,
+      "enter_to_confirmed_cursor_ms": 4073.701,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 26.541,
+      "ctrl_r_to_agent_session_new_ms": 26.767,
+      "fixture": {
+        "sessions": 1,
+        "sections": 220,
+        "acp_updates": 2203,
+        "update_types": {
+          "user_message_chunk": 220,
+          "agent_message_chunk": 1542,
+          "tool_call": 221,
+          "tool_call_update": 220
+        },
+        "saved_session_events": 2213,
+        "transcript_bytes": 876809,
+        "text_bytes": 38359
+      }
+    }
+  ],
+  "tally": {
+    "213 transcript pass": 1,
+    "216 transcript replay_unavailable": 1,
+    "220 transcript pass": 1
+  }
+}

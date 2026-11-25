@@ -1,0 +1,55 @@
+{
+  "method": "Loopback wire diagnostic in a 120x40 tmux terminal. All times start immediately before Enter on the selected picker row. Wire times mark receipt of a websocket read by the relay. Reselect cursor confirms contiguous application through that sequence by the UI. Native replay_finished can be absent for journal catch-up.",
+  "builds": {
+    "parent": {
+      "binary_sha256": "27d4f9822c4ebb0050db73d5825f8d889961474d1071a761abdaafe93bf7625f",
+      "turns": 32,
+      "acp_updates": 323,
+      "events": 339,
+      "out_of_sequence": 0,
+      "saved_journal_watermark": 334,
+      "marker_seq": {
+        "FirstReplayBeacon": 10,
+        "FinalReplayBeacon": 330,
+        "CompleteReplayBeacon": 331,
+        "LiveReplayBeacon0001": 337
+      },
+      "selection_to_subscribe_ms": 0.908,
+      "selection_to_first_wire_event_ms": 1.579,
+      "selection_to_saved_watermark_on_wire_ms": 3.24,
+      "selection_to_native_replay_finished_on_wire_ms": null,
+      "selection_to_live_request_ms": 2.105,
+      "selection_to_live_on_wire_ms": 3.7,
+      "selection_to_live_visible_and_ready_ms": 230.489,
+      "selection_to_reselect_request_ms": 233.729,
+      "initial_cursor": 0,
+      "reselect_cursor": 339,
+      "delivered_at_reselect": 339
+    },
+    "fixed": {
+      "binary_sha256": "0b45f02287cd94e19f44fcd50222ff1826226d43f63c78df113b1dbb6f6b662f",
+      "turns": 32,
+      "acp_updates": 323,
+      "events": 339,
+      "out_of_sequence": 0,
+      "saved_journal_watermark": 334,
+      "marker_seq": {
+        "FirstReplayBeacon": 10,
+        "FinalReplayBeacon": 330,
+        "CompleteReplayBeacon": 331,
+        "LiveReplayBeacon0001": 337
+      },
+      "selection_to_subscribe_ms": 0.896,
+      "selection_to_first_wire_event_ms": 1.712,
+      "selection_to_saved_watermark_on_wire_ms": 4.028,
+      "selection_to_native_replay_finished_on_wire_ms": null,
+      "selection_to_live_request_ms": 0.979,
+      "selection_to_live_on_wire_ms": 4.028,
+      "selection_to_live_visible_and_ready_ms": 11.916,
+      "selection_to_reselect_request_ms": 15.015,
+      "initial_cursor": 0,
+      "reselect_cursor": 339,
+      "delivered_at_reselect": 339
+    }
+  }
+}
