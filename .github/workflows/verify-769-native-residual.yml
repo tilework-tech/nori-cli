@@ -1,0 +1,121 @@
+name: verify-769-native-residual
+# Independent verifier recheck of the residual #769 recovery disconnect on
+# native macOS: fix 085dac66 (subscriber queue sized to the journal) against
+# the failing control e2e98ba3, with the #770 audit at 5705df90.
+on:
+  push:
+    branches: ['verify/pr-769-085dac66-native-perf']
+
+jobs:
+  native:
+    name: macOS residual recovery recheck
+    runs-on: blacksmith-6vcpu-macos-15
+    timeout-minutes: 330
+    env:
+      FIX: 085dac66de3db2caab042679679812cc4d69dacb
+      CTL: e2e98ba32dcad099615d3ec9a37a0019982c1a5d
+      BENCH: 5705df90a331297a6ae03888adca78e245ddccea
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v6
+        with: { path: verify, persist-credentials: false }
+      - uses: actions/checkout@v6
+        with: { path: fix, ref: "${{ env.FIX }}", persist-credentials: false }
+      - uses: actions/checkout@v6
+        with: { path: ctl, ref: "${{ env.CTL }}", persist-credentials: false }
+      - uses: actions/checkout@v6
+        with: { path: bench, ref: "${{ env.BENCH }}", persist-credentials: false }
+
+      - name: Verify source revisions and trees
+        run: |
+          set -eux
+          uname -a; sw_vers; sysctl -n machdep.cpu.brand_string hw.ncpu
+          test "$(git -C fix rev-parse HEAD)" = "$FIX"
+          test "$(git -C ctl rev-parse HEAD)" = "$CTL"
+          test "$(git -C bench rev-parse HEAD)" = "$BENCH"
+          for d in fix ctl bench; do git -C $d status --porcelain | wc -l | grep -qx ' *0'; done
+          test "$(git -C verify rev-parse HEAD:nori-rs)" = "$(git -C fix rev-parse HEAD:nori-rs)"
+          test "$(git -C bench rev-parse HEAD:nori-rs)" = "$(git -C fix rev-parse HEAD:nori-rs)"
+
+      - uses: dtolnay/rust-toolchain@1.90
+
+      - name: Install tmux
+        run: (command -v tmux || brew install tmux) && tmux -V && python3 --version
+
+      - name: Paused-subscriber regression, 10 runs per tree
+        continue-on-error: true
+        run: |
+          set -x
+          O="$GITHUB_WORKSPACE/out/regression"; mkdir -p "$O"
+          # The control gets only the new test file from the fix.
+          cp fix/nori-rs/harness/tests/managed_remote.rs ctl/nori-rs/harness/tests/managed_remote.rs
+          git -C ctl status --porcelain | tee "$O/ctl-dirty.txt"
+          T=a_subscriber_may_pause_until_it_is_one_journal_behind
+          for name in fix ctl; do
+            (cd $name/nori-rs && CARGO_TARGET_DIR="$RUNNER_TEMP/test-$name" cargo test --locked -p nori-harness --test managed_remote --no-run -j 6) > "$O/$name-build.log" 2>&1
+            for i in $(seq 1 10); do
+              if (cd $name/nori-rs && CARGO_TARGET_DIR="$RUNNER_TEMP/test-$name" cargo test --locked -p nori-harness --test managed_remote -- --exact $T) > "$O/$name-run$i.log" 2>&1
+              then echo "$name run $i pass" | tee -a "$O/tally.txt"
+              else echo "$name run $i FAIL $(grep -m1 -E 'panicked|dropped' "$O/$name-run$i.log")" | tee -a "$O/tally.txt"; fi
+            done
+          done
+          (cd fix/nori-rs && CARGO_TARGET_DIR="$RUNNER_TEMP/test-fix" cargo test --locked -p nori-harness --test managed_remote) > "$O/fix-file.log" 2>&1; echo "fix whole file exit $?" | tee -a "$O/tally.txt"
+          git -C ctl checkout -- nori-rs/harness/tests/managed_remote.rs
+
+      - name: Build optimized fix and control (separate target dirs)
+        run: |
+          set -eux
+          mkdir -p "$RUNNER_TEMP/bin"
+          for name in fix ctl; do
+            (cd $name/nori-rs && CARGO_TARGET_DIR="$RUNNER_TEMP/target-$name" cargo build --release --locked -p nori-cli -j 6)
+            cp "$RUNNER_TEMP/target-$name/release/nori" "$RUNNER_TEMP/bin/nori-$name"
+          done
+          shasum -a 256 "$RUNNER_TEMP"/bin/nori-* | tee "$RUNNER_TEMP/bin/SHA256SUMS"
+          test "$(cut -d' ' -f1 "$RUNNER_TEMP/bin/SHA256SUMS" | sort -u | wc -l)" -eq 2
+
+      - name: Labelled recovery stress, 3 parallel loops, 64 sections
+        continue-on-error: true
+        env: { TMPDIR: /tmp }
+        run: |
+          B="$RUNNER_TEMP/bin"; O="$GITHUB_WORKSPACE/out/stress"; mkdir -p "$O"
+          cp "$B/SHA256SUMS" "$O/"
+          for k in a b c; do
+            python3 -I verify/.verify769/stress769.py --build fix "$B/nori-fix" --build ctl "$B/nori-ctl" \
+              --attempts 16 --sections 64 --tag mac64-$k --out "$O/stress-64-$k.jsonl" --failures "$O/failures" > "$O/stress-64-$k.log" 2>&1 &
+          done
+          wait
+          cat "$O"/stress-64-*.jsonl | python3 -c 'import sys,json,collections; c=collections.Counter((r["build"],r["outcome"]) for r in map(json.loads,sys.stdin)); print(dict(c))' | tee "$O/tally-64.txt"
+
+      - name: Labelled recovery, 160 sections, one loop
+        continue-on-error: true
+        env: { TMPDIR: /tmp }
+        run: |
+          B="$RUNNER_TEMP/bin"; O="$GITHUB_WORKSPACE/out/stress"
+          python3 -I verify/.verify769/stress769.py --build fix "$B/nori-fix" --build ctl "$B/nori-ctl" \
+            --attempts 4 --sections 160 --tag mac160 --out "$O/stress-160.jsonl" --failures "$O/failures" > "$O/stress-160.log" 2>&1
+          cat "$O"/stress-160.jsonl | python3 -c 'import sys,json,collections; c=collections.Counter((r["build"],r["outcome"]) for r in map(json.loads,sys.stdin)); print(dict(c))' | tee "$O/tally-160.txt"
+
+      - name: Long open, 150 sections
+        continue-on-error: true
+        env: { TMPDIR: /tmp }
+        run: |
+          B="$RUNNER_TEMP/bin"; O="$GITHUB_WORKSPACE/out/open"; mkdir -p "$O"
+          python3 -I verify/.verify769/replay769.py --build fix "$B/nori-fix" --build ctl "$B/nori-ctl" --sections 150 --samples 3 --out "$O/open-150.json" 2>&1 | tee "$O/open-150.log" | grep -v '^ '
+
+      - name: '#770 recovery audit at 5705df90, 128 and 160 sections, every sample audited'
+        continue-on-error: true
+        env: { TMPDIR: /tmp }
+        working-directory: bench
+        run: |
+          B="$RUNNER_TEMP/bin"; O="$GITHUB_WORKSPACE/out/bench"; mkdir -p "$O"
+          python3 -m unittest discover -s scripts/attach_perf 2>&1 | tee "$O/unittest.txt" | tail -3
+          for build in fix ctl; do
+            python3 scripts/attach_perf/recovery.py "$B/nori-$build" --samples 4 --turns 128 160 --audit-all \
+              --output "$O/long-$build.json" > "$O/long-$build.log" 2>&1; echo "$build exit $?" | tee -a "$O/exit.txt"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-769-native-residual
+          path: out/
