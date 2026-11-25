@@ -1,0 +1,105 @@
+name: verify-769-native-recovery
+# Independent verifier recheck of nori-cli #769 F1 (recovery split by a host
+# disconnect) at e2e98ba3 and the #770 recovery audit at 588423e7, on native
+# macOS. Control builds: the former fix head 0e673ef4 (F1 seen on Linux) and
+# the stack parent d8c061da (the 256-event live queue without #769).
+on:
+  push:
+    branches: ['verify/pr-769-e2e98ba3-native-perf']
+
+jobs:
+  native:
+    name: macOS recovery recheck
+    runs-on: blacksmith-6vcpu-macos-15
+    timeout-minutes: 200
+    env:
+      FIX: e2e98ba32dcad099615d3ec9a37a0019982c1a5d
+      OLDFIX: 0e673ef45839e9809b8e7c5d2734d90d1780bbd7
+      PARENT: d8c061dad6a77651d25d118c9a1f6dcf172d7ac4
+      BENCH: 588423e7a7111f0bd669cbea93ddf82ef5731922
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v6
+        with: { path: verify, persist-credentials: false }
+      - uses: actions/checkout@v6
+        with: { path: fix, ref: "${{ env.FIX }}", persist-credentials: false }
+      - uses: actions/checkout@v6
+        with: { path: oldfix, ref: "${{ env.OLDFIX }}", persist-credentials: false }
+      - uses: actions/checkout@v6
+        with: { path: parent, ref: "${{ env.PARENT }}", persist-credentials: false }
+      - uses: actions/checkout@v6
+        with: { path: bench, ref: "${{ env.BENCH }}", persist-credentials: false }
+
+      - name: Verify source revisions and trees
+        run: |
+          set -eux
+          uname -a; sw_vers; sysctl -n machdep.cpu.brand_string hw.ncpu
+          test "$(git -C fix rev-parse HEAD)" = "$FIX"
+          test "$(git -C oldfix rev-parse HEAD)" = "$OLDFIX"
+          test "$(git -C parent rev-parse HEAD)" = "$PARENT"
+          test "$(git -C bench rev-parse HEAD)" = "$BENCH"
+          for d in fix oldfix parent bench; do git -C $d status --porcelain | wc -l | grep -qx ' *0'; done
+          test "$(git -C verify rev-parse HEAD:nori-rs)" = "$(git -C fix rev-parse HEAD:nori-rs)"
+          test "$(git -C bench rev-parse HEAD:nori-rs)" = "$(git -C fix rev-parse HEAD:nori-rs)"
+
+      - uses: dtolnay/rust-toolchain@1.90
+
+      - name: Install tmux
+        run: (command -v tmux || brew install tmux) && tmux -V && python3 --version
+
+      - name: Build optimized fix, oldfix and parent (separate target dirs)
+        run: |
+          set -eux
+          mkdir -p "$RUNNER_TEMP/bin"
+          for name in fix oldfix parent; do
+            (cd $name/nori-rs && CARGO_TARGET_DIR="$RUNNER_TEMP/target-$name" cargo build --release --locked -p nori-cli -j 6)
+            cp "$RUNNER_TEMP/target-$name/release/nori" "$RUNNER_TEMP/bin/nori-$name"
+          done
+          shasum -a 256 "$RUNNER_TEMP"/bin/nori-* | tee "$RUNNER_TEMP/bin/SHA256SUMS"
+          test "$(cut -d' ' -f1 "$RUNNER_TEMP/bin/SHA256SUMS" | sort -u | wc -l)" -eq 3
+
+      - name: Independent recovery and replay harness (kiln)
+        continue-on-error: true
+        env: { TMPDIR: /tmp }
+        run: |
+          set -x
+          B="$RUNNER_TEMP/bin"; O="$GITHUB_WORKSPACE/out/kiln"; mkdir -p "$O"
+          cp "$B/SHA256SUMS" "$O/"
+          P="python3 -I verify/.verify769/replay769.py --build fix $B/nori-fix --build oldfix $B/nori-oldfix --build parent $B/nori-parent"
+          $P --mode recover --sections 64 --samples 8 --keep-scrollback --out "$O/recover-transcript-64.json" 2>&1 | tee "$O/recover-transcript-64.log" | grep -v '^ '
+          $P --mode recover --native --sections 64 --samples 8 --keep-scrollback --out "$O/recover-native-64.json" 2>&1 | tee "$O/recover-native-64.log" | grep -v '^ '
+          python3 -I verify/.verify769/replay769.py --build fix $B/nori-fix --build parent $B/nori-parent --sections 150 --samples 2 --out "$O/open-150.json" 2>&1 | tee "$O/open-150.log" | grep -v '^ '
+          python3 -I verify/.verify769/summarize.py "$O"/*.json | tee "$O/SUMMARY.md"
+
+      - name: '#770 recovery audit, one audited sample per run'
+        continue-on-error: true
+        env: { TMPDIR: /tmp }
+        working-directory: bench
+        run: |
+          B="$RUNNER_TEMP/bin"; O="$GITHUB_WORKSPACE/out/bench"; mkdir -p "$O"
+          python3 -m unittest discover -s scripts/attach_perf 2>&1 | tee "$O/unittest.txt" | tail -3
+          for build in oldfix fix; do
+            for i in 1 2 3 4 5 6; do
+              for mode in transcript native; do
+                if python3 scripts/attach_perf/recovery.py "$B/nori-$build" --samples 1 --turns 64 --modes $mode \
+                    --output "$O/recovery-$build-$mode-$i.json" > "$O/recovery-$build-$mode-$i.log" 2>&1; then
+                  echo "$build $mode $i pass" | tee -a "$O/recovery-tally.txt"
+                else
+                  echo "$build $mode $i FAIL $(grep -E 'Error|assert' "$O/recovery-$build-$mode-$i.log" | tail -1)" | tee -a "$O/recovery-tally.txt"
+                fi
+              done
+            done
+          done
+
+      - name: Host and attach unit tests at the fix head
+        continue-on-error: true
+        working-directory: fix/nori-rs
+        run: |
+          cargo test --locked -p nori-acp-host --test subscription_replay 2>&1 | tee "$GITHUB_WORKSPACE/out/host-subscription-replay.txt" | grep -E "^test result|FAILED|panicked"
+          cargo test --locked -p nori-tui --lib attach:: 2>&1 | tee "$GITHUB_WORKSPACE/out/attach-unit.txt" | grep -E "^test result|FAILED|panicked"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-769-native-recovery
+          path: out/
