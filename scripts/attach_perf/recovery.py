@@ -12,7 +12,7 @@ import signal
 import tempfile
 import time
 
-from audit import check_exactly_once, stitch
+from audit import NoReply, check_exactly_once, classify, stitch
 from fixture import HostFixture
 from replay import CLOCK, SECTION, Terminal, elapsed
 from transport import TransportProbe
@@ -72,7 +72,10 @@ def sample(binary, turns, native_load, wrapper, audit=False):
         # A recent paste burst deliberately holds the first Enter until its flush.
         time.sleep(.12)
         term.send("Enter")
-        term.wait(lambda s: "Synthetic acknowledgement." in s)
+        try:
+            term.wait(lambda s: "Synthetic acknowledgement." in s, timeout=20)
+        except RuntimeError:
+            raise NoReply(term.screen()) from None
         result["enter_to_new_reply_ms"] = elapsed(enter)
         if audit:
             # Page from the newest event to the first, stitch the overlapping
@@ -150,6 +153,8 @@ def main():
     p.add_argument("--tmux-wrapper", default=os.environ.get("NORI_BENCH_TMUX"))
     p.add_argument("--output", type=Path)
     p.add_argument("--check-restart", action="store_true")
+    p.add_argument("--audit-all", action="store_true",
+                   help="page back and audit every sample, not only the first of each group")
     args = p.parse_args()
     binary = args.binary.resolve()
     result = {"platform": platform.platform(), "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
@@ -160,15 +165,33 @@ def main():
         if args.output:
             args.output.write_text(json.dumps(result, indent=2) + "\n")
         return
+    prompt = "RecoveryProbe"
     for length in args.turns:
         for mode in args.modes:
             for index in range(args.samples):
-                sample_data = sample(binary, length, mode == "native", args.tmux_wrapper, audit=index == 0)
-                result["samples"].append({"sections": length, "mode": mode, **sample_data})
+                audited = args.audit_all or index == 0
+                try:
+                    sample_data, error = sample(binary, length, mode == "native", args.tmux_wrapper,
+                                                audit=audited), None
+                except Exception as failure:  # one labelled outcome per sample
+                    sample_data, error = {"failure": str(failure)[:4000],
+                                         "screen": getattr(failure, "screen", None)}, failure
+                outcome, conclusive = classify(error, prompt)
+                result["samples"].append({"sections": length, "mode": mode, "audited": audited,
+                                          "outcome": outcome, "conclusive": conclusive, **sample_data})
                 print(json.dumps(result["samples"][-1]), flush=True)
                 if args.output:
                     args.output.write_text(json.dumps(result, indent=2) + "\n")
-
+    tally = {}
+    for s in result["samples"]:
+        key = f'{s["sections"]} {s["mode"]} {s["outcome"]}'
+        tally[key] = tally.get(key, 0) + 1
+    result["tally"] = tally
+    print(json.dumps({"tally": tally}), flush=True)
+    if args.output:
+        args.output.write_text(json.dumps(result, indent=2) + "\n")
+    if any(s["conclusive"] and s["outcome"] != "pass" for s in result["samples"]):
+        raise SystemExit(1)
 
 if __name__ == "__main__":
     main()

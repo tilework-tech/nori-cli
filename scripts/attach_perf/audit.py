@@ -56,3 +56,34 @@ def check_exactly_once(lines, turns, first_marker, last_marker):
     if not beacons or not first < beacons[0] or not last > max(
             i for i, line in enumerate(lines) if f"SectionBeacon{turns:04d}" in line):
         raise AuditError("opening or final marker is out of place")
+
+
+class NoReply(Exception):
+    """The replacement adapter's answer never appeared; carries the last screen."""
+
+    def __init__(self, screen):
+        super().__init__("no answer to the post-recovery prompt")
+        self.screen = screen
+
+
+def classify(error, prompt):
+    """Label one recovery sample as (outcome, conclusive).
+
+    Inconclusive outcomes are misses the harness cannot attribute to the build:
+    a prompt that never left the composer, or an unexpected harness error.
+    """
+    if error is None:
+        return "pass", True
+    if isinstance(error, AuditError):
+        if str(error).startswith("connection notice"):
+            return "notice_in_history", True
+        return "history_mismatch", True
+    if isinstance(error, NoReply):
+        if "Connection restored" in error.screen:
+            return "prompt_lost", True
+        if any(prompt in line for line in error.screen.splitlines()[-4:]):
+            return "unsent_draft", False
+        return "no_reply", True
+    if "Replay unavailable" in str(error):
+        return "replay_unavailable", True
+    return "error", False
