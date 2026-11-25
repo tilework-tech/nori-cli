@@ -1,0 +1,134 @@
+[
+  {
+    "probe": "queue",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "queue",
+    "check": "paused_row_lists_three_in_order",
+    "passed": true,
+    "detail": "{'prompts': ['queued alpha', 'queued beta', 'queued gamma'], 'entries': [{'id': 'probe-q0-1795649181181630529', 'text': 'queued alpha', 'editable': False}, {'id': 'probe-q1-1795649181183175322', 'text': 'queued beta', 'editable': False}, {'id': 'probe-q2-1795649181184453004', 'text': 'queued gamma', 'editable': False}], 'paused': 'interrupted'}"
+  },
+  {
+    "probe": "queue",
+    "check": "late_watcher_sees_paused_queue",
+    "passed": true,
+    "detail": "{'prompts': ['queued alpha', 'queued beta', 'queued gamma'], 'entries': [{'id': 'probe-q0-1795649181181630529', 'text': 'queued alpha', 'editable': False}, {'id': 'probe-q1-1795649181183175322', 'text': 'queued beta', 'editable': False}, {'id': 'probe-q2-1795649181184453004', 'text': 'queued gamma', 'editable': False}], 'paused': 'interrupted'}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_take_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_resume_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_discard_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 5, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "unmarked_client_prompt_not_editable",
+    "passed": true,
+    "detail": "{'id': 'probe-q0-1795649181181630529', 'text': 'queued alpha', 'editable': False}"
+  },
+  {
+    "probe": "queue",
+    "check": "unmarked_client_prompt_take_null",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 9, 'result': {'text': None}}"
+  },
+  {
+    "probe": "queue",
+    "check": "resume_ok",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 10, 'result': {}}"
+  },
+  {
+    "probe": "queue",
+    "check": "resume_delivers_all_once_in_order",
+    "passed": true,
+    "detail": "['queued alpha', 'queued beta', 'queued gamma']"
+  },
+  {
+    "probe": "queue",
+    "check": "take_after_started_is_null",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 11, 'result': {'text': None}}"
+  },
+  {
+    "probe": "queue",
+    "check": "discard_sends_nothing",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "probe": "queue",
+    "check": "discard_clears_queue_and_pause",
+    "passed": true,
+    "detail": "{'prompts': []}"
+  },
+  {
+    "probe": "queue",
+    "check": "unknown_session_refused",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 20, 'error': {'code': -32002, 'message': 'unknown session id'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_cannot_take_others_prompt",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "composer_prompts_editable",
+    "passed": true,
+    "detail": "[{'id': 'probe-q0-1795649188577317474', 'text': 'queued alpha', 'editable': True}, {'id': 'probe-q1-1795649188579151517', 'text': 'queued beta', 'editable': True}, {'id': 'probe-q2-1795649188580865310', 'text': 'queued gamma', 'editable': True}]"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "own_take_once_then_null",
+    "passed": true,
+    "detail": "[{'jsonrpc': '2.0', 'id': 9, 'result': {'text': 'queued alpha'}}, {'jsonrpc': '2.0', 'id': 10, 'result': {'text': None}}]"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "after_reconnect_take_once",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {'text': 'queued beta'}}"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "same_key_retry_same_answer_other_key_null",
+    "passed": true,
+    "detail": "[{'jsonrpc': '2.0', 'id': 3, 'result': {'text': 'queued beta'}}, {'jsonrpc': '2.0', 'id': 4, 'result': {'text': None}}]"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "second_terminal_takes_control",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {'role': 'controller', 'controller_connected': True}}"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "new_controller_takes_other_terminals_prompt",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'result': {'text': 'queued gamma'}}"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "non_composer_client_take_result",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'result': {'text': 'queued delta'}}"
+  }
+]

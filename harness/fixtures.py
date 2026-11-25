@@ -101,7 +101,11 @@ def env_for(home: Path, extra=None):
 
 def read_ledger(ledger: Path):
     out = []
-    for line in ledger.read_text().splitlines():
+    text = ledger.read_text()
+    lines = text.split("\n")
+    if not text.endswith("\n"):
+        lines = lines[:-1]  # the adapter is still writing the last line
+    for line in lines:
         if line.strip():
             out.append(json.loads(line))
     return out

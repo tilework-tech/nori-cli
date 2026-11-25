@@ -5452,6 +5452,78 @@ def r13_plain_shell(ctx):
 SCENARIOS.update({"R13": ("#789: plain nori ! runs in the session folder", r13_plain_shell)})
 
 
+def r14_controller_edits_queue(ctx, how):
+    """#790 (Cliff): editing follows the current controller. A fresh attach after Ctrl+D (how=fresh) or
+    another terminal after Alt+T (how=takeover) takes a pending prompt into its composer, edits it, and
+    sends the correction once; the original is never delivered; the other queued prompts keep their order.
+    A watcher's Up+Enter changes nothing. Queue removal is told apart from history recall by the queue count."""
+    ctx.start_host()
+    sid = seed(ctx, "relay 1 dawn")
+    a = ctx.term("a")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn relay finished.", 15)
+    a.type("hold on")
+    a.keys("Enter")
+    wait_ledger(ctx, lambda r: r["kind"] == "tick")
+    for w in ("relay 1 lamp", "relay 1 second", "relay 1 third"):
+        a.type(w); time.sleep(0.2); a.keys("Tab"); time.sleep(0.6)
+    a.keys("Escape")
+    a.wait_for("3 queued", 10)
+    queued = lambda t: (re.search(r"(\d+) queued", t.screen()) or [None, "0"])[1]
+    if how == "fresh":
+        a.keys("C-d"); time.sleep(1.5)
+        ctx.check("fresh.a_detached", a.at_shell(), last_nonblank(a.screen()))
+        b = ctx.term("fresh")
+        j_open(ctx, b, sid)
+    else:
+        b = ctx.term("other")
+        j_open(ctx, b, sid)
+    b.wait_for("3 queued", 15)
+    time.sleep(1)
+    if how == "takeover":
+        b.keys("C-u"); b.keys("Up"); time.sleep(1.0); b.keys("Enter"); time.sleep(1.5)
+        b.capture("watcher-up-enter")
+        ctx.check("watcher.queue_unchanged", queued(b) == "3" and queued(a) == "3", (queued(b), queued(a)))
+        ctx.check("watcher.nothing_sent", not r_sent(ctx, "relay 1 third"), len(r_sent(ctx, "relay 1 third")))
+        b.keys("C-u")
+        b.keys("M-t"); time.sleep(1.5)
+    b.keys("C-u"); b.keys("Up"); time.sleep(1.2)
+    b.capture("after-up")
+    recalled = "relay 1 third" in r_composer(b) and queued(b) == "3"
+    ctx.check(f"{how}.up_is_not_history_recall", not recalled, {"queued": queued(b), "composer": r_composer(b)})
+    if recalled:
+        b.keys("C-u")
+    else:
+        b.keys("Enter"); time.sleep(1.2)
+    b.capture("after-take")
+    took = queued(b) == "2" and "relay 1 third" in r_composer(b)
+    ctx.check(f"{how}.take_removes_from_queue_into_composer", took, {"queued": queued(b), "composer": r_composer(b)})
+    if not took:
+        b.type("relay 1 third")
+    b.keys("End"); b.type("fix")
+    time.sleep(0.3)
+    b.keys("Enter")
+    time.sleep(2.0)
+    if re.search(r"paused", b.screen()):
+        b.keys("C-u"); b.keys("Enter")
+    deadline = time.time() + 25
+    while time.time() < deadline and not (r_sent(ctx, "relay 1 thirdfix") and r_sent(ctx, "relay 1 second")):
+        time.sleep(0.3)
+    time.sleep(3)
+    b.capture("settled")
+    texts = [r.get("text", "") for r in ctx.ledger("request", "session/prompt")]
+    ctx.check(f"{how}.correction_sent_once", sum(t.strip() == "relay 1 thirdfix" for t in texts) == 1, texts)
+    ctx.check(f"{how}.original_never_sent", not any(t.strip() == "relay 1 third" for t in texts), texts)
+    order = [t.strip() for t in texts if t.strip() in ("relay 1 lamp", "relay 1 second")]
+    ctx.check(f"{how}.others_once_in_order", order == ["relay 1 lamp", "relay 1 second"], order)
+
+
+SCENARIOS.update({
+    "R14a": ("#790: fresh attach after Ctrl+D takes, edits and sends a queued prompt once", lambda c: r14_controller_edits_queue(c, "fresh")),
+    "R14b": ("#790: watcher refused, then Alt+T terminal takes, edits and sends once", lambda c: r14_controller_edits_queue(c, "takeover")),
+})
+
+
 CAP = "[tui]\ntool_output_max_lines = 10"
 NO_UPDATE = "check_for_update_on_startup = false"
 FIXTURE_ARGS = {"S34m": {"top_extra": NO_UPDATE}, "R12": {"top_extra": NO_UPDATE}, "R13": {"top_extra": NO_UPDATE}, "K01": {"top_extra": NO_UPDATE}, "S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},

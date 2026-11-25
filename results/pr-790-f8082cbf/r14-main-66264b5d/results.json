@@ -1,0 +1,80 @@
+[
+  {
+    "scenario": "R14a",
+    "check": "fresh.a_detached",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.up_is_not_history_recall",
+    "passed": true,
+    "detail": "{'queued': '3', 'composer': '\u203a / for slash command menu'}"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.take_removes_from_queue_into_composer",
+    "passed": true,
+    "detail": "{'queued': '2', 'composer': '\u203a relay 1 third'}"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.correction_sent_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.original_never_sent",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.others_once_in_order",
+    "passed": true,
+    "detail": "['relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "watcher.queue_unchanged",
+    "passed": true,
+    "detail": "('3', '3')"
+  },
+  {
+    "scenario": "R14b",
+    "check": "watcher.nothing_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.up_is_not_history_recall",
+    "passed": true,
+    "detail": "{'queued': '3', 'composer': '\u203a ? for shortcuts'}"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.take_removes_from_queue_into_composer",
+    "passed": true,
+    "detail": "{'queued': '2', 'composer': '\u203a relay 1 third'}"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.correction_sent_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.original_never_sent",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.others_once_in_order",
+    "passed": true,
+    "detail": "['relay 1 lamp', 'relay 1 second']"
+  }
+]

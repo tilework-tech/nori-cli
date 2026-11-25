@@ -1,0 +1,36 @@
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 1 dawn
+
+
+• - dawn row 01
+
+  dawn relay finished.
+
+
+› hold on
+
+
+• tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 tick 10 tick 11 tick 12 tick 13 tick 14 tick 15 tick 16
+  tick 17
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+
+■ Could not take the queued message back: watcher is read-only; take control before changing a session
+
+• This terminal now controls the host.
+
+  3 queued · paused (interrupted) · enter resumes
+  ↳ relay 1 lamp
+  ↳ relay 1 second
+  › relay 1 third
+    j/k select · enter/e edit · del/x remove · esc back
+
+                                                                                                                [ auto ]
+› / for slash command menu
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

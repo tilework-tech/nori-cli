@@ -1,0 +1,134 @@
+[
+  {
+    "scenario": "R05a",
+    "check": "reclaim.up_focuses_queue_not_history",
+    "passed": true,
+    "detail": "list"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.text_in_composer",
+    "passed": true,
+    "detail": "\u203a relay 1 lamp"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.queue_row_gone",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.never_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reconnect.queue_still_listed",
+    "passed": true,
+    "detail": "ued \u00b7 paused (interrupted) \u00b7 enter resumes\n  \u21b3 relay 1 lamp\n    \u2191 select\n\n                                                                                                                [ auto ]\n\u203a / for slash command menu\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.up_focuses_queue_not_history",
+    "passed": true,
+    "detail": "list"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.text_in_composer",
+    "passed": true,
+    "detail": "\u203a relay 1 lamp"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.queue_row_gone",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.never_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.a_detached",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.up_is_not_history_recall",
+    "passed": true,
+    "detail": "{'queued': '3', 'composer': '\u203a ! for shell commands'}"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.take_removes_from_queue_into_composer",
+    "passed": true,
+    "detail": "{'queued': '2', 'composer': '\u203a relay 1 third'}"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.correction_sent_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.original_never_sent",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.others_once_in_order",
+    "passed": true,
+    "detail": "['relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "watcher.queue_unchanged",
+    "passed": true,
+    "detail": "('3', '3')"
+  },
+  {
+    "scenario": "R14b",
+    "check": "watcher.nothing_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.up_is_not_history_recall",
+    "passed": true,
+    "detail": "{'queued': '3', 'composer': '\u203a / for slash command menu'}"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.take_removes_from_queue_into_composer",
+    "passed": true,
+    "detail": "{'queued': '2', 'composer': '\u203a relay 1 third'}"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.correction_sent_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.original_never_sent",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.others_once_in_order",
+    "passed": true,
+    "detail": "['relay 1 lamp', 'relay 1 second']"
+  }
+]

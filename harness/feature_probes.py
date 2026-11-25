@@ -420,8 +420,8 @@ def probe_queue_composer():
         tk = b.call("_nori/control/take", {})
         check("queue_composer", "second_terminal_takes_control", "result" in tk, tk)
         r4 = b.call("_nori/session/queue/take", {"requestKey": f"probe-{time.time_ns()}", "sessionId": sid, "entryId": ents[2]["id"]})
-        # Coordinator's reading of #778: a terminal takes back only its own prompts.
-        check("queue_composer", "other_composer_terminal_cannot_take", (r4.get("result") or {}).get("text") is None, r4)
+        # Cliff (#790): editing follows the current controller, so a terminal that took control may take it.
+        check("queue_composer", "new_controller_takes_other_terminals_prompt", (r4.get("result") or {}).get("text") == "queued gamma", r4)
         plain = run.link()
         sid2, q2 = paused_queue(run, b, ["queued delta"])
         e2 = (q2.get("entries") or [])[0]
