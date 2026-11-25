@@ -893,6 +893,13 @@ impl App {
             } => self
                 .chat_widget
                 .on_host_goal_loaded(&session_id, goal, asked),
+            AppEvent::HostContextLoaded {
+                session_id,
+                result,
+                asked,
+            } => self
+                .chat_widget
+                .on_host_context_loaded(&session_id, result, asked),
             AppEvent::HarnessActionFailed(message) => self.chat_widget.add_error_message(message),
             AppEvent::DiffResult(text) => {
                 // Clear the in-progress state in the bottom pane

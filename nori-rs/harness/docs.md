@@ -28,13 +28,14 @@ owned by [`docs/turns.md`](../../docs/turns.md); transcript files by
 | `normalized/` (private) | session phase | Private reduction of ACP updates |
 | `session_event_fanout.rs` | | One unbounded primary consumer plus bounded subscribers |
 | `session_manager/` | `SessionManager`, `SessionRecord`, `StartSession`, `ManagedSession`, `SessionSource` | Registry, capacity, envelopes, replay, recovery, delegation |
-| `managed_remote.rs`, `managed_remote/`, `remote_agent.rs` | `ManagedRemoteHost` | Implements `nori_acp_host::remote::ManagedAgent` over the manager, including `_nori/session/queue/*` (`managed_remote/queue.rs`) and `_nori/session/goal/*` (`managed_remote/goal.rs`); re-exports the transport types |
+| `managed_remote.rs`, `managed_remote/`, `remote_agent.rs` | `ManagedRemoteHost` | Implements `nori_acp_host::remote::ManagedAgent` over the manager, including `_nori/session/queue/*` (`managed_remote/queue.rs`) `_nori/session/goal/*` (`managed_remote/goal.rs`) and `_nori/session/context` (`managed_remote/context.rs`); re-exports the transport types |
 | `managed_launch.rs`, `managed_launch/` | `ManagedLaunches`, `LaunchRefusal`, `session_folder` | Launch admission for a managed host |
 | `managed_acp.rs`, `managed_acp/` | | Relay for one admitted binding and generation; side sessions |
 | `follow_up.rs`, `follow_up_rpc.rs` | `FollowUpReceipt`, `FollowUpStatus`, `supports_guarded_steering` | Follow-up delivery and steering gate |
 | `permission_mode.rs` | | The three permission modes and their `approval_policy` |
 | `transcript/`, `transcript_discovery.rs` | `TranscriptRecorder`, `TranscriptLoader`, `SCHEMA_VERSION` (3) | Nori transcripts; provider transcript lookup for token counts |
-| `context_timeline/` | | Context usage readings at prompt boundaries |
+| `context_timeline/` | | Context usage readings at prompt boundaries; the timeline types are the wire types in `nori-protocol` |
+| `instruction_files/` | | The instruction files an agent loads from a folder, with token counts; read on the host for `_nori/session/context` and by the TUI for local sessions |
 | `hooks.rs`, `undo.rs`, `auto_worktree.rs`, `message_history.rs`, `custom_prompts.rs` | | Session hooks, git ghost snapshots, worktrees, `history.jsonl`, prompt files |
 
 ```text

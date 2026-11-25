@@ -3,6 +3,7 @@
 //! ACP owns agent/client semantics. Nori adds only the lifecycle and product
 //! notifications that ACP does not define.
 
+mod context;
 mod delegation;
 mod host;
 mod pending_request;
@@ -11,6 +12,7 @@ mod session_envelope;
 mod session_event;
 
 pub use agent_client_protocol_schema as acp;
+pub use context::*;
 pub use delegation::*;
 pub use host::*;
 pub use pending_request::PendingRequest;
