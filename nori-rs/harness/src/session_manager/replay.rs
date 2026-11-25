@@ -50,6 +50,9 @@ pub struct ReplayInfo {
     /// Tokens in context and the context window, from the agent's latest
     /// usage report.
     pub context: Option<(i64, i64)>,
+    /// The latest queue snapshot, so a client that joins after its
+    /// announcement expired still sees a paused queue.
+    pub queue: Option<nori_protocol::QueueSnapshot>,
 }
 
 struct History {
@@ -65,6 +68,7 @@ struct History {
     reply: nori_protocol::ReplyPreview,
     pending: nori_protocol::PendingRequest,
     context: Option<(i64, i64)>,
+    queue: Option<nori_protocol::QueueSnapshot>,
 }
 
 impl Default for History {
@@ -79,6 +83,7 @@ impl Default for History {
             reply: nori_protocol::ReplyPreview::default(),
             pending: nori_protocol::PendingRequest::default(),
             context: None,
+            queue: None,
         }
     }
 }
@@ -119,6 +124,9 @@ impl Journal {
         history.reply.observe(&envelope.event);
         history.pending.observe(&envelope.event);
         match &envelope.event {
+            SessionEvent::Nori(NoriEvent::QueueChanged(queue)) => {
+                history.queue = Some(queue.clone());
+            }
             SessionEvent::Nori(NoriEvent::PromptSummaryUpdated(summary)) => {
                 history.title = Some(summary.summary.clone())
             }
@@ -197,6 +205,7 @@ impl Journal {
             idle_seconds: i64::try_from(history.last_activity.elapsed().as_secs())
                 .unwrap_or(i64::MAX),
             context: history.context,
+            queue: history.queue.clone(),
         })
     }
 

@@ -70,8 +70,33 @@ While the queue is paused:
 - After a resume, the queue sends one prompt per completed turn again. A
   later cancel or failure pauses what is left.
 - Reclaiming the last user prompt clears the pause.
+- **Discard** drops every queued user prompt, including ones that cannot be
+  edited, and clears the pause. None of them is sent.
 
 In the TUI, Enter on an empty composer resumes a paused queue.
+
+### The queue on the host
+
+The queue lives on the host, so a terminal that reconnects, or a second
+terminal on the same host, finds it as it was.
+
+- Every client sees the queue in `queue_changed` session events and on each
+  `_nori/session/list` row (`queue`: entries and pause reason). The row keeps
+  the latest snapshot after its event has left the replay window.
+- Only the controller changes the queue, with `_nori/session/queue/resume`,
+  `_nori/session/queue/take` and `_nori/session/queue/discard`. Watchers get
+  `-32016`. The host advertises them as `capabilities.nori_sessions.queue`.
+- `take` returns a prompt's text to exactly one caller. Any later `take` of
+  that entry, or one for a prompt that already started, returns
+  `{"text": null}`.
+- Only prompts a terminal's own user typed are editable: those from plain
+  `nori`'s own pipe, and `_nori/session/follow_up` calls from a client that
+  declared `capabilities.nori_sessions.composer` at `initialize`, as the
+  shared TUI does. Any controller terminal may take them back. A follow-up
+  from a client that does not declare it, such as the Sessions broker or an
+  older client, can be resumed or discarded, not taken into a composer.
+- The plain TUI and `nori attach` use these methods for any session on a
+  host. A host without `queue` keeps the in-process queue controls.
 
 ### Reclaim
 

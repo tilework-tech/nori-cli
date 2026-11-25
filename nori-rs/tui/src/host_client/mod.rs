@@ -173,6 +173,15 @@ pub(crate) enum HostCall {
         kind: nori_protocol::PathKind,
         limit: i32,
     },
+    /// Let the session's paused queue send again. Only a controller may.
+    ResumeQueue {
+        session_id: String,
+    },
+    /// Take one queued prompt back before it is sent. Only a controller may.
+    TakeQueued {
+        session_id: String,
+        entry_id: String,
+    },
 }
 
 impl HostCall {
@@ -181,7 +190,7 @@ impl HostCall {
             // Hosts send `approval_mode_changed` only to clients that declare it.
             Self::Initialize => (
                 "initialize",
-                json!({"capabilities":{"nori_sessions":{"approval_modes":true}}}),
+                json!({"capabilities":{"nori_sessions":{"approval_modes":true,"composer":true}}}),
             ),
             Self::List => ("_nori/session/list", json!({})),
             Self::Subscribe { session_id, cursor } => (
@@ -287,6 +296,20 @@ impl HostCall {
                     query,
                     kind,
                     limit: Some(limit),
+                }),
+            ),
+            Self::ResumeQueue { session_id } => (
+                "_nori/session/queue/resume",
+                json!(nori_protocol::QueueParams { session_id }),
+            ),
+            Self::TakeQueued {
+                session_id,
+                entry_id,
+            } => (
+                "_nori/session/queue/take",
+                json!(nori_protocol::QueueTakeParams {
+                    session_id,
+                    entry_id
                 }),
             ),
         }

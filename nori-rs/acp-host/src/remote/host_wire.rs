@@ -455,6 +455,7 @@ where
                                     Transport::Lines(_) => false,
                                 };
                                 let declares_approval_modes = request["params"]["capabilities"]["nori_sessions"]["approval_modes"] == true;
+                                let declares_composer = request["params"]["capabilities"]["nori_sessions"]["composer"] == true;
                                 let mut reply = state.host.request_from(client, request).await;
                                 if reply.response.get("error").is_none() {
                                     reply.response["result"]["control"] = state.control.lock().await.register(client, &changes, observe);
@@ -470,6 +471,7 @@ where
                                                 Transport::WebSocket | Transport::Lifecycle => super::HostClientOrigin::Independent,
                                                 Transport::Lines(origin) => origin,
                                             },
+                                            composer: declares_composer,
                                             outbound: outbound.clone(),
                                             close: cancel.clone(),
                                             role: roles.clone(),
