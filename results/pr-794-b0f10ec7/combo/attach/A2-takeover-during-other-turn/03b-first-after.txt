@@ -1,0 +1,26 @@
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Sketch the orchard plan
+
+
+• Survey in progress.
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+
+› Count the cedar trees
+
+
+• Survey in progress.
+  Survey correction received: Count the cedar trees.
+
+
+›
+
+  / commands · @ files · ? help · watching · read-only · orchard · mock-model · ready · Approvals: Agent · alt+t take control · ctrl+d detach

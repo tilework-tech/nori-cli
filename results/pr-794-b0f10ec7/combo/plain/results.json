@@ -1,0 +1,86 @@
+[
+  {
+    "scenario": "P2-shell-help",
+    "check": "bang_empty.no_enter",
+    "passed": true,
+    "detail": "!"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "bang_typed.enter_run",
+    "passed": true,
+    "detail": "Enter run"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "bang.enter_actually_runs",
+    "passed": true,
+    "detail": "shell$ nori --agent mock-model\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/v794/P2-shell-help/orchard\n  Agent        Mock ACP\n\n\n  Run 'npx nori-skillsets init' to set up Nori AI enhancements\n\n\u2022 Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\u2022 Ran echo orchard-$((6*7))\n  \u2514 orchard-42\n\n\n\u203a\n\n  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "bang.not_sent_to_agent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "after_run.back_to_discovery",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "help.lists_shell_and_skills",
+    "passed": true,
+    "detail": "P\n\n\n  Run 'npx nori-skillsets init' to set up Nori AI enhancements\n\n\u2022 Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\u2022 Ran echo orchard-$((6*7))\n  \u2514 orchard-42\n\n\n?\n\n  / for commands                          ctrl + j for newline\n  @ for file paths                        $ for skills\n  ! for shell commands                    ctrl + v to paste images\n  esc esc to edit previous message        ctrl + g to open editor\n  ctrl + c to exit                        alt"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "at.files_popup",
+    "passed": true,
+    "detail": "shell$ nori --agent mock-model\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/v794/P2-shell-help/orchard\n  Agent        Mock ACP\n\n\n  Run 'npx nori-skillsets init' to set up Nori AI enhancements\n\n\u2022 Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\u2022 Ran echo orchard-$((6*7))\n  \u2514 orchard-42\n\n\n\u203a @pea\n\n  src/pear_ledger.rs\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "busy_typed.steer_queue",
+    "passed": true,
+    "detail": "Enter steer \u00b7 Tab queue \u00b7 Ctrl+J newline"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "tab.queued_not_sent",
+    "passed": true,
+    "detail": "['Sketch the orchard plan']"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "busy_command.enter_run_only",
+    "passed": true,
+    "detail": "Enter run"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "enter.steered_into_turn",
+    "passed": true,
+    "detail": "\n\u203a Sketch the orchard plan\n\n\n\u2022 Survey in progress.\n\n\u2022 Queued for the next turn.\n\n\u2022 Delivered to the active turn.\n\n\n\u203a include the walnut row\n\n  Survey correction received: include the walnut row.\n\n\n\u203a Count the cedar trees\n\n\n\u2022 Cedar count complete.\n\n\n\u203a\n\n  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help\n\n"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "queued_delivered_after_once",
+    "passed": true,
+    "detail": "['Sketch the orchard plan', 'Count the cedar trees']"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "idle_again.discovery",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "busy_empty.hint",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  }
+]

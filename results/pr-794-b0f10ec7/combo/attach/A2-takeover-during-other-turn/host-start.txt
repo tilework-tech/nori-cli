@@ -1,0 +1,2 @@
+Host started (pid 49448)  ws://127.0.0.1:35713/acp
+Token: /tmp/v794/A2-takeover-during-other-turn/home/host/token (owner-only)

@@ -1,0 +1,30 @@
+shell$ python3 -I /home/sprite/org/workspace/.worktrees/acc/harness/pr794/kittywrap.py nori --agent mock-model
+  › Nori CLI v0.0.0
+
+  System       /tmp/v794/E1/orchard
+  Agent        Mock ACP
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› count cedars
+
+  Enter send · Shift+Enter newline
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

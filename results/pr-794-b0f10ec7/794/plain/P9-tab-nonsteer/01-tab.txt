@@ -1,0 +1,30 @@
+shell$ nori --agent mock-model
+  › Nori CLI v0.0.0
+
+  System       /tmp/v794/P9-tab-nonsteer/orchard
+  Agent        Mock ACP
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Survey the pear rows
+
+
+• Queued for the next turn.
+
+• Aligning the neural pathways (3s • esc to interrupt)
+  ↳ then the plums
+    ↑ select
+
+
+›
+
+  / commands · ! shell · @ files · ? help
+
+
+
+
+

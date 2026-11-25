@@ -1,0 +1,26 @@
+  System       /tmp/v794/P4-own-turn-nonsteerable/orchard
+  Agent        Mock ACP
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Survey the pear rows
+
+
+• Steering unavailable. Added to the next-turn queue.
+
+• Test message 1Test message 2
+
+
+› then the plums
+
+
+• Test message 1Test message 2
+
+
+›
+
+  / commands · ! shell · @ files · ? help

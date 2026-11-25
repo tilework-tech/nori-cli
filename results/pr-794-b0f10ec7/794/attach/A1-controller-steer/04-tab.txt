@@ -1,0 +1,26 @@
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Sketch the orchard plan
+
+
+• Survey in progress.
+
+• Queued for the next turn.
+
+• Burning VC cash (3s • esc to interrupt)
+  ↳ Count the cedar trees
+    ↑ select
+
+
+›
+
+  / commands · ! shell · @ files · ? help · controlling · orchard · mock-model · working · Approvals: Agent · ctrl+d detach

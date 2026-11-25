@@ -1,0 +1,308 @@
+[
+  {
+    "scenario": "A1-controller-steer",
+    "check": "empty.hints_lead_status",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "empty.keys_bold",
+    "passed": true,
+    "detail": "'\\x1b[0m\\x1b[39m\\x1b[49m  \\x1b[1m/\\x1b[0;2m\\x1b[39m\\x1b[49m commands \u00b7 \\x1b[0;1m\\x1b[39m\\x1b[49m!\\x1b[0;2m\\x1b[39m\\x1b[49m shell \u00b7 \\x1b[0;1m\\x1b[39m\\x1b[49m@\\x1b[0;2m\\x1b[39m\\x1b[49m files \u00b7 \\x1b[0;1m\\x1b[39m\\x1b[49m?\\x1b[0;2m\\x1b[39m\\x1b[49m help \u00b7 \\x1b[0m\\x1b[38;5;2m\\x1b[49mcontroll'"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "typed.send_newline",
+    "passed": true,
+    "detail": "Enter send \u00b7 Ctrl+J newline \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "own_turn.steer_queue",
+    "passed": true,
+    "detail": "Enter steer \u00b7 Tab queue \u00b7 Ctrl+J newline \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 working \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "tab.queued_not_sent",
+    "passed": true,
+    "detail": "['Sketch the orchard plan']"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "watcher.empty_no_shell_no_enter",
+    "passed": true,
+    "detail": "/ commands \u00b7 @ files \u00b7 ? help \u00b7 watching \u00b7 read-only \u00b7 orchard \u00b7 mock-model \u00b7 working \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "watcher.status_keeps_take_control",
+    "passed": true,
+    "detail": "/ commands \u00b7 @ files \u00b7 ? help \u00b7 watching \u00b7 read-only \u00b7 orchard \u00b7 mock-model \u00b7 working \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "watcher.typed_only_newline",
+    "passed": true,
+    "detail": "Ctrl+J newline \u00b7 watching \u00b7 read-only \u00b7 orchard \u00b7 mock-model \u00b7 working \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "watcher.enter_sends_nothing",
+    "passed": true,
+    "detail": "['Sketch the orchard plan']"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "watcher.draft_kept",
+    "passed": true,
+    "detail": ". Press Alt+T to take control; your draft is kept.\n\n\u2022 Refactoring the refactoring (3s \u2022 esc to interrupt)\n  \u21b3 Count the cedar trees\n    \u2191 select\n\n\n\u203a Count the pine trees\n\n  Ctrl+J newline \u00b7 watching \u00b7 read-only \u00b7 orchard \u00b7 mock-model \u00b7 working \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "watcher.bang_no_enter",
+    "passed": true,
+    "detail": "watching \u00b7 read-only \u00b7 orchard \u00b7 mock-model \u00b7 working \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "steer.delivered_in_turn",
+    "passed": true,
+    "detail": "['Sketch the orchard plan', 'Count the cedar trees']"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "queued.delivered_once_after",
+    "passed": true,
+    "detail": "['Sketch the orchard plan', 'Count the cedar trees']"
+  },
+  {
+    "scenario": "A1-controller-steer",
+    "check": "idle.back_to_discovery",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A2-takeover-during-other-turn",
+    "check": "second.now_controlling",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 working \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A2-takeover-during-other-turn",
+    "check": "hint_while_turn_not_own",
+    "passed": null,
+    "detail": "Enter steer \u00b7 Tab queue \u00b7 Ctrl+J newline"
+  },
+  {
+    "scenario": "A2-takeover-during-other-turn",
+    "check": "enter_outcome",
+    "passed": null,
+    "detail": "{'prompts': ['Sketch the orchard plan'], 'screen_tail': '\\n\\n\u203a Count the cedar trees\\n\\n\\n\u2022 Survey in progress.\\n  Survey correction received: Count the cedar trees.\\n\\n\\n\u203a\\n\\n  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach'}"
+  },
+  {
+    "scenario": "A2-takeover-during-other-turn",
+    "check": "hint_matches_outcome",
+    "passed": true,
+    "detail": "('Enter steer \u00b7 Tab queue \u00b7 Ctrl+J newline', ['Sketch the orchard plan'])"
+  },
+  {
+    "scenario": "A2-takeover-during-other-turn",
+    "check": "after_cancel_prompts",
+    "passed": null,
+    "detail": "['Sketch the orchard plan']"
+  },
+  {
+    "scenario": "A3-nonsteerable-paused",
+    "check": "nonsteer.enter_queue_only",
+    "passed": true,
+    "detail": "Enter queue \u00b7 Ctrl+J newline"
+  },
+  {
+    "scenario": "A3-nonsteerable-paused",
+    "check": "enter.queued_not_delivered",
+    "passed": true,
+    "detail": "['Survey the pear rows']"
+  },
+  {
+    "scenario": "A3-nonsteerable-paused",
+    "check": "paused.controller_enter_resume_first",
+    "passed": true,
+    "detail": "Enter resume queue \u00b7 / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "A3-nonsteerable-paused",
+    "check": "paused.watcher_no_resume",
+    "passed": true,
+    "detail": "/ commands \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "A3-nonsteerable-paused",
+    "check": "paused.watcher_enter_does_not_resume",
+    "passed": true,
+    "detail": "['Survey the pear rows']"
+  },
+  {
+    "scenario": "A3-nonsteerable-paused",
+    "check": "watcher_enter_screen_tail",
+    "passed": null,
+    "detail": "    \u2191 select\n\n\n\u203a\n\n  / commands \u00b7 @ files \u00b7 ? help \u00b7 watching \u00b7 read-only \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A3-nonsteerable-paused",
+    "check": "paused.controller_enter_resumes_once",
+    "passed": true,
+    "detail": "['Survey the pear rows', 'then the plums']"
+  },
+  {
+    "scenario": "A4-remote-shell",
+    "check": "remote.controlling",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A4-remote-shell",
+    "check": "remote.empty_hints",
+    "passed": null,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "A4-remote-shell",
+    "check": "remote.bang_typed_hints",
+    "passed": null,
+    "detail": "Enter run"
+  },
+  {
+    "scenario": "A4-remote-shell",
+    "check": "remote.outcome",
+    "passed": null,
+    "detail": "{'ran': True, 'canaries': ['/tmp/v794/A4-remote-shell/orchard/remote-canary-plum'], 'gray_hint': ''}"
+  },
+  {
+    "scenario": "A4-remote-shell",
+    "check": "remote.advertised_shell_matches_run",
+    "passed": true,
+    "detail": "{'advertised': True, 'ran': True}"
+  },
+  {
+    "scenario": "A4-remote-shell",
+    "check": "remote.enter_run_matches_run",
+    "passed": true,
+    "detail": "{'hint': 'Enter run', 'ran': True}"
+  },
+  {
+    "scenario": "A4-remote-shell",
+    "check": "remote.at_files",
+    "passed": null,
+    "detail": "{'advertised': True, 'popup_has_host_file': True}"
+  },
+  {
+    "scenario": "A4-remote-shell",
+    "check": "remote.at_advertised_matches_popup",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\u2022 This terminal now controls the host.\n\n\u2022 Ran touch remote-canary-plum\n\n\n\u203a @pea\n\n  src/pear_ledger.rs\n"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "40.footer",
+    "passed": null,
+    "detail": "controlling \u00b7 orchard \u00b7 mock-model \u00b7 r"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "40.status_kept",
+    "passed": true,
+    "detail": "controlling \u00b7 orchard \u00b7 mock-model \u00b7 r"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "40.typed",
+    "passed": null,
+    "detail": "controlling \u00b7 orchard \u00b7 mock-model \u00b7 r"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "60.footer",
+    "passed": null,
+    "detail": "controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Ag"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "60.status_kept",
+    "passed": true,
+    "detail": "controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Ag"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "60.typed",
+    "passed": null,
+    "detail": "controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Ag"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "80.footer",
+    "passed": null,
+    "detail": "controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "80.status_kept",
+    "passed": true,
+    "detail": "controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "80.typed",
+    "passed": null,
+    "detail": "controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "100.footer",
+    "passed": null,
+    "detail": "/ commands \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "100.status_kept",
+    "passed": true,
+    "detail": "/ commands \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "100.typed",
+    "passed": null,
+    "detail": "Enter send \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "140.footer",
+    "passed": null,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "140.status_kept",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A5-narrow",
+    "check": "140.typed",
+    "passed": null,
+    "detail": "Enter send \u00b7 Ctrl+J newline \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A6-attach-enhanced",
+    "check": "attach.shift_enter_hint",
+    "passed": true,
+    "detail": "Enter send \u00b7 Shift+Enter newline \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A6-attach-enhanced",
+    "check": "attach.shift_enter_newline_not_sent",
+    "passed": true,
+    "detail": "(['', '\u203a count cedars', 'and pines', '', 'Enter send \u00b7 Shift+Enter newline \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach'], [])"
+  }
+]

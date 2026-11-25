@@ -1,0 +1,26 @@
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Sketch the orchard plan
+
+
+• Survey in progress.
+
+• This terminal now controls the host.
+
+• Warming up the GPUs (2s • esc to interrupt)
+
+
+›
+
+  / commands · ! shell · @ files · ? help · controlling · orchard · mock-model · working · Approvals: Agent · ctrl+d detach

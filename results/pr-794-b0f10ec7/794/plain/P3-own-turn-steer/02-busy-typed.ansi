@@ -1,0 +1,25 @@
+shell$ nori --agent mock-model
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/v794/P3-own-turn-steer/orchard
+[2m  Agent        [0m[39m[49mMock ACP
+
+
+[2m  Run '[0m[38;5;6m[49mnpx nori-skillsets init[2m[39m' to set up Nori AI enhancements
+
+• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mSketch the orchard plan
+
+
+[2m• [0m[39m[49mSurvey in progress.
+
+[1m[38;2;128;128;128m•[0m[39m[49m [1m[38;2;128;128;128mNegotiating with the garbage collecto[38;2;138;138;138mr[0m[39m[49m [2m(1s • esc to interrupt)
+
+
+[0;1m[39m[49m›[0m[39m[49m Count the cedar trees
+
+  [1mEnter[0;2m[39m[49m steer · [0;1m[39m[49mTab[0;2m[39m[49m queue · [0;1m[39m[49mCtrl+J[0;2m[39m[49m newline
+
+

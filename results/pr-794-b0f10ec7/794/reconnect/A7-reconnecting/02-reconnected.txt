@@ -1,0 +1,26 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+■ Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting; your draft is kept.
+
+■ Reconnecting to the host. Your draft is kept; send it once the connection is back.
+
+• Reconnected to the host.
+
+
+› count cedars
+
+  Enter send · Ctrl+J newline · controlling · orchard · mock-model · ready · Approvals: Agent · ctrl+d detach

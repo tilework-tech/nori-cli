@@ -1,0 +1,26 @@
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Sketch the orchard plan
+
+
+• Survey in progress.
+
+• This terminal now controls the host.
+
+• Delivered to the active turn.
+
+
+› Count the cedar trees
+
+
+• Survey in progress.
+  Survey correction received: Count the cedar trees.
+
+• Nothing is running in this session.
+
+
+›
+
+  / commands · ! shell · @ files · ? help · controlling · orchard · mock-model · ready · Approvals: Agent · ctrl+d detach

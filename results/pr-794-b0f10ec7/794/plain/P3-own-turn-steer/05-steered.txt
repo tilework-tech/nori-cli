@@ -1,0 +1,26 @@
+
+› Sketch the orchard plan
+
+
+• Survey in progress.
+
+• Queued for the next turn.
+
+• Delivered to the active turn.
+
+
+› include the walnut row
+
+  Survey correction received: include the walnut row.
+
+
+› Count the cedar trees
+
+
+• Cedar count complete.
+
+
+›
+
+  / commands · ! shell · @ files · ? help
+

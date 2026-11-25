@@ -1,0 +1,296 @@
+[
+  {
+    "scenario": "P1-empty-typed-back",
+    "check": "empty.discovery",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "P1-empty-typed-back",
+    "check": "empty.keys_bold_labels_dim",
+    "passed": true,
+    "detail": "'\\x1b[0m\\x1b[39m\\x1b[49m  \\x1b[1m/\\x1b[0;2m\\x1b[39m\\x1b[49m commands \u00b7 \\x1b[0;1m\\x1b[39m\\x1b[49m!\\x1b[0;2m\\x1b[39m\\x1b[49m shell \u00b7 \\x1b[0;1m\\x1b[39m\\x1b[49m@\\x1b[0;2m\\x1b[39m\\x1b[49m files \u00b7 \\x1b[0;1m\\x1b[39m\\x1b[49m?\\x1b[0;2m\\x1b[39m\\x1b[49m help'"
+  },
+  {
+    "scenario": "P1-empty-typed-back",
+    "check": "empty.no_placeholder_tip",
+    "passed": true,
+    "detail": "['  \u203a Nori CLI v0.0.0', '\u203a']"
+  },
+  {
+    "scenario": "P1-empty-typed-back",
+    "check": "typed.send_newline",
+    "passed": true,
+    "detail": "Enter send \u00b7 Ctrl+J newline"
+  },
+  {
+    "scenario": "P1-empty-typed-back",
+    "check": "erased.back_to_discovery",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "P1-empty-typed-back",
+    "check": "slash.enter_run_after_popup_closed",
+    "passed": true,
+    "detail": "Enter run"
+  },
+  {
+    "scenario": "P1-empty-typed-back",
+    "check": "ctrl_j_inserts_newline",
+    "passed": true,
+    "detail": "['', '', '', '', '', '']"
+  },
+  {
+    "scenario": "P1-empty-typed-back",
+    "check": "ctrl_j_not_submitted",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "bang_empty.no_enter",
+    "passed": true,
+    "detail": "!"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "bang_typed.enter_run",
+    "passed": true,
+    "detail": "Enter run"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "bang.enter_actually_runs",
+    "passed": true,
+    "detail": "shell$ nori --agent mock-model\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/v794/P2-shell-help/orchard\n  Agent        Mock ACP\n\n\n  Run 'npx nori-skillsets init' to set up Nori AI enhancements\n\n\u2022 Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\u2022 Ran echo orchard-$((6*7))\n  \u2514 orchard-42\n\n\n\u203a\n\n  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "bang.not_sent_to_agent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "after_run.back_to_discovery",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "help.lists_shell_and_skills",
+    "passed": true,
+    "detail": "P\n\n\n  Run 'npx nori-skillsets init' to set up Nori AI enhancements\n\n\u2022 Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\u2022 Ran echo orchard-$((6*7))\n  \u2514 orchard-42\n\n\n?\n\n  / for commands                          ctrl + j for newline\n  @ for file paths                        $ for skills\n  ! for shell commands                    ctrl + v to paste images\n  esc esc to edit previous message        ctrl + g to open editor\n  ctrl + c to exit                        alt"
+  },
+  {
+    "scenario": "P2-shell-help",
+    "check": "at.files_popup",
+    "passed": true,
+    "detail": "shell$ nori --agent mock-model\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/v794/P2-shell-help/orchard\n  Agent        Mock ACP\n\n\n  Run 'npx nori-skillsets init' to set up Nori AI enhancements\n\n\u2022 Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\u2022 Ran echo orchard-$((6*7))\n  \u2514 orchard-42\n\n\n\u203a @pea\n\n  src/pear_ledger.rs\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "busy_typed.steer_queue",
+    "passed": true,
+    "detail": "Enter steer \u00b7 Tab queue \u00b7 Ctrl+J newline"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "tab.queued_not_sent",
+    "passed": true,
+    "detail": "['Sketch the orchard plan']"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "busy_command.enter_run_only",
+    "passed": true,
+    "detail": "Enter run"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "enter.steered_into_turn",
+    "passed": true,
+    "detail": "\n\u203a Sketch the orchard plan\n\n\n\u2022 Survey in progress.\n\n\u2022 Queued for the next turn.\n\n\u2022 Delivered to the active turn.\n\n\n\u203a include the walnut row\n\n  Survey correction received: include the walnut row.\n\n\n\u203a Count the cedar trees\n\n\n\u2022 Cedar count complete.\n\n\n\u203a\n\n  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help\n\n"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "queued_delivered_after_once",
+    "passed": true,
+    "detail": "['Sketch the orchard plan', 'Count the cedar trees']"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "idle_again.discovery",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "P3-own-turn-steer",
+    "check": "busy_empty.hint",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "P4-own-turn-nonsteerable",
+    "check": "nonsteer.enter_queue_no_tab",
+    "passed": true,
+    "detail": "Enter queue \u00b7 Ctrl+J newline"
+  },
+  {
+    "scenario": "P4-own-turn-nonsteerable",
+    "check": "enter.queued_not_steered",
+    "passed": true,
+    "detail": "(['Survey the pear rows'], 'k ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\\n\\n\\n\u203a Survey the pear rows\\n\\n\\n\u2022 Steering unavailable. Added to the next-turn queue.\\n\\n\u2022 Mass-producing artisanal code (3s \u2022 esc to interrupt)\\n  \u21b3 then the plums\\n    \u2191 select\\n\\n\\n\u203a\\n\\n  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help\\n\\n')"
+  },
+  {
+    "scenario": "P4-own-turn-nonsteerable",
+    "check": "queued_delivered_next_turn_once",
+    "passed": true,
+    "detail": "['Survey the pear rows', 'then the plums']"
+  },
+  {
+    "scenario": "P5-paused-queue",
+    "check": "paused.shown",
+    "passed": true,
+    "detail": "ng...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streami\n  ng...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...\n\n\u25a0 Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at\nhttps://github.com/tilework-tech/nori-cli/issues\n\n  1 queued \u00b7 paused (interrupted) \u00b7 enter resumes\n  \u21b3 then the plums\n    \u2191 select\n\n\n\u203a\n\n  Enter resume queue \u00b7 / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help\n"
+  },
+  {
+    "scenario": "P5-paused-queue",
+    "check": "paused.enter_resume_first",
+    "passed": true,
+    "detail": "Enter resume queue \u00b7 / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "P5-paused-queue",
+    "check": "paused.queue_not_delivered_yet",
+    "passed": true,
+    "detail": "['Survey the pear rows']"
+  },
+  {
+    "scenario": "P5-paused-queue",
+    "check": "paused.typed_hides_resume",
+    "passed": true,
+    "detail": "Enter send \u00b7 Ctrl+J newline"
+  },
+  {
+    "scenario": "P5-paused-queue",
+    "check": "empty_enter_resumes_once",
+    "passed": true,
+    "detail": "['Survey the pear rows', 'then the plums']"
+  },
+  {
+    "scenario": "P5-paused-queue",
+    "check": "after_resume.no_resume_hint",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "P6-narrow",
+    "check": "40.fits_and_drops_whole",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files"
+  },
+  {
+    "scenario": "P6-narrow",
+    "check": "40.typed",
+    "passed": true,
+    "detail": "Enter send \u00b7 Ctrl+J newline"
+  },
+  {
+    "scenario": "P6-narrow",
+    "check": "60.fits_and_drops_whole",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "P6-narrow",
+    "check": "60.typed",
+    "passed": true,
+    "detail": "Enter send \u00b7 Ctrl+J newline"
+  },
+  {
+    "scenario": "P6-narrow",
+    "check": "80.fits_and_drops_whole",
+    "passed": true,
+    "detail": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help"
+  },
+  {
+    "scenario": "P6-narrow",
+    "check": "80.typed",
+    "passed": true,
+    "detail": "Enter send \u00b7 Ctrl+J newline"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "segment-false.hint_present(expected False)",
+    "passed": true,
+    "detail": "[\"  Run 'npx nori-skillsets init' to set up Nori AI enhancements\", '\u2022 Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)', '\u203a @ for file mentions']"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "segment-false.placeholder",
+    "passed": true,
+    "detail": "\u203a @ for file mentions"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "segment-false.typed_row",
+    "passed": true,
+    "detail": "\u203a count cedars"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "left-without.hint_present(expected False)",
+    "passed": true,
+    "detail": "[\"  Run 'npx nori-skillsets init' to set up Nori AI enhancements\", '\u2022 Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)', '\u203a ! for shell commands']"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "left-without.placeholder",
+    "passed": true,
+    "detail": "\u203a ! for shell commands"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "left-without.typed_row",
+    "passed": true,
+    "detail": "\u203a count cedars"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "left-not-first.hint_present(expected True)",
+    "passed": true,
+    "detail": "['\u2022 Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)', '\u203a', '  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help']"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "left-not-first.placeholder",
+    "passed": true,
+    "detail": "\u203a"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "left-not-first.typed_row",
+    "passed": true,
+    "detail": "Enter send \u00b7 Ctrl+J newline"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "right-only.hint_present(expected True)",
+    "passed": true,
+    "detail": "['\u2022 Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)', '\u203a', '                                                                                 / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help']"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "right-only.placeholder",
+    "passed": true,
+    "detail": "\u203a"
+  },
+  {
+    "scenario": "P7-off-layouts",
+    "check": "right-only.typed_row",
+    "passed": true,
+    "detail": "Enter send \u00b7 Ctrl+J newline"
+  }
+]

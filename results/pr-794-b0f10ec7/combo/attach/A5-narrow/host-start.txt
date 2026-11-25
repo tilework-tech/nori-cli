@@ -1,0 +1,2 @@
+Host started (pid 50760)  ws://127.0.0.1:39061/acp
+Token: /tmp/v794/A5-narrow/home/host/token (owner-only)

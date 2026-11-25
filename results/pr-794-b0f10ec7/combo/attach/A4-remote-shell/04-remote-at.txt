@@ -1,0 +1,26 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+• This terminal now controls the host.
+
+• Remote shell commands are not yet supported.
+
+
+› @pea
+
+  src/pear_ledger.rs

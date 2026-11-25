@@ -1,0 +1,26 @@
+  › Nori CLI v0.0.0
+
+  System       /tmp/v794/P3-own-turn-steer/orchard
+  Agent        Mock ACP
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Sketch the orchard plan
+
+
+• Survey in progress.
+
+• Queued for the next turn.
+
+• Praying to the demo gods (2s • esc to interrupt)
+  ↳ Count the cedar trees
+    ↑ select
+
+
+›
+
+  / commands · ! shell · @ files · ? help

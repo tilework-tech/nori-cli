@@ -1,0 +1,2 @@
+Host started (pid 50297)  ws://127.0.0.1:34237/acp
+Token: /tmp/v794/A4-remote-shell/home/host/token (owner-only)

@@ -1,0 +1,8 @@
+{
+  "busy_empty_hint": "/ commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help",
+  "typed_hint": "Enter run",
+  "ran": true,
+  "prompts": [
+    "Sketch the orchard plan"
+  ]
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "scenario": "A7-reconnecting",
+    "check": "reconnecting.no_send_key",
+    "passed": true,
+    "detail": "Ctrl+J newline \u00b7 RECONNECTING \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 draft kept \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "A7-reconnecting",
+    "check": "reconnecting.enter_sends_nothing",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "A7-reconnecting",
+    "check": "reconnected.send_back",
+    "passed": true,
+    "detail": "Enter send \u00b7 Ctrl+J newline \u00b7 controlling \u00b7 orchard \u00b7 mock-model \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  }
+]

@@ -1,0 +1,26 @@
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/v794/P3-own-turn-steer/orchard
+[2m  Agent        [0m[39m[49mMock ACP
+
+
+[2m  Run '[0m[38;5;6m[49mnpx nori-skillsets init[2m[39m' to set up Nori AI enhancements
+
+• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mSketch the orchard plan
+
+
+[2m• [0m[39m[49mSurvey in progress.
+
+[2m• [0m[39m[49mQueued for the next turn.
+
+[1m[38;2;231;231;231m•[0m[39m[49m [1m[38;2;128;128;128mPrayin[38;2;138;138;138mg[38;2;167;167;167m [38;2;202;202;202mt[38;2;231;231;231mo[38;2;242;242;242m [38;2;231;231;231mt[38;2;202;202;202mh[38;2;167;167;167me[38;2;138;138;138m [38;2;128;128;128mdemo gods[0m[39m[49m [2m(2s • esc to interrupt)
+  ↳ [3mCount the cedar trees
+[0;2m[39m[49m    ↑ select
+
+
+[0;1m[39m[49m›
+
+[0m[39m[49m  [1m/[0;2m[39m[49m commands · [0;1m[39m[49m![0;2m[39m[49m shell · [0;1m[39m[49m@[0;2m[39m[49m files · [0;1m[39m[49m?[0;2m[39m[49m help

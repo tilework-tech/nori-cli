@@ -1,0 +1,26 @@
+
+
+› Sketch the orchard plan
+
+
+• Survey in progress.
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+
+
+› include the walnut row
+
+
+• Survey in progress.
+  Survey correction received: include the walnut row.
+
+
+› Count the cedar trees
+
+
+• Cedar count complete.
+
+
+›
+
+  / commands · @ files · ? help · watching · read-only · orchard · mock-model · ready · Approvals: Agent · alt+t take control · ctrl+d detach

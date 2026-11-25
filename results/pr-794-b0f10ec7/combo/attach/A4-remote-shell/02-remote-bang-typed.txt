@@ -1,0 +1,26 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+• This terminal now controls the host.
+
+
+! touch remote-canary-plum
+
+  controlling · orchard · mock-model · ready · Approvals: Agent · ctrl+d detach

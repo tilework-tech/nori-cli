@@ -1,0 +1,38 @@
+[
+  {
+    "scenario": "E1-enhanced-keys",
+    "check": "keyboard_flags_pushed",
+    "passed": true,
+    "detail": "push \u001b[>7u\u001b[?\nquery-answered\n"
+  },
+  {
+    "scenario": "E1-enhanced-keys",
+    "check": "typed.shift_enter_hint",
+    "passed": true,
+    "detail": "Enter send \u00b7 Shift+Enter newline"
+  },
+  {
+    "scenario": "E1-enhanced-keys",
+    "check": "shift_enter_inserts_newline",
+    "passed": true,
+    "detail": "['', '', '', '', '', '']"
+  },
+  {
+    "scenario": "E1-enhanced-keys",
+    "check": "shift_enter_not_submitted",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "E1-enhanced-keys",
+    "check": "ctrl_j_still_newline",
+    "passed": true,
+    "detail": "['', '', '', '', '', '']"
+  },
+  {
+    "scenario": "E1-enhanced-keys",
+    "check": "enter_sends_three_lines",
+    "passed": true,
+    "detail": "['count cedars\\nand pines\\nand firs']"
+  }
+]
