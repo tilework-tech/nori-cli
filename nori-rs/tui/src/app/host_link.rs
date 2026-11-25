@@ -33,6 +33,26 @@ const LIST_EVERY: Duration = Duration::from_secs(1);
 const OWNED_STOPPED: &str = "The host this terminal owns stopped.";
 const NOT_CONNECTED: &str = "Reconnecting to the host. Try again once it is back.";
 /// The transport cannot tell whether the host applied a call it never answered.
+/// A call failed because the connection to the host was down or dropped,
+/// not because the host refused it; the host may have applied it.
+#[derive(Debug)]
+pub(crate) struct ConnectionLost(&'static str);
+
+impl std::fmt::Display for ConnectionLost {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+impl std::error::Error for ConnectionLost {}
+
+#[cfg(test)]
+impl ConnectionLost {
+    pub(crate) fn for_tests() -> Self {
+        Self(UNANSWERED)
+    }
+}
+
 const UNANSWERED: &str =
     "The connection to the host dropped before it answered. The request may have reached the host.";
 
@@ -154,8 +174,12 @@ impl HostLink {
     }
 
     pub fn request(&mut self, call: HostCall, reply: HostReply) {
-        if let Some(reason) = self.refusal() {
-            reply.deliver(Err(anyhow::anyhow!(reason)));
+        if let Some(reason) = &self.connection.stopped {
+            reply.deliver(Err(anyhow::anyhow!(reason.clone())));
+            return;
+        }
+        if !self.connection.connected {
+            reply.deliver(Err(ConnectionLost(NOT_CONNECTED).into()));
             return;
         }
         if let Err(HostTag::Operation(reply)) = self.client.request(call, HostTag::Operation(reply))
@@ -264,6 +288,7 @@ impl HostLink {
                 let sessions = &result["capabilities"]["nori_sessions"];
                 self.connection.features.session_folders = sessions["session_cwd"] == true;
                 self.connection.features.find_paths = sessions["find_paths"] == true;
+                self.connection.features.queue = sessions["queue"] == true;
                 // List at once rather than at the next heartbeat, so the
                 // picker opens as soon as the host lets this terminal in.
                 if !self.client.has_pending(|tag| matches!(tag, HostTag::List)) {
@@ -316,7 +341,7 @@ impl HostLink {
                 self.connection.connected = false;
                 for tag in unanswered {
                     if let HostTag::Operation(reply) = tag {
-                        reply.deliver(Err(anyhow::anyhow!(UNANSWERED)));
+                        reply.deliver(Err(ConnectionLost(UNANSWERED).into()));
                     }
                 }
                 Ok(Some(HostUpdate::Disconnected(reason)))

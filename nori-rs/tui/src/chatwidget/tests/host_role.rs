@@ -193,6 +193,7 @@ async fn new_on_a_joined_host_asks_the_host_to_start_a_session_in_the_named_fold
             session_folders: true,
             find_paths: true,
             remote: true,
+            ..crate::host_client::HostFeatures::default()
         },
         ..joined(ControlRole::Controller, true)
     });

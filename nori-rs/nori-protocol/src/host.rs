@@ -15,6 +15,7 @@ use serde_json::Value;
 use serde_json::json;
 
 use crate::Delegation;
+use crate::QueueSnapshot;
 use crate::SessionEnvelope;
 use crate::acp::v1 as acp;
 
@@ -121,7 +122,7 @@ pub struct HostDiscovery {
 /// methods, and `host.json`. A change that a client of the previous contract
 /// could not use bumps the major; an addition such clients can ignore bumps
 /// the minor; a fix that changes no message bumps the patch.
-pub const HOST_CONTRACT: &str = "1.2.0";
+pub const HOST_CONTRACT: &str = "1.3.0";
 
 /// Whether a host advertising contract `host` serves a client built for
 /// contract `client`: `host` must satisfy the caret requirement `^client`.
@@ -257,6 +258,42 @@ pub struct FindPathsResult {
     pub matches: Vec<PathMatch>,
 }
 
+/// Params of `_nori/session/queue/resume` and `_nori/session/queue/discard`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct QueueParams {
+    pub session_id: String,
+}
+
+/// Params of `_nori/session/queue/take`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct QueueTakeParams {
+    pub session_id: String,
+    /// A [`crate::QueueEntry`] ID from the session's latest queue snapshot.
+    pub entry_id: String,
+    /// Chosen by the caller for this take. Asking again with the same key
+    /// returns the same answer, so a reply lost to a disconnect can be
+    /// fetched again; a different key gets null once the prompt is taken.
+    pub request_key: String,
+}
+
+/// Result of `_nori/session/queue/take`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct QueueTakeResult {
+    /// The text the user queued, returned to exactly one caller. Null when
+    /// the prompt already started, was already taken, or cannot return to a
+    /// composer without losing content.
+    pub text: Option<String>,
+}
+
+/// Result of `_nori/session/queue/discard`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct QueueDiscardResult {
+    /// How many queued prompts were dropped before being sent.
+    pub discarded: i32,
+}
+
 /// JSON Schema (draft 2020-12) of the types exchanged with `nori host`: the
 /// ACP v1 messages it serves and Nori's additions, with every type under
 /// `$defs` and keys sorted so the output is stable.
@@ -309,6 +346,11 @@ pub fn host_wire_schema() -> Value {
         generator.subschema_for::<Delegation>(),
         generator.subschema_for::<FindPathsParams>(),
         generator.subschema_for::<FindPathsResult>(),
+        generator.subschema_for::<QueueParams>(),
+        generator.subschema_for::<QueueTakeParams>(),
+        generator.subschema_for::<QueueTakeResult>(),
+        generator.subschema_for::<QueueDiscardResult>(),
+        generator.subschema_for::<QueueSnapshot>(),
     ];
     let definitions = generator.take_definitions(true);
     sorted(json!({
