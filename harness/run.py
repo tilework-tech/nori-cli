@@ -4726,7 +4726,7 @@ def j06_detach_keeps_host(ctx, how):
     j_open(ctx, b, sid)
     b.wait_for("tk row", 20)
     time.sleep(1.5)
-    hist = b.history()
+    hist = r_inline_history(b)
     ctx.check("rejoin.history_once", hist.count("dawn row 02") == 1, hist.count("dawn row 02"))
     ctx.check("rejoin.stream_rows_once", hist.count("tk row 03") == 1, hist.count("tk row 03"))
     b.capture("rejoined")
@@ -4884,6 +4884,506 @@ SCENARIOS.update({
     "K02": ("plain nori: custom markdown and script prompts", k02_custom_prompts),
     "K03": ("plain nori: /goal set and show", k03_goal),
     "K04": ("plain nori: /context names the folder's instruction file", k04_context),
+})
+
+
+# ---------------------------------------------------------------------------
+# R: restacked heads (#777 5c72765d, real #784 launcher, #778-#785 on real attach).
+# From #784 on, `nori attach` is the shared joined TUI, so no verifier entry is set.
+# ---------------------------------------------------------------------------
+
+NOT_ON_HOST = "not available on this host yet"
+
+
+def r_order(text, needles):
+    """Each needle once, in the given order; returns (ok, positions)."""
+    pos = [(n, text.count(n), text.find(n)) for n in needles]
+    ok = all(c == 1 for _, c, _ in pos) and [p for _, _, p in pos] == sorted(p for _, _, p in pos)
+    return ok, [(n, c) for n, c, _ in pos if c != 1] or "ordered"
+
+
+def r_inline_history(t):
+    """Scrollback of a joined terminal: switch alternate -> inline first so every row is in tmux history."""
+    if t.alt_screen():
+        t.keys("C-l")
+        time.sleep(1.5)
+    return t.history()
+
+
+def r_sent(ctx, word):
+    return [r for r in ctx.ledger("request", "session/prompt") if word in r.get("text", "")]
+
+
+def r01_no_newline_order(ctx):
+    """#777 fix on real attach: replies without a final newline show once, restored and live, in order, for a late joiner too."""
+    ctx.start_host()
+    sid = seed(ctx, "relay 2 dawn")
+    a = ctx.term("controller")
+    j_open(ctx, a, sid)
+    try:
+        a.wait_for("dawn relay finished.", 10)
+    except TimeoutError:
+        pass
+    a.capture("restored")
+    ctx.check("restored.unterminated_reply_shown", "dawn relay finished." in a.screen(), a.screen()[-300:])
+    for word in ("noon", "dusk"):
+        a.type(f"relay 2 {word}")
+        a.keys("Enter")
+        try:
+            a.wait_for(f"{word} relay finished.", 15)
+        except TimeoutError:
+            pass
+        time.sleep(0.8)
+    a.type("plain evening note")
+    a.keys("Enter")
+    try:
+        a.wait_for("heard: plain evening note", 15)
+    except TimeoutError:
+        pass
+    time.sleep(1.0)
+    a.capture("live")
+    seq = ["relay 2 dawn", "dawn row 01", "dawn relay finished.", "relay 2 noon", "noon row 02", "noon relay finished.",
+           "relay 2 dusk", "dusk row 02", "dusk relay finished.", "heard: plain evening note"]
+    b = ctx.term("late-joiner")
+    j_open(ctx, b, sid)
+    try:
+        b.wait_for("heard: plain evening note", 15)
+    except TimeoutError:
+        pass
+    time.sleep(1.0)
+    b.capture("late-joiner")
+    for name, t in (("controller", a), ("late_joiner", b)):
+        hist = r_inline_history(t)
+        t.capture(f"{name}-inline")
+        ok, detail = r_order(hist, seq)
+        ctx.check(f"{name}.each_once_in_order", ok, detail)
+        glued = [l for l in hist.splitlines() if re.search(r"finished\.\s*(-|›|\S)", l)]
+        ctx.check(f"{name}.no_tail_glued_to_next_row", not glued, glued[:3])
+    for word in ("noon", "dusk"):
+        ctx.check(f"live.{word}_delivered_once", len(r_sent(ctx, f"relay 2 {word}")) == 1, len(r_sent(ctx, f"relay 2 {word}")))
+
+
+def r02_picker_and_new(ctx):
+    """Empty host: alternate-screen picker; /new starts a session on the host; picker lists and opens it later."""
+    ctx.start_host()
+    a = ctx.term("first")
+    a.run(f"{NORI} attach")
+    a.wait_for("Sessions", 10)
+    time.sleep(0.5)
+    a.capture("picker-empty")
+    ctx.check("start.alternate_screen", a.alt_screen(), a.alt_screen())
+    ctx.check("start.picker_shown", "Sessions 0" in a.screen(), a.screen()[:200])
+    a.keys("Escape")
+    a.wait_for("No session selected", 10)
+    a.type("/new")
+    time.sleep(0.6)
+    a.keys("Enter")
+    try:
+        a.wait_for("controlling · app", 15)
+    except TimeoutError:
+        pass
+    a.capture("after-new")
+    ls = ctx.nori("host", "ls").stdout
+    ctx.check("new.session_on_host", len([l for l in ls.splitlines() if "claude-code" in l or "app" in l]) >= 1, ls[-300:])
+    a.type("relay 1 first")
+    a.keys("Enter")
+    try:
+        a.wait_for("first relay finished.", 15)
+    except TimeoutError:
+        pass
+    ctx.check("new.first_prompt_once", len(r_sent(ctx, "relay 1 first")) == 1, len(r_sent(ctx, "relay 1 first")))
+    a.keys("C-d")
+    time.sleep(1.5)
+    ctx.check("detach.back_at_shell", a.at_shell(), last_nonblank(a.screen()))
+    seed(ctx, "relay 1 second", cwd="beta")
+    b = ctx.term("second")
+    b.run(f"{NORI} attach")
+    b.wait_for("Sessions", 10)
+    time.sleep(1.0)
+    b.capture("picker-two")
+    ctx.check("picker.lists_two", "Sessions 2" in b.screen(), b.screen()[:300])
+    b.keys("Enter")
+    time.sleep(2.5)
+    b.capture("picker-opened")
+    ctx.check("picker.enter_opens_a_session", "relay finished." in b.screen() and "controlling" in b.screen(), b.screen()[-300:])
+
+
+def r03_typeahead(ctx):
+    """Keys typed right after launch reach the composer once; the first prompt is delivered once."""
+    ctx.start_host()
+    sid = seed(ctx, "relay 1 dawn")
+    a = ctx.term("a")
+    a.run(f"{NORI} attach {sid[:8]}")
+    time.sleep(0.05)
+    a.type("relay 1 early")
+    time.sleep(0.4)
+    a.keys("Enter")
+    try:
+        a.wait_for("early relay finished.", 15)
+    except TimeoutError:
+        pass
+    time.sleep(0.8)
+    a.capture("typeahead")
+    ctx.check("typeahead.delivered_once", len(r_sent(ctx, "relay 1 early")) == 1,
+              [r.get("text") for r in ctx.ledger("request", "session/prompt")])
+    ctx.check("typeahead.reply_shown_once", a.screen().count("early relay finished.") == 1, a.screen()[-300:])
+
+
+def r_queue_paused(ctx, t, word):
+    t.type("hold on")
+    t.keys("Enter")
+    wait_ledger(ctx, lambda r: r["kind"] == "tick")
+    t.type(word)
+    t.keys("Tab")
+    time.sleep(1.0)
+    t.keys("Escape")
+    t.wait_for("paused", 10)
+    time.sleep(0.5)
+
+
+def r_reclaim(t):
+    """Up on an empty composer focuses the newest editable queued prompt; Enter takes it back.
+    With nothing editable, Up falls through to prompt history, so Enter would send a second copy:
+    only press Enter when the queue list took focus (the queued row is no longer the composer text)."""
+    t.keys("C-u")
+    t.keys("Up")
+    time.sleep(1.0)
+    t.capture("after-up")
+    if "1 queued" in t.screen() and any(w in r_composer(t) for w in ("relay 1 lamp", "relay 1 beacon")):
+        t.keys("C-u")
+        return "history-recall"
+    t.keys("Enter")
+    time.sleep(1.5)
+    return "list"
+
+
+def r_composer(t):
+    rows = [l for l in t.screen().splitlines() if l.lstrip().startswith("›")]
+    return rows[-1] if rows else ""
+
+
+def r05_reclaim_own(ctx, via_proxy=False):
+    """#778: the terminal that queued a prompt takes it back once (optionally after reconnecting)."""
+    endpoint, _ = ctx.start_host()
+    sid = seed(ctx, "relay 1 dawn")
+    proxy = Proxy(endpoint) if via_proxy else None
+    a = ctx.term("a")
+    j_open(ctx, a, sid, via=proxy)
+    a.wait_for("dawn relay finished.", 15)
+    word = "relay 1 lamp"
+    r_queue_paused(ctx, a, word)
+    a.capture("paused")
+    if proxy:
+        proxy.drop_all(hold=3.0)
+        time.sleep(1.5)
+        a.capture("dropped")
+        time.sleep(6)
+        a.capture("reconnected")
+        ctx.check("reconnect.queue_still_listed", "1 queued" in a.screen(), a.screen()[-300:])
+    how = r_reclaim(a)
+    a.capture("reclaimed")
+    ctx.check("reclaim.up_focuses_queue_not_history", how == "list", how)
+    ctx.check("reclaim.text_in_composer", word in r_composer(a), r_composer(a))
+    ctx.check("reclaim.queue_row_gone", "1 queued" not in a.screen(), [l for l in a.screen().splitlines() if "queued" in l])
+    a.keys("C-u")
+    a.type("relay 1 after")
+    a.keys("Enter")
+    try:
+        a.wait_for("after relay finished.", 15)
+    except TimeoutError:
+        pass
+    time.sleep(3)
+    a.capture("after-next-turn")
+    ctx.check("reclaim.never_sent", not r_sent(ctx, word), len(r_sent(ctx, word)))
+    if proxy:
+        proxy.close()
+
+
+def r05c_reclaim_other(ctx):
+    """#778: a prompt another terminal queued can't be taken into this composer; resume still sends it once."""
+    ctx.start_host()
+    sid = seed(ctx, "relay 1 dawn")
+    a = ctx.term("a")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn relay finished.", 15)
+    b = ctx.term("b")
+    j_open(ctx, b, sid)
+    b.wait_for("dawn relay finished.", 15)
+    word = "relay 1 beacon"
+    r_queue_paused(ctx, a, word)
+    b.keys("M-t")
+    time.sleep(2)
+    how = r_reclaim(b)
+    b.capture("other-reclaim")
+    ctx.check("other.up_does_not_take_it", how == "history-recall" or "1 queued" in b.screen(), how)
+    ctx.check("other.not_taken_into_composer", word not in r_composer(b), r_composer(b))
+    b.keys("C-u")
+    time.sleep(0.3)
+    b.keys("Enter")
+    try:
+        wait_ledger(ctx, lambda r: r.get("method") == "session/prompt" and word in r.get("text", ""), timeout=15)
+    except Exception:
+        pass
+    time.sleep(2)
+    b.capture("resumed")
+    ctx.check("other.resume_sends_once", len(r_sent(ctx, word)) == 1, len(r_sent(ctx, word)))
+
+
+def r06_history_hostwide(ctx):
+    """#779 on real attach: a prompt sent in one terminal is recalled and searched in another terminal, a remote one with its own home."""
+    endpoint, _ = ctx.start_host()
+    sid = seed(ctx, "relay 1 dawn")
+    a = ctx.term("a")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn relay finished.", 15)
+    a.type("relay 1 cormorant")
+    a.keys("Enter")
+    a.wait_for("cormorant relay finished.", 15)
+    proxy = Proxy(endpoint)
+    b = ctx.term("remote", home="laptop")
+    j_open(ctx, b, sid, via=proxy)
+    b.wait_for("cormorant relay finished.", 15)
+    b.keys("M-t")
+    time.sleep(1.5)
+    b.keys("Up")
+    time.sleep(1.0)
+    b.capture("up")
+    ctx.check("history.up_in_other_terminal", "relay 1 cormorant" in r_composer(b), r_composer(b))
+    b.keys("C-u")
+    b.keys("C-r")
+    time.sleep(0.5)
+    b.type("cormo")
+    time.sleep(1.0)
+    b.capture("ctrl-r")
+    ctx.check("history.ctrl_r_in_other_terminal", "relay 1 cormorant" in b.screen(), b.screen()[-300:])
+    b.keys("Escape")
+    hp = ctx.fx["homes"]["host"] / "history.jsonl"
+    lp = ctx.fx["homes"]["laptop"] / "history.jsonl"
+    ctx.check("history.stored_once_on_host", hp.exists() and hp.read_text().count("relay 1 cormorant") == 1,
+              hp.read_text().count("relay 1 cormorant") if hp.exists() else "missing")
+    ctx.check("history.client_home_untouched", not lp.exists() or "cormorant" not in lp.read_text(), "laptop history")
+    proxy.close()
+
+
+def r07_prompts(ctx):
+    """#780 on real attach: host prompts listed in a remote terminal; script runs on the host in the session folder."""
+    cmds = ctx.fx["homes"]["host"] / "commands"
+    cmds.mkdir(exist_ok=True)
+    (cmds / "harbor-review.md").write_text("---\ndescription: Review the harbor log\n---\nrelay 1 review-$1\n")
+    (cmds / "wherescript.sh").write_text("#!/bin/sh\necho \"relay 1 ran-in-$(basename $(dirname $(pwd)))\"\n")
+    os.chmod(cmds / "wherescript.sh", 0o755)
+    lc = ctx.fx["homes"]["laptop"] / "commands"
+    lc.mkdir(exist_ok=True)
+    (lc / "laptop-decoy.md").write_text("relay 1 decoy\n")
+    endpoint, _ = ctx.start_host()
+    sid = seed(ctx, "relay 1 dawn", cwd="beta")
+    proxy = Proxy(endpoint)
+    b = ctx.term("remote", home="laptop")
+    j_open(ctx, b, sid, via=proxy)
+    b.wait_for("dawn relay finished.", 15)
+    time.sleep(1)
+    b.type("/harbor")
+    time.sleep(1.2)
+    b.capture("popup")
+    ctx.check("prompts.host_prompt_listed", "harbor-review" in b.screen(), b.screen()[-400:])
+    b.keys("C-u")
+    b.type("/laptop")
+    time.sleep(1.0)
+    ctx.check("prompts.client_prompt_not_listed", "laptop-decoy" not in b.screen(), b.screen()[-300:])
+    b.keys("C-u")
+    b.type("/prompts:harbor-review north")
+    b.keys("Enter")
+    time.sleep(0.5)
+    if "/prompts:harbor-review" in r_composer(b):
+        b.keys("Enter")
+    try:
+        b.wait_for("review-north relay finished.", 15)
+    except TimeoutError:
+        pass
+    ctx.check("prompts.markdown_expands_once", len(r_sent(ctx, "relay 1 review-north")) == 1, len(r_sent(ctx, "relay 1 review-north")))
+    b.type("/prompts:wherescript")
+    b.keys("Enter")
+    time.sleep(0.5)
+    if "/prompts:wherescript" in r_composer(b):
+        b.keys("Enter")
+    try:
+        b.wait_for("ran-in-beta relay finished.", 15)
+    except TimeoutError:
+        pass
+    b.capture("script")
+    sent = [r.get("text") for r in ctx.ledger("request", "session/prompt") if "ran-in-" in r.get("text", "")]
+    ctx.check("prompts.script_ran_in_session_folder_once", sent == ["relay 1 ran-in-beta"] or (len(sent) == 1 and "ran-in-beta" in sent[0]), sent)
+    proxy.close()
+
+
+def r08_goal(ctx):
+    """#781 on real attach: controller sets a goal; a watcher sees it; watcher can't change it."""
+    (Path(ctx.fx["control"]) / "http-mcp").write_text("1")
+    ctx.start_host()
+    sid = seed(ctx, "relay 1 dawn")
+    a = ctx.term("a")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn relay finished.", 15)
+    b = ctx.term("watcher")
+    j_open(ctx, b, sid)
+    b.wait_for("dawn relay finished.", 15)
+    a.type("/goal chart the north harbor")
+    a.keys("Enter")
+    time.sleep(0.6)
+    if "/goal chart" in r_composer(a):
+        a.keys("Enter")
+    time.sleep(2.5)
+    a.capture("goal-set")
+    b.capture("goal-watcher")
+    ctx.check("goal.runs_in_attach", NOT_ON_HOST not in a.screen(), [l for l in a.screen().splitlines() if "/goal" in l][-2:])
+    ctx.check("goal.controller_shows_it", "north harbor" in a.screen(), a.screen()[-400:])
+    ctx.check("goal.watcher_shows_it", "north harbor" in b.screen(), b.screen()[-400:])
+    b.type("/goal sink the fleet")
+    b.keys("Enter")
+    time.sleep(0.6)
+    if "/goal sink" in r_composer(b):
+        b.keys("Enter")
+    time.sleep(2)
+    b.capture("goal-watcher-refused")
+    a.type("/goal")
+    a.keys("Enter")
+    time.sleep(0.6)
+    if r_composer(a).strip().endswith("/goal"):
+        a.keys("Enter")
+    time.sleep(1.5)
+    a.capture("goal-show")
+    ctx.check("goal.watcher_change_refused", "sink the fleet" not in a.screen(), a.screen()[-400:])
+
+
+def r09_context(ctx):
+    """#782 on real attach: /context from a remote terminal names the session folder's CLAUDE.md on the host."""
+    (ctx.fx["roots"]["beta"] / "CLAUDE.md").write_text("# Beta harbor rules\nKeep the beacon lit.\n")
+    endpoint, _ = ctx.start_host()
+    sid = seed(ctx, "relay 1 dawn", cwd="beta")
+    proxy = Proxy(endpoint)
+    b = ctx.term("remote", home="laptop")
+    j_open(ctx, b, sid, via=proxy)
+    b.wait_for("dawn relay finished.", 15)
+    b.keys("M-t")
+    time.sleep(1)
+    b.type("/context")
+    b.keys("Enter")
+    time.sleep(0.6)
+    if r_composer(b).strip().endswith("/context"):
+        b.keys("Enter")
+    time.sleep(2.5)
+    b.capture("context")
+    hist = r_inline_history(b)
+    ctx.check("context.runs_in_attach", NOT_ON_HOST not in hist, [l for l in hist.splitlines() if "/context" in l][-2:])
+    ctx.check("context.names_session_claude_md", "CLAUDE.md" in hist, hist[-600:])
+    proxy.close()
+
+
+def r10_compact(ctx):
+    """#783 on real attach: controller compacts; both terminals see it finish once; a watcher can't start one."""
+    ctx.start_host()
+    sid = seed(ctx, "relay 2 dawn")
+    a = ctx.term("a")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn relay finished.", 15)
+    b = ctx.term("watcher")
+    j_open(ctx, b, sid)
+    b.wait_for("dawn relay finished.", 15)
+    before = len(ctx.ledger("request", "session/prompt"))
+    b.type("/compact")
+    b.keys("Enter")
+    time.sleep(0.6)
+    if r_composer(b).strip().endswith("/compact"):
+        b.keys("Enter")
+    time.sleep(2.0)
+    b.capture("watcher-compact")
+    ctx.check("compact.watcher_refused", len(ctx.ledger("request", "session/prompt")) == before,
+              len(ctx.ledger("request", "session/prompt")) - before)
+    a.type("/compact")
+    a.keys("Enter")
+    time.sleep(0.6)
+    if r_composer(a).strip().endswith("/compact"):
+        a.keys("Enter")
+    time.sleep(6.0)
+    a.capture("controller-compact")
+    b.capture("watcher-after")
+    ctx.check("compact.runs_in_attach", NOT_ON_HOST not in a.screen(), [l for l in a.screen().splitlines() if "/compact" in l][-2:])
+    ha, hb = r_inline_history(a), r_inline_history(b)
+    pat = re.compile(r"(?i)(context compacted|compacted)")
+    ctx.check("compact.controller_sees_finish", pat.search(ha) is not None, ha[-500:])
+    ctx.check("compact.watcher_sees_finish", pat.search(hb) is not None, hb[-500:])
+    ctx.check("compact.session_kept", sid[:8] in ctx.nori("host", "ls").stdout, "")
+    a.type("relay 1 post")
+    a.keys("Enter")
+    try:
+        a.wait_for("post relay finished.", 15)
+    except TimeoutError:
+        pass
+    ctx.check("compact.next_turn_works", len(r_sent(ctx, "relay 1 post")) == 1, len(r_sent(ctx, "relay 1 post")))
+
+
+def r11_shell(ctx):
+    """#785 per Cliff: local controller runs ! in the session folder; remote controller gets a gray hint, nothing runs; watcher read-only."""
+    endpoint, _ = ctx.start_host()
+    sid = seed(ctx, "relay 1 dawn", cwd="beta")
+    run = ctx.fx["run"]
+    canaries = lambda: sorted(str(p.relative_to(run)) for p in Path(run).rglob("shell-canary-*"))
+    a = ctx.term("local")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn relay finished.", 15)
+    a.type("!echo shell-in-$(basename $(dirname $PWD)) && touch shell-canary-local")
+    a.keys("Enter")
+    try:
+        a.wait_for("shell-in-beta", 10)
+    except TimeoutError:
+        pass
+    time.sleep(1)
+    a.capture("local")
+    ctx.check("local.output_from_session_folder", "shell-in-beta" in a.screen(), a.screen()[-300:])
+    ctx.check("local.ran_in_session_folder", canaries() == ["roots/beta/app/shell-canary-local"], canaries())
+    w = ctx.term("watcher")
+    j_open(ctx, w, sid)
+    w.wait_for("dawn relay finished.", 15)
+    time.sleep(1)
+    ctx.check("watcher.sees_local_command_cell", "shell-in-beta" in w.screen(), w.screen()[-300:])
+    w.type("!touch shell-canary-watcher")
+    w.keys("Enter")
+    time.sleep(2)
+    w.capture("watcher")
+    ctx.check("watcher.nothing_ran", "shell-canary-watcher" not in " ".join(canaries()), canaries())
+    proxy = Proxy(endpoint)
+    r = ctx.term("remote", home="laptop")
+    j_open(ctx, r, sid, via=proxy)
+    r.wait_for("dawn relay finished.", 15)
+    r.keys("M-t")
+    time.sleep(1.5)
+    r.type("!")
+    time.sleep(0.8)
+    r.capture("remote-bang")
+    ctx.check("remote.hint_shown", re.search(r"(?i)remote shell commands are not (yet )?supported", r.screen()) is not None,
+              r.screen()[-400:])
+    r.type("touch shell-canary-remote")
+    r.keys("Enter")
+    time.sleep(2.5)
+    r.capture("remote-enter", expect=None)
+    ctx.check("remote.nothing_ran", "shell-canary-remote" not in " ".join(canaries()), canaries())
+    ctx.check("remote.not_sent_as_prompt", not r_sent(ctx, "shell-canary-remote"), len(r_sent(ctx, "shell-canary-remote")))
+    proxy.close()
+
+
+SCENARIOS.update({
+    "R01": ("restack: no-newline replies restored and live, once and in order, late joiner too", r01_no_newline_order),
+    "R02": ("restack: empty-host picker, /new on the host, picker lists and opens", r02_picker_and_new),
+    "R03": ("restack: typeahead right after launch delivered once", r03_typeahead),
+    "R05a": ("restack #778: own queued prompt taken back once", r05_reclaim_own),
+    "R05b": ("restack #778: own queued prompt taken back once after reconnect", lambda c: r05_reclaim_own(c, True)),
+    "R05c": ("restack #778: another terminal's queued prompt not takeable; resume sends once", r05c_reclaim_other),
+    "R06": ("restack #779: host-wide recall and search from a remote terminal", r06_history_hostwide),
+    "R07": ("restack #780: host prompts in a remote terminal; script in session folder", r07_prompts),
+    "R08": ("restack #781: goal set by controller, seen by watcher, watcher refused", r08_goal),
+    "R09": ("restack #782: /context names the session folder's CLAUDE.md", r09_context),
+    "R10": ("restack #783: compact from controller, finish seen by both, watcher refused", r10_compact),
+    "R11": ("restack #785: local ! in session folder, remote hint and nothing runs, watcher read-only", r11_shell),
 })
 
 

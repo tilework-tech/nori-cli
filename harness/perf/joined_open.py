@@ -107,6 +107,11 @@ def sample(label, binary, joined, sections, workdir, cols, rows):
             pane.settle(0.5)
             out["raw_bytes"] = pane.raw.stat().st_size
             if joined:
+                # From #784 on, attach opens on the alternate screen; Ctrl+L writes the transcript to scrollback.
+                out["alt_screen_at_open"] = pane.tmux("display", "-p", "-t", "k", "#{alternate_on}").strip() == "1"
+                if out["alt_screen_at_open"]:
+                    pane.tmux("send-keys", "-t", "k", "C-l")
+                    pane.settle(0.8)
                 out["audit"] = audit(pane.history(), sections)
             out["final_screen"] = pane.screen()
         finally:

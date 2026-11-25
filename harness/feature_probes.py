@@ -303,7 +303,75 @@ def probe_context():
         check("context", "unknown_session_-32002", err(r4) == -32002, r4)
 
 
-PROBES = {"queue": probe_queue, "history": probe_history, "prompts": probe_prompts, "goal": probe_goal, "context": probe_context}
+# ------------------------------------------------------------- compact (#783)
+def probe_compact():
+    with Run("compact") as run:
+        ctl = run.link()
+        if not has_cap(ctl, "compact"):
+            check("compact", "capability", False, "absent"); RESULTS[-1]["absent"] = True; return
+        check("compact", "capability_advertised", True)
+        sid = run.new("relay 2 harbor")
+        watcher = run.link()
+        watcher.call("_nori/session/subscribe", {"session_id": sid, "cursors": {sid: 0}}); watcher.drain(1.0); watcher.notes.clear()
+        r = watcher.call("_nori/session/compact", {"sessionId": sid})
+        check("compact", "watcher_refused_-32016", err(r) == -32016, r)
+        before = len(run.prompts())
+        r = ctl.call("_nori/session/compact", {"sessionId": sid})
+        check("compact", "controller_admitted", "result" in r, r)
+        notes = watcher.drain(8.0)
+        blob = [json.dumps(n) for n in notes]
+        done = [b for b in blob if "context_compacted" in b or "Compact failed" in b]
+        check("compact", "watcher_sees_finish_once", len([b for b in blob if "context_compacted" in b]) == 1, done[:2] or blob[-3:])
+        check("compact", "agent_asked_to_summarize", len(run.prompts()) > before, run.prompts()[before:][:2])
+        check("compact", "same_session_listed", bool(row(ctl, sid)), row(ctl, sid).get("session_id"))
+        late = run.link()
+        late.call("_nori/session/subscribe", {"session_id": sid, "cursors": {sid: 0}})
+        replay = [json.dumps(n) for n in late.drain(2.0)]
+        check("compact", "late_joiner_replay_has_finish", any("context_compacted" in b for b in replay), len(replay))
+        n0 = len(run.prompts())
+        r = ctl.call("_nori/session/prompt", {"session_id": sid, "prompt": text("relay 1 after")})
+        deadline = time.time() + 15
+        while time.time() < deadline and not any("relay 1 after" in p for p in run.prompts()):
+            time.sleep(0.1)
+        check("compact", "next_prompt_delivered_once", sum("relay 1 after" in p for p in run.prompts()) == 1, run.prompts()[n0:])
+        r = ctl.call("_nori/session/compact", {"sessionId": "00000000-0000-4000-8000-00000000dead"})
+        check("compact", "unknown_session_-32002", err(r) == -32002, r)
+
+
+# --------------------------------------------------------------- shell (#785)
+def probe_shell():
+    with Run("shell") as run:
+        ctl = run.link()
+        if not has_cap(ctl, "shell"):
+            check("shell", "capability", False, "absent"); RESULTS[-1]["absent"] = True; return
+        check("shell", "capability_advertised", True)
+        sid = run.new(cwd=run.fx["roots"]["beta"])
+        watcher = run.link()
+        watcher.call("_nori/session/subscribe", {"session_id": sid, "cursors": {sid: 0}}); watcher.drain(1.0); watcher.notes.clear()
+        canary = lambda n: sorted(str(p.relative_to(run.dir)) for p in run.dir.rglob(f"probe-canary-{n}"))
+        r = watcher.call("_nori/session/shell", {"sessionId": sid, "command": "touch probe-canary-watcher"})
+        time.sleep(1.0)
+        check("shell", "watcher_refused_-32016", err(r) == -32016 and not canary("watcher"), [r, canary("watcher")])
+        r = ctl.call("_nori/session/shell", {"sessionId": sid, "command": "echo cwd=$PWD; touch probe-canary-ctl"})
+        notes = [json.dumps(n) for n in watcher.drain(4.0)]
+        shell = [b for b in notes if "user_shell" in b]
+        # A wire controller on 127.0.0.1: recorded as-is; the local/remote split is judged in the TUI scenarios (R11).
+        check("shell", "controller_wire_result", "result" in r or "error" in r, r)
+        check("shell", "controller_wire_ran", canary("ctl"), canary("ctl"))
+        if canary("ctl"):
+            check("shell", "ran_in_session_folder", canary("ctl") == ["roots/beta/app/probe-canary-ctl"], canary("ctl"))
+            out = "".join(bytes(json.loads(b)["params"]["event"]["event"]["event"].get("chunk") or []).decode()
+                          for b in shell)
+            states = [json.loads(b)["params"]["event"]["event"]["event"].get("state") for b in shell]
+            check("shell", "watcher_sees_user_shell_with_output", f"cwd={run.fx['roots']['beta']}" in out and states[0] == "started" and states[-1] == "finished", [states, out[:200]])
+        r = ctl.call("_nori/session/shell", {"sessionId": sid, "command": ""})
+        check("shell", "empty_command_-32602", err(r) == -32602, r)
+        r = ctl.call("_nori/session/shell", {"sessionId": "00000000-0000-4000-8000-00000000dead", "command": "true"})
+        check("shell", "unknown_session_-32002", err(r) == -32002, r)
+        check("shell", "nothing_sent_to_agent", not any("probe-canary" in p for p in run.prompts()), run.prompts()[-2:])
+
+
+PROBES = {"queue": probe_queue, "history": probe_history, "prompts": probe_prompts, "goal": probe_goal, "context": probe_context, "compact": probe_compact, "shell": probe_shell}
 only = [x for x in A.only.split(",") if x]
 for name, fn in PROBES.items():
     if only and name not in only:
