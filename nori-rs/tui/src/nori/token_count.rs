@@ -77,7 +77,7 @@ pub fn format_token_count(tc: &TokenCount) -> String {
     format!("{prefix}{formatted_number} {noun}")
 }
 
-fn format_with_thousands_separator(n: i64) -> String {
+pub(crate) fn format_with_thousands_separator(n: i64) -> String {
     if n < 0 {
         return format!("-{}", format_with_thousands_separator(-n));
     }

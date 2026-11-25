@@ -6,7 +6,7 @@
 //!
 //! Flags set the starting state so captures are repeatable:
 //! `--width N`, `--tools few|many|long|none`,
-//! `--fields full|minimal|not-resumable|no-session`,
+//! `--fields full|codex|minimal|not-resumable|no-session`,
 //! `--shade off|terminal|dark|light`, `--no-color`.
 
 #[path = "../../tui-components/examples/support/mod.rs"]
@@ -111,6 +111,7 @@ fn parse_args() -> Result<State> {
             "--fields" => {
                 state.fields = match value().as_str() {
                     "full" => ExitFieldsFixture::Full,
+                    "codex" => ExitFieldsFixture::Codex,
                     "minimal" => ExitFieldsFixture::Minimal,
                     "not-resumable" => ExitFieldsFixture::NotResumable,
                     "no-session" => ExitFieldsFixture::NoSession,
@@ -206,7 +207,8 @@ fn main() -> Result<()> {
                     .render(wide, frame.buffer_mut());
             }
             let model = exit_card_fixture(state.tools, state.fields);
-            Paragraph::new(exit_card_lines(&model, width, paint)).render(card, frame.buffer_mut());
+            Paragraph::new(soft_wrap(exit_card_lines(&model, width, paint), width))
+                .render(card, frame.buffer_mut());
 
             KeyHints::new([
                 KeyHint::new("← →", "width"),
@@ -238,6 +240,37 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Card lines always fit; only the resume command can be wider. Cut it at
+/// the edge cell by cell, the way a terminal soft-wraps it.
+fn soft_wrap(lines: Vec<Line<'static>>, width: u16) -> Vec<Line<'static>> {
+    let width = usize::from(width);
+    let mut out = Vec::new();
+    for line in lines {
+        if line.width() <= width {
+            out.push(line);
+            continue;
+        }
+        let style = line
+            .spans
+            .first()
+            .map(|span| span.style)
+            .unwrap_or_default();
+        let text: String = line
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        let chars: Vec<char> = text.chars().collect();
+        for chunk in chars.chunks(width.max(1)) {
+            out.push(Line::from(Span::styled(
+                chunk.iter().collect::<String>(),
+                style,
+            )));
+        }
+    }
+    out
 }
 
 /// A dotted row exactly `width` cells wide, so the card's edge is visible.

@@ -1,13 +1,16 @@
 use pretty_assertions::assert_eq;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 use ratatui::text::Line;
 
+use super::layout::VALUE_OFFSET;
 use super::*;
 use crate::insert_history::insert_history_lines;
 use crate::test_backend::VT100Backend;
 
 const STRESS: (ExitToolsFixture, ExitFieldsFixture) =
     (ExitToolsFixture::Many, ExitFieldsFixture::Full);
+const RESUME: &str = "nori resume 019a7c3e-5b21-7f4d-9e08-6c2a1d4b8f37";
 
 fn card(tools: ExitToolsFixture, fields: ExitFieldsFixture, width: u16) -> Vec<Line<'static>> {
     exit_card_lines(
@@ -17,8 +20,17 @@ fn card(tools: ExitToolsFixture, fields: ExitFieldsFixture, width: u16) -> Vec<L
     )
 }
 
-/// Print the card into a VT100 terminal through the same history path the
-/// session uses, and return every terminal row the card occupies.
+/// The card without its trailing resume command, which is allowed to wrap.
+fn body(lines: &[Line<'static>]) -> Vec<Line<'static>> {
+    let text = plain(lines);
+    match text.last() {
+        Some(last) if last.starts_with("nori resume ") => lines[..lines.len() - 2].to_vec(),
+        _ => lines.to_vec(),
+    }
+}
+
+/// Print lines into a VT100 terminal through the same history path the
+/// session uses, and return every terminal row they occupy.
 fn terminal_rows(lines: Vec<Line<'static>>, width: u16) -> Vec<String> {
     let height = u16::try_from(lines.len() * 3 + 4).expect("rows fit");
     let backend = VT100Backend::new(width, height);
@@ -50,7 +62,8 @@ fn plain(lines: &[Line<'static>]) -> Vec<String> {
         .collect()
 }
 
-fn block_after(rows: &[String], label: &str) -> Vec<String> {
+/// The rows of one labelled block: the label row and its continuation rows.
+fn block(rows: &[String], label: &str) -> Vec<String> {
     let start = rows
         .iter()
         .position(|row| row.trim_start().starts_with(label))
@@ -65,12 +78,23 @@ fn block_after(rows: &[String], label: &str) -> Vec<String> {
     block
 }
 
+/// Column just past the first number on a row.
+fn number_end(row: &str) -> usize {
+    let start = row
+        .find(|ch: char| ch.is_ascii_digit())
+        .expect("row has a count");
+    start
+        + row[start..]
+            .find(|ch: char| !ch.is_ascii_digit() && ch != ',')
+            .unwrap_or(row.len() - start)
+}
+
 #[test]
 fn every_card_line_occupies_exactly_one_terminal_row_at_every_width() {
     for tools in ExitToolsFixture::ALL {
         for fields in ExitFieldsFixture::ALL {
             for width in 1..=120 {
-                let lines = card(tools, fields, width);
+                let lines = body(&card(tools, fields, width));
                 let expected = plain(&lines);
                 assert_eq!(
                     terminal_rows(lines, width),
@@ -83,92 +107,36 @@ fn every_card_line_occupies_exactly_one_terminal_row_at_every_width() {
 }
 
 #[test]
-fn tool_continuation_rows_start_at_the_value_column() {
-    let rows = terminal_rows(card(STRESS.0, STRESS.1, 40), 40);
-    let tools = block_after(&rows, "Tools");
+fn the_last_line_is_only_the_resume_command() {
+    for width in [10_u16, 40, 80, 120] {
+        let lines = card(STRESS.0, STRESS.1, width);
+        let text = plain(&lines);
 
-    assert!(tools.len() > 3, "the stress case must wrap: {tools:#?}");
-    for row in &tools[1..] {
         assert_eq!(
-            row.chars().take_while(|ch| *ch == ' ').count(),
-            VALUE_OFFSET,
-            "continuation row is misaligned: {row:?}"
+            text[text.len() - 2..],
+            [String::new(), RESUME.to_string()],
+            "at width {width}"
+        );
+        assert_eq!(
+            lines.last().map(|line| line
+                .spans
+                .iter()
+                .all(|span| span.style.fg == Some(Color::Green))),
+            Some(true)
         );
     }
 }
 
 #[test]
-fn tools_that_fit_are_never_split_across_rows() {
-    let rows = terminal_rows(card(STRESS.0, STRESS.1, 40), 40);
-    for item in ["Read 37", "TodoWrite 7", "WebFetch 5", "NotebookEdit 1"] {
-        assert!(
-            rows.iter().any(|row| row.contains(item)),
-            "{item:?} was split: {rows:#?}"
-        );
-    }
-}
-
-#[test]
-fn a_tool_name_wider_than_the_column_breaks_after_its_separators() {
-    let rows = terminal_rows(card(STRESS.0, STRESS.1, 40), 40);
-    let tools = block_after(&rows, "Tools");
-    let pieces: Vec<&str> = tools
-        .iter()
-        .map(|row| row.trim_start())
-        .skip_while(|row| !row.starts_with("mcp__github"))
-        .take(3)
-        .collect();
-
-    assert_eq!(
-        pieces,
-        vec![
-            "mcp__github__create_pull_",
-            "request_review_comment 4",
-            "Write 3"
-        ]
-    );
-}
-
-#[test]
-fn a_name_without_separators_is_cut_at_the_column_edge() {
-    let rows = terminal_rows(
-        card(ExitToolsFixture::LongNames, ExitFieldsFixture::Minimal, 40),
-        40,
-    );
-    let tools = block_after(&rows, "Tools");
-    let start = tools
-        .iter()
-        .position(|row| row.contains("Exampletool"))
-        .expect("unbreakable name shown");
-
-    assert_eq!(tools[start].trim_start().len(), 40 - VALUE_OFFSET);
-    assert_eq!(tools[start + 1].trim_start(), "separatorsatall 2");
-}
-
-#[test]
-fn narrow_terminals_stack_each_label_above_its_values() {
-    let rows = terminal_rows(card(STRESS.0, STRESS.1, 24), 24);
-    let tools = rows
-        .iter()
-        .position(|row| row == "  Tools")
-        .expect("Tools label alone on its row");
-
-    assert!(
-        rows[tools + 1].starts_with("    Read 37"),
-        "values indent under the label: {rows:#?}"
-    );
-}
-
-#[test]
-fn rows_without_values_are_left_out() {
-    let rows = plain(&card(
+fn a_session_that_cannot_resume_ends_without_a_command() {
+    let text = plain(&card(
         ExitToolsFixture::None,
         ExitFieldsFixture::NotResumable,
         80,
     ));
 
     assert_eq!(
-        rows,
+        text,
         vec![
             "  › Nori CLI  session ended".to_string(),
             String::new(),
@@ -179,13 +147,192 @@ fn rows_without_values_are_left_out() {
 
 #[test]
 fn a_session_without_an_id_shows_only_the_heading() {
-    let rows = plain(&card(
+    let text = plain(&card(
         ExitToolsFixture::None,
         ExitFieldsFixture::NoSession,
         80,
     ));
 
-    assert_eq!(rows, vec!["  › Nori CLI  session ended".to_string()]);
+    assert_eq!(text, vec!["  › Nori CLI  session ended".to_string()]);
+}
+
+#[test]
+fn the_session_block_lists_title_and_agent_under_the_id() {
+    let text = plain(&card(ExitToolsFixture::Few, ExitFieldsFixture::Full, 80));
+
+    assert_eq!(
+        block(&text, "Session"),
+        vec![
+            "  Session      019a7c3e-5b21-7f4d-9e08-6c2a1d4b8f37".to_string(),
+            "               Title  Redesign the exit card".to_string(),
+            "               Agent  Claude Code".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn tool_counts_are_right_justified_and_names_left_justified() {
+    let text = plain(&card(STRESS.0, STRESS.1, 80));
+    let tools = block(&text, "Tools");
+
+    assert_eq!(tools.len(), 14, "one tool per row: {tools:#?}");
+    assert!(
+        tools
+            .iter()
+            .all(|row| number_end(row) == number_end(&tools[0])),
+        "{tools:#?}"
+    );
+    assert!(
+        tools
+            .iter()
+            .all(|row| row[number_end(row)..].starts_with("  ")
+                && !row[number_end(row) + 2..].starts_with(' '))
+    );
+    assert_eq!(tools[0], "  Tools        37  Read");
+    assert_eq!(tools[13], "                1  NotebookEdit");
+}
+
+#[test]
+fn tools_keep_descending_call_order() {
+    let text = plain(&card(STRESS.0, STRESS.1, 80));
+    let counts: Vec<i64> = block(&text, "Tools")
+        .iter()
+        .map(|row| {
+            let end = number_end(row);
+            let start = row[..end].rfind(' ').map_or(0, |space| space + 1);
+            row[start..end].parse().expect("count")
+        })
+        .collect();
+
+    let mut sorted = counts.clone();
+    sorted.sort_by(|a, b| b.cmp(a));
+    assert_eq!(counts, sorted);
+}
+
+#[test]
+fn wide_terminals_lay_tools_out_in_columns() {
+    let text = plain(&card(ExitToolsFixture::Few, ExitFieldsFixture::Full, 120));
+
+    assert_eq!(
+        block(&text, "Tools"),
+        vec![
+            "  Tools        37  Read   18  Edit    6  Glob".to_string(),
+            "               29  Bash   12  Grep    3  Write".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn one_long_tool_name_keeps_a_wide_terminal_in_one_column() {
+    let text = plain(&card(STRESS.0, STRESS.1, 120));
+
+    assert_eq!(block(&text, "Tools").len(), 14);
+}
+
+#[test]
+fn a_long_tool_name_wraps_under_its_own_name_column() {
+    let text = plain(&card(STRESS.0, STRESS.1, 40));
+    let tools = block(&text, "Tools");
+    let start = tools
+        .iter()
+        .position(|row| row.contains("mcp__github__"))
+        .expect("long name shown");
+    let name_column = tools[start].find("mcp__").expect("name");
+
+    assert_eq!(
+        tools[start + 1].find(|ch: char| ch != ' '),
+        Some(name_column)
+    );
+    assert!(
+        tools[start].ends_with('_'),
+        "breaks after a separator: {:?}",
+        tools[start]
+    );
+}
+
+#[test]
+fn a_name_without_separators_is_cut_at_the_column_edge() {
+    let text = plain(&card(
+        ExitToolsFixture::LongNames,
+        ExitFieldsFixture::Minimal,
+        40,
+    ));
+    let tools = block(&text, "Tools");
+    let start = tools
+        .iter()
+        .position(|row| row.contains("Exampletool"))
+        .expect("unbreakable name shown");
+
+    assert_eq!(tools[start].len(), 40);
+}
+
+#[test]
+fn skills_and_subagents_take_one_line_each() {
+    let text = plain(&card(STRESS.0, STRESS.1, 80));
+
+    assert_eq!(
+        block(&text, "Skills"),
+        vec![
+            "  Skills       test-driven-development".to_string(),
+            "               writing-plans".to_string()
+        ]
+    );
+}
+
+#[test]
+fn a_wide_terminal_fits_a_few_skills_on_one_line() {
+    let text = plain(&card(STRESS.0, STRESS.1, 120));
+
+    assert_eq!(
+        block(&text, "Skills"),
+        vec!["  Skills       test-driven-development · writing-plans".to_string()]
+    );
+}
+
+#[test]
+fn usage_closes_the_card_with_context_then_tokens_then_cost() {
+    let text = plain(&card(ExitToolsFixture::Few, ExitFieldsFixture::Full, 80));
+    let usage_start = text
+        .iter()
+        .position(|row| row.trim_start().starts_with("Context"))
+        .expect("context row");
+
+    assert_eq!(text[usage_start - 1], "");
+    assert_eq!(
+        text[usage_start..text.len() - 2],
+        [
+            "  Context      164,208 of 1,000,000 · 16% full",
+            "  Tokens       2,204,330  total",
+            "                  18,420  input",
+            "               2,071,850  cached read",
+            "                  72,100  cached write",
+            "                  41,960  output",
+            "  Cost         $3.42 · reported by the agent",
+        ]
+        .map(String::from)
+    );
+}
+
+#[test]
+fn a_session_without_usage_reports_has_no_usage_section() {
+    let text = plain(&card(ExitToolsFixture::Few, ExitFieldsFixture::Minimal, 80));
+
+    assert!(!text.iter().any(|row| {
+        ["Context", "Tokens", "Cost"]
+            .iter()
+            .any(|label| row.trim_start().starts_with(label))
+    }));
+}
+
+#[test]
+fn narrow_terminals_stack_each_label_above_its_values() {
+    let text = plain(&card(STRESS.0, STRESS.1, 24));
+    let tools = text
+        .iter()
+        .position(|row| row == "  Tools")
+        .expect("Tools label alone on its row");
+
+    assert_eq!(text[tools + 1], "    37  Read");
 }
 
 #[test]
@@ -222,30 +369,36 @@ fn an_unknown_terminal_background_gets_no_band() {
 }
 
 #[test]
-fn shading_paints_one_even_band_with_a_blank_row_above_and_below() {
+fn shading_paints_one_even_band_and_leaves_the_resume_command_outside_it() {
     let model = exit_card_fixture(STRESS.0, STRESS.1);
     let paint = ExitCardPaint {
         shade_from: Some((24, 26, 27)),
         color: true,
     };
+    let band = crate::style::user_message_bg((24, 26, 27));
     for width in [24_u16, 40, 80, 120] {
         let lines = exit_card_lines(&model, width, paint);
-        let band = crate::style::user_message_bg((24, 26, 27));
-        let first_width = lines[0].width();
+        let shaded = body(&lines);
+        let band_width = shaded[0].width();
 
         assert!(
-            lines.iter().all(|line| line.width() == first_width),
+            shaded.iter().all(|line| line.width() == band_width),
             "uneven band at {width}"
         );
-        assert!(usize::from(width) >= first_width);
+        assert!(usize::from(width) >= band_width);
         assert!(
-            lines
+            shaded
                 .iter()
                 .flat_map(|line| &line.spans)
                 .all(|span| span.style.bg == Some(band))
         );
-        assert_eq!(plain(&lines[..1]), vec![String::new()]);
-        assert_eq!(plain(&lines[lines.len() - 1..]), vec![String::new()]);
+        assert_eq!(plain(&shaded[..1]), vec![String::new()]);
+        assert!(
+            lines[shaded.len()..]
+                .iter()
+                .flat_map(|line| &line.spans)
+                .all(|span| span.style.bg.is_none())
+        );
     }
 }
 
@@ -258,11 +411,12 @@ fn zero_width_renders_nothing() {
 fn terminal_snapshots() {
     for (name, tools, fields, width) in [
         (
-            "typical_80",
+            "claude_80",
             ExitToolsFixture::Few,
             ExitFieldsFixture::Full,
             80,
         ),
+        ("codex_120", STRESS.0, ExitFieldsFixture::Codex, 120),
         ("stress_40", STRESS.0, STRESS.1, 40),
         ("stress_24", STRESS.0, STRESS.1, 24),
         (
