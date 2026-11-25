@@ -52,7 +52,8 @@ jobs:
           git -C ctl status --porcelain | tee "$O/ctl-dirty.txt"
           T=a_subscriber_may_pause_until_it_is_one_journal_behind
           for name in fix ctl; do
-            (cd $name/nori-rs && CARGO_TARGET_DIR="$RUNNER_TEMP/test-$name" cargo test --locked -p nori-harness --test managed_remote --no-run -j 6) > "$O/$name-build.log" 2>&1
+            # The fixture's mock-model agent resolves mock_acp_agent beside the test binary.
+            (cd $name/nori-rs && CARGO_TARGET_DIR="$RUNNER_TEMP/test-$name" cargo build --locked -p mock-acp-agent -j 6 && CARGO_TARGET_DIR="$RUNNER_TEMP/test-$name" cargo test --locked -p nori-harness --test managed_remote --no-run -j 6) > "$O/$name-build.log" 2>&1
             for i in $(seq 1 10); do
               if (cd $name/nori-rs && CARGO_TARGET_DIR="$RUNNER_TEMP/test-$name" cargo test --locked -p nori-harness --test managed_remote -- --exact $T) > "$O/$name-run$i.log" 2>&1
               then echo "$name run $i pass" | tee -a "$O/tally.txt"
