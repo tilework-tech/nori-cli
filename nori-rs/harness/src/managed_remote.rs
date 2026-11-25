@@ -18,6 +18,7 @@ use crate::remote_agent::HostClientOrigin;
 use crate::remote_agent::REMOTE_CONTROL_RESPONDER;
 use crate::session_manager::SessionManager;
 
+mod goal;
 mod queue;
 
 /// A transport-independent view of a manager. Disconnection does not stop sessions.
@@ -272,6 +273,7 @@ impl ManagedRemoteHost {
                         "context_size":replay.as_ref().and_then(|info| info.context).map(|(_, size)| size),
                         "model":record.model_name,
                         "queue":replay.as_ref().and_then(|info| info.queue.clone()),
+                        "goal":replay.as_ref().and_then(|info| info.goal.clone()),
                     })
                 }).collect::<Vec<_>>();
                 Ok((
@@ -369,6 +371,9 @@ impl ManagedRemoteHost {
                 .queue(method, params)
                 .await
                 .map(|result| (result, None)),
+            goal::GET | goal::SET if self.authenticated_controller => {
+                self.goal(method, params).await.map(|result| (result, None))
+            }
             _ => Err(RemoteError::new(-32601, "method not found")),
         }
     }

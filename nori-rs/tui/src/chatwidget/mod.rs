@@ -66,6 +66,7 @@ pub(crate) use context::ContextSnapshot;
 mod event_handlers;
 mod external_cancel;
 mod goal;
+mod goal_host;
 mod helpers;
 mod history_host;
 mod key_handling;

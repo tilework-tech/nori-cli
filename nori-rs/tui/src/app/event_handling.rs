@@ -855,6 +855,13 @@ impl App {
             }
             AppEvent::GoalLoaded(Some(goal)) => self.chat_widget.handle_thread_goal_updated(goal),
             AppEvent::GoalLoaded(None) => self.chat_widget.handle_thread_goal_cleared(),
+            AppEvent::HostGoalLoaded {
+                session_id,
+                goal,
+                asked,
+            } => self
+                .chat_widget
+                .on_host_goal_loaded(&session_id, goal, asked),
             AppEvent::HarnessActionFailed(message) => self.chat_widget.add_error_message(message),
             AppEvent::DiffResult(text) => {
                 // Clear the in-progress state in the bottom pane

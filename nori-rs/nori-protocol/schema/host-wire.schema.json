@@ -2250,6 +2250,86 @@
       "x-method": "session/fork",
       "x-side": "agent"
     },
+    "GoalGetParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/session/goal/get`.",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "type": "object"
+    },
+    "GoalOp": {
+      "description": "One change to a session's goal.",
+      "oneOf": [
+        {
+          "enum": [
+            "pause",
+            "resume",
+            "clear"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Replace the goal with an active one.",
+          "properties": {
+            "set": {
+              "properties": {
+                "objective": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "objective"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "set"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "GoalResult": {
+      "description": "Result of `_nori/session/goal/get` and `_nori/session/goal/set`: the\nsession's goal afterwards, null when it has none.",
+      "properties": {
+        "goal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadGoal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "GoalSetParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/session/goal/set`.",
+      "properties": {
+        "op": {
+          "$ref": "#/$defs/GoalOp"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "op"
+      ],
+      "type": "object"
+    },
     "HistoryAddParams": {
       "additionalProperties": false,
       "description": "Params of `_nori/host/history/add`.",
@@ -8670,6 +8750,15 @@
     },
     {
       "$ref": "#/$defs/PromptRunResult"
+    },
+    {
+      "$ref": "#/$defs/GoalGetParams"
+    },
+    {
+      "$ref": "#/$defs/GoalSetParams"
+    },
+    {
+      "$ref": "#/$defs/GoalResult"
     }
   ],
   "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",

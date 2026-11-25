@@ -53,6 +53,9 @@ pub struct ReplayInfo {
     /// The latest queue snapshot, so a client that joins after its
     /// announcement expired still sees a paused queue.
     pub queue: Option<nori_protocol::QueueSnapshot>,
+    /// The latest goal, so a client that joins after its announcement
+    /// expired still sees it.
+    pub goal: Option<nori_protocol::ThreadGoal>,
 }
 
 struct History {
@@ -69,6 +72,7 @@ struct History {
     pending: nori_protocol::PendingRequest,
     context: Option<(i64, i64)>,
     queue: Option<nori_protocol::QueueSnapshot>,
+    goal: Option<nori_protocol::ThreadGoal>,
 }
 
 impl Default for History {
@@ -84,6 +88,7 @@ impl Default for History {
             pending: nori_protocol::PendingRequest::default(),
             context: None,
             queue: None,
+            goal: None,
         }
     }
 }
@@ -126,6 +131,9 @@ impl Journal {
         match &envelope.event {
             SessionEvent::Nori(NoriEvent::QueueChanged(queue)) => {
                 history.queue = Some(queue.clone());
+            }
+            SessionEvent::Nori(NoriEvent::GoalChanged(goal)) => {
+                history.goal = goal.clone();
             }
             SessionEvent::Nori(NoriEvent::PromptSummaryUpdated(summary)) => {
                 history.title = Some(summary.summary.clone())
@@ -206,6 +214,7 @@ impl Journal {
                 .unwrap_or(i64::MAX),
             context: history.context,
             queue: history.queue.clone(),
+            goal: history.goal.clone(),
         })
     }
 
