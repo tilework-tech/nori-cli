@@ -67,6 +67,7 @@ mod event_handlers;
 mod external_cancel;
 mod goal;
 mod helpers;
+mod host_role;
 mod key_handling;
 mod login;
 mod new_session_folder;
@@ -198,6 +199,9 @@ pub(crate) struct ChatWidget {
     managed_conversation_id: Option<nori_harness::ConversationId>,
     /// The permission mode the host last announced for this session.
     approval_mode: Option<nori_protocol::ApprovalMode>,
+    /// This terminal's standing on a host it joined; `None` when it owns
+    /// its host.
+    host_connection: Option<crate::host_client::HostConnection>,
     /// The modes the host says this session accepts; unknown until announced.
     available_approval_modes: Option<Vec<nori_protocol::ApprovalMode>>,
     // True while /close awaits the agent's session/close response. Blocks

@@ -2,6 +2,13 @@ use super::*;
 
 impl ChatWidget {
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
+        if key_event.code == KeyCode::Char('t')
+            && key_event.modifiers == KeyModifiers::ALT
+            && key_event.kind == KeyEventKind::Press
+            && self.take_host_control()
+        {
+            return;
+        }
         // Alt+Up is reserved for moving to a parent session, which the app
         // does before the widget sees the key. Whatever reaches the widget
         // has no parent to move to, so it changes nothing: not the queue, its
@@ -142,6 +149,15 @@ impl ChatWidget {
                     || self.follow_only_attachment =>
             {
                 self.bottom_pane.restore_composer_submission(text);
+                return;
+            }
+            InputResult::Submitted(text) | InputResult::Queued(text)
+                if self.host_input_refusal().is_some() =>
+            {
+                self.bottom_pane.restore_composer_submission(text);
+                if let Some(refusal) = self.host_input_refusal() {
+                    self.add_error_message(refusal);
+                }
                 return;
             }
             InputResult::Submitted(text) => (text, FollowUpIntent::Steer),

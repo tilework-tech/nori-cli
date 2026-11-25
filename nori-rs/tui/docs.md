@@ -21,7 +21,7 @@ UI strings keep that word.
 | Module | Role |
 |---|---|
 | `lib.rs` | `run_main`: config, onboarding, automatic worktree, `nori_host_runtime::launch`, `App::run` |
-| `app/` | `App`: main `select!` loop, session deck, session lifecycle and resume, delegation, `host_link.rs` (owned-host pipe and stop) |
+| `app/` | `App`: main `select!` loop, session deck, session lifecycle and resume, delegation, `host_link.rs` (owned or joined host link) |
 | `chatwidget/` | `ChatWidget`: one session's view, composer submit, approvals, goals, pickers, queue list and recall |
 | `bottom_pane/` | Composer, footer, popups, approval overlay |
 | `presentation/` | Private projection of ACP updates into display items |
@@ -66,9 +66,25 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   so they end when it stops.
 - Only `run_main` holds an `OwnedHost`. The attach frontend never holds the
   in-process half and never ends a session when its terminal closes.
-- The App sends `initialize` on the owned pipe before it reads UI events. A
-  failed initialize or a stopped pipe ends the loop with an error. The App
-  stops the host after the loop, even on error.
+- `HostLink` either owns its host (`start`, over the in-process pipe) or
+  joins a running one (`join`, over `host_client::drive`). For an owned host,
+  the App sends `initialize` before it reads UI events; a refused initialize
+  or a stopped pipe ends the loop with an error, and `stop_or_leave` stops
+  every session after the loop, even on error.
+- A joined link re-sends `initialize` on every connection, takes its role
+  from the reply, and lists sessions every second while connected as the
+  heartbeat. Disconnects, role changes, stops, and a refused initialize
+  become `HostUpdate`s that never end the loop; a stop or refused
+  initialize ends the connection for good. Calls made while
+  disconnected or after a stop are refused at once; calls unanswered when
+  the connection drops fail as possibly applied. Leaving a joined host only
+  closes the connection; its sessions keep running. `join` has no
+  production caller yet.
+- `ChatWidget` holds the joined link's `HostConnection` (none for an owned
+  host) and picks its command `Surface` from it: `Owned` without one,
+  `Joined` with one. The `attach/` frontend uses `Attached`. A joined
+  watcher's submission is refused with the draft kept, and Alt+T sends
+  `AppEvent::TakeHostControl`.
 - Match `SessionEvent::Acp` and `SessionEvent::Nori` first, then project. Keep
   display inference private in `presentation/`. Never add a public normalized
   ACP enum for rendering.

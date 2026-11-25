@@ -102,6 +102,9 @@ pub(crate) enum AppEvent {
     /// `/screen`: switch between the inline and the full-screen view.
     ToggleScreenMode,
 
+    /// Alt+T in a terminal joined to a host: ask to become its controller.
+    TakeHostControl,
+
     /// A `/close` failed: surface the error and unblock the widget.
     SessionCloseFailed {
         generation: SessionGeneration,

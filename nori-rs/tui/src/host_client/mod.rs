@@ -37,6 +37,27 @@ pub(crate) struct HostEndpoint {
     pub refresh_local_token: Option<Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>>,
 }
 
+/// This terminal's standing with the host it is connected to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HostConnection {
+    pub role: nori_protocol::ControlRole,
+    /// False while the connection is down and being re-established.
+    pub connected: bool,
+    /// Why the host can no longer serve this terminal, once it cannot.
+    pub stopped: Option<String>,
+}
+
+impl HostConnection {
+    /// A host this terminal owns: it always controls and never reconnects.
+    pub fn owned() -> Self {
+        Self {
+            role: nori_protocol::ControlRole::Controller,
+            connected: true,
+            stopped: None,
+        }
+    }
+}
+
 /// The `_meta` key that scopes `session/list` and `session/new` to a
 /// prepared agent server.
 pub(crate) const PREPARED_AGENT: &str = "nori/preparedAgent";
