@@ -13,6 +13,8 @@ All sessions, agents and content are synthetic (the kiln agent in `harness/perf/
 
 Heads were checked again before publishing; none moved. Handoff comments: #769 issuecomment-7164923854, #770 issuecomment-7164924617.
 
+Verdict comments: [#769](https://github.com/tilework-tech/nori-cli/pull/769#issuecomment-7167741333), [#770](https://github.com/tilework-tech/nori-cli/pull/770#issuecomment-7167748407), [#773](https://github.com/tilework-tech/nori-cli/pull/773#issuecomment-7167749098).
+
 Builds: `cargo build --release --locked -p nori-cli`, Rust 1.90.0, glibc on Linux (Modal, kernel 7.3.4, tmux 3.3a) and native on macOS 15.7.4 arm64 (6-vCPU Blacksmith runner). Each revision has its own `CARGO_TARGET_DIR`. Hashes: `linux/SHA256SUMS`, `macos/stress/SHA256SUMS`.
 
 ## Verdict
