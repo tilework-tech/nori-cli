@@ -146,6 +146,7 @@ pub(crate) struct ChatWidget {
     // Stream lifecycle controller
     stream_controller: Option<StreamController>,
     session_generation: crate::app_event::SessionGeneration,
+    submitted_prompt: Option<crate::host_client::PromptInterrupt>,
     owned_prompt_request_id: Option<nori_protocol::acp::v1::RequestId>,
     proactive_turn_active: bool,
     external_turn: Option<nori_protocol::ExternalTurn>,

@@ -161,7 +161,7 @@ impl ChatWidget {
         }
     }
 
-    fn locally_owned_request_active(&self) -> bool {
+    pub(super) fn locally_owned_request_active(&self) -> bool {
         self.owned_prompt_request_id.is_some()
             || matches!(
                 self.acp_session_phase,
@@ -222,6 +222,7 @@ impl ChatWidget {
                 {
                     self.separate_proactive_turn();
                 }
+                self.submitted_prompt = None;
                 let phase = match phase {
                     nori_protocol::SessionPhase::Idle => {
                         crate::presentation::session_runtime::SessionPhaseView::Idle
@@ -844,6 +845,10 @@ impl ChatWidget {
 
         if self.can_control_external_turn() {
             self.request_external_cancel();
+            return;
+        }
+        if self.interrupt_host_prompt() {
+            self.bottom_pane.show_ctrl_c_quit_hint();
             return;
         }
         if self.bottom_pane.is_task_running() {

@@ -58,6 +58,10 @@ for line in sys.stdin:
     params = frame.get("params", {})
     sid = params.get("sessionId")
 
+    if method and Path("fixture-traffic").exists():
+        with Path("fixture-traffic").open("a") as trace:
+            print(method, sid or "-", file=trace)
+
     if method is None:
         if rid in pending:
             prompt, sid, metadata = pending.pop(rid)

@@ -48,7 +48,7 @@ App (HostLink) ──HostCall + tag──▶ HostSessionClient ──JSON──�
 - Method names and parameter shapes follow the
   [host contract](../../../../docs/remote-control.md#11-background-host-and-attached-terminals).
   Calls cover initialize, session list, subscribe, take control, new, prompt,
-  follow-up, cancel, observed-turn cancel, close, resume, permission response,
+  follow-up, observed-turn cancel, close, resume, permission response,
   delegate, and delegation resolve.
 
 ### Core Implementation
@@ -56,8 +56,8 @@ App (HostLink) ──HostCall + tag──▶ HostSessionClient ──JSON──�
 - [`HostSessionClient<T>`](mod.rs) allocates increasing JSON-RPC ids, stores
   the caller's tag per id, and serializes each `HostCall` to its wire method.
   If the connection cannot enqueue a request, `request` returns its tag so
-  the caller can resolve the waiting operation. `notify` sends a JSON-RPC notification with no id
-  (`Cancel` is sent as the standard `session/cancel` notification).
+  the caller can resolve the waiting operation. [PromptInterrupt](prompt_interrupt.rs) couples an early interrupt to the
+  matching receipt, including when admission precedes the first phase event.
   `has_pending` lets a caller avoid duplicate calls, such as a second
   outstanding list.
 - `incoming` maps connection events to `HostEvent`s:

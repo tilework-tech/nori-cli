@@ -39,10 +39,8 @@ impl Runtime {
             self.follow_up_notice(session_id, format!("{text} [{message_id}] {draft}"));
             return;
         }
-        if let Pending::Prompt { session_id, .. } = &pending
-            && let Some(conversation) = self.state.conversations.get_mut(session_id)
-        {
-            conversation.submitted_prompt = false;
+        if let Pending::Prompt { interrupt, .. } = &pending {
+            interrupt.retire();
         }
         if let Pending::Mutation { draft: Some(draft) } | Pending::Prompt { draft, .. } = &pending
             && self.composer.is_empty()

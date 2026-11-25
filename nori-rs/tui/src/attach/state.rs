@@ -103,7 +103,7 @@ pub(super) struct Conversation {
     pub external_turn: Option<nori_protocol::ExternalTurn>,
     pub cancel_delivery: CancelDelivery,
     /// A prompt sent by this terminal can be cancelled before its first phase arrives.
-    pub submitted_prompt: bool,
+    pub submitted_prompt: Option<crate::host_client::PromptInterrupt>,
     pub permissions: Vec<Permission>,
     pub delegations: Vec<nori_protocol::Delegation>,
     pub cwd: std::path::PathBuf,
@@ -496,7 +496,7 @@ impl AttachState {
                 }
                 conversation.external_turn = None;
                 conversation.cancel_delivery = CancelDelivery::Unsent;
-                conversation.submitted_prompt = false;
+                conversation.submitted_prompt = None;
                 conversation.phase = None;
                 conversation.parts.push(Part::Ended(ended.message));
                 conversation.permissions.clear();
@@ -513,7 +513,7 @@ impl AttachState {
                 conversation.apply_external_turn(turn);
             }
             SessionEvent::Nori(NoriEvent::SessionPhaseChanged(phase)) => {
-                conversation.submitted_prompt = false;
+                conversation.submitted_prompt = None;
                 if matches!(
                     phase,
                     nori_protocol::SessionPhase::Idle

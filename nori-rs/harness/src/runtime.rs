@@ -565,6 +565,15 @@ impl HarnessHandle {
             .await?
     }
 
+    /// The ACP transport assigns each outgoing prompt a fresh UUID. It appears
+    /// in both the host admission receipt and the public prompting phase.
+    pub(crate) async fn cancel_observed_turn(&self, id: String) -> anyhow::Result<()> {
+        self.cancel_admission
+            .submit(CancelTarget::Observed(id))
+            .await?
+            .await?
+    }
+
     /// Let a queue paused by an interrupted or failed turn send again. The
     /// next queued prompt starts at once when the session is idle; otherwise
     /// the queue drains after the running turn completes. A queue that is not

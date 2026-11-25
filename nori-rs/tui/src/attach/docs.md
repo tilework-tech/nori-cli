@@ -226,8 +226,9 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
   controller-only request as `/cancel`, `_nori/session/cancel_observed`.
   The host checks the observation ID against the active turn. Attach shows
   delivery or confirmation failures and leaves any retry to the controller.
-  For a host-admitted prompt, `/cancel` sends the standard `session/cancel`
-  notification. `/close` sends ACP `session/close`, and `/resume` and Ctrl+R
+  For an admitted prompt the same request carries its ACP request UUID.
+  Before admission, attach remembers Escape for that submission and waits
+  for its receipt. Losing control discards the pending interrupt. `/close` sends ACP `session/close`, and `/resume` and Ctrl+R
   send `session/resume` with the row's
   folder (`_nori/session/resume` for an older host whose rows carry no
   folder). A resumed session is attached to this connection, so the host

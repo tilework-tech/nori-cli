@@ -288,7 +288,12 @@ impl ChatWidget {
     /// no modal overlay (e.g. approvals or status indicator), and no composer popups.
     /// In this state Esc-Esc backtracking is enabled.
     pub(crate) fn is_normal_backtrack_mode(&self) -> bool {
-        !self.can_control_external_turn() && self.bottom_pane.is_normal_backtrack_mode()
+        !self.can_control_external_turn()
+            && !self
+                .submitted_prompt
+                .as_ref()
+                .is_some_and(crate::host_client::PromptInterrupt::live)
+            && self.bottom_pane.is_normal_backtrack_mode()
     }
 
     pub(crate) fn insert_str(&mut self, text: &str) {
@@ -431,7 +436,7 @@ impl ChatWidget {
         });
     }
 
-    pub(crate) fn submit_prompt(&self, content: Vec<nori_protocol::acp::v1::ContentBlock>) {
+    pub(crate) fn submit_prompt(&mut self, content: Vec<nori_protocol::acp::v1::ContentBlock>) {
         let Some(handle) = self.harness_handle.clone() else {
             self.app_event_tx.send(AppEvent::HarnessActionFailed(
                 "No active harness session".to_string(),
@@ -439,14 +444,39 @@ impl ChatWidget {
             return;
         };
         let app_event_tx = self.app_event_tx.clone();
+        let interrupt = self
+            .managed_conversation_id
+            .filter(|_| !self.cloud_mode && !self.locally_owned_request_active())
+            .map(|session| crate::host_client::PromptInterrupt::new(session.to_string()));
+        if let Some(pending) = &interrupt {
+            crate::host_client::PromptInterrupt::track_first(&mut self.submitted_prompt, pending);
+        }
         tokio::spawn(async move {
-            if let Err(error) = handle.prompt(content).await
-                && !handle.is_expected_shutdown_error(&error)
-                && error
-                    .downcast_ref::<nori_harness::backend::PromptWithdrawn>()
-                    .is_none()
-            {
-                app_event_tx.send(AppEvent::HarnessActionFailed(error.to_string()));
+            match handle.prompt(content).await {
+                Ok(nori_protocol::acp::v1::RequestId::Str(id)) => {
+                    if let Some(call) = interrupt.and_then(|pending| pending.admitted_id(Some(&id)))
+                    {
+                        app_event_tx.send(AppEvent::HostRequest {
+                            call,
+                            reply: crate::app_event_sender::HostReply::ReportError(
+                                app_event_tx.clone(),
+                            ),
+                        });
+                    }
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    if let Some(pending) = interrupt {
+                        pending.retire();
+                    }
+                    if !handle.is_expected_shutdown_error(&error)
+                        && error
+                            .downcast_ref::<nori_harness::backend::PromptWithdrawn>()
+                            .is_none()
+                    {
+                        app_event_tx.send(AppEvent::HarnessActionFailed(error.to_string()));
+                    }
+                }
             }
         });
     }

@@ -1863,6 +1863,18 @@ fn external_turn_cancel_tracks_the_displayed_turn_until_confirmation() {
     chat.handle_session_event(generation, external_state("turn-a", State::Working));
     let working = render_bottom_pane(&mut chat, 80);
     assert!(working.contains("esc to interrupt"), "{working}");
+    chat.handle_key_event(KeyEvent::new_with_kind(
+        KeyCode::Esc,
+        KeyModifiers::NONE,
+        KeyEventKind::Repeat,
+    ));
+    assert!(
+        std::iter::from_fn(|| rx.try_recv().ok()).all(|event| !matches!(
+            event,
+            AppEvent::HarnessAction(crate::app_event::HarnessAction::Cancel)
+                | AppEvent::HostRequest { .. }
+        ))
+    );
     chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(std::iter::from_fn(|| rx.try_recv().ok()).any(|event| matches!(
         event, AppEvent::HostRequest { call: crate::host_client::HostCall::CancelObserved { session_id, observed_turn_id }, .. }
