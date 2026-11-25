@@ -227,11 +227,21 @@ fn starting_beside_a_host_whose_contract_cannot_be_read_fails() {
     success(host.run(&["host", "stop"]));
 }
 
+/// A contract newer than this build's that this build still serves: the
+/// next minor of [`nori_protocol::HOST_CONTRACT`].
+fn newer_compatible_contract() -> String {
+    let mut parts = nori_protocol::HOST_CONTRACT
+        .split('.')
+        .map(|part| part.parse::<i32>().unwrap());
+    let (major, minor) = (parts.next().unwrap(), parts.next().unwrap());
+    format!("{major}.{}.0", minor + 1)
+}
+
 #[test]
 fn starting_beside_a_host_of_a_compatible_contract_reuses_it() {
     let host = Host::new();
     success(host.run(&["host", "--port", "0"]));
-    advertise_contract(&host, "1.9.0");
+    advertise_contract(&host, &newer_compatible_contract());
     let before = discovery(&host);
 
     let again = success(host.run(&["host", "--port", "0"]));
@@ -652,6 +662,9 @@ mod goal;
 
 #[path = "host_lifecycle/compact.rs"]
 mod compact;
+
+#[path = "host_lifecycle/shell.rs"]
+mod shell;
 
 #[path = "host_lifecycle/find_paths.rs"]
 mod find_paths;

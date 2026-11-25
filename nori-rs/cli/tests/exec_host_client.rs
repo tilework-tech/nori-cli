@@ -158,10 +158,20 @@ fn exec_runs_on_its_own_host_when_the_running_one_speaks_another_contract() {
     );
 }
 
+/// A contract newer than this build's that this build still serves: the
+/// next minor of [`nori_protocol::HOST_CONTRACT`].
+fn newer_compatible_contract() -> String {
+    let mut parts = nori_protocol::HOST_CONTRACT
+        .split('.')
+        .map(|part| part.parse::<i32>().unwrap());
+    let (major, minor) = (parts.next().unwrap(), parts.next().unwrap());
+    format!("{major}.{}.0", minor + 1)
+}
+
 #[test]
 fn exec_runs_on_a_running_host_of_a_newer_compatible_contract() {
     let host = RunningHost::start();
-    host.advertise_contract("1.9.0");
+    host.advertise_contract(&newer_compatible_contract());
     let folder = TempDir::new().unwrap();
 
     let output = host.exec(folder.path(), &["hello"]);

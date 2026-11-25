@@ -848,6 +848,16 @@ impl App {
             } => self
                 .chat_widget
                 .on_history_entry_loaded(log_id, offset, entry),
+            AppEvent::UserShellRefused {
+                generation,
+                command,
+            } => {
+                if self.chat_widget.session_generation() == generation {
+                    self.chat_widget.on_user_shell_refused(command);
+                } else if let Some(parked) = self.session_deck.parked_mut(generation) {
+                    parked.widget.on_user_shell_refused(command);
+                }
+            }
             AppEvent::QueuedPromptReclaimed {
                 generation,
                 event_id,

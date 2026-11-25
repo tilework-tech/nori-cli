@@ -205,6 +205,11 @@ pub(crate) enum AppEvent {
     CustomPromptsLoaded(Vec<nori_harness::CustomPrompt>),
     UndoSnapshotsLoaded(Vec<nori_harness::UndoSnapshot>),
     GoalLoaded(Option<nori_protocol::ThreadGoal>),
+    /// The host refused a `!` command; it goes back to that widget's prompt.
+    UserShellRefused {
+        generation: SessionGeneration,
+        command: String,
+    },
     /// A host session's goal, for whichever widget shows that session.
     /// `asked` when the user asked to see it, rather than the widget
     /// learning it when the session came on screen.
