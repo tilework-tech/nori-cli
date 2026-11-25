@@ -154,9 +154,13 @@ impl App {
                 .add_info_message("Session closed (released).".to_string(), None);
         }
         self.deferred_spawn_pending = true;
-        self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Picker {
-            fallback_to_spawn: false,
-        });
+        if self.cloud_mode {
+            self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Picker {
+                fallback_to_spawn: false,
+            });
+        } else {
+            self.begin_restore_picker();
+        }
         tui.frame_requester().schedule_frame();
         Ok(true)
     }

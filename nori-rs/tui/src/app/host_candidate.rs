@@ -11,6 +11,9 @@ use std::path::PathBuf;
 use super::*;
 use crate::host_client::HostCall;
 
+pub(super) const NO_SESSION_HINT: &str =
+    "No session is active - /resume retries the picker, /new starts a fresh session.";
+
 /// Live events the widget may fall behind by before its subscription lags.
 const ACTIVATION_REPLAY_CAPACITY: i32 = 4096;
 
@@ -20,6 +23,16 @@ const ACTIVATION_REPLAY_CAPACITY: i32 = 4096;
 pub(crate) struct HostSelection {
     id: String,
     cwd: PathBuf,
+}
+
+/// Why the host is preparing a server for this terminal.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PickerPurpose {
+    /// `/agent`: move to another ACP agent server.
+    Switch,
+    /// `/resume` or the picker after the last `/close`: restore one of the
+    /// current agent's saved sessions or start a new one.
+    Restore,
 }
 
 /// The saved session a switch restores, with the title its row showed.
@@ -34,6 +47,8 @@ pub(crate) struct SavedSession {
 pub(crate) struct PreparedCatalog {
     selection: HostSelection,
     sessions: Vec<nori_protocol::acp::v1::SessionInfo>,
+    /// The server can list saved sessions and load or resume one.
+    can_restore: bool,
 }
 
 fn host_message(error: anyhow::Error) -> String {
@@ -47,9 +62,28 @@ impl App {
         if self.chat_widget.has_harness_session() && self.refuse_at_session_cap() {
             return;
         }
-        self.discard_candidate();
         self.chat_widget
             .set_login_agent_override(Some(agent_name.clone()));
+        self.begin_host_picker(agent_name, display_name, PickerPurpose::Switch);
+    }
+
+    /// Offer the current agent's saved sessions from a server the host
+    /// prepares for this terminal.
+    pub(crate) fn begin_restore_picker(&mut self) {
+        let agent_name = self.config.active_agent.clone();
+        let display_name = nori_harness::get_agent_display_name(&agent_name);
+        self.chat_widget
+            .add_info_message(format!("Listing {display_name} sessions…"), None);
+        self.begin_host_picker(agent_name, display_name, PickerPurpose::Restore);
+    }
+
+    fn begin_host_picker(
+        &mut self,
+        agent_name: String,
+        display_name: String,
+        purpose: PickerPurpose,
+    ) {
+        self.discard_candidate();
         let generation = crate::chatwidget::agent::next_session_generation();
         let cwd = self.config_for_agent(&agent_name).cwd;
         let tx = self.app_event_tx.clone();
@@ -66,6 +100,7 @@ impl App {
         self.candidate_agent = Some(CandidateAgent::Preparing {
             generation,
             agent_name: prepared_agent_name,
+            purpose,
         });
     }
 
@@ -76,38 +111,50 @@ impl App {
         display_name: String,
         result: Result<PreparedCatalog, String>,
     ) {
-        let is_current = matches!(
-            &self.candidate_agent,
+        let purpose = match &self.candidate_agent {
             Some(CandidateAgent::Preparing {
                 generation: current,
                 agent_name: current_agent,
-                ..
-            }) if *current == generation && *current_agent == agent_name
-        );
-        if !is_current {
-            if let Ok(PreparedCatalog { selection, .. }) = result {
-                self.discard_selection(selection);
+                purpose,
+            }) if *current == generation && *current_agent == agent_name => *purpose,
+            _ => {
+                if let Ok(PreparedCatalog { selection, .. }) = result {
+                    self.discard_selection(selection);
+                }
+                return;
             }
-            return;
-        }
+        };
         self.candidate_agent = None;
         match result {
             Ok(PreparedCatalog {
                 selection,
+                can_restore: false,
+                ..
+            }) if purpose == PickerPurpose::Restore => {
+                self.discard_selection(selection);
+                self.chat_widget.open_local_resume_session_picker();
+            }
+            Ok(PreparedCatalog {
+                selection,
                 sessions,
+                ..
             }) => {
                 self.candidate_agent = Some(CandidateAgent::Prepared {
                     agent_name,
                     display_name,
                     selection,
+                    purpose,
                 });
                 self.chat_widget
                     .show_acp_resume_session_picker(sessions, true);
             }
             Err(error) => {
-                self.chat_widget.set_login_agent_override(Some(agent_name));
+                if purpose == PickerPurpose::Switch {
+                    self.chat_widget.set_login_agent_override(Some(agent_name));
+                }
                 self.chat_widget
                     .add_error_message(format!("Couldn't prepare {display_name}: {error}"));
+                self.hint_when_sessionless();
             }
         }
     }
@@ -120,6 +167,7 @@ impl App {
             agent_name,
             display_name,
             selection,
+            purpose,
         }) = self.candidate_agent.take()
         else {
             return;
@@ -153,6 +201,7 @@ impl App {
             agent_name,
             display_name,
             saved,
+            purpose,
         });
     }
 
@@ -178,6 +227,7 @@ impl App {
             agent_name,
             display_name,
             saved,
+            purpose,
             ..
         }) = self.candidate_agent.take()
         else {
@@ -186,7 +236,9 @@ impl App {
         let id = match result {
             Ok(id) => id,
             Err(error) => {
-                self.chat_widget.set_login_agent_override(Some(agent_name));
+                if purpose == PickerPurpose::Switch {
+                    self.chat_widget.set_login_agent_override(Some(agent_name));
+                }
                 self.chat_widget
                     .add_error_message(format!("Couldn't activate {display_name}: {error}"));
                 return;
@@ -232,7 +284,16 @@ impl App {
             widget: Box::new(widget),
             activation_error: None,
             resumes,
+            announce_agent: purpose == PickerPurpose::Switch,
         });
+    }
+
+    /// After the last `/close`, say how to get a session back.
+    pub(super) fn hint_when_sessionless(&mut self) {
+        if !self.chat_widget.has_harness_session() {
+            self.chat_widget
+                .add_info_message(NO_SESSION_HINT.to_string(), None);
+        }
     }
 
     pub(super) fn discard_selection(&self, selection: HostSelection) {
@@ -259,13 +320,25 @@ async fn prepare_and_list(
             cwd: cwd.clone(),
         })
         .await;
-    let sessions = listed.map_err(host_message).and_then(|catalog| {
-        serde_json::from_value(catalog["sessions"].clone()).map_err(|error| error.to_string())
+    let catalog = listed.map_err(host_message).and_then(|catalog| {
+        let sessions = serde_json::from_value(catalog["sessions"].clone())
+            .map_err(|error| error.to_string())?;
+        let capabilities: nori_protocol::acp::v1::AgentCapabilities = serde_json::from_value(
+            catalog["_meta"][crate::host_client::PREPARED_AGENT]["agentCapabilities"].clone(),
+        )
+        .map_err(|error| error.to_string())?;
+        Ok((
+            sessions,
+            capabilities.session_capabilities.list.is_some()
+                && (capabilities.load_session
+                    || capabilities.session_capabilities.resume.is_some()),
+        ))
     });
-    match sessions {
-        Ok(sessions) => Ok(PreparedCatalog {
+    match catalog {
+        Ok((sessions, can_restore)) => Ok(PreparedCatalog {
             selection: HostSelection { id, cwd },
             sessions,
+            can_restore,
         }),
         Err(error) => {
             drop(tx.host_receipt(HostCall::DiscardPrepared { selection: id }));
