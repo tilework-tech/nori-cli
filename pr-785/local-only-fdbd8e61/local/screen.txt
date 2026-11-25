@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-demo-785/lantern
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+• Ran pwd
+  └ /tmp/nori-demo-785/lantern
+
+• Ran ls
+  └ Cargo.toml
+    README.md
+    src
+
+
+› @ for file mentions
+

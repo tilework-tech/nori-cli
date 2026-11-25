@@ -1,0 +1,40 @@
+initialize -> capabilities.nori_sessions.shell
+  remote controller: False
+  local controller:  True
+
+session folder /tmp/nori-demo-785/harbor
+
+remote controller (bearer token only) runs !touch marker
+  reply: error -32018 Remote shell commands are not yet supported.
+
+local controller (bearer + local token) takes control, runs !pwd; ls
+  reply: started
+  as the watcher saw it:
+  started   'pwd; ls' in /tmp/nori-demo-785/harbor
+  output    /tmp/nori-demo-785/harbor
+  output    README.md
+  finished  exit 0
+
+watcher holding the local token runs !pwd
+  reply: error -32016 watcher is read-only; take control before changing a session
+
+marker exists after the remote request? False
+
+probe done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

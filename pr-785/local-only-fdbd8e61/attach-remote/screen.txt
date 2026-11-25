@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+• Ran pwd
+  └ /tmp/nori-demo-785/harbor
+
+• This terminal now controls the host.
+
+• Remote shell commands are not yet supported.
+
+
+! touch marker
+
+  controlling · harbor · mock-model · ready · Approvals: Agent · ctrl+d detach
