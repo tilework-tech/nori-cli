@@ -4744,8 +4744,152 @@ SCENARIOS.update({
 })
 
 
+# ---------------------------------------------------------------------------
+# K: host-backed features (#778-#782) through plain `nori`, which now routes
+# them through its owned host. Compared against main for regressions.
+# ---------------------------------------------------------------------------
+
+def k_plain(ctx, name="fg"):
+    t = ctx.term(name)
+    t.run(f"{NORI} --skip-trust-directory")
+    screen = t.wait_for(r"(›|Update now)", 20, regex=True)
+    if "Update now" in screen:
+        t.keys("2")
+        time.sleep(0.8)
+    wait_composer(t)
+    return t
+
+
+def k_quit(t):
+    t.keys("C-u")
+    t.type("/quit")
+    t.keys("Enter")
+    time.sleep(0.8)
+    if not t.at_shell():
+        t.keys("Enter")
+    time.sleep(0.5)
+
+
+def k01_history_recall(ctx):
+    """Up recalls and Ctrl+R finds a prompt sent in an earlier plain nori run."""
+    t = k_plain(ctx)
+    t.type("relay 1 cormorant")
+    t.keys("Enter")
+    t.wait_for("cormorant row 01", 20)
+    k_quit(t)
+    t = k_plain(ctx, "fg2")
+    t.keys("Up")
+    time.sleep(1.0)
+    ctx.check("history.up_recalls_previous_run", "relay 1 cormorant" in last_nonblank(t.screen()) or "› relay 1 cormorant" in t.screen(), t.screen()[-300:])
+    t.capture("up-recall")
+    t.keys("C-u")
+    t.keys("C-r")
+    time.sleep(0.5)
+    t.type("cormo")
+    time.sleep(1.0)
+    t.capture("ctrl-r")
+    ctx.check("history.ctrl_r_finds_it", "relay 1 cormorant" in t.screen(), t.screen()[-300:])
+    t.keys("Escape")
+    hp = ctx.fx["homes"]["host"] / "history.jsonl"
+    ctx.check("history.recorded_once_in_home", hp.exists() and hp.read_text().count("relay 1 cormorant") == 1,
+              hp.read_text().count("relay 1 cormorant") if hp.exists() else "missing")
+    k_quit(t)
+
+
+def k02_custom_prompts(ctx):
+    """A markdown prompt expands; a script prompt runs in the session folder; output is queued once."""
+    cmds = ctx.fx["homes"]["host"] / "commands"
+    cmds.mkdir(exist_ok=True)
+    (cmds / "harbor-review.md").write_text("---\ndescription: Review the harbor log\n---\nrelay 1 review-$1\n")
+    (cmds / "wherescript.sh").write_text("#!/bin/sh\necho \"relay 1 ran-in-$(basename $(dirname $(pwd)))\"\n")
+    os.chmod(cmds / "wherescript.sh", 0o755)
+    t = k_plain(ctx)
+    t.type("/harbor")
+    time.sleep(1.2)
+    menu = t.screen()
+    t.capture("popup")
+    ctx.check("prompts.listed_in_popup", "harbor-review" in menu, menu[-400:])
+    t.keys("C-u")
+    t.type("/prompts:harbor-review north")
+    t.keys("Enter")
+    time.sleep(0.5)
+    if "/prompts:harbor-review" in last_nonblank(t.screen()):
+        t.keys("Enter")
+    try:
+        t.wait_for("review-north row 01", 20)
+        ok = True
+    except TimeoutError:
+        ok = False
+    ctx.check("prompts.markdown_expands_and_sends", ok, t.screen()[-300:])
+    t.type("/prompts:wherescript")
+    t.keys("Enter")
+    time.sleep(0.5)
+    if "/prompts:wherescript" in last_nonblank(t.screen()):
+        t.keys("Enter")
+    try:
+        t.wait_for("ran-in-alpha row 01", 25)
+        ok = True
+    except TimeoutError:
+        ok = False
+    t.capture("script")
+    prompts = [r.get("text", "") for r in ctx.ledger("request", "session/prompt")]
+    ctx.check("prompts.script_output_sent_once", ok and sum("ran-in-alpha" in p for p in prompts) == 1, prompts)
+    k_quit(t)
+
+
+def k03_goal(ctx):
+    """/goal set, show, pause, clear in plain nori."""
+    t = k_plain(ctx)
+    t.type("relay 1 warmup")
+    t.keys("Enter")
+    t.wait_for("warmup row 01", 20)
+    t.type("/goal chart the north harbor")
+    t.keys("Enter")
+    time.sleep(1.5)
+    if "/goal chart" in last_nonblank(t.screen()):
+        t.keys("Enter"); time.sleep(1.5)
+    t.capture("goal-set")
+    hist = t.history()
+    ctx.check("goal.set_shown", "north harbor" in hist, hist[-400:])
+    t.type("/goal")
+    t.keys("Enter")
+    time.sleep(1.5)
+    t.capture("goal-show")
+    ctx.check("goal.show_reports_it", t.history().count("north harbor") >= 2, t.screen()[-400:])
+    k_quit(t)
+
+
+def k04_context(ctx):
+    """/context prints a report naming the session folder's AGENTS.md."""
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        (ctx.fx["roots"]["alpha"] / name).write_text("# Alpha harbor rules\nKeep the beacon lit.\n")
+    t = k_plain(ctx)
+    t.type("relay 1 warmup")
+    t.keys("Enter")
+    t.wait_for("warmup row 01", 20)
+    t.type("/context")
+    t.keys("Enter")
+    time.sleep(2.0)
+    if "/context" in last_nonblank(t.screen()):
+        t.keys("Enter"); time.sleep(2.0)
+    t.capture("context")
+    hist = t.history()
+    ctx.check("context.report_printed", re.search(r"(context|Context)", hist) is not None, hist[-500:])
+    ctx.check("context.names_instruction_file", "CLAUDE.md" in hist or "AGENTS.md" in hist, hist[-500:])
+    k_quit(t)
+
+
+SCENARIOS.update({
+    "K01": ("plain nori: Up and Ctrl+R recall a prompt from an earlier run", k01_history_recall),
+    "K02": ("plain nori: custom markdown and script prompts", k02_custom_prompts),
+    "K03": ("plain nori: /goal set and show", k03_goal),
+    "K04": ("plain nori: /context names the folder's instruction file", k04_context),
+})
+
+
 CAP = "[tui]\ntool_output_max_lines = 10"
-FIXTURE_ARGS = {"S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
+NO_UPDATE = "check_for_update_on_startup = false"
+FIXTURE_ARGS = {"S34m": {"top_extra": NO_UPDATE}, "K01": {"top_extra": NO_UPDATE}, "S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
                 "S37b": {"host_extra": 'default_mode = "ask"', "top_extra": 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}
 
 

@@ -1,0 +1,62 @@
+[
+  {
+    "scenario": "K01",
+    "check": "history.up_recalls_previous_run",
+    "passed": true,
+    "detail": "v0.0.0\n\n  System       /tmp/nori-host-tui-acceptance-k778/K01/roots/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n                                                                                                         [ acceptEdits ]\n\u203a relay 1 cormorant\n\n"
+  },
+  {
+    "scenario": "K01",
+    "check": "history.ctrl_r_finds_it",
+    "passed": true,
+    "detail": "alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n                                                                                                         [ acceptEdits ]\n\u203a $ for skill listing\n\n  relay 1 cormorant\n  esc close  enter select  j/k move  / search\n"
+  },
+  {
+    "scenario": "K01",
+    "check": "history.recorded_once_in_home",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "K02",
+    "check": "prompts.listed_in_popup",
+    "passed": true,
+    "detail": "ri --skip-trust-directory\n  \u203a Nori CLI v0.0.0\n\n  System       /tmp/nori-host-tui-acceptance-k778/K02/roots/alpha/app\n  Agent        Claude\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n                                                                                                         [ acceptEdits ]\n/ harbor\n\n  /prompts:harbor-review  Review the harbor log\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "K02",
+    "check": "prompts.markdown_expands_and_sends",
+    "passed": true,
+    "detail": "e\n\n\u2022 Lantern Claude options: Mode=auto (/config to change)\n\n\n\u203a relay 1 review-north\n\n\n\u2022 - review-north row 01\n\n  review-north relay finished.\n\n                                                                                                         [ acceptEdits ]\n\u203a ? for shortcuts\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "K02",
+    "check": "prompts.script_output_sent_once",
+    "passed": true,
+    "detail": "['<context>\\nSource: this message is from Nori CLI.\\n\\nYou are operating over ACP.\\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\\n</context>\\n\\nrelay 1 review-north\\n', \"Output from script 'wherescript':\\nrelay 1 ran-in-alpha\\n\"]"
+  },
+  {
+    "scenario": "K03",
+    "check": "goal.set_shown",
+    "passed": false,
+    "detail": "antern Claude options: Mode=auto (/config to change)\n\n\n\u203a relay 1 warmup\n\n\n\u2022 - warmup row 01\n\n  warmup relay finished.\n\n\u25a0 /goal is unavailable. The active agent advertises neither HTTP MCP support nor the goal extension, so /goal is\nunavailable.\n\n                                                                                                         [ acceptEdits ]\n\u203a ? for shortcuts\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "K03",
+    "check": "goal.show_reports_it",
+    "passed": false,
+    "detail": "al is unavailable. The active agent advertises neither HTTP MCP support nor the goal extension, so /goal is\nunavailable.\n\n\u25a0 /goal is unavailable. The active agent advertises neither HTTP MCP support nor the goal extension, so /goal is\nunavailable.\n\n                                                                                                         [ acceptEdits ]\n\u203a ? for shortcuts\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "K04",
+    "check": "context.report_printed",
+    "passed": true,
+    "detail": "known     not reported\n  Starts carry the latest prior observation.\n\n  Local instructions \u00b7 estimated tokens                         Skills observed              Subagents observed\n  /tmp/nori-host-tui-acceptance-k778/K04/roots/alpha...  ~10    None observed                None observed\n\n  Local file sizes; inclusion in the current context is not verified.\n\n                                                                                                         [ acceptEdits ]\n\u203a ? for shortcuts\n\n"
+  },
+  {
+    "scenario": "K04",
+    "check": "context.names_instruction_file",
+    "passed": false,
+    "detail": "known     not reported\n  Starts carry the latest prior observation.\n\n  Local instructions \u00b7 estimated tokens                         Skills observed              Subagents observed\n  /tmp/nori-host-tui-acceptance-k778/K04/roots/alpha...  ~10    None observed                None observed\n\n  Local file sizes; inclusion in the current context is not verified.\n\n                                                                                                         [ acceptEdits ]\n\u203a ? for shortcuts\n\n"
+  }
+]

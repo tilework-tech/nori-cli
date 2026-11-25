@@ -1,0 +1,98 @@
+[
+  {
+    "probe": "queue",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "queue",
+    "check": "paused_row_lists_three_in_order",
+    "passed": true,
+    "detail": "{'prompts': ['queued alpha', 'queued beta', 'queued gamma'], 'entries': [{'id': 'probe-q0-1795629908097801872', 'text': 'queued alpha', 'editable': False}, {'id': 'probe-q1-1795629908099274635', 'text': 'queued beta', 'editable': False}, {'id': 'probe-q2-1795629908100388549', 'text': 'queued gamma', 'editable': False}], 'paused': 'interrupted'}"
+  },
+  {
+    "probe": "queue",
+    "check": "late_watcher_sees_paused_queue",
+    "passed": true,
+    "detail": "{'prompts': ['queued alpha', 'queued beta', 'queued gamma'], 'entries': [{'id': 'probe-q0-1795629908097801872', 'text': 'queued alpha', 'editable': False}, {'id': 'probe-q1-1795629908099274635', 'text': 'queued beta', 'editable': False}, {'id': 'probe-q2-1795629908100388549', 'text': 'queued gamma', 'editable': False}], 'paused': 'interrupted'}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_take_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_resume_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_discard_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 5, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "own_wire_prompt_marked_editable",
+    "passed": false,
+    "detail": "{'id': 'probe-q0-1795629908097801872', 'text': 'queued alpha', 'editable': False}"
+  },
+  {
+    "probe": "queue",
+    "check": "queuing_connection_takes_its_text_once",
+    "passed": false,
+    "detail": "[{'jsonrpc': '2.0', 'id': 9, 'result': {'text': None}}, {'jsonrpc': '2.0', 'id': 10, 'result': {'text': None}}]"
+  },
+  {
+    "probe": "queue",
+    "check": "resume_ok",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 11, 'result': {}}"
+  },
+  {
+    "probe": "queue",
+    "check": "resume_delivers_remaining_once_in_order",
+    "passed": false,
+    "detail": "['queued alpha', 'queued beta', 'queued gamma']"
+  },
+  {
+    "probe": "queue",
+    "check": "taken_prompt_never_sent",
+    "passed": false,
+    "detail": "['relay 1 seed', 'hold the line', 'queued alpha', 'queued beta', 'queued gamma']"
+  },
+  {
+    "probe": "queue",
+    "check": "take_after_started_is_null",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 12, 'result': {'text': None}}"
+  },
+  {
+    "probe": "queue",
+    "check": "discard_sends_nothing",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "probe": "queue",
+    "check": "discard_clears_queue_and_pause",
+    "passed": true,
+    "detail": "{'prompts': []}"
+  },
+  {
+    "probe": "queue",
+    "check": "unknown_session_refused",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 21, 'error': {'code': -32002, 'message': 'unknown session id'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_cannot_take_others_prompt",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  }
+]

@@ -16,7 +16,8 @@ Environment:
                    server to start waits before answering initialize; `new-delay` and
                    `close-delay` do the same for the next session/new and session/close;
                    while `agent-commands` exists, every new session advertises the
-                   agent commands /review and /lanternize
+                   agent commands /review and /lanternize; while `http-mcp` exists,
+                   initialize advertises HTTP MCP support (enables host goal management)
 
 Prompt words (first word of the prompt text):
   hold     stream a tick every 200 ms until cancelled (records ticks)
@@ -266,9 +267,11 @@ def main():
                 ledger("init_delay_start", seconds=delay)
                 time.sleep(delay)
                 ledger("init_delay_end")
+            caps = {"loadSession": True, "sessionCapabilities": {"close": {}, "resume": {}, "list": {}}}
+            if CONTROL and os.path.exists(os.path.join(CONTROL, "http-mcp")):
+                caps["mcpCapabilities"] = {"http": True, "sse": False}
             send(id=rid, result={"protocolVersion": 1, "agentInfo": {"name": NAME, "version": "0.0.1"},
-                                 "agentCapabilities": {"loadSession": True,
-                                                       "sessionCapabilities": {"close": {}, "resume": {}, "list": {}}}})
+                                 "agentCapabilities": caps})
         elif method == "session/new" and take_switch("new-refuse"):
             ledger("new_refused", cwd=params.get("cwd"))
             send(id=rid, error={"code": -32603, "message": f"no fresh lantern is available from {NAME}"})

@@ -1,0 +1,74 @@
+[
+  {
+    "probe": "history",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "history",
+    "check": "controller_add_ok:lighthouse b",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {}}"
+  },
+  {
+    "probe": "history",
+    "check": "controller_add_ok:harbor tide ",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'result': {}}"
+  },
+  {
+    "probe": "history",
+    "check": "controller_add_ok:lighthouse l",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'result': {}}"
+  },
+  {
+    "probe": "history",
+    "check": "watcher_add_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "history",
+    "check": "metadata_counts_three_more",
+    "passed": true,
+    "detail": "[{'logId': 0, 'entryCount': 0}, {'logId': 13770815, 'entryCount': 3}]"
+  },
+  {
+    "probe": "history",
+    "check": "watcher_reads_each_entry_in_order",
+    "passed": true,
+    "detail": "['{\"entry\": {\"sessionId\": \"7a9d0ede-ed78-429b-91a9-f3f6a5d1c046\", \"ts\": 1795630350, \"text\": \"lighthouse beam audit\"}}', '{\"entry\": {\"sessionId\": \"7a9d0ede-ed78-429b-91a9-f3f6a5d1c046\", \"ts\": 1795630350, \"text\": \"harbor tide table\"}}', '{\"entry\": {\"sessionId\": \"7a9d0ede-ed78-429b-91a9-f3f6a5d1c046\", \"ts\": 1795630350, \"text\": \"lighthouse lens polish\"}}']"
+  },
+  {
+    "probe": "history",
+    "check": "search_returns_entries",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 8, \"result\": {\"entries\": [{\"sessionId\": \"7a9d0ede-ed78-429b-91a9-f3f6a5d1c046\", \"ts\": 1795630350, \"text\": \"lighthouse lens polish\"}, {\"sessionId\": \"7a9d0ede-ed78-429b-91a9-f3f6a5d1c046\", \"ts\": 1795630350, \"text\": \"lighthouse beam audit\"}, {\"sessionId\": \"7a9d0ede-ed78-429b-91"
+  },
+  {
+    "probe": "history",
+    "check": "stored_in_host_nori_home",
+    "passed": true,
+    "detail": "/tmp/nori-feature-probes/history/homes/host/history.jsonl"
+  },
+  {
+    "probe": "history",
+    "check": "client_home_untouched",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "history",
+    "check": "out_of_range_offset_is_not_a_crash",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 5, 'result': {'entry': None}}"
+  },
+  {
+    "probe": "history",
+    "check": "unknown_session_add_refused",
+    "passed": false,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'result': {}}"
+  }
+]

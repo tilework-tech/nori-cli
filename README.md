@@ -63,3 +63,9 @@ them; `run_linux*.sh` hold the Linux matrix (run with `bash`). Results and the v
   attach vs the joined App, and audits the whole inline scrollback.
 - `harness/diffstates.py OLD NEW` lists only checks whose pass/fail changed.
 - Verdicts: `results/attach-776-b2562f5e/`, `results/attach-777-20051fcf/`.
+- `harness/feature_probes.py --nori BIN --out FILE [--only queue,history,prompts,goal,context]`
+  probes the host-backed feature methods (#778–#782) on the wire with a controller
+  and a watcher. K01–K04 in `run.py` cover the same features in plain `nori`. The
+  lantern `http-mcp` control switch makes the agent advertise HTTP MCP, which host
+  goal management requires. Subscribe with `{"session_id", "cursors": {id: n}}`; the
+  host ignores `sessionId`/`cursor` and falls back to the selected session.

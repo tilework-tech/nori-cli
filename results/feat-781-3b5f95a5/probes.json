@@ -1,0 +1,74 @@
+[
+  {
+    "probe": "goal",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "goal",
+    "check": "starts_empty",
+    "passed": true,
+    "detail": "[None, None]"
+  },
+  {
+    "probe": "goal",
+    "check": "controller_set_ok",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'result': {'goal': {'objective': 'chart the north harbor', 'status': 'active', 'tokens_used': 0, 'time_used_seconds': 0, 'created_at': 1795631847, 'updated_at': 1795631847}}}"
+  },
+  {
+    "probe": "goal",
+    "check": "watcher_sees_goal_changed_live",
+    "passed": true,
+    "detail": "['{\"jsonrpc\": \"2.0\", \"method\": \"_nori/session/event\", \"params\": {\"conversation_id\": \"11414c29-ec4c-4c24-b61d-8feb3e2a2887\", \"agent\": \"claude-code\", \"seq\": 15, \"ev', '{\"jsonrpc\": \"2.0\", \"method\": \"_nori/session/event\", \"params\": {\"conversation_id\": \"11414c29-ec4c-4c24-b61d-8feb3e2a2887\", \"agent\": \"claude-code\", \"seq\": 16, \"ev', '{\"jsonrpc\": \"2.0\", \"method\": \"_nori/session/event\", \"params\": {\"conversation_id\": \"11414c29-ec4c-4c24-b61d-8feb3e2a2887\", \"agent\": \"claude-code\", \"seq\": 17, \"ev', '{\"json"
+  },
+  {
+    "probe": "goal",
+    "check": "watcher_reads_goal",
+    "passed": true,
+    "detail": "{'objective': 'chart the north harbor', 'status': 'active', 'tokens_used': 0, 'time_used_seconds': 3, 'created_at': 1795631847, 'updated_at': 1795631847}"
+  },
+  {
+    "probe": "goal",
+    "check": "other_session_unchanged",
+    "passed": true,
+    "detail": "None"
+  },
+  {
+    "probe": "goal",
+    "check": "watcher_set_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 5, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "goal",
+    "check": "pause_ok",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 9, 'result': {'goal': {'objective': 'chart the north harbor', 'status': 'paused', 'tokens_used': 0, 'time_used_seconds': 3, 'created_at': 1795631847, 'updated_at': 1795631850}}}"
+  },
+  {
+    "probe": "goal",
+    "check": "resume_ok",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 10, 'result': {'goal': {'objective': 'chart the north harbor', 'status': 'active', 'tokens_used': 0, 'time_used_seconds': 3, 'created_at': 1795631847, 'updated_at': 1795631850}}}"
+  },
+  {
+    "probe": "goal",
+    "check": "late_joiner_list_row_carries_goal",
+    "passed": true,
+    "detail": "{'objective': 'chart the north harbor', 'status': 'active', 'tokens_used': 0, 'time_used_seconds': 3, 'created_at': 1795631847, 'updated_at': 1795631850}"
+  },
+  {
+    "probe": "goal",
+    "check": "clear_ok_then_empty",
+    "passed": true,
+    "detail": "[{'jsonrpc': '2.0', 'id': 11, 'result': {'goal': None}}, None]"
+  },
+  {
+    "probe": "goal",
+    "check": "unknown_session_-32002",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 14, 'error': {'code': -32002, 'message': 'unknown session id'}}"
+  }
+]

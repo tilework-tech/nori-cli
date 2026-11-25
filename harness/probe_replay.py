@@ -15,7 +15,7 @@ try:
     time.sleep(1.5)
     ep, tok = wire.host_endpoint(fx["homes"]["host"])
     w = wire.Wire(ep, tok, observe=False)
-    r = w.call("_nori/session/subscribe", {"sessionId": sid, "cursor": 0})
+    r = w.call("_nori/session/subscribe", {"session_id": sid, "cursors": {sid: 0}})
     print("subscribe ->", json.dumps(r)[:300])
     for n in w.drain(2.0):
         p = n.get("params", {})

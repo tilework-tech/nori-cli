@@ -1,0 +1,33 @@
+suite-782-host.log: 177 passed, 0 failed
+suite-782-tui.log: 1909 passed, 0 failed
+suite-782-e2e.log: 310 passed, 0 failed
+test context::a_turn_reporting_usage_shows_in_the_report ... ok
+test context::an_unknown_session_is_refused ... ok
+test context::a_watcher_reads_the_report ... ok
+test context::initialize_advertises_session_context ... ok
+test context::each_session_reports_its_own_usage ... ok
+test context::instruction_files_come_from_the_session_folder_on_the_host ... ok
+test goal::a_terminal_that_connects_later_sees_the_goal_on_its_list_row ... ok
+test goal::an_unknown_session_is_refused ... ok
+test goal::a_watcher_reads_and_follows_the_goal_but_cannot_change_it ... ok
+test goal::each_session_keeps_its_own_goal ... ok
+test goal::initialize_advertises_session_goals ... ok
+test history::history_is_kept_in_the_hosts_own_home ... ok
+test history::a_watcher_cannot_record_a_prompt ... ok
+test history::a_prompt_one_terminal_records_is_recalled_and_found_by_another ... ok
+test goal::pause_resume_and_clear_change_the_goal ... ok
+test history::initialize_advertises_history ... ok
+test history::nothing_is_recorded_when_the_host_keeps_no_history ... ok
+test prompts::a_failing_script_reports_why ... ok
+test prompts::a_script_runs_on_the_host_in_the_sessions_folder ... ok
+test prompts::initialize_advertises_prompts ... ok
+test prompts::a_watcher_lists_the_prompts_kept_in_the_hosts_home ... ok
+test prompts::a_watcher_cannot_run_a_script ... ok
+test prompts::only_a_script_in_the_hosts_commands_can_be_run ... ok
+test queue::an_unknown_session_is_refused ... ok
+test queue::a_prompt_another_client_queued_is_not_taken_into_this_composer ... ok
+test queue::initialize_advertises_queue_control ... ok
+test queue::a_terminal_that_connects_later_sees_the_paused_queue ... ok
+test queue::watchers_cannot_change_the_queue ... ok
+test queue::discarding_drops_every_queued_prompt_without_sending_it ... ok
+test queue::resuming_sends_each_queued_prompt_once_in_order ... ok

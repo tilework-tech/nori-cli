@@ -1,0 +1,74 @@
+[
+  {
+    "probe": "prompts",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "prompts",
+    "check": "watcher_lists_host_prompts_with_body",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 2, \"result\": {\"prompts\": [{\"name\": \"harbor-review\", \"description\": \"Review the harbor log\", \"argumentHint\": \"<area>\", \"kind\": {\"type\": \"markdown\"}, \"content\": \"Review the $1 section of the harbor log.\\n\"}, {\"name\": \"where\", \"description\": null, \"argumentHint\": null, \"kind\": {\"type\": \"script\", \"interpreter\": \"bash\"}, \"content\": \"\"}]}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "client_home_prompt_not_listed",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "prompts",
+    "check": "script_runs_in_session_folder_on_host",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 2, \"result\": {\"stdout\": \"cwd=/tmp/nori-feature-probes/prompts/roots/beta/app\\nargc=3\\narg=a b\\narg=$(touch /tmp/nori-feature-probes/prompts/INJECTED)\\narg=; touch /tmp/nori-feature-probes/prompts/INJECTED\\n\"}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "args_passed_verbatim_three",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 2, \"result\": {\"stdout\": \"cwd=/tmp/nori-feature-probes/prompts/roots/beta/app\\nargc=3\\narg=a b\\narg=$(touch /tmp/nori-feature-probes/prompts/INJECTED)\\narg=; touch /tmp/nori-feature-probes/prompts/INJECTED\\n\"}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "no_shell_injection_from_args",
+    "passed": true,
+    "detail": "/tmp/nori-feature-probes/prompts/INJECTED"
+  },
+  {
+    "probe": "prompts",
+    "check": "watcher_run_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "refuses_name:outside",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32602, 'message': 'no script prompt named ../outside'}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "refuses_name:outside.sh",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32602, 'message': 'no script prompt named ../outside.sh'}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "refuses_name:outside.sh",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 5, 'error': {'code': -32602, 'message': 'no script prompt named /tmp/nori-feature-probes/prompts/outside.sh'}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "refuses_name:missing",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'error': {'code': -32602, 'message': 'no script prompt named missing'}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "markdown_prompt_not_executed_as_script",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 7, 'error': {'code': -32602, 'message': 'no script prompt named harbor-review'}}"
+  }
+]

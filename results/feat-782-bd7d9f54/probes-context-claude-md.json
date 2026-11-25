@@ -1,0 +1,44 @@
+[
+  {
+    "probe": "context",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "context",
+    "check": "watcher_may_read",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 2, \"result\": {\"timeline\": {\"turns\": [{\"number\": 1, \"requestId\": \"f2c1b79b-2a47-4dd7-a16e-5eb84385c2cc\", \"start\": {\"recordedAt\": \"2026-11-25T18:45:13.141Z\", \"observation\": null, \"epoch\": 0}, \"end\": {\"recordedAt\": \"2026-11-25T18:45:13.392Z\", \"observation\": null, \"epoch\": 0}}],"
+  },
+  {
+    "probe": "context",
+    "check": "has_timeline_instructions_usage",
+    "passed": true,
+    "detail": "['timeline', 'instructions', 'usage']"
+  },
+  {
+    "probe": "context",
+    "check": "reads_claude_md_in_session_folder_on_host",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 2, \"result\": {\"timeline\": {\"turns\": [{\"number\": 1, \"requestId\": \"f2c1b79b-2a47-4dd7-a16e-5eb84385c2cc\", \"start\": {\"recordedAt\": \"2026-11-25T18:45:13.141Z\", \"observation\": null, \"epoch\": 0}, \"end\": {\"recordedAt\": \"2026-11-25T18:45:13.392Z\", \"observation\": null, \"epoch\": 0}}], \"current\": null, \"segments\": [], \"incompleteHistory\": false, \"epoch\": 0}, \"instructions\": [{\"path\":"
+  },
+  {
+    "probe": "context",
+    "check": "other_session_does_not_list_beta_file",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 3, \"result\": {\"timeline\": {\"turns\": [{\"number\": 1, \"requestId\": \"a81e3de6-10a8-47ed-ade4-a4bd563b2262\", \"start\": {\"recordedAt\": \"2026-11-25T18:45:13.950Z\", \"observation\": null, \"epoch\": 0}, \"end\": {\"recordedAt\": \"2026-11-25T18:45:14.201Z\", \"observation\": null, \"epoch\": 0}}],"
+  },
+  {
+    "probe": "context",
+    "check": "skip_instructions_omits_them",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 4, \"result\": {\"timeline\": {\"turns\": [{\"number\": 1, \"requestId\": \"f2c1b79b-2a47-4dd7-a16e-5eb84385c2cc\", \"start\": {\"recordedAt\": \"2026-11-25T18:45:13.141Z\", \"observation\": null, \"epoch\": 0}, \"end\": {\"recordedAt\": \"2026-11-25T18:45:13.392Z\", \"observation\": null, \"epoch\": 0}}],"
+  },
+  {
+    "probe": "context",
+    "check": "unknown_session_-32002",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'error': {'code': -32002, 'message': 'unknown session id'}}"
+  }
+]
