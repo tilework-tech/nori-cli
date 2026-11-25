@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Nori CLI face: study 02</title>
+<title>Nori CLI face: final face set</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <!-- Fonts are optional. Cells are fixed-width boxes, so the grid holds with any fallback. -->
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -34,7 +34,7 @@
 </style>
 </head>
 <body>
-<h1>Nori CLI face · study 02</h1>
+<h1>Nori CLI face · final face set</h1>
 <p class="sub">Face <b>〉_ ▐</b> and wordmark <b>〉nori CLI</b>. Eyes green, mouth foreground. Design study, synthetic content. Every frame keeps its cells.</p>
 <div id="bar">
   <label>Speed <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.2">0.2×</option></select></label>
@@ -67,15 +67,13 @@ function typing(build) {            // build(i, typedText) -> frame string
 }
 
 const GROUPS = [
- {key:'blink', title:'Blink B3 · three speeds (was 40 ms frames)', rest:REST, opts:[
-  {id:'B3-a', name:'60 ms frames', note:'Squash blink, 180 ms in total.', f:[fr(REST,900), fr('{g}› {f}_ {g}▗',60), fr('{g}- {f}_ {g}▁',60), fr('{g}› {f}_ {g}▗',60)]},
-  {id:'B3-b', name:'80 ms frames', note:'Squash blink, 240 ms in total.', f:[fr(REST,900), fr('{g}› {f}_ {g}▗',80), fr('{g}- {f}_ {g}▁',80), fr('{g}› {f}_ {g}▗',80)]},
-  {id:'B3-c', name:'100 ms frames', note:'Squash blink, 300 ms in total.', f:[fr(REST,900), fr('{g}› {f}_ {g}▗',100), fr('{g}- {f}_ {g}▁',100), fr('{g}› {f}_ {g}▗',100)]},
+ {key:'blink', title:'Blink · both eyes', rest:REST, opts:[
+  {id:'B3', name:'Squash', note:'Eyes shrink, close, reopen. 80 ms per frame, 240 ms in total.', f:[fr(REST,900), fr('{g}› {f}_ {g}▗',80), fr('{g}- {f}_ {g}▁',80), fr('{g}› {f}_ {g}▗',80)]},
  ]},
- {key:'wink', title:'Wink · chosen', rest:REST, opts:[
+ {key:'wink', title:'Wink · right eye', rest:REST, opts:[
   {id:'W1', name:'Dash', note:'Block becomes a dash, holds 240 ms.', f:[fr(REST,900), fr('{g}〉{f}_ {g}-',240)]},
  ]},
- {key:'retype', title:'Retype into the wordmark · chosen', rest:WORD, opts:[
+ {key:'retype', title:'Retype · face into wordmark · 60 ms per letter', rest:WORD, opts:[
   {id:'R1', name:'Mouth types', note:'The underscore is the cursor. It pushes the right eye along.',
     f:[fr(REST,700), ...typing((i,t)=>`{g}〉{b}${t}{f}_ {g}▐`), fr('{g}〉{b}nori CLI{f}_ {g}▐',240), fr('{g}〉{b}nori CLI',120), fr(WORD,1600)]},
  ]},

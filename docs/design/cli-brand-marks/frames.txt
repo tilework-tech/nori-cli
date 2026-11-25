@@ -1,13 +1,24 @@
-Nori CLI face, study 04. Plain-text frames. Synthetic content.
+Nori CLI face. Chosen frames, plain text. Synthetic content.
 〉 (U+3009) takes 2 cells. Eyes are green, the mouth is foreground.
 
 FACE      〉_ ▐              (5 cells)
 WORDMARK  〉nori CLI v0.42.0  (version dim)
 
-CHOSEN
-  B3 blink   〉_ ▐   › _ ▗   - _ ▁   › _ ▗        speed open: 60, 80 or 100 ms per frame
-  W1 wink    〉_ ▐   〉_ -                         240 ms
-  R1 retype  〉_ ▐  〉n_ ▐  〉no_ ▐ ... 〉nori CLI_ ▐  〉nori CLI  〉nori CLI v0.42.0   60 ms per letter
+BLINK (B3)   〉_ ▐   › _ ▗   - _ ▁   › _ ▗   〉_ ▐
+             80 ms per frame, 240 ms in total
 
-DROPPED
-  Every look option and the working hum. A look must move both eyes together with the mouth still.
+WINK (W1)    〉_ ▐   〉_ -   〉_ ▐
+             dash holds 240 ms
+
+RETYPE (R1)  〉_ ▐
+             〉n_ ▐
+             〉no_ ▐
+             〉nor_ ▐
+             〉nori_ ▐
+             〉nori _ ▐
+             〉nori C_ ▐
+             〉nori CL_ ▐
+             〉nori CLI_ ▐      holds 240 ms
+             〉nori CLI         120 ms
+             〉nori CLI v0.42.0
+             60 ms per letter. The underscore is the cursor and pushes the right eye along.
