@@ -637,3 +637,6 @@ mod explicit_close;
 
 #[path = "host_lifecycle/find_paths.rs"]
 mod find_paths;
+
+#[path = "host_lifecycle/startup.rs"]
+mod startup;

@@ -438,3 +438,25 @@ async fn resuming_a_live_session_after_a_reconnect_does_not_replay_its_history()
         "resume does not replay: {seen}"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lifecycle_connection_at_capacity_is_limited_to_host_management() {
+    let host = host_with("[host]\nmax_clients = 1", &[]);
+    let endpoint = at_path(&host, "/acp");
+    let _full = upgrade(&endpoint, Some(&token(&host))).await.unwrap();
+    let mut admin =
+        nori_harness::remote_agent::ManagedClient::connect_lifecycle(&endpoint, &token(&host))
+            .await
+            .unwrap();
+    let initialized = admin
+        .request("initialize", json!({"observe":true}))
+        .await
+        .unwrap();
+    assert_eq!(initialized["control"]["role"], "watcher");
+    assert!(
+        admin
+            .request("_nori/session/list", json!({}))
+            .await
+            .is_err()
+    );
+}

@@ -8,7 +8,6 @@ use std::sync::atomic::Ordering;
 use axum::extract::State;
 use axum::extract::WebSocketUpgrade;
 use axum::extract::ws::Message;
-use axum::extract::ws::WebSocket;
 use axum::extract::ws::rejection::WebSocketUpgradeRejection;
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
@@ -38,6 +37,7 @@ struct HostState<M> {
     generation: Arc<AtomicI64>,
     clients: Arc<AtomicI64>,
     max_clients: i64,
+    lifecycle_clients: Arc<AtomicI64>,
     shutdown: CancellationToken,
 }
 
@@ -52,6 +52,7 @@ impl<M> Clone for HostState<M> {
             generation: self.generation.clone(),
             clients: self.clients.clone(),
             max_clients: self.max_clients,
+            lifecycle_clients: self.lifecycle_clients.clone(),
             shutdown: self.shutdown.clone(),
         }
     }
@@ -78,6 +79,7 @@ pub(super) fn router<M: ManagedAgent>(
         instance: instance.into(),
         control,
         generation: Arc::new(AtomicI64::new(0)),
+        lifecycle_clients: Default::default(),
         clients: Arc::new(AtomicI64::new(0)),
         max_clients: i64::from(max_clients),
         shutdown,
@@ -117,7 +119,17 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
             .into_response();
     };
     // The legacy managed-mode wire is not limited.
-    let slot = if STANDARD || state.host.standard_acp_enabled() {
+    let lifecycle = !STANDARD
+        && headers
+            .get("x-nori-lifecycle")
+            .is_some_and(|value| value == "1");
+    let slot = if lifecycle {
+        let Some(slot) = super::client_limit::ClientSlot::claim(&state.lifecycle_clients, 16)
+        else {
+            return (StatusCode::SERVICE_UNAVAILABLE, "Host management is busy.").into_response();
+        };
+        Some(slot)
+    } else if STANDARD || state.host.standard_acp_enabled() {
         None
     } else {
         let Some(slot) = super::client_limit::ClientSlot::claim(&state.clients, state.max_clients)
@@ -151,9 +163,12 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
                 return;
             }
             let client = state.generation.fetch_add(1, Ordering::Relaxed);
+            let transport = if lifecycle { Transport::Lifecycle } else { Transport::WebSocket };
+            let (sink, incoming) = socket.split();
             tokio::select! {
                 _ = cancel.cancelled() => {},
-                result = serve(socket, &state, client, cancel.clone()) => {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(5)), if lifecycle => {},
+                result = serve_frames(sink, incoming, &state, client, cancel.clone(), transport) => {
                     if let Err(error) = result {
                         tracing::debug!(%error, "managed host connection ended");
                     }
@@ -180,20 +195,11 @@ const OUTBOUND_CAPACITY: usize = 16384;
 #[derive(Clone, Copy)]
 pub(super) enum Transport {
     WebSocket,
+    Lifecycle,
     /// The host's own stdin and stdout: its one client always controls, and
     /// an ended subscription is reported in band, as the stream cannot close
     /// and reopen.
     Lines(super::HostClientOrigin),
-}
-
-async fn serve<M: ManagedAgent>(
-    socket: WebSocket,
-    state: &HostState<M>,
-    client: i64,
-    cancel: CancellationToken,
-) -> anyhow::Result<()> {
-    let (sink, incoming) = socket.split();
-    serve_frames(sink, incoming, state, client, cancel, Transport::WebSocket).await
 }
 
 /// Lines of this process's stdin, without their newlines, until it closes.
@@ -295,6 +301,7 @@ async fn serve_lines<M: ManagedAgent, T>(
         instance: instance.into(),
         control: Default::default(),
         generation: Arc::new(AtomicI64::new(0)),
+        lifecycle_clients: Default::default(),
         clients: Arc::new(AtomicI64::new(0)),
         max_clients: 1,
         shutdown: shutdown.clone(),
@@ -396,6 +403,13 @@ where
                                 }
                             };
                             let id = request.get("id").cloned().unwrap_or(Value::Null);
+                            if matches!(transport, Transport::Lifecycle)
+                                && !(request["jsonrpc"] == "2.0" && request.get("id").is_some()
+                                    && matches!(request["method"].as_str(), Some("initialize" | "_nori/host/stop")))
+                            {
+                                send_frame(&mut sink, Message::Text(failure(id, -32601, "host management connections only support initialize and stop").response.to_string().into())).await?;
+                                break;
+                            }
                             let id_valid = id.is_string() || id.is_i64() || id.is_null();
                             // Notifications and answers to the host's own
                             // requests carry no reply.
@@ -433,6 +447,7 @@ where
                             let reply = if request["method"] == "initialize" {
                                 let observe = match transport {
                                     Transport::WebSocket => request["params"]["observe"] == true,
+                                    Transport::Lifecycle => true,
                                     Transport::Lines(_) => false,
                                 };
                                 let declares_approval_modes = request["params"]["capabilities"]["nori_sessions"]["approval_modes"] == true;
@@ -448,7 +463,7 @@ where
                                         state.host.connection_opened(super::managed::HostConnection {
                                             client,
                                             origin: match transport {
-                                                Transport::WebSocket => super::HostClientOrigin::Independent,
+                                                Transport::WebSocket | Transport::Lifecycle => super::HostClientOrigin::Independent,
                                                 Transport::Lines(origin) => origin,
                                             },
                                             outbound: outbound.clone(),
@@ -510,7 +525,7 @@ where
                 } => {
                     let Some(envelope) = event else {
                         match transport {
-                            Transport::WebSocket => break,
+                            Transport::WebSocket | Transport::Lifecycle => break,
                             Transport::Lines(_) => {
                                 subscription = None;
                                 send_frame(&mut sink, Message::Text(json!({"jsonrpc":"2.0","method":"_nori/session/subscription_ended","params":{"reason":"replay_required"}}).to_string().into())).await?;
