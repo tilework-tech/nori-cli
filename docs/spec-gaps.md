@@ -75,8 +75,9 @@ question in the item.
   in `harness/src/managed_remote.rs` and `host-runtime/src/host/service.rs`.
   The TUI host client already uses ACP `session/new`, `session/list`,
   `session/set_mode`, `session/close`, and `session/resume` (with a `cwd`).
-  It also calls `_nori/host/prepare_agent`, `_nori/host/discard_agent`, and
-  `_nori/session/find_paths`, which the rule's list does not name yet.
+  It also calls `_nori/host/prepare_agent`, `_nori/host/discard_agent`,
+  `_nori/session/find_paths`, and `_nori/session/queue/{resume,take,discard}`,
+  which the rule's list does not name yet.
 - **Done when:** no cli client calls those four methods; the host still serves
   them, marked deprecated in the registry, until the next major.
 - **Depends on:** G03.
