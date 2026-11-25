@@ -76,7 +76,7 @@ All commands ran from a fresh clone at the head with a clean tree (`/tmp/clean77
 | Finding | Status |
 |---|---|
 | B1: absolute baseline depends on the build | **Documented** (musl named, glibc rerun quoted). The shipped next.6 musl artifact measured **1,249 ms** median (n=5) from Enter to the latest reply here, not README's 2,581 ms. The fix measured 54.9 ms, and both drew the same body (`ee5a2c42…`). The ratio holds, but the absolute values depend on the machine as well as the libc. |
-| B2: recovery audit could not see F1 or a duplicate | **Fixed in logic.** Stitched exactly-once check and notice rejection; 11/11 unit tests pass. In real runs it catches F1: on the former head it failed 3/12 at 128/160 turns, and 1/11 more in the rerun, each with `connection notice in restored history`. With the documented 64-turn fixture, the former head passed **20/20 on Linux and 12/12 on macOS**: that fixture does not produce F1, so the README's recovery command does not exercise it. By default only the first sample of each group is audited. |
+| B2: recovery audit could not see F1 or a duplicate | **Fixed in logic.** Stitched exactly-once check and notice rejection; 11/11 unit tests pass. In real runs it catches F1: on the former head it failed 4/17 runs at 128/160 turns, each with `connection notice in restored history`. With the documented 64-turn fixture, the former head passed **20/20 on Linux and 12/12 on macOS**: that fixture does not produce F1, so the README's recovery command does not exercise it. By default only the first sample of each group is audited. |
 | B3: range not stated | **Documented** (4–64 sections; 4,096-envelope retention). Not stated: recovery's lower bound of about 2,000 updates. |
 
 Other #770 observations:
