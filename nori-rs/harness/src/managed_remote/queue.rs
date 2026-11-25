@@ -56,7 +56,7 @@ impl ManagedRemoteHost {
         }
     }
 
-    fn running(&self, session_id: &str) -> Result<HarnessHandle, RemoteError> {
+    pub(super) fn running(&self, session_id: &str) -> Result<HarnessHandle, RemoteError> {
         let id = self.target(Some(session_id))?;
         let handle = self
             .manager

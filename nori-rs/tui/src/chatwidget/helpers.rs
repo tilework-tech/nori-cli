@@ -344,6 +344,7 @@ impl ChatWidget {
         let Some(action) = self
             .history_action_on_host(action)
             .and_then(|action| self.prompts_action_on_host(action))
+            .and_then(|action| self.goal_action_on_host(action))
         else {
             return;
         };
