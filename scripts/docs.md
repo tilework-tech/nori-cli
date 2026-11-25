@@ -73,6 +73,18 @@ The [host follow-up verifier](verify-host-follow-up/README.md) exercises mid-tur
 
 Run `bun scripts/verify-pi-endpoint/verify.mjs nori-rs/target/debug/nori` from the repository root to check a local Pi launch. The verifier requires Bun, a built CLI and access to the upstream packages through npm or its cache. It checks missing-key refusal, then drives a file read and terminal command through the real adapter and a synthetic Chat Completions endpoint. Managed host tests exercise provisioner-supplied fixture definitions on a local host. A deployed Sessions launch needs separate verification.
 
+### Host startup benchmark
+
+On Linux and macOS, compare two prebuilt release binaries on the same idle machine:
+
+```sh
+python3 scripts/host_startup_benchmark.py --base /path/to/base/nori --head /path/to/head/nori --output startup.json
+```
+
+Each sample uses a fresh private home and a local adapter that holds its initialization reply. The PTY responds to terminal queries and detects the first composer prompt and the first character rendered by the application, both timed from process launch. A separate measurement times `nori host --port 0` until it returns, verifies readiness with `host ls`, and times a fresh `nori attach` to its first empty session list. Cold host means there was no running host. Filesystem caches are warm.
+
+After one untimed run per binary, the script rotates two baseline runs and one candidate run, with 50 samples per series by default. For each metric it compares median and nearest-rank p95. The limit is the larger of (1) the slower baseline percentile plus the difference between baseline percentiles and (2) the 99.5th percentile from 2,000 reproducible bootstrap estimates of that statistic drawn from both baseline series. Exceeding any limit exits with status 1. The JSON contains raw samples and all thresholds. Compare both binaries on each target OS.
+
 ### Things to Know
 
 - Git tags are the single source of truth for version enumeration -- `list_tags()` reads the repository's `origin` remote rather than GitHub Releases, so the caller must run in a checkout with an accessible `origin`; this also preserves versions whose tag exists even if a cancelled or failed workflow never created the corresponding GitHub Release
