@@ -1,0 +1,32 @@
+
+ Exit card specimen
+ Width 120 · Tools: 6 tools · Fields: Codex, no cost
+ Shading: off · Color: on
+
+ ···················································································································· 120
+   › Nori CLI  session ended
+
+   Session      019a7c3e-5b21-7f4d-9e08-6c2a1d4b8f37
+                Title  Redesign the exit card
+                Agent  Codex
+   Messages     14 prompts · 19 replies
+   Tools        37  Read   18  Edit    6  Glob
+                29  Bash   12  Grep    3  Write
+   Skills       test-driven-development · writing-plans
+   Subagents    nori-code-researcher · nori-web-researcher
+
+   Context      164,208 of 272,000 · 60% full
+   Tokens       1,386,204  total
+                1,302,118  input
+                1,164,288  cached read
+                   37,516  output
+                   46,570  reasoning
+
+ nori resume 019a7c3e-5b21-7f4d-9e08-6c2a1d4b8f37
+
+
+
+
+
+ ← → width  t tools  f fields  s shading  c color  q close
+

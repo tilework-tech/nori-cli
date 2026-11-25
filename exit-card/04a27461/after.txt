@@ -1,0 +1,44 @@
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/tmp.ZwRbyxGedT
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› mock:title Tidy the release notes
+
+
+• Mock Agent 0.1.0 session updated:
+  title=Tidy the release notes
+
+─ Worked for 0s ──────────────────────────────────────────────────────────────────────────────────────────────
+──────────
+
+• Done. The release notes are tidied.
+
+
+› Check the changelog too
+
+
+• Done. The release notes are tidied.
+
+  › Nori CLI  session ended
+
+  Session      ee455e10-4705-4922-bbf6-9e1036aacfec
+               Title  Tidy the release notes
+               Agent  Mock ACP
+  Messages     2 prompts · 2 replies
+
+  Context      340,412 of 1,000,000 · 34% full
+  Tokens       96,420  total
+                6,240  input
+               80,200  cached read
+                4,200  cached write
+                5,780  output
+
+nori resume ee455e10-4705-4922-bbf6-9e1036aacfec
+
+
