@@ -50,6 +50,7 @@ split across PTY reads still applies. On top of it, `TuiSession` offers:
 | --- | --- |
 | `history_contents()` | Every scrollback line, oldest first, then the visible screen |
 | `raw_output()` | Every byte the TUI wrote, including sequences the emulator drops, such as notifications |
+| `is_alternate_screen()` | Whether the TUI is drawing on the alternate screen (the full-screen view or an overlay) |
 | `resize(rows, cols)` | Resizes the PTY and emulator, as a user dragging the window would |
 | `settle(duration)` | Keeps reading output for a fixed time so the emulator catches up |
 | `wait_out_answer_grace()` | Settles for `ANSWER_GRACE`, longer than the TUI's request answer grace period, so the next option key answers a request that just appeared |
@@ -202,6 +203,15 @@ fitting one row. A cloud-mode
 scenario checks that `/close` beside another open session lists the released one
 as closed. The ignored `jump_timing_on_a_long_history` test reports how long a
 jump to a long history takes; run it with `--ignored --nocapture`.
+
+[Screen toggle scenarios](tests/screen_toggle.rs) drive `/screen` in plain
+`nori` and `nori-tui`. They check that the full-screen view shows the
+transcript, keeps a draft across the Ctrl+T transcript overlay and a resize,
+follows Alt+, session moves, and that returning inline leaves every prompt
+and answer in the scrollback exactly once, including a turn that streamed
+(paced by `MOCK_AGENT_RESPONSE_CHUNK_DELAY_MS`) while full-screen. One
+scenario switches with Ctrl+L while a draft is typed and checks that the
+draft stays in the composer, unsent, until Enter sends it once.
 
 [Tool output preference scenarios](tests/tool_output_preference.rs) use a
 shared home and the mock agent's `MOCK_AGENT_SEND_COMMAND_OUTPUT` command to

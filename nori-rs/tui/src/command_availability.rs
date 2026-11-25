@@ -21,6 +21,9 @@ pub(crate) const NOT_IN_ATTACH: &str = "not available in nori attach yet";
 pub(crate) const WATCHING: &str = "watching · Alt+T to take control";
 /// Host commands wait for the connection to come back.
 pub(crate) const RECONNECTING: &str = "reconnecting";
+/// `/screen` switches plain `nori` out of its inline view; the attached
+/// terminal has no inline view to switch from.
+pub(crate) const ALWAYS_FULL_SCREEN: &str = "nori attach is always full-screen";
 
 /// Where a command does its work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,7 +42,8 @@ fn route(command: SlashCommand) -> Route {
         | SlashCommand::Exit
         | SlashCommand::Settings
         | SlashCommand::Vim
-        | SlashCommand::Logout => Route::Terminal,
+        | SlashCommand::Logout
+        | SlashCommand::Screen => Route::Terminal,
         SlashCommand::Sessions => Route::Host {
             needs_control: false,
         },
@@ -108,7 +112,8 @@ fn runs_in_attach(command: SlashCommand) -> bool {
         | SlashCommand::ApiKey
         | SlashCommand::SwitchSkillset
         | SlashCommand::Fork
-        | SlashCommand::Browser => false,
+        | SlashCommand::Browser
+        | SlashCommand::Screen => false,
     }
 }
 
@@ -140,10 +145,10 @@ pub(crate) fn unavailable_reason(command: SlashCommand, surface: Surface) -> Opt
             let route = route(command);
             if !runs_in_attach(command) {
                 return Some(
-                    if route == Route::InProcess {
-                        NOT_ON_THIS_HOST
-                    } else {
-                        NOT_IN_ATTACH
+                    match (command, route) {
+                        (SlashCommand::Screen, _) => ALWAYS_FULL_SCREEN,
+                        (_, Route::InProcess) => NOT_ON_THIS_HOST,
+                        (_, Route::Terminal | Route::Host { .. }) => NOT_IN_ATTACH,
                     }
                     .to_string(),
                 );
@@ -196,4 +201,41 @@ pub(crate) fn parse_builtin(text: &str) -> Option<(SlashCommand, &str)> {
         .iter()
         .any(|(_, visible)| *visible == command)
         .then_some((command, &rest[name_end..]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn screen_runs_in_plain_nori_even_during_a_turn_and_is_greyed_in_attach() {
+        let (command, rest) = parse_builtin("/screen").expect("/screen is a builtin");
+        assert_eq!(rest, "");
+        assert!(command.available_during_task());
+        for cloud_mode in [false, true] {
+            assert_eq!(
+                unavailable_reason(
+                    command,
+                    Surface::Owned {
+                        cloud_mode,
+                        agent_session_close: false,
+                    }
+                ),
+                None
+            );
+        }
+        for (watching, connected) in [(false, true), (true, true), (false, false)] {
+            assert_eq!(
+                unavailable_reason(
+                    command,
+                    Surface::Attached {
+                        watching,
+                        connected
+                    }
+                ),
+                Some(ALWAYS_FULL_SCREEN.to_string())
+            );
+        }
+    }
 }

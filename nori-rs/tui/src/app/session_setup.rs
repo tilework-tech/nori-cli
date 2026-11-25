@@ -202,7 +202,7 @@ impl App {
         if self.chat_widget.has_harness_session()
             || self.chat_widget.managed_conversation_id().is_some()
         {
-            self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
+            self.retiring_transcript = Some(self.transcript_cells.replace(Vec::new()));
         } else {
             self.chat_widget.shutdown_harness_session();
         }
@@ -290,14 +290,7 @@ impl App {
             }
         };
 
-        // Restore terminal to normal mode so the editor can take over
-        let _ = tui::restore();
-
-        let status = editor::spawn_editor(&editor_cmd, &temp_path);
-
-        // Re-enable TUI mode
-        let _ = tui::set_modes();
-        tui.frame_requester().schedule_frame();
+        let status = tui.run_external_program(|| editor::spawn_editor(&editor_cmd, &temp_path));
 
         match status {
             Ok(exit_status) if exit_status.success() => {
@@ -352,74 +345,72 @@ impl App {
 
         let chooser_args = fm.chooser_args(&chooser_output);
 
-        // Restore terminal to normal mode so the file manager can take over.
-        let _ = tui::restore();
-
         // Loop: launch file manager → open selected file in editor → re-launch
         // file manager. The user stays in the browse workflow until they exit
         // the file manager without selecting a file (or it fails).
-        loop {
-            // Clear the chooser output so a stale selection from a previous
-            // iteration doesn't persist.
-            let _ = std::fs::write(&chooser_output, "");
+        let chat_widget = &mut self.chat_widget;
+        tui.run_external_program(|| {
+            loop {
+                // Clear the chooser output so a stale selection from a previous
+                // iteration doesn't persist.
+                let _ = std::fs::write(&chooser_output, "");
 
-            let fm_status = std::process::Command::new(fm.command_name())
-                .args(&chooser_args)
-                .stdin(std::process::Stdio::inherit())
-                .stdout(std::process::Stdio::inherit())
-                .stderr(std::process::Stdio::inherit())
-                .status();
+                let fm_status = std::process::Command::new(fm.command_name())
+                    .args(&chooser_args)
+                    .stdin(std::process::Stdio::inherit())
+                    .stdout(std::process::Stdio::inherit())
+                    .stderr(std::process::Stdio::inherit())
+                    .status();
 
-            match fm_status {
-                Ok(exit_status) if exit_status.success() => {
-                    let chosen = std::fs::read_to_string(&chooser_output)
-                        .unwrap_or_default()
-                        .lines()
-                        .next()
-                        .unwrap_or("")
-                        .trim()
-                        .to_string();
+                match fm_status {
+                    Ok(exit_status) if exit_status.success() => {
+                        let chosen = std::fs::read_to_string(&chooser_output)
+                            .unwrap_or_default()
+                            .lines()
+                            .next()
+                            .unwrap_or("")
+                            .trim()
+                            .to_string();
 
-                    if chosen.is_empty() {
-                        // User exited file manager without selecting a file.
-                        break;
-                    }
+                        if chosen.is_empty() {
+                            // User exited file manager without selecting a file.
+                            break;
+                        }
 
-                    let chosen_path = std::path::Path::new(&chosen);
-                    if chosen_path.is_file() {
-                        let editor_cmd = editor::resolve_editor();
-                        let editor_status = editor::spawn_editor(&editor_cmd, chosen_path);
-                        if let Err(err) = editor_status {
-                            self.chat_widget.add_error_message(format!(
-                                "Failed to launch editor '{editor_cmd}': {err}"
+                        let chosen_path = std::path::Path::new(&chosen);
+                        if chosen_path.is_file() {
+                            let editor_cmd = editor::resolve_editor();
+                            let editor_status = editor::spawn_editor(&editor_cmd, chosen_path);
+                            if let Err(err) = editor_status {
+                                chat_widget.add_error_message(format!(
+                                    "Failed to launch editor '{editor_cmd}': {err}"
+                                ));
+                                break;
+                            }
+                            // After editor exits, loop back to re-launch the file manager.
+                        } else {
+                            chat_widget.add_error_message(format!(
+                                "Selected path is not a file: {chosen}"
                             ));
                             break;
                         }
-                        // After editor exits, loop back to re-launch the file manager.
-                    } else {
-                        self.chat_widget
-                            .add_error_message(format!("Selected path is not a file: {chosen}"));
+                    }
+                    Ok(_) => {
+                        // File manager exited with non-zero status.
+                        break;
+                    }
+                    Err(err) => {
+                        chat_widget.add_error_message(format!(
+                            "Failed to launch {}: {err}. Is it installed?",
+                            fm.command_name()
+                        ));
                         break;
                     }
                 }
-                Ok(_) => {
-                    // File manager exited with non-zero status.
-                    break;
-                }
-                Err(err) => {
-                    self.chat_widget.add_error_message(format!(
-                        "Failed to launch {}: {err}. Is it installed?",
-                        fm.command_name()
-                    ));
-                    break;
-                }
             }
-        }
+        });
 
-        // Always clean up temp file and restore TUI.
         let _ = std::fs::remove_file(&chooser_output);
-        let _ = tui::set_modes();
-        tui.frame_requester().schedule_frame();
     }
 
     #[cfg(target_os = "windows")]

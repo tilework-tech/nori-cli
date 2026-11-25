@@ -43,6 +43,7 @@ use crate::tui::job_control::SUSPEND_KEY;
 #[cfg(unix)]
 use crate::tui::job_control::SuspendContext;
 
+mod alt_screen;
 #[cfg(unix)]
 mod job_control;
 
@@ -163,7 +164,10 @@ pub fn init() -> Result<Terminal> {
 fn set_panic_hook() {
     let hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {
-        let _ = restore(); // ignore any errors as we are already failing
+        // Ignore any errors as we are already failing. Leaving the alternate
+        // screen is harmless when it is not up.
+        let _ = execute!(stdout(), DisableAlternateScroll, LeaveAlternateScreen);
+        let _ = restore();
         hook(panic_info);
     }));
 }
@@ -181,6 +185,7 @@ pub struct Tui {
     pub(crate) terminal: Terminal,
     pending_history_lines: Vec<Line<'static>>,
     alt_saved_viewport: Option<ratatui::layout::Rect>,
+    alt_screen_nesting: alt_screen::AltScreenNesting,
     #[cfg(unix)]
     suspend_context: SuspendContext,
     // True when overlay alt-screen UI is active
@@ -234,6 +239,7 @@ impl Tui {
             terminal,
             pending_history_lines: vec![],
             alt_saved_viewport: None,
+            alt_screen_nesting: Default::default(),
             #[cfg(unix)]
             suspend_context: SuspendContext::new(),
             alt_screen_active: Arc::new(AtomicBool::new(false)),
@@ -330,7 +336,13 @@ impl Tui {
 
     /// Enter alternate screen and expand the viewport to full terminal size, saving the current
     /// inline viewport for restoration when leaving.
+    ///
+    /// Requests nest: while the alternate screen is already up (for example the full-screen
+    /// view under a transcript overlay) this only records the request.
     pub fn enter_alt_screen(&mut self) -> Result<()> {
+        if !self.alt_screen_nesting.enter() {
+            return Ok(());
+        }
         let _ = execute!(self.terminal.backend_mut(), EnterAlternateScreen);
         // Enable "alternate scroll" so terminals may translate wheel to arrows
         let _ = execute!(self.terminal.backend_mut(), EnableAlternateScroll);
@@ -349,7 +361,28 @@ impl Tui {
     }
 
     /// Leave alternate screen and restore the previously saved inline viewport, if any.
+    ///
+    /// Only the request matching the outermost `enter_alt_screen` leaves; an inner one (an
+    /// overlay closing over the full-screen view) keeps the alternate screen.
     pub fn leave_alt_screen(&mut self) -> Result<()> {
+        if !self.alt_screen_nesting.leave() {
+            return Ok(());
+        }
+        self.switch_to_normal_screen();
+        Ok(())
+    }
+
+    /// Leave the alternate screen however many requests hold it, as on exit.
+    /// Returns true when the terminal was on the alternate screen.
+    pub(crate) fn leave_alt_screen_entirely(&mut self) -> bool {
+        if !self.alt_screen_nesting.leave_all() {
+            return false;
+        }
+        self.switch_to_normal_screen();
+        true
+    }
+
+    fn switch_to_normal_screen(&mut self) {
         // Disable alternate scroll when leaving alt-screen
         let _ = execute!(self.terminal.backend_mut(), DisableAlternateScroll);
         let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen);
@@ -357,7 +390,34 @@ impl Tui {
             self.terminal.set_viewport_area(saved);
         }
         self.alt_screen_active.store(false, Ordering::Relaxed);
-        Ok(())
+    }
+
+    /// Hand the terminal to a child program such as `$EDITOR` and take it
+    /// back once `run` returns. Full-screen programs leave the alternate
+    /// screen when they exit, so if the TUI was on it, switch back and
+    /// redraw from scratch.
+    pub(crate) fn run_external_program<T>(&mut self, run: impl FnOnce() -> T) -> T {
+        let _ = restore();
+        let result = run();
+        let _ = set_modes();
+        if self.alt_screen_active.load(Ordering::Relaxed) {
+            let _ = execute!(
+                self.terminal.backend_mut(),
+                EnterAlternateScreen,
+                EnableAlternateScroll
+            );
+            if let Ok(size) = self.terminal.size() {
+                self.terminal.set_viewport_area(ratatui::layout::Rect::new(
+                    0,
+                    0,
+                    size.width,
+                    size.height,
+                ));
+            }
+            let _ = self.terminal.clear();
+        }
+        self.frame_requester().schedule_frame();
+        result
     }
 
     pub fn insert_history_lines(&mut self, lines: Vec<Line<'static>>) {
@@ -392,7 +452,9 @@ impl Tui {
             let terminal = &mut self.terminal;
             let screen_size = terminal.size()?;
             let last_known_screen_size = terminal.last_known_screen_size;
+            // The alternate screen has no inline viewport to keep anchored to the cursor.
             if screen_size != last_known_screen_size
+                && !self.alt_screen_active.load(Ordering::Relaxed)
                 && let Ok(cursor_pos) = terminal.get_cursor_position()
             {
                 let last_known_cursor_pos = terminal.last_known_cursor_pos;

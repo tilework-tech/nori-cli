@@ -989,6 +989,8 @@ pub enum HotkeyAction {
     HistorySearch,
     /// Toggle the pinned plan drawer between collapsed and expanded.
     TogglePlanDrawer,
+    /// Switch between the inline view and the full-screen view.
+    ToggleScreen,
     /// Move to the previous session (multi-session only).
     PreviousSession,
     /// Move to the next session (multi-session only).
@@ -1021,6 +1023,7 @@ impl HotkeyAction {
             Self::Yank => "Yank",
             Self::HistorySearch => "History Search",
             Self::TogglePlanDrawer => "Toggle Plan Drawer",
+            Self::ToggleScreen => "Toggle Screen",
             Self::PreviousSession => "Previous Session",
             Self::NextSession => "Next Session",
             Self::NextWaitingSession => "Next Waiting Session",
@@ -1050,6 +1053,7 @@ impl HotkeyAction {
             Self::TogglePlanDrawer => {
                 "Toggle the pinned plan drawer between collapsed and expanded"
             }
+            Self::ToggleScreen => "Switch between the inline and full-screen views",
             Self::PreviousSession => "Move to the previous session",
             Self::NextSession => "Move to the next session",
             Self::NextWaitingSession => {
@@ -1079,6 +1083,7 @@ impl HotkeyAction {
             Self::Yank => "yank",
             Self::HistorySearch => "history_search",
             Self::TogglePlanDrawer => "toggle_plan_drawer",
+            Self::ToggleScreen => "toggle_screen",
             Self::PreviousSession => "previous_session",
             Self::NextSession => "next_session",
             Self::NextWaitingSession => "next_waiting_session",
@@ -1106,6 +1111,7 @@ impl HotkeyAction {
             Self::Yank => "ctrl+y",
             Self::HistorySearch => "ctrl+r",
             Self::TogglePlanDrawer => "alt+p",
+            Self::ToggleScreen => "ctrl+l",
             Self::PreviousSession => "alt+,",
             Self::NextSession => "alt+.",
             Self::NextWaitingSession => "alt+down",
@@ -1133,6 +1139,7 @@ impl HotkeyAction {
             Self::Yank,
             Self::HistorySearch,
             Self::TogglePlanDrawer,
+            Self::ToggleScreen,
             Self::PreviousSession,
             Self::NextSession,
             Self::NextWaitingSession,
@@ -1257,6 +1264,8 @@ pub struct HotkeyConfigToml {
     pub history_search: Option<HotkeyBinding>,
     /// Hotkey for toggling the pinned plan drawer.
     pub toggle_plan_drawer: Option<HotkeyBinding>,
+    /// Hotkey for switching between the inline and full-screen views.
+    pub toggle_screen: Option<HotkeyBinding>,
     /// Hotkey: move to the previous session.
     pub previous_session: Option<HotkeyBinding>,
     /// Hotkey: move to the next session.
@@ -1304,6 +1313,8 @@ pub struct HotkeyConfig {
     pub history_search: HotkeyBinding,
     /// Hotkey for toggling the pinned plan drawer.
     pub toggle_plan_drawer: HotkeyBinding,
+    /// Hotkey for switching between the inline and full-screen views.
+    pub toggle_screen: HotkeyBinding,
     /// Hotkey: move to the previous session.
     pub previous_session: HotkeyBinding,
     /// Hotkey: move to the next session.
@@ -1361,6 +1372,7 @@ impl Default for HotkeyConfig {
             toggle_plan_drawer: HotkeyBinding::from_str(
                 HotkeyAction::TogglePlanDrawer.default_binding(),
             ),
+            toggle_screen: HotkeyBinding::from_str(HotkeyAction::ToggleScreen.default_binding()),
             previous_session: HotkeyBinding::from_str(
                 HotkeyAction::PreviousSession.default_binding(),
             ),
@@ -1439,6 +1451,7 @@ impl HotkeyConfig {
                 .toggle_plan_drawer
                 .clone()
                 .unwrap_or(defaults.toggle_plan_drawer),
+            toggle_screen: toml.toggle_screen.clone().unwrap_or(defaults.toggle_screen),
             previous_session: toml
                 .previous_session
                 .clone()
@@ -1478,6 +1491,7 @@ impl HotkeyConfig {
             HotkeyAction::Yank => &self.yank,
             HotkeyAction::HistorySearch => &self.history_search,
             HotkeyAction::TogglePlanDrawer => &self.toggle_plan_drawer,
+            HotkeyAction::ToggleScreen => &self.toggle_screen,
             HotkeyAction::PreviousSession => &self.previous_session,
             HotkeyAction::NextSession => &self.next_session,
             HotkeyAction::NextWaitingSession => &self.next_waiting_session,
@@ -1505,6 +1519,7 @@ impl HotkeyConfig {
             HotkeyAction::Yank => self.yank = binding,
             HotkeyAction::HistorySearch => self.history_search = binding,
             HotkeyAction::TogglePlanDrawer => self.toggle_plan_drawer = binding,
+            HotkeyAction::ToggleScreen => self.toggle_screen = binding,
             HotkeyAction::PreviousSession => self.previous_session = binding,
             HotkeyAction::NextSession => self.next_session = binding,
             HotkeyAction::NextWaitingSession => self.next_waiting_session = binding,
@@ -1538,6 +1553,7 @@ impl HotkeyConfig {
             (HotkeyAction::Yank, &self.yank),
             (HotkeyAction::HistorySearch, &self.history_search),
             (HotkeyAction::TogglePlanDrawer, &self.toggle_plan_drawer),
+            (HotkeyAction::ToggleScreen, &self.toggle_screen),
             (HotkeyAction::PreviousSession, &self.previous_session),
             (HotkeyAction::NextSession, &self.next_session),
             (HotkeyAction::NextWaitingSession, &self.next_waiting_session),

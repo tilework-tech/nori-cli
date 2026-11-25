@@ -130,6 +130,10 @@ impl App {
                     {
                         return Ok(true);
                     }
+                    if self.screen.is_full_screen() {
+                        self.draw_full_screen(tui)?;
+                        return Ok(true);
+                    }
                     tui.draw(
                         self.chat_widget.desired_height(tui.terminal.size()?.width),
                         |frame| {
@@ -178,6 +182,7 @@ impl App {
                 self.chat_widget
                     .handle_context_timeline(generation, conversation_id, result);
             }
+            AppEvent::ToggleScreenMode => self.toggle_screen_mode(tui)?,
             AppEvent::NewSessionIn(folder) => {
                 self.new_session_in(folder, tui.frame_requester());
                 tui.frame_requester().schedule_frame();
@@ -757,6 +762,8 @@ impl App {
                 self.on_conversation_history_for_backtrack(tui, ev)?;
             }
             AppEvent::ExitRequest => {
+                // The exit message and held history belong in the inline scrollback.
+                self.return_inline_for_exit(tui)?;
                 self.cancel_primary_agent_preparation();
                 if let Some(agent) = self.prepared_agent.take() {
                     agent.shutdown().await;
@@ -782,9 +789,8 @@ impl App {
                             self.has_emitted_history_lines = true;
                         }
                     }
-                    if self.overlay.is_some() {
-                        self.deferred_history_lines.extend(display);
-                    } else {
+                    let display = self.screen.print_or_hold(display, self.overlay.is_some());
+                    if !display.is_empty() {
                         tui.insert_history_lines(display);
                     }
                 }
@@ -1797,8 +1803,8 @@ impl App {
                 );
 
                 // Trim transcript to preserve history before the fork point
-                self.transcript_cells
-                    .truncate(cell_index.min(self.transcript_cells.len()));
+                let kept = cell_index.min(self.transcript_cells.len());
+                self.transcript_cells.edit().truncate(kept);
                 self.render_transcript_once(tui);
 
                 if !prefill.is_empty() {
@@ -1942,6 +1948,12 @@ impl App {
                 self.chat_widget.toggle_plan_drawer();
                 self.plan_drawer_mode = self.chat_widget.plan_drawer_mode();
                 tui.frame_requester().schedule_frame();
+                return;
+            }
+
+            let screen_binding = self.hotkey_config.binding_for(HotkeyAction::ToggleScreen);
+            if matches_binding(screen_binding, &key_event) {
+                self.app_event_tx.send(AppEvent::ToggleScreenMode);
                 return;
             }
         }

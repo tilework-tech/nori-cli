@@ -1,0 +1,22 @@
+---
+source: tui/src/app/full_screen_frame.rs
+expression: "frame(&cells, 60, 18).backend()"
+---
+"                                                            "
+"• answer 10                                                 "
+"                                                            "
+"                                                            "
+"› question 11                                               "
+"                                                            "
+"                                                            "
+"• answer 11                                                 "
+"                                                            "
+"                                                            "
+"› question 12                                               "
+"                                                            "
+"                                                            "
+"• answer 12                                                 "
+"                                                            "
+"                                                            "
+"› unsent draft about the gulls                              "
+"                                                            "

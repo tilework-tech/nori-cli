@@ -35,7 +35,7 @@ impl App {
         area.y = 0;
         area.width = width;
         tui.terminal.set_viewport_area(area);
-        self.deferred_history_lines.clear();
+        self.screen.discard_held();
         self.has_emitted_history_lines = !lines.is_empty();
         if !lines.is_empty() {
             tui.insert_history_lines(lines);
@@ -48,8 +48,16 @@ impl App {
     /// and will replay its own history, such as a resumed session. The
     /// previous session's cells leave the transcript and the terminal.
     pub(super) fn begin_replacing_session_transcript(&mut self, tui: &mut tui::Tui) -> Result<()> {
-        self.transcript_cells.clear();
+        self.transcript_cells.edit().clear();
         self.backtrack = crate::app_backtrack::BacktrackState::default();
+        if self.overlay.is_some() || tui.is_alt_screen_active() {
+            // The inline scrollback is not on screen; reprint it once the
+            // terminal is back on the normal screen.
+            self.screen.discard_held();
+            self.session_reprint_pending = true;
+            tui.frame_requester().schedule_frame();
+            return Ok(());
+        }
         self.reprint_active_transcript(tui)
     }
 
@@ -92,7 +100,7 @@ impl App {
             return;
         };
         let mut previous = std::mem::replace(&mut self.chat_widget, *parked.widget);
-        let previous_transcript = std::mem::replace(&mut self.transcript_cells, parked.transcript);
+        let previous_transcript = self.transcript_cells.replace(parked.transcript);
         previous.set_foreground(false);
         previous.close_session_list();
         if previous.has_harness_session() || previous.managed_conversation_id().is_some() {
@@ -209,6 +217,10 @@ impl App {
             tui.frame_requester().schedule_frame();
         }
         self.transcript_cells.push(cell.clone());
+        if self.screen.is_full_screen() {
+            // The full-screen view draws the transcript itself.
+            tui.frame_requester().schedule_frame();
+        }
         let mut display = cell.display_lines(tui.terminal.last_known_screen_size.width);
         if display.is_empty() {
             return;
@@ -223,9 +235,8 @@ impl App {
                 self.has_emitted_history_lines = true;
             }
         }
-        if self.overlay.is_some() {
-            self.deferred_history_lines.extend(display);
-        } else {
+        let display = self.screen.print_or_hold(display, self.overlay.is_some());
+        if !display.is_empty() {
             tui.insert_history_lines(display);
         }
     }
@@ -239,7 +250,7 @@ impl App {
         cwd: std::path::PathBuf,
     ) {
         let consolidation = crate::transcript_reflow::consolidate_agent_message_cells(
-            &mut self.transcript_cells,
+            self.transcript_cells.edit(),
             source,
             &cwd,
         );

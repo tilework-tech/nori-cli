@@ -99,6 +99,9 @@ pub(crate) enum AppEvent {
     /// `/new DIR`: start a new session in this existing folder.
     NewSessionIn(std::path::PathBuf),
 
+    /// `/screen`: switch between the inline and the full-screen view.
+    ToggleScreenMode,
+
     /// A `/close` failed: surface the error and unblock the widget.
     SessionCloseFailed {
         generation: SessionGeneration,

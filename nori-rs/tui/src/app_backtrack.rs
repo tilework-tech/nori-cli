@@ -125,13 +125,8 @@ impl App {
     pub(crate) fn close_transcript_overlay(&mut self, tui: &mut tui::Tui) {
         let _ = tui.leave_alt_screen();
         let was_backtrack = self.backtrack.overlay_preview_active;
-        if self.transcript_reflow.has_pending_reflow() {
-            self.deferred_history_lines.clear();
-        } else if !self.deferred_history_lines.is_empty() {
-            let lines = std::mem::take(&mut self.deferred_history_lines);
-            tui.insert_history_lines(lines);
-        }
         self.overlay = None;
+        self.release_held_history(tui);
         self.backtrack.overlay_preview_active = false;
         if was_backtrack {
             // Ensure backtrack state is fully reset when overlay closes (e.g. via 'q').
@@ -148,8 +143,14 @@ impl App {
     pub(crate) fn render_transcript_once(&mut self, tui: &mut tui::Tui) {
         if !self.transcript_cells.is_empty() {
             let width = tui.terminal.last_known_screen_size.width;
-            for cell in &self.transcript_cells {
-                tui.insert_history_lines(cell.display_lines(width));
+            let lines = self
+                .transcript_cells
+                .iter()
+                .flat_map(|cell| cell.display_lines(width))
+                .collect();
+            let lines = self.screen.print_or_hold(lines, self.overlay.is_some());
+            if !lines.is_empty() {
+                tui.insert_history_lines(lines);
             }
         }
     }
@@ -345,7 +346,7 @@ impl App {
 
     /// Trim transcript_cells to preserve only content up to the selected user message.
     fn trim_transcript_for_backtrack(&mut self, nth_user_message: usize) {
-        trim_transcript_cells_to_nth_user(&mut self.transcript_cells, nth_user_message);
+        trim_transcript_cells_to_nth_user(self.transcript_cells.edit(), nth_user_message);
     }
 }
 
