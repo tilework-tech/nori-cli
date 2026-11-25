@@ -173,7 +173,7 @@ async fn a_live_reading_is_not_replaced_by_an_older_host_reply() {
     chat.bottom_pane.set_session_usage(Some(SessionUsageState {
         used_tokens: 90_000,
         total_tokens: 200_000,
-        cost_display: None,
+        cost: None,
     }));
     answer(
         &mut chat,

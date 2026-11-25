@@ -73,7 +73,7 @@ impl ChatWidget {
             self.bottom_pane.set_session_usage(Some(SessionUsageState {
                 used_tokens: usage.used,
                 total_tokens: usage.size,
-                cost_display: None,
+                cost: None,
             }));
         }
         if asked {
