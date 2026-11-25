@@ -100,6 +100,7 @@ fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<bool>
     match command {
         SlashCommand::Goal => features.goal.then_some(false),
         SlashCommand::Context => features.context.then_some(false),
+        SlashCommand::Compact => features.compact.then_some(true),
         SlashCommand::Quit
         | SlashCommand::Exit
         | SlashCommand::Settings
@@ -117,7 +118,6 @@ fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<bool>
         | SlashCommand::Close
         | SlashCommand::ResumeViewonly
         | SlashCommand::Init
-        | SlashCommand::Compact
         | SlashCommand::Undo
         | SlashCommand::Browse
         | SlashCommand::Diff
@@ -372,6 +372,31 @@ mod tests {
                 unavailable_reason(SlashCommand::Context, surface),
                 expected.map(str::to_string),
                 "/context in {surface:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_joined_controller_compacts_only_on_a_host_that_serves_it() {
+        let joined = |watching, connected, compact| Surface::Joined {
+            watching,
+            connected,
+            features: HostFeatures {
+                compact,
+                ..HostFeatures::default()
+            },
+        };
+        let cases = [
+            (joined(false, true, false), Some(NOT_ON_THIS_HOST)),
+            (joined(false, true, true), None),
+            (joined(true, true, true), Some(WATCHING)),
+            (joined(false, false, true), Some(RECONNECTING)),
+        ];
+        for (surface, expected) in cases {
+            assert_eq!(
+                unavailable_reason(SlashCommand::Compact, surface),
+                expected.map(str::to_string),
+                "/compact in {surface:?}"
             );
         }
     }

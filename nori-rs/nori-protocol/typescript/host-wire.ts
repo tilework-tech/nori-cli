@@ -66,7 +66,8 @@ export type NoriHostWire =
   | GoalSetParams
   | GoalResult
   | ContextParams
-  | ContextReport;
+  | ContextReport
+  | CompactParams;
 /**
  * The encoding used for character offsets in positions.
  *
@@ -4562,4 +4563,10 @@ export interface ContextCheckpoint {
 export interface ContextUsage {
   size: number;
   used: number;
+}
+/**
+ * Params of `_nori/session/compact`.
+ */
+export interface CompactParams {
+  sessionId: string;
 }
