@@ -86,6 +86,11 @@ on the ACP SDK (`nori-cli` uses it only as a dev-dependency for tests).
   `nori-monorepo: docs/acp-extensions.md`. Change the contract first.
 - A host has at most one controller. Watchers receive updates only. Mutation
   admission is serialized in `remote/host_control.rs`.
+- While `host_wire.rs` writes a subscription's replay, it moves live events
+  off the subscriber's bounded queue into a backlog of up to
+  `REPLAY_BACKLOG_EVENTS` (4,096) and sends them after the replay, in order.
+  A long replay therefore does not count against the live queue. A client
+  too slow to read still fills the queue and is dropped.
 - MCP forwarding and OAuth behavior are owned by [`docs/mcp.md`](../../docs/mcp.md).
 
 ## Tests

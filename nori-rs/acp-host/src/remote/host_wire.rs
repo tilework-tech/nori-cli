@@ -187,6 +187,10 @@ async fn route<M: ManagedAgent, const STANDARD: bool>(
         .into_response()
 }
 
+/// Envelopes a subscription may hold back while its replay is written: the
+/// host journal's retention, beyond which a replay would have expired anyway.
+const REPLAY_BACKLOG_EVENTS: usize = 4096;
+
 /// Outbound messages one connection may have queued before it counts as
 /// too slow and is closed.
 const OUTBOUND_CAPACITY: usize = 16384;
@@ -504,8 +508,18 @@ where
                             send_frame(&mut sink, Message::Text(reply.response.to_string().into())).await?;
                             drop(reply.delivery_guard);
                             if let Some(mut next) = reply.subscription {
-                                for envelope in next.replay.drain(..) {
+                                // Live events published while the replay is written follow it in
+                                // order. Taking them off the live queue keeps a long replay from
+                                // counting against that queue; a client too slow to read the
+                                // replay still fills it once the backlog is full.
+                                let mut pending = std::collections::VecDeque::from(std::mem::take(&mut next.replay));
+                                while let Some(envelope) = pending.pop_front() {
                                     send_frame(&mut sink, Message::Text(managed_event(&envelope, approval_modes).to_string().into())).await?;
+                                    while pending.len() < REPLAY_BACKLOG_EVENTS
+                                        && let Ok(live) = next.events.try_recv()
+                                    {
+                                        pending.push_back(live);
+                                    }
                                 }
                                 subscription = Some(next);
                             }
