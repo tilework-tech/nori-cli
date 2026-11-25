@@ -23,6 +23,7 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyboardEnhancementFlags;
 use crossterm::event::PopKeyboardEnhancementFlags;
 use crossterm::event::PushKeyboardEnhancementFlags;
+use crossterm::event::TerminalEvent;
 use crossterm::terminal::EnterAlternateScreen;
 use crossterm::terminal::LeaveAlternateScreen;
 use crossterm::terminal::supports_keyboard_enhancement;
@@ -44,6 +45,7 @@ use crate::tui::job_control::SUSPEND_KEY;
 use crate::tui::job_control::SuspendContext;
 
 mod alt_screen;
+mod input;
 #[cfg(unix)]
 mod job_control;
 
@@ -53,7 +55,10 @@ pub type Terminal = CustomTerminal<CrosstermBackend<Stdout>>;
 pub fn set_modes() -> Result<()> {
     execute!(stdout(), EnableBracketedPaste)?;
 
-    enable_raw_mode()?;
+    if let Err(error) = enable_raw_mode() {
+        let _ = execute!(stdout(), DisableBracketedPaste);
+        return Err(error);
+    }
     // Enable keyboard enhancement flags so modifiers for keys like Enter are disambiguated.
     // chat_composer.rs is using a keyboard event listener to enter for any modified keys
     // to create a new line that require this.
@@ -120,11 +125,11 @@ impl Command for DisableAlternateScroll {
 pub fn restore() -> Result<()> {
     // Pop may fail on platforms that didn't support the push; ignore errors.
     let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
-    execute!(stdout(), DisableBracketedPaste)?;
+    let paste = execute!(stdout(), DisableBracketedPaste);
     let _ = execute!(stdout(), DisableFocusChange);
-    disable_raw_mode()?;
+    let raw = disable_raw_mode();
     let _ = execute!(stdout(), crossterm::cursor::Show);
-    Ok(())
+    paste.and(raw)
 }
 
 /// Path to the controlling terminal, used for input when stdin is redirected.
@@ -157,8 +162,10 @@ pub fn init() -> Result<Terminal> {
     set_panic_hook();
 
     let backend = CrosstermBackend::new(stdout());
-    let tui = CustomTerminal::with_options(backend)?;
-    Ok(tui)
+    CustomTerminal::with_options(backend).inspect_err(|_| {
+        // The cursor-position query can fail after raw mode was enabled.
+        let _ = restore();
+    })
 }
 
 fn set_panic_hook() {
@@ -181,6 +188,7 @@ pub enum TuiEvent {
 }
 
 pub struct Tui {
+    input: input::TerminalInput,
     frame_schedule_tx: tokio::sync::mpsc::UnboundedSender<Instant>,
     draw_tx: tokio::sync::broadcast::Sender<()>,
     pub(crate) terminal: Terminal,
@@ -232,9 +240,11 @@ impl Tui {
         let enhanced_keys_supported = supports_keyboard_enhancement().unwrap_or(false);
         // Cache this to avoid contention with the event reader.
         supports_color::on_cached(supports_color::Stream::Stdout);
-        let _ = crate::terminal_palette::default_colors();
+        let input = input::TerminalInput::default();
+        input.request_palette();
 
         Self {
+            input,
             frame_schedule_tx,
             draw_tx,
             terminal,
@@ -271,9 +281,7 @@ impl Tui {
     }
 
     pub fn event_stream(&self) -> Pin<Box<dyn Stream<Item = TuiEvent> + Send + 'static>> {
-        use tokio_stream::StreamExt;
-
-        let mut crossterm_events = crossterm::event::EventStream::new();
+        let input = self.input.clone();
         let mut draw_rx = self.draw_tx.subscribe();
 
         // State for tracking how we should resume from ^Z suspend.
@@ -286,12 +294,25 @@ impl Tui {
         let event_stream = async_stream::stream! {
             loop {
                 select! {
-                    Some(Ok(event)) = crossterm_events.next() => {
+                    Some(Ok(event)) = input.next() => {
+                        let event = match event {
+                            TerminalEvent::Input(event) => event,
+                            TerminalEvent::Color { slot, color } => {
+                                if input.color_report(slot, color) {
+                                    yield TuiEvent::Draw;
+                                }
+                                continue;
+                            }
+                            _ => continue,
+                        };
                         match event {
                             Event::Key(key_event) => {
                                 #[cfg(unix)]
                                 if SUSPEND_KEY.is_press(key_event) {
-                                    let _ = suspend_context.suspend(&alt_screen_active);
+                                    input.release();
+                                    if suspend_context.suspend(&alt_screen_active).is_ok() {
+                                        input.request_palette();
+                                    }
                                     // We continue here after resume.
                                     yield TuiEvent::Draw;
                                     continue;
@@ -306,7 +327,7 @@ impl Tui {
                             }
                             Event::FocusGained => {
                                 terminal_focused.store(true, Ordering::Relaxed);
-                                crate::terminal_palette::requery_default_colors();
+                                input.request_palette();
                                 yield TuiEvent::Draw;
                             }
                             Event::FocusLost => {
@@ -393,14 +414,26 @@ impl Tui {
         self.alt_screen_active.store(false, Ordering::Relaxed);
     }
 
+    /// Stop reading before the shell's screen becomes visible.
+    pub(crate) fn release_input(&self) {
+        self.input.release();
+    }
+
+    pub(crate) fn restore(&self) -> Result<()> {
+        self.release_input();
+        restore()
+    }
+
     /// Hand the terminal to a child program such as `$EDITOR` and take it
     /// back once `run` returns. Full-screen programs leave the alternate
     /// screen when they exit, so if the TUI was on it, switch back and
     /// redraw from scratch.
     pub(crate) fn run_external_program<T>(&mut self, run: impl FnOnce() -> T) -> T {
-        let _ = restore();
+        let _ = self.restore();
         let result = run();
-        let _ = set_modes();
+        if set_modes().is_ok() {
+            self.input.request_palette();
+        }
         if self.alt_screen_active.load(Ordering::Relaxed) {
             let _ = execute!(
                 self.terminal.backend_mut(),

@@ -65,6 +65,8 @@ frontend could need in the crate below it; this crate stays a dispatcher.
   Never read stdin upstream of that branch.
 - Stdin is read for a prompt only when the prompt argument is absent, is `-`,
   or `--stdin` is set. A plain argument leaves stdin untouched.
+- One-shot `nori host ls` uses the terminal’s default background and leaves
+  queued input available to the shell.
 - After the interactive path drains a pipe, it points fd 0 back at the
   terminal, so children such as `$EDITOR` get a usable stdin.
 - `-p` selects a mode. It is rejected with a subcommand or `--image`.

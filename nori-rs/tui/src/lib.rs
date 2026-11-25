@@ -355,7 +355,7 @@ async fn run_ratatui_app(
             match run_update_prompt_if_needed(&mut tui, &initial_config).await? {
                 UpdatePromptOutcome::Continue => {}
                 UpdatePromptOutcome::RunUpdate(action) => {
-                    crate::tui::restore()?;
+                    tui.restore()?;
                     return Ok(AppExitInfo {
                         token_usage: crate::ui_types::TokenUsage::default(),
                         conversation_id: None,
@@ -393,7 +393,7 @@ async fn run_ratatui_app(
         )
         .await?;
         if onboarding_result.should_exit {
-            restore();
+            restore(&tui);
             session_log::log_session_end();
             let _ = tui.terminal.clear();
             return Ok(AppExitInfo {
@@ -505,7 +505,7 @@ async fn run_ratatui_app(
         .await?
         {
             resume_picker::ResumeSelection::Exit => {
-                restore();
+                restore(&tui);
                 session_log::log_session_end();
                 return Ok(AppExitInfo {
                     token_usage: crate::ui_types::TokenUsage::default(),
@@ -544,7 +544,7 @@ async fn run_ratatui_app(
     ) {
         Ok(host) => host,
         Err(error) => {
-            restore();
+            restore(&tui);
             return Err(color_eyre::eyre::eyre!(error));
         }
     };
@@ -574,7 +574,7 @@ async fn run_ratatui_app(
         reporter.flush();
     }
 
-    restore();
+    restore(&tui);
     // Mark the end of the recorded session.
     session_log::log_session_end();
     // ignore error when collecting usage – report underlying error instead
@@ -607,7 +607,7 @@ fn resume_target_from_metadata(
 
 fn resume_startup_error(tui: &mut Tui, message: String) -> color_eyre::Result<AppExitInfo> {
     error!("{message}");
-    restore();
+    restore(tui);
     session_log::log_session_end();
     let _ = tui.terminal.clear();
     if let Err(err) = writeln!(std::io::stdout(), "{message}") {
@@ -625,8 +625,8 @@ fn resume_startup_error(tui: &mut Tui, message: String) -> color_eyre::Result<Ap
     clippy::print_stderr,
     reason = "TUI should no longer be displayed, so we can write to stderr."
 )]
-fn restore() {
-    if let Err(err) = tui::restore() {
+fn restore(tui: &Tui) {
+    if let Err(err) = tui.restore() {
         eprintln!(
             "failed to restore terminal. Run `reset` or restart your terminal to recover: {err}"
         );

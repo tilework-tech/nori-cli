@@ -45,6 +45,7 @@ pub async fn run_attach(
     {
         tracing::debug!(%error, "could not clear program status");
     }
+    tui.release_input();
     let leave = tui.leave_alt_screen();
     let restore = crate::tui::restore();
     result?;
