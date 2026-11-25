@@ -70,6 +70,8 @@ pub(crate) struct HostFeatures {
     /// The host runs on another machine, so this terminal's folders mean
     /// nothing there.
     pub remote: bool,
+    /// `_nori/session/queue/*` resumes a paused queue and takes prompts back.
+    pub queue: bool,
 }
 
 impl HostConnection {
@@ -83,6 +85,7 @@ impl HostConnection {
                 session_folders: true,
                 find_paths: true,
                 remote: false,
+                queue: true,
             },
         }
     }
@@ -173,6 +176,17 @@ pub(crate) enum HostCall {
         kind: nori_protocol::PathKind,
         limit: i32,
     },
+    /// Let the session's paused queue send again. Only a controller may.
+    ResumeQueue {
+        session_id: String,
+    },
+    /// Take one queued prompt back before it is sent. Only a controller may.
+    TakeQueued {
+        session_id: String,
+        entry_id: String,
+        /// Asking again with this key returns the same answer.
+        request_key: String,
+    },
 }
 
 impl HostCall {
@@ -181,7 +195,7 @@ impl HostCall {
             // Hosts send `approval_mode_changed` only to clients that declare it.
             Self::Initialize => (
                 "initialize",
-                json!({"capabilities":{"nori_sessions":{"approval_modes":true}}}),
+                json!({"capabilities":{"nori_sessions":{"approval_modes":true,"composer":true}}}),
             ),
             Self::List => ("_nori/session/list", json!({})),
             Self::Subscribe { session_id, cursor } => (
@@ -287,6 +301,22 @@ impl HostCall {
                     query,
                     kind,
                     limit: Some(limit),
+                }),
+            ),
+            Self::ResumeQueue { session_id } => (
+                "_nori/session/queue/resume",
+                json!(nori_protocol::QueueParams { session_id }),
+            ),
+            Self::TakeQueued {
+                session_id,
+                entry_id,
+                request_key,
+            } => (
+                "_nori/session/queue/take",
+                json!(nori_protocol::QueueTakeParams {
+                    session_id,
+                    entry_id,
+                    request_key,
                 }),
             ),
         }

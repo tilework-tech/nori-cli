@@ -5240,6 +5240,20 @@
       },
       "type": "object"
     },
+    "QueueDiscardResult": {
+      "description": "Result of `_nori/session/queue/discard`.",
+      "properties": {
+        "discarded": {
+          "description": "How many queued prompts were dropped before being sent.",
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "discarded"
+      ],
+      "type": "object"
+    },
     "QueueEntry": {
       "description": "One queued user prompt, in delivery order.",
       "properties": {
@@ -5259,6 +5273,19 @@
       "required": [
         "id",
         "text"
+      ],
+      "type": "object"
+    },
+    "QueueParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/session/queue/resume` and `_nori/session/queue/discard`.",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
       ],
       "type": "object"
     },
@@ -5308,6 +5335,42 @@
       "required": [
         "prompts"
       ],
+      "type": "object"
+    },
+    "QueueTakeParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/session/queue/take`.",
+      "properties": {
+        "entryId": {
+          "description": "A [`crate::QueueEntry`] ID from the session's latest queue snapshot.",
+          "type": "string"
+        },
+        "requestKey": {
+          "description": "Chosen by the caller for this take. Asking again with the same key\nreturns the same answer, so a reply lost to a disconnect can be\nfetched again; a different key gets null once the prompt is taken.",
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "entryId",
+        "requestKey"
+      ],
+      "type": "object"
+    },
+    "QueueTakeResult": {
+      "description": "Result of `_nori/session/queue/take`.",
+      "properties": {
+        "text": {
+          "description": "The text the user queued, returned to exactly one caller. Null when\nthe prompt already started, was already taken, or cannot return to a\ncomposer without losing content.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
       "type": "object"
     },
     "Range": {
@@ -8301,6 +8364,21 @@
     },
     {
       "$ref": "#/$defs/FindPathsResult"
+    },
+    {
+      "$ref": "#/$defs/QueueParams"
+    },
+    {
+      "$ref": "#/$defs/QueueTakeParams"
+    },
+    {
+      "$ref": "#/$defs/QueueTakeResult"
+    },
+    {
+      "$ref": "#/$defs/QueueDiscardResult"
+    },
+    {
+      "$ref": "#/$defs/QueueSnapshot"
     }
   ],
   "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",

@@ -851,7 +851,9 @@ fn new_request_id() -> acp::RequestId {
 
 mod queue_pause;
 mod reclaim;
+pub(crate) use reclaim::Discarded;
 pub(crate) use reclaim::Reclaimed;
+pub(crate) use reclaim::discard_queued;
 pub(crate) use reclaim::reclaim_queued;
 
 #[cfg(test)]

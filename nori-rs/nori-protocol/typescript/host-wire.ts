@@ -46,7 +46,12 @@ export type NoriHostWire =
   | ResolveDelegationParams
   | Delegation
   | FindPathsParams
-  | FindPathsResult;
+  | FindPathsResult
+  | QueueParams
+  | QueueTakeParams
+  | QueueTakeResult
+  | QueueDiscardResult
+  | QueueSnapshot;
 /**
  * The encoding used for character offsets in positions.
  *
@@ -4197,4 +4202,46 @@ export interface PathMatch {
    * completed to one folder, in the form it was typed, ending in `/`.
    */
   path: string;
+}
+/**
+ * Params of `_nori/session/queue/resume` and `_nori/session/queue/discard`.
+ */
+export interface QueueParams {
+  sessionId: string;
+}
+/**
+ * Params of `_nori/session/queue/take`.
+ */
+export interface QueueTakeParams {
+  /**
+   * A [`crate::QueueEntry`] ID from the session's latest queue snapshot.
+   */
+  entryId: string;
+  /**
+   * Chosen by the caller for this take. Asking again with the same key
+   * returns the same answer, so a reply lost to a disconnect can be
+   * fetched again; a different key gets null once the prompt is taken.
+   */
+  requestKey: string;
+  sessionId: string;
+}
+/**
+ * Result of `_nori/session/queue/take`.
+ */
+export interface QueueTakeResult {
+  /**
+   * The text the user queued, returned to exactly one caller. Null when
+   * the prompt already started, was already taken, or cannot return to a
+   * composer without losing content.
+   */
+  text?: string | null;
+}
+/**
+ * Result of `_nori/session/queue/discard`.
+ */
+export interface QueueDiscardResult {
+  /**
+   * How many queued prompts were dropped before being sent.
+   */
+  discarded: number;
 }

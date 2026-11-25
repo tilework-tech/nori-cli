@@ -235,7 +235,7 @@ fn every_call_reaches_the_host_method_it_names() {
         vec![
             (
                 json!("initialize"),
-                json!({"capabilities":{"nori_sessions":{"approval_modes":true}}})
+                json!({"capabilities":{"nori_sessions":{"approval_modes":true,"composer":true}}})
             ),
             (
                 json!("_nori/session/subscribe"),

@@ -251,6 +251,7 @@ mod file_mentions;
 mod full_screen_frame;
 mod host_candidate;
 mod host_link;
+pub(crate) use host_link::ConnectionLost;
 #[cfg(test)]
 mod host_link_tests;
 mod host_updates;

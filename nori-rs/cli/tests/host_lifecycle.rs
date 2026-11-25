@@ -636,6 +636,9 @@ mod remote_transport;
 #[path = "host_lifecycle/explicit_close.rs"]
 mod explicit_close;
 
+#[path = "host_lifecycle/queue.rs"]
+mod queue;
+
 #[path = "host_lifecycle/find_paths.rs"]
 mod find_paths;
 
