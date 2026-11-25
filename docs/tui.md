@@ -274,6 +274,40 @@ conversation on the Nori Sessions broker. Differences from plain `nori`:
 Handroll must be on `PATH`, or named by `NORI_HANDROLL_BIN`. Handroll's own
 contract lives in the Handroll repo.
 
+## Terminal status
+
+With `[tui] program_status = true`, Nori tells the terminal what the
+foreground session is doing, using the
+[Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status)
+(OSC 7501, rev 0.4). Terminals that support it, such as kitty and iTerm2, can
+show the state as a tab indicator or notification. Other terminals ignore it.
+Nori does not probe for support.
+
+| State | When |
+|---|---|
+| `blocked` | A permission request or a delegation waiting for approval is open. The oldest one is reported. |
+| `working` | A prompt turn is running or cancelling, or the agent runs a turn of its own. |
+| `done` | The last turn ended with any stop reason except cancelled. |
+| `error` | The prompt failed, or the session ended with a lost connection, a spawn failure, or a timeout. |
+| `idle` | Before the first turn and after a cancelled turn. |
+
+- `done` and `error` stay until the next prompt starts. Typing does not
+  change them. A restored transcript starts at idle.
+- A blocked report says "Approval needed". Set
+  `[tui] program_status_approval_titles = true` to send the real approval
+  title instead. The title is made single-line and cut to 2048 bytes.
+- Only the foreground session reports. Switching sessions reports the new one
+  at once. `/screen` does not change the report.
+- The tab title keeps naming the agent. Reports never set a title.
+- `nori attach` reports the selected session the same way, in controller and
+  watcher terminals.
+- Nori clears the report on exit, on a `nori cloud` detach, on detach from
+  `nori attach`, and on a panic.
+- tmux 3.8 and earlier drop the sequence. Newer tmux forwards the active
+  pane's report. Nori does not use DCS passthrough.
+- A Ctrl+Z suspend keeps the last report until the TUI resumes. An attached
+  terminal whose host stops keeps its last report until it exits.
+
 ## Leave the TUI
 
 `/quit`, `/exit`, the bare words `exit` or `quit`, Ctrl+D on an empty prompt,

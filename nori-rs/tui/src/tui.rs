@@ -167,6 +167,7 @@ fn set_panic_hook() {
         // Ignore any errors as we are already failing. Leaving the alternate
         // screen is harmless when it is not up.
         let _ = execute!(stdout(), DisableAlternateScroll, LeaveAlternateScreen);
+        crate::program_status::clear_after_panic();
         let _ = restore();
         hook(panic_info);
     }));

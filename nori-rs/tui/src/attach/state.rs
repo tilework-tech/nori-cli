@@ -120,6 +120,7 @@ pub(super) struct Conversation {
     pub available_modes: Option<Vec<nori_protocol::ApprovalMode>>,
     normalizer: ClientEventNormalizer,
     message_boundary: bool,
+    program_status: crate::program_status::ProgramStatusTracker,
 }
 
 pub(super) struct AttachState {
@@ -175,6 +176,18 @@ impl Default for AttachState {
 }
 
 impl AttachState {
+    /// The selected session's status for the terminal report. `None` while
+    /// the selected session has no events yet, so the last report stays
+    /// until its real state is known.
+    pub fn foreground_program_status(&self) -> Option<crate::program_status::ProgramStatus> {
+        let Some(selected) = &self.selected else {
+            return Some(crate::program_status::ProgramStatus::IDLE);
+        };
+        self.conversations
+            .get(selected)
+            .map(|conversation| conversation.program_status.status())
+    }
+
     pub fn replace_sessions(&mut self, value: Value) -> anyhow::Result<()> {
         self.sessions = serde_json::from_value(value["sessions"].clone())?;
         for row in &self.sessions {
@@ -450,6 +463,7 @@ impl AttachState {
         ) {
             conversation.close_refusal.expire_report();
         }
+        conversation.program_status.observe(&envelope.event);
         match envelope.event {
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::AgentNotification::SessionNotification(notification),

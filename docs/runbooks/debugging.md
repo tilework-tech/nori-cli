@@ -206,6 +206,10 @@ Each test runs with a temporary `NORI_HOME`, `TERM=xterm-256color`,
 `NORI_SYNC_SYSTEM_INFO=1`, and
 `RUST_LOG=codex_core=info,nori_tui=info,codex_rmcp_client=info,nori_harness=debug,nori_acp_host=debug`.
 
+Terminals do not render OSC 7501 status reports. `program_status_reports(raw)`
+in `tui-pty-e2e` returns the body of each report in `raw_output()` in order
+(for example `state=working:app=nori`).
+
 Tests that need real agents and credentials are marked `#[ignore]`. Run them
 with:
 

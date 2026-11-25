@@ -212,6 +212,30 @@ custom_working_message_list = ["alpha", "beta"]
     }
 
     #[test]
+    fn program_status_reports_stay_off_until_the_tui_opts_in() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "agent = \"gemini\"\n").unwrap();
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(
+            (config.program_status, config.program_status_approval_titles),
+            (false, false)
+        );
+
+        std::fs::write(
+            &config_path,
+            "agent = \"gemini\"\n\n[tui]\nprogram_status = true\nprogram_status_approval_titles = true\n",
+        )
+        .unwrap();
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(
+            (config.program_status, config.program_status_approval_titles),
+            (true, true)
+        );
+    }
+
+    #[test]
     fn test_nori_config_load_from_path() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join(CONFIG_FILE);
