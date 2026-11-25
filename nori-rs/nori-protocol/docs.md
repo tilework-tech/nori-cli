@@ -18,7 +18,7 @@ delegation. The crate has no behavior beyond small pure helpers. Terms follow
 | `lib.rs` | `acp`, `PROMPT_ECHO_ID_META_KEY` | Re-exports `agent_client_protocol_schema` as `acp` |
 | `session_event.rs` | `SessionEvent::{Acp, Nori}`, `AcpEvent`, `NoriEvent` and its payloads | The ordered event stream of one session |
 | `session_envelope.rs` | `SessionEnvelope`, `SessionStatus` | One event tagged with its conversation ID, agent, and `seq` |
-| `host.rs` | `HostDiscovery`, `HOST_CONTRACT`, `host_serves_contract`, `ControlRole`, `_nori/*` params and results, `host_wire_schema()` | Nori additions on `nori host` |
+| `host.rs` | `HostDiscovery`, `HOST_CONTRACT`, `host_serves_contract`, `ControlRole`, `_nori/*` params and results, `LOCAL_TOKEN_HEADER`, `REMOTE_SHELL_UNSUPPORTED` (`-32018`) and its message, `host_wire_schema()` | Nori additions on `nori host` |
 | `context.rs` | `ContextTimeline` and its turns, checkpoints, observations and segments; `ContextParams`, `ContextReport` | A session's context report, as `_nori/session/context` replies and the harness records it |
 | `delegation.rs` | `DELEGATION_RESULT_HEADER`, `delegation_result_prompt`, name helpers | Text every surface uses for a delegated child |
 | `pending_request.rs` | `PendingRequest` | What a waiting session asks for, in session lists |

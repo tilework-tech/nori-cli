@@ -23,6 +23,8 @@ pub struct AttachOptions {
     pub endpoint: String,
     pub token: String,
     pub session_id: Option<String>,
+    /// The host's local token, from local discovery only.
+    pub local_token: Option<String>,
     /// Secure local discovery only; explicit remote credentials are never refreshed.
     pub refresh_local_token: Option<Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>>,
 }
@@ -32,12 +34,31 @@ pub async fn run_attach(
     config: nori_config::NoriConfig,
     options: AttachOptions,
 ) -> anyhow::Result<()> {
-    let initial = ManagedClient::connect(&options.endpoint, &options.token).await?;
+    let session_id = options.session_id;
+    let remote = options.refresh_local_token.is_none();
+    let endpoint = crate::host_client::HostEndpoint {
+        endpoint: options.endpoint,
+        token: options.token,
+        local_token: options.local_token,
+        refresh_local_token: options.refresh_local_token,
+    };
+    let initial = endpoint.connect().await?;
     let mut tui = crate::tui::Tui::new(crate::tui::init()?);
     let mut program_status = crate::program_status::ProgramStatusReporter::from_config(&config);
     let result = async {
         tui.enter_alt_screen()?;
-        run(&mut tui, options, initial, config, &mut program_status).await
+        run(
+            &mut tui,
+            Joined {
+                endpoint,
+                session_id,
+                remote,
+            },
+            initial,
+            config,
+            &mut program_status,
+        )
+        .await
     }
     .await;
     if let Some(reporter) = program_status.as_mut()
@@ -54,9 +75,17 @@ pub async fn run_attach(
     Ok(())
 }
 
+/// The host this frontend attached to.
+struct Joined {
+    endpoint: crate::host_client::HostEndpoint,
+    session_id: Option<String>,
+    /// Credentials came from outside local discovery.
+    remote: bool,
+}
+
 async fn run(
     tui: &mut crate::tui::Tui,
-    options: AttachOptions,
+    options: Joined,
     initial: ManagedClient,
     config: nori_config::NoriConfig,
     program_status: &mut Option<crate::program_status::ProgramStatusReporter>,
@@ -67,15 +96,11 @@ async fn run(
     let mut runtime = runtime::Runtime::new(options.session_id.clone(), request_tx);
     runtime.cwd = config.cwd;
     runtime.state.thoughts_in_history = config.thoughts_in_history;
-    runtime.remote = options.refresh_local_token.is_none();
+    runtime.remote = options.remote;
     runtime.set_session_list_binding(hotkeys.open_session_list);
     runtime.set_next_waiting_binding(hotkeys.next_waiting_session);
     runtime.state.parent_binding = hotkeys.parent_session;
-    let endpoint = crate::host_client::HostEndpoint {
-        endpoint: options.endpoint,
-        token: options.token,
-        refresh_local_token: options.refresh_local_token,
-    };
+    let endpoint = options.endpoint;
     let connection = tokio::spawn(crate::host_client::drive(
         endpoint, initial, request_rx, event_tx,
     ));

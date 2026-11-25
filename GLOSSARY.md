@@ -35,7 +35,9 @@ summary in front of the next prompt. See `docs/turns.md`.
 
 **Controller** — See **control role** in nori-monorepo `GLOSSARY.md`. In
 `nori attach`, a watcher sees "Watching · read-only", and Alt+T takes
-control. The TUI is always the controller of the private host it owns.
+control. The TUI is always the controller of the private host it owns. A
+**local controller** runs on the host's machine; a **remote controller** does
+not. See **local client**.
 
 **Conversation** — See nori-monorepo `GLOSSARY.md`. In the CLI the
 conversation ID is a UUID. On `nori host` the ACP `sessionId` is the
@@ -93,6 +95,12 @@ project. Never use "harness" for the session runtime.
 
 **Live session** — A session that is registered with a running session
 manager, with or without a running agent process. Opposite: stored session.
+
+**Local client** — A client of a host that runs on the host's machine: plain
+`nori`'s in-process pipe, or a WebSocket client that presents the host's
+private `host/local-token`, as `nori attach` with local discovery does. Every
+other client is a **remote client**, including every stdio client. Only a
+local controller may run `!` commands. See `docs/tui.md`.
 
 **Parked session** — A live session that the TUI holds off screen. It keeps
 running and keeps its own transcript, composer, and pending requests.

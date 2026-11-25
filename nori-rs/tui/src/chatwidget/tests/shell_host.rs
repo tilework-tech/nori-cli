@@ -227,3 +227,49 @@ async fn a_command_from_the_replay_shows_like_a_live_one() {
 
     assert_eq!(transcript(&mut replay_rx), transcript(&mut live_rx));
 }
+
+#[tokio::test]
+async fn a_remote_terminal_shows_a_gray_hint_and_runs_nothing() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    host_session(&mut chat);
+    chat.submit_user_message("!touch marker".to_string().into());
+    let (_, reply) = host_requests(&mut chat, &mut rx).pop().unwrap();
+
+    reply.deliver(Err(anyhow::Error::new(crate::host_client::HostError {
+        code: Some(-32018),
+        message: Some("Remote shell commands are not yet supported.".into()),
+    })));
+    let mut errors = Vec::new();
+    let mut hints = Vec::new();
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            match rx.recv().await {
+                Some(AppEvent::InsertHistoryCell(cell)) => hints.push(cell.display_lines(80)),
+                Some(AppEvent::HarnessActionFailed(message)) => errors.push(message),
+                Some(AppEvent::HarnessAction(action)) => panic!("ran {action:?} in process"),
+                Some(AppEvent::UserShellRefused { command, .. }) => {
+                    chat.on_user_shell_refused(command);
+                    return;
+                }
+                Some(_) => {}
+                None => panic!("the widget stopped sending"),
+            }
+        }
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(
+        (errors, hints.len(), chat.composer_text()),
+        (Vec::<String>::new(), 1, "!touch marker".to_string())
+    );
+    assert!(
+        hints[0][0]
+            .spans
+            .iter()
+            .all(|span| span.style.fg == Some(ratatui::style::Color::DarkGray)),
+        "the hint is gray: {:?}",
+        hints[0][0]
+    );
+    assert_snapshot!(lines_to_single_string(&hints[0]));
+}

@@ -80,6 +80,7 @@ The monorepo host contract owns the meaning of `lock`, `host.json`,
 | `host.json` | `0600` | Written at start through `host.json.tmp`; removed on stop. A managed host does not write it. See the host contract. |
 | `state.json` | `0600` | Written at start; removed on stop and at the next start. See the host contract. |
 | `token` | `0600` | Replaced at every start. See the host contract. |
+| `local-token` | `0600` | Replaced at every start; not written by a managed host. A second secret that never leaves this machine and is in no published file. Local `nori attach` sends it in the `x-nori-local-token` upgrade header to prove it runs here, which only `!` commands require. A wrong or missing value connects as remote. Unlike `token`, never copy it to another machine. |
 | `host.log` | `0600` | stdout and stderr of a host started by `nori host`. Appended; never trimmed. |
 | `session-settings.json` | `0600` | Mode, adapter options, and ACP `mcpServers` per conversation, reapplied on resume. Written atomically through `session-settings.json.tmp` by any host on this home, including the TUI's private host; the write fails with a log warning while `host/` does not exist. An entry is removed when its session is deleted. |
 | `recovery/` | `0700` | Managed host only. Recovery journal: `journal.lock` and one `<sha256 of binding ID>.wal` file per binding. The managed wire is in the host contract. |

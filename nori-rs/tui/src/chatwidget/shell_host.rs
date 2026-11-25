@@ -1,6 +1,7 @@
 //! `!` commands. A session on the host runs them on that host, through
-//! `_nori/session/shell`, in the session's folder; a widget with no host
-//! session runs them in process. Either way the command, its output and its
+//! `_nori/session/shell`, in the session's folder, when this terminal runs on
+//! the host's machine; a remote terminal gets a gray hint and nothing runs on
+//! either machine. A widget with no host session runs them in process. Either way the command, its output and its
 //! exit code arrive as the session's `user_shell` events, which every widget
 //! following the session shows as a command cell, live or replayed.
 
@@ -12,6 +13,7 @@ use nori_protocol::UserShellStream;
 use super::*;
 use crate::app_event::HarnessAction;
 use crate::host_client::HostCall;
+use crate::host_client::HostError;
 use crate::presentation::ToolKind;
 use crate::presentation::ToolPhase;
 use crate::presentation::ToolSnapshot;
@@ -124,9 +126,20 @@ impl ChatWidget {
                 });
                 tokio::spawn(async move {
                     if let Err(error) = reply.await {
-                        tx.send(AppEvent::HarnessActionFailed(format!(
-                            "Could not run !{command}: {error}"
-                        )));
+                        let remote = error.downcast_ref::<HostError>().is_some_and(|error| {
+                            error.code == Some(i64::from(nori_protocol::REMOTE_SHELL_UNSUPPORTED))
+                        });
+                        if remote {
+                            tx.send(AppEvent::InsertHistoryCell(Box::new(
+                                history_cell::new_hint_event(
+                                    nori_protocol::REMOTE_SHELL_UNSUPPORTED_MESSAGE.to_owned(),
+                                ),
+                            )));
+                        } else {
+                            tx.send(AppEvent::HarnessActionFailed(format!(
+                                "Could not run !{command}: {error}"
+                            )));
+                        }
                         tx.send(AppEvent::UserShellRefused {
                             generation,
                             command,
