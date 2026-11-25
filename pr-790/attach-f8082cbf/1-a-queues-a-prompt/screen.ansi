@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+[2m• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mmock:stream-until-cancel
+
+
+[2m• [0m[39m[49mQueued for the next turn.
+
+[2m• [0m[39m[49mharbor
+  answerStreaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+  aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+  reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+  Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+  ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+  g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+  ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+  aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+  reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+  Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+  ..Streaming...Streaming...Streaming...Streaming...Streaming...
+
+[38;5;1m■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues[39m
+
+  [2m1 queued · [0m[38;5;6m[49mpaused[2m[39m (interrupted) · enter resumes[0m[39m[49m
+[2m  ↳ [3mplant the cedar row[0m[39m[49m
+[2m    ↑ select[0m[39m[49m
+
+
+[1m›[0m[39m[49m [2m@ for file mentions[0m[39m[49m
+
+  [38;5;2mcontrolling[2m[39m · project · mock-model · ready · Approvals: Agent · ctrl+d detach[0m[39m[49m                                   [38;5;3m⎇ main
