@@ -496,6 +496,12 @@ fn watcher_cannot_answer_a_permission_request_but_controller_can() {
         host.list().contains("waiting on you"),
         "watcher answer leaves permission pending"
     );
+    // "D2-permission" above also matches the prompt line; answer only once
+    // the request itself is on screen and past its answer grace.
+    controller
+        .wait_for_text("Would you like to allow", TIMEOUT)
+        .unwrap();
+    controller.wait_out_answer_grace();
     controller.send_key(Key::Enter).unwrap();
     controller
         .wait_for_text("Permission granted with option: allow", TIMEOUT)
@@ -857,12 +863,19 @@ fn same_port_host_restart_stops_reconnecting_and_explains_session_loss() {
         std::fs::read(host.home.path().join("host/token")).unwrap(),
         old_token
     );
-    client.wait_for_text("Host restarted", TIMEOUT).unwrap();
+    // The notice and the hint row land in separate frames; wait for both
+    // rather than reading a screen caught between them.
+    client
+        .wait_for(
+            |screen| {
+                screen.contains("Host restarted; sessions were lost")
+                    && screen.contains("Re-run nori attach")
+                    && screen.contains("DISCONNECTED")
+            },
+            TIMEOUT,
+        )
+        .unwrap();
     let screen = client.screen_contents();
-    assert!(
-        screen.contains("sessions were lost") && screen.contains("nori attach"),
-        "{screen}"
-    );
     assert!(
         !screen.contains("RECONNECTING") && !screen.contains("sessions continue"),
         "{screen}"
