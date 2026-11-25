@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› count the walnut trees by the north gate
+
+
+• Noted. Working on the demo orchard.
+
+
+› list the pear rows needing pruning
+
+
+• Noted. Working on the demo orchard.
+
+
+› @ for file mentions
+
+  list the pear rows needing pruning
+  count the walnut trees by the north gate
+  esc close  enter select  j/k move  / search

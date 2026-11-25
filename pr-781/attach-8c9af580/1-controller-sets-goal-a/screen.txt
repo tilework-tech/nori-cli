@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+Goal
+Status: active
+Objective: grow the synthetic cedar orchard
+Time used: 0s
+Tokens used: 0
+
+Commands: /goal edit, /goal pause, /goal clear
+
+• Mock Agent 0.1.0 session updated:
+  goal.objective=<string>, goal.status=<string>
+
+
+› ? for shortcuts
+
+  controlling · demo-a · mock-model · ready · Approvals: Agent · ctrl+d detach

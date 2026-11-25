@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+• Ran pwd
+  └ /tmp/proof/srv/demo-a
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+
+
+› !pwd
+
+  watching · read-only · demo-a · mock-model · ready · Approvals: Agent · alt+t take control · ctrl+d detach

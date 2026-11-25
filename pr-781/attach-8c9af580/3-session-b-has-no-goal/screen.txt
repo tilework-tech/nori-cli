@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+• No goal is currently set.
+
+  2 ready
+
+
+› @ for file mentions
+
+  controlling · demo-a · mock-model · ready · Approvals: Agent · ctrl+d detach

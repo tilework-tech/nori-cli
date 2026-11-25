@@ -1,0 +1,5 @@
+# #785 ! shell
+
+1. `!pwd` from the attached controller prints the host session's folder /tmp/proof/srv/demo-a in a `Ran pwd` cell (client folder is /tmp/proof/work/client); the mock agent received no `pwd` prompt. 2. The watcher sees the same cell; its own `!pwd` is refused and the draft kept. 3. Plain `nori`: `!echo …` now shows its output. On main the command runs but nothing is shown, because the widget dropped `user_shell` events (before frame not captured; see the PR's snapshot tests).
+
+Built from `feat/host-session-shell` at ef209c3e (every feature in the stack is present at that head). Mock agent, synthetic data. One background `nori host` with HOME=/tmp/proof/host-home and NORI_HOME=/tmp/proof/host-nori, sessions in /tmp/proof/srv/demo-a. Terminals run `nori attach --host` with their own HOME/NORI_HOME (/tmp/proof/client-home, /tmp/proof/client2-home) from /tmp/proof/work/client. Each frame folder holds screen.png (Ghostty Web 0.4.0 render), screen.txt, screen.ansi and metadata.json. Ghostty Web draws `↳` as a blank cell; screen.txt has it.

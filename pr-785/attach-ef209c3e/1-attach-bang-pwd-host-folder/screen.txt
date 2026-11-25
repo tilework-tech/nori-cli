@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+• Ran pwd
+  └ /tmp/proof/srv/demo-a
+
+
+› ? for shortcuts
+
+  controlling · demo-a · mock-model · ready · Approvals: Agent · ctrl+d detach

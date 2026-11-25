@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• codex-mock options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› mock:usage 340412 1000000
+  /context
+
+
+• Noted. Working on the demo orchard.
+
+
+› @ for file mentions
+
+  controlling · demo-a · codex-mock · ready · Approvals: Agent · ctrl+d detach                               34% / 1.00M

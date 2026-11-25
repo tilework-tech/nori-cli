@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+Goal
+Status: active
+Objective: grow the synthetic cedar orchard
+Time used: 0s
+Tokens used: 0
+
+Commands: /goal edit, /goal pause, /goal clear
+
+• Mock Agent 0.1.0 session updated:
+  goal.objective=<string>, goal.status=<string>
+
+Goal
+Status: active
+Objective: grow the synthetic cedar orchard
+Time used: 0s
+Tokens used: 0
+
+Commands: /goal edit, /goal pause, /goal clear
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+
+
+/ goal tend the plum row
+
+  watching · read-only · demo-a · mock-model · ready · Approvals: Agent · alt+t take control · ctrl+d detach

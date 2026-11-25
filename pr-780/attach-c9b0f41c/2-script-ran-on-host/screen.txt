@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Plan the cedar row of the demo orchard.
+
+
+• Noted. Working on the demo orchard.
+
+• Running script 'orchard-where'...
+
+
+› Output from script 'orchard-where':
+  ran in /tmp/proof/srv/demo-a
+  marker from the host home
+
+
+• Noted. Working on the demo orchard.
+
+
+› @ for file mentions
+
+  controlling · demo-a · mock-model · ready · Approvals: Agent · ctrl+d detach

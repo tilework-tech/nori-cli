@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+[2m• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+[0;1m[39m[49mGoal[0m[39m[49m
+[2mStatus: [0m[39m[49mactive
+[2mObjective: [0m[39m[49mgrow the synthetic cedar orchard
+[2mTime used: [0m[39m[49m0s
+[2mTokens used: [0m[39m[49m0
+
+[2mCommands: /goal edit, /goal pause, /goal clear
+
+• [0m[39m[49mMock Agent 0.1.0 session updated:
+  goal.objective=[1m[38;5;6m<string>[0m[39m[49m, goal.status=[1m[38;5;6m<string>
+[0m[39m[49m
+[1mGoal[0m[39m[49m
+[2mStatus: [0m[39m[49mactive
+[2mObjective: [0m[39m[49mgrow the synthetic cedar orchard
+[2mTime used: [0m[39m[49m0s
+[2mTokens used: [0m[39m[49m0
+
+[2mCommands: /goal edit, /goal pause, /goal clear
+[0m[39m[49m
+[38;5;1m■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.[39m
+
+
+[38;5;2m/[39m goal tend the plum row
+
+  [38;5;6mwatching · read-only[2m[39m · demo-a · mock-model · ready · Approvals: Agent · alt+t take control · ctrl+d detach

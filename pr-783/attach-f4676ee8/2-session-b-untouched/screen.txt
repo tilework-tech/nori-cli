@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+  2 ready
+
+
+› $ for skill listing
+
+  controlling · demo-a · mock-model · ready · Approvals: Agent · ctrl+d detach

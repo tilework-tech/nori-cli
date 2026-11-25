@@ -1,0 +1,40 @@
+
+
+› mock:usage 340412 1000000
+  /context
+
+
+• Noted. Working on the demo orchard.
+
+  Context
+  codex-mock · 1 user turn · /context
+
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    340,412 / 1,000,000 tokens
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    34.0% used
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ◩ □ □ □ □ □ □ □ □ □ □ □    Used          340,412
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Free          659,588
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Current turn  1 · ended
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Turn tokens   unknown
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    ◩ Current fill boundary
+                                             □ Free capacity
+                                             Each cell = 0.5% of the window
+
+  Current · ▦ Baseline 340,412
+
+  Turn checkpoints
+  Turn   Start             End             Change      Reading
+  T1     unknown           340,412         unknown     observed
+  Starts carry the latest prior observation.
+
+  Local instructions · estimated tokens                         Skills observed              Subagents observed
+  /tmp/proof/srv/demo-a/AGENTS.md                         ~7    None observed                None observed
+
+  Local file sizes; inclusion in the current context is not verified.
+
+
+› ! for shell commands
+
+  controlling · demo-a · codex-mock · ready · Approvals: Agent · ctrl+d detach                               34% / 1.00M
