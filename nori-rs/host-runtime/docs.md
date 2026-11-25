@@ -22,7 +22,7 @@ code. Terms follow [`GLOSSARY.md`](../../GLOSSARY.md).
 | `host/service.rs` | `HostService` | One manager, config and overrides, launches, settings, deleted set; implements `ManagedAgent` |
 | `host/acp/` | `AcpFace` | Standard ACP v1 face: `handshake.rs` (`initialize`), `list.rs`, `attach.rs` (`session/new`, `load`, `resume`), `session.rs`, `config.rs` (host `agent` and `mode` options, settings kept across resume), `adapter_modes.rs`, `find_paths.rs`, `history.rs` (`_nori/host/history/*` over the host's own `history.jsonl`; recording is the controller's, reads are open to watchers), `prompts.rs` (`_nori/host/prompts` lists the host's own `$NORI_HOME/commands`, open to watchers; `_nori/session/prompts/run` runs a script prompt found by name in the session's folder, controller only) |
 | `host/transcripts.rs` | | List, replay, and resume sessions that an earlier host or local run recorded under `$NORI_HOME/transcripts` |
-| `host/state.rs` | `HostFiles`, `HostState`, `read_token`, `private_open` | `lock`, `token`, `host.json`; owner-only files |
+| `host/state.rs` | `HostFiles`, `HostState`, `read_token`, `private_open` | `lock`, `token`, `local-token`, `host.json`; owner-only files |
 | `host/tui_owned.rs` | `OwnedHost`, `StopHost`, `launch` | The private host that plain `nori` owns |
 | `host/recovery_control.rs`, `host/recovery_history.rs` | `RecoveryControl` | Binding checkpoints and history for a managed host |
 
@@ -76,6 +76,13 @@ the transport types through `nori_harness::remote_agent`, not through
 - The host directory is created with mode `0700` and must not be a symlink.
   Files in it open with mode `0600` and `O_NOFOLLOW`. The `lock` file is never
   removed. `host.json` is written to a temporary file and renamed.
+- `token` and `local-token` are two separate secrets, both new at every
+  start. `token` authenticates every client and may be copied to a remote
+  one. `local-token` never leaves the machine and is in no published file
+  (not in `host.json`); a client that presents it proves it runs here, which
+  only `!` commands require (see `nori-rs/acp-host/docs.md`).
+- The face advertises `capabilities.nori_sessions.shell` as `true`; the
+  transport turns it to `false` for each remote connection.
 - Background hosts need Unix owner-only permissions. `HostFiles::new` fails on
   other platforms.
 - Permission modes are `ask`, `agent`, and `approve-all`

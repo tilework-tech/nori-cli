@@ -184,9 +184,41 @@ impl JoinedHost {
         }
     }
 
+    /// Attach the way a terminal on the host's machine does: plain
+    /// `nori attach`, which finds the host through its `NORI_HOME`. The
+    /// terminal keeps its own `HOME` and folder.
+    pub fn attach_local(&self) -> Attached {
+        let home = tempfile::tempdir().unwrap();
+        let folder = tempfile::tempdir().unwrap();
+        let mut terminal = self.spawn(
+            folder.path(),
+            "mock-model",
+            &["attach"],
+            self.nori_home.path(),
+            home.path(),
+        );
+        terminal.wait_for_text("Sessions", TIMEOUT).unwrap();
+        Attached {
+            terminal,
+            _nori_home: tempfile::tempdir().unwrap(),
+            _home: home,
+            _folder: folder,
+        }
+    }
+
     /// Attach and start a session in the host's project folder.
     pub fn attach_new(&self) -> Attached {
-        let mut attached = self.attach();
+        let attached = self.attach();
+        self.open_new(attached)
+    }
+
+    /// [`Self::attach_new`] from a terminal on the host's machine.
+    pub fn attach_new_local(&self) -> Attached {
+        let attached = self.attach_local();
+        self.open_new(attached)
+    }
+
+    fn open_new(&self, mut attached: Attached) -> Attached {
         let terminal = &mut attached.terminal;
         terminal.send_key(Key::Escape).unwrap();
         terminal

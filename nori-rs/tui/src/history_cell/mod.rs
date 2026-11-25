@@ -505,6 +505,12 @@ pub(crate) fn new_info_event(message: String, hint: Option<String>) -> PlainHist
     PlainHistoryCell { lines }
 }
 
+/// A brief gray note, for something the user tried that is not available here.
+pub(crate) fn new_hint_event(message: String) -> PlainHistoryCell {
+    let lines: Vec<Line<'static>> = vec![vec!["• ".dark_gray(), message.dark_gray()].into()];
+    PlainHistoryCell { lines }
+}
+
 pub(crate) fn new_error_event(message: String) -> PlainHistoryCell {
     // Use a hair space (U+200A) to create a subtle, near-invisible separation
     // before the text. VS16 is intentionally omitted to keep spacing tighter
