@@ -1549,3 +1549,40 @@ fn new_on_an_attached_host_opens_the_session_the_host_started() {
         "both sessions keep running: {listing}"
     );
 }
+
+#[test]
+fn page_up_in_full_screen_reaches_history_above_the_screen() {
+    let host = Host::new();
+    host.start();
+    let mut client = host.create_session();
+    ask(&mut client, "D2 earliest question");
+    for turn in 0..12 {
+        // Earlier answers leave the full-screen view, so wait for this
+        // turn's prompt and the end of the turn instead of counting answers.
+        let prompt = format!("D2 later question {turn}");
+        client.submit_input(&prompt).unwrap();
+        client
+            .wait_for(
+                |screen| screen.contains(&prompt) && !screen.contains("esc to interrupt"),
+                TIMEOUT,
+            )
+            .unwrap();
+        client.settle(Duration::from_millis(300));
+    }
+    assert!(
+        !client.screen_contents().contains("D2 earliest question"),
+        "the first turn has scrolled off the full-screen view"
+    );
+
+    let deadline = Instant::now() + TIMEOUT;
+    while !client.screen_contents().contains("D2 earliest question") {
+        assert!(
+            Instant::now() < deadline,
+            "PageUp never reached the first turn:\n{}",
+            client.screen_contents()
+        );
+        client.send_key(Key::PageUp).unwrap();
+        client.settle(Duration::from_millis(200));
+    }
+    assert!(client.is_alternate_screen());
+}

@@ -264,6 +264,11 @@ impl HostLink {
                 let sessions = &result["capabilities"]["nori_sessions"];
                 self.connection.features.session_folders = sessions["session_cwd"] == true;
                 self.connection.features.find_paths = sessions["find_paths"] == true;
+                // List at once rather than at the next heartbeat, so the
+                // picker opens as soon as the host lets this terminal in.
+                if !self.client.has_pending(|tag| matches!(tag, HostTag::List)) {
+                    let _ = self.client.request(HostCall::List, HostTag::List);
+                }
                 if let Ok(control) =
                     serde_json::from_value::<nori_protocol::ControlStatus>(result["control"].take())
                 {

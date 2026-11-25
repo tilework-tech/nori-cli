@@ -244,7 +244,7 @@ folder, agent, and host status, `Approvals: <mode>`, and the keys that apply
 | `alt+down` | Next session that waits on you. |
 | `alt+up` | Go to the parent session. |
 | Ctrl+R (in the list) | Resume a failed session. |
-| PgUp / PgDn | Scroll 10 lines. |
+| PgUp | In the full-screen view, open the transcript a page above the screen; Esc or q closes it. |
 | `/new [folder] [agent]` | Start a session. Without a folder, it uses the folder of the session on screen. With no session, a local host uses the terminal's folder and a `--host` host uses its own folder. A host that lists paths resolves the folder and completes it on Tab. The new session comes on screen once the host lists it. |
 | `/delegate <agent> <task>` | Delegate a task from the session on screen. |
 | `/close` | Close the session on screen. |

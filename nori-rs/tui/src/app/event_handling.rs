@@ -1955,6 +1955,20 @@ impl App {
         {
             return;
         }
+        // The full-screen view of a joined host shows only the newest rows;
+        // PageUp opens the transcript a page above them.
+        if key_event.kind == KeyEventKind::Press
+            && key_event.code == KeyCode::PageUp
+            && self.joined.is_some()
+            && self.screen.is_full_screen()
+            && !self.chat_widget.has_active_popup()
+        {
+            self.open_transcript_overlay(tui);
+            let _ = self
+                .handle_backtrack_overlay_event(tui, TuiEvent::Key(key_event))
+                .await;
+            return;
+        }
         if key_event.kind == KeyEventKind::Press && !self.chat_widget.has_active_popup() {
             let transcript_binding = self.hotkey_config.binding_for(HotkeyAction::OpenTranscript);
             if matches_binding(transcript_binding, &key_event)

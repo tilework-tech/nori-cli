@@ -305,3 +305,23 @@ async fn a_joined_link_reports_the_hosts_session_list() {
 
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn a_joined_link_lists_the_host_as_soon_as_it_is_ready() {
+    let server = host().await;
+    let started = std::time::Instant::now();
+    let mut link = join(endpoint_of(server.local_addr())).await;
+
+    loop {
+        if let HostUpdate::Sessions(_) = next_update(&mut link).await {
+            break;
+        }
+    }
+    assert!(
+        started.elapsed() < std::time::Duration::from_millis(500),
+        "the first list waited for the heartbeat: {:?}",
+        started.elapsed()
+    );
+
+    server.shutdown().await;
+}
