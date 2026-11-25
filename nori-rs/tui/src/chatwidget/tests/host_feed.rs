@@ -23,6 +23,7 @@ fn joined(role: ControlRole, connected: bool) -> HostConnection {
         role,
         connected,
         stopped: None,
+        features: crate::host_client::HostFeatures::default(),
     }
 }
 
@@ -247,4 +248,34 @@ fn an_answer_without_a_final_newline_prints_when_its_turn_ends() {
 
     let (text, _) = printed(&mut rx);
     assert!(text.contains("synthetic host answer"), "{text}");
+}
+
+#[test]
+fn a_host_session_that_shuts_down_closes_without_leaving_the_host() {
+    let (mut chat, mut rx) = host_feed_widget();
+    chat.set_host_connection(joined(ControlRole::Watcher, true));
+
+    feed_wire(
+        &mut chat,
+        [nori_protocol::SessionEvent::Nori(
+            nori_protocol::NoriEvent::SessionEnded(nori_protocol::SessionEnded {
+                reason: nori_protocol::SessionEndReason::Shutdown,
+                message: None,
+            }),
+        )],
+    );
+
+    let (_, events) = printed(&mut rx);
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, AppEvent::SessionClosed { .. })),
+        "{events:?}"
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, AppEvent::ExitRequest)),
+        "{events:?}"
+    );
 }

@@ -19,6 +19,7 @@ use crate::app_event_sender::HostReply;
 use crate::host_client::HostCall;
 use crate::host_client::HostConnection;
 use crate::host_client::HostEndpoint;
+use crate::host_client::HostFeatures;
 use nori_protocol::ControlRole;
 
 const TOKEN: &str = "synthetic-token";
@@ -108,11 +109,20 @@ async fn settle(link: &mut HostLink, expected: HostConnection) {
     );
 }
 
+/// A host joined with explicit credentials, before it says what it serves.
+fn remote_host() -> HostFeatures {
+    HostFeatures {
+        remote: true,
+        ..HostFeatures::default()
+    }
+}
+
 fn controlling() -> HostConnection {
     HostConnection {
         role: ControlRole::Controller,
         connected: true,
         stopped: None,
+        features: remote_host(),
     }
 }
 
@@ -121,6 +131,7 @@ fn watching() -> HostConnection {
         role: ControlRole::Watcher,
         connected: true,
         stopped: None,
+        features: remote_host(),
     }
 }
 
@@ -209,6 +220,7 @@ async fn a_dropped_connection_fails_unanswered_calls_and_comes_back_initialized(
             role: ControlRole::Controller,
             connected: false,
             stopped: None,
+            features: remote_host(),
         }
     );
     let error = settled(receipt)

@@ -13,6 +13,7 @@ use serde_json::json;
 
 use super::App;
 use crate::host_client::HostConnection;
+use crate::host_client::HostFeatures;
 use crate::tui::FrameRequester;
 
 const AMBER: &str = "a1a1a1a1-0000-4000-8000-000000000001";
@@ -23,6 +24,7 @@ fn connection() -> HostConnection {
         role: ControlRole::Controller,
         connected: true,
         stopped: None,
+        features: HostFeatures::default(),
     }
 }
 
@@ -145,4 +147,27 @@ async fn a_session_the_host_stops_listing_is_shown_closed() {
         listed_status(&app, "synthetic amber"),
         Some(SessionStatus::Ready)
     );
+}
+
+#[tokio::test]
+async fn typing_before_a_picked_session_comes_on_screen_reaches_that_session() {
+    let home = tempfile::tempdir().unwrap();
+    let mut app = joined_app(&home, None);
+    app.on_joined_sessions(
+        list(&[row(AMBER, "synthetic amber")]),
+        FrameRequester::test_dummy(),
+        &connection(),
+    );
+    app.chat_widget.set_composer_text("/q".to_string());
+
+    let generation = app
+        .session_rows()
+        .into_iter()
+        .find(|row| row.title.contains("synthetic amber"))
+        .map(|row| row.generation)
+        .unwrap();
+    app.show_session(generation);
+
+    assert_eq!(on_screen(&app).as_deref(), Some(AMBER));
+    assert_eq!(app.chat_widget.composer_text(), "/q");
 }

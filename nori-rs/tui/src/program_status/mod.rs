@@ -45,10 +45,3 @@ pub(crate) struct ProgramStatus {
     pub state: ProgramState,
     pub approval_title: Option<String>,
 }
-
-impl ProgramStatus {
-    pub(crate) const IDLE: Self = Self {
-        state: ProgramState::Idle,
-        approval_title: None,
-    };
-}

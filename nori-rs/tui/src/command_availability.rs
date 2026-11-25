@@ -5,11 +5,8 @@
 //! run is greyed with the reason this module returns, and running it anyway
 //! is refused with the same reason, so the menu and execution never disagree.
 
-use std::str::FromStr;
-
 use crate::slash_command::CommandScope;
 use crate::slash_command::SlashCommand;
-use crate::slash_command::built_in_slash_commands;
 
 /// The host has no method for the command yet; only plain `nori`'s own
 /// in-process session can run it.
@@ -24,9 +21,6 @@ pub(crate) const RECONNECTING: &str = "reconnecting";
 /// Typed input waits for the connection to come back.
 pub(crate) const RECONNECTING_INPUT: &str =
     "Reconnecting to the host. Your draft is kept; send it once the connection is back.";
-/// `/screen` switches plain `nori` out of its inline view; the attached
-/// terminal has no inline view to switch from.
-pub(crate) const ALWAYS_FULL_SCREEN: &str = "nori attach is always full-screen";
 
 /// Where a command does its work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,45 +75,6 @@ fn route(command: SlashCommand) -> Route {
     }
 }
 
-/// Whether the attached terminal has its own handling for the command.
-fn runs_in_attach(command: SlashCommand) -> bool {
-    match command {
-        SlashCommand::Quit
-        | SlashCommand::Exit
-        | SlashCommand::Sessions
-        | SlashCommand::New
-        | SlashCommand::Delegate
-        | SlashCommand::Resume
-        | SlashCommand::Close
-        | SlashCommand::Approvals => true,
-        SlashCommand::Agent
-        | SlashCommand::Model
-        | SlashCommand::Config
-        | SlashCommand::Settings
-        | SlashCommand::Vim
-        | SlashCommand::Goal
-        | SlashCommand::ResumeViewonly
-        | SlashCommand::Init
-        | SlashCommand::Compact
-        | SlashCommand::Undo
-        | SlashCommand::Browse
-        | SlashCommand::Diff
-        | SlashCommand::Mention
-        | SlashCommand::Status
-        | SlashCommand::Context
-        | SlashCommand::Memory
-        | SlashCommand::FirstPrompt
-        | SlashCommand::Mcp
-        | SlashCommand::Login
-        | SlashCommand::Logout
-        | SlashCommand::ApiKey
-        | SlashCommand::SwitchSkillset
-        | SlashCommand::Fork
-        | SlashCommand::Browser
-        | SlashCommand::Screen => false,
-    }
-}
-
 /// The terminal a command was typed in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Surface {
@@ -129,8 +84,6 @@ pub(crate) enum Surface {
         cloud_mode: bool,
         agent_session_close: bool,
     },
-    /// `nori attach`: a terminal connected to a host it does not own.
-    Attached { watching: bool, connected: bool },
     /// The shared terminal joined to a host it does not own. It has no
     /// in-process session, so only terminal commands and host methods run.
     Joined { watching: bool, connected: bool },
@@ -142,6 +95,7 @@ fn runs_when_joined(command: SlashCommand) -> bool {
         SlashCommand::Sessions
         | SlashCommand::New
         | SlashCommand::Close
+        | SlashCommand::Delegate
         | SlashCommand::Approvals => true,
         SlashCommand::Quit
         | SlashCommand::Exit
@@ -152,7 +106,6 @@ fn runs_when_joined(command: SlashCommand) -> bool {
         | SlashCommand::Agent
         | SlashCommand::Model
         | SlashCommand::Config
-        | SlashCommand::Delegate
         | SlashCommand::Resume
         | SlashCommand::Goal
         | SlashCommand::ResumeViewonly
@@ -183,39 +136,13 @@ pub(crate) fn unavailable_reason(command: SlashCommand, surface: Surface) -> Opt
             cloud_mode,
             agent_session_close,
         } => scope_reason(command, cloud_mode, agent_session_close),
-        Surface::Attached {
-            watching,
-            connected,
-        } => {
-            let route = route(command);
-            if !runs_in_attach(command) {
-                return Some(
-                    match (command, route) {
-                        (SlashCommand::Screen, _) => ALWAYS_FULL_SCREEN,
-                        (_, Route::InProcess) => NOT_ON_THIS_HOST,
-                        (_, Route::Terminal | Route::Host { .. }) => NOT_IN_ATTACH,
-                    }
-                    .to_string(),
-                );
-            }
-            match route {
-                Route::Terminal | Route::InProcess => None,
-                Route::Host {
-                    needs_control: true,
-                } if !connected => Some(RECONNECTING.to_string()),
-                Route::Host {
-                    needs_control: true,
-                } if watching => Some(WATCHING.to_string()),
-                Route::Host { .. } => None,
-            }
-        }
         Surface::Joined {
             watching,
             connected,
         } => match route(command) {
             Route::Terminal => None,
             Route::InProcess => Some(NOT_ON_THIS_HOST.to_string()),
-            Route::Host { .. } if !runs_when_joined(command) => Some(NOT_ON_THIS_HOST.to_string()),
+            Route::Host { .. } if !runs_when_joined(command) => Some(NOT_IN_ATTACH.to_string()),
             Route::Host {
                 needs_control: true,
             } if !connected => Some(RECONNECTING.to_string()),
@@ -249,29 +176,22 @@ fn scope_reason(
     }
 }
 
-/// The builtin a submitted line starts with, and the text after its name.
-/// Names that are not builtins (agent commands, custom prompts, paths) are
-/// `None`, so they reach the agent unchanged.
-pub(crate) fn parse_builtin(text: &str) -> Option<(SlashCommand, &str)> {
-    let rest = text.strip_prefix('/')?;
-    let name_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
-    let name = &rest[..name_end];
-    let command = SlashCommand::from_str(name).ok()?;
-    built_in_slash_commands()
-        .iter()
-        .any(|(_, visible)| *visible == command)
-        .then_some((command, &rest[name_end..]))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::slash_command::built_in_slash_commands;
     use pretty_assertions::assert_eq;
+    use std::str::FromStr;
 
     #[test]
-    fn screen_runs_in_plain_nori_even_during_a_turn_and_is_greyed_in_attach() {
-        let (command, rest) = parse_builtin("/screen").expect("/screen is a builtin");
-        assert_eq!(rest, "");
+    fn screen_runs_in_plain_nori_and_in_attach_even_during_a_turn() {
+        let command = SlashCommand::from_str("screen").expect("/screen parses");
+        assert!(
+            built_in_slash_commands()
+                .iter()
+                .any(|(_, visible)| *visible == command),
+            "/screen is a builtin"
+        );
         assert!(command.available_during_task());
         for cloud_mode in [false, true] {
             assert_eq!(
@@ -289,12 +209,12 @@ mod tests {
             assert_eq!(
                 unavailable_reason(
                     command,
-                    Surface::Attached {
+                    Surface::Joined {
                         watching,
                         connected
                     }
                 ),
-                Some(ALWAYS_FULL_SCREEN.to_string())
+                None
             );
         }
     }
@@ -327,7 +247,7 @@ mod tests {
             (
                 SlashCommand::Model,
                 joined(false, true),
-                Some(NOT_ON_THIS_HOST),
+                Some(NOT_IN_ATTACH),
             ),
             (SlashCommand::New, joined(true, false), Some(RECONNECTING)),
             (SlashCommand::Sessions, joined(false, false), None),

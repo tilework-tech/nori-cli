@@ -76,6 +76,52 @@ impl ChatWidget {
         );
     }
 
+    /// `/approvals MODE` on a joined host: set the session's mode without the
+    /// menu. Approving everything still asks first. Returns whether `text`
+    /// was such a command.
+    pub(super) fn handle_approvals_with_mode(&mut self, text: &str) -> bool {
+        let Some(wanted) = text
+            .strip_prefix("/approvals ")
+            .map(str::trim)
+            .filter(|wanted| !wanted.is_empty() && self.host_connection.is_some())
+        else {
+            return false;
+        };
+        let surface = self.command_surface();
+        if let Some(reason) =
+            crate::command_availability::unavailable_reason(SlashCommand::Approvals, surface)
+        {
+            self.add_error_message(format!("/approvals: {reason}"));
+            self.set_composer_text(text.to_owned());
+            return true;
+        }
+        let mode = match wanted {
+            "ask" => nori_protocol::ApprovalMode::Ask,
+            "agent" => nori_protocol::ApprovalMode::Agent,
+            "approve-all" => nori_protocol::ApprovalMode::ApproveAll,
+            _ => {
+                self.add_error_message(format!(
+                    "/approvals: unknown mode {wanted}; use ask, agent or approve-all"
+                ));
+                return true;
+            }
+        };
+        let session_id = self.managed_conversation_id.map(|id| id.to_string());
+        let warn = !self
+            .config
+            .notices
+            .hide_full_access_warning
+            .unwrap_or(false);
+        if mode == nori_protocol::ApprovalMode::ApproveAll && warn {
+            self.open_approve_all_confirmation(session_id);
+        } else {
+            for action in Self::approval_mode_actions(session_id, mode) {
+                action(&self.app_event_tx);
+            }
+        }
+        true
+    }
+
     /// Change the mode of `session_id` on its host, or of this terminal's
     /// own session when it has no host session.
     fn approval_mode_actions(
@@ -421,6 +467,7 @@ impl ChatWidget {
     pub(crate) fn update_approval_mode_label(&mut self) {
         let label = self.approval_mode_name().to_owned();
         self.bottom_pane.set_approval_mode_label(Some(label));
+        self.refresh_host_status();
     }
 
     /// Change the mode of a session that has no host session, such as a

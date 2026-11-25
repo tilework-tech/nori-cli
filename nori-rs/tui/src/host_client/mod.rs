@@ -7,6 +7,7 @@
 
 mod connection;
 mod file_search;
+pub(crate) mod new_session;
 pub(crate) use file_search::FileSearch;
 pub(crate) use file_search::HostFileSearch;
 pub(crate) use file_search::file_matches;
@@ -37,6 +38,16 @@ pub(crate) struct HostEndpoint {
     pub refresh_local_token: Option<Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>>,
 }
 
+/// Connection parameters resolved by the CLI before entering the terminal.
+/// The token is deliberately excluded from Debug output.
+pub struct AttachOptions {
+    pub endpoint: String,
+    pub token: String,
+    pub session_id: Option<String>,
+    /// Secure local discovery only; explicit remote credentials are never refreshed.
+    pub refresh_local_token: Option<Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>>,
+}
+
 /// This terminal's standing with the host it is connected to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct HostConnection {
@@ -45,6 +56,20 @@ pub(crate) struct HostConnection {
     pub connected: bool,
     /// Why the host can no longer serve this terminal, once it cannot.
     pub stopped: Option<String>,
+    pub features: HostFeatures,
+}
+
+/// What the connected host can do, from its `initialize` reply.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct HostFeatures {
+    /// `_nori/session/new` takes a `cwd`.
+    pub session_folders: bool,
+    /// `_nori/session/find_paths` lists files and folders on the host's
+    /// disk, and the host names `~` and relative folders itself.
+    pub find_paths: bool,
+    /// The host runs on another machine, so this terminal's folders mean
+    /// nothing there.
+    pub remote: bool,
 }
 
 impl HostConnection {
@@ -54,6 +79,11 @@ impl HostConnection {
             role: nori_protocol::ControlRole::Controller,
             connected: true,
             stopped: None,
+            features: HostFeatures {
+                session_folders: true,
+                find_paths: true,
+                remote: false,
+            },
         }
     }
 }

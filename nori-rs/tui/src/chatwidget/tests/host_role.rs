@@ -15,6 +15,7 @@ fn joined(role: ControlRole, connected: bool) -> HostConnection {
         role,
         connected,
         stopped: None,
+        features: crate::host_client::HostFeatures::default(),
     }
 }
 
@@ -138,4 +139,102 @@ fn a_watchers_command_menu_greys_what_needs_control() {
         "{menu}"
     );
     insta::assert_snapshot!("joined_watcher_command_menu", menu);
+}
+
+#[test]
+fn the_hint_row_shows_this_terminals_standing_on_the_host() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    let mut rows = Vec::new();
+    for (label, connection) in [
+        ("controlling", joined(ControlRole::Controller, true)),
+        ("watching", joined(ControlRole::Watcher, true)),
+        ("reconnecting", joined(ControlRole::Controller, false)),
+        (
+            "stopped",
+            HostConnection {
+                stopped: Some("Host restarted; sessions were lost.".into()),
+                ..joined(ControlRole::Watcher, false)
+            },
+        ),
+    ] {
+        chat.set_host_connection(connection);
+        // The composer's placeholder rotates; only the footer row is checked.
+        let footer = render_bottom_pane(&chat)
+            .lines()
+            .filter(|line| !line.trim().is_empty() && !line.starts_with('›'))
+            .collect::<Vec<_>>()
+            .join("\n");
+        rows.push(format!("{label}:\n{footer}"));
+    }
+    insta::assert_snapshot!(rows.join("\n\n"));
+}
+
+#[test]
+fn detach_leaves_the_host_even_while_watching() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_host_connection(joined(ControlRole::Watcher, true));
+
+    type_text(&mut chat, "/detach");
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let (text, events) = printed(&mut rx);
+    assert!(text.contains("Left the host"), "{text} {events:?}");
+    assert!(!asks_host(&events, |call| matches!(
+        call,
+        HostCall::Prompt(_) | HostCall::Close { .. }
+    )));
+}
+
+#[tokio::test]
+async fn new_on_a_joined_host_asks_the_host_to_start_a_session_in_the_named_folder() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_host_connection(HostConnection {
+        features: crate::host_client::HostFeatures {
+            session_folders: true,
+            find_paths: true,
+            remote: true,
+        },
+        ..joined(ControlRole::Controller, true)
+    });
+
+    type_text(&mut chat, "/new ~/synthetic-orchard");
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let (_, events) = printed(&mut rx);
+    assert!(
+        asks_host(&events, |call| matches!(
+            call,
+            HostCall::NewSession(params) if params["cwd"] == "~/synthetic-orchard"
+        )),
+        "{events:?}"
+    );
+}
+
+#[test]
+fn a_watcher_cannot_start_a_session_and_keeps_the_command() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_host_connection(joined(ControlRole::Watcher, true));
+
+    type_text(&mut chat, "/new ./synthetic-folder");
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(chat.composer_text(), "/new ./synthetic-folder");
+    let (text, events) = printed(&mut rx);
+    assert!(text.contains("Alt+T"), "{text}");
+    assert!(!asks_host(&events, |call| matches!(
+        call,
+        HostCall::NewSession(_)
+    )));
+}
+
+#[test]
+fn ctrl_d_leaves_a_joined_host_even_with_a_draft() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_host_connection(joined(ControlRole::Controller, true));
+
+    type_text(&mut chat, "synthetic unsent draft");
+    chat.handle_key_event(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL));
+
+    let (text, _) = printed(&mut rx);
+    assert!(text.contains("Left the host"), "{text}");
 }

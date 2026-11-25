@@ -77,6 +77,9 @@ pub(crate) struct FooterProps {
     /// Cloud session identifier (e.g. `nori-fast-kazunoko-aac8`) when attached
     /// through cloud mode. Renders the `CloudSession` segment.
     pub(crate) cloud_session: Option<String>,
+    /// This terminal's standing on a joined host. It leads the footer and is
+    /// never hidden by the segment configuration.
+    pub(crate) host_status: Option<Line<'static>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -459,7 +462,12 @@ struct FooterSegmentGroups {
 
 fn footer_segment_groups(props: &FooterProps) -> FooterSegmentGroups {
     FooterSegmentGroups {
-        left: segments_for(props, &props.footer_layout_config.footer_left),
+        left: props
+            .host_status
+            .iter()
+            .cloned()
+            .chain(segments_for(props, &props.footer_layout_config.footer_left))
+            .collect(),
         right: segments_for(props, &props.footer_layout_config.footer_right),
     }
 }
@@ -970,6 +978,7 @@ mod tests {
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             acp_mode_label: None,
             cloud_session: None,
+            host_status: None,
         }
     }
 

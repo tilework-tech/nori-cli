@@ -98,6 +98,17 @@ impl App {
         if self.overlay.is_some() {
             self.close_transcript_overlay(tui);
         }
+        // Leaving a joined host from the full-screen view hands the shell
+        // back as it was; the host still holds the sessions' history.
+        if self.joined.is_some() && self.screen.is_full_screen() {
+            self.screen.discard_held();
+            self.session_reprint_pending = false;
+            self.screen.set_full_screen(false);
+            if tui.leave_alt_screen_entirely() {
+                tui.terminal.clear()?;
+            }
+            return Ok(());
+        }
         self.screen.set_full_screen(false);
         if tui.leave_alt_screen_entirely() {
             tui.terminal.clear()?;

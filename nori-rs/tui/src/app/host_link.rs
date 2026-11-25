@@ -21,6 +21,7 @@ use crate::host_client::HostCall;
 use crate::host_client::HostConnection;
 use crate::host_client::HostEndpoint;
 use crate::host_client::HostEvent;
+use crate::host_client::HostFeatures;
 use crate::host_client::HostSessionClient;
 use nori_host_runtime::StopHost;
 use nori_protocol::ControlRole;
@@ -114,6 +115,8 @@ impl HostLink {
     /// Joins the running host `initial` is connected to. The link initializes
     /// itself on every connection and reports [`HostUpdate::Ready`].
     pub fn join(endpoint: HostEndpoint, initial: ManagedClient) -> Self {
+        // Only a host discovered on this machine refreshes its token.
+        let remote = endpoint.refresh_local_token.is_none();
         let (requests, request_rx) = mpsc::unbounded_channel();
         let (event_tx, events) = mpsc::unbounded_channel();
         let driver = tokio::spawn(crate::host_client::drive(
@@ -130,6 +133,10 @@ impl HostLink {
                 role: ControlRole::Watcher,
                 connected: false,
                 stopped: None,
+                features: HostFeatures {
+                    remote,
+                    ..HostFeatures::default()
+                },
             },
             initialized: false,
         }
@@ -254,6 +261,9 @@ impl HostLink {
                 }
                 let reconnected = std::mem::replace(&mut self.initialized, true);
                 self.connection.connected = true;
+                let sessions = &result["capabilities"]["nori_sessions"];
+                self.connection.features.session_folders = sessions["session_cwd"] == true;
+                self.connection.features.find_paths = sessions["find_paths"] == true;
                 if let Ok(control) =
                     serde_json::from_value::<nori_protocol::ControlStatus>(result["control"].take())
                 {

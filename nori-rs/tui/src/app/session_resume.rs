@@ -21,6 +21,26 @@ impl App {
         if self.chat_widget.session_generation() != generation {
             return Ok(());
         }
+        if self.joined.is_some() {
+            // The host restarts a failed session in its own folder.
+            if let Some(id) = self.chat_widget.managed_conversation_id()
+                && self
+                    .listed_session(id)
+                    .is_some_and(|row| row.status == SessionStatus::Failed)
+            {
+                self.app_event_tx
+                    .send(crate::app_event::AppEvent::HostRequest {
+                        call: crate::host_client::HostCall::Resume {
+                            session_id: id.to_string(),
+                            cwd: None,
+                        },
+                        reply: crate::app_event_sender::HostReply::ReportError(
+                            self.app_event_tx.clone(),
+                        ),
+                    });
+            }
+            return Ok(());
+        }
         let Some(manager) = self.session_manager.clone() else {
             self.chat_widget
                 .add_error_message(crate::chatwidget::NEEDS_OWN_HOST_MESSAGE.to_string());

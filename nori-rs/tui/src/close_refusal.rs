@@ -76,14 +76,6 @@ impl CloseRefusal {
             .collect()
     }
 
-    /// Something other than an adapter error arrived, so a refusal still
-    /// waiting for its stream copy will not get one: later errors are new.
-    pub(crate) fn expire_report(&mut self) {
-        if matches!(self.state, Some(State::Reported { .. })) {
-            self.state = None;
-        }
-    }
-
     /// The close ended without a refusal (the adapter released the session,
     /// or the connection dropped). Returns the held errors, which belong to
     /// something else.

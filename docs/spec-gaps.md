@@ -33,7 +33,7 @@ question in the item.
   (`harness/src/managed_remote.rs`, `host-runtime/src/host/service.rs`).
   `agentCapabilities._meta["nori/preparedAgent"]` already uses `_meta`
   (`host-runtime/src/host/acp/handshake.rs`).
-  Readers: `tui/src/attach/runtime.rs`, `cli/src/host/mod.rs` (`session_cwd`
+  Readers: `tui/src/host_client/mod.rs` (`HostFeatures`), `cli/src/host/mod.rs` (`session_cwd`
   check), and nori-sessions `native/src/main/host/probe.ts`.
 - **Done when:** the host sends both forms and reads both; every cli reader
   uses the `_meta` form; `HOST_CONTRACT` gets a minor bump; schema
@@ -69,7 +69,7 @@ question in the item.
 - **Rule:** the ACP face is the contract. `_nori/*` exists only for
   follow-ups, delegation, subscribing to every session, control, and stop.
   (Host contract: The ACP face, Nori additions.)
-- **Today:** `tui/src/attach/` and `tui/src/host_client/mod.rs` use
+- **Today:** `tui/src/host_client/mod.rs` uses
   `_nori/session/{list,new,prompt,respond}`; `nori host ls` and `nori host new`
   (`cli/src/host/mod.rs`) use `_nori/session/{list,new}`. The host serves them
   in `harness/src/managed_remote.rs` and `host-runtime/src/host/service.rs`.
@@ -175,7 +175,7 @@ question in the item.
   resumed. (Product spec: Next; Glossary: Close; `docs/tui.md`.)
 - **Today:** Ctrl+D removes a closed row, and Ctrl+R resumes only failed
   sessions (`tui/src/bottom_pane/session_list_view.rs`,
-  `tui/src/attach/input.rs`).
+  `tui/src/app/session_resume.rs`).
 - **Done when:** closed rows stay until deleted; Ctrl+R resumes closed and
   failed sessions; PTY test covers it.
 

@@ -294,11 +294,14 @@ impl Drop for Attach {
     }
 }
 
+/// The status row a running turn shows, whoever started it.
+const TURN_RUNNING: &str = "esc to interrupt";
+
 #[test]
 fn ctrl_c_cancels_once_and_preserves_the_attached_draft() {
     let mut client = Attach::open();
     client.activity(true, 0);
-    client.screen("Agent working");
+    client.screen(TURN_RUNNING);
     let draft = "Remember the seven bridges";
     client.tui.type_input(draft).unwrap();
     client.tui.send_key(Key::Ctrl('c')).unwrap();
@@ -322,7 +325,7 @@ fn delayed_cancel_for_amber_does_not_interrupt_blue() {
     let mut client = Attach::open();
     client.activity(true, 0);
     let amber = client.observed_turn();
-    client.screen("Agent working");
+    client.screen(TURN_RUNNING);
     client.hold_cancel = true;
     client.tui.submit_input("/cancel").unwrap();
     client.until("Amber's outgoing cancel", |c| c.held.is_some());
@@ -332,7 +335,7 @@ fn delayed_cancel_for_amber_does_not_interrupt_blue() {
     client.activity(true, 0);
     let blue = client.observed_turn();
     assert_ne!(amber, blue);
-    client.screen("Agent working");
+    client.screen(TURN_RUNNING);
 
     let late = client.held.take().unwrap();
     client.hold_cancel = false;
@@ -362,7 +365,17 @@ fn delayed_cancel_for_amber_does_not_interrupt_blue() {
 fn escape_in_attach_reaches_the_terminal_submitted_prompt_once() {
     let mut client = Attach::open();
     client.tui.submit_input("amber").unwrap();
-    client.screen("Awaiting interrupt");
+    // The adapter's reply has no final newline, so the terminal holds it
+    // back until the turn ends; the host shows the prompt was admitted.
+    client.until("the prompt's first reply", |c| {
+        c.host_frames.iter().any(|frame| {
+            frame
+                .pointer("/params/event/event/update/content/text")
+                .and_then(Value::as_str)
+                == Some("Awaiting interrupt")
+        })
+    });
+    client.screen(TURN_RUNNING);
     client.tui.send_key(Key::Escape).unwrap();
     client.tui.send_key(Key::Escape).unwrap();
     client.adapter_title("Received cancel 1");

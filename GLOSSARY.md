@@ -34,8 +34,8 @@ summary, starts a new ACP session for the same conversation, and puts the
 summary in front of the next prompt. See `docs/turns.md`.
 
 **Controller** — See **control role** in nori-monorepo `GLOSSARY.md`. In
-`nori attach`, a watcher sees "Watching · read-only", and Alt+T takes
-control. The TUI is always the controller of the private host it owns.
+`nori attach`, a watcher's hint row shows "watching · read-only", and Alt+T
+takes control. The TUI is always the controller of the private host it owns.
 
 **Conversation** — See nori-monorepo `GLOSSARY.md`. In the CLI the
 conversation ID is a UUID. On `nori host` the ACP `sessionId` is the

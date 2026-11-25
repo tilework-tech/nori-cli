@@ -156,6 +156,7 @@ impl ChatComposer {
             footer_layout_config: self.footer_layout_config.clone(),
             acp_mode_label: self.acp_mode_label.clone(),
             cloud_session: self.cloud_session.clone(),
+            host_status: self.host_status.clone(),
         }
     }
 

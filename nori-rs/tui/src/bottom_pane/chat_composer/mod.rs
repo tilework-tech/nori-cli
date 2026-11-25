@@ -154,6 +154,10 @@ pub(crate) struct ChatComposer {
     acp_mode_label: Option<String>,
     /// Cloud session id shown in the footer when attached to a cloud session.
     cloud_session: Option<String>,
+    /// A joined host's terminal also takes `/detach` and `/cancel`.
+    joined_host: bool,
+    /// This terminal's standing on a joined host, first in the footer.
+    host_status: Option<Line<'static>>,
     vim_enter_behavior: nori_config::VimEnterBehavior,
     vertical_footer: bool,
     prompt_summary: Option<String>,
@@ -230,6 +234,8 @@ impl ChatComposer {
             approval_mode_label: None,
             acp_mode_label: None,
             cloud_session: None,
+            joined_host: false,
+            host_status: None,
             vim_enter_behavior: nori_config::VimEnterBehavior::Off,
             vertical_footer: false,
             prompt_summary: None,
@@ -502,6 +508,13 @@ impl ChatComposer {
         self.cloud_session = cloud_session;
     }
 
+    /// A joined host's terminal: `/detach` and `/cancel` are commands, and `status` leads
+    /// the footer.
+    pub(crate) fn set_host_status(&mut self, status: Option<Line<'static>>) {
+        self.joined_host = status.is_some();
+        self.host_status = status;
+    }
+
     pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
         self.prompt_summary = summary;
     }
@@ -521,20 +534,6 @@ impl ChatComposer {
         desc: Line<'static>,
     ) {
         self.command_description_overrides.insert(cmd, desc);
-    }
-
-    /// Replace every greyed builtin and its reason at once.
-    pub(crate) fn set_disabled_builtin_commands(
-        &mut self,
-        disabled: HashMap<SlashCommand, Line<'static>>,
-    ) {
-        if disabled == self.disabled_builtin_commands {
-            return;
-        }
-        self.disabled_builtin_commands = disabled;
-        if let ActivePopup::Command(popup) = &mut self.active_popup {
-            popup.set_disabled_builtins(self.disabled_builtin_commands.clone());
-        }
     }
 
     pub(crate) fn set_builtin_command_disabled(

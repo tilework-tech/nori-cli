@@ -61,6 +61,10 @@ types through `nori_protocol::acp`.
   event with no gaps. A fork starts a new conversation and a new sequence.
 - `SessionEnvelope.conversation_id` is the conversation ID, never an ACP
   session ID.
+- `AcpEvent::Response` decodes a payload that carries `stopReason` as a
+  `PromptResponse`. ACP's `AgentResponse` is untagged, and the all-optional
+  `AuthenticateResponse` would otherwise absorb any payload, so a client
+  reading envelopes back from the wire never sees its turn end.
 - `SessionStatus::is_closed()` is true for both `Closed` and `Done`. Code that
   checks only `Closed` misses finished delegated children.
 - `HOST_CONTRACT` is the host wire version. The bump rule and the

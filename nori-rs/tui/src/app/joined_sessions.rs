@@ -36,6 +36,8 @@ use crate::tui;
 /// How long a refused subscription waits before it is asked again.
 const SUBSCRIBE_RETRY: std::time::Duration = std::time::Duration::from_secs(1);
 
+const NO_SESSION_SELECTED: &str = "No session selected. Use /new to start one on this host.";
+
 pub(crate) struct JoinedSessions {
     feed: JoinedFeed,
     listed_once: bool,
@@ -44,6 +46,10 @@ pub(crate) struct JoinedSessions {
     open_session: Option<String>,
     /// The host's latest list, for sessions whose events are not followed.
     rows: HashMap<ConversationId, ListedSession>,
+    /// A session this terminal's `/new` started, shown once listed.
+    started: Option<ConversationId>,
+    /// The hint for a terminal with no session on screen was shown.
+    told_no_session: bool,
 }
 
 #[derive(Deserialize)]
@@ -88,7 +94,7 @@ impl App {
         analytics: Option<nori_installed::AnalyticsReporter>,
     ) -> Result<AppExitInfo> {
         let mut host = HostLink::join(endpoint, initial);
-        let (app, app_event_rx) = Self::joined(
+        let (mut app, app_event_rx) = Self::joined(
             tui.frame_requester(),
             tui.enhanced_keys_supported(),
             auth_manager,
@@ -97,6 +103,9 @@ impl App {
             open_session,
             analytics,
         );
+        // `nori attach` opens on the alternate screen; `/screen` returns inline.
+        tui.enter_alt_screen()?;
+        app.screen.set_full_screen(true);
         let ran = app.drive(tui, app_event_rx, &mut host).await;
         let left = host.stop_or_leave().await;
         let exit = ran?;
@@ -160,6 +169,8 @@ impl App {
             listed_once: false,
             open_session,
             rows: HashMap::new(),
+            started: None,
+            told_no_session: false,
         });
         (app, app_event_rx)
     }
@@ -245,6 +256,7 @@ impl App {
             );
         }
 
+        self.show_started_session();
         if !first {
             return;
         }
@@ -280,9 +292,6 @@ impl App {
                 self.chat_widget.add_error_message(message);
                 self.open_session_list();
             }
-            None if listed.is_empty() => self
-                .chat_widget
-                .add_info_message("This host has no sessions.".to_string(), None),
             None => self.open_session_list(),
         }
     }
@@ -310,6 +319,75 @@ impl App {
                 }
             }
         }
+    }
+
+    /// With no session left on screen, a placeholder that starts nothing
+    /// takes the closed session's place, which stays in the list.
+    pub(super) fn show_joined_placeholder(
+        &mut self,
+        frame_requester: tui::FrameRequester,
+        notice: &str,
+    ) {
+        let connection = self.chat_widget.host_connection();
+        let init = self.chat_widget_init(frame_requester, None, Vec::new(), None, true, None);
+        let mut placeholder = ChatWidget::new(init);
+        placeholder.suppress_welcome_card();
+        if let Some(connection) = connection {
+            placeholder.set_host_connection(connection);
+        }
+        self.install_active_widget(placeholder);
+        self.chat_widget.add_info_message(notice.to_string(), None);
+    }
+
+    /// The session `/new` started, shown as soon as the host lists it.
+    pub(super) fn open_when_listed(&mut self, id: String) {
+        let Ok(id) = ConversationId::from_string(&id) else {
+            self.chat_widget.add_error_message(format!(
+                "The host started a session with an unknown ID: {id}"
+            ));
+            return;
+        };
+        if let Some(joined) = self.joined.as_mut() {
+            joined.started = Some(id);
+        }
+        self.show_started_session();
+    }
+
+    fn show_started_session(&mut self) {
+        let Some(joined) = self.joined.as_mut() else {
+            return;
+        };
+        let Some(generation) = joined.started.and_then(|id| joined.feed.generation_of(id)) else {
+            return;
+        };
+        joined.started = None;
+        self.show_session(generation);
+    }
+
+    /// The hint row names the host's status for the session on screen. With
+    /// none on screen once the list is closed, say how to get one.
+    pub(super) fn refresh_joined_session_status(&mut self) {
+        let no_session = self.chat_widget.managed_conversation_id().is_none()
+            && !self.chat_widget.session_list_in_front();
+        if let Some(joined) = self.joined.as_mut()
+            && joined.listed_once
+            && no_session
+            && !std::mem::replace(&mut joined.told_no_session, true)
+        {
+            self.chat_widget.add_info_message(
+                NO_SESSION_SELECTED.to_string(),
+                Some("Alt+S picks one; Ctrl+D detaches".to_string()),
+            );
+        }
+        let Some(status) = self
+            .chat_widget
+            .managed_conversation_id()
+            .and_then(|id| self.listed_session(id))
+            .map(|row| row.status)
+        else {
+            return;
+        };
+        self.chat_widget.set_host_session_status(status);
     }
 
     pub(super) fn joined_connection_lost(&mut self) {
