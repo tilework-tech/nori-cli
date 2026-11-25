@@ -1,0 +1,90 @@
+name: verify-769-native-perf
+# Independent verifier run for nori-cli #769 (fix 0e673ef4) against main 80992049,
+# with the #770 benchmark scripts at 789a2ce5. Native macOS, optimized builds.
+on:
+  push:
+    branches: ['verify/pr-769-0e673ef4-native-perf']
+
+jobs:
+  native:
+    name: macOS attach replay
+    runs-on: blacksmith-6vcpu-macos-15
+    timeout-minutes: 170
+    env:
+      FIX: 0e673ef45839e9809b8e7c5d2734d90d1780bbd7
+      BASE: 8099204975768d0b0d17e7bd21f13cfbd48ddb59
+      BENCH: 789a2ce53f5082553395ce75813ec248934e429c
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v6
+        with: { path: verify, persist-credentials: false }
+      - uses: actions/checkout@v6
+        with: { path: fix, ref: "${{ env.FIX }}", persist-credentials: false }
+      - uses: actions/checkout@v6
+        with: { path: base, ref: "${{ env.BASE }}", persist-credentials: false }
+      - uses: actions/checkout@v6
+        with: { path: bench, ref: "${{ env.BENCH }}", persist-credentials: false }
+
+      - name: Verify source revisions and trees
+        run: |
+          set -eux
+          uname -a; sw_vers; sysctl -n machdep.cpu.brand_string hw.ncpu
+          test "$(git -C fix rev-parse HEAD)" = "$FIX"
+          test "$(git -C base rev-parse HEAD)" = "$BASE"
+          test "$(git -C bench rev-parse HEAD)" = "$BENCH"
+          for d in fix base bench; do git -C $d status --porcelain | wc -l | grep -qx ' *0'; done
+          echo "fix nori-rs tree $(git -C fix rev-parse HEAD:nori-rs)"
+          echo "base nori-rs tree $(git -C base rev-parse HEAD:nori-rs)"
+          # the verify branch must carry the PR head's nori-rs tree unchanged
+          test "$(git -C verify rev-parse HEAD:nori-rs)" = "$(git -C fix rev-parse HEAD:nori-rs)"
+
+      - uses: dtolnay/rust-toolchain@1.90
+
+      - name: Install tmux
+        run: (command -v tmux || brew install tmux) && tmux -V && python3 --version
+
+      - name: Build optimized base and fix (separate target dirs)
+        run: |
+          set -eux
+          mkdir -p "$RUNNER_TEMP/bin"
+          for name in base fix; do
+            (cd $name/nori-rs && CARGO_TARGET_DIR="$RUNNER_TEMP/target-$name" cargo build --release --locked -p nori-cli -j 6)
+            cp "$RUNNER_TEMP/target-$name/release/nori" "$RUNNER_TEMP/bin/nori-$name"
+          done
+          shasum -a 256 "$RUNNER_TEMP"/bin/nori-* | tee "$RUNNER_TEMP/bin/SHA256SUMS"
+          test "$(shasum -a 256 < "$RUNNER_TEMP/bin/nori-base")" != "$(shasum -a 256 < "$RUNNER_TEMP/bin/nori-fix")"
+
+      - name: Independent replay harness (kiln)
+        continue-on-error: true
+        env: { TMPDIR: /tmp }
+        run: |
+          set -x
+          B="$RUNNER_TEMP/bin"; O="$GITHUB_WORKSPACE/out/kiln"; mkdir -p "$O"
+          cp "$B/SHA256SUMS" "$O/"
+          P="python3 -I verify/.verify769/replay769.py --build base $B/nori-base --build fix $B/nori-fix"
+          $P --sections 64 --samples 3 --out "$O/open-64.json" 2>&1 | tee "$O/open-64.log" | grep -v '^ '
+          $P --sections 4 --samples 2 --out "$O/open-4.json" 2>&1 | tee "$O/open-4.log" | grep -v '^ '
+          $P --mode recover --sections 64 --samples 2 --keep-scrollback --out "$O/recover-transcript-64.json" 2>&1 | tee "$O/recover-transcript-64.log" | grep -v '^ '
+          $P --mode recover --native --sections 64 --samples 2 --keep-scrollback --out "$O/recover-native-64.json" 2>&1 | tee "$O/recover-native-64.log" | grep -v '^ '
+
+      - name: '#770 benchmark scripts on the same binaries'
+        continue-on-error: true
+        env: { TMPDIR: /tmp }
+        working-directory: bench
+        run: |
+          set -x
+          B="$RUNNER_TEMP/bin"; O="$GITHUB_WORKSPACE/out/bench"; mkdir -p "$O"
+          python3 scripts/attach_perf/replay.py "$B/nori-base" --turns 64 --sessions 1 --samples 3 --live --stream --output "$O/replay-base-64-1.json"
+          python3 scripts/attach_perf/replay.py "$B/nori-fix" --turns 64 --sessions 1 --samples 3 --live --stream --check-batching --output "$O/replay-fix-64-1.json"
+          python3 scripts/attach_perf/transport.py --build base "$B/nori-base" --build fix "$B/nori-fix" --turns 32 --output "$O/transport-32.json"
+
+      - name: Attach unit tests at the fix head
+        continue-on-error: true
+        working-directory: fix/nori-rs
+        run: cargo test --locked -p nori-tui --lib attach:: 2>&1 | tee "$GITHUB_WORKSPACE/out/attach-unit.txt" | grep -E "^test result|FAILED|panicked"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-769-native-perf
+          path: out/
