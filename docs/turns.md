@@ -371,3 +371,24 @@ Rewind:
 - The `/fork` picker is titled "Fork conversation", its fork item reads
   "Branch from current point", and `/fork` is described as "rewind
   conversation to a previous message".
+
+### Context use on a host
+
+Each session on a host reports its own context use. Every terminal on the
+host shows the use of the session on screen.
+
+- Any client, watchers included, reads a session's report with
+  `_nori/session/context` {sessionId, skipInstructions?}. The reply is
+  `{timeline, instructions, usage}`:
+  - `timeline` holds the usage the agent reported at each prompt boundary.
+  - `instructions` lists the active instruction files in the session's
+    folder on the host, with token counts; `~` is the host's home.
+    `skipInstructions` leaves it empty.
+  - `usage` is the latest `{used, size}`, kept after its update has left
+    the replay window, as on the `_nori/session/list` row
+    (`context_used`, `context_size`).
+- An unknown session gets `-32002`. The host advertises the method as
+  `capabilities.nori_sessions.context`.
+- The plain TUI and `nori attach` use it for any session on a host. `/context`
+  prints the host's report. When a session comes on screen, the footer takes
+  its usage from the host unless the agent has already reported a newer one.

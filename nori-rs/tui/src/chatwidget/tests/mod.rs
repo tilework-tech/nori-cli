@@ -158,6 +158,7 @@ mod api_key;
 mod approvals;
 mod close_refusal;
 mod context;
+mod context_host;
 mod delegation;
 mod explore_details;
 mod goal_host;

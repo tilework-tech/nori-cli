@@ -496,6 +496,10 @@ impl ChatComposer {
         self.session_usage = usage;
     }
 
+    pub(crate) fn has_session_usage(&self) -> bool {
+        self.session_usage.is_some()
+    }
+
     pub(crate) fn set_system_info(&mut self, info: crate::system_info::SystemInfo) {
         self.system_info = Some(info);
     }

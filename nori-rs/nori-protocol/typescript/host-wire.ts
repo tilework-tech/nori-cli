@@ -64,7 +64,9 @@ export type NoriHostWire =
   | PromptRunResult
   | GoalGetParams
   | GoalSetParams
-  | GoalResult;
+  | GoalResult
+  | ContextParams
+  | ContextReport;
 /**
  * The encoding used for character offsets in positions.
  *
@@ -4423,4 +4425,135 @@ export interface GoalSetParams {
  */
 export interface GoalResult {
   goal?: ThreadGoal | null;
+}
+/**
+ * Params of `_nori/session/context`.
+ */
+export interface ContextParams {
+  sessionId: string;
+  /**
+   * Leave `instructions` empty, for a caller that wants only the usage.
+   */
+  skipInstructions?: boolean;
+}
+/**
+ * Result of `_nori/session/context`.
+ */
+export interface ContextReport {
+  /**
+   * The active instruction files in the session's folder on the host.
+   */
+  instructions: ContextInstruction[];
+  timeline: ContextTimeline;
+  /**
+   * The latest usage, kept after its update leaves the replay window.
+   */
+  usage?: ContextUsage | null;
+}
+/**
+ * An instruction file the session's agent loads, with its path as the host
+ * shows it (`~` is the host's home) and its token count when known.
+ */
+export interface ContextInstruction {
+  path: string;
+  tokens?: number | null;
+}
+/**
+ * Context history derived from raw ACP and Harness lifecycle events.
+ */
+export interface ContextTimeline {
+  current?: ContextObservation | null;
+  epoch: number;
+  incompleteHistory: boolean;
+  segments: ContextSegment[];
+  turns: ContextTurn[];
+}
+/**
+ * An original ACP usage payload with stable observation metadata.
+ */
+export interface ContextObservation {
+  id: string;
+  observedAt: string;
+  usage: UsageUpdate1;
+}
+/**
+ * Context window and cost update for a session.
+ */
+export interface UsageUpdate1 {
+  /**
+   * The _meta property is reserved by ACP to allow clients and agents to attach additional
+   * metadata to their interactions. Implementations MUST NOT make assumptions about values at
+   * these keys.
+   *
+   * See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+   */
+  _meta?: {
+    [k: string]: unknown;
+  } | null;
+  /**
+   * Cumulative session cost (optional).
+   */
+  cost?: Cost | null;
+  /**
+   * Total context window size in tokens.
+   */
+  size: number;
+  /**
+   * Tokens currently in context.
+   */
+  used: number;
+}
+/**
+ * Cost information for a session.
+ */
+export interface Cost {
+  /**
+   * The _meta property is reserved by ACP to allow clients and agents to attach additional
+   * metadata to their interactions. Implementations MUST NOT make assumptions about values at
+   * these keys.
+   *
+   * See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+   */
+  _meta?: {
+    [k: string]: unknown;
+  } | null;
+  /**
+   * Total cumulative cost for session.
+   */
+  amount: number;
+  /**
+   * ISO 4217 currency code (e.g., "USD", "EUR").
+   */
+  currency: string;
+}
+/**
+ * Observed growth attributed to a turn, or an unattributed baseline.
+ */
+export interface ContextSegment {
+  tokens: number;
+  turn?: number | null;
+}
+/**
+ * One admitted prompt, with immutable boundary observations.
+ */
+export interface ContextTurn {
+  end?: ContextCheckpoint | null;
+  number: number;
+  requestId: RequestId;
+  start: ContextCheckpoint;
+}
+/**
+ * The latest known usage when a prompt boundary was observed.
+ */
+export interface ContextCheckpoint {
+  epoch: number;
+  observation?: ContextObservation | null;
+  recordedAt: string;
+}
+/**
+ * The latest usage the agent reported for the session.
+ */
+export interface ContextUsage {
+  size: number;
+  used: number;
 }
