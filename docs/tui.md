@@ -349,7 +349,7 @@ Columns:
 | `/diff` | yes | local only | Show `git diff`, including untracked files. |
 | `/mention` | yes | all | Insert `@` to mention a file. |
 | `/status` | yes | all | Show the session configuration and context use. |
-| `/context` | yes | all | Show context use and the local instruction files. Does not prompt the agent. |
+| `/context` | yes | all | Show context use and the instruction files the agent loads. For a session on a host, both come from the host, so the files are the ones in the session's folder on that machine. Does not prompt the agent. |
 | `/memory` | yes | all | Show the contents of the active instruction files. |
 | `/first-prompt` | yes | all | Show the first prompt of the session. |
 | `/mcp` | no | all | Manage MCP servers. Changes apply to new sessions. See [mcp.md](mcp.md). |

@@ -421,6 +421,7 @@ impl ChatWidget {
         if !historical_child {
             self.submit_harness_action(crate::app_event::HarnessAction::LoadCustomPrompts);
             self.load_host_goal_quietly();
+            self.request_host_context(false);
         }
         self.bottom_pane.hide_status_indicator();
         self.update_approval_mode_label();

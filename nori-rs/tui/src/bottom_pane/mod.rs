@@ -794,6 +794,11 @@ impl BottomPane {
         self.composer.status_footer_values()
     }
 
+    /// Whether the agent has reported usage for the session shown.
+    pub(crate) fn has_session_usage(&self) -> bool {
+        self.composer.has_session_usage()
+    }
+
     pub(crate) fn context_usage_snapshot(
         &self,
     ) -> (crate::nori::session_header::ContextStatus, &'static str) {

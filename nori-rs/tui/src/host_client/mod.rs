@@ -165,6 +165,11 @@ pub(crate) enum HostCall {
         session_id: String,
         op: nori_protocol::GoalOp,
     },
+    /// The session's context report. Watchers may read it.
+    SessionContext {
+        session_id: String,
+        skip_instructions: bool,
+    },
 }
 
 impl HostCall {
@@ -331,6 +336,16 @@ impl HostCall {
             Self::SetGoal { session_id, op } => (
                 "_nori/session/goal/set",
                 json!(nori_protocol::GoalSetParams { session_id, op }),
+            ),
+            Self::SessionContext {
+                session_id,
+                skip_instructions,
+            } => (
+                "_nori/session/context",
+                json!(nori_protocol::ContextParams {
+                    session_id,
+                    skip_instructions,
+                }),
             ),
         }
     }

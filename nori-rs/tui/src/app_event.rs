@@ -186,6 +186,14 @@ pub(crate) enum AppEvent {
         goal: Option<nori_protocol::ThreadGoal>,
         asked: bool,
     },
+    /// A host session's context report, for whichever widget shows that
+    /// session. `asked` when the user ran `/context`, rather than the widget
+    /// learning its usage when the session came on screen.
+    HostContextLoaded {
+        session_id: String,
+        result: Result<nori_protocol::ContextReport, String>,
+        asked: bool,
+    },
     HarnessActionFailed(String),
 
     /// Kick off an asynchronous file search for the given query (text after
