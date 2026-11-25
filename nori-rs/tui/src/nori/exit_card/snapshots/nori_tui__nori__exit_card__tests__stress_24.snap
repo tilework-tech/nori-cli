@@ -1,5 +1,5 @@
 ---
-source: tui/src/storybook/exit_card/tests.rs
+source: tui/src/nori/exit_card/tests.rs
 expression: "framed.join(\"\\n\")"
 ---
   › Nori CLI            |
@@ -56,7 +56,3 @@ expression: "framed.join(\"\\n\")"
     $3.42               |
     reported by the     |
     agent               |
-                        |
-nori resume 019a7c3e-   |
-5b21-7f4d-9e08-         |
-6c2a1d4b8f37            |

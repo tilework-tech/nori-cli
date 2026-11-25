@@ -1,12 +1,16 @@
 //! Synthetic exit-card fixtures. Every value here is invented.
 
+use nori_harness::AgentKind;
+
+use super::ExitAgent;
 use super::ExitCardModel;
 use super::ExitContext;
-use super::ExitCost;
-use super::ExitTokens;
+use crate::presentation::session_runtime::SessionCost;
 use crate::session_stats::SessionStats;
+use crate::session_stats::TokenTotals;
 
-const SESSION_ID: &str = "019a7c3e-5b21-7f4d-9e08-6c2a1d4b8f37";
+/// The synthetic session ID every fixture uses.
+pub const FIXTURE_SESSION_ID: &str = "019a7c3e-5b21-7f4d-9e08-6c2a1d4b8f37";
 
 /// Which tool list the card shows.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -22,6 +26,7 @@ pub enum ExitToolsFixture {
     None,
 }
 
+#[cfg_attr(not(feature = "storybook"), allow(dead_code))]
 impl ExitToolsFixture {
     pub const ALL: [Self; 4] = [Self::Few, Self::Many, Self::LongNames, Self::None];
 
@@ -101,6 +106,7 @@ pub enum ExitFieldsFixture {
     NoSession,
 }
 
+#[cfg_attr(not(feature = "storybook"), allow(dead_code))]
 impl ExitFieldsFixture {
     pub const ALL: [Self; 4] = [
         Self::Full,
@@ -118,6 +124,12 @@ impl ExitFieldsFixture {
             Self::NotResumable => Self::NoSession,
             Self::NoSession => Self::Full,
         }
+    }
+
+    /// Whether the CLI prints a resume command after this session's card.
+    #[must_use]
+    pub fn resumable(self) -> bool {
+        matches!(self, Self::Full | Self::Codex | Self::Minimal)
     }
 
     #[must_use]
@@ -141,8 +153,7 @@ pub fn exit_card_fixture(tools: ExitToolsFixture, fields: ExitFieldsFixture) -> 
     for (name, count) in tools.tools() {
         stats.tool_calls.insert((*name).to_string(), *count);
     }
-    let active = matches!(fields, Full | Codex | Minimal);
-    if active {
+    if fields.resumable() {
         stats.user_messages = 14;
         stats.assistant_messages = 19;
     }
@@ -151,48 +162,49 @@ pub fn exit_card_fixture(tools: ExitToolsFixture, fields: ExitFieldsFixture) -> 
         stats.skills_used = vec!["test-driven-development".into(), "writing-plans".into()];
         stats.subagents_used = vec!["nori-code-researcher".into(), "nori-web-researcher".into()];
     }
-    let (agent, tokens, cost) = match fields {
-        Full => (
-            Some("Claude Code"),
-            Some(ExitTokens {
+    let claude = || ExitAgent {
+        name: "Claude Code".into(),
+        kind: Some(AgentKind::ClaudeCode),
+    };
+    let (agent, cost) = match fields {
+        Full => {
+            stats.tokens = Some(TokenTotals {
                 total: 2_204_330,
                 input: 18_420,
                 output: 41_960,
                 cached_read: Some(2_071_850),
                 cached_write: Some(72_100),
                 reasoning: None,
-            }),
-            Some(ExitCost {
-                amount: 3.42,
-                currency: "USD".into(),
-            }),
-        ),
-        Codex => (
-            Some("Codex"),
-            Some(ExitTokens {
+            });
+            (Some(claude()), Some(SessionCost::new(3.42, "USD")))
+        }
+        Codex => {
+            stats.tokens = Some(TokenTotals {
                 total: 1_386_204,
                 input: 1_302_118,
                 output: 37_516,
                 cached_read: Some(1_164_288),
                 cached_write: None,
                 reasoning: Some(46_570),
-            }),
-            None,
-        ),
-        Minimal => (Some("Claude Code"), None, None),
-        NotResumable | NoSession => (None, None, None),
+            });
+            let codex = ExitAgent {
+                name: "Codex".into(),
+                kind: Some(AgentKind::Codex),
+            };
+            (Some(codex), None)
+        }
+        Minimal => (Some(claude()), None),
+        NotResumable | NoSession => (None, None),
     };
     ExitCardModel {
-        session_id: (fields != NoSession).then(|| SESSION_ID.to_string()),
+        session_id: (fields != NoSession).then(|| FIXTURE_SESSION_ID.to_string()),
         title: rich.then(|| "Redesign the exit card".to_string()),
-        agent: agent.map(str::to_string),
-        resumable: active,
+        agent,
         stats,
         context: rich.then_some(ExitContext {
             used: 164_208,
             size: if fields == Codex { 272_000 } else { 1_000_000 },
         }),
-        tokens,
         cost,
     }
 }

@@ -1,8 +1,4 @@
-//! Design specimen for an unbordered exit card.
-//!
-//! Design-only: nothing in the session calls this view. It exists so the
-//! storybook can show the proposed layout against fixture data before the
-//! production exit card changes.
+//! The exit card printed into scrollback when a session ends.
 //!
 //! Layout rules, shared with the intro and `/status` cards:
 //! - no border and no block-drawing characters;
@@ -17,24 +13,34 @@
 //!   few on one line;
 //! - a name wider than its column breaks after `_`, `-`, `/`, `.` or `:`,
 //!   then at a space, and is cut at the column edge only when it has none;
-//! - below [`MIN_COLUMN_WIDTH`] cells each label sits on its own line with its
+//! - below `layout::MIN_COLUMN_WIDTH` cells each label sits on its own line with its
 //!   values indented beneath it;
 //! - rows with nothing to show are left out;
-//! - the last line is the bare resume command, unindented and unwrapped, so
-//!   a triple-click selects exactly the command. Every other line fits the
-//!   terminal width;
+//! - every line fits the terminal width, so the terminal never soft-wraps
+//!   the card;
+//! - green marks the title, the agent name takes its agent's color, and
+//!   `NO_COLOR` terminals keep only bold and dim;
 //! - shading is an optional band blended from the terminal background. A
-//!   terminal without a known background gets no band. The resume command
-//!   sits outside the band.
+//!   terminal without a known background gets no band.
+//!
+//! The resume command is not part of the card. The CLI prints it bare as the
+//! last line of output once the TUI has exited, so the terminal wraps it as
+//! one line and a triple-click selects exactly the command.
 
+use nori_harness::AgentKind;
+use ratatui::style::Color;
+use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use unicode_width::UnicodeWidthStr;
 
+use crate::history_cell::HistoryCell;
 use crate::nori::token_count::format_with_thousands_separator;
+use crate::presentation::session_runtime::SessionCost;
 use crate::session_stats::SessionStats;
 
+#[cfg(any(test, feature = "storybook"))]
 mod fixtures;
 mod layout;
 
@@ -42,10 +48,14 @@ use layout::Body;
 use layout::Row;
 use layout::Spans;
 
+#[cfg(any(test, feature = "storybook"))]
 pub use fixtures::ExitFieldsFixture;
+#[cfg(any(test, feature = "storybook"))]
 pub use fixtures::ExitToolsFixture;
+#[cfg(feature = "storybook")]
+pub use fixtures::FIXTURE_SESSION_ID;
+#[cfg(any(test, feature = "storybook"))]
 pub use fixtures::exit_card_fixture;
-pub use layout::MIN_COLUMN_WIDTH;
 
 /// Context window usage from the agent's last usage update.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,24 +64,12 @@ pub struct ExitContext {
     pub size: i64,
 }
 
-/// Session token totals summed from the agent's per-turn usage reports.
-/// Optional fields are the ones agents may leave out.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ExitTokens {
-    pub total: i64,
-    pub input: i64,
-    pub output: i64,
-    pub cached_read: Option<i64>,
-    pub cached_write: Option<i64>,
-    pub reasoning: Option<i64>,
-}
-
-/// Cumulative session cost, when the agent reports one.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ExitCost {
-    pub amount: f64,
-    /// ISO 4217 code, such as `USD`.
-    pub currency: String,
+/// The agent a session ran with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExitAgent {
+    pub name: String,
+    /// `None` for custom agents, which keep the terminal foreground.
+    pub kind: Option<AgentKind>,
 }
 
 /// Everything the exit card can show. Every field is optional in practice:
@@ -81,14 +79,11 @@ pub struct ExitCardModel {
     pub session_id: Option<String>,
     /// Session title from the agent's session info updates.
     pub title: Option<String>,
-    /// Display name of the agent the session ran with.
-    pub agent: Option<String>,
-    /// Whether `nori resume` can reopen this session.
-    pub resumable: bool,
+    pub agent: Option<ExitAgent>,
+    /// Messages, tools, skills, subagents, and summed token totals.
     pub stats: SessionStats,
     pub context: Option<ExitContext>,
-    pub tokens: Option<ExitTokens>,
-    pub cost: Option<ExitCost>,
+    pub cost: Option<SessionCost>,
 }
 
 /// How the card is painted.
@@ -100,6 +95,7 @@ pub struct ExitCardPaint {
     pub color: bool,
 }
 
+#[cfg(test)]
 impl ExitCardPaint {
     #[must_use]
     pub fn plain() -> Self {
@@ -110,13 +106,48 @@ impl ExitCardPaint {
     }
 }
 
-/// The shell command that reopens a session.
-#[must_use]
-pub fn resume_command(session_id: &str) -> String {
-    format!("nori resume {session_id}")
+/// The exit card as a history cell, painted for the current terminal.
+#[derive(Debug)]
+pub(crate) struct ExitCardCell {
+    model: ExitCardModel,
+    paint: ExitCardPaint,
 }
 
-/// Render the proposed exit card at `width` terminal cells.
+impl ExitCardCell {
+    pub(crate) fn new(model: ExitCardModel) -> Self {
+        let color = supports_color::on_cached(supports_color::Stream::Stdout).is_some();
+        Self {
+            model,
+            paint: ExitCardPaint {
+                shade_from: None,
+                color,
+            },
+        }
+    }
+}
+
+impl HistoryCell for ExitCardCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        exit_card_lines(&self.model, width, self.paint)
+    }
+}
+
+/// The identity color of a built-in agent's name. Agents without a brand
+/// color keep the terminal foreground.
+#[allow(clippy::disallowed_methods)]
+pub(crate) fn agent_style(kind: Option<AgentKind>) -> Style {
+    match kind {
+        Some(AgentKind::ClaudeCode) => Style::new().fg(Color::Rgb(255, 158, 100)),
+        Some(AgentKind::Codex) => Style::new().fg(Color::Gray),
+        Some(AgentKind::GrokBuild) => Style::new().fg(Color::Blue),
+        Some(AgentKind::Gemini) => Style::new().fg(Color::Yellow),
+        Some(AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Hermes | AgentKind::Pi)
+        | None => Style::new(),
+    }
+}
+
+/// Render the exit card at `width` terminal cells. No line is wider than
+/// `width`.
 #[must_use]
 pub fn exit_card_lines(
     model: &ExitCardModel,
@@ -137,23 +168,13 @@ pub fn exit_card_lines(
             card.extend(layout::row_lines(row, width));
         }
     }
-
-    let mut resume = match (&model.session_id, model.resumable) {
-        (Some(id), true) => vec![
-            Line::default(),
-            Line::from(Span::from(resume_command(id)).green()),
-        ],
-        (Some(_), false) | (None, _) => Vec::new(),
-    };
     if !paint.color {
         card = card.into_iter().map(layout::strip_color).collect();
-        resume = resume.into_iter().map(layout::strip_color).collect();
     }
-    if let Some(bg) = paint.shade_from {
-        card = layout::shade(card, width, crate::style::user_message_bg(bg));
+    match paint.shade_from {
+        Some(bg) => layout::shade(card, width, crate::style::user_message_bg(bg)),
+        None => card,
     }
-    card.extend(resume);
-    card
 }
 
 fn header_lines(width: usize) -> Vec<Line<'static>> {
@@ -186,14 +207,16 @@ fn activity_rows(model: &ExitCardModel, width: usize) -> Vec<Row> {
     let wide = width >= layout::WIDE_WIDTH;
 
     if let Some(id) = &model.session_id {
-        let fields = [("Title", &model.title), ("Agent", &model.agent)]
-            .into_iter()
-            .filter_map(|(label, value)| {
-                value
-                    .as_ref()
-                    .map(|value| (label, vec![Span::from(value.clone())]))
-            })
-            .collect();
+        let mut fields = Vec::new();
+        if let Some(title) = &model.title {
+            fields.push(("Title", vec![Span::from(title.clone()).green()]));
+        }
+        if let Some(agent) = &model.agent {
+            fields.push((
+                "Agent",
+                vec![Span::styled(agent.name.clone(), agent_style(agent.kind))],
+            ));
+        }
         rows.push(Row {
             label: "Session",
             body: Body::Detail {
@@ -271,7 +294,7 @@ fn usage_rows(model: &ExitCardModel) -> Vec<Row> {
         });
     }
 
-    if let Some(tokens) = model.tokens.filter(|tokens| tokens.total > 0) {
+    if let Some(tokens) = model.stats.tokens.filter(|tokens| tokens.total > 0) {
         let mut lines: Vec<(Spans, Spans)> = vec![(
             vec![Span::from(format_with_thousands_separator(tokens.total)).bold()],
             vec![Span::from("total").bold()],
@@ -302,8 +325,8 @@ fn usage_rows(model: &ExitCardModel) -> Vec<Row> {
 
     if let Some(cost) = &model.cost {
         let amount = match cost.currency.as_str() {
-            "USD" => format!("${:.2}", cost.amount),
-            currency => format!("{:.2} {currency}", cost.amount),
+            "USD" => format!("${}", cost.amount()),
+            currency => format!("{} {currency}", cost.amount()),
         };
         rows.push(Row {
             label: "Cost",

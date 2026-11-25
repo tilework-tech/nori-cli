@@ -794,6 +794,12 @@ impl BottomPane {
         self.composer.status_footer_values()
     }
 
+    pub(crate) fn session_cost(
+        &self,
+    ) -> Option<&crate::presentation::session_runtime::SessionCost> {
+        self.composer.session_cost()
+    }
+
     pub(crate) fn context_usage_snapshot(
         &self,
     ) -> (crate::nori::session_header::ContextStatus, &'static str) {

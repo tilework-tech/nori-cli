@@ -6,7 +6,7 @@
 pub(crate) mod agent_config_state;
 pub(crate) mod agent_mode_history;
 pub(crate) mod agent_picker;
-pub(crate) mod exit_message;
+pub(crate) mod exit_card;
 pub(crate) mod fork_picker;
 pub(crate) mod onboarding;
 pub(crate) mod resume_session_picker;

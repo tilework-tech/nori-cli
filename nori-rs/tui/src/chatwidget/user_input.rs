@@ -322,19 +322,33 @@ impl ChatWidget {
         ));
     }
 
-    /// Create an exit message cell with session statistics.
+    /// Create the exit card summarising the session.
     /// Called by app.rs before exiting to display final session summary.
     pub(crate) fn create_exit_message_cell(&self) -> Box<dyn HistoryCell> {
-        use crate::nori::exit_message::ExitMessageCell;
+        use crate::nori::exit_card::ExitAgent;
+        use crate::nori::exit_card::ExitCardCell;
+        use crate::nori::exit_card::ExitCardModel;
+        use crate::nori::exit_card::ExitContext;
 
-        let session_id = self
-            .conversation_id()
-            .map(|id| id.to_string())
-            .unwrap_or_else(|| "(no session)".to_string());
+        let agent_name = self.bottom_pane.agent_display_name();
+        let agent = (!agent_name.is_empty()).then(|| ExitAgent {
+            name: agent_name.to_string(),
+            kind: nori_harness::AgentKind::from_slug(&self.config.active_agent),
+        });
+        let (context, _) = self.bottom_pane.context_usage_snapshot();
+        let context = context
+            .tokens
+            .zip(context.window_tokens)
+            .map(|(used, size)| ExitContext { used, size });
 
-        let stats = self.session_stats().clone();
-
-        Box::new(ExitMessageCell::new(session_id, stats))
+        Box::new(ExitCardCell::new(ExitCardModel {
+            session_id: self.conversation_id().map(|id| id.to_string()),
+            title: self.bottom_pane.status_footer_values().session_title,
+            agent,
+            stats: self.session_stats().clone(),
+            context,
+            cost: self.bottom_pane.session_cost().cloned(),
+        }))
     }
 
     pub(super) fn request_redraw(&mut self) {

@@ -29,7 +29,7 @@ UI strings keep that word.
 | `host_client/` | Client of a `nori host`: connection, reconnect, reply matching; `drive` (WebSocket) and `drive_pipe` (owned host) |
 | `attach/` | `run_attach`, `AttachOptions`: the `nori attach` frontend |
 | `program_status/` | OSC 7501 terminal status: `ProgramStatusTracker` (fold over one session's events) and `ProgramStatusReporter` (encode and write) |
-| `nori/` | Nori pickers (agent, config, fork, resume, skillset, hotkey, MCP), onboarding, session header, update prompt |
+| `nori/` | Nori pickers (agent, config, fork, resume, skillset, hotkey, MCP), onboarding, session header, exit card, update prompt |
 | `resume_picker/`, `session_*.rs`, `viewonly_transcript.rs` | Resume picker, session preview and stats, view-only transcripts |
 | `tui.rs`, `custom_terminal.rs`, `insert_history.rs`, `render/` | Terminal setup, inline viewport, scrollback insertion |
 | `style.rs`, `color.rs`, `terminal_palette.rs`, `shimmer.rs` | Styles and terminal colors |
@@ -140,7 +140,7 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
 | Attach frontend | `src/attach/tests*.rs` | `cargo test -p nori-tui attach` |
 | vt100 emulator suite | `tests/all.rs`, `tests/suite/` | `cargo test -p nori-tui --features vt100-tests` |
 | Real binary in a PTY | `nori-rs/tui-pty-e2e` | `just test e2e` (repository root) |
-| Visual specimens | `examples/` | `cargo run -p nori-tui --features storybook --example context_storybook` |
+| Visual specimens | `examples/` | `cargo run -p nori-tui --features storybook --example <name>_storybook` (`context`, `status_card`, `exit_card`) |
 
 Run commands from `nori-rs/` unless noted. Review snapshot changes with
 `cargo insta pending-snapshots -p nori-tui`, then

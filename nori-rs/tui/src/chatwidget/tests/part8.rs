@@ -250,7 +250,7 @@ fn session_usage_updates_footer_and_disables_transcript_fallback() {
             usage: Some(crate::presentation::session_runtime::SessionUsageState {
                 used_tokens: 42_600,
                 total_tokens: 258_400,
-                cost_display: None,
+                cost: None,
             }),
             session_info_patch: None,
         },
@@ -329,7 +329,7 @@ textarea_top_right = [
             usage: Some(crate::presentation::session_runtime::SessionUsageState {
                 used_tokens: 42_600,
                 total_tokens: 258_400,
-                cost_display: None,
+                cost: None,
             }),
             session_info_patch: None,
         },
@@ -389,7 +389,7 @@ footer_left = [
             usage: Some(crate::presentation::session_runtime::SessionUsageState {
                 used_tokens: 42_600,
                 total_tokens: 258_400,
-                cost_display: None,
+                cost: None,
             }),
             session_info_patch: None,
         },

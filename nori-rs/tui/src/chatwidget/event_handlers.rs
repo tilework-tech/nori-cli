@@ -45,6 +45,17 @@ impl ChatWidget {
     }
 
     fn handle_acp_event(&mut self, event: nori_protocol::AcpEvent) {
+        // Every prompt's reported usage counts toward the session totals,
+        // including prompts this widget did not send (queued, goal, steering).
+        if let nori_protocol::AcpEvent::Response {
+            response: Ok(nori_protocol::acp::v1::AgentResponse::PromptResponse(response)),
+            ..
+        } = &event
+            && self.replay_source.is_none()
+            && let Some(usage) = &response.usage
+        {
+            self.session_stats.record_prompt_usage(usage);
+        }
         match event {
             nori_protocol::AcpEvent::Notification(
                 nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
