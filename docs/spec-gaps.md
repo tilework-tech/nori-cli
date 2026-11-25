@@ -25,10 +25,14 @@ question in the item.
   `_meta["nori/observe"]` on the request, `agentCapabilities._meta["nori/host"]`
   on the result. The host accepts and sends both forms for one minor version.
   (Host contract: `initialize`; Registry: `nori/observe`, `nori/host`.)
-- **Today:** request root `params.observe`
-  (`acp-host/src/remote/host_wire.rs::serve_frames`); result root fields
-  `capabilities.nori_sessions`, `control`, `server_info`
+- **Today:** request root `params.observe` and
+  `params.capabilities.nori_sessions.approval_modes`
+  (`acp-host/src/remote/host_wire.rs::serve_frames`; a lifecycle connection
+  always observes); result root fields `capabilities.nori_sessions`
+  (including `find_paths`), `control`, `server_info`
   (`harness/src/managed_remote.rs`, `host-runtime/src/host/service.rs`).
+  `agentCapabilities._meta["nori/preparedAgent"]` already uses `_meta`
+  (`host-runtime/src/host/acp/handshake.rs`).
   Readers: `tui/src/attach/runtime.rs`, `cli/src/host/mod.rs` (`session_cwd`
   check), and nori-sessions `native/src/main/host/probe.ts`.
 - **Done when:** the host sends both forms and reads both; every cli reader
@@ -69,6 +73,10 @@ question in the item.
   `_nori/session/{list,new,prompt,respond}`; `nori host ls` and `nori host new`
   (`cli/src/host/mod.rs`) use `_nori/session/{list,new}`. The host serves them
   in `harness/src/managed_remote.rs` and `host-runtime/src/host/service.rs`.
+  The TUI host client already uses ACP `session/new`, `session/list`,
+  `session/set_mode`, `session/close`, and `session/resume` (with a `cwd`).
+  It also calls `_nori/host/prepare_agent`, `_nori/host/discard_agent`, and
+  `_nori/session/find_paths`, which the rule's list does not name yet.
 - **Done when:** no cli client calls those four methods; the host still serves
   them, marked deprecated in the registry, until the next major.
 - **Depends on:** G03.
@@ -80,7 +88,8 @@ question in the item.
 - **Today:** each new session becomes the selected session, and `_nori/*`
   calls without `session_id` target it (`harness/src/managed_remote.rs`,
   `target`; `host-runtime/src/host/service.rs`;
-  `host-runtime/src/host/acp/session.rs::new_session`). `_nori/session/list`
+  `host-runtime/src/host/acp/session.rs::start_and_attach`, which picker
+  activations also use). `_nori/session/list`
   returns `selected_session_id`.
 - **Done when:** `session_id` is required on every session-scoped `_nori/*`
   call (`-32602` without it); `selected_session_id` is gone.
@@ -131,8 +140,9 @@ question in the item.
 - **Rule:** client-sent `mcpServers` merge over host config for that session;
   the client entry wins on a name clash; the host remembers them. (Host
   contract: The ACP face.)
-- **Today:** only `session/new` merges them
-  (`host-runtime/src/host/acp/session.rs::new_session`). Load and resume apply
+- **Today:** only `session/new` and picker activation merge them
+  (`host-runtime/src/host/acp/session.rs::start_and_attach`,
+  `host-runtime/src/host/acp/picker.rs::activate_selection`). Load and resume apply
   only the remembered set (`host-runtime/src/host/acp/attach.rs`,
   `host-runtime/src/host/acp/config.rs::restore_mcp_servers`).
 - **Done when:** load and resume merge the sent list over the remembered one
@@ -151,8 +161,8 @@ question in the item.
 
 - **Rule:** the `nori-client` server name is reserved for Nori. A client's own
   `Authorization` header is not overwritten. (`docs/mcp.md`.)
-- **Today:** a client can send a server named `nori-client`, so the agent gets
-  two; an HTTP server with its own `Authorization` header still gets a stored
+- **Today:** a client can send a server named `nori-client` on `session/new`
+  or picker activation, so the agent gets two; an HTTP server with its own `Authorization` header still gets a stored
   OAuth header added.
 - **Done when:** a client `nori-client` entry gets `-32602`; a client header
   wins over a stored token.
@@ -164,8 +174,8 @@ question in the item.
 - **Rule:** close stops the agent; the session stays listed and can be
   resumed. (Product spec: Next; Glossary: Close; `docs/tui.md`.)
 - **Today:** Ctrl+D removes a closed row, and Ctrl+R resumes only failed
-  sessions (`tui/src/bottom_pane/chat_composer/key_handling.rs`,
-  `tui/src/app_event.rs`).
+  sessions (`tui/src/bottom_pane/session_list_view.rs`,
+  `tui/src/attach/input.rs`).
 - **Done when:** closed rows stay until deleted; Ctrl+R resumes closed and
   failed sessions; PTY test covers it.
 
@@ -174,14 +184,24 @@ question in the item.
 - **Rule:** `/approvals` offers `ask`, `agent`, `approve-all`, and applies the
   choice the same way as `session/set_mode` (adapter mode and remembered host
   mode). (`docs/permissions.md`, `docs/tui.md`; decision c06.)
-- **Today:** it shows the Codex presets "Read Only", "Agent", "Agent (full
-  access)" (`common/src/approval_presets.rs`); "Read Only" maps to
-  `on-request`, so no choice gives `ask`; it changes only Nori's approval
-  policy. The footer shows the same presets. "Agent (full access)" opens a
-  confirmation hidden by `hide_full_access_warning`.
-- **Done when:** the picker and footer show the three modes; selection goes
-  through the host's mode path; the presets and their warning are gone;
-  snapshots updated.
+- **Today:** the picker and footer show the three modes, and a host session
+  changes through `session/set_mode` (`tui/src/chatwidget/approvals.rs`).
+  Approve all still opens the full-access confirmation hidden by
+  `hide_full_access_warning`, and `common/src/approval_presets.rs` remains for
+  the Windows sandbox prompt.
+- **Done when:** the full-access warning is gone and nothing in the TUI uses
+  `common/src/approval_presets.rs`; snapshots updated.
+
+### G30. Closing the last open session (S) — Decision needed
+
+- **Rule:** closing the only open session is refused. (`docs/tui.md`.)
+- **Today:** `/close` on the last open session closes it and opens the
+  saved-session picker (`tui/src/app/session_lifecycle.rs::on_session_closed`).
+  Only Ctrl+D in the session list refuses
+  (`tui/src/app/session_lifecycle.rs::close_session`).
+- **Decision needed:** keep the picker behaviour and change the spec, or
+  refuse `/close` too.
+- **Done when:** `/close` and Ctrl+D agree with the spec; PTY test covers it.
 
 ### G14. Separate fork from rewind (S)
 
