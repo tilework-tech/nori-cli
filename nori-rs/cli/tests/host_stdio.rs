@@ -322,8 +322,15 @@ impl Drop for BackgroundHost<'_> {
 }
 
 fn start_background_host(home: &Path) {
+    start_background_host_with(home, &[]);
+}
+
+/// Start the home's background host with `env` added to its environment,
+/// which its adapters inherit.
+fn start_background_host_with(home: &Path, env: &[(&str, &str)]) {
     let started = nori(home)
         .args(["host", "--port", "0"])
+        .envs(env.iter().copied())
         .stdin(Stdio::null())
         .output()
         .unwrap();
@@ -392,6 +399,67 @@ async fn a_stdio_client_joins_the_homes_running_host_and_its_sessions_outlive_it
     assert!(stopped.status.success(), "{stopped:?}");
 }
 
+/// Pipe `initialize`, `session/new` and `session/list` as ids 1, 2 and 3
+/// without waiting for any reply.
+async fn pipe_initialize_new_and_list(host: &mut StdioHost, folder: &Path) {
+    for (id, method, params) in [
+        (1, "initialize", json!({"protocolVersion": 1})),
+        (
+            2,
+            "session/new",
+            json!({"cwd": canonical(folder), "mcpServers": []}),
+        ),
+        (3, "session/list", json!({})),
+    ] {
+        host.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
+            .await;
+    }
+}
+
+/// The replies on `lines` answer the piped requests once each, `initialize`
+/// first, and name the new session. The host serves `session/new`
+/// concurrently, so the other two may be answered in either order.
+fn assert_each_piped_request_answered_once(lines: &[String]) -> String {
+    let replies: Vec<Value> = lines
+        .iter()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .filter(|frame| frame.get("method").is_none())
+        .collect();
+    let mut answered: Vec<i64> = replies
+        .iter()
+        .map(|reply| {
+            reply["id"]
+                .as_i64()
+                .unwrap_or_else(|| panic!("a reply to no piped request: {lines:#?}"))
+        })
+        .collect();
+    assert_eq!(answered.first(), Some(&1), "{lines:#?}");
+    answered.sort_unstable();
+    assert_eq!(answered, vec![1, 2, 3], "{lines:#?}");
+    let result = |id: i64| {
+        let reply = replies.iter().find(|reply| reply["id"] == id).unwrap();
+        assert!(reply.get("error").is_none(), "{reply}");
+        reply["result"].clone()
+    };
+    assert_eq!(result(1)["protocolVersion"], 1, "{lines:#?}");
+    assert!(result(3)["sessions"].is_array(), "{lines:#?}");
+    let session = result(2)["sessionId"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(!session.is_empty(), "{lines:#?}");
+    session
+}
+
+/// Whether the home's background host is running `session`.
+async fn background_host_runs(home: &Path, session: &str) -> bool {
+    let mut watcher = background_client(home, json!({"observe": true})).await;
+    live(
+        &watcher.request("session/list", json!({})).await.unwrap(),
+        session,
+    )
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn requests_piped_before_stdin_closes_are_all_answered_by_the_joined_host() {
     let home = home();
@@ -400,33 +468,54 @@ async fn requests_piped_before_stdin_closes_are_all_answered_by_the_joined_host(
     let folder = TempDir::new().unwrap();
     let mut host = StdioHost::host(home.path(), &[]);
 
-    for (id, method, params) in [
-        (1, "initialize", json!({"protocolVersion": 1})),
-        (
-            2,
-            "session/new",
-            json!({"cwd": canonical(folder.path()), "mcpServers": []}),
-        ),
-        (3, "session/list", json!({})),
-    ] {
-        host.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
-            .await;
-    }
+    pipe_initialize_new_and_list(&mut host, folder.path()).await;
     let (status, lines) = host.close().await;
-    let mut answered: Vec<i64> = lines
-        .iter()
-        .map(|line| serde_json::from_str::<Value>(line).unwrap())
-        .filter(|frame| frame.get("method").is_none())
-        .map(|frame| {
-            assert!(frame.get("result").is_some(), "request failed: {frame}");
-            frame["id"].as_i64().expect("numeric request ID")
-        })
-        .collect();
 
     assert!(status.success(), "{status}");
-    // Session creation may finish after the list request.
-    answered.sort_unstable();
-    assert_eq!(answered, vec![1, 2, 3], "{lines:#?}");
+    let session = assert_each_piped_request_answered_once(&lines);
+    assert!(
+        background_host_runs(home.path(), &session).await,
+        "{lines:#?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_still_starting_when_stdin_closes_is_answered_after_a_later_request() {
+    let home = home();
+    let release = home.path().join("release-session-new");
+    let _background = BackgroundHost(home.path());
+    start_background_host_with(
+        home.path(),
+        &[(
+            "MOCK_AGENT_NEW_SESSION_RELEASE_FILE",
+            release.to_str().unwrap(),
+        )],
+    );
+    let folder = TempDir::new().unwrap();
+    let mut host = StdioHost::host(home.path(), &[]);
+
+    pipe_initialize_new_and_list(&mut host, folder.path()).await;
+    // Close stdin while `session/new` is held, then let it finish.
+    drop(host.input.take());
+    host.until(|frame| frame.get("method").is_none() && frame["id"] == 3)
+        .await;
+    let held = !host
+        .inbox
+        .iter()
+        .any(|frame| frame.get("method").is_none() && frame["id"] == 2);
+    std::fs::write(&release, "").unwrap();
+    let (status, lines) = host.close().await;
+
+    assert!(
+        held,
+        "session/new was answered before its release: {lines:#?}"
+    );
+    assert!(status.success(), "{status}");
+    let session = assert_each_piped_request_answered_once(&lines);
+    assert!(
+        background_host_runs(home.path(), &session).await,
+        "{lines:#?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
