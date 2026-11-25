@@ -560,7 +560,11 @@ impl App {
                 request_id,
                 approved,
             } => {
-                let manager = self.session_manager.clone();
+                let Some(manager) = self.session_manager.clone() else {
+                    self.chat_widget
+                        .add_error_message(crate::chatwidget::NEEDS_OWN_HOST_MESSAGE.to_string());
+                    return Ok(true);
+                };
                 let tx = self.app_event_tx.clone();
                 let generation = self
                     .session_facts()
@@ -752,11 +756,8 @@ impl App {
                         self.chat_widget.add_error_message(message);
                     }
                 } else {
-                    let Some(event) = self.route_parked_session_event(generation, event) else {
-                        tui.frame_requester().schedule_frame();
-                        return Ok(true);
-                    };
-                    self.chat_widget.handle_session_event(generation, event);
+                    self.deliver_session_event(generation, event);
+                    tui.frame_requester().schedule_frame();
                 }
             }
             AppEvent::ConversationHistory(ev) => {

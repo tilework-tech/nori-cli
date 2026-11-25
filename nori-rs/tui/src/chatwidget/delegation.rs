@@ -21,7 +21,10 @@ impl ChatWidget {
             self.add_error_message("Start a session before delegating a task.".into());
             return true;
         };
-        let manager = self.session_manager.clone();
+        let Some(manager) = self.session_manager.clone() else {
+            self.add_error_message(NEEDS_OWN_HOST_MESSAGE.to_string());
+            return true;
+        };
         let tx = self.app_event_tx.clone();
         tokio::spawn(async move {
             if let Err(error) = manager.delegate(&parent, agent, task).await {

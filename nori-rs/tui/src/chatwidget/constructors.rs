@@ -16,7 +16,8 @@ impl ChatWidget {
         let analytics = common.analytics.clone();
         let delegated_child = common
             .session_manager
-            .get(&session.conversation_id)
+            .as_ref()
+            .and_then(|manager| manager.get(&session.conversation_id))
             .is_some_and(|record| {
                 record.source == nori_harness::session_manager::SessionSource::Session
             });
@@ -81,6 +82,24 @@ impl ChatWidget {
         widget
     }
 
+    /// Show conversation `id` of a joined host. Its history and live events
+    /// arrive from the host's feed and its prompts go to the host; no agent
+    /// runs in this process. `common.config` names the session's folder and
+    /// agent.
+    pub(crate) fn from_host_feed(
+        mut common: ChatWidgetInit,
+        id: ConversationId,
+        title: Option<String>,
+    ) -> Self {
+        common.deferred_spawn = true;
+        common.prepared_agent = None;
+        let mut widget = Self::new_inner(common);
+        widget.managed_conversation_id = Some(id);
+        widget.cloud_session_title = title;
+        widget.suppress_welcome_card();
+        widget
+    }
+
     fn new_inner(common: ChatWidgetInit) -> Self {
         let ChatWidgetInit {
             config,
@@ -110,7 +129,7 @@ impl ChatWidget {
         let app_event_tx = app_event_tx.for_session(session_generation);
         let spawn_result = if let Some(agent) = prepared_agent {
             super::agent::launch_prepared_agent(
-                &session_manager,
+                session_manager.as_ref(),
                 agent,
                 nori_harness::runtime::SessionStart::New,
                 app_event_tx.clone(),
@@ -124,7 +143,7 @@ impl ChatWidget {
             }
         } else {
             spawn_agent(
-                &session_manager,
+                session_manager.as_ref(),
                 config.clone(),
                 app_event_tx.clone(),
                 session_generation,
@@ -300,7 +319,7 @@ impl ChatWidget {
         let app_event_tx = app_event_tx.for_session(session_generation);
         let spawn_result = if let Some(agent) = prepared_agent {
             super::agent::launch_prepared_agent(
-                &session_manager,
+                session_manager.as_ref(),
                 agent,
                 nori_harness::runtime::SessionStart::Resume(nori_harness::runtime::SessionResume {
                     acp_session_id: acp_session_id.clone(),
@@ -312,7 +331,7 @@ impl ChatWidget {
             )
         } else {
             spawn_acp_agent_resume(
-                &session_manager,
+                session_manager.as_ref(),
                 config.clone(),
                 acp_session_id.clone(),
                 transcript,

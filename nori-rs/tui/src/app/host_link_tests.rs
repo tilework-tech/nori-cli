@@ -274,3 +274,22 @@ async fn a_host_that_stops_leaves_the_joined_terminal_running_with_the_reason() 
 
     replacement.shutdown().await;
 }
+
+#[tokio::test]
+async fn a_joined_link_reports_the_hosts_session_list() {
+    let server = host().await;
+    let mut link = join(endpoint_of(server.local_addr())).await;
+
+    let listed = tokio::time::timeout(WAIT, async {
+        loop {
+            if let HostUpdate::Sessions(list) = next_update(&mut link).await {
+                break list;
+            }
+        }
+    })
+    .await
+    .expect("the heartbeat must list the host's sessions");
+    assert_eq!(listed, json!({}));
+
+    server.shutdown().await;
+}

@@ -24,6 +24,9 @@ fn local_image_content(
     ))
 }
 
+/// A joined host with no session on screen has nothing to prompt.
+const NO_HOST_SESSION: &str = "No session is open on this host. Pick one with /sessions.";
+
 impl ChatWidget {
     pub(super) fn flush_active_cell(&mut self) {
         self.active_user_message_id = None;
@@ -143,7 +146,7 @@ impl ChatWidget {
         if self.delegated_child
             && self
                 .managed_conversation_id
-                .and_then(|id| self.session_manager.get(&id))
+                .and_then(|id| self.session_manager.as_ref()?.get(&id))
                 .is_some_and(|record| {
                     record.status.is_closed()
                         || record.status == nori_protocol::SessionStatus::Failed
@@ -159,7 +162,12 @@ impl ChatWidget {
             return;
         }
 
-        if self.harness_handle.is_none() {
+        if self.host_connection.is_some() && self.managed_conversation_id.is_none() {
+            self.add_error_message(NO_HOST_SESSION.to_string());
+            return;
+        }
+
+        if !self.has_harness_session() {
             if text.starts_with('/') {
                 self.add_error_message(
                     "No active session - pick one with /resume or start one with /new.".to_string(),
@@ -229,6 +237,13 @@ impl ChatWidget {
             }
         }
 
+        // A joined session has no harness to prompt; the host starts the turn.
+        let delivery = match delivery {
+            crate::follow_up::Delivery::Default if self.follows_host_session() => {
+                crate::follow_up::Delivery::IfIdle
+            }
+            delivery => delivery,
+        };
         match delivery {
             crate::follow_up::Delivery::FollowUp { turn, intent } => {
                 let Some(session) = self.managed_conversation_id else {
@@ -265,12 +280,11 @@ impl ChatWidget {
                 });
             }
             crate::follow_up::Delivery::IfIdle => {
-                let (Some(session), Some(handle)) =
-                    (self.managed_conversation_id, self.harness_handle.clone())
-                else {
+                let Some(session) = self.managed_conversation_id else {
                     self.add_error_message("No active host session".into());
                     return;
                 };
+                let handle = self.harness_handle.clone();
                 let interrupt = crate::host_client::PromptInterrupt::new(session.to_string());
                 crate::host_client::PromptInterrupt::track_first(
                     &mut self.submitted_prompt,
@@ -286,7 +300,9 @@ impl ChatWidget {
                 tokio::spawn(async move {
                     match admitted.await {
                         Ok(receipt) => {
-                            handle.record_host_prompt_started();
+                            if let Some(handle) = handle {
+                                handle.record_host_prompt_started();
+                            }
                             if let Some(call) = interrupt.admitted(&receipt) {
                                 tx.send(AppEvent::HostRequest {
                                     call,

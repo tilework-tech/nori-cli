@@ -10,6 +10,7 @@
 use std::time::Duration;
 
 use nori_harness::remote_agent::ManagedClient;
+use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
@@ -55,6 +56,10 @@ pub(crate) enum HostUpdate {
     Disconnected(String),
     /// The host can no longer serve this terminal.
     Stopped(String),
+    /// The host's `_nori/session/list` result.
+    Sessions(Value),
+    /// One `_nori/session/event` notification's parameters.
+    Session(Value),
 }
 
 enum Ownership {
@@ -108,10 +113,6 @@ impl HostLink {
 
     /// Joins the running host `initial` is connected to. The link initializes
     /// itself on every connection and reports [`HostUpdate::Ready`].
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the joined session view is the caller")
-    )]
     pub fn join(endpoint: HostEndpoint, initial: ManagedClient) -> Self {
         let (requests, request_rx) = mpsc::unbounded_channel();
         let (event_tx, events) = mpsc::unbounded_channel();
@@ -270,10 +271,11 @@ impl HostLink {
                 })
                 .and_then(|status| self.change_role(status.role))),
             HostEvent::Reply {
-                tag: HostTag::List, ..
-            }
-            | HostEvent::Session(_)
-            | HostEvent::Ignored => Ok(None),
+                tag: HostTag::List,
+                result,
+            } => Ok(result.ok().map(HostUpdate::Sessions)),
+            HostEvent::Session(params) if joined => Ok(Some(HostUpdate::Session(params))),
+            HostEvent::Session(_) | HostEvent::Ignored => Ok(None),
             HostEvent::RoleChanged(role) if joined => {
                 // The client names a role it cannot read a watcher.
                 let role = serde_json::from_value(serde_json::Value::String(role))

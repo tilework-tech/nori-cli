@@ -20,8 +20,8 @@ UI strings keep that word.
 
 | Module | Role |
 |---|---|
-| `lib.rs` | `run_main`: config, onboarding, automatic worktree, `nori_host_runtime::launch`, `App::run` |
-| `app/` | `App`: main `select!` loop, session deck, session lifecycle and resume, delegation, `host_link.rs` (owned or joined host link) |
+| `lib.rs` | `run_main`: config, onboarding, automatic worktree, `nori_host_runtime::launch`, `App::run`; `run_joined_app`: `App::run_joined` on a running host |
+| `app/` | `App`: main `select!` loop (`run_loop.rs`), session deck, session lifecycle and resume, delegation, `host_link.rs` (owned or joined host link), joined session view (`joined_sessions.rs`, `joined_feed.rs`) |
 | `chatwidget/` | `ChatWidget`: one session's view, composer submit, approvals, goals, pickers, queue list and recall |
 | `bottom_pane/` | Composer, footer, popups, approval overlay |
 | `presentation/` | Private projection of ACP updates into display items |
@@ -64,8 +64,13 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
 
 - Never construct a `SessionManager` here. Sessions belong to the owned host,
   so they end when it stops.
-- Only `run_main` holds an `OwnedHost`. The attach frontend never holds the
+- Only `run_main` builds an `OwnedHost`. The attach frontend never holds the
   in-process half and never ends a session when its terminal closes.
+- The App has two entries that share one loop: `App::run` on an owned host
+  (plain `nori`, `SessionManager` in-process) and `App::run_joined`
+  (`run_joined_app` in `lib.rs`) on a host it joined, with no
+  `SessionManager`, `HarnessHandle`, or `ForegroundConfig`
+  (`session_manager` and `foreground_config` are `Option`).
 - `HostLink` either owns its host (`start`, over the in-process pipe) or
   joins a running one (`join`, over `host_client::drive`). For an owned host,
   the App sends `initialize` before it reads UI events; a refused initialize
@@ -78,8 +83,19 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   initialize ends the connection for good. Calls made while
   disconnected or after a stop are refused at once; calls unanswered when
   the connection drops fail as possibly applied. Leaving a joined host only
-  closes the connection; its sessions keep running. `join` has no
-  production caller yet.
+  closes the connection; its sessions keep running.
+- Joined session view: every listed session gets a parked widget
+  (`ChatWidget::from_host_feed`). `JoinedFeed` applies `_nori/session/event`
+  envelopes once each, in seq order per conversation, and follows forks. A
+  gap is reported once; that conversation then applies nothing more until it
+  is resubscribed from its cursor. The connection's single subscription
+  follows the session on screen and is re-sent after every reconnect and
+  every switch, so it replays exactly what this terminal has not applied.
+  Parked sessions take status, title, and preview from the 1 s list. Feed
+  events take the same delivery path as `AppEvent::SessionEvent`.
+- In joined mode, leaving sends no `Shutdown` and closes no session; prompts
+  go through host calls. Actions that need an in-process session show "This
+  needs a session running in this terminal's own host."
 - `ChatWidget` holds the joined link's `HostConnection` (none for an owned
   host) and picks its command `Surface` from it: `Owned` without one,
   `Joined` with one. The `attach/` frontend uses `Attached`. A joined

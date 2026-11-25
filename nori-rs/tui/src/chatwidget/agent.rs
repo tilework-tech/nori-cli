@@ -51,7 +51,7 @@ pub(crate) struct SpawnAgentResult {
 /// Looks up the agent in the ACP registry. If found, spawns an ACP agent.
 /// Otherwise, emits an error and opens the agent picker.
 pub(crate) fn spawn_agent(
-    manager: &SessionManager,
+    manager: Option<&SessionManager>,
     config: Config,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
@@ -101,7 +101,7 @@ pub(crate) fn spawn_agent(
 /// If the agent supports `session/load`, server-side resume is used.
 /// Otherwise, falls back to client-side replay using the provided transcript.
 pub(crate) fn spawn_acp_agent_resume(
-    manager: &SessionManager,
+    manager: Option<&SessionManager>,
     config: Config,
     acp_session_id: Option<String>,
     transcript: Option<nori_harness::transcript::Transcript>,
@@ -140,7 +140,7 @@ fn spawn_error_agent(agent_name: String, error_msg: String, app_event_tx: AppEve
 /// Launch a session via the harness runtime and forward its events into the
 /// TUI event loop.
 fn prepare_and_launch_acp_agent(
-    manager: &SessionManager,
+    manager: Option<&SessionManager>,
     config: Config,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
@@ -183,7 +183,7 @@ pub(crate) fn terminal_session_context() -> SessionContext {
 
 /// Activate an already prepared connection and forward its session events.
 pub(crate) fn launch_prepared_agent(
-    manager: &SessionManager,
+    manager: Option<&SessionManager>,
     agent: PreparedAgent,
     start: SessionStart,
     app_event_tx: AppEventSender,
@@ -204,7 +204,7 @@ pub(crate) fn launch_prepared_agent(
 /// with `generation`, into the TUI event loop. An agent prepared for a fork
 /// starts a fork of that parent; any other agent starts a user session.
 fn start_managed_session(
-    manager: &SessionManager,
+    manager: Option<&SessionManager>,
     agent: SessionAgent,
     start: SessionStart,
     app_event_tx: AppEventSender,
@@ -215,21 +215,26 @@ fn start_managed_session(
         SessionAgent::Prepared(agent) => agent.fork_parent(),
         SessionAgent::Prepare(_) => None,
     }
-    .filter(|parent| manager.get(parent).is_some());
+    .filter(|parent| manager.is_some_and(|manager| manager.get(parent).is_some()));
     let source = if parent.is_some() {
         SessionSource::Fork
     } else {
         SessionSource::User
     };
-    let session = match manager.start(StartSession {
-        agent,
-        start,
-        parent,
-        source,
-    }) {
+    let started = match manager {
+        Some(manager) => manager
+            .start(StartSession {
+                agent,
+                start,
+                parent,
+                source,
+            })
+            .map_err(|error| format!("Failed to start ACP session: {error}")),
+        None => Err(super::NEEDS_OWN_HOST_MESSAGE.to_string()),
+    };
+    let session = match started {
         Ok(session) => session,
-        Err(error) => {
-            let message = format!("Failed to start ACP session: {error}");
+        Err(message) => {
             for event in [
                 NoriEvent::RequestFailed(RequestFailure {
                     request_id: None,
