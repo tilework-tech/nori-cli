@@ -1,0 +1,40 @@
+  answerStreaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+  aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+  reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+  Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+  ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+  g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+  ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+  aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+  reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+  Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+  ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+  g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+  ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+  aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+  reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+  Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+  ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+  g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+  ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stre
+  aming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...St
+  reaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+  Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming.
+  ..Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streamin
+  g...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...Stream
+  ing...Streaming...Streaming...Streaming...Streaming...Streaming...Streaming...
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+
+• This terminal now controls the host.
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+  1 queued · paused (interrupted) · enter resumes
+  ↳ water the orchard
+
+
+› water the orchard
+
+  watching · read-only · project · mock-model · ready · Approvals: Agent · alt+t take control · ctrl+d detach
