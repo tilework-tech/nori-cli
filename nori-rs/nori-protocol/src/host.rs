@@ -17,6 +17,7 @@ use serde_json::json;
 use crate::Delegation;
 use crate::QueueSnapshot;
 use crate::SessionEnvelope;
+use crate::ThreadGoal;
 use crate::acp::v1 as acp;
 
 /// `_meta` on a `session/list` row.
@@ -122,7 +123,7 @@ pub struct HostDiscovery {
 /// methods, and `host.json`. A change that a client of the previous contract
 /// could not use bumps the major; an addition such clients can ignore bumps
 /// the minor; a fix that changes no message bumps the patch.
-pub const HOST_CONTRACT: &str = "1.5.0";
+pub const HOST_CONTRACT: &str = "1.6.0";
 
 /// Whether a host advertising contract `host` serves a client built for
 /// contract `client`: `host` must satisfy the caret requirement `^client`.
@@ -416,6 +417,41 @@ pub struct PromptRunResult {
     pub stdout: String,
 }
 
+/// Params of `_nori/session/goal/get`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GoalGetParams {
+    pub session_id: String,
+}
+
+/// One change to a session's goal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GoalOp {
+    /// Replace the goal with an active one.
+    Set {
+        objective: String,
+    },
+    Pause,
+    Resume,
+    Clear,
+}
+
+/// Params of `_nori/session/goal/set`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GoalSetParams {
+    pub session_id: String,
+    pub op: GoalOp,
+}
+
+/// Result of `_nori/session/goal/get` and `_nori/session/goal/set`: the
+/// session's goal afterwards, null when it has none.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct GoalResult {
+    pub goal: Option<ThreadGoal>,
+}
+
 /// JSON Schema (draft 2020-12) of the types exchanged with `nori host`: the
 /// ACP v1 messages it serves and Nori's additions, with every type under
 /// `$defs` and keys sorted so the output is stable.
@@ -483,6 +519,9 @@ pub fn host_wire_schema() -> Value {
         generator.subschema_for::<PromptsListResult>(),
         generator.subschema_for::<PromptRunParams>(),
         generator.subschema_for::<PromptRunResult>(),
+        generator.subschema_for::<GoalGetParams>(),
+        generator.subschema_for::<GoalSetParams>(),
+        generator.subschema_for::<GoalResult>(),
     ];
     let definitions = generator.take_definitions(true);
     sorted(json!({
@@ -525,6 +564,8 @@ mod contract_tests {
             ("1.2.0", "1.4.0", false),
             ("1.5.0", "1.4.0", true),
             ("1.4.0", "1.5.0", false),
+            ("1.6.0", "1.5.0", true),
+            ("1.5.0", "1.6.0", false),
             ("2.0.0", "1.9.0", false),
             ("1.9.0", "2.0.0", false),
             ("0.3.1", "0.3.0", true),

@@ -66,6 +66,7 @@ pub(crate) use context::ContextSnapshot;
 mod event_handlers;
 mod external_cancel;
 mod goal;
+mod goal_host;
 mod helpers;
 mod host_role;
 pub(crate) use host_role::JOINED_COMMANDS;
@@ -254,6 +255,9 @@ pub(crate) struct ChatWidget {
     first_prompt_text: Option<String>,
     // Latest ACP-owned goal snapshot for this session.
     current_goal: Option<nori_protocol::ThreadGoal>,
+    /// A live goal change reached this widget, so a quiet goal read that
+    /// lands afterwards is older and must not replace it.
+    live_goal_seen: bool,
     // Latest ACP capability snapshot projected into Nori client concepts.
     session_agent_capabilities: crate::presentation::AgentCapabilitiesView,
     /// Whether the top-level CLI launched the handroll-backed cloud mode.

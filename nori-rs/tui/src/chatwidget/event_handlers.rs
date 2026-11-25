@@ -309,9 +309,13 @@ impl ChatWidget {
                 self.on_context_compacted(compacted.summary);
             }
             nori_protocol::NoriEvent::GoalChanged(Some(goal)) => {
+                self.live_goal_seen = true;
                 self.handle_thread_goal_updated(goal);
             }
-            nori_protocol::NoriEvent::GoalChanged(None) => self.handle_thread_goal_cleared(),
+            nori_protocol::NoriEvent::GoalChanged(None) => {
+                self.live_goal_seen = true;
+                self.handle_thread_goal_cleared();
+            }
             nori_protocol::NoriEvent::CapabilitiesChanged(capabilities) => {
                 self.handle_session_capabilities_changed(
                     crate::presentation::SessionCapabilitiesView {
@@ -427,6 +431,7 @@ impl ChatWidget {
                 .is_some_and(|record| record.status.is_closed());
         if !historical_child {
             self.submit_harness_action(crate::app_event::HarnessAction::LoadCustomPrompts);
+            self.load_host_goal_quietly();
         }
         self.bottom_pane.hide_status_indicator();
         self.update_approval_mode_label();

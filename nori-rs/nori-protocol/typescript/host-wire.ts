@@ -61,7 +61,10 @@ export type NoriHostWire =
   | PromptsListParams
   | PromptsListResult
   | PromptRunParams
-  | PromptRunResult;
+  | PromptRunResult
+  | GoalGetParams
+  | GoalSetParams
+  | GoalResult;
 /**
  * The encoding used for character offsets in positions.
  *
@@ -616,6 +619,16 @@ export type HostPromptKind =
   | {
       interpreter: string;
       type: "script";
+    };
+/**
+ * One change to a session's goal.
+ */
+export type GoalOp =
+  | ("pause" | "resume" | "clear")
+  | {
+      set: {
+        objective: string;
+      };
     };
 
 /**
@@ -4396,4 +4409,24 @@ export interface PromptRunParams {
  */
 export interface PromptRunResult {
   stdout: string;
+}
+/**
+ * Params of `_nori/session/goal/get`.
+ */
+export interface GoalGetParams {
+  sessionId: string;
+}
+/**
+ * Params of `_nori/session/goal/set`.
+ */
+export interface GoalSetParams {
+  op: GoalOp;
+  sessionId: string;
+}
+/**
+ * Result of `_nori/session/goal/get` and `_nori/session/goal/set`: the
+ * session's goal afterwards, null when it has none.
+ */
+export interface GoalResult {
+  goal?: ThreadGoal | null;
 }

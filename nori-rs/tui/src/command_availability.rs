@@ -5,6 +5,7 @@
 //! run is greyed with the reason this module returns, and running it anyway
 //! is refused with the same reason, so the menu and execution never disagree.
 
+use crate::host_client::HostFeatures;
 use crate::slash_command::CommandScope;
 use crate::slash_command::SlashCommand;
 
@@ -86,7 +87,51 @@ pub(crate) enum Surface {
     },
     /// The shared terminal joined to a host it does not own. It has no
     /// in-process session, so only terminal commands and host methods run.
-    Joined { watching: bool, connected: bool },
+    Joined {
+        watching: bool,
+        connected: bool,
+        features: HostFeatures,
+    },
+}
+
+/// Commands plain `nori` runs in process that a joined host also runs once
+/// it advertises their method; `Some(needs_control)` when it does.
+fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<bool> {
+    match command {
+        SlashCommand::Goal => features.goal.then_some(false),
+        SlashCommand::Quit
+        | SlashCommand::Exit
+        | SlashCommand::Settings
+        | SlashCommand::Vim
+        | SlashCommand::Logout
+        | SlashCommand::Screen
+        | SlashCommand::Sessions
+        | SlashCommand::Agent
+        | SlashCommand::Model
+        | SlashCommand::Config
+        | SlashCommand::Approvals
+        | SlashCommand::New
+        | SlashCommand::Delegate
+        | SlashCommand::Resume
+        | SlashCommand::Close
+        | SlashCommand::ResumeViewonly
+        | SlashCommand::Init
+        | SlashCommand::Compact
+        | SlashCommand::Undo
+        | SlashCommand::Browse
+        | SlashCommand::Diff
+        | SlashCommand::Mention
+        | SlashCommand::Status
+        | SlashCommand::Context
+        | SlashCommand::Memory
+        | SlashCommand::FirstPrompt
+        | SlashCommand::Mcp
+        | SlashCommand::Login
+        | SlashCommand::ApiKey
+        | SlashCommand::SwitchSkillset
+        | SlashCommand::Fork
+        | SlashCommand::Browser => None,
+    }
 }
 
 /// Host commands the shared terminal runs on a host it joined.
@@ -139,18 +184,29 @@ pub(crate) fn unavailable_reason(command: SlashCommand, surface: Surface) -> Opt
         Surface::Joined {
             watching,
             connected,
-        } => match route(command) {
-            Route::Terminal => None,
-            Route::InProcess => Some(NOT_ON_THIS_HOST.to_string()),
-            Route::Host { .. } if !runs_when_joined(command) => Some(NOT_IN_ATTACH.to_string()),
-            Route::Host {
-                needs_control: true,
-            } if !connected => Some(RECONNECTING.to_string()),
-            Route::Host {
-                needs_control: true,
-            } if watching => Some(WATCHING.to_string()),
-            Route::Host { .. } => None,
+            features,
+        } => match served_by_host(command, features) {
+            Some(needs_control) => joined_host_reason(needs_control, watching, connected),
+            None => match route(command) {
+                Route::Terminal => None,
+                Route::InProcess => Some(NOT_ON_THIS_HOST.to_string()),
+                Route::Host { .. } if !runs_when_joined(command) => Some(NOT_IN_ATTACH.to_string()),
+                Route::Host { needs_control } => {
+                    joined_host_reason(needs_control, watching, connected)
+                }
+            },
         },
+    }
+}
+
+/// Why a host command cannot run on a joined host now, if it cannot.
+fn joined_host_reason(needs_control: bool, watching: bool, connected: bool) -> Option<String> {
+    if needs_control && !connected {
+        Some(RECONNECTING.to_string())
+    } else if needs_control && watching {
+        Some(WATCHING.to_string())
+    } else {
+        None
     }
 }
 
@@ -211,7 +267,8 @@ mod tests {
                     command,
                     Surface::Joined {
                         watching,
-                        connected
+                        connected,
+                        features: HostFeatures::default(),
                     }
                 ),
                 None
@@ -224,6 +281,7 @@ mod tests {
         let joined = |watching, connected| Surface::Joined {
             watching,
             connected,
+            features: HostFeatures::default(),
         };
         let cases = [
             (SlashCommand::Screen, joined(false, true), None),
@@ -260,6 +318,36 @@ mod tests {
                 expected.map(str::to_string),
                 "/{} in {surface:?}",
                 command.command()
+            );
+        }
+    }
+
+    #[test]
+    fn a_joined_terminal_runs_goal_only_on_a_host_that_serves_it() {
+        let older = Surface::Joined {
+            watching: false,
+            connected: true,
+            features: HostFeatures::default(),
+        };
+        let serving = |watching, connected| Surface::Joined {
+            watching,
+            connected,
+            features: HostFeatures {
+                goal: true,
+                ..HostFeatures::default()
+            },
+        };
+        let cases = [
+            (older, Some(NOT_ON_THIS_HOST)),
+            (serving(false, true), None),
+            (serving(true, true), None),
+            (serving(false, false), None),
+        ];
+        for (surface, expected) in cases {
+            assert_eq!(
+                unavailable_reason(SlashCommand::Goal, surface),
+                expected.map(str::to_string),
+                "/goal in {surface:?}"
             );
         }
     }
