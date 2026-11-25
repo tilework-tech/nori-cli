@@ -444,6 +444,7 @@ impl ManagedAgent for HostService {
                 sessions["session_cwd"] = json!(true);
                 sessions["find_paths"] = json!(true);
                 sessions["queue"] = json!(true);
+                sessions["history"] = json!(true);
                 sessions["follow_up"] = json!(1);
             }
             if initialize && let Some(result) = reply.response.get_mut("result") {

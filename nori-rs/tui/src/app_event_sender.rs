@@ -4,10 +4,25 @@ use crate::app_event::AppEvent;
 use crate::app_event::SessionGeneration;
 use crate::session_log;
 
-#[derive(Debug)]
 pub(crate) enum HostReply {
     ReportError(AppEventSender),
     Receipt(tokio::sync::oneshot::Sender<anyhow::Result<serde_json::Value>>),
+    /// Turns the reply into the event it answers, sent where it lands, so
+    /// the caller needs no task of its own to wait for it.
+    Then(AppEventSender, HostReplyLanded),
+}
+
+pub(crate) type HostReplyLanded =
+    Box<dyn FnOnce(anyhow::Result<serde_json::Value>) -> Option<AppEvent> + Send>;
+
+impl std::fmt::Debug for HostReply {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ReportError(_) => f.write_str("HostReply::ReportError"),
+            Self::Receipt(_) => f.write_str("HostReply::Receipt"),
+            Self::Then(..) => f.write_str("HostReply::Then"),
+        }
+    }
 }
 
 impl HostReply {
@@ -20,6 +35,11 @@ impl HostReply {
             }
             Self::Receipt(sender) => {
                 let _ = sender.send(result);
+            }
+            Self::Then(tx, landed) => {
+                if let Some(event) = landed(result) {
+                    tx.send(event);
+                }
             }
         }
     }

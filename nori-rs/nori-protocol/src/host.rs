@@ -122,7 +122,7 @@ pub struct HostDiscovery {
 /// methods, and `host.json`. A change that a client of the previous contract
 /// could not use bumps the major; an addition such clients can ignore bumps
 /// the minor; a fix that changes no message bumps the patch.
-pub const HOST_CONTRACT: &str = "1.3.0";
+pub const HOST_CONTRACT: &str = "1.4.0";
 
 /// Whether a host advertising contract `host` serves a client built for
 /// contract `client`: `host` must satisfy the caret requirement `^client`.
@@ -290,6 +290,69 @@ pub struct QueueDiscardResult {
     pub discarded: i32,
 }
 
+/// Params of `_nori/host/history/add`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct HistoryAddParams {
+    /// The session the prompt was sent to.
+    pub session_id: String,
+    pub text: String,
+}
+
+/// Params of `_nori/host/history/entry`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct HistoryEntryParams {
+    /// [`HistoryMetadata::log_id`] of the history the client counted in.
+    pub log_id: i64,
+    /// Zero-based, oldest first.
+    pub offset: i64,
+}
+
+/// One prompt in the host's history.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryRecord {
+    pub session_id: String,
+    /// Seconds since the Unix epoch.
+    pub ts: i64,
+    pub text: String,
+}
+
+/// Result of `_nori/host/history/entry`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct HistoryEntryResult {
+    /// Null when `offset` is past the end, or `logId` names a history the
+    /// host no longer keeps.
+    pub entry: Option<HistoryRecord>,
+}
+
+/// Params of `_nori/host/history/search`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct HistorySearchParams {
+    /// At most this many distinct prompts, newest first.
+    pub max_results: i32,
+}
+
+/// Result of `_nori/host/history/search`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct HistorySearchResult {
+    /// Distinct prompts, newest first; the client filters them as the user
+    /// types.
+    pub entries: Vec<HistoryRecord>,
+}
+
+/// Result of `_nori/host/history/metadata`: what a client counts in when it
+/// recalls prompts with `_nori/host/history/entry`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryMetadata {
+    /// Identifies the history file; it changes when the file is replaced.
+    pub log_id: i64,
+    pub entry_count: i64,
+}
+
 /// JSON Schema (draft 2020-12) of the types exchanged with `nori host`: the
 /// ACP v1 messages it serves and Nori's additions, with every type under
 /// `$defs` and keys sorted so the output is stable.
@@ -347,6 +410,12 @@ pub fn host_wire_schema() -> Value {
         generator.subschema_for::<QueueTakeResult>(),
         generator.subschema_for::<QueueDiscardResult>(),
         generator.subschema_for::<QueueSnapshot>(),
+        generator.subschema_for::<HistoryAddParams>(),
+        generator.subschema_for::<HistoryEntryParams>(),
+        generator.subschema_for::<HistoryEntryResult>(),
+        generator.subschema_for::<HistorySearchParams>(),
+        generator.subschema_for::<HistorySearchResult>(),
+        generator.subschema_for::<HistoryMetadata>(),
     ];
     let definitions = generator.take_definitions(true);
     sorted(json!({
