@@ -1,0 +1,36 @@
+
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /private/tmp/nori-host-tui-acceptance/R13/roots/beta/app
+  Agent        Claude
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+• Ran echo plain-in-$(basename $(dirname $PWD)) && touch shell-canary-plain
+  └ plain-in-beta
+
+                                                                                                         [ acceptEdits ]
+› ? for shortcuts
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,134 @@
+== R01 restack: no-newline replies restored and live, once and in order, late joiner too
+PASS R01/restored.unterminated_reply_shown )
+
+
+› relay 2 dawn
+
+
+• - dawn row 01
+  - dawn row 02
+
+  dawn relay finished.
+
+                                                                                  
+PASS R01/controller.each_once_in_order ordered
+PASS R01/controller.no_tail_glued_to_next_row []
+PASS R01/late_joiner.each_once_in_order ordered
+PASS R01/late_joiner.no_tail_glued_to_next_row []
+PASS R01/live.noon_delivered_once 1
+PASS R01/live.dusk_delivered_once 1
+== R02 restack: empty-host picker, /new on the host, picker lists and opens
+PASS R02/start.alternate_screen True
+PASS R02/start.picker_shown 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 0  tab: waiting only · / search
+
+All  waiting on you
+
+◇ No options available
+  The caller has not supplied any rows.
+
+
+↑↓/j/k
+PASS R02/new.session_on_host ID                                    AGENT             STATUS               AGE  CWD                                                        TITLE
+83ea8523-8bbc
+PASS R02/new.first_prompt_once 1
+PASS R02/detach.back_at_shell shell$
+PASS R02/picker.lists_two 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 2 · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+  Session                                                      
+PASS R02/picker.enter_opens_a_session nge)
+
+
+› relay 1 first
+
+
+• - first row 01
+
+  first relay finished.
+
+  2 ready
+
+                                                                                 
+== R11 restack #785: local ! in session folder, remote hint and nothing runs, watcher read-only
+PASS R11/local.output_from_session_folder in-$(basename $(dirname $PWD)) && touch shell-canary-local
+  └ shell-in-beta
+
+                                                                                  
+PASS R11/local.ran_in_session_folder ['roots/beta/app/shell-canary-local']
+PASS R11/watcher.sees_local_command_cell PWD)) && touch shell-canary-local
+  └ shell-in-beta
+
+                                                                                                           
+PASS R11/watcher.nothing_ran ['roots/beta/app/shell-canary-local']
+PASS R11/remote.hint_shown  shell-in-$(basename $(dirname $PWD)) && touch shell-canary-local
+  └ shell-in-beta
+
+• This terminal now controls the host.
+
+• Remote shell commands are not yet
+PASS R11/remote.hint_is_gray_not_red '\x1b[38;5;8m• Remote shell commands are not yet supported.\x1b[39m'
+PASS R11/remote.command_back_in_prompt ['! touch shell-canary-remote']
+PASS R11/remote.nothing_ran_anywhere ['roots/beta/app/shell-canary-local']
+PASS R11/remote.not_sent_as_prompt 0
+PASS R11/remote.local_terminal_no_new_ran_cell (1, 1)
+== R13 #789: plain nori ! runs in the session folder
+PASS R13/plain.output_from_session_folder rn Claude options: Mode=auto (/config to change)
+
+• Ran echo plain-in-$(basename $(dirname $PWD)) && touch shell-canary-plain
+  └ plain-in-beta
+
+               
+PASS R13/plain.ran_once_in_session_folder ['roots/beta/app/shell-canary-plain']
+PASS R13/plain.not_sent_to_agent 0
+{"nori": "nori", "passed": 27, "failed": 0, "checks": 27}

@@ -1,0 +1,86 @@
+[
+  {
+    "probe": "shell",
+    "check": "local_token_exists_0600",
+    "passed": true,
+    "detail": "0o600"
+  },
+  {
+    "probe": "shell",
+    "check": "local_token_in_no_other_host_file",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "probe": "shell",
+    "check": "local_initialize_shell_true",
+    "passed": true,
+    "detail": "True"
+  },
+  {
+    "probe": "shell",
+    "check": "local_watcher_refused_-32016",
+    "passed": true,
+    "detail": "[{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}, []]"
+  },
+  {
+    "probe": "shell",
+    "check": "local_controller_ran_in_session_folder",
+    "passed": true,
+    "detail": "[{'jsonrpc': '2.0', 'id': 2, 'result': {}}, ['roots/beta/app/probe-canary-ctl']]"
+  },
+  {
+    "probe": "shell",
+    "check": "watcher_sees_user_shell_with_output",
+    "passed": true,
+    "detail": "[['started', 'output', 'finished'], 'cwd=/private/tmp/nori-feature-probes/shell/roots/beta/app\\n']"
+  },
+  {
+    "probe": "shell",
+    "check": "empty_command_-32602",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32602, 'message': 'the command is empty'}}"
+  },
+  {
+    "probe": "shell",
+    "check": "local_unknown_session_-32002",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32002, 'message': 'unknown session id'}}"
+  },
+  {
+    "probe": "shell",
+    "check": "remote_initialize_shell_false",
+    "passed": true,
+    "detail": "False"
+  },
+  {
+    "probe": "shell",
+    "check": "remote_controller_-32018_nothing_ran",
+    "passed": true,
+    "detail": "[{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32018, 'message': 'Remote shell commands are not yet supported.'}}, []]"
+  },
+  {
+    "probe": "shell",
+    "check": "remote_no_user_shell_event",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "shell",
+    "check": "remote_unknown_session_-32018",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32018, 'message': 'Remote shell commands are not yet supported.'}}"
+  },
+  {
+    "probe": "shell",
+    "check": "wrong_local_token_is_remote",
+    "passed": true,
+    "detail": "False"
+  },
+  {
+    "probe": "shell",
+    "check": "nothing_sent_to_agent",
+    "passed": true,
+    "detail": "['relay 1 seed']"
+  }
+]

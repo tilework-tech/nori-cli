@@ -1,0 +1,15 @@
+PASS shell/local_token_exists_0600 0o600
+PASS shell/local_token_in_no_other_host_file []
+PASS shell/local_initialize_shell_true True
+PASS shell/local_watcher_refused_-32016 [{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}, []]
+PASS shell/local_controller_ran_in_session_folder [{'jsonrpc': '2.0', 'id': 2, 'result': {}}, ['roots/beta/app/probe-canary-ctl']]
+PASS shell/watcher_sees_user_shell_with_output [['started', 'output', 'finished'], 'cwd=/private/tmp/nori-feature-probes/shell/roots/beta/app\n']
+PASS shell/empty_command_-32602 {'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32602, 'message': 'the command is empty'}}
+PASS shell/local_unknown_session_-32002 {'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32002, 'message': 'unknown session id'}}
+PASS shell/remote_initialize_shell_false False
+PASS shell/remote_controller_-32018_nothing_ran [{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32018, 'message': 'Remote shell commands are not yet supported.'}}, []]
+PASS shell/remote_no_user_shell_event 
+PASS shell/remote_unknown_session_-32018 {'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32018, 'message': 'Remote shell commands are not yet supported.'}}
+PASS shell/wrong_local_token_is_remote False
+PASS shell/nothing_sent_to_agent ['relay 1 seed']
+{"passed": 14, "failed": 0, "absent": []}

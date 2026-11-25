@@ -1,0 +1,164 @@
+[
+  {
+    "scenario": "R01",
+    "check": "restored.unterminated_reply_shown",
+    "passed": true,
+    "detail": ")\n\n\n\u203a relay 2 dawn\n\n\n\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a ! for shell commands\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.noon_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.dusk_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.alternate_screen",
+    "passed": true,
+    "detail": "True"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.picker_shown",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 0  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n\u25c7 No options available\n  The caller has not supplied any rows.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  e"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.session_on_host",
+    "passed": true,
+    "detail": "ID                                    AGENT             STATUS               AGE  CWD                                                        TITLE\n83ea8523-8bbc-4b48-9dd2-e5e270352526  claude-code       ready                 0s  /private/tmp/nori-host-tui-acceptance/R02/roots/alpha/app  -\n"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.first_prompt_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "detach.back_at_shell",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.lists_two",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 2 \u00b7 2 ready  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n  Session                                                                      Agent         Status\n\u203a \u25cb relay 1 first                                                              claude-code   ready\n    "
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.enter_opens_a_session",
+    "passed": true,
+    "detail": "nge)\n\n\n\u203a relay 1 first\n\n\n\u2022 - first row 01\n\n  first relay finished.\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R11",
+    "check": "local.output_from_session_folder",
+    "passed": true,
+    "detail": "in-$(basename $(dirname $PWD)) && touch shell-canary-local\n  \u2514 shell-in-beta\n\n                                                                                                                [ auto ]\n\u203a ! for shell commands\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R11",
+    "check": "local.ran_in_session_folder",
+    "passed": true,
+    "detail": "['roots/beta/app/shell-canary-local']"
+  },
+  {
+    "scenario": "R11",
+    "check": "watcher.sees_local_command_cell",
+    "passed": true,
+    "detail": "PWD)) && touch shell-canary-local\n  \u2514 shell-in-beta\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R11",
+    "check": "watcher.nothing_ran",
+    "passed": true,
+    "detail": "['roots/beta/app/shell-canary-local']"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.hint_shown",
+    "passed": true,
+    "detail": " shell-in-$(basename $(dirname $PWD)) && touch shell-canary-local\n  \u2514 shell-in-beta\n\n\u2022 This terminal now controls the host.\n\n\u2022 Remote shell commands are not yet supported.\n\n                                                                                                                [ auto ]\n! touch shell-canary-remote\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.hint_is_gray_not_red",
+    "passed": true,
+    "detail": "'\\x1b[38;5;8m\u2022 Remote shell commands are not yet supported.\\x1b[39m'"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.command_back_in_prompt",
+    "passed": true,
+    "detail": "['! touch shell-canary-remote']"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.nothing_ran_anywhere",
+    "passed": true,
+    "detail": "['roots/beta/app/shell-canary-local']"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.not_sent_as_prompt",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.local_terminal_no_new_ran_cell",
+    "passed": true,
+    "detail": "(1, 1)"
+  },
+  {
+    "scenario": "R13",
+    "check": "plain.output_from_session_folder",
+    "passed": true,
+    "detail": "rn Claude options: Mode=auto (/config to change)\n\n\u2022 Ran echo plain-in-$(basename $(dirname $PWD)) && touch shell-canary-plain\n  \u2514 plain-in-beta\n\n                                                                                                         [ acceptEdits ]\n\u203a ? for shortcuts\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "R13",
+    "check": "plain.ran_once_in_session_folder",
+    "passed": true,
+    "detail": "['roots/beta/app/shell-canary-plain']"
+  },
+  {
+    "scenario": "R13",
+    "check": "plain.not_sent_to_agent",
+    "passed": true,
+    "detail": "0"
+  }
+]
