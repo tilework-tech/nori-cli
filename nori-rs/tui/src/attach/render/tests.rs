@@ -70,7 +70,7 @@ fn ready_prompt_preserves_blank_transcript_boundaries() {
         render_conversation(state, "test", area, &mut buffer);
         buffer.content.chunks(usize::from(area.width)).any(|row| {
             row.iter()
-                .map(|cell| cell.symbol())
+                .map(ratatui::buffer::Cell::symbol)
                 .collect::<String>()
                 .contains("Ready. Send a prompt")
         })
