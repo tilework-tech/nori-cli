@@ -1,0 +1,35 @@
+
+
+[2m• [0m[39m[49m- dawn row 01
+  - dawn row 02
+
+
+[1;2m› [0m[39m[49mrelay 60 tk
+
+
+  dawn relay finished.- tk row 01
+
+  - tk row 02
+  - tk row 03
+
+[2m• [0m[39m[49mLeft the host; its sessions keep running. [38;5;8mjoin again with `nori attach`
+
+[2m[39m╭───────────────────────────────────────────────╮
+│ [0;1m[38;5;2m[49mGoodbye! [0;2m[39m[49mThanks for using Nori.               │
+│                                               │
+│ Session: [0m[39m[49mf457e038-b32a-4e51-8448-565dcfa35146[2m │
+│                                               │
+│ [0;1m[39m[49mMessages[0;2m[39m[49m      User: 2  Assistant: 0  Total: 2 │
+│ [0;1m[39m[49mTool Calls[0m[39m[49m    [2m(none)                          │
+│                                               │
+│ [0;1m[39m[49mSkills Used[0;2m[39m[49m                                   │
+│   (none)                                      │
+│                                               │
+│ [0;1m[39m[49mSubagents Used[0;2m[39m[49m                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+[0m[39m[49mshell$
+
+
+
+

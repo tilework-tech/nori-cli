@@ -50,3 +50,16 @@ full scrollback to prove exactly-once ordering. `replay769.py` runs base/fix
 pairs (`open` and failed-session `recover` modes); `summarize.py` tabulates
 them; `run_linux*.sh` hold the Linux matrix (run with `bash`). Results and the verdict are in
 `results/769-0e673ef4/`.
+
+## Shared attach stack (#776, #777, launcher)
+
+- `harness/verifier/` holds verifier-only Rust tests (`inject.sh` copies them into a
+  verifier tree), the 13-envelope host replay fixture, and
+  `verifier-joined-app.patch`, which lets `nori attach` run `run_joined_app` when
+  `NORI_VERIFY_JOINED_APP` is set, before the launcher cutover exists.
+- `run.py` J01–J06 drive the joined App with sessions seeded by `nori host new`.
+  Run them against a wrapper that sets `NORI_VERIFY_JOINED_APP=1`.
+- `harness/perf/joined_open.py` compares long-history open and first key for
+  attach vs the joined App, and audits the whole inline scrollback.
+- `harness/diffstates.py OLD NEW` lists only checks whose pass/fail changed.
+- Verdicts: `results/attach-776-b2562f5e/`, `results/attach-777-20051fcf/`.

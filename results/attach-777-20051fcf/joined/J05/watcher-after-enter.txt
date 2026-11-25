@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 2 dawn
+
+
+• - dawn row 01
+  - dawn row 02
+
+
+› perm paint it
+
+
+  dawn relay finished.
+
+
+  Would you like to allow edit: Paint the boathouse?
+
+  Paint the boathouse
+
+› 1. Allow once (y)
+  2. Reject (esc)
+
+  Press enter to confirm or esc to reject

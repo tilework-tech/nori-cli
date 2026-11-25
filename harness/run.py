@@ -4438,6 +4438,312 @@ SCENARIOS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# J: the shared App joined to a running host (#777 run_joined_app). Sessions are
+# seeded with `nori host new` because a joined terminal cannot start one yet.
+# ---------------------------------------------------------------------------
+
+def seed(ctx, prompt, wait_text=None, cwd="alpha"):
+    out = ctx.nori("host", "new", "--prompt", prompt, cwd=ctx.fx["roots"][cwd])
+    sid = out.stdout.strip().splitlines()[-1].strip() if out.stdout.strip() else ""
+    if out.returncode or not sid:
+        raise RuntimeError(f"host new failed: {out.stdout} {out.stderr}")
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        if any(r.get("kind") == "turn_end" for r in ctx.ledger()) or "hold" in prompt or "perm" in prompt:
+            break
+        time.sleep(0.2)
+    return sid
+
+
+def count(t, needle):
+    return t.history().count(needle)
+
+
+def j_open(ctx, t, sid, via=None):
+    if via is not None:
+        attach_via(ctx, t, via, sid)
+    else:
+        t.run(f"{NORI} attach {sid[:8]}")
+    t.wait_for("›", 20)
+
+
+def j01_restored_then_live_once(ctx):
+    """Joined controller: restored history once, then its own turn live once."""
+    ctx.start_host()
+    sid = seed(ctx, "relay 2 dawn")
+    ctx.nori("host", "ls")
+    a = ctx.term("controller")
+    j_open(ctx, a, sid)
+    try:
+        a.wait_for("dawn row 02", 10)
+    except TimeoutError:
+        pass
+    time.sleep(1.5)
+    a.capture("restored")
+    ctx.check("restore.reply_once", count(a, "dawn row 02") == 1, count(a, "dawn row 02"))
+    a.type("relay 2 noon")
+    a.keys("Enter")
+    try:
+        a.wait_for("noon row 02", 15)
+    except TimeoutError:
+        pass
+    time.sleep(1.5)
+    a.capture("live")
+    prompts = [r.get("text", "") for r in ctx.ledger("request", "session/prompt")]
+    ctx.check("live.prompt_delivered_once", sum("relay 2 noon" in p for p in prompts) == 1, prompts)
+    ctx.check("live.reply_once", count(a, "noon row 02") == 1, count(a, "noon row 02"))
+    ctx.check("live.restored_still_once", count(a, "dawn row 02") == 1, count(a, "dawn row 02"))
+    ctx.check("live.composer_cleared", "relay 2 noon" not in last_nonblank(a.screen()), last_nonblank(a.screen()))
+
+
+def j02_two_terminals_takeover(ctx):
+    """Controller and watcher: watcher Enter keeps draft, Alt+T takeover, both see turns once."""
+    ctx.start_host()
+    sid = seed(ctx, "relay 2 dawn")
+    a = ctx.term("controller")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn row 02", 20)
+    time.sleep(1)
+    b = ctx.term("watcher")
+    j_open(ctx, b, sid)
+    b.wait_for("dawn row 02", 20)
+    time.sleep(1)
+    b.capture("watcher-joined")
+    ctx.check("watcher.restored_once", count(b, "dawn row 02") == 1, count(b, "dawn row 02"))
+    b.type("relay 2 wat")
+    b.keys("Enter")
+    time.sleep(1.2)
+    b.capture("watcher-enter")
+    prompts = [r.get("text", "") for r in ctx.ledger("request", "session/prompt")]
+    ctx.check("watcher.enter_not_delivered", not any("relay 2 wat" in p for p in prompts), prompts)
+    ctx.check("watcher.draft_kept", "relay 2 wat" in b.screen())
+    ctx.check("watcher.enter_names_alt_t", re.search(r"alt\+t", b.screen(), re.I), b.screen()[-400:])
+    a.type("relay 2 ctl")
+    a.keys("Enter")
+    a.wait_for("ctl row 02", 20)
+    b.wait_for("ctl row 02", 20)
+    time.sleep(1)
+    ctx.check("watcher.live_once", count(b, "ctl row 02") == 1, count(b, "ctl row 02"))
+    a.type("controller unsent draft")
+    b.keys("M-t")
+    time.sleep(2)
+    a.capture("controller-demoted")
+    b.capture("watcher-promoted")
+    ctx.check("takeover.new_controller_notice", re.search(r"now controls", b.history()), b.screen()[-300:])
+    ctx.check("takeover.old_controller_notice", re.search(r"took control", a.history()), a.screen()[-300:])
+    ctx.check("takeover.old_controller_draft_kept", "controller unsent draft" in a.screen())
+    ctx.check("takeover.promoted_draft_kept", "relay 2 wat" in b.screen())
+    b.keys("Enter")
+    b.wait_for("wat row 02", 20)
+    a.wait_for("wat row 02", 20)
+    time.sleep(1)
+    prompts = [r.get("text", "") for r in ctx.ledger("request", "session/prompt")]
+    ctx.check("takeover.prompt_delivered_once", sum("relay 2 wat" in p for p in prompts) == 1, prompts)
+    for name, t in (("a", a), ("b", b)):
+        ctx.check(f"takeover.{name}_reply_once", count(t, "wat row 02") == 1,
+                  count(t, "wat row 02"))
+    a.keys("Enter")
+    time.sleep(1)
+    prompts = [r.get("text", "") for r in ctx.ledger("request", "session/prompt")]
+    ctx.check("takeover.demoted_enter_not_delivered", not any("controller unsent draft" in p for p in prompts), prompts)
+
+
+def j03_reconnect_replays_missed_once(ctx):
+    """Watcher behind a relay misses a turn while down; after reconnect it shows it once, draft kept."""
+    endpoint, _ = ctx.start_host()
+    sid = seed(ctx, "relay 2 dawn")
+    a = ctx.term("controller")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn row 02", 20)
+    proxy = Proxy(endpoint)
+    b = ctx.term("watcher")
+    j_open(ctx, b, sid, via=proxy)
+    b.wait_for("dawn row 02", 20)
+    time.sleep(1)
+    b.type("watcher draft across the gap")
+    a.type("controller draft across the gap")
+    proxy.drop_all(hold=4.0)
+    time.sleep(0.6)
+    b.capture("watcher-down")
+    # a turn the watcher can only see by replay
+    c = ctx.term("third")
+    j_open(ctx, c, sid)
+    c.wait_for("dawn row 02", 20)
+    a.keys("C-u")
+    a.type("relay 2 away")
+    a.keys("Enter")
+    a.wait_for("away row 02", 20)
+    try:
+        b.wait_for("away row 02", 30)
+        seen = True
+    except TimeoutError:
+        seen = False
+    time.sleep(1.5)
+    b.capture("watcher-reconnected")
+    hist = b.history()
+    ctx.check("reconnect.missed_turn_shown", seen)
+    ctx.check("reconnect.missed_turn_once", hist.count("away row 02") == 1, hist.count("away row 02"))
+    ctx.check("reconnect.history_not_repeated", hist.count("dawn row 02") == 1, hist.count("dawn row 02"))
+    ctx.check("reconnect.notice_shown", re.search(r"(Lost the connection|Reconnect)", hist), "")
+    ctx.check("reconnect.watcher_draft_kept", "watcher draft across the gap" in b.screen())
+    ctx.check("reconnect.third_sees_once", count(c, "away row 02") == 1, count(c, "away row 02"))
+    proxy.close()
+
+
+def j_pick(t, title):
+    """Open the session list with Alt+S (keeps the draft) and open the row titled `title`."""
+    t.keys("M-s")
+    t.wait_for("enter open", 10)
+    t.capture("list-for-" + title.replace(" ", "-"))
+    for key in ["Up"] * 6 + ["Down"] * 12:
+        rows = [l for l in t.screen().splitlines() if l.lstrip().startswith(("› ○", "› ●", "› ◐", "› ◉"))]
+        if rows and title in rows[0]:
+            break
+        t.keys(key)
+        time.sleep(0.25)
+    t.keys("Enter")
+    time.sleep(1.5)
+
+
+def j04_switch_sessions(ctx):
+    """Two sessions: switch with Alt+S, drafts stay per session, events from the hidden one appear once."""
+    ctx.start_host()
+    s1 = seed(ctx, "relay 2 one")
+    s2 = seed(ctx, "relay 2 two")
+    time.sleep(1.5)
+    a = ctx.term("controller")
+    j_open(ctx, a, s1)
+    a.wait_for("one row 02", 20)
+    a.type("draft kept in one")
+    b = ctx.term("driver")
+    j_open(ctx, b, s1)
+    b.wait_for("one row 02", 20)
+    j_pick(a, "relay 2 two")
+    a.wait_for("two row 02", 15)
+    a.capture("on-two")
+    ctx.check("switch.two_shown_once", count(a, "two row 02") == 1, count(a, "two row 02"))
+    ctx.check("switch.draft_not_carried_to_two", "draft kept in one" not in a.screen())
+    a.type("draft kept in two")
+    b.keys("M-t")
+    time.sleep(1.5)
+    b.type("relay 2 hid")
+    b.keys("Enter")
+    b.wait_for("hid row 02", 20)
+    time.sleep(1)
+    ctx.check("switch.hidden_turn_not_on_two", "hid row 02" not in a.screen())
+    j_pick(a, "relay 2 one")
+    time.sleep(2)
+    a.capture("back-on-one-early")
+    a.wait_for("hid row 02", 15)
+    time.sleep(1)
+    a.capture("back-on-one")
+    hist = a.history()
+    ctx.check("switch.back_shows_hidden_turn_once", hist.count("hid row 02") == 1, hist.count("hid row 02"))
+    ctx.check("switch.draft_kept_in_one", "draft kept in one" in a.screen(), last_nonblank(a.screen()))
+    j_pick(a, "relay 2 two")
+    time.sleep(1)
+    a.capture("back-on-two")
+    ctx.check("switch.draft_kept_in_two", "draft kept in two" in a.screen(), last_nonblank(a.screen()))
+    ctx.check("switch.two_not_repeated", a.history().count("two row 02") == 1, a.history().count("two row 02"))
+
+
+def j05_permissions(ctx):
+    """Permission request: watcher cannot answer, controller answers once; the agent sees one outcome."""
+    ctx.start_host()
+    sid = seed(ctx, "relay 2 dawn")
+    a = ctx.term("controller")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn row 02", 20)
+    b = ctx.term("watcher")
+    j_open(ctx, b, sid)
+    b.wait_for("dawn row 02", 20)
+    a.type("perm paint it")
+    a.keys("Enter")
+    a.wait_for("Paint the boathouse", 20)
+    try:
+        b.wait_for("Paint the boathouse", 10)
+        wsaw = True
+    except TimeoutError:
+        wsaw = False
+    a.capture("controller-permission")
+    b.capture("watcher-permission")
+    ctx.check("perm.watcher_sees_request", wsaw)
+    b.keys("Enter")
+    time.sleep(1.5)
+    outcomes = [r for r in ctx.ledger() if r.get("kind") == "response" and "outcome" in json.dumps(r)]
+    b.capture("watcher-after-enter")
+    ctx.check("perm.watcher_answer_not_delivered", not outcomes, outcomes[:2])
+    a.keys("Enter")
+    deadline = time.time() + 20
+    while time.time() < deadline and not [r for r in ctx.ledger() if r.get("kind") == "response" and "outcome" in json.dumps(r)]:
+        time.sleep(0.2)
+    time.sleep(1.5)
+    a.capture("controller-answered")
+    b.capture("watcher-after-answer")
+    outcomes = [r for r in ctx.ledger() if r.get("kind") == "response" and "outcome" in json.dumps(r)]
+    ctx.check("perm.answered_once", len(outcomes) == 1, outcomes[:2])
+    ctx.check("perm.answer_was_allow", outcomes and "allow" in json.dumps(outcomes[0]), outcomes[:1])
+    ctx.check("perm.controller_prompt_dismissed", "Allow once" not in a.screen().replace("Permission: Allow once", ""), a.screen()[-300:])
+    ctx.check("perm.watcher_prompt_dismissed", "Allow once" not in b.screen(), b.screen()[-300:])
+
+
+def j06_detach_keeps_host(ctx, how):
+    """Leaving a joined terminal mid-turn keeps the host session running."""
+    ctx.start_host()
+    sid = seed(ctx, "relay 2 dawn")
+    a = ctx.term("attach")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn row 02", 20)
+    a.type("relay 60 tk")
+    a.keys("Enter")
+    a.wait_for("tk row 03", 20)
+    if how == "ctrl-d":
+        a.keys("C-d")
+    elif how == "quit":
+        a.type("/quit")
+        a.keys("Enter")
+    elif how == "ctrl-c":
+        a.keys("C-c")
+        time.sleep(0.4)
+        a.keys("C-c")
+    elif how == "hangup":
+        pid = a.fmt("#{pane_pid}")
+        subprocess.run(["pkill", "-HUP", "-P", pid])
+    time.sleep(2)
+    before = len(ctx.ledger("relay"))
+    time.sleep(2)
+    after = len(ctx.ledger("relay"))
+    if how != "hangup":
+        a.capture("after-leave")
+        check_restored(ctx, a, "leave")
+    ctx.check("leave.turn_keeps_ticking", after > before, (before, after))
+    ls = ctx.nori("host", "ls").stdout
+    ctx.check("leave.session_listed", sid[:8] in ls, ls[-300:])
+    ends = [r for r in ctx.ledger() if r.get("kind") == "request" and r.get("method") in ("session/close", "session/cancel")]
+    ctx.check("leave.nothing_closed_or_cancelled", not ends, ends[:2])
+    b = ctx.term("rejoin")
+    j_open(ctx, b, sid)
+    b.wait_for("tk row", 20)
+    time.sleep(1.5)
+    hist = b.history()
+    ctx.check("rejoin.history_once", hist.count("dawn row 02") == 1, hist.count("dawn row 02"))
+    ctx.check("rejoin.stream_rows_once", hist.count("tk row 03") == 1, hist.count("tk row 03"))
+    b.capture("rejoined")
+
+
+SCENARIOS.update({
+    "J01": ("joined: restored history once, own turn live once", j01_restored_then_live_once),
+    "J02": ("joined: controller/watcher, watcher Enter, Alt+T takeover", j02_two_terminals_takeover),
+    "J03": ("joined: reconnect replays only the missed turn; draft kept", j03_reconnect_replays_missed_once),
+    "J04": ("joined: switch sessions; drafts per session; hidden events once", j04_switch_sessions),
+    "J05": ("joined: permission answered once by the controller only", j05_permissions),
+    "J06a": ("joined: Ctrl+D mid-turn keeps the host session", lambda c: j06_detach_keeps_host(c, "ctrl-d")),
+    "J06b": ("joined: /quit mid-turn keeps the host session", lambda c: j06_detach_keeps_host(c, "quit")),
+    "J06d": ("joined: PTY hangup mid-turn keeps the host session", lambda c: j06_detach_keeps_host(c, "hangup")),
+})
+
+
 CAP = "[tui]\ntool_output_max_lines = 10"
 FIXTURE_ARGS = {"S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
                 "S37b": {"host_extra": 'default_mode = "ask"', "top_extra": 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}

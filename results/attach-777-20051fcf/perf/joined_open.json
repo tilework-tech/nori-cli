@@ -1,0 +1,195 @@
+{
+ "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+ "builds": {
+  "attach-777": "de08c8ab20097144022ddcab8318462d8fd3155ef7233a7eea043b5fec6d00fc",
+  "joined-777v": "d38c57930471c515fc881a773c100a9825f52d2543642e1a56f45c8798e55a7d"
+ },
+ "samples": [
+  {
+   "build": "attach-777",
+   "sections": 64,
+   "timeout_screen": " Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n Closing note 074 for the run.\n Closing note 075 for the run.\n Closing note 076 for the run.\n Closing note 077 for the run.\n Closing note 078 for the run.\n Closing note 079 for the run.\n Closing note 080 for the run.\n Closing note 081 for the run.\n Closing note 082 for the run.\n Closing note 083 for the run.\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u2022 Explored 1 read\n   \u2022 Read final.txt\n\n\n\u203a \u0436\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n",
+   "latest_ms": 55.27,
+   "final_tool_ms": 55.28,
+   "key_ms": 55.3,
+   "raw_bytes": 184815,
+   "final_screen": " Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n Closing note 074 for the run.\n Closing note 075 for the run.\n Closing note 076 for the run.\n Closing note 077 for the run.\n Closing note 078 for the run.\n Closing note 079 for the run.\n Closing note 080 for the run.\n Closing note 081 for the run.\n Closing note 082 for the run.\n Closing note 083 for the run.\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u2022 Explored 1 read\n   \u2022 Read final.txt\n\n\n\u203a \u0436\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n",
+   "index": 0
+  },
+  {
+   "build": "joined-777v",
+   "sections": 64,
+   "key_ms": 59.45,
+   "first_mark_ms": 1076.14,
+   "latest_ms": 1144.41,
+   "final_tool_ms": 1144.42,
+   "raw_bytes": 131801,
+   "audit": {
+    "marks_in_order_once": true,
+    "mark_count": 64,
+    "dup_marks": 0,
+    "opening": 1,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 070 for the run.\n  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a ? for shortcuts\n\n",
+   "index": 0
+  },
+  {
+   "build": "joined-777v",
+   "sections": 64,
+   "key_ms": 60.28,
+   "first_mark_ms": 1074.2,
+   "final_tool_ms": 1145.39,
+   "latest_ms": 1149.08,
+   "raw_bytes": 135261,
+   "audit": {
+    "marks_in_order_once": true,
+    "mark_count": 64,
+    "dup_marks": 0,
+    "opening": 1,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 070 for the run.\n  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a ! for shell commands\n\n",
+   "index": 1
+  },
+  {
+   "build": "attach-777",
+   "sections": 64,
+   "timeout_screen": " Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n Closing note 074 for the run.\n Closing note 075 for the run.\n Closing note 076 for the run.\n Closing note 077 for the run.\n Closing note 078 for the run.\n Closing note 079 for the run.\n Closing note 080 for the run.\n Closing note 081 for the run.\n Closing note 082 for the run.\n Closing note 083 for the run.\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u2022 Explored 1 read\n   \u2022 Read final.txt\n\n\n\u203a \u0436\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n",
+   "latest_ms": 54.59,
+   "final_tool_ms": 54.59,
+   "key_ms": 54.61,
+   "raw_bytes": 186793,
+   "final_screen": " Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n Closing note 074 for the run.\n Closing note 075 for the run.\n Closing note 076 for the run.\n Closing note 077 for the run.\n Closing note 078 for the run.\n Closing note 079 for the run.\n Closing note 080 for the run.\n Closing note 081 for the run.\n Closing note 082 for the run.\n Closing note 083 for the run.\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u2022 Explored 1 read\n   \u2022 Read final.txt\n\n\n\u203a \u0436\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n",
+   "index": 1
+  },
+  {
+   "build": "attach-777",
+   "sections": 64,
+   "timeout_screen": " Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n Closing note 074 for the run.\n Closing note 075 for the run.\n Closing note 076 for the run.\n Closing note 077 for the run.\n Closing note 078 for the run.\n Closing note 079 for the run.\n Closing note 080 for the run.\n Closing note 081 for the run.\n Closing note 082 for the run.\n Closing note 083 for the run.\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u2022 Explored 1 read\n   \u2022 Read final.txt\n\n\n\u203a \u0436\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n",
+   "latest_ms": 54.19,
+   "final_tool_ms": 54.2,
+   "key_ms": 54.22,
+   "raw_bytes": 185451,
+   "final_screen": " Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n Closing note 074 for the run.\n Closing note 075 for the run.\n Closing note 076 for the run.\n Closing note 077 for the run.\n Closing note 078 for the run.\n Closing note 079 for the run.\n Closing note 080 for the run.\n Closing note 081 for the run.\n Closing note 082 for the run.\n Closing note 083 for the run.\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u2022 Explored 1 read\n   \u2022 Read final.txt\n\n\n\u203a \u0436\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n",
+   "index": 2
+  },
+  {
+   "build": "joined-777v",
+   "sections": 64,
+   "key_ms": 54.94,
+   "first_mark_ms": 1070.3,
+   "latest_ms": 1138.37,
+   "final_tool_ms": 1138.38,
+   "raw_bytes": 130435,
+   "audit": {
+    "marks_in_order_once": true,
+    "mark_count": 64,
+    "dup_marks": 0,
+    "opening": 1,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 070 for the run.\n  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a @ for file mentions\n\n",
+   "index": 2
+  },
+  {
+   "build": "attach-777",
+   "sections": 150,
+   "first_mark_ms": 54.25,
+   "key_ms": 58.1,
+   "latest_ms": 73.83,
+   "final_tool_ms": 73.84,
+   "raw_bytes": 82295,
+   "final_screen": " Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n Closing note 074 for the run.\n Closing note 075 for the run.\n Closing note 076 for the run.\n Closing note 077 for the run.\n Closing note 078 for the run.\n Closing note 079 for the run.\n Closing note 080 for the run.\n Closing note 081 for the run.\n Closing note 082 for the run.\n Closing note 083 for the run.\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u2022 Explored 1 read\n   \u2022 Read final.txt\n\n\n\u203a \u0436\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n",
+   "index": 0
+  },
+  {
+   "build": "joined-777v",
+   "sections": 150,
+   "key_ms": 58.46,
+   "first_mark_ms": 1075.94,
+   "final_tool_ms": 1223.48,
+   "latest_ms": 1227.11,
+   "raw_bytes": 300459,
+   "audit": {
+    "marks_in_order_once": false,
+    "mark_count": 82,
+    "dup_marks": 0,
+    "opening": 0,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 070 for the run.\n  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a $ for skill listing\n\n",
+   "index": 0
+  },
+  {
+   "build": "joined-777v",
+   "sections": 150,
+   "key_ms": 63.62,
+   "first_mark_ms": 1081.68,
+   "latest_ms": 1229.86,
+   "final_tool_ms": 1229.87,
+   "raw_bytes": 298044,
+   "audit": {
+    "marks_in_order_once": false,
+    "mark_count": 82,
+    "dup_marks": 0,
+    "opening": 0,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 070 for the run.\n  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a ! for shell commands\n\n",
+   "index": 1
+  },
+  {
+   "build": "attach-777",
+   "sections": 150,
+   "first_mark_ms": 54.39,
+   "key_ms": 54.41,
+   "latest_ms": 77.69,
+   "final_tool_ms": 77.69,
+   "raw_bytes": 83131,
+   "final_screen": " Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n Closing note 074 for the run.\n Closing note 075 for the run.\n Closing note 076 for the run.\n Closing note 077 for the run.\n Closing note 078 for the run.\n Closing note 079 for the run.\n Closing note 080 for the run.\n Closing note 081 for the run.\n Closing note 082 for the run.\n Closing note 083 for the run.\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u2022 Explored 1 read\n   \u2022 Read final.txt\n\n\n\u203a \u0436\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n",
+   "index": 1
+  },
+  {
+   "build": "attach-777",
+   "sections": 150,
+   "first_mark_ms": 54.27,
+   "key_ms": 54.29,
+   "latest_ms": 82.05,
+   "final_tool_ms": 82.05,
+   "raw_bytes": 84218,
+   "final_screen": " Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n Closing note 074 for the run.\n Closing note 075 for the run.\n Closing note 076 for the run.\n Closing note 077 for the run.\n Closing note 078 for the run.\n Closing note 079 for the run.\n Closing note 080 for the run.\n Closing note 081 for the run.\n Closing note 082 for the run.\n Closing note 083 for the run.\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u2022 Explored 1 read\n   \u2022 Read final.txt\n\n\n\u203a \u0436\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n",
+   "index": 2
+  },
+  {
+   "build": "joined-777v",
+   "sections": 150,
+   "key_ms": 61.63,
+   "first_mark_ms": 1080.42,
+   "latest_ms": 1241.55,
+   "final_tool_ms": 1241.56,
+   "raw_bytes": 299481,
+   "audit": {
+    "marks_in_order_once": false,
+    "mark_count": 82,
+    "dup_marks": 0,
+    "opening": 0,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 070 for the run.\n  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a $ for skill listing\n\n",
+   "index": 2
+  }
+ ]
+}

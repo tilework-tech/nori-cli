@@ -1,0 +1,7 @@
+test app::host_link_verifier::v1_control_moves_back_and_forth_between_two_joined_terminals ... ok
+test app::host_link_verifier::v5_leaving_closes_only_this_connection ... ok
+test app::host_link_verifier::v2_a_call_while_disconnected_is_refused_at_once ... ok
+test app::host_link_verifier::v3_a_controller_that_reconnects_after_losing_control_comes_back_as_a_watcher ... ok
+test app::host_link_verifier::v4_an_idle_joined_terminal_stays_connected_past_the_silence_timeout ... ok
+test result: ok. 1946 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 16.95s
+test result: ok. 1946 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 16.95s

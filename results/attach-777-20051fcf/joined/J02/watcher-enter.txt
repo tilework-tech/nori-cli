@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 2 dawn
+
+
+• - dawn row 01
+  - dawn row 02
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+
+                                                                                                                [ auto ]
+› relay 2 wat
+

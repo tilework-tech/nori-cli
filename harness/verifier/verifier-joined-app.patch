@@ -1,0 +1,25 @@
+diff --git a/nori-rs/cli/src/host/mod.rs b/nori-rs/cli/src/host/mod.rs
+index 753d6bf9f..a0e6216e7 100644
+--- a/nori-rs/cli/src/host/mod.rs
++++ b/nori-rs/cli/src/host/mod.rs
+@@ -204,6 +204,20 @@ pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow
+         }
+         None => None,
+     };
++    if std::env::var_os("NORI_VERIFY_JOINED_APP").is_some() {
++        return nori_tui::run_joined_app(
++            config,
++            nori_tui::AttachOptions {
++                endpoint,
++                token,
++                session_id,
++                refresh_local_token,
++            },
++        )
++        .await
++        .map(|_| ())
++        .map_err(|error| anyhow::anyhow!("{error:?}"));
++    }
+     nori_tui::run_attach(
+         config,
+         nori_tui::AttachOptions {

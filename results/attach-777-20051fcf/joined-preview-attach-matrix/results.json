@@ -1,0 +1,218 @@
+[
+  {
+    "scenario": "S03a",
+    "check": "attach.alt_screen_on",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S03a",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S03a-attach: 'tick 3' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Listing Claude Code sessions\u2026\n\n  1 starting\n\n\n  Resume a live session or start a new one\n\n     Session                                    Source     Working directory         Updated           Turn status\n  \u258f  Start a new session                        CLI        Not reported              now               ready         \u2595\n     Saved orchard survey                       Local      /tmp/nori-host-tui-acce\u2026  unknown           Not reported\n  \u2191\u2193/j/k move  / search  enter select  esc close\n\n"
+  },
+  {
+    "scenario": "S03b",
+    "check": "attach.alt_screen_on",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S03b",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S03b-attach: 'tick 3' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Listing Claude Code sessions\u2026\n\n  1 starting\n\n\n  Resume a live session or start a new one\n\n     Session                                    Source     Working directory         Updated           Turn status\n  \u258f  Start a new session                        CLI        Not reported              now               ready         \u2595\n     Saved orchard survey                       Local      /tmp/nori-host-tui-acce\u2026  unknown           Not reported\n  \u2191\u2193/j/k move  / search  enter select  esc close\n\n"
+  },
+  {
+    "scenario": "S03c",
+    "check": "attach.alt_screen_on",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S03c",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S03c-attach: 'tick 3' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Listing Claude Code sessions\u2026\n\n  1 starting\n\n\n  Resume a live session or start a new one\n\n     Session                                    Source     Working directory         Updated           Turn status\n  \u258f  Start a new session                        CLI        Not reported              now               ready         \u2595\n     Saved orchard survey                       Local      /tmp/nori-host-tui-acce\u2026  unknown           Not reported\n  \u2191\u2193/j/k move  / search  enter select  esc close\n\n"
+  },
+  {
+    "scenario": "S04",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S04-attach: 'heard: first light' not on screen\nshell$ nori attach\n\u2022 This host has no sessions.\n\n\u25a0 This needs a session running in this terminal's own host.\n\n\u25a0 No session is open on this host. Pick one with /sessions.\n\n\n\u203a / for slash command menu\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S05",
+    "check": "slash.menu_opens_with_normal_commands",
+    "passed": false,
+    "detail": "missing ['/agent', '/model', '/config', '/approvals', '/new', '/sessions', '/delegate']"
+  },
+  {
+    "scenario": "S05",
+    "check": "slash.diff_listed_with_reason",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S05",
+    "check": "slash.browse_listed_with_reason",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S05",
+    "check": "slash.undo_listed_with_reason",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "scenario": "S05",
+    "check": "slash.unavailable_not_sent_as_prompt",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S08",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S08-controller: 'heard: first light' not on screen\nshell$ nori attach\n\u2022 This host has no sessions.\n\n\u25a0 This needs a session running in this terminal's own host.\n\n\u25a0 No session is open on this host. Pick one with /sessions.\n\n\n\u203a $ for skill listing\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S09",
+    "check": "reconnect.controller_draft_kept",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S09",
+    "check": "reconnect.controller_role_restored",
+    "passed": false,
+    "detail": "unknown: ''"
+  },
+  {
+    "scenario": "S11b",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S11b-attach: 'heard: think about the tide' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Listing Claude Code sessions\u2026\n\n  1 starting\n\n\n  Resume a live session or start a new one\n\n     Session                                    Source     Working directory         Updated           Turn status\n  \u258f  Start a new session                        CLI        Not reported              now               ready         \u2595\n     Saved orchard survey                       Local      /tmp/nori-host-tui-acce\u2026  unknown           Not reported\n  \u2191\u2193/j/k move  / search  enter select  esc close\n\n"
+  },
+  {
+    "scenario": "S16",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S16-controller: 'heard: first light' not on screen\nshell$ nori attach\n\u25a0 This needs a session running in this terminal's own host.\n\nSessions 1  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\u2315  irst light\n\n\u25c7 No matching options\n  Try a different search term or category.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  esc close\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S17",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S17-controller: 'tick 3' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Listing Claude Code sessions\u2026\n\n  1 starting\n\n\n  Resume a live session or start a new one\n\n     Session                                    Source     Working directory         Updated           Turn status\n  \u258f  Start a new session                        CLI        Not reported              now               ready         \u2595\n     Saved orchard survey                       Local      /tmp/nori-host-tui-acce\u2026  unknown           Not reported\n  \u2191\u2193/j/k move  / search  enter select  esc close\n\n"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_1_shown",
+    "passed": false,
+    "detail": "{'rows': [], 'working': ['     Session                                    Source     Working directory         Updated           Turn status']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_1_on_working_row",
+    "passed": false,
+    "detail": "{'rows': [], 'working': ['     Session                                    Source     Working directory         Updated           Turn status']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_2_shown",
+    "passed": false,
+    "detail": "{'rows': [], 'working': ['     Session                                    Source     Working directory         Updated           Turn status']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_2_on_working_row",
+    "passed": false,
+    "detail": "{'rows': [], 'working': ['     Session                                    Source     Working directory         Updated           Turn status']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_3_shown",
+    "passed": false,
+    "detail": "{'rows': [], 'working': ['     Session                                    Source     Working directory         Updated           Turn status']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_3_on_working_row",
+    "passed": false,
+    "detail": "{'rows': [], 'working': ['     Session                                    Source     Working directory         Updated           Turn status']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.second_heading_replaces_first",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.plain_thought_replaces_heading",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S18b",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S18b-attach: 'heard: ponder the harbor' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Listing Claude Code sessions\u2026\n\n  1 starting\n\n\n  Resume a live session or start a new one\n\n     Session                                    Source     Working directory         Updated           Turn status\n  \u258f  Start a new session                        CLI        Not reported              now               ready         \u2595\n     Saved orchard survey                       Local      /tmp/nori-host-tui-acce\u2026  unknown           Not reported\n  \u2191\u2193/j/k move  / search  enter select  esc close\n\n"
+  },
+  {
+    "scenario": "S19d",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S19d-attach: 'heard: bulky rows' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Listing Claude Code sessions\u2026\n\n  1 starting\n\n\n  Resume a live session or start a new one\n\n     Session                                    Source     Working directory         Updated           Turn status\n  \u258f  Start a new session                        CLI        Not reported              now               ready         \u2595\n     Saved orchard survey                       Local      /tmp/nori-host-tui-acce\u2026  unknown           Not reported\n  \u2191\u2193/j/k move  / search  enter select  "
+  },
+  {
+    "scenario": "S20b",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S20b-attach: 'heard: wake the keeper' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Listing Claude Code sessions\u2026\n\n  1 starting\n\n\n  Resume a live session or start a new one\n\n     Session                                    Source     Working directory         Updated           Turn status\n  \u258f  Start a new session                        CLI        Not reported              now               ready         \u2595\n     Saved orchard survey                       Local      /tmp/nori-host-tui-acce\u2026  unknown           Not reported\n  \u2191\u2193/j/k move  / search  enter select  esc close\n\n"
+  },
+  {
+    "scenario": "S25b",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S25b-watcher: '\u203a' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Listing Claude Code sessions\u2026\n\n  1 starting\n\n\n  Resume a live session or start a new one\n\n     Session                                    Source     Working directory         Updated           Turn status\n  \u258f  Start a new session                        CLI        Not reported              now               ready         \u2595\n     Saved orchard survey                       Local      /tmp/nori-host-tui-acce\u2026  unknown           Not reported\n  \u2191\u2193/j/k move  / search  enter select  esc close\n\n"
+  },
+  {
+    "scenario": "S28b",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: adapter produced 0 ticks, wanted 3"
+  },
+  {
+    "scenario": "S29c",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S29c-controller: 'heard: first light' not on screen\nshell$ nori attach\n\u25a0 This needs a session running in this terminal's own host.\n\nSessions 1 \u00b7 1 ready  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\u2315  irst light\n\n\u25c7 No matching options\n  Try a different search term or category.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  esc close\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S35b",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S35b-controller: 'heard: first light' not on screen\nshell$ nori attach\n\u25a0 This needs a session running in this terminal's own host.\n\nSessions 1  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\u2315  irst light\n\n\u25c7 No matching options\n  Try a different search term or category.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  esc close\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S35c",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S35c-controller: 'heard: first light' not on screen\nshell$ nori attach\n\u25a0 This needs a session running in this terminal's own host.\n\nSessions 1  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\u2315  irst light\n\n\u25c7 No matching options\n  Try a different search term or category.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  esc close\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S35h",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S35h-controller: 'heard: first light' not on screen\nshell$ nori attach --host ws://127.0.0.1:46277/acp --token-file /tmp/nori-host-tui-acceptance-777j/S35h/homes/host/host/\ntoken\n\u25a0 This needs a session running in this terminal's own host.\n\nSessions 1  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\u2315  irst light\n\n\u25c7 No matching options\n  Try a different search term or category.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  esc close\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S37a",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S37a-controller-a: 'heard: first light' not on screen\nshell$ nori attach\n\u25a0 This needs a session running in this terminal's own host.\n\nSessions 1  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\u2315  irst light\n\n\u25c7 No matching options\n  Try a different search term or category.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  esc close\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  }
+]
