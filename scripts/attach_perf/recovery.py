@@ -12,6 +12,7 @@ import signal
 import tempfile
 import time
 
+from audit import check_exactly_once, stitch
 from fixture import HostFixture
 from replay import CLOCK, SECTION, Terminal, elapsed
 from transport import TransportProbe
@@ -74,25 +75,23 @@ def sample(binary, turns, native_load, wrapper, audit=False):
         term.wait(lambda s: "Synthetic acknowledgement." in s)
         result["enter_to_new_reply_ms"] = elapsed(enter)
         if audit:
-            # Walk one screen at a time toward the first event. Overlapping pages
-            # keep the largest visible index nonincreasing, including across resets.
-            previous_max = turns + 1
-            seen_sections = set()
-            page = term.settled()
+            # Page from the newest event to the first, stitch the overlapping
+            # bodies, and require every section once, whole, in order, with no
+            # connection notice inside the restored history.
+            def body(screen):
+                return screen.splitlines()[3:-4]
+            pages = [body(term.settled())]
             for _ in range(4 * turns + 30):
-                numbers = [int(i) for i in SECTION.findall(page)]
-                if numbers:
-                    assert numbers == sorted(set(numbers)) and max(numbers) <= previous_max
-                    previous_max = max(numbers)
-                    seen_sections.update(numbers)
-                if f.first_marker in page:
+                if f.first_marker in "\n".join(pages[-1]):
                     break
-                before = page
+                before = term.screen()
                 term.send("PageUp")
                 term.wait(lambda s: before != s)
-                page = term.settled()
-            assert f.first_marker in page and seen_sections == set(range(1, turns + 1))
-            result["audited_sections"] = len(seen_sections)
+                pages.append(body(term.settled()))
+            history = stitch(pages)
+            check_exactly_once(history, turns, f.first_marker, f.last_marker)
+            result["audited_sections"] = turns
+            result["audited_lines"] = len(history)
         term.send("Left")
         term.wait(lambda s: f.title in s and "enter open" in s)
         term.send("Enter")

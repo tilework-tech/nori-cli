@@ -40,14 +40,14 @@ python3 -m unittest discover -s scripts/attach_perf
 
 - **Replay.** Timing starts immediately before Enter on a populated host row. It records the first history content, the latest restored reply, a distinct final read tool, a draft typed after the first content, PageUp movement, and a character typed during an optional 24-chunk live stream. The audit scrolls back through every numbered section.
 - **Wire.** The recording proxy rejects missing or out-of-order sequences and reads the TUI's applied cursor from its next subscription on reselection.
-- **Recovery.** Ctrl+R on a failed row starts a replacement adapter (native load or local transcript fallback); Enter opens it; a new prompt must be answered.
+- **Recovery.** Ctrl+R on a failed row starts a replacement adapter (native load or local transcript fallback); Enter opens it; a new prompt must be answered. The first sample of each group pages back to the first event, stitches the overlapping screens into one scrollback, and fails unless every section appears exactly once, whole and in order, with no connection notice inside it.
 - **Startup.** Plain `nori` activation to first handled keystroke and visible initialized model; provider `/resume` list and restore; the unmodified #764 gates with initialize held open. Times are milliseconds from launch or Enter, ending when bytes reach the PTY reader.
 
-Workloads: 4 sections (43 ACP updates, 741 text bytes) and 64 sections (643 updates, 11,042 bytes, ~258 KB transcript). Each section has user text, chunked Markdown, a fenced Rust block and a completed read tool.
+Workloads: 4 sections (43 ACP updates, 741 text bytes) and 64 sections (643 updates, 11,042 bytes, ~258 KB transcript). Each section has user text, chunked Markdown, a fenced Rust block and a completed read tool. The results cover only this 4–64 section range. The host retains at most 4,096 envelopes across all of its sessions, so a much longer history opens as "Replay unavailable" with an empty conversation on every build measured.
 
 ## Results
 
-Linux x86-64 (Modal, kernel 7.3.4), tmux 3.3a, loopback, warm pages. 64 sections, one listed row, median of five fresh hosts in milliseconds:
+Linux x86-64 (Modal, kernel 7.3.4), tmux 3.3a, loopback, warm pages. 64 sections, one listed row, median of five fresh hosts in milliseconds. All three columns are x86-64 musl builds, the libc of the shipped Linux artifact, and the absolute times are musl-specific. An independent rerun on glibc builds measured a median of 708 ms, not 2.6 s, from Enter to the latest restored reply on `main` at `80992049`, and 20.4 ms on #769; the ratio holds on both.
 
 | Milestone | Shipped next.6 | Stack `96e84746` | Fix #769 `c3e3d4fa` |
 |---|---:|---:|---:|
