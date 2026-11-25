@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+• Ran pwd
+  └ /tmp/pr789/hosthome/project
+
+• This terminal now controls the host.
+
+• Remote shell commands are not yet supported.
+
+
+! touch /tmp/pr789/marker/ran-remotely
+
+  controlling · project · mock-model · ready · Approvals: Agent · ctrl+d detach

@@ -1,0 +1,8 @@
+Wed Nov 25 22:30:24 UTC 2026
+$ ls -la /tmp/pr789/marker/
+total 8
+drwxr-xr-x  2 sprite sprite 4096 Nov 25 22:29 .
+drwxr-xr-x 11 sprite sprite 4096 Nov 25 22:29 ..
+$ ls /tmp/pr789/marker/ran-remotely
+ls: cannot access '/tmp/pr789/marker/ran-remotely': No such file or directory
+exit=2

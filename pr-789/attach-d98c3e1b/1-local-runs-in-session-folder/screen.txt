@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+• Ran pwd
+  └ /tmp/pr789/hosthome/project
+
+
+› / for slash command menu
+
+  controlling · project · mock-model · ready · Approvals: Agent · ctrl+d detach
