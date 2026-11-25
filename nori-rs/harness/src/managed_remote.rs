@@ -18,6 +18,7 @@ use crate::remote_agent::HostClientOrigin;
 use crate::remote_agent::REMOTE_CONTROL_RESPONDER;
 use crate::session_manager::SessionManager;
 
+mod context;
 mod goal;
 mod queue;
 
@@ -386,6 +387,9 @@ impl ManagedRemoteHost {
                 .queue(method, params)
                 .await
                 .map(|result| (result, None)),
+            context::CONTEXT if self.authenticated_controller => {
+                self.context(params).await.map(|result| (result, None))
+            }
             goal::GET | goal::SET if self.authenticated_controller => {
                 self.goal(method, params).await.map(|result| (result, None))
             }

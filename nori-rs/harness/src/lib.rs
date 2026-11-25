@@ -12,6 +12,7 @@ pub mod backend;
 pub mod bash;
 pub mod compact;
 pub mod context_timeline;
+pub mod instruction_files;
 pub(crate) use nori_config as config;
 pub mod custom_prompts;
 pub use custom_prompts::CustomPrompt;

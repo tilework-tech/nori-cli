@@ -22,7 +22,7 @@ UI strings keep that word.
 |---|---|
 | `lib.rs` | `run_main`: config, onboarding, automatic worktree, `nori_host_runtime::launch`, `App::run`; `run_joined_app`: `App::run_joined` on a running host |
 | `app/` | `App`: main `select!` loop (`run_loop.rs`), session deck, session lifecycle and resume, delegation, `host_link.rs` (owned or joined host link), joined session view (`joined_sessions.rs`, `joined_feed.rs`) |
-| `chatwidget/` | `ChatWidget`: one session's view, composer submit, approvals, goals, pickers, queue list and recall (a host session's queue is resumed and reclaimed through the host, `queue_host.rs`; its prompt history is recorded, recalled and searched on the host, `history_host.rs`; its custom prompts are listed from the host and their scripts run there, `prompts_host.rs`; its goal is read when the session comes on screen and changed on the host, `goal_host.rs`) |
+| `chatwidget/` | `ChatWidget`: one session's view, composer submit, approvals, goals, pickers, queue list and recall (a host session's queue is resumed and reclaimed through the host, `queue_host.rs`; its prompt history is recorded, recalled and searched on the host, `history_host.rs`; its custom prompts are listed from the host and their scripts run there, `prompts_host.rs`; its goal is read when the session comes on screen and changed on the host, `goal_host.rs`; its `/context` report and footer usage come from the host, `context_host.rs`) |
 | `bottom_pane/` | Composer, footer, popups, approval overlay |
 | `presentation/` | Private projection of ACP updates into display items |
 | `history_cell/`, `exec_cell/`, `client_tool_cell.rs`, `markdown*`, `diff_render.rs` | History cells and their rendering |
@@ -115,7 +115,7 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   host serves, such as folders for `/new` and `find_paths` completion.
   In-process commands the host serves a method for run joined once the host
   advertises it (`command_availability::served_by_host`): `/goal` with
-  `goal`. Older hosts keep the refusal. A
+  `goal`, `/context` with `context`. Older hosts keep the refusal. A
   joined watcher's submission is refused with the draft kept, and Alt+T sends
   `AppEvent::TakeHostControl`. Ctrl+C goes to `ChatWidget::joined_ctrl_c`
   first: only a connected controller cancels, including a turn another
