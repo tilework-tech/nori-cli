@@ -191,12 +191,19 @@ enum CandidateAgent {
     Preparing {
         generation: crate::app_event::SessionGeneration,
         agent_name: String,
-        abort: tokio::task::AbortHandle,
     },
     Prepared {
         agent_name: String,
         display_name: String,
-        agent: Box<nori_harness::runtime::PreparedAgent>,
+        selection: host_candidate::HostSelection,
+    },
+    /// The host is starting the picked session; no widget exists until it
+    /// answers with the live ID.
+    Requested {
+        generation: crate::app_event::SessionGeneration,
+        agent_name: String,
+        display_name: String,
+        saved: Option<host_candidate::SavedSession>,
     },
     Activating {
         agent_name: String,
@@ -221,6 +228,7 @@ mod auth_preference;
 mod config_persistence;
 mod delegation;
 mod event_handling;
+mod host_candidate;
 mod host_link;
 mod resize_reflow;
 mod session_deck;
@@ -231,6 +239,7 @@ mod session_resume;
 mod session_setup;
 mod session_view;
 mod thought_setting;
+pub(crate) use host_candidate::PreparedCatalog;
 #[cfg(test)]
 pub(crate) use session_view::route_session_history_event;
 

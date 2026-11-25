@@ -13,6 +13,7 @@ ids = itertools.count()
 permissions = itertools.count(40)
 pending = {}
 cancels = 0
+answers = 0
 held_close = None
 leases = []
 sessions = set()
@@ -62,6 +63,9 @@ for line in sys.stdin:
     if method and Path("fixture-traffic").exists():
         with Path("fixture-traffic").open("a") as trace:
             print(method, sid or "-", file=trace)
+    if method and Path(f"fixture-traffic-{name}").exists():
+        with Path(f"fixture-traffic-{name}").open("a") as trace:
+            print(os.getpid(), method, sid or "-", file=trace)
 
     if method is None:
         if rid in pending:
@@ -113,6 +117,10 @@ for line in sys.stdin:
                 del pending[permission]
                 send(id=prompt, result={"stopReason": "cancelled"})
     elif method in ("session/load", "session/resume"):
+        # Refuses both restore methods, so a resume fallback cannot hide it.
+        if Path("fixture-refuse-load").exists():
+            send(id=rid, error={"code": -32004, "message": "saved session unavailable"})
+            continue
         sessions.add(sid)
         if method == "session/load":
             update(sid, "user_message_chunk", "saved input")
@@ -183,6 +191,11 @@ for line in sys.stdin:
         if text == "exit-fixture":
             sys.exit(0)
         if text == "finish":
+            send(id=rid, result={"stopReason": "end_turn"})
+            continue
+        if any(block.get("text") == "whoami" for block in params["prompt"]):
+            answers += 1
+            update(sid, "agent_message_chunk", f"{name} is answering ({answers}).")
             send(id=rid, result={"stopReason": "end_turn"})
             continue
         perm = 40 if text == "reuse permission id" else next(permissions)

@@ -266,6 +266,68 @@ fn every_call_reaches_the_host_method_it_names() {
 }
 
 #[test]
+fn prepared_agent_calls_use_the_registered_host_methods() {
+    let (mut client, mut rx) = client();
+    let folder = std::path::PathBuf::from("/srv/harbor");
+    let calls = vec![
+        HostCall::PrepareAgent {
+            agent: "birch".into(),
+            cwd: folder.clone(),
+        },
+        HostCall::ListPrepared {
+            selection: "sel-1".into(),
+            cwd: folder.clone(),
+        },
+        HostCall::ActivatePrepared {
+            selection: "sel-1".into(),
+            cwd: folder.clone(),
+            saved_session_id: Some("saved-1".into()),
+        },
+        HostCall::ActivatePrepared {
+            selection: "sel-2".into(),
+            cwd: folder,
+            saved_session_id: None,
+        },
+        HostCall::DiscardPrepared {
+            selection: "sel-3".into(),
+        },
+    ];
+    for (tag, call) in calls.into_iter().enumerate() {
+        client
+            .request(call, ["a", "b", "c", "d", "e"][tag])
+            .unwrap();
+    }
+    let outgoing: Vec<(Value, Value)> = sent(&mut rx)
+        .into_iter()
+        .map(|message| (message["method"].clone(), message["params"].clone()))
+        .collect();
+    assert_eq!(
+        outgoing,
+        vec![
+            (
+                json!("_nori/host/prepare_agent"),
+                json!({"agent":"birch","cwd":"/srv/harbor"})
+            ),
+            (
+                json!("session/list"),
+                json!({"cwd":"/srv/harbor","_meta":{"nori/preparedAgent":{"id":"sel-1"}}})
+            ),
+            (
+                json!("session/new"),
+                json!({"cwd":"/srv/harbor","mcpServers":[],
+                    "_meta":{"nori/preparedAgent":{"id":"sel-1","savedSessionId":"saved-1"}}})
+            ),
+            (
+                json!("session/new"),
+                json!({"cwd":"/srv/harbor","mcpServers":[],
+                    "_meta":{"nori/preparedAgent":{"id":"sel-2"}}})
+            ),
+            (json!("_nori/host/discard_agent"), json!({"id":"sel-3"})),
+        ]
+    );
+}
+
+#[test]
 fn a_late_reply_from_before_a_reconnect_never_settles_a_new_call() {
     let (mut client, mut rx) = client();
     client.request(HostCall::List, "before").unwrap();
