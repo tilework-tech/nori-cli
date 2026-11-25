@@ -116,11 +116,6 @@ pub(super) async fn run_prompt_summary(
     Ok(())
 }
 
-/// Return the custom commands directory: `{nori_home}/commands`.
-pub(super) fn commands_dir(nori_home: &std::path::Path) -> PathBuf {
-    nori_home.join("commands")
-}
-
 /// Execute session_start hooks and emit warnings for any failures.
 /// Route parsed hook results to the appropriate event channels.
 ///

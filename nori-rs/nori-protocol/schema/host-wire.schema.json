@@ -2443,6 +2443,75 @@
       ],
       "type": "object"
     },
+    "HostPrompt": {
+      "description": "One custom prompt from the host's `$NORI_HOME/commands`.",
+      "properties": {
+        "argumentHint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content": {
+          "description": "The prompt's body without its frontmatter; empty for a script.",
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/HostPromptKind"
+        },
+        "name": {
+          "description": "Invoked as `/prompts:<name>`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "content"
+      ],
+      "type": "object"
+    },
+    "HostPromptKind": {
+      "description": "How a custom prompt is used.",
+      "oneOf": [
+        {
+          "description": "`content` is sent as the prompt once the client fills in its\narguments.",
+          "properties": {
+            "type": {
+              "const": "markdown",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Run on the host with `_nori/session/prompts/run`; its output is sent\nas the prompt.",
+          "properties": {
+            "interpreter": {
+              "type": "string"
+            },
+            "type": {
+              "const": "script",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "interpreter"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "HostStopResult": {
       "description": "Result of `_nori/host/stop`.",
       "properties": {
@@ -5263,6 +5332,45 @@
       "x-method": "session/prompt",
       "x-side": "agent"
     },
+    "PromptRunParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/session/prompts/run`.",
+      "properties": {
+        "args": {
+          "description": "Positional arguments passed to the script.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "A script prompt's name from `_nori/host/prompts`.",
+          "type": "string"
+        },
+        "sessionId": {
+          "description": "The session whose folder the script runs in.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "name",
+        "args"
+      ],
+      "type": "object"
+    },
+    "PromptRunResult": {
+      "description": "Result of `_nori/session/prompts/run`: a script that exited zero.",
+      "properties": {
+        "stdout": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "stdout"
+      ],
+      "type": "object"
+    },
     "PromptSummary": {
       "properties": {
         "summary": {
@@ -5271,6 +5379,36 @@
       },
       "required": [
         "summary"
+      ],
+      "type": "object"
+    },
+    "PromptsListParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/host/prompts`.",
+      "properties": {
+        "sessionId": {
+          "description": "The session the list is for. The list is the host's either way.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "PromptsListResult": {
+      "description": "Result of `_nori/host/prompts`.",
+      "properties": {
+        "prompts": {
+          "description": "Sorted by name.",
+          "items": {
+            "$ref": "#/$defs/HostPrompt"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "prompts"
       ],
       "type": "object"
     },
@@ -8520,6 +8658,18 @@
     },
     {
       "$ref": "#/$defs/HistoryMetadata"
+    },
+    {
+      "$ref": "#/$defs/PromptsListParams"
+    },
+    {
+      "$ref": "#/$defs/PromptsListResult"
+    },
+    {
+      "$ref": "#/$defs/PromptRunParams"
+    },
+    {
+      "$ref": "#/$defs/PromptRunResult"
     }
   ],
   "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",
