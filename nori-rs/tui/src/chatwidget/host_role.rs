@@ -85,6 +85,7 @@ impl ChatWidget {
             Some(connection) => crate::command_availability::Surface::Joined {
                 watching: connection.role == ControlRole::Watcher,
                 connected: connection.connected && connection.stopped.is_none(),
+                features: connection.features,
             },
         }
     }

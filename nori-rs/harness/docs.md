@@ -28,7 +28,7 @@ owned by [`docs/turns.md`](../../docs/turns.md); transcript files by
 | `normalized/` (private) | session phase | Private reduction of ACP updates |
 | `session_event_fanout.rs` | | One unbounded primary consumer plus bounded subscribers |
 | `session_manager/` | `SessionManager`, `SessionRecord`, `StartSession`, `ManagedSession`, `SessionSource` | Registry, capacity, envelopes, replay, recovery, delegation |
-| `managed_remote.rs`, `managed_remote/`, `remote_agent.rs` | `ManagedRemoteHost` | Implements `nori_acp_host::remote::ManagedAgent` over the manager, including `_nori/session/queue/*` (`managed_remote/queue.rs`); re-exports the transport types |
+| `managed_remote.rs`, `managed_remote/`, `remote_agent.rs` | `ManagedRemoteHost` | Implements `nori_acp_host::remote::ManagedAgent` over the manager, including `_nori/session/queue/*` (`managed_remote/queue.rs`) and `_nori/session/goal/*` (`managed_remote/goal.rs`); re-exports the transport types |
 | `managed_launch.rs`, `managed_launch/` | `ManagedLaunches`, `LaunchRefusal`, `session_folder` | Launch admission for a managed host |
 | `managed_acp.rs`, `managed_acp/` | | Relay for one admitted binding and generation; side sessions |
 | `follow_up.rs`, `follow_up_rpc.rs` | `FollowUpReceipt`, `FollowUpStatus`, `supports_guarded_steering` | Follow-up delivery and steering gate |

@@ -66,6 +66,7 @@ pub(crate) use context::ContextSnapshot;
 mod event_handlers;
 mod external_cancel;
 mod goal;
+mod goal_host;
 mod helpers;
 mod host_role;
 pub(crate) use host_role::JOINED_COMMANDS;

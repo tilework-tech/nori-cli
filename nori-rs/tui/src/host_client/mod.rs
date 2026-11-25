@@ -70,6 +70,8 @@ pub(crate) struct HostFeatures {
     /// The host runs on another machine, so this terminal's folders mean
     /// nothing there.
     pub remote: bool,
+    /// `_nori/session/goal/*` reads and changes a session's goal.
+    pub goal: bool,
 }
 
 impl HostConnection {
@@ -83,6 +85,7 @@ impl HostConnection {
                 session_folders: true,
                 find_paths: true,
                 remote: false,
+                goal: true,
             },
         }
     }
@@ -206,6 +209,15 @@ pub(crate) enum HostCall {
         session_id: String,
         name: String,
         args: Vec<String>,
+    },
+    /// The session's goal now. Watchers may read it.
+    GetGoal {
+        session_id: String,
+    },
+    /// Set, pause, resume or clear the session's goal. Only a controller may.
+    SetGoal {
+        session_id: String,
+        op: nori_protocol::GoalOp,
     },
 }
 
@@ -365,6 +377,14 @@ impl HostCall {
                     name,
                     args
                 }),
+            ),
+            Self::GetGoal { session_id } => (
+                "_nori/session/goal/get",
+                json!(nori_protocol::GoalGetParams { session_id }),
+            ),
+            Self::SetGoal { session_id, op } => (
+                "_nori/session/goal/set",
+                json!(nori_protocol::GoalSetParams { session_id, op }),
             ),
         }
     }

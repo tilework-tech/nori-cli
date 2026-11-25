@@ -264,6 +264,7 @@ impl HostLink {
                 let sessions = &result["capabilities"]["nori_sessions"];
                 self.connection.features.session_folders = sessions["session_cwd"] == true;
                 self.connection.features.find_paths = sessions["find_paths"] == true;
+                self.connection.features.goal = sessions["goal"] == true;
                 if let Ok(control) =
                     serde_json::from_value::<nori_protocol::ControlStatus>(result["control"].take())
                 {
