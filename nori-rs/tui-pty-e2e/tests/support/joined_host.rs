@@ -23,6 +23,8 @@ pub struct JoinedHost {
     pub home: tempfile::TempDir,
     binary: PathBuf,
     agent_env: Vec<(String, String)>,
+    real_instruction_files: bool,
+    agent: &'static str,
 }
 
 /// One attached terminal and the homes only it uses.
@@ -67,17 +69,47 @@ impl JoinedHost {
                 .iter()
                 .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
                 .collect(),
+            real_instruction_files: false,
+            agent: "mock-model",
         }
+    }
+
+    /// The host reads the instruction files that are really on disk rather
+    /// than the harness's fixed list, and runs the mock agent as a
+    /// Codex-named agent, which loads `AGENTS.md`.
+    #[allow(dead_code)]
+    pub fn with_real_instruction_files(mut self) -> Self {
+        let mock = self
+            .binary
+            .with_file_name(format!("mock_acp_agent{}", std::env::consts::EXE_SUFFIX));
+        let command = serde_json::to_string(&mock.to_string_lossy()).unwrap();
+        let config = self.nori_home.path().join("config.toml");
+        let mut toml = std::fs::read_to_string(&config).unwrap();
+        toml = toml.replacen("agent = \"mock-model\"", "agent = \"codex-mock\"", 1);
+        toml.push_str(&format!(
+            "[[agents]]\nname = \"Codex Mock\"\nslug = \"codex-mock\"\n[agents.distribution.local]\ncommand = {command}\n"
+        ));
+        std::fs::write(config, toml).unwrap();
+        self.real_instruction_files = true;
+        self.agent = "codex-mock";
+        self
     }
 
     pub fn project(&self) -> PathBuf {
         self.nori_home.path().join("project")
     }
 
-    fn spawn(&self, cwd: &Path, args: &[&str], nori_home: &Path, home: &Path) -> TuiSession {
+    fn spawn(
+        &self,
+        cwd: &Path,
+        agent: &str,
+        args: &[&str],
+        nori_home: &Path,
+        home: &Path,
+    ) -> TuiSession {
         let mut config = SessionConfig::new()
             .with_command_args(
-                ["--agent", "mock-model"]
+                ["--agent", agent]
                     .into_iter()
                     .chain(args.iter().copied())
                     .map(str::to_owned),
@@ -91,6 +123,9 @@ impl JoinedHost {
         for (key, value) in &self.agent_env {
             config = config.with_agent_env(key.clone(), value.clone());
         }
+        if self.real_instruction_files {
+            config = config.with_real_instruction_files();
+        }
         config.cwd = Some(cwd.to_path_buf());
         TuiSession::spawn_with_config(40, 120, config).unwrap()
     }
@@ -98,6 +133,7 @@ impl JoinedHost {
     pub fn start(&self) {
         let mut terminal = self.spawn(
             &self.project(),
+            self.agent,
             &["host", "--port", "0"],
             self.nori_home.path(),
             self.home.path(),
@@ -127,6 +163,7 @@ impl JoinedHost {
         let folder = tempfile::tempdir().unwrap();
         let mut terminal = self.spawn(
             folder.path(),
+            "mock-model",
             &[
                 "attach",
                 "--host",
@@ -191,7 +228,7 @@ impl JoinedHost {
 
     pub fn stop(&self) {
         let mut child = Command::new(&self.binary)
-            .args(["--agent", "mock-model", "host", "stop"])
+            .args(["--agent", self.agent, "host", "stop"])
             .current_dir(self.project())
             .env("NORI_HOME", self.nori_home.path())
             .env("CODEX_HOME", self.nori_home.path())

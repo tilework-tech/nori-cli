@@ -99,6 +99,7 @@ pub(crate) enum Surface {
 fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<bool> {
     match command {
         SlashCommand::Goal => features.goal.then_some(false),
+        SlashCommand::Context => features.context.then_some(false),
         SlashCommand::Quit
         | SlashCommand::Exit
         | SlashCommand::Settings
@@ -122,7 +123,6 @@ fn served_by_host(command: SlashCommand, features: HostFeatures) -> Option<bool>
         | SlashCommand::Diff
         | SlashCommand::Mention
         | SlashCommand::Status
-        | SlashCommand::Context
         | SlashCommand::Memory
         | SlashCommand::FirstPrompt
         | SlashCommand::Mcp
@@ -348,6 +348,30 @@ mod tests {
                 unavailable_reason(SlashCommand::Goal, surface),
                 expected.map(str::to_string),
                 "/goal in {surface:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_joined_terminal_shows_context_only_on_a_host_that_serves_it() {
+        let joined = |watching, context| Surface::Joined {
+            watching,
+            connected: true,
+            features: HostFeatures {
+                context,
+                ..HostFeatures::default()
+            },
+        };
+        let cases = [
+            (joined(false, false), Some(NOT_ON_THIS_HOST)),
+            (joined(false, true), None),
+            (joined(true, true), None),
+        ];
+        for (surface, expected) in cases {
+            assert_eq!(
+                unavailable_reason(SlashCommand::Context, surface),
+                expected.map(str::to_string),
+                "/context in {surface:?}"
             );
         }
     }

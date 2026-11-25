@@ -22,12 +22,12 @@ use unicode_width::UnicodeWidthStr;
 
 use super::AgentKindSimple;
 use super::InstructionFile;
-use super::TokenCount;
 use super::format_directory;
 use super::status_view::AgentStatus;
 use super::status_view::ContextStatus;
 use super::status_view::GitStatus;
 use super::status_view::StatusViewModel;
+use crate::nori::token_count::TokenCount;
 
 /// Width of the aligned label column shared by every labelled status row.
 /// Sized to fit the widest label (`Forked from`) without punctuation. Values

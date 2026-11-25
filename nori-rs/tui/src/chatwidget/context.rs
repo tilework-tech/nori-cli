@@ -11,10 +11,26 @@ pub(crate) struct ContextSnapshot {
     instructions: Vec<(String, Option<i64>)>,
 }
 
+impl From<nori_protocol::ContextReport> for ContextSnapshot {
+    fn from(report: nori_protocol::ContextReport) -> Self {
+        Self {
+            timeline: report.timeline,
+            instructions: report
+                .instructions
+                .into_iter()
+                .map(|file| (file.path, file.tokens))
+                .collect(),
+        }
+    }
+}
+
 impl ChatWidget {
     pub(crate) fn add_context_output(&mut self) {
         let started = std::time::Instant::now();
         tracing::debug!(target: "nori_context_profile", stage = "context_dispatch", "context command dispatched");
+        if self.request_host_context(true) {
+            return;
+        }
         let handle = self.harness_handle.clone();
         let remote = self.cloud_mode || self.cloud_session_identity().is_some();
         if remote && handle.is_none() {
@@ -98,7 +114,7 @@ impl ChatWidget {
         }
     }
 
-    fn insert_context_output(&mut self, snapshot: ContextSnapshot) {
+    pub(super) fn insert_context_output(&mut self, snapshot: ContextSnapshot) {
         let started = std::time::Instant::now();
         let (usage, source) = self.bottom_pane.context_usage_snapshot();
         let remote = self.cloud_mode || self.cloud_session_identity().is_some();
