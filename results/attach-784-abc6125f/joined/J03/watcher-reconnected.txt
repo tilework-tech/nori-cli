@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 2 dawn
+
+
+• - dawn row 01
+  - dawn row 02
+
+  dawn relay finished.
+
+■ Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting;
+your draft is kept.
+
+• Reconnected to the host. Watching; Alt+T takes control.
+
+
+› relay 2 away
+
+
+• - away row 01
+  - away row 02
+
+  away relay finished.
+
+                                                                                                                [ auto ]
+› watcher draft across the gap
+
+  watching · read-only · app · claude-code · ready · Approvals: Agent · alt+t take control · ctrl+d detach

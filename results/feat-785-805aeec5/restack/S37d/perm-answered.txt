@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› perm check
+
+
+• claude-code permission: {"outcome": "selected", "optionId": "allow"}
+
+                                                                                                                [ auto ]
+› @ for file mentions
+
+  controlling · app · claude-code · ready · Approvals: Approve all · ctrl+d detach · Approvals: Approve all

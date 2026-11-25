@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 1 dawn
+
+
+• - dawn row 01
+
+  dawn relay finished.
+
+
+› relay 1 early
+
+
+• - early row 01
+
+  early relay finished.
+
+                                                                                                                [ auto ]
+› / for slash command menu
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

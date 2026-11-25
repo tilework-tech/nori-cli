@@ -1,0 +1,644 @@
+[
+  {
+    "scenario": "S35b",
+    "check": "ctl.host_route_reason",
+    "passed": true,
+    "detail": "/compact  not available on this host yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.attach_screen_reason",
+    "passed": true,
+    "detail": "/agent  not available in nori attach yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.host_commands_enabled",
+    "passed": true,
+    "detail": "['/new  start a new chat during a conversation', '/sessions  list sessions and move between them']"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.quit_enabled",
+    "passed": true,
+    "detail": "/quit  exit Nori"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.tab_completes_builtin",
+    "passed": true,
+    "detail": "/sessions"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_refused_with_reason",
+    "passed": true,
+    "detail": "  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_refusal_count",
+    "passed": true,
+    "detail": "shown 1 time(s)"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_draft_kept",
+    "passed": false,
+    "detail": "\u203a @ for file mentions"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_refused_with_reason",
+    "passed": true,
+    "detail": "  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_refusal_count",
+    "passed": true,
+    "detail": "shown 1 time(s)"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_draft_kept",
+    "passed": false,
+    "detail": "\u203a @ for file mentions"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_review_args_sent_once",
+    "passed": false,
+    "detail": "{'sent': 0, 'prompts': ['first light']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_review_sent_once",
+    "passed": false,
+    "detail": "{'sent': 0, 'prompts': ['first light']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_lanternize_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/lanternize']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.leading_space_quit_is_a_prompt",
+    "passed": true,
+    "detail": "['first light', '/lanternize', 'quit']"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.bare_quit_detaches",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.detach_keeps_session",
+    "passed": true,
+    "detail": "['deec6318-97ce-4efc-9fb1-78e5127b57fd']"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.open_menu_shows_reason",
+    "passed": true,
+    "detail": "/new              reconnecting"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_refused_with_reason",
+    "passed": true,
+    "detail": "['\u25a0 Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting;', '\u25a0 /new: reconnecting']"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.draft_kept",
+    "passed": false,
+    "detail": "\u203a @ for file mentions"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.nothing_sent_while_down",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.menu_enabled_after",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_runs_once_after",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.at_offers_host_folder",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches\n\n\n\u203a @lan\n\n  docs/laptop_notes.md\n"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_relative_from_host_folder",
+    "passed": true,
+    "detail": "['/ new ./assets/alpha-only/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_tilde_from_host_home",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.relative_new_uses_host_folder",
+    "passed": true,
+    "detail": "{'cwd': '/private/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'host': '/private/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'client': '/private/tmp/nori-host-tui-acceptance/S41c/roots/laptop/app/docs'}"
+  },
+  {
+    "scenario": "J01",
+    "check": "restore.reply_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J01",
+    "check": "live.prompt_delivered_once",
+    "passed": true,
+    "detail": "['relay 2 dawn', 'relay 2 noon']"
+  },
+  {
+    "scenario": "J01",
+    "check": "live.reply_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J01",
+    "check": "live.restored_still_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J01",
+    "check": "live.composer_cleared",
+    "passed": true,
+    "detail": "  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "J02",
+    "check": "watcher.restored_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J02",
+    "check": "watcher.enter_not_delivered",
+    "passed": true,
+    "detail": "['relay 2 dawn']"
+  },
+  {
+    "scenario": "J02",
+    "check": "watcher.draft_kept",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J02",
+    "check": "watcher.enter_names_alt_t",
+    "passed": true,
+    "detail": "\n\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n\u25a0 Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.\n\n                                                                                                                [ auto ]\n\u203a relay 2 wat\n\n  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "J02",
+    "check": "watcher.live_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J02",
+    "check": "takeover.new_controller_notice",
+    "passed": true,
+    "detail": " row 01\n  - ctl row 02\n\n  ctl relay finished.\n\n\u2022 This terminal now controls the host.\n\n                                                                                                                [ auto ]\n\u203a relay 2 wat\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "J02",
+    "check": "takeover.old_controller_notice",
+    "passed": true,
+    "detail": "ook control. Watching; Alt+T takes it back.\n\n                                                                                                                [ auto ]\n\u203a controller unsent draft\n\n  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "J02",
+    "check": "takeover.old_controller_draft_kept",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J02",
+    "check": "takeover.promoted_draft_kept",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J02",
+    "check": "takeover.prompt_delivered_once",
+    "passed": true,
+    "detail": "['relay 2 dawn', 'relay 2 ctl', 'relay 2 wat']"
+  },
+  {
+    "scenario": "J02",
+    "check": "takeover.a_reply_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J02",
+    "check": "takeover.b_reply_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J02",
+    "check": "takeover.demoted_enter_not_delivered",
+    "passed": true,
+    "detail": "['relay 2 dawn', 'relay 2 ctl', 'relay 2 wat']"
+  },
+  {
+    "scenario": "J03",
+    "check": "reconnect.missed_turn_shown",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J03",
+    "check": "reconnect.missed_turn_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J03",
+    "check": "reconnect.history_not_repeated",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J03",
+    "check": "reconnect.notice_shown",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J03",
+    "check": "reconnect.watcher_draft_kept",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J03",
+    "check": "reconnect.third_sees_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J04",
+    "check": "switch.two_shown_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J04",
+    "check": "switch.draft_not_carried_to_two",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J04",
+    "check": "switch.hidden_turn_not_on_two",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J04",
+    "check": "switch.back_shows_hidden_turn_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J04",
+    "check": "switch.draft_kept_in_one",
+    "passed": true,
+    "detail": "  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "J04",
+    "check": "switch.draft_kept_in_two",
+    "passed": true,
+    "detail": "  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "J04",
+    "check": "switch.two_not_repeated",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J05",
+    "check": "perm.watcher_sees_request",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J05",
+    "check": "perm.watcher_answer_not_delivered",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "J05",
+    "check": "perm.answered_once",
+    "passed": true,
+    "detail": "[{'t': 1795643015.165069, 'adapter': 'claude-code', 'pid': 90747, 'kind': 'response', 'id': 9000, 'body': {'outcome': {'outcome': 'selected', 'optionId': 'allow'}}}]"
+  },
+  {
+    "scenario": "J05",
+    "check": "perm.answer_was_allow",
+    "passed": true,
+    "detail": "[{'t': 1795643015.165069, 'adapter': 'claude-code', 'pid': 90747, 'kind': 'response', 'id': 9000, 'body': {'outcome': {'outcome': 'selected', 'optionId': 'allow'}}}]"
+  },
+  {
+    "scenario": "J05",
+    "check": "perm.controller_prompt_dismissed",
+    "passed": true,
+    "detail": "t it\n\n\n\u2022 claude-code permission: {\"outcome\": \"selected\", \"optionId\": \"allow\"}\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "J05",
+    "check": "perm.watcher_prompt_dismissed",
+    "passed": true,
+    "detail": "ssion: {\"outcome\": \"selected\", \"optionId\": \"allow\"}\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "J06a",
+    "check": "leave.shell_prompt_returns",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "J06a",
+    "check": "leave.alt_screen_off",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J06a",
+    "check": "leave.cursor_visible",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J06a",
+    "check": "leave.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 1, 'paste_off': 1, 'cursor_hide': 0, 'cursor_show': 29, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "J06a",
+    "check": "leave.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J06a",
+    "check": "leave.turn_keeps_ticking",
+    "passed": true,
+    "detail": "(13, 21)"
+  },
+  {
+    "scenario": "J06a",
+    "check": "leave.session_listed",
+    "passed": true,
+    "detail": "                                   AGENT             STATUS               AGE  CWD                                                         TITLE\n76bf1017-56c7-4a6f-ae7c-5910c5c37797  claude-code       working               6s  /private/tmp/nori-host-tui-acceptance/J06a/roots/alpha/app  relay 2 dawn\n"
+  },
+  {
+    "scenario": "J06a",
+    "check": "leave.nothing_closed_or_cancelled",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "J06a",
+    "check": "rejoin.history_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J06a",
+    "check": "rejoin.stream_rows_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J06b",
+    "check": "leave.shell_prompt_returns",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "J06b",
+    "check": "leave.alt_screen_off",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J06b",
+    "check": "leave.cursor_visible",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J06b",
+    "check": "leave.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 1, 'paste_off': 1, 'cursor_hide': 0, 'cursor_show': 33, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "J06b",
+    "check": "leave.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "J06b",
+    "check": "leave.turn_keeps_ticking",
+    "passed": true,
+    "detail": "(13, 21)"
+  },
+  {
+    "scenario": "J06b",
+    "check": "leave.session_listed",
+    "passed": true,
+    "detail": "                                   AGENT             STATUS               AGE  CWD                                                         TITLE\nc79f8398-a281-41ca-b6e4-e5ab3058d4fa  claude-code       working               6s  /private/tmp/nori-host-tui-acceptance/J06b/roots/alpha/app  relay 2 dawn\n"
+  },
+  {
+    "scenario": "J06b",
+    "check": "leave.nothing_closed_or_cancelled",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "J06b",
+    "check": "rejoin.history_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J06b",
+    "check": "rejoin.stream_rows_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J06d",
+    "check": "leave.turn_keeps_ticking",
+    "passed": true,
+    "detail": "(12, 20)"
+  },
+  {
+    "scenario": "J06d",
+    "check": "leave.session_listed",
+    "passed": true,
+    "detail": "                                   AGENT             STATUS               AGE  CWD                                                         TITLE\n69be50a9-cd7b-4529-91dd-c30144085566  claude-code       working               5s  /private/tmp/nori-host-tui-acceptance/J06d/roots/alpha/app  relay 2 dawn\n"
+  },
+  {
+    "scenario": "J06d",
+    "check": "leave.nothing_closed_or_cancelled",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "J06d",
+    "check": "rejoin.history_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "J06d",
+    "check": "rejoin.stream_rows_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R01",
+    "check": "restored.unterminated_reply_shown",
+    "passed": true,
+    "detail": "\u203a relay 2 dawn\n\n\n\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a / for slash command menu\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.noon_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.dusk_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.alternate_screen",
+    "passed": true,
+    "detail": "True"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.picker_shown",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 0  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n\u25c7 No options available\n  The caller has not supplied any rows.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  e"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.session_on_host",
+    "passed": true,
+    "detail": "ID                                    AGENT             STATUS               AGE  CWD                                                        TITLE\nea6ec2fb-8c45-4a3d-85b6-8e7fb161dc07  claude-code       ready                 0s  /private/tmp/nori-host-tui-acceptance/R02/roots/alpha/app  -\n"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.first_prompt_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "detach.back_at_shell",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.lists_two",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 2 \u00b7 2 ready  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n  Session                                                                      Agent         Status\n\u203a \u25cb relay 1 first                                                              claude-code   ready\n    "
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.enter_opens_a_session",
+    "passed": true,
+    "detail": "\n\n\u203a relay 1 first\n\n\n\u2022 - first row 01\n\n  first relay finished.\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a / for slash command menu\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.delivered_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'relay 1 early']"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.reply_shown_once",
+    "passed": true,
+    "detail": "lay finished.\n\n\n\u203a relay 1 early\n\n\n\u2022 - early row 01\n\n  early relay finished.\n\n                                                                                                                [ auto ]\n\u203a $ for skill listing\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 working \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  }
+]

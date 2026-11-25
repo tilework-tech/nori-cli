@@ -1,4 +1,24 @@
-# Independent acceptance: #778–#785 on real `nori attach` (restacked heads)
+# Independent acceptance: #778–#785 on real `nori attach`
+
+## Current heads (restacked onto #784 `abc6125f`, re-checked)
+
+| PR | Head | Result |
+|---|---|---|
+| #778 | `68aff31b` | Own take-back once, also after reconnect (R05a/b). Same `requestKey` retries get the same answer and other keys get null. **D1 open.** |
+| #779 | `d6001467` | Pass (R06). L1 open. |
+| #780 | `a0f831ae` | Pass (R07) |
+| #781 | `90999ab8` | Pass (R08) |
+| #782 | `01874964` | Pass (R09). L1 (file name cut off) open. |
+| #783 | `684944f7` | Pass (R10; compact probes 9/9) |
+| #785 | `805aeec5` | **Fails the local-only rule:** a remote controller's `!` runs on the host (R11, 6 shell probes). The local-only patch is not in this head. |
+| Stack | | **B1 resolved:** #778 is on `abc6125f`. R03 typeahead passes. S06 (except a folder-name confirmation check that also fails at #784), S07, S10, S12, S13, S18b, S37d and S38b pass. |
+
+Evidence: `feat-785-805aeec5/` (R and S scenarios, probes 79/87; failures = #779 L1, D1, and the 6 local-only shell checks). M1 and M2 from #784 carry through the stack: the newest reply takes 450 / 1,576 / 2,159 ms at 64 / 150 / 170 sections, and duplicated rows appear (`../attach-784-abc6125f/perf/`).
+
+The sections below are the earlier run at the 20:15 heads.
+
+---
+
 
 All data is synthetic. No feature branch was edited. The heads under test were published at 20:15–20:21 UTC:
 

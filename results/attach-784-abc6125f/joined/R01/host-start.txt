@@ -1,0 +1,2 @@
+Host started (pid 229231)  ws://127.0.0.1:43823/acp
+Token: /tmp/nori-host-tui-acceptance-jabc/R01/homes/host/host/token (owner-only)

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› ponder the harbor
+
+
+│ Charting the breakwater
+│ Counting the pilings first.
+│
+│ Sorting the buoy colours
+│ Red to port.
+
+─ Worked for 4s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Midway note.
+
+│ Listening for the foghorn cadence
+
+─ Worked for 6s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• claude-code heard: ponder the harbor
+
+                                                                                                                [ auto ]
+› $ for skill listing
+
+  controlling · app · claude-code · working · Approvals: Agent · ctrl+d detach

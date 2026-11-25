@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+  3 ready
+
+                                                                                                                [ auto ]
+/ new assets/beta-only/
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

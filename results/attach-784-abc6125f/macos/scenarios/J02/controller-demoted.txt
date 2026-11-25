@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 2 dawn
+
+
+• - dawn row 01
+  - dawn row 02
+
+  dawn relay finished.
+
+
+› relay 2 ctl
+
+
+• - ctl row 01
+  - ctl row 02
+
+  ctl relay finished.
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+                                                                                                                [ auto ]
+› controller unsent draft
+
+  watching · read-only · app · claude-code · ready · Approvals: Agent · alt+t take control · ctrl+d detach

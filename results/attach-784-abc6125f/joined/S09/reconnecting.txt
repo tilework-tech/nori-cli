@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+■ Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting;
+your draft is kept.
+
+                                                                                                                [ auto ]
+› half-written controller draft
+
+  RECONNECTING · app · claude-code · ready · Approvals: Agent · draft kept · ctrl+d detach

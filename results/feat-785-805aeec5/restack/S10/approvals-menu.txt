@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+  Approvals for this session
+  New sessions start in the host default. The sandbox is set separately.
+
+   1. Ask
+      Ask before every edit and command.
+  ▏2. Agent (current)                                                                                                ▕
+  ▏   The agent asks when it judges it needs to.                                                                     ▕
+   3. Approve all
+      Nori approves every permission request.
+  ↑↓/j/k move  enter select  esc close
+

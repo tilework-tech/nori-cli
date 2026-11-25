@@ -1,0 +1,27 @@
+{
+  "host_mode": "agent",
+  "after_new": {
+    "running": true,
+    "mode_label": "agent",
+    "error_lines": [],
+    "tail": [
+      "\u2022 Claude Code options: Mode=auto (/config to change)",
+      "                                                                                                                [ auto ]",
+      "\u203a ? for shortcuts",
+      "  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+    ]
+  },
+  "after_prompt": {
+    "running": true,
+    "mode_label": "agent",
+    "error_lines": [],
+    "tail": [
+      "\u2022 Claude Code options: Mode=auto (/config to change)",
+      "\u203a fresh errand",
+      "\u2022 claude-code heard: fresh errand",
+      "                                                                                                                [ auto ]",
+      "\u203a ? for shortcuts",
+      "  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+    ]
+  }
+}

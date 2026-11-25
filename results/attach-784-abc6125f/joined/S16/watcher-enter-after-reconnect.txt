@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+■ Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting;
+your draft is kept.
+
+• Reconnected to the host. Watching; Alt+T takes control.
+
+
+› second light
+
+
+• claude-code heard: second light
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+
+                                                                                                                [ auto ]
+› watcher draft across the gap
+
+  watching · read-only · app · claude-code · ready · Approvals: Agent · alt+t take control · ctrl+d detach

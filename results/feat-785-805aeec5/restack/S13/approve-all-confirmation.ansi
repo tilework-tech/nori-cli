@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[2m• [0m[39m[49mOpenCode options: Mode=[1m[38;5;6mbuild[0;2m[39m[49m (/config to change)
+
+[0m[39m[49m  [2m2 ready
+[0m[39m[49m
+
+  [1mApprove every request in this session?
+[0m[39m[49m  Nori will say yes to every edit, command and tool call the agent asks about. [38;5;1mThe sandbox setting still applies;
+[39m  [38;5;1mnothing else stops a harmful request.[39m
+
+[1m[38;5;2m› 1. Approve all                           Only for this session[0m[39m[49m
+  2. Approve all, and stop asking me this  [2mSkip this question next time[0m[39m[49m
+  3. Go back                               [2mKeep the current mode[0m[39m[49m
+
+  [2m↑/k ↓/j to navigate, enter to confirm, esc to go back

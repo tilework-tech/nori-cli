@@ -1,0 +1,36 @@
+
+
+
+[2m• [0m[39m[49mClaude Code options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+[0m[39m[49m
+[1;2m› [0m[39m[49mrelay 1 dawn
+
+
+[2m• [0m[39m[49m- dawn row 01
+
+  dawn relay finished.
+
+
+[1;2m› [0m[39m[49mrelay 1 review-north
+
+
+[2m• [0m[39m[49m- review-north row 01
+
+  review-north relay finished.
+
+[2m• [0m[39m[49mRunning script 'wherescript'...
+
+
+[1;2m› [0m[39m[49mOutput from script 'wherescript':
+  relay 1 ran-in-beta
+
+
+[2m• [0m[39m[49m- ran-in-beta row 01
+
+  ran-in-beta relay finished.
+
+                                                                                                                [2m[ auto ]
+[0;1m[39m[49m›[0m[39m[49m [2m? for shortcuts[0m[39m[49m
+
+  [38;5;2mcontrolling[2m[39m · app · claude-code · working · Approvals: Agent · ctrl+d detach

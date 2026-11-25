@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+■ /compact: not available on this host yet
+
+                                                                                                                [ auto ]
+› ! for shell commands
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

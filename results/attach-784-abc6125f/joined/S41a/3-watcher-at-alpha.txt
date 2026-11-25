@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+  2 ready
+
+                                                                                                                [ auto ]
+› @lan
+
+  src/lantern_glass.rs
+  src/lantern_wick.rs
+  docs/alpha_notes.md

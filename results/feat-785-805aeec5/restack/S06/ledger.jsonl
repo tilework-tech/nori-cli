@@ -1,0 +1,18 @@
+{"t": 1795642856.1651454, "adapter": "claude-code", "pid": 215873, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-r805/S06/roots/alpha/app", "argv": []}
+{"t": 1795642856.16524, "adapter": "claude-code", "pid": 215873, "kind": "request", "method": "initialize"}
+{"t": 1795642856.165605, "adapter": "claude-code", "pid": 215873, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-r805/S06/roots/alpha/app"}
+{"t": 1795642856.165919, "adapter": "claude-code", "pid": 215873, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-r805/S06/roots/alpha/app"}
+{"t": 1795642856.169165, "adapter": "claude-code", "pid": 215873, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795642857.944628, "adapter": "claude-code", "pid": 215956, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-r805/S06/roots/beta/app", "argv": []}
+{"t": 1795642857.9447174, "adapter": "claude-code", "pid": 215956, "kind": "request", "method": "initialize"}
+{"t": 1795642857.9450593, "adapter": "claude-code", "pid": 215956, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-r805/S06/roots/beta/app"}
+{"t": 1795642857.945313, "adapter": "claude-code", "pid": 215956, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-r805/S06/roots/beta/app"}
+{"t": 1795642857.9484127, "adapter": "claude-code", "pid": 215956, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795642860.2201214, "adapter": "claude-code", "pid": 216022, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-r805/S06/roots/beta/app", "argv": []}
+{"t": 1795642860.2202013, "adapter": "claude-code", "pid": 216022, "kind": "request", "method": "initialize"}
+{"t": 1795642860.220533, "adapter": "claude-code", "pid": 216022, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-r805/S06/roots/beta/app"}
+{"t": 1795642860.2208235, "adapter": "claude-code", "pid": 216022, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-r805/S06/roots/beta/app"}
+{"t": 1795642860.2239544, "adapter": "claude-code", "pid": 216022, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795642864.3452692, "adapter": "claude-code", "pid": 216022, "kind": "stdin_eof"}
+{"t": 1795642864.3452697, "adapter": "claude-code", "pid": 215956, "kind": "stdin_eof"}
+{"t": 1795642864.3453062, "adapter": "claude-code", "pid": 215873, "kind": "stdin_eof"}

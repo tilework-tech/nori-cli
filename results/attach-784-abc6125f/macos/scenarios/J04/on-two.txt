@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 2 two
+
+
+• - two row 01
+  - two row 02
+
+  two relay finished.
+
+  2 ready
+
+                                                                                                                [ auto ]
+› ! for shell commands
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

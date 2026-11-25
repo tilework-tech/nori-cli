@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 0  tab: waiting only · / search
+
+All  waiting on you
+
+◇ No options available
+  The caller has not supplied any rows.
+
+
+↑↓/j/k move  enter open  tab waiting on you  esc close
+

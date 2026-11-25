@@ -1,0 +1,277 @@
+== S35b attach controller: reasons, refusals, agent commands, quit
+PASS S35b/ctl.host_route_reason /compact  not available on this host yet
+PASS S35b/ctl.attach_screen_reason /agent  not available in nori attach yet
+PASS S35b/ctl.host_commands_enabled ['/new  start a new chat during a conversation', '/sessions  list sessions and move between them']
+PASS S35b/ctl.quit_enabled /quit  exit Nori
+PASS S35b/ctl.tab_completes_builtin /sessions
+PASS S35b/ctl.compact_refused_with_reason   controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach
+PASS S35b/ctl.compact_refusal_count shown 1 time(s)
+FAIL S35b/ctl.compact_draft_kept › @ for file mentions
+PASS S35b/ctl.compact_nothing_sent []
+PASS S35b/ctl.agent_refused_with_reason   controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach
+PASS S35b/ctl.agent_refusal_count shown 1 time(s)
+FAIL S35b/ctl.agent_draft_kept › @ for file mentions
+PASS S35b/ctl.agent_nothing_sent []
+FAIL S35b/ctl.agent_command_review_args_sent_once {'sent': 0, 'prompts': ['first light']}
+FAIL S35b/ctl.agent_command_review_sent_once {'sent': 0, 'prompts': ['first light']}
+PASS S35b/ctl.agent_command_lanternize_sent_once {'sent': 1, 'prompts': ['first light', '/lanternize']}
+PASS S35b/ctl.leading_space_quit_is_a_prompt ['first light', '/lanternize', 'quit']
+PASS S35b/ctl.bare_quit_detaches shell$
+PASS S35b/ctl.detach_keeps_session ['deec6318-97ce-4efc-9fb1-78e5127b57fd']
+== S35h commands while reconnecting and after
+PASS S35h/reconnect.open_menu_shows_reason /new              reconnecting
+PASS S35h/reconnect.new_refused_with_reason ['■ Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting;', '■ /new: reconnecting']
+FAIL S35h/reconnect.draft_kept › @ for file mentions
+PASS S35h/reconnect.nothing_sent_while_down 1
+PASS S35h/reconnect.menu_enabled_after /new              start a new chat during a conversation
+PASS S35h/reconnect.new_runs_once_after 2
+== S41c cwd: attach --host with no session: @, Tab and relative /new use the host folder
+FAIL S41c/n.at_offers_host_folder 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches
+
+
+› @lan
+
+  docs/laptop_notes.md
+
+PASS S41c/n.tab_relative_from_host_folder ['/ new ./assets/alpha-only/']
+PASS S41c/n.tab_tilde_from_host_home ['/ new ~/kiln_host/']
+PASS S41c/n.relative_new_uses_host_folder {'cwd': '/private/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'host': '/private/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'client': 
+== J01 joined: restored history once, own turn live once
+PASS J01/restore.reply_once 1
+PASS J01/live.prompt_delivered_once ['relay 2 dawn', 'relay 2 noon']
+PASS J01/live.reply_once 1
+PASS J01/live.restored_still_once 1
+PASS J01/live.composer_cleared   controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach
+== J02 joined: controller/watcher, watcher Enter, Alt+T takeover
+PASS J02/watcher.restored_once 1
+PASS J02/watcher.enter_not_delivered ['relay 2 dawn']
+PASS J02/watcher.draft_kept 
+PASS J02/watcher.enter_names_alt_t 
+• - dawn row 01
+  - dawn row 02
+
+  dawn relay finished.
+
+■ Watching: another terminal controls this host. Press Alt+T to take control; your draft is kept.
+
+   
+PASS J02/watcher.live_once 1
+PASS J02/takeover.new_controller_notice  row 01
+  - ctl row 02
+
+  ctl relay finished.
+
+• This terminal now controls the host.
+
+                                                                         
+PASS J02/takeover.old_controller_notice ook control. Watching; Alt+T takes it back.
+
+                                                                                                                [ a
+PASS J02/takeover.old_controller_draft_kept 
+PASS J02/takeover.promoted_draft_kept 
+PASS J02/takeover.prompt_delivered_once ['relay 2 dawn', 'relay 2 ctl', 'relay 2 wat']
+PASS J02/takeover.a_reply_once 1
+PASS J02/takeover.b_reply_once 1
+PASS J02/takeover.demoted_enter_not_delivered ['relay 2 dawn', 'relay 2 ctl', 'relay 2 wat']
+== J03 joined: reconnect replays only the missed turn; draft kept
+PASS J03/reconnect.missed_turn_shown 
+PASS J03/reconnect.missed_turn_once 1
+PASS J03/reconnect.history_not_repeated 1
+PASS J03/reconnect.notice_shown 
+PASS J03/reconnect.watcher_draft_kept 
+PASS J03/reconnect.third_sees_once 1
+== J04 joined: switch sessions; drafts per session; hidden events once
+PASS J04/switch.two_shown_once 1
+PASS J04/switch.draft_not_carried_to_two 
+PASS J04/switch.hidden_turn_not_on_two 
+PASS J04/switch.back_shows_hidden_turn_once 1
+PASS J04/switch.draft_kept_in_one   watching · read-only · app · claude-code · ready · Approvals: Agent · alt+t take control · ctrl+d detach
+PASS J04/switch.draft_kept_in_two   watching · read-only · app · claude-code · ready · Approvals: Agent · alt+t take control · ctrl+d detach
+PASS J04/switch.two_not_repeated 1
+== J05 joined: permission answered once by the controller only
+PASS J05/perm.watcher_sees_request 
+PASS J05/perm.watcher_answer_not_delivered []
+PASS J05/perm.answered_once [{'t': 1795643015.165069, 'adapter': 'claude-code', 'pid': 90747, 'kind': 'response', 'id': 9000, 'body': {'outcome': {'outcome': 'selected', 'optionId': 'allow
+PASS J05/perm.answer_was_allow [{'t': 1795643015.165069, 'adapter': 'claude-code', 'pid': 90747, 'kind': 'response', 'id': 9000, 'body': {'outcome': {'outcome': 'selected', 'optionId': 'allow
+PASS J05/perm.controller_prompt_dismissed t it
+
+
+• claude-code permission: {"outcome": "selected", "optionId": "allow"}
+
+                                                                                 
+PASS J05/perm.watcher_prompt_dismissed ssion: {"outcome": "selected", "optionId": "allow"}
+
+                                                                                                           
+== J06a joined: Ctrl+D mid-turn keeps the host session
+PASS J06a/leave.shell_prompt_returns shell$
+PASS J06a/leave.alt_screen_off 
+PASS J06a/leave.cursor_visible 
+PASS J06a/leave.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 1, 'paste_off': 1, 'cursor_hide': 0, 'cursor_show': 29, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+PASS J06a/leave.tty_cooked 
+PASS J06a/leave.turn_keeps_ticking (13, 21)
+PASS J06a/leave.session_listed                                    AGENT             STATUS               AGE  CWD                                                         TITLE
+76bf1017-56c7-4
+PASS J06a/leave.nothing_closed_or_cancelled []
+PASS J06a/rejoin.history_once 1
+PASS J06a/rejoin.stream_rows_once 1
+== J06b joined: /quit mid-turn keeps the host session
+PASS J06b/leave.shell_prompt_returns shell$
+PASS J06b/leave.alt_screen_off 
+PASS J06b/leave.cursor_visible 
+PASS J06b/leave.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 1, 'paste_off': 1, 'cursor_hide': 0, 'cursor_show': 33, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+PASS J06b/leave.tty_cooked 
+PASS J06b/leave.turn_keeps_ticking (13, 21)
+PASS J06b/leave.session_listed                                    AGENT             STATUS               AGE  CWD                                                         TITLE
+c79f8398-a281-4
+PASS J06b/leave.nothing_closed_or_cancelled []
+PASS J06b/rejoin.history_once 1
+PASS J06b/rejoin.stream_rows_once 1
+== J06d joined: PTY hangup mid-turn keeps the host session
+PASS J06d/leave.turn_keeps_ticking (12, 20)
+PASS J06d/leave.session_listed                                    AGENT             STATUS               AGE  CWD                                                         TITLE
+69be50a9-cd7b-4
+PASS J06d/leave.nothing_closed_or_cancelled []
+PASS J06d/rejoin.history_once 1
+PASS J06d/rejoin.stream_rows_once 1
+== R01 restack: no-newline replies restored and live, once and in order, late joiner too
+PASS R01/restored.unterminated_reply_shown › relay 2 dawn
+
+
+• - dawn row 01
+  - dawn row 02
+
+  dawn relay finished.
+
+                                                                                      
+PASS R01/controller.each_once_in_order ordered
+PASS R01/controller.no_tail_glued_to_next_row []
+PASS R01/late_joiner.each_once_in_order ordered
+PASS R01/late_joiner.no_tail_glued_to_next_row []
+PASS R01/live.noon_delivered_once 1
+PASS R01/live.dusk_delivered_once 1
+== R02 restack: empty-host picker, /new on the host, picker lists and opens
+PASS R02/start.alternate_screen True
+PASS R02/start.picker_shown 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 0  tab: waiting only · / search
+
+All  waiting on you
+
+◇ No options available
+  The caller has not supplied any rows.
+
+
+↑↓/j/k
+PASS R02/new.session_on_host ID                                    AGENT             STATUS               AGE  CWD                                                        TITLE
+ea6ec2fb-8c45
+PASS R02/new.first_prompt_once 1
+PASS R02/detach.back_at_shell shell$
+PASS R02/picker.lists_two 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 2 · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+  Session                                                      
+PASS R02/picker.enter_opens_a_session 
+
+› relay 1 first
+
+
+• - first row 01
+
+  first relay finished.
+
+  2 ready
+
+                                                                                      
+== R03 restack: typeahead right after launch delivered once
+PASS R03/typeahead.delivered_once ['relay 1 dawn', 'relay 1 early']
+PASS R03/typeahead.reply_shown_once lay finished.
+
+
+› relay 1 early
+
+
+• - early row 01
+
+  early relay finished.
+
+                                                                                   
+{"nori": "nori", "passed": 101, "failed": 6, "checks": 107}

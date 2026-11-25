@@ -146,7 +146,7 @@ def probe_queue():
         # e1a1e4b4 contract: this client declares no `composer` capability (like the Sessions broker),
         # so its prompts can be resumed or discarded but not taken. Own-take is in probe_queue_composer.
         check("queue", "unmarked_client_prompt_not_editable", ents[0].get("editable") is False, ents[0])
-        r1 = ctl.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[0]["id"]})
+        r1 = ctl.call("_nori/session/queue/take", {"requestKey": f"probe-{time.time_ns()}", "sessionId": sid, "entryId": ents[0]["id"]})
         check("queue", "unmarked_client_prompt_take_null", "result" in r1 and r1["result"].get("text") is None, r1)
         before = len(run.prompts())
         r = ctl.call("_nori/session/queue/resume", {"sessionId": sid})
@@ -157,7 +157,7 @@ def probe_queue():
         time.sleep(2.0)
         after = run.prompts()[before:]
         check("queue", "resume_delivers_all_once_in_order", after == ["queued alpha", "queued beta", "queued gamma"], after)
-        r3 = ctl.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[1]["id"]})
+        r3 = ctl.call("_nori/session/queue/take", {"requestKey": f"probe-{time.time_ns()}", "sessionId": sid, "entryId": ents[1]["id"]})
         check("queue", "take_after_started_is_null", "result" in r3 and r3["result"].get("text") is None, r3)
         # discard on a fresh pause
         sid2, q2 = paused_queue(run, ctl, ["drop one", "drop two"])
@@ -173,7 +173,7 @@ def probe_queue():
         sid3, q3 = paused_queue(run, ctl, ["only mine"])
         other = run.link()
         other.call("_nori/session/take_control", {}) if False else None
-        r = late.call("_nori/session/queue/take", {"sessionId": sid3, "entryId": (q3.get("entries") or [{}])[0].get("id")})
+        r = late.call("_nori/session/queue/take", {"requestKey": f"probe-{time.time_ns()}", "sessionId": sid3, "entryId": (q3.get("entries") or [{}])[0].get("id")})
         check("queue", "watcher_cannot_take_others_prompt", err(r) == -32016, r)
 
 
@@ -402,25 +402,31 @@ def probe_queue_composer():
         sid, q = paused_queue(run, a, ["queued alpha", "queued beta", "queued gamma"])
         ents = q.get("entries") or []
         check("queue_composer", "composer_prompts_editable", all(e.get("editable") for e in ents), ents)
-        r1 = a.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[0]["id"]})
-        r2 = a.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[0]["id"]})
+        r1 = a.call("_nori/session/queue/take", {"requestKey": f"probe-{time.time_ns()}", "sessionId": sid, "entryId": ents[0]["id"]})
+        r2 = a.call("_nori/session/queue/take", {"requestKey": f"probe-{time.time_ns()}", "sessionId": sid, "entryId": ents[0]["id"]})
         check("queue_composer", "own_take_once_then_null", (r1.get("result") or {}).get("text") == "queued alpha"
               and "result" in r2 and r2["result"].get("text") is None, [r1, r2])
         a.close(); run.links.remove(a)
         a2 = run.link(composer=True)
-        r3 = a2.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[1]["id"]})
+        k = f"retry-{time.time_ns()}"
+        r3 = a2.call("_nori/session/queue/take", {"requestKey": k, "sessionId": sid, "entryId": ents[1]["id"]})
         check("queue_composer", "after_reconnect_take_once", (r3.get("result") or {}).get("text") == "queued beta", r3)
+        r3b = a2.call("_nori/session/queue/take", {"requestKey": k, "sessionId": sid, "entryId": ents[1]["id"]})
+        r3c = a2.call("_nori/session/queue/take", {"requestKey": k + "-other", "sessionId": sid, "entryId": ents[1]["id"]})
+        check("queue_composer", "same_key_retry_same_answer_other_key_null", (r3b.get("result") or {}).get("text") == "queued beta"
+              and "result" in r3c and r3c["result"].get("text") is None, [r3b, r3c])
+        prompts_before = list(run.prompts())
         b = run.link(composer=True)
         tk = b.call("_nori/control/take", {})
         check("queue_composer", "second_terminal_takes_control", "result" in tk, tk)
-        r4 = b.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[2]["id"]})
+        r4 = b.call("_nori/session/queue/take", {"requestKey": f"probe-{time.time_ns()}", "sessionId": sid, "entryId": ents[2]["id"]})
         # Coordinator's reading of #778: a terminal takes back only its own prompts.
         check("queue_composer", "other_composer_terminal_cannot_take", (r4.get("result") or {}).get("text") is None, r4)
         plain = run.link()
         sid2, q2 = paused_queue(run, b, ["queued delta"])
         e2 = (q2.get("entries") or [])[0]
         plain.call("_nori/control/take", {})
-        r5 = plain.call("_nori/session/queue/take", {"sessionId": sid2, "entryId": e2["id"]})
+        r5 = plain.call("_nori/session/queue/take", {"requestKey": f"probe-{time.time_ns()}", "sessionId": sid2, "entryId": e2["id"]})
         check("queue_composer", "non_composer_client_take_result", True, r5)
 
 

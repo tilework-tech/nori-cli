@@ -1,0 +1,12 @@
+{"t": 1795642871.883788, "adapter": "claude-code", "pid": 216698, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-jabc/S35b/roots/alpha/app", "argv": []}
+{"t": 1795642871.883919, "adapter": "claude-code", "pid": 216698, "kind": "request", "method": "initialize"}
+{"t": 1795642871.8846238, "adapter": "claude-code", "pid": 216698, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-jabc/S35b/roots/alpha/app"}
+{"t": 1795642871.8849823, "adapter": "claude-code", "pid": 216698, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-jabc/S35b/roots/alpha/app"}
+{"t": 1795642871.8904793, "adapter": "claude-code", "pid": 216698, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795642874.6433167, "adapter": "claude-code", "pid": 216698, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "first light"}
+{"t": 1795642874.6435556, "adapter": "claude-code", "pid": 216698, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795642921.9374213, "adapter": "claude-code", "pid": 216698, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "/lanternize"}
+{"t": 1795642921.9376063, "adapter": "claude-code", "pid": 216698, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795642925.337165, "adapter": "claude-code", "pid": 216698, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "quit"}
+{"t": 1795642925.3373454, "adapter": "claude-code", "pid": 216698, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795642930.8811274, "adapter": "claude-code", "pid": 216698, "kind": "stdin_eof"}
