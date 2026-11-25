@@ -19,10 +19,13 @@ impl App {
     /// With several sessions, refuse to start another one at the cap and say
     /// how to make room. Returns true when the start was refused.
     pub(super) fn refuse_at_session_cap(&mut self) -> bool {
-        if self.session_manager.free_slots() > 0 {
+        let Some(manager) = &self.session_manager else {
+            return false;
+        };
+        if manager.free_slots() > 0 {
             return false;
         }
-        let limit = self.session_manager.max_sessions();
+        let limit = manager.max_sessions();
         self.chat_widget.add_error_message(format!(
             "{limit} sessions are open, the most `[tui] max_sessions` allows. Close one first: \
              select it in the session list (Left or /sessions) and press ctrl+d, or /close the \
@@ -94,12 +97,25 @@ impl App {
         if self.cloud_mode && widget.supports_session_close() {
             widget.start_cloud_close();
         } else if let Some(id) = widget.managed_conversation_id() {
-            let manager = self.session_manager.clone();
-            tokio::spawn(async move {
-                if let Err(error) = manager.close(&id, grace).await {
-                    tracing::warn!(%error, "a session did not shut down cleanly");
-                }
-            });
+            if let Some(manager) = self.session_manager.clone() {
+                tokio::spawn(async move {
+                    if let Err(error) = manager.close(&id, grace).await {
+                        tracing::warn!(%error, "a session did not shut down cleanly");
+                    }
+                });
+            } else {
+                // A joined host closes its own session; every terminal
+                // learns of it from the session's events.
+                self.app_event_tx
+                    .send(crate::app_event::AppEvent::HostRequest {
+                        call: crate::host_client::HostCall::Close {
+                            session_id: id.to_string(),
+                        },
+                        reply: crate::app_event_sender::HostReply::ReportError(
+                            self.app_event_tx.clone(),
+                        ),
+                    });
+            }
         }
         if generation == active
             && let Some(next) = next
@@ -186,12 +202,12 @@ impl App {
             // once this session's agent process has ended.
             if !parked.widget.is_closed_by_user()
                 && let Some(id) = parked.widget.managed_conversation_id()
-                && self.session_manager.get(&id).is_some_and(|record| {
+                && let Some(manager) = self.session_manager.clone()
+                && manager.get(&id).is_some_and(|record| {
                     !(record.status.is_closed() || record.status == SessionStatus::Failed)
                 })
             {
                 parked.widget.mark_closed_by_user();
-                let manager = self.session_manager.clone();
                 let tx = self.app_event_tx.clone();
                 tokio::spawn(async move {
                     if let Err(error) = manager.close(&id, std::time::Duration::ZERO).await {

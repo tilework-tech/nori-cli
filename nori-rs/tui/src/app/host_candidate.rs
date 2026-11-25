@@ -171,7 +171,9 @@ impl App {
         // the candidate that would have used it.
         let mut live = self.config_for_agent(&agent_name);
         live.cwd.clone_from(&cwd);
-        self.foreground_config.set(live);
+        if let Some(foreground_config) = &self.foreground_config {
+            foreground_config.set(live);
+        }
         let tx = self.app_event_tx.clone();
         let prepared_agent_name = agent_name.clone();
         tokio::spawn(async move {
@@ -341,25 +343,32 @@ impl App {
                 return;
             }
         };
-        let subscription = match self
-            .session_manager
-            .subscribe_following(id, ACTIVATION_REPLAY_CAPACITY)
-        {
+        let subscription = match self.session_manager.as_ref().map_or_else(
+            || Err(crate::chatwidget::NEEDS_OWN_HOST_MESSAGE.to_string()),
+            |manager| {
+                manager
+                    .subscribe_following(id, ACTIVATION_REPLAY_CAPACITY)
+                    .map_err(|error| format!("Couldn't show {display_name}: {error}"))
+            },
+        ) {
             Ok(subscription) => subscription,
-            Err(error) => {
+            Err(message) => {
                 drop(self.app_event_tx.host_receipt(HostCall::Close {
                     session_id: id.to_string(),
                 }));
                 self.return_from_refused_new();
-                self.chat_widget
-                    .add_error_message(format!("Couldn't show {display_name}: {error}"));
+                self.chat_widget.add_error_message(message);
                 return;
             }
         };
         let mut config = self.config_for_agent(&agent_name);
         // The session works where the host started it, which `/new DIR`
         // or a restored session may put outside the launch folder.
-        if let Some(record) = self.session_manager.get(&id) {
+        if let Some(record) = self
+            .session_manager
+            .as_ref()
+            .and_then(|manager| manager.get(&id))
+        {
             config.cwd = record.cwd;
         }
         let mut init = self.chat_widget_init(
@@ -375,7 +384,9 @@ impl App {
         let mut widget = ChatWidget::from_host_activation(
             init,
             id,
-            self.session_manager.handle(&id),
+            self.session_manager
+                .as_ref()
+                .and_then(|manager| manager.handle(&id)),
             subscription,
             saved.map(|saved| (saved.id, saved.title)),
         );

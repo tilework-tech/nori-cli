@@ -180,6 +180,19 @@ impl App {
         )
     }
 
+    /// Show a session event in the widget of session `generation`, on screen
+    /// or parked. Events for a session this terminal no longer holds are
+    /// dropped.
+    pub(super) fn deliver_session_event(
+        &mut self,
+        generation: SessionGeneration,
+        event: nori_protocol::SessionEvent,
+    ) {
+        if let Some(event) = self.route_parked_session_event(generation, event) {
+            self.chat_widget.handle_session_event(generation, event);
+        }
+    }
+
     /// Hand a session event to the parked widget it belongs to. Returns the
     /// event when no parked session owns it.
     pub(super) fn route_parked_session_event(
@@ -283,10 +296,13 @@ impl App {
         } else {
             std::time::Duration::ZERO
         };
+        let Some(session_manager) = self.session_manager.clone() else {
+            return;
+        };
         let mut closing = tokio::task::JoinSet::new();
         for (_, parked) in self.session_deck.parked_sessions_mut() {
             if let Some(id) = parked.widget.managed_conversation_id() {
-                let manager = self.session_manager.clone();
+                let manager = session_manager.clone();
                 closing.spawn(async move { manager.close(&id, grace).await });
             }
         }

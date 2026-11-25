@@ -95,6 +95,9 @@ use nori_config::SandboxPolicy;
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const DEFAULT_PROJECT_DOC_FILENAME: &str = "AGENTS.md";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
+/// Shown when an action needs the in-process session registry this terminal lacks.
+pub(crate) const NEEDS_OWN_HOST_MESSAGE: &str =
+    "This needs a session running in this terminal's own host.";
 
 /// Common initialization parameters shared by all `ChatWidget` constructors.
 pub(crate) struct ChatWidgetInit {
@@ -121,7 +124,7 @@ pub(crate) struct ChatWidgetInit {
     /// Emits one authenticated activity after this session's first prompt reaches ACP.
     pub(crate) analytics: Option<nori_installed::AnalyticsReporter>,
     /// The app's session registry; this widget's session starts through it.
-    pub(crate) session_manager: nori_harness::session_manager::SessionManager,
+    pub(crate) session_manager: Option<nori_harness::session_manager::SessionManager>,
     /// The time source for request answer grace periods.
     pub(crate) clock: crate::answer_guard::Clock,
 }
@@ -193,7 +196,7 @@ pub(crate) struct ChatWidget {
     session_configured_received: bool,
     // Typed handle for the active harness session.
     harness_handle: Option<HarnessHandle>,
-    session_manager: nori_harness::session_manager::SessionManager,
+    session_manager: Option<nori_harness::session_manager::SessionManager>,
     /// This widget's session in the session manager. Follows branch-at-head
     /// forks, which move the agent process to the child conversation.
     managed_conversation_id: Option<nori_harness::ConversationId>,

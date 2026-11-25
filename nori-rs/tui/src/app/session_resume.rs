@@ -21,10 +21,15 @@ impl App {
         if self.chat_widget.session_generation() != generation {
             return Ok(());
         }
+        let Some(manager) = self.session_manager.clone() else {
+            self.chat_widget
+                .add_error_message(crate::chatwidget::NEEDS_OWN_HOST_MESSAGE.to_string());
+            return Ok(());
+        };
         let Some(record) = self
             .chat_widget
             .managed_conversation_id()
-            .and_then(|id| self.session_manager.get(&id))
+            .and_then(|id| manager.get(&id))
             .filter(|record| record.status == SessionStatus::Failed)
         else {
             return Ok(());
@@ -32,8 +37,7 @@ impl App {
         let title = self.session_title(generation, super::session_overview::WHOLE_NAME);
         let mut config = self.config_for_agent(&record.agent);
         config.cwd.clone_from(&record.cwd);
-        let session = match self
-            .session_manager
+        let session = match manager
             .resume(
                 &record.conversation_id,
                 crate::chatwidget::agent::agent_prepare_spec(config.clone(), None),

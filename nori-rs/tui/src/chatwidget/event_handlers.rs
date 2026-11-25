@@ -392,7 +392,7 @@ impl ChatWidget {
             if self.delegated_child {
                 self.harness_handle = self
                     .conversation_id
-                    .and_then(|id| self.session_manager.handle(&id));
+                    .and_then(|id| self.session_manager.as_ref()?.handle(&id));
             }
         }
         self.forked_from =
@@ -416,7 +416,7 @@ impl ChatWidget {
             && self.harness_handle.is_none()
             && self
                 .managed_conversation_id
-                .and_then(|id| self.session_manager.get(&id))
+                .and_then(|id| self.session_manager.as_ref()?.get(&id))
                 .is_some_and(|record| record.status.is_closed());
         if !historical_child {
             self.submit_harness_action(crate::app_event::HarnessAction::LoadCustomPrompts);

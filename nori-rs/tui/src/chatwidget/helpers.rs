@@ -81,6 +81,12 @@ impl ChatWidget {
                 Some("reattach later from the `nori cloud` picker".to_string()),
             ));
         }
+        if self.host_connection.is_some() {
+            self.add_to_history(history_cell::new_info_event(
+                "Left the host; its sessions keep running.".to_string(),
+                Some("join again with `nori attach`".to_string()),
+            ));
+        }
         self.request_redraw();
 
         let child_grace = if self.cloud_mode {
@@ -242,7 +248,7 @@ impl ChatWidget {
     }
 
     pub(crate) fn has_harness_session(&self) -> bool {
-        self.harness_handle.is_some()
+        self.harness_handle.is_some() || self.follows_host_session()
     }
 
     pub(crate) fn loop_state(&self) -> Option<(i32, i32)> {
@@ -321,7 +327,12 @@ impl ChatWidget {
         } else {
             std::time::Duration::ZERO
         };
-        let manager = self.session_manager.clone();
+        let Some(manager) = self.session_manager.clone() else {
+            self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
+                history_cell::new_error_event(NEEDS_OWN_HOST_MESSAGE.to_string()),
+            )));
+            return;
+        };
         tokio::spawn(async move {
             if let Err(error) = manager.close(&conversation_id, child_grace).await {
                 tracing::warn!(%error, "failed to shut down replaced harness session");
@@ -331,12 +342,52 @@ impl ChatWidget {
 
     pub(crate) fn submit_harness_action(&self, action: crate::app_event::HarnessAction) {
         let Some(handle) = self.harness_handle.clone() else {
-            if matches!(action, crate::app_event::HarnessAction::Shutdown { .. }) {
-                self.app_event_tx.send(AppEvent::ExitRequest);
-            } else {
-                self.app_event_tx.send(AppEvent::HarnessActionFailed(
-                    "No active harness session".to_string(),
-                ));
+            use crate::app_event::HarnessAction;
+            match action {
+                // Leaving a joined host ends only this terminal's view.
+                HarnessAction::Shutdown { .. } => self.app_event_tx.send(AppEvent::ExitRequest),
+                // A joined session's history and prompts live on its host.
+                HarnessAction::AddHistory(_)
+                | HarnessAction::LoadCustomPrompts
+                | HarnessAction::LoadGoal
+                | HarnessAction::HistoryEntry { .. }
+                | HarnessAction::SearchHistory { .. }
+                    if self.follows_host_session() => {}
+                HarnessAction::Cancel
+                | HarnessAction::ReclaimQueuedPrompt { .. }
+                | HarnessAction::ResumeQueue
+                | HarnessAction::Compact
+                | HarnessAction::Branch
+                | HarnessAction::UndoTo(_)
+                | HarnessAction::LoadUndoSnapshots
+                | HarnessAction::RunUserShell(_)
+                | HarnessAction::SetGoal { .. }
+                | HarnessAction::SetGoalStatus(_)
+                | HarnessAction::ClearGoal
+                    if self.follows_host_session() =>
+                {
+                    self.app_event_tx.send(AppEvent::HarnessActionFailed(
+                        NEEDS_OWN_HOST_MESSAGE.to_string(),
+                    ));
+                }
+                HarnessAction::Cancel
+                | HarnessAction::ReclaimQueuedPrompt { .. }
+                | HarnessAction::ResumeQueue
+                | HarnessAction::Compact
+                | HarnessAction::Branch
+                | HarnessAction::UndoTo(_)
+                | HarnessAction::LoadUndoSnapshots
+                | HarnessAction::RunUserShell(_)
+                | HarnessAction::AddHistory(_)
+                | HarnessAction::HistoryEntry { .. }
+                | HarnessAction::SearchHistory { .. }
+                | HarnessAction::LoadCustomPrompts
+                | HarnessAction::LoadGoal
+                | HarnessAction::SetGoal { .. }
+                | HarnessAction::SetGoalStatus(_)
+                | HarnessAction::ClearGoal => self.app_event_tx.send(
+                    AppEvent::HarnessActionFailed("No active harness session".to_string()),
+                ),
             }
             return;
         };

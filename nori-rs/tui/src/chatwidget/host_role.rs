@@ -17,6 +17,14 @@ impl ChatWidget {
         self.refresh_builtin_command_availability();
     }
 
+    /// Whether this widget shows a joined host's session, which runs on the
+    /// host with no harness in this process.
+    pub(crate) fn follows_host_session(&self) -> bool {
+        self.harness_handle.is_none()
+            && self.host_connection.is_some()
+            && self.managed_conversation_id.is_some()
+    }
+
     /// The surface command availability is judged for.
     pub(super) fn command_surface(&self) -> crate::command_availability::Surface {
         match &self.host_connection {

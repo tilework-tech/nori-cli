@@ -621,6 +621,41 @@ fn resume_startup_error(tui: &mut Tui, message: String) -> color_eyre::Result<Ap
     })
 }
 
+/// Join a running host in the shared terminal client. Leaving closes only
+/// this terminal's connection; the host's sessions keep running.
+pub async fn run_joined_app(
+    config: NoriConfig,
+    options: AttachOptions,
+) -> color_eyre::Result<AppExitInfo> {
+    let initial =
+        nori_harness::remote_agent::ManagedClient::connect(&options.endpoint, &options.token)
+            .await
+            .map_err(|error| color_eyre::eyre::eyre!(error))?;
+    let mut tui = Tui::new(tui::init()?);
+    let auth_manager = AuthManager::shared(
+        config.nori_home.clone(),
+        false,
+        codex_login::AuthCredentialsStoreMode::File,
+    );
+    let endpoint = host_client::HostEndpoint {
+        endpoint: options.endpoint,
+        token: options.token,
+        refresh_local_token: options.refresh_local_token,
+    };
+    let result = App::run_joined(
+        &mut tui,
+        auth_manager,
+        config,
+        endpoint,
+        initial,
+        options.session_id,
+        None,
+    )
+    .await;
+    restore(&tui);
+    result
+}
+
 #[expect(
     clippy::print_stderr,
     reason = "TUI should no longer be displayed, so we can write to stderr."
