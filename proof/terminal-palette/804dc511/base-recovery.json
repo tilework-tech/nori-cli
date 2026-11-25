@@ -1,0 +1,77 @@
+{
+  "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+  "binary_sha256": "b34747e59b47b3181518d65eddfcc37885f81acf611a6b6e11e86768f5bbc888",
+  "terminal": "120x40 tmux loopback via diagnostic wire probe",
+  "samples": [
+    {
+      "sections": 64,
+      "mode": "transcript",
+      "ctrl_r_to_ready_row_ms": 51.142,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 46.185,
+      "enter_to_first_latest_ms": 86.518,
+      "enter_to_first_tool_ms": 86.519,
+      "enter_to_new_reply_ms": 291.519,
+      "audited_sections": 64,
+      "audited_lines": 973,
+      "history_watermark": 983,
+      "applied_after_probe": 1316,
+      "enter_to_wire_watermark_ms": 18.599,
+      "enter_to_replay_finished_wire_ms": 62.516,
+      "enter_to_confirmed_cursor_ms": 2553.344,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 36.609,
+      "ctrl_r_to_agent_session_new_ms": 37.064,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 256973,
+        "text_bytes": 11042
+      }
+    },
+    {
+      "sections": 64,
+      "mode": "native",
+      "ctrl_r_to_ready_row_ms": 70.609,
+      "rows": 1,
+      "ctrl_r_stayed_in_picker": true,
+      "enter_to_first_content_ms": 48.61,
+      "enter_to_first_latest_ms": 65.381,
+      "enter_to_first_tool_ms": 65.382,
+      "enter_to_new_reply_ms": 239.819,
+      "audited_sections": 64,
+      "audited_lines": 972,
+      "history_watermark": 1006,
+      "applied_after_probe": 1315,
+      "enter_to_wire_watermark_ms": 19.592,
+      "enter_to_replay_finished_wire_ms": 21.865,
+      "enter_to_confirmed_cursor_ms": 2310.855,
+      "event_gaps": 0,
+      "ctrl_r_to_agent_initialize_ms": 34.814,
+      "ctrl_r_to_agent_session_load_ms": 39.472,
+      "fixture": {
+        "sessions": 1,
+        "sections": 64,
+        "acp_updates": 643,
+        "update_types": {
+          "user_message_chunk": 64,
+          "agent_message_chunk": 450,
+          "tool_call": 65,
+          "tool_call_update": 64
+        },
+        "saved_session_events": 653,
+        "transcript_bytes": 257621,
+        "text_bytes": 11042
+      }
+    }
+  ]
+}
