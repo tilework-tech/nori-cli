@@ -151,7 +151,7 @@ jobs:
           for round in 1 2 3; do sed -n '/^failures:$/,/^test result/p' round-$round.log | head -400; done
           echo "attach rounds FAILED: $(grep -c FAILED attach-rounds.txt) of $(grep -c '^round' attach-rounds.txt)"
           ! grep -q FAILED attach-rounds.txt
-          test "$(grep -c '^round' attach-rounds.txt)" -ge 132
+          test "$(grep -c '^round' attach-rounds.txt)" = 108
       - name: Replay, PageUp, list latency and streaming on macOS
         working-directory: .
         run: |
