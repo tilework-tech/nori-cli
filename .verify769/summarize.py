@@ -36,14 +36,16 @@ def summarize(path):
     checks = []
     for b in builds:
         ok = all(s["audit"]["ordered_exactly_once"] for s in rows[b])
-        dup = sum(s["audit"]["duplicate_count"] for s in rows[b])
+        dup = sum(s["audit"].get("duplicate_count", 0) for s in rows[b])
+        broken = sum(1 for s in rows[b] if "stitch_error" in s["audit"])
         drafts = all(s["draft_intact"] for s in rows[b])
         start = all(s["reached_start"] for s in rows[b])
-        hashes = sorted({s["audit"]["sha256"][:12] for s in rows[b]})
+        hashes = sorted({s["audit"]["sha256"][:12] for s in rows[b] if "sha256" in s["audit"]})
         finals = sorted({s["final_history_sha256"][:12] for s in rows[b]})
         extra = ""
         if rows[b] and "answered_by_replacement" in rows[b][0]:
-            extra = f", answered by replacement {all(s['answered_by_replacement'] for s in rows[b])}"
+            extra = (f", new prompt answered by replacement {sum(1 for s in rows[b] if s['answered_by_replacement'])}/{len(rows[b])}"
+                     f", scrollback unreadable (pinned notice) {broken}")
         if rows[b] and "disconnect_notices" in rows[b][0]:
             extra += (f", samples with a disconnect {sum(1 for s in rows[b] if s['disconnect_notices'] or s['restored_notices'])}/{len(rows[b])}"
                       f", samples with a disconnect row left in scrollback {sum(1 for s in rows[b] if s['scrollback_disconnect_rows'])}")

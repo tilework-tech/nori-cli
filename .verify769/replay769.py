@@ -238,14 +238,21 @@ def open_sample(binary, args, workdir):
             out["final_history_sha256"] = hashlib.sha256("\n".join(h).encode()).hexdigest()
             out["final_screen"] = final
             out["final_ansi"] = pane.ansi()
-            full, lat, top = stitch(pane, args.sections * 30 + 60)
+            try:
+                full, lat, top = stitch(pane, args.sections * 30 + 60)
+                stitch_error = None
+            except AssertionError as broken:
+                # A notice pinned below the history (e.g. a lost prompt) breaks paging;
+                # record the sample as failing instead of aborting the run.
+                full, lat, top, stitch_error = [], [], False, str(broken)[:4000]
             out["reached_start"] = top
             out["page_up_first_ms"] = lat[0] if lat else None
             out["page_up_ms_median"] = round(statistics.median(lat), 2) if lat else None
             out["page_up_ms_max"] = max(lat) if lat else None
             out["page_up_ms_last5_median"] = round(statistics.median(lat[-5:]), 2) if lat else None
             out["page_ups"] = len(lat)
-            out["audit"] = audit(full, args.sections, lives, prompt)
+            out["audit"] = audit(full, args.sections, lives, prompt) if stitch_error is None else {
+                "ordered_exactly_once": False, "stitch_error": stitch_error}
             plain = re.sub(rb"\x1b\[[0-9;?]*[A-Za-z]", b"", pane.raw.read_bytes())
             out["disconnect_notices"] = plain.count(b"Connection lost")
             out["restored_notices"] = plain.count(b"Connection restored")
