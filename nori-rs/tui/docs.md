@@ -91,6 +91,13 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   drained, so a replay burst writes one report.
 - `ProgramStatusReporter` writes only when the bytes change, never when
   stdout is not a TTY, and clears once if it ever reported.
+- During catch-up, the attach event loop applies queued host events in
+  arrival order and draws once per bounded batch, handling keys and list
+  refreshes between batches. The attach renderer formats transcript parts
+  from newest to oldest only until they cover the scroll offset and the
+  visible rows, then shows those rows in reading order. Scrolling past the
+  start keeps the first page on screen. An idle conversation with no
+  transcript text shows the ready prompt.
 - Approval and sandbox policy come from `nori-config`. ACP session config
   options stay ACP schema values.
 - "Fork" means ACP fork; going back to an earlier message is rewind. "Queue"

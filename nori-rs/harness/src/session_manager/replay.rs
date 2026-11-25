@@ -89,7 +89,7 @@ struct Subscriber {
 }
 
 pub(super) struct Journal {
-    capacity: usize,
+    pub(super) capacity: usize,
     events: VecDeque<SessionEnvelope>,
     sessions: HashMap<String, History>,
     subscribers: Vec<Subscriber>,

@@ -232,6 +232,11 @@ impl SessionManager {
         }
     }
 
+    /// Envelopes the reconnect history retains across this manager's sessions.
+    pub fn replay_capacity(&self) -> i32 {
+        i32::try_from(self.shared.state().journal.capacity).unwrap_or(i32::MAX)
+    }
+
     /// Replay strictly after each cursor and follow live events at one atomic boundary.
     /// `None` selects all sessions, including sessions subsequently started.
     pub fn subscribe_from(

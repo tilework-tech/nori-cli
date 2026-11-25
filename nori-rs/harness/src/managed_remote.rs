@@ -18,8 +18,6 @@ use crate::remote_agent::HostClientOrigin;
 use crate::remote_agent::REMOTE_CONTROL_RESPONDER;
 use crate::session_manager::SessionManager;
 
-const REMOTE_QUEUE_EVENTS: i32 = 256;
-
 /// A transport-independent view of a manager. Disconnection does not stop sessions.
 pub struct ManagedRemoteHost {
     manager: SessionManager,
@@ -286,9 +284,12 @@ impl ManagedRemoteHost {
                 } else {
                     Some(self.target(params.session_id.as_deref())?)
                 };
+                // A subscriber may fall as far behind as a reconnect could still replay.
+                // Restoring a failed session publishes thousands of events in a few
+                // milliseconds, so a shorter queue drops a client on any brief stall.
                 let subscription = self
                     .manager
-                    .subscribe_from(session, &params.cursors, REMOTE_QUEUE_EVENTS)
+                    .subscribe_from(session, &params.cursors, self.manager.replay_capacity())
                     .map_err(|error| RemoteError::new(-32003, error))?;
                 Ok((json!({"subscribed":true}), Some(subscription)))
             }

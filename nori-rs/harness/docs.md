@@ -84,6 +84,11 @@ The session runtime must not depend on `nori-host-runtime`, `nori-tui`,
   same conversation continues it. A fork starts a new conversation.
 - A bounded subscriber that falls behind is dropped and its receiver closes.
   It never slows a session or the primary consumer.
+- A host subscription (`_nori/session/subscribe` in `managed_remote.rs`) may
+  fall as far behind as the journal retains (4,096 envelopes by default). A
+  reconnect could not replay a larger gap anyway. Restoring a failed session
+  publishes thousands of envelopes within milliseconds, so a shorter queue
+  dropped clients that only paused briefly.
 - Remote and local mutations go through the same typed handle methods, so
   hooks, transcripts, goals, and permission policy always apply.
 - Goal completion is proven only by `update_goal` on the `nori-client` MCP
