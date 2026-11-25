@@ -6,8 +6,8 @@
 //! notifications under the Nori conversation ID, from the manager journal,
 //! so several clients can watch one session and a late client still sees
 //! what happened before it attached. The controller also receives the
-//! session's `session/request_permission` requests. See
-//! `docs/remote-control.md` §12.
+//! session's `session/request_permission` requests. See "The ACP face" in
+//! the host contract (`nori-monorepo: docs/specs/nori-cli/host-contract.md`).
 
 pub(super) mod adapter_modes;
 mod attach;

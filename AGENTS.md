@@ -1,5 +1,7 @@
 # We only care about the ACP backend
 
+**Glossary:** use terms as [GLOSSARY.md](GLOSSARY.md) defines them. Cross-repo terms are in the monorepo's root `GLOSSARY.md`.
+
 We only care about the ACP backend and the code that compiles into the nori bin. The inherited Codex engine and its `codex` bin have been removed; every agent, Codex included, runs as an external ACP subprocess. Make sure all changes and responses are aligned to this critical fact. For example, if I ask 'add notifications to the cli', you should assume I mean 'add notification support to the ACP backend for the nori cli'.
 
 # Rust/nori-rs
@@ -20,7 +22,8 @@ In the nori-rs folder where the rust code lives:
 - Do not use unsigned integer even if the number cannot be negative.
 - When possible, make `match` statements exhaustive and avoid wildcard arms.
 - Do not create small helper methods that are referenced only once.
-- When a change affects behavior covered by a doc in `docs/` (indexed in `docs/README.md`), update that doc in the same PR. Use `docs/glossary.md` terms.
+- When a change affects behavior covered by a doc (see [Documentation](#documentation)), update that doc in the same PR.
+- Register any new or changed ACP extension (`_nori/*` method or `nori/*` `_meta` key) in the monorepo's `docs/acp-extensions.md` before landing code.
 - Avoid large modules:
   - Prefer adding new modules instead of growing existing ones.
   - Target Rust modules under 500 LoC, excluding tests.
@@ -39,7 +42,7 @@ Before finalizing a change to `nori-rs`, run `just fix -p <project>` (in `nori-r
 
 ## TUI style conventions
 
-See `nori-rs/tui/styles.md`.
+See the Styles section of `nori-rs/tui/docs.md`.
 
 ## TUI code conventions
 
@@ -84,7 +87,41 @@ Snapshot workflow (`cargo install cargo-insta` if missing):
 ### Integration tests (core)
 
 - `core_test_support` (`nori-rs/core/tests/common`) provides `skip_if_no_network!`, `skip_if_sandbox!`, `load_default_config_for_test`, and `fs_wait` helpers. Use the skip macros instead of checking the sandbox environment variables by hand.
-- End-to-end ACP behavior is tested against `mock-acp-agent`, a deterministic ACP agent driven by scenario environment variables (see `nori-rs/mock-acp-agent/docs.md`). `tui-pty-e2e` runs the real `nori` binary against it in a pseudo-terminal (see `nori-rs/tui-pty-e2e/docs.md`).
+- End-to-end ACP behavior is tested against `mock-acp-agent`, a deterministic ACP agent driven by scenario environment variables (`nori-rs/mock-acp-agent`). `tui-pty-e2e` runs the real `nori` binary against it in a pseudo-terminal (`nori-rs/tui-pty-e2e`).
+
+## Documentation
+
+The code on `main` is ground truth. Each fact has one owning doc; other docs
+link to it. Cross-repo facts (the `nori host` wire, ACP extensions, the product
+spec) live in the monorepo under `docs/specs/nori-cli/`, whose `README.md` maps
+every CLI doc across repos.
+
+| Doc | Owns |
+|---|---|
+| `README.md` | Install, update, platforms, quick start (also the npm page) |
+| `GLOSSARY.md` | Terms used inside the CLI |
+| `docs/turns.md` | Turns, the prompt queue, steering, follow-ups, goals, compaction, delegation |
+| `docs/permissions.md` | Permission modes, `/approvals`, `--yolo`, unattended `nori exec`, sandboxing |
+| `docs/agents.md` | Built-in agents, adapters, `[acp_adapters]`, custom `[[agents]]`, models |
+| `docs/auth.md` | `nori auth`, saved keys, credential stores, token providers |
+| `docs/mcp.md` | MCP servers, MCP OAuth, the `nori-client` MCP server |
+| `docs/commands.md` | Every subcommand, flag, environment variable, exit code |
+| `docs/configuration.md` | Every `config.toml` key |
+| `docs/storage.md` | Files under `NORI_HOME` |
+| `docs/tui.md` | Using the TUI: slash commands, keybindings, attach |
+| `docs/release-artifacts.md` | Tags, dist-tags, release assets (Sessions depends on these) |
+| `docs/runbooks/releasing.md`, `docs/runbooks/debugging.md` | Releasing and debugging |
+
+Module docs (`docs.md`) exist for `cli`, `host-runtime`, `harness` (the session
+runtime), `acp-host`, `tui`, `nori-config`, and `nori-protocol`. Other crates:
+
+- `auth-providers`: sign-in detection and saved API keys per provider.
+- `installed`: install tracking.
+- `skillsets`: client for the `nori-skillsets` CLI.
+- `tui-components`: reusable Ratatui components.
+- `mock-acp-agent`: scriptable ACP agent for tests.
+- `tui-pty-e2e`: PTY end-to-end tests of the real binaries.
+- Inherited from Codex: `core`, `common`, `login`, `rmcp-client` and `mcp-types` (MCP client), `sandbox`, `linux-sandbox`, `windows-sandbox-rs`, `execpolicy`, `apply-patch`, `arg0` (argv0 dispatch), `process-hardening`, `keyring-store`, `file-search`, `ansi-escape`, `async-utils`, `utils/*`, `stdio-to-uds`.
 
 ## Critical: How to Close the Loop
 

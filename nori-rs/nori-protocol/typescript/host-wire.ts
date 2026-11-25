@@ -2918,7 +2918,7 @@ export interface SessionEnvelope {
    */
   agent: string;
   /**
-   * Nori's conversation ID for the session (see `docs/glossary.md`).
+   * Nori's conversation ID for the session (see `GLOSSARY.md`).
    */
   conversation_id: string;
   event: SessionEvent;
