@@ -60,6 +60,10 @@ frontend could need in the crate below it; this crate stays a dispatcher.
 
 ## Invariants
 
+- `nori host` writes a new `host/local-token` beside `host/token` and passes
+  it to the transport; a managed host serves no `!` commands, so it gets
+  none. `nori attach` sends it only with local discovery. With `--host` and
+  `--token-file` it sends none and is a remote client.
 - `nori exec --acp` and `nori host --stdio` own stdin as a JSON-RPC channel.
   `run_exec` returns into the host before it reads a prompt from stdin.
   Never read stdin upstream of that branch.

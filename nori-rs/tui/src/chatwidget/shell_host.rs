@@ -1,6 +1,7 @@
 //! `!` commands. A session on the host runs them on that host, through
-//! `_nori/session/shell`, in the session's folder; a widget with no host
-//! session runs them in process. Either way the command, its output and its
+//! `_nori/session/shell`, in the session's folder, when this terminal runs on
+//! the host's machine; a remote terminal gets a gray hint and nothing runs on
+//! either machine. A widget with no host session runs them in process. Either way the command, its output and its
 //! exit code arrive as the session's `user_shell` events, which every widget
 //! following the session shows as a command cell, live or replayed.
 
@@ -12,6 +13,7 @@ use nori_protocol::UserShellStream;
 use super::*;
 use crate::app_event::HarnessAction;
 use crate::host_client::HostCall;
+use crate::host_client::HostError;
 use crate::presentation::ToolKind;
 use crate::presentation::ToolPhase;
 use crate::presentation::ToolSnapshot;
@@ -103,6 +105,13 @@ fn snapshot(
     }
 }
 
+/// The gray note a terminal on another machine gets for `!cmd`.
+fn remote_shell_hint() -> AppEvent {
+    AppEvent::InsertHistoryCell(Box::new(history_cell::new_hint_event(
+        nori_protocol::REMOTE_SHELL_UNSUPPORTED_MESSAGE.to_owned(),
+    )))
+}
+
 impl ChatWidget {
     /// Sends a `!` command for a host session to the host; any other action,
     /// or any widget without a host session, is returned for the harness.
@@ -118,17 +127,22 @@ impl ChatWidget {
             HarnessAction::RunUserShell(command) => {
                 let tx = self.app_event_tx.clone();
                 let generation = self.session_generation;
-                // A joined host older than `_nori/session/shell` cannot run it,
-                // and the command must never reach the agent as a prompt.
-                if self
+                // A joined host that does not offer `_nori/session/shell` to
+                // this terminal is either remote or too old to run it, and
+                // the command must never reach the agent as a prompt.
+                if let Some(connection) = self
                     .host_connection
                     .as_ref()
-                    .is_some_and(|connection| !connection.features.shell)
+                    .filter(|connection| !connection.features.shell)
                 {
-                    tx.send(AppEvent::HarnessActionFailed(format!(
-                        "!{command}: {}",
-                        crate::command_availability::NOT_ON_THIS_HOST
-                    )));
+                    if connection.features.remote {
+                        tx.send(remote_shell_hint());
+                    } else {
+                        tx.send(AppEvent::HarnessActionFailed(format!(
+                            "!{command}: {}",
+                            crate::command_availability::NOT_ON_THIS_HOST
+                        )));
+                    }
                     tx.send(AppEvent::UserShellRefused {
                         generation,
                         command,
@@ -141,9 +155,16 @@ impl ChatWidget {
                 });
                 tokio::spawn(async move {
                     if let Err(error) = reply.await {
-                        tx.send(AppEvent::HarnessActionFailed(format!(
-                            "Could not run !{command}: {error}"
-                        )));
+                        let remote = error.downcast_ref::<HostError>().is_some_and(|error| {
+                            error.code == Some(i64::from(nori_protocol::REMOTE_SHELL_UNSUPPORTED))
+                        });
+                        if remote {
+                            tx.send(remote_shell_hint());
+                        } else {
+                            tx.send(AppEvent::HarnessActionFailed(format!(
+                                "Could not run !{command}: {error}"
+                            )));
+                        }
                         tx.send(AppEvent::UserShellRefused {
                             generation,
                             command,

@@ -258,3 +258,88 @@ async fn a_bang_command_on_an_older_joined_host_is_refused_and_kept() {
         )
     );
 }
+
+#[tokio::test]
+async fn a_remote_terminal_shows_a_gray_hint_and_runs_nothing() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    host_session(&mut chat);
+    chat.submit_user_message("!touch marker".to_string().into());
+    let (_, reply) = host_requests(&mut chat, &mut rx).pop().unwrap();
+
+    reply.deliver(Err(anyhow::Error::new(crate::host_client::HostError {
+        code: Some(-32018),
+        message: Some("Remote shell commands are not yet supported.".into()),
+    })));
+    let mut errors = Vec::new();
+    let mut hints = Vec::new();
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            match rx.recv().await {
+                Some(AppEvent::InsertHistoryCell(cell)) => hints.push(cell.display_lines(80)),
+                Some(AppEvent::HarnessActionFailed(message)) => errors.push(message),
+                Some(AppEvent::HarnessAction(action)) => panic!("ran {action:?} in process"),
+                Some(AppEvent::UserShellRefused { command, .. }) => {
+                    chat.on_user_shell_refused(command);
+                    return;
+                }
+                Some(_) => {}
+                None => panic!("the widget stopped sending"),
+            }
+        }
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(
+        (errors, hints.len(), chat.composer_text()),
+        (Vec::<String>::new(), 1, "!touch marker".to_string())
+    );
+    assert!(
+        hints[0][0]
+            .spans
+            .iter()
+            .all(|span| span.style.fg == Some(ratatui::style::Color::DarkGray)),
+        "the hint is gray: {:?}",
+        hints[0][0]
+    );
+    assert_snapshot!(lines_to_single_string(&hints[0]));
+}
+
+#[tokio::test]
+async fn a_remote_joined_terminal_shows_the_gray_hint_without_asking_the_host() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    host_session(&mut chat);
+    chat.set_host_connection(crate::host_client::HostConnection {
+        role: nori_protocol::ControlRole::Controller,
+        connected: true,
+        stopped: None,
+        features: crate::host_client::HostFeatures {
+            remote: true,
+            ..Default::default()
+        },
+    });
+    chat.submit_user_message("!touch marker".to_string().into());
+
+    let mut errors = Vec::new();
+    let mut hints = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        match event {
+            AppEvent::HarnessAction(action) => chat.submit_harness_action(action),
+            AppEvent::UserShellRefused { command, .. } => chat.on_user_shell_refused(command),
+            AppEvent::HarnessActionFailed(message) => errors.push(message),
+            AppEvent::InsertHistoryCell(cell) => {
+                hints.push(lines_to_single_string(&cell.display_lines(80)))
+            }
+            AppEvent::HostRequest { call, .. } => panic!("sent {call:?} to the host"),
+            _ => {}
+        }
+    }
+    assert_eq!(
+        (chat.composer_text(), errors, hints),
+        (
+            "!touch marker".to_string(),
+            Vec::<String>::new(),
+            vec!["• Remote shell commands are not yet supported.\n".to_string()]
+        )
+    );
+}

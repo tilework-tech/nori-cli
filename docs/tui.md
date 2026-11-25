@@ -440,7 +440,7 @@ already bound swaps the two.
 | Enter on an empty prompt | Resume a paused queue. |
 | Left on an empty prompt | Open the session list. |
 | `?` on an empty prompt | Show the shortcut overlay. |
-| `!` at the start | Shell mode: run the line as a shell command on the session's host, in the session's folder. The command and its output show in the transcript, for every terminal following the session. A watcher cannot run one; the line goes back to its prompt. |
+| `!` at the start | Shell mode: run the line as a shell command on the session's host, in the session's folder. The command and its output show in the transcript, for every terminal following the session. Only a local controller can run one. A watcher, or a terminal on another machine, gets the line back in its prompt. |
 | `@` | Mention a file (fuzzy search). |
 | `$` | Pick an agent skill or command. |
 | Ctrl+Z | Suspend Nori. |
@@ -478,17 +478,30 @@ prompt does not answer it. When several requests wait, the newest shows first.
   same host. Up sees those after the next turn ends.
 - **`!` shell commands:** `!cmd` runs `$SHELL -lc cmd` on the host that
   runs the session, in the session's folder, as the host's user, with no
-  sandbox and no approval (see [permissions](permissions.md)). The host
-  method is `_nori/session/shell` {sessionId, command}. It replies once the
-  command starts; an empty command gets `-32602`, a watcher `-32016`, and an
-  unknown session `-32002`. The command, its output and its exit code arrive
-  as that session's `user_shell` events, so every terminal following the
-  session shows a `Ran` cell, also on replay. A failed command's bullet is
-  red. Output is shown once the command finishes. Hosts advertise this as
-  `capabilities.nori_sessions.shell` (host contract 1.9.0). Without a host
-  session the command runs in process, the same way. `nori attach` on an
-  older host refuses `!cmd` with "not available on this host yet" and puts
-  the line back in the prompt; it never sends it to the agent.
+  sandbox and no approval (see [permissions](permissions.md)). Only a
+  *local* client may run one: plain `nori` (its in-process host), or
+  `nori attach` that found the host through local discovery and so sends the
+  host's private local token (see [storage](storage.md#host-files)). Every
+  other client is remote: `nori attach --host URL --token-file F`, and every
+  stdio client (`nori host --stdio`, `nori exec --acp`, the join relay),
+  which may be relayed from anywhere. A remote `!cmd` runs on neither
+  machine; the TUI shows the gray hint "Remote shell commands are not yet
+  supported." and puts `!cmd` back in the prompt.
+- **`_nori/session/shell`** {sessionId, command} is the host method. It
+  replies once the command starts. A watcher gets `-32016`; a remote
+  controller then gets `-32018` with the message above, before the session
+  is looked up; an empty command gets `-32602`, and an unknown session
+  `-32002`. The command, its output and its exit code arrive as that
+  session's `user_shell` events, so every terminal following the session
+  shows a `Ran` cell, also on replay. A failed command's bullet is red.
+  Output is shown once the command finishes. `initialize` advertises
+  `capabilities.nori_sessions.shell` (host contract 1.9.0) per connection:
+  `true` only for a local client. Without a host session the command runs in
+  process, the same way. When a joined host does not offer `shell`, `nori
+  attach` does not send `!cmd`: with `--host` it shows the gray hint above,
+  and on a local host too old for `!` it says "not available on this host
+  yet". Either way the line goes back to the prompt and never reaches the
+  agent.
 - **Paste:** a paste over 1000 characters shows as
   `[Pasted Content N chars]` and expands on send. A pasted image path becomes
   an attachment.

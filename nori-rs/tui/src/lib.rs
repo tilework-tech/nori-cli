@@ -625,21 +625,22 @@ pub async fn run_joined_app(
     config: NoriConfig,
     options: AttachOptions,
 ) -> color_eyre::Result<AppExitInfo> {
-    let initial =
-        nori_harness::remote_agent::ManagedClient::connect(&options.endpoint, &options.token)
-            .await
-            .map_err(|error| color_eyre::eyre::eyre!(error))?;
+    let endpoint = host_client::HostEndpoint {
+        endpoint: options.endpoint,
+        token: options.token,
+        local_token: options.local_token,
+        refresh_local_token: options.refresh_local_token,
+    };
+    let initial = endpoint
+        .connect()
+        .await
+        .map_err(|error| color_eyre::eyre::eyre!(error))?;
     let mut tui = Tui::new(tui::init()?);
     let auth_manager = AuthManager::shared(
         config.nori_home.clone(),
         false,
         codex_login::AuthCredentialsStoreMode::File,
     );
-    let endpoint = host_client::HostEndpoint {
-        endpoint: options.endpoint,
-        token: options.token,
-        refresh_local_token: options.refresh_local_token,
-    };
     let result = App::run_joined(
         &mut tui,
         auth_manager,
