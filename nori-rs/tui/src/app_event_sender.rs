@@ -103,7 +103,8 @@ impl AppEventSender {
                 | AppEvent::ConsolidateAgentMessage { .. }
                 | AppEvent::AgentConnecting { .. }
                 | AppEvent::AgentSpawnFailed { .. }
-                | AppEvent::HarnessActionFailed(_)),
+                | AppEvent::HarnessActionFailed(_)
+                | AppEvent::ScriptExecutionComplete { .. }),
             ) => AppEvent::SessionHistory {
                 generation,
                 event: Box::new(event),
