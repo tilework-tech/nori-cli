@@ -1174,7 +1174,7 @@ cloud mode). That ID follows branch-at-head forks. Exit keeps its existing path:
 session shuts down through its handle and a candidate is discarded. The TUI
 never calls `SessionManager::shutdown` itself; after the main loop it stops
 its owned host, which shuts down whatever sessions remain (parked ones, or one
-still mid-turn) with zero grace.
+still mid-turn) with the [host’s bounded adapter grace period](../host-runtime/src/host/service.rs).
 Preparation generations apply the
 same stale-result rule before a widget or active session exists.
 

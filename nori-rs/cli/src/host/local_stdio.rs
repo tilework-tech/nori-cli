@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
-use std::time::Duration;
 
 use nori_config::NoriConfig;
 use nori_config::NoriConfigOverrides;
@@ -88,14 +87,10 @@ pub(crate) async fn serve(
         stop
     };
     let served = RemoteAcpServer::serve_host_stdio_lines(host.clone(), lines, stop).await;
-    let report = host.manager.shutdown(Duration::ZERO).await;
+    let shutdown = host.shutdown_sessions().await;
     match served? {
         None | Some(Stop::Requested) => {}
         Some(Stop::Signal(signal)) => anyhow::bail!("{signal}"),
     }
-    anyhow::ensure!(
-        report.timed_out.is_empty() && report.failed.is_empty(),
-        "some sessions did not stop cleanly: {report:?}"
-    );
-    Ok(())
+    shutdown
 }

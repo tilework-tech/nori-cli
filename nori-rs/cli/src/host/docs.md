@@ -42,7 +42,12 @@ Path: @/nori-rs/cli/src/host
   `SessionManager`. Agent initialization and transcript recording follow the
   ordinary harness path.
 - The host starts with an empty manager and retains it until explicit stop or
-  process termination. Ending the last session never ends the host.
+  process termination. Ending the last session never ends the host. During
+  orderly shutdown the [host owner](../../../host-runtime/src/host/service.rs)
+  closes adapter inputs in parallel and gives them two seconds to flush on EOF.
+  The Unix child watcher then sweeps each process group before reaping its
+  leader. Hard host death bypasses this cleanup. Reconnect to a replacement
+  as a fresh host instance.
 
 ```text
 host command -> detached host -> authenticated /acp -----> HostService
@@ -691,7 +696,7 @@ On a private host:
 
 | Event | Outcome |
 | --- | --- |
-| stdin reaches EOF | Sessions stop (zero grace) and the process exits 0, or non-zero if a session did not stop cleanly. |
+| stdin reaches EOF | Adapters receive the host shutdown grace period and the process exits 0, or non-zero if a session did not stop cleanly. |
 | The ACP face disconnects the client, for example one more than 1024 events behind | Sessions stop and the process exits non-zero. |
 | `_nori/host/stop` | As stdin EOF. |
 | SIGINT or SIGTERM | Sessions stop and the process exits non-zero. |
@@ -725,7 +730,7 @@ nori exec "prompt"
   A run with `-c` overrides or `--add-dir` (`own_host`) always skips the
   running host, because that host applies its own configuration. The
   in-process host takes no lock, publishes no discovery and binds no socket,
-  and its sessions stop (zero grace) when the run ends.
+  and shuts down its sessions with the host grace period when the run ends.
 - **Per run.** `initialize` (pipe only; the socket path already initialized
   during host choice), `session/new` with the resolved `-C` folder or current
   folder, empty `mcpServers` and `_meta["nori/agent"]` when `--agent`/`-a` was
