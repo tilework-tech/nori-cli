@@ -1223,6 +1223,20 @@ pub fn normalize_for_snapshot(contents: String) -> String {
                 line = result;
             }
 
+            // Exit card row: "  Session      019bb411-..." -> "  Session      [SESSION_ID]"
+            if line.trim_start().starts_with("Session ")
+                && line.split_whitespace().nth(1).is_some_and(|value| {
+                    value.len() == 36
+                        && value.char_indices().all(|(index, ch)| match index {
+                            8 | 13 | 18 | 23 => ch == '-',
+                            _ => ch.is_ascii_hexdigit(),
+                        })
+                })
+                && let Some(result) = replace_after_marker(&line, "Session ", "[SESSION_ID]")
+            {
+                line = result;
+            }
+
             // Resume hint: "nori resume 019bb411-..." -> "nori resume [SESSION_ID]"
             if let Some(result) = replace_after_marker(&line, "nori resume", "[SESSION_ID]") {
                 line = result;

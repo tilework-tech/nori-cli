@@ -8,19 +8,16 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 • Sure, I'll help you with that!
 
-╭───────────────────────────────────────╮
-│  Goodbye! Thanks for using Nori.      │
-│                                       │
-│  Session: [SESSION_ID]                │
-│                                       │
-│ Messages      User: 1  Assistant: 1  Total: 2 │
-│  Tool Calls    (none)                 │
-│                                       │
-│  Skills Used                          │
-│    (none)                             │
-│                                       │
-│  Subagents Used                       │
-│    (none)                             │
-╰───────────────────────────────────────╯
-To continue this session, run:
+  › Nori CLI  session ended
+
+  Session      [SESSION_ID]                        
+               Agent  Mock ACP
+  Messages     1 prompt · 1 reply
+
+  Context      340,412 of 1,000,000 · 34% full
+  Tokens       12,480  total
+                9,120  input
+                8,000  cached read
+                3,360  output
+
 nori resume [SESSION_ID]

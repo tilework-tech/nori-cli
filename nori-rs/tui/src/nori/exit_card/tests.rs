@@ -10,7 +10,6 @@ use crate::test_backend::VT100Backend;
 
 const STRESS: (ExitToolsFixture, ExitFieldsFixture) =
     (ExitToolsFixture::Many, ExitFieldsFixture::Full);
-const RESUME: &str = "nori resume 019a7c3e-5b21-7f4d-9e08-6c2a1d4b8f37";
 
 fn card(tools: ExitToolsFixture, fields: ExitFieldsFixture, width: u16) -> Vec<Line<'static>> {
     exit_card_lines(
@@ -18,15 +17,6 @@ fn card(tools: ExitToolsFixture, fields: ExitFieldsFixture, width: u16) -> Vec<L
         width,
         ExitCardPaint::plain(),
     )
-}
-
-/// The card without its trailing resume command, which is allowed to wrap.
-fn body(lines: &[Line<'static>]) -> Vec<Line<'static>> {
-    let text = plain(lines);
-    match text.last() {
-        Some(last) if last.starts_with("nori resume ") => lines[..lines.len() - 2].to_vec(),
-        _ => lines.to_vec(),
-    }
 }
 
 /// Print lines into a VT100 terminal through the same history path the
@@ -94,7 +84,7 @@ fn every_card_line_occupies_exactly_one_terminal_row_at_every_width() {
     for tools in ExitToolsFixture::ALL {
         for fields in ExitFieldsFixture::ALL {
             for width in 1..=120 {
-                let lines = body(&card(tools, fields, width));
+                let lines = card(tools, fields, width);
                 let expected = plain(&lines);
                 assert_eq!(
                     terminal_rows(lines, width),
@@ -107,28 +97,45 @@ fn every_card_line_occupies_exactly_one_terminal_row_at_every_width() {
 }
 
 #[test]
-fn the_last_line_is_only_the_resume_command() {
-    for width in [10_u16, 40, 80, 120] {
-        let lines = card(STRESS.0, STRESS.1, width);
-        let text = plain(&lines);
+fn the_card_never_contains_the_resume_command() {
+    let text = plain(&card(STRESS.0, STRESS.1, 80));
 
-        assert_eq!(
-            text[text.len() - 2..],
-            [String::new(), RESUME.to_string()],
-            "at width {width}"
-        );
-        assert_eq!(
-            lines.last().map(|line| line
-                .spans
-                .iter()
-                .all(|span| span.style.fg == Some(Color::Green))),
-            Some(true)
-        );
-    }
+    assert!(
+        !text.iter().any(|row| row.contains("nori resume")),
+        "{text:#?}"
+    );
 }
 
 #[test]
-fn a_session_that_cannot_resume_ends_without_a_command() {
+fn the_title_is_green_and_the_agent_takes_its_color() {
+    let lines = card(ExitToolsFixture::Few, ExitFieldsFixture::Full, 80);
+    let style_of = |text: &str| {
+        lines
+            .iter()
+            .flat_map(|line| &line.spans)
+            .find(|span| span.content == text)
+            .map(|span| span.style.fg)
+            .unwrap_or_else(|| panic!("no span {text:?}"))
+    };
+
+    assert_eq!(style_of("Redesign the exit card"), Some(Color::Green));
+    assert_eq!(
+        style_of("Claude Code"),
+        agent_style(Some(nori_harness::AgentKind::ClaudeCode)).fg
+    );
+}
+
+#[test]
+fn agents_without_a_brand_color_keep_the_terminal_foreground() {
+    use nori_harness::AgentKind;
+
+    assert_eq!(agent_style(Some(AgentKind::Pi)).fg, None);
+    assert_eq!(agent_style(None).fg, None);
+    assert_eq!(agent_style(Some(AgentKind::Codex)).fg, Some(Color::Gray));
+}
+
+#[test]
+fn a_session_with_only_an_id_shows_the_heading_and_id() {
     let text = plain(&card(
         ExitToolsFixture::None,
         ExitFieldsFixture::NotResumable,
@@ -299,7 +306,7 @@ fn usage_closes_the_card_with_context_then_tokens_then_cost() {
 
     assert_eq!(text[usage_start - 1], "");
     assert_eq!(
-        text[usage_start..text.len() - 2],
+        text[usage_start..],
         [
             "  Context      164,208 of 1,000,000 · 16% full",
             "  Tokens       2,204,330  total",
@@ -369,7 +376,7 @@ fn an_unknown_terminal_background_gets_no_band() {
 }
 
 #[test]
-fn shading_paints_one_even_band_and_leaves_the_resume_command_outside_it() {
+fn shading_paints_one_even_band() {
     let model = exit_card_fixture(STRESS.0, STRESS.1);
     let paint = ExitCardPaint {
         shade_from: Some((24, 26, 27)),
@@ -378,7 +385,7 @@ fn shading_paints_one_even_band_and_leaves_the_resume_command_outside_it() {
     let band = crate::style::user_message_bg((24, 26, 27));
     for width in [24_u16, 40, 80, 120] {
         let lines = exit_card_lines(&model, width, paint);
-        let shaded = body(&lines);
+        let shaded = &lines;
         let band_width = shaded[0].width();
 
         assert!(
@@ -393,12 +400,6 @@ fn shading_paints_one_even_band_and_leaves_the_resume_command_outside_it() {
                 .all(|span| span.style.bg == Some(band))
         );
         assert_eq!(plain(&shaded[..1]), vec![String::new()]);
-        assert!(
-            lines[shaded.len()..]
-                .iter()
-                .flat_map(|line| &line.spans)
-                .all(|span| span.style.bg.is_none())
-        );
     }
 }
 

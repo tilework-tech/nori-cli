@@ -22,19 +22,36 @@ use crate::nori::session_header::SkillsetStatus;
 use crate::nori::session_header::StatusViewModel;
 use crate::nori::token_count::TokenCount;
 
-mod exit_card;
+pub use crate::nori::exit_card::ExitCardPaint;
+pub use crate::nori::exit_card::ExitFieldsFixture;
+pub use crate::nori::exit_card::ExitToolsFixture;
 
-pub use exit_card::ExitCardModel;
-pub use exit_card::ExitCardPaint;
-pub use exit_card::ExitContext;
-pub use exit_card::ExitCost;
-pub use exit_card::ExitFieldsFixture;
-pub use exit_card::ExitTokens;
-pub use exit_card::ExitToolsFixture;
-pub use exit_card::MIN_COLUMN_WIDTH;
-pub use exit_card::exit_card_fixture;
-pub use exit_card::exit_card_lines;
-pub use exit_card::resume_command;
+/// Render an exit card specimen through the production view, followed by
+/// the bare resume command the CLI prints after the TUI exits. The command
+/// is the one line that may be wider than `width`; a terminal soft-wraps it.
+#[must_use]
+pub fn exit_card_specimen_lines(
+    tools: ExitToolsFixture,
+    fields: ExitFieldsFixture,
+    width: u16,
+    paint: ExitCardPaint,
+) -> Vec<Line<'static>> {
+    use ratatui::style::Stylize;
+
+    let model = crate::nori::exit_card::exit_card_fixture(tools, fields);
+    let mut lines = crate::nori::exit_card::exit_card_lines(&model, width, paint);
+    if fields.resumable() && width > 0 {
+        let command = format!("nori resume {}", crate::nori::exit_card::FIXTURE_SESSION_ID);
+        let command = if paint.color {
+            ratatui::text::Span::from(command).green()
+        } else {
+            ratatui::text::Span::from(command)
+        };
+        lines.push(Line::default());
+        lines.push(Line::from(command));
+    }
+    lines
+}
 
 /// Render fixture context data using the same history cell as `/context`.
 pub fn context_specimen_lines(used: Option<i64>, width: u16) -> Vec<Line<'static>> {

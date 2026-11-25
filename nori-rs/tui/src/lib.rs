@@ -6,7 +6,6 @@
 use additional_dirs::add_dir_warning_message;
 use app::App;
 pub use app::AppExitInfo;
-pub use app::RESUME_HINT_LEAD;
 pub use app::resume_command_for_conversation;
 use codex_login::AuthManager;
 #[cfg(target_os = "windows")]

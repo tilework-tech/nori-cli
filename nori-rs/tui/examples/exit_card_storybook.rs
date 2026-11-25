@@ -1,7 +1,7 @@
-//! Exit card design specimen.
+//! Exit card specimen.
 //!
-//! Renders the design-only exit card (`nori_tui::storybook::exit_card_lines`)
-//! over synthetic fixtures. The storybook owns the chrome: width, tool list,
+//! Renders the production exit card over synthetic fixtures, followed by the
+//! resume command the CLI prints after it. The storybook owns the chrome: width, tool list,
 //! fields, shading, and color.
 //!
 //! Flags set the starting state so captures are repeatable:
@@ -20,8 +20,7 @@ use crossterm::event::KeyEventKind;
 use nori_tui::storybook::ExitCardPaint;
 use nori_tui::storybook::ExitFieldsFixture;
 use nori_tui::storybook::ExitToolsFixture;
-use nori_tui::storybook::exit_card_fixture;
-use nori_tui::storybook::exit_card_lines;
+use nori_tui::storybook::exit_card_specimen_lines;
 use nori_tui_components::KeyHint;
 use nori_tui_components::KeyHints;
 use ratatui::layout::Constraint;
@@ -165,7 +164,7 @@ fn main() -> Result<()> {
             let width = WIDTHS[state.width].min(sections[1].width);
             let color = if state.color { "on" } else { "off (NO_COLOR)" };
             Paragraph::new(vec![
-                Line::styled("Exit card specimen · design only", theme.title),
+                Line::styled("Exit card specimen", theme.title),
                 Line::styled(
                     format!(
                         "Width {width} · Tools: {} · Fields: {}",
@@ -206,9 +205,8 @@ fn main() -> Result<()> {
                     .style(canvas)
                     .render(wide, frame.buffer_mut());
             }
-            let model = exit_card_fixture(state.tools, state.fields);
-            Paragraph::new(soft_wrap(exit_card_lines(&model, width, paint), width))
-                .render(card, frame.buffer_mut());
+            let lines = exit_card_specimen_lines(state.tools, state.fields, width, paint);
+            Paragraph::new(soft_wrap(lines, width)).render(card, frame.buffer_mut());
 
             KeyHints::new([
                 KeyHint::new("← →", "width"),

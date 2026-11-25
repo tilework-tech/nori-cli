@@ -90,7 +90,7 @@ fn context_command_uses_reported_usage_and_prints_a_detached_snapshot() {
     chat.bottom_pane.set_session_usage(Some(SessionUsageState {
         used_tokens: 340_412,
         total_tokens: 1_000_000,
-        cost_display: None,
+        cost: None,
     }));
     while rx.try_recv().is_ok() {}
     chat.dispatch_command(SlashCommand::Context);
@@ -108,7 +108,7 @@ fn context_command_uses_reported_usage_and_prints_a_detached_snapshot() {
     chat.bottom_pane.set_session_usage(Some(SessionUsageState {
         used_tokens: 0,
         total_tokens: 1_000_000,
-        cost_display: None,
+        cost: None,
     }));
     assert_eq!(before, lines_to_single_string(&cells[0].display_lines(100)));
     assert_eq!(chat.bottom_pane.context_usage_snapshot().0.tokens, Some(0));
