@@ -2250,6 +2250,134 @@
       "x-method": "session/fork",
       "x-side": "agent"
     },
+    "HistoryAddParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/host/history/add`.",
+      "properties": {
+        "sessionId": {
+          "description": "The session the prompt was sent to.",
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "text"
+      ],
+      "type": "object"
+    },
+    "HistoryEntryParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/host/history/entry`.",
+      "properties": {
+        "logId": {
+          "description": "[`HistoryMetadata::log_id`] of the history the client counted in.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Zero-based, oldest first.",
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "logId",
+        "offset"
+      ],
+      "type": "object"
+    },
+    "HistoryEntryResult": {
+      "description": "Result of `_nori/host/history/entry`.",
+      "properties": {
+        "entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HistoryRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Null when `offset` is past the end, or `logId` names a history the\nhost no longer keeps."
+        }
+      },
+      "type": "object"
+    },
+    "HistoryMetadata": {
+      "description": "Result of `_nori/host/history/metadata`: what a client counts in when it\nrecalls prompts with `_nori/host/history/entry`.",
+      "properties": {
+        "entryCount": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "logId": {
+          "description": "Identifies the history file; it changes when the file is replaced.",
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "logId",
+        "entryCount"
+      ],
+      "type": "object"
+    },
+    "HistoryRecord": {
+      "description": "One prompt in the host's history.",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "ts": {
+          "description": "Seconds since the Unix epoch.",
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sessionId",
+        "ts",
+        "text"
+      ],
+      "type": "object"
+    },
+    "HistorySearchParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/host/history/search`.",
+      "properties": {
+        "maxResults": {
+          "description": "At most this many distinct prompts, newest first.",
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maxResults"
+      ],
+      "type": "object"
+    },
+    "HistorySearchResult": {
+      "description": "Result of `_nori/host/history/search`.",
+      "properties": {
+        "entries": {
+          "description": "Distinct prompts, newest first; the client filters them as the user\ntypes.",
+          "items": {
+            "$ref": "#/$defs/HistoryRecord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "type": "object"
+    },
     "HookOutput": {
       "properties": {
         "level": {
@@ -8379,6 +8507,24 @@
     },
     {
       "$ref": "#/$defs/QueueSnapshot"
+    },
+    {
+      "$ref": "#/$defs/HistoryAddParams"
+    },
+    {
+      "$ref": "#/$defs/HistoryEntryParams"
+    },
+    {
+      "$ref": "#/$defs/HistoryEntryResult"
+    },
+    {
+      "$ref": "#/$defs/HistorySearchParams"
+    },
+    {
+      "$ref": "#/$defs/HistorySearchResult"
+    },
+    {
+      "$ref": "#/$defs/HistoryMetadata"
     }
   ],
   "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",

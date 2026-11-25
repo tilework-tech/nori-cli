@@ -289,6 +289,7 @@ impl HostLink {
                 self.connection.features.session_folders = sessions["session_cwd"] == true;
                 self.connection.features.find_paths = sessions["find_paths"] == true;
                 self.connection.features.queue = sessions["queue"] == true;
+                self.connection.features.history = sessions["history"] == true;
                 // List at once rather than at the next heartbeat, so the
                 // picker opens as soon as the host lets this terminal in.
                 if !self.client.has_pending(|tag| matches!(tag, HostTag::List)) {

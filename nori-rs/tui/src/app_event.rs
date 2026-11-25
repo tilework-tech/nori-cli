@@ -176,6 +176,13 @@ pub(crate) enum AppEvent {
     /// Request to exit the application gracefully.
     ExitRequest,
 
+    /// A history reply from the host for the widget of `generation`. It is
+    /// dropped once that widget is no longer on screen.
+    HostHistoryLanded {
+        generation: SessionGeneration,
+        event: Box<AppEvent>,
+    },
+
     HarnessAction(HarnessAction),
     HistoryEntryLoaded {
         log_id: i64,
@@ -183,6 +190,11 @@ pub(crate) enum AppEvent {
         entry: Option<nori_harness::HistoryEntry>,
     },
     HistorySearchLoaded(Vec<nori_harness::HistoryEntry>),
+    /// The host reported how many prompts its history holds now.
+    HistoryMetadataLoaded {
+        log_id: i64,
+        entry_count: i64,
+    },
     /// The harness answered a queued-prompt reclaim.
     QueuedPromptReclaimed {
         generation: SessionGeneration,

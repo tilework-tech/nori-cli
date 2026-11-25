@@ -20,7 +20,7 @@ code. Terms follow [`GLOSSARY.md`](../../GLOSSARY.md).
 | Module | Main items | Role |
 |---|---|---|
 | `host/service.rs` | `HostService` | One manager, config and overrides, launches, settings, deleted set; implements `ManagedAgent` |
-| `host/acp/` | `AcpFace` | Standard ACP v1 face: `handshake.rs` (`initialize`), `list.rs`, `attach.rs` (`session/new`, `load`, `resume`), `session.rs`, `config.rs` (host `agent` and `mode` options, settings kept across resume), `adapter_modes.rs` |
+| `host/acp/` | `AcpFace` | Standard ACP v1 face: `handshake.rs` (`initialize`), `list.rs`, `attach.rs` (`session/new`, `load`, `resume`), `session.rs`, `config.rs` (host `agent` and `mode` options, settings kept across resume), `adapter_modes.rs`, `find_paths.rs`, `history.rs` (`_nori/host/history/*` over the host's own `history.jsonl`; recording is the controller's, reads are open to watchers) |
 | `host/transcripts.rs` | | List, replay, and resume sessions that an earlier host or local run recorded under `$NORI_HOME/transcripts` |
 | `host/state.rs` | `HostFiles`, `HostState`, `read_token`, `private_open` | `lock`, `token`, `host.json`; owner-only files |
 | `host/tui_owned.rs` | `OwnedHost`, `StopHost`, `launch` | The private host that plain `nori` owns |

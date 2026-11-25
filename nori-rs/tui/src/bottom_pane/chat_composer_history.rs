@@ -27,6 +27,10 @@ pub(crate) struct ChatComposerHistory {
     /// history navigation. Used to decide if further Up/Down presses should be
     /// treated as navigation versus normal cursor movement.
     last_history_text: Option<String>,
+
+    /// Up was pressed on an empty composer before any history was known.
+    /// The size arrives a moment later for a joined host; recall then.
+    deferred_recall: bool,
 }
 
 impl ChatComposerHistory {
@@ -38,6 +42,7 @@ impl ChatComposerHistory {
             fetched_history: HashMap::new(),
             history_cursor: None,
             last_history_text: None,
+            deferred_recall: false,
         }
     }
 
@@ -49,6 +54,18 @@ impl ChatComposerHistory {
         self.local_history.clear();
         self.history_cursor = None;
         self.last_history_text = None;
+    }
+
+    /// Take the persistent history's current size, as reported again later
+    /// in the session. Unchanged metadata keeps this session's own entries;
+    /// a grown history already holds them. Browsing is left undisturbed.
+    pub fn refresh_metadata(&mut self, log_id: u64, entry_count: usize) {
+        let unchanged =
+            self.history_log_id == Some(log_id) && self.history_entry_count == entry_count;
+        if unchanged || self.history_cursor.is_some() {
+            return;
+        }
+        self.set_metadata(log_id, entry_count);
     }
 
     /// Record a message submitted by the user in the current session so it can
@@ -70,6 +87,22 @@ impl ChatComposerHistory {
     }
 
     /// Reset navigation tracking so the next Up key resumes from the latest entry.
+    /// Remember an Up pressed before any history was known.
+    pub fn defer_recall(&mut self) {
+        self.deferred_recall = true;
+    }
+
+    /// Whether an earlier Up should now recall the newest prompt: once,
+    /// and only when there is history to recall.
+    pub fn take_deferred_recall(&mut self) -> bool {
+        let known = self.history_entry_count + self.local_history.len() > 0;
+        known && std::mem::take(&mut self.deferred_recall)
+    }
+
+    pub fn has_entries(&self) -> bool {
+        self.history_entry_count > 0 || !self.local_history.is_empty()
+    }
+
     pub fn reset_navigation(&mut self) {
         self.history_cursor = None;
         self.last_history_text = None;

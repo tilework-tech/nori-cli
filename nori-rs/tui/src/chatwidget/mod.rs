@@ -69,6 +69,7 @@ mod goal;
 mod helpers;
 mod host_role;
 pub(crate) use host_role::JOINED_COMMANDS;
+mod history_host;
 mod key_handling;
 mod login;
 mod new_session_folder;

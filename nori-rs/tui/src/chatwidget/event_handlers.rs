@@ -434,6 +434,7 @@ impl ChatWidget {
             u64::try_from(event.history_log_id).unwrap_or_default(),
             usize::try_from(event.history_entry_count).unwrap_or_default(),
         );
+        self.refresh_host_history();
         self.conversation_id = event
             .transcript_id
             .as_deref()
@@ -1099,6 +1100,7 @@ impl ChatWidget {
         if completed.failure == Some(crate::presentation::TurnFailure::Fatal) {
             self.cancel_loop();
         }
+        self.refresh_host_history();
         // A failure already surfaces its own error cell; only a clean user
         // cancellation shows the generic "interrupted" notice.
         let interrupted = completed.stop_reason == nori_protocol::acp::v1::StopReason::Cancelled

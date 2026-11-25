@@ -51,7 +51,13 @@ export type NoriHostWire =
   | QueueTakeParams
   | QueueTakeResult
   | QueueDiscardResult
-  | QueueSnapshot;
+  | QueueSnapshot
+  | HistoryAddParams
+  | HistoryEntryParams
+  | HistoryEntryResult
+  | HistorySearchParams
+  | HistorySearchResult
+  | HistoryMetadata;
 /**
  * The encoding used for character offsets in positions.
  *
@@ -4244,4 +4250,78 @@ export interface QueueDiscardResult {
    * How many queued prompts were dropped before being sent.
    */
   discarded: number;
+}
+/**
+ * Params of `_nori/host/history/add`.
+ */
+export interface HistoryAddParams {
+  /**
+   * The session the prompt was sent to.
+   */
+  sessionId: string;
+  text: string;
+}
+/**
+ * Params of `_nori/host/history/entry`.
+ */
+export interface HistoryEntryParams {
+  /**
+   * [`HistoryMetadata::log_id`] of the history the client counted in.
+   */
+  logId: number;
+  /**
+   * Zero-based, oldest first.
+   */
+  offset: number;
+}
+/**
+ * Result of `_nori/host/history/entry`.
+ */
+export interface HistoryEntryResult {
+  /**
+   * Null when `offset` is past the end, or `logId` names a history the
+   * host no longer keeps.
+   */
+  entry?: HistoryRecord | null;
+}
+/**
+ * One prompt in the host's history.
+ */
+export interface HistoryRecord {
+  sessionId: string;
+  text: string;
+  /**
+   * Seconds since the Unix epoch.
+   */
+  ts: number;
+}
+/**
+ * Params of `_nori/host/history/search`.
+ */
+export interface HistorySearchParams {
+  /**
+   * At most this many distinct prompts, newest first.
+   */
+  maxResults: number;
+}
+/**
+ * Result of `_nori/host/history/search`.
+ */
+export interface HistorySearchResult {
+  /**
+   * Distinct prompts, newest first; the client filters them as the user
+   * types.
+   */
+  entries: HistoryRecord[];
+}
+/**
+ * Result of `_nori/host/history/metadata`: what a client counts in when it
+ * recalls prompts with `_nori/host/history/entry`.
+ */
+export interface HistoryMetadata {
+  entryCount: number;
+  /**
+   * Identifies the history file; it changes when the file is replaced.
+   */
+  logId: number;
 }
