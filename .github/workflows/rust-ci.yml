@@ -1,8 +1,7 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
+    branches: ['verify/pr-772-f7a2a5c1-native-attach-ab']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +11,7 @@ jobs:
   checks:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 55
     defaults:
       run:
         working-directory: nori-rs
@@ -25,10 +24,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
+        include:
+          - runner: blacksmith-6vcpu-macos-15
+            target: aarch64-apple-darwin
+            name: macOS attach A/B base vs PR
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: f7a2a5c1f277cdefb2d6910c1041ad32c88a2dd6
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = f7a2a5c1f277cdefb2d6910c1041ad32c88a2dd6 && git diff --quiet HEAD -- . && git rev-parse HEAD && uname -sm && sw_vers
 
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -126,21 +135,31 @@ jobs:
           mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
           cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
-      - name: cargo test nori
+      - name: host_attach macOS rounds at base 80992049
         env:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
-          cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-harness
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-host-runtime
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp-host
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-auth-providers
-      - name: cargo clippy
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
-
+          git checkout -f 8099204975768d0b0d17e7bd21f13cfbd48ddb59
+          test "$(git rev-parse HEAD)" = 8099204975768d0b0d17e7bd21f13cfbd48ddb59
+          cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
+          cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
+          sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/host_attach.rs
+          for round in 1 2 3 4; do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach -- --exact attached_busy_enter_reports_fallback_and_tab_explicitly_queues watcher_cannot_answer_a_permission_request_but_controller_can 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/base round $round: /"; done | tee -a ab.txt
+          git checkout -f -- tui-pty-e2e/tests/host_attach.rs
+      - name: host_attach macOS rounds at pr f7a2a5c1
+        env:
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+        run: |
+          git checkout -f f7a2a5c1f277cdefb2d6910c1041ad32c88a2dd6
+          test "$(git rev-parse HEAD)" = f7a2a5c1f277cdefb2d6910c1041ad32c88a2dd6
+          cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
+          cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
+          sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/host_attach.rs
+          for round in 1 2 3 4; do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach -- --exact attached_busy_enter_reports_fallback_and_tab_explicitly_queues watcher_cannot_answer_a_permission_request_but_controller_can 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/pr round $round: /"; done | tee -a ab.txt
+          git checkout -f -- tui-pty-e2e/tests/host_attach.rs
+      - name: A/B summary
+        run: |
+          for l in base pr; do echo "$l: $(grep -c "^$l round.*FAILED" ab.txt) FAILED of $(grep -c "^$l round" ab.txt)"; done
       # Save cargo home cache (only when key wasn't hit)
       - name: Save cargo home cache
         if: always() && !cancelled() && steps.cache_cargo_home_restore.outputs.cache-hit != 'true'
