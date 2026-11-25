@@ -183,6 +183,7 @@ impl App {
                     .handle_context_timeline(generation, conversation_id, result);
             }
             AppEvent::ToggleScreenMode => self.toggle_screen_mode(tui)?,
+            AppEvent::TakeHostControl => host.take_control(),
             AppEvent::NewSessionIn(folder) => {
                 self.new_session_in(folder, tui.frame_requester());
                 tui.frame_requester().schedule_frame();

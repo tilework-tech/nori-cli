@@ -21,6 +21,9 @@ pub(crate) const NOT_IN_ATTACH: &str = "not available in nori attach yet";
 pub(crate) const WATCHING: &str = "watching · Alt+T to take control";
 /// Host commands wait for the connection to come back.
 pub(crate) const RECONNECTING: &str = "reconnecting";
+/// Typed input waits for the connection to come back.
+pub(crate) const RECONNECTING_INPUT: &str =
+    "Reconnecting to the host. Your draft is kept; send it once the connection is back.";
 /// `/screen` switches plain `nori` out of its inline view; the attached
 /// terminal has no inline view to switch from.
 pub(crate) const ALWAYS_FULL_SCREEN: &str = "nori attach is always full-screen";
@@ -128,6 +131,48 @@ pub(crate) enum Surface {
     },
     /// `nori attach`: a terminal connected to a host it does not own.
     Attached { watching: bool, connected: bool },
+    /// The shared terminal joined to a host it does not own. It has no
+    /// in-process session, so only terminal commands and host methods run.
+    Joined { watching: bool, connected: bool },
+}
+
+/// Host commands the shared terminal runs on a host it joined.
+fn runs_when_joined(command: SlashCommand) -> bool {
+    match command {
+        SlashCommand::Sessions
+        | SlashCommand::New
+        | SlashCommand::Close
+        | SlashCommand::Approvals => true,
+        SlashCommand::Quit
+        | SlashCommand::Exit
+        | SlashCommand::Settings
+        | SlashCommand::Vim
+        | SlashCommand::Logout
+        | SlashCommand::Screen
+        | SlashCommand::Agent
+        | SlashCommand::Model
+        | SlashCommand::Config
+        | SlashCommand::Delegate
+        | SlashCommand::Resume
+        | SlashCommand::Goal
+        | SlashCommand::ResumeViewonly
+        | SlashCommand::Init
+        | SlashCommand::Compact
+        | SlashCommand::Undo
+        | SlashCommand::Browse
+        | SlashCommand::Diff
+        | SlashCommand::Mention
+        | SlashCommand::Status
+        | SlashCommand::Context
+        | SlashCommand::Memory
+        | SlashCommand::FirstPrompt
+        | SlashCommand::Mcp
+        | SlashCommand::Login
+        | SlashCommand::ApiKey
+        | SlashCommand::SwitchSkillset
+        | SlashCommand::Fork
+        | SlashCommand::Browser => false,
+    }
 }
 
 /// `None` when `command` can run in `surface`, otherwise the reason shown in
@@ -164,6 +209,21 @@ pub(crate) fn unavailable_reason(command: SlashCommand, surface: Surface) -> Opt
                 Route::Host { .. } => None,
             }
         }
+        Surface::Joined {
+            watching,
+            connected,
+        } => match route(command) {
+            Route::Terminal => None,
+            Route::InProcess => Some(NOT_ON_THIS_HOST.to_string()),
+            Route::Host { .. } if !runs_when_joined(command) => Some(NOT_ON_THIS_HOST.to_string()),
+            Route::Host {
+                needs_control: true,
+            } if !connected => Some(RECONNECTING.to_string()),
+            Route::Host {
+                needs_control: true,
+            } if watching => Some(WATCHING.to_string()),
+            Route::Host { .. } => None,
+        },
     }
 }
 
@@ -235,6 +295,47 @@ mod tests {
                     }
                 ),
                 Some(ALWAYS_FULL_SCREEN.to_string())
+            );
+        }
+    }
+
+    #[test]
+    fn a_joined_terminal_runs_terminal_commands_and_host_commands_its_role_allows() {
+        let joined = |watching, connected| Surface::Joined {
+            watching,
+            connected,
+        };
+        let cases = [
+            (SlashCommand::Screen, joined(false, true), None),
+            (SlashCommand::New, joined(false, true), None),
+            (SlashCommand::Close, joined(false, true), None),
+            (SlashCommand::Close, joined(false, false), Some(RECONNECTING)),
+            (SlashCommand::Approvals, joined(false, true), None),
+            (SlashCommand::Sessions, joined(true, true), None),
+            (SlashCommand::New, joined(true, true), Some(WATCHING)),
+            (SlashCommand::Close, joined(true, true), Some(WATCHING)),
+            (SlashCommand::New, joined(false, false), Some(RECONNECTING)),
+            (
+                SlashCommand::Compact,
+                joined(false, true),
+                Some(NOT_ON_THIS_HOST),
+            ),
+            (
+                SlashCommand::Model,
+                joined(false, true),
+                Some(NOT_ON_THIS_HOST),
+            ),
+            (SlashCommand::New, joined(true, false), Some(RECONNECTING)),
+            (SlashCommand::Sessions, joined(false, false), None),
+            (SlashCommand::Quit, joined(true, false), None),
+            (SlashCommand::Exit, joined(true, true), None),
+        ];
+        for (command, surface, expected) in cases {
+            assert_eq!(
+                unavailable_reason(command, surface),
+                expected.map(str::to_string),
+                "/{} in {surface:?}",
+                command.command()
             );
         }
     }

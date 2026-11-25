@@ -59,7 +59,10 @@ impl ChatWidget {
     ) {
         self.builtin_command_availability = update.builtin_commands;
         self.session_agent_capabilities = update.agent;
+        self.refresh_builtin_command_availability();
+    }
 
+    pub(super) fn refresh_builtin_command_availability(&mut self) {
         // Refresh the popup greying for every builtin from the merged
         // (server + client-scope) verdict. Iterating all variants — not just
         // the server map keys — both clears stale disabled state and applies
@@ -109,13 +112,9 @@ impl ChatWidget {
         {
             return server.clone();
         }
-        if let Some(reason) = crate::command_availability::unavailable_reason(
-            command,
-            crate::command_availability::Surface::Owned {
-                cloud_mode: self.cloud_mode,
-                agent_session_close: self.session_agent_capabilities.session_close,
-            },
-        ) {
+        if let Some(reason) =
+            crate::command_availability::unavailable_reason(command, self.command_surface())
+        {
             return nori_protocol::CommandAvailability {
                 enabled: false,
                 reason: Some(reason),

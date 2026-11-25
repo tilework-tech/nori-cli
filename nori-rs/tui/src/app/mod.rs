@@ -248,6 +248,9 @@ mod file_mentions;
 mod full_screen_frame;
 mod host_candidate;
 mod host_link;
+#[cfg(test)]
+mod host_link_tests;
+mod host_updates;
 mod new_session_folder;
 mod program_status;
 mod resize_reflow;
@@ -300,7 +303,7 @@ impl App {
             &mut host,
         )
         .await;
-        let stopped = host.stop().await;
+        let stopped = host.stop_or_leave().await;
         let exit = ran?;
         stopped.map_err(|error| color_eyre::eyre::eyre!(error))?;
         Ok(exit)
@@ -562,7 +565,10 @@ impl App {
                     app.handle_tui_event(tui, event).await?
                 }
                 Some(event) = host.next() => {
-                    host.handle(event).map_err(|error| color_eyre::eyre::eyre!(error))?;
+                    let update = host.handle(event).map_err(|error| color_eyre::eyre::eyre!(error))?;
+                    if let Some(update) = update {
+                        app.on_host_update(update, host.connection());
+                    }
                     true
                 }
             } {

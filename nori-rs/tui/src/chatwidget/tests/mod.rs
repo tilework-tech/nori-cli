@@ -160,6 +160,7 @@ mod close_refusal;
 mod context;
 mod delegation;
 mod explore_details;
+mod host_role;
 mod new_session_folder;
 mod part10;
 mod part8;
