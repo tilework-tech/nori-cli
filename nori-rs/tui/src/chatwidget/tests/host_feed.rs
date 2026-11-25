@@ -279,3 +279,35 @@ fn a_host_session_that_shuts_down_closes_without_leaving_the_host() {
         "{events:?}"
     );
 }
+
+#[test]
+fn a_watcher_leaves_a_prompt_another_terminal_sent_running() {
+    let (mut chat, mut rx) = host_feed_widget();
+    chat.set_host_connection(joined(ControlRole::Watcher, true));
+    feed(&mut chat, [prompting("other-terminal-prompt")]);
+    let _ = printed(&mut rx);
+    chat.set_composer_text("synthetic watcher draft".to_string());
+
+    for key in [
+        KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+        KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+    ] {
+        chat.handle_key_event(key);
+    }
+
+    let (text, events) = printed(&mut rx);
+    let interrupts: Vec<_> = events
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                AppEvent::HostRequest { .. }
+                    | AppEvent::HarnessAction(_)
+                    | AppEvent::HarnessActionFailed(_)
+            )
+        })
+        .collect();
+    assert!(interrupts.is_empty(), "{interrupts:?}");
+    assert_eq!(chat.composer_text(), "synthetic watcher draft");
+    assert_eq!(text.matches("Alt+T").count(), 2, "{text}");
+}

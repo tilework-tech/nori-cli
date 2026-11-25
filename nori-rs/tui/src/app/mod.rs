@@ -257,6 +257,7 @@ mod host_updates;
 mod joined_feed;
 #[cfg(test)]
 mod joined_feed_tests;
+mod joined_pager;
 mod joined_sessions;
 #[cfg(test)]
 mod joined_sessions_tests;

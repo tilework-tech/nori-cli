@@ -95,9 +95,13 @@ struct Attach {
     from_tui: WebSocket<TcpStream>,
     to_host: WebSocket<TcpStream>,
     host_frames: Vec<Value>,
+    /// Every request the terminal sent the host, in order.
+    tui_requests: Vec<Value>,
     session_id: String,
     hold_cancel: bool,
     held: Option<Value>,
+    /// The host endpoint and token, for a second terminal's connection.
+    endpoint: tungstenite::handshake::client::Request,
     _host: Host,
 }
 
@@ -130,6 +134,7 @@ impl Attach {
             "Authorization",
             format!("Bearer {}", token.trim()).parse().unwrap(),
         );
+        let endpoint_request = request.clone();
         let upstream = TcpStream::connect(request.uri().authority().unwrap().as_str()).unwrap();
         let (to_host, _) = tungstenite::client(request, upstream).unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -178,9 +183,11 @@ impl Attach {
             from_tui,
             to_host,
             host_frames: Vec::new(),
+            tui_requests: Vec::new(),
             session_id: String::new(),
             hold_cancel: false,
             held: None,
+            endpoint: endpoint_request,
             _host: host,
         };
         client.screen("Sessions");
@@ -201,6 +208,9 @@ impl Attach {
                     .to_text()
                     .ok()
                     .and_then(|s| serde_json::from_str::<Value>(s).ok());
+                if let Some(frame) = frame.as_ref().filter(|f| f["method"].is_string()) {
+                    self.tui_requests.push(frame.clone());
+                }
                 if let Some(frame) = frame.as_ref()
                     && frame["method"] == "_nori/session/subscribe"
                     && let Some(id) = frame["params"]["session_id"].as_str().filter(|s| *s != "*")
@@ -272,6 +282,37 @@ impl Attach {
                     == Some(title)
             })
         });
+    }
+
+    /// Another terminal joins the host and takes control, so this one
+    /// watches.
+    fn lose_control(&mut self) -> WebSocket<TcpStream> {
+        let upstream =
+            TcpStream::connect(self.endpoint.uri().authority().unwrap().as_str()).unwrap();
+        let (mut other, _) = tungstenite::client(self.endpoint.clone(), upstream).unwrap();
+        for (id, method, params) in [
+            (1, "initialize", json!({})),
+            (2, "_nori/control/take", json!({})),
+        ] {
+            let request = json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params});
+            other.send(Message::text(request.to_string())).unwrap();
+        }
+        self.screen("Watching");
+        other
+    }
+
+    /// The interrupts this terminal has sent the host.
+    fn interrupts_sent(&self) -> usize {
+        self.tui_requests
+            .iter()
+            .filter(|f| f["method"] == CANCEL_OBSERVED || f["method"] == "session/cancel")
+            .count()
+    }
+
+    /// Relay for `duration`, so anything the terminal would send arrives.
+    fn relay_for(&mut self, duration: Duration) {
+        let until = Instant::now() + duration;
+        self.until("the relay to settle", |_| Instant::now() >= until);
     }
 
     fn observed_turn(&mut self) -> String {
@@ -483,4 +524,57 @@ fn attached_close_can_be_refused_and_retried() {
         "{trace}"
     );
     assert!(!trace.contains("session/cancel"), "{trace}");
+}
+
+#[test]
+fn a_watchers_ctrl_c_leaves_the_controllers_turn_running() {
+    let mut client = Attach::open();
+    client.activity(true, 0);
+    client.screen(TURN_RUNNING);
+    let _other = client.lose_control();
+    let draft = "Watching the tide come in";
+    client.tui.type_input(draft).unwrap();
+    let before = client.tui_requests.len();
+
+    client.tui.send_key(Key::Ctrl('c')).unwrap();
+    client.tui.send_key(Key::Escape).unwrap();
+    client.screen("Alt+T");
+    client.relay_for(Duration::from_millis(500));
+
+    assert_eq!(client.interrupts_sent(), 0);
+    assert_eq!(
+        client.tui_requests.len(),
+        before,
+        "{:?}",
+        &client.tui_requests[before..]
+    );
+    let screen = client.tui.screen_contents();
+    assert!(
+        screen.contains(draft),
+        "the watcher's draft is kept: {screen}"
+    );
+    assert!(
+        screen.contains(TURN_RUNNING),
+        "the turn keeps running: {screen}"
+    );
+}
+
+#[test]
+fn ctrl_c_with_nothing_typed_leaves_the_host_once_a_cancel_is_pending() {
+    let mut client = Attach::open();
+    client.activity(true, 0);
+    client.screen(TURN_RUNNING);
+    client.tui.send_key(Key::Ctrl('c')).unwrap();
+    client.screen("Cancel requested");
+    client.adapter_title("Received cancel 1");
+
+    client.tui.send_key(Key::Ctrl('c')).unwrap();
+
+    // Leaving closes this terminal's connection; the host keeps the turn.
+    assert!(
+        client.tui.wait_for_process_exit(TIMEOUT),
+        "{}",
+        client.tui.screen_contents()
+    );
+    assert_eq!(client.interrupts_sent(), 1);
 }

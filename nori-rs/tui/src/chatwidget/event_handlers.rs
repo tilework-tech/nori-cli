@@ -861,13 +861,7 @@ impl ChatWidget {
         if self.exiting {
             return;
         }
-        // On a joined host, a turn someone else started is cancelled before
-        // the draft, which stays for the next prompt.
-        if self.host_connection.is_some()
-            && self.can_control_external_turn()
-            && !self.bottom_pane.has_active_view()
-        {
-            self.request_external_cancel();
+        if self.joined_ctrl_c() {
             return;
         }
         if self.bottom_pane.on_ctrl_c() == CancellationEvent::Handled {

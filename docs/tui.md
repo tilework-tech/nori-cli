@@ -237,18 +237,18 @@ folder, agent, and host status, `Approvals: <mode>`, and the keys that apply
 |---|---|
 | Enter | Send. During a turn, steer. |
 | Tab | During a turn, queue. In `/new`, complete a folder name. |
-| Ctrl+C | Cancel the running turn, also one another terminal started. Otherwise clear the draft. |
+| Ctrl+C | As the controller, cancel the running turn, also one another terminal started; the draft is kept. Once that cancel is pending, Ctrl+C is not resent: it keeps a typed draft and on an empty prompt detaches. A watcher or a reconnecting terminal never cancels, with Ctrl+C or Esc: during a turn it prints why and keeps the draft. On a stopped host, or when nothing runs, clear the draft; on an empty prompt, detach. |
 | Ctrl+D, `/quit`, `/exit`, `/detach` | Detach. In the session list, Ctrl+D closes the selected session; in an empty list it detaches. |
 | `alt+t` | Take control. |
 | `alt+s`, Left on an empty prompt, `/sessions` | Open the session list. |
 | `alt+down` | Next session that waits on you. |
 | `alt+up` | Go to the parent session. |
 | Ctrl+R (in the list) | Resume a failed session. |
-| PgUp | In the full-screen view, open the transcript a page above the screen; Esc or q closes it. |
+| PgUp, Ctrl+T | Open the transcript (PgUp: in the full-screen view, a page above the screen); Esc or q closes it. |
 | `/new [folder] [agent]` | Start a session. Without a folder, it uses the folder of the session on screen. With no session, a local host uses the terminal's folder and a `--host` host uses its own folder. A host that lists paths resolves the folder and completes it on Tab. The new session comes on screen once the host lists it. |
 | `/delegate <agent> <task>` | Delegate a task from the session on screen. |
 | `/close` | Close the session on screen. |
-| `/approvals ask\|agent\|approve-all` | Set the permission mode of the session on screen. `approve-all` asks first. |
+| `/approvals ask\|agent\|approve-all` | Set the permission mode of the session on screen. `approve-all` asks first. An unknown mode keeps the typed command. |
 | `/cancel` | Cancel the turn on screen. |
 
 Esc does not edit an earlier prompt in `nori attach`. Other commands are

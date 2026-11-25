@@ -960,8 +960,8 @@ fn delegated_child_in_host_list_preserves_metadata_columns_and_can_be_opened() {
         parent_screen.contains("child-column-ch") && parent_screen.contains("parent host task"),
         "notice names child and parent by their tasks: {parent_screen}"
     );
-    // Alt+Down jumps once the host has listed the child to this terminal.
-    client.wait_for_text("1 waiting on you", TIMEOUT).unwrap();
+    // Alt+Down jumps as soon as the notice names the child, without waiting
+    // for the next list heartbeat.
     client.send_key(Key::AltDown).unwrap();
     client.wait_for_text("child-column-check", TIMEOUT).unwrap();
     client.wait_for_text("Allow", TIMEOUT).unwrap();

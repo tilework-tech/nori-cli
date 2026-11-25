@@ -103,6 +103,7 @@ impl ChatWidget {
                 self.add_error_message(format!(
                     "/approvals: unknown mode {wanted}; use ask, agent or approve-all"
                 ));
+                self.set_composer_text(text.to_owned());
                 return true;
             }
         };

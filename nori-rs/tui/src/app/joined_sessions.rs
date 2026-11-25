@@ -175,6 +175,11 @@ impl App {
         (app, app_event_rx)
     }
 
+    /// Whether this terminal joined a host it does not own.
+    pub(crate) fn is_joined(&self) -> bool {
+        self.joined.is_some()
+    }
+
     /// What the host last listed about `id`.
     pub(super) fn listed_session(&self, id: ConversationId) -> Option<&ListedSession> {
         self.joined.as_ref()?.rows.get(&id)
@@ -337,6 +342,10 @@ impl App {
         }
         self.install_active_widget(placeholder);
         self.chat_widget.add_info_message(notice.to_string(), None);
+        // The notice already says how to get a session.
+        if let Some(joined) = self.joined.as_mut() {
+            joined.told_no_session = true;
+        }
     }
 
     /// The session `/new` started, shown as soon as the host lists it.
@@ -354,6 +363,10 @@ impl App {
     }
 
     fn show_started_session(&mut self) {
+        // Shown once the session being set up is on screen, at the next list.
+        if self.session_setup_pending() {
+            return;
+        }
         let Some(joined) = self.joined.as_mut() else {
             return;
         };

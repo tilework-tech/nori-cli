@@ -77,9 +77,11 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   every session after the loop, even on error.
 - A joined link re-sends `initialize` on every connection, takes its role
   from the reply, and lists sessions every second while connected as the
-  heartbeat. Disconnects, role changes, stops, and a refused initialize
-  become `HostUpdate`s that never end the loop; a stop or refused
-  initialize ends the connection for good. Calls made while
+  heartbeat. A session event that is a delegation change, a notice, or an
+  agent request also lists at once (unless a list is pending), so Alt+Down
+  reaches a child as soon as the parent's notice names it. Disconnects, role
+  changes, stops, and a refused initialize become `HostUpdate`s that never
+  end the loop; a stop or refused initialize ends the connection for good. Calls made while
   disconnected or after a stop are refused at once; calls unanswered when
   the connection drops fail as possibly applied. Leaving a joined host only
   closes the connection; its sessions keep running.
@@ -97,8 +99,11 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   (`_nori/session/*`). Actions that need an in-process session show "This
   needs a session running in this terminal's own host." A host session that
   ends with reason Shutdown is treated as closed, not as the end of the
-  terminal; the next session or a placeholder comes on screen. Esc-backtrack
-  is off.
+  terminal; the next session or a placeholder comes on screen, and only
+  "Session ended…" prints. Esc-backtrack is off: the joined transcript pager
+  (PgUp in `app/joined_pager.rs`, or Ctrl+T) opens with
+  `TranscriptOverlay::without_edits`, offers only "q/esc to quit", and Esc
+  closes it.
 - A joined App starts on the alternate screen; `/screen` and Ctrl+L switch to
   the inline view and back. Leaving from the alternate screen prints no
   transcript and no exit summary.
@@ -109,7 +114,13 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   "not available on this host yet". `HostConnection.features` gates what the
   host serves, such as folders for `/new` and `find_paths` completion. A
   joined watcher's submission is refused with the draft kept, and Alt+T sends
-  `AppEvent::TakeHostControl`.
+  `AppEvent::TakeHostControl`. Ctrl+C goes to `ChatWidget::joined_ctrl_c`
+  first: only a connected controller cancels, including a turn another
+  terminal started, and never resends a pending cancel (an empty prompt then
+  detaches). A watcher or a reconnecting terminal sends no cancel on Ctrl+C
+  or Esc; during a turn either key prints the refusal and keeps the draft. On
+  a stopped host Ctrl+C clears the draft or detaches. A `/new` session refused while another was being set up is retried
+  at the next list.
 - Match `SessionEvent::Acp` and `SessionEvent::Nori` first, then project. Keep
   display inference private in `presentation/`. Never add a public normalized
   ACP enum for rendering.

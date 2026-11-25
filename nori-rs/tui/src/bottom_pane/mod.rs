@@ -42,7 +42,7 @@ pub(crate) mod picker_keys;
 pub mod popup_consts;
 mod queued_user_messages;
 mod scroll_state;
-mod session_list_view;
+pub(crate) mod session_list_view;
 pub(crate) use session_list_view::SessionRow;
 #[cfg(test)]
 mod request_key_tests;

@@ -80,4 +80,23 @@ impl App {
             );
         }
     }
+
+    /// A delegation a joined host's session asked for is answered by that
+    /// host, which runs the parent.
+    pub(super) fn resolve_delegation_on_host(
+        &self,
+        host: &mut super::host_link::HostLink,
+        parent: ConversationId,
+        request_id: String,
+        approved: bool,
+    ) {
+        host.request(
+            crate::host_client::HostCall::ResolveDelegation {
+                session_id: parent.to_string(),
+                request_id: serde_json::Value::String(request_id),
+                approved,
+            },
+            crate::app_event_sender::HostReply::ReportError(self.app_event_tx.clone()),
+        );
+    }
 }

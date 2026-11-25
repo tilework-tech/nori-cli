@@ -16,7 +16,7 @@ use crate::chatwidget::ChatWidget;
 use crate::tui;
 
 /// What a joined terminal shows once the session on screen has closed.
-const SESSION_ENDED: &str =
+pub(super) const SESSION_ENDED: &str =
     "Session ended. Use /new to start one on this host, or Alt+S to pick one.";
 
 impl App {

@@ -113,7 +113,9 @@ impl App {
         } else {
             match event {
                 TuiEvent::Key(key_event) => {
-                    self.handle_key_event(tui, key_event).await;
+                    if !self.page_up_into_joined_transcript(tui, key_event).await? {
+                        self.handle_key_event(tui, key_event).await;
+                    }
                 }
                 TuiEvent::Paste(pasted) => {
                     self.chat_widget.handle_paste(pasted);
@@ -191,11 +193,7 @@ impl App {
                 generation,
                 text,
                 found,
-            } => {
-                if generation == self.chat_widget.session_generation() {
-                    self.chat_widget.on_host_folders(&text, found);
-                }
-            }
+            } => self.on_host_folders_found(generation, &text, found),
             AppEvent::NewSessionIn(folder) => {
                 self.new_session_in(folder, tui.frame_requester());
                 tui.frame_requester().schedule_frame();
@@ -573,14 +571,7 @@ impl App {
                 approved,
             } => {
                 if self.joined.is_some() {
-                    host.request(
-                        crate::host_client::HostCall::ResolveDelegation {
-                            session_id: parent.to_string(),
-                            request_id: serde_json::Value::String(request_id),
-                            approved,
-                        },
-                        crate::app_event_sender::HostReply::ReportError(self.app_event_tx.clone()),
-                    );
+                    self.resolve_delegation_on_host(host, parent, request_id, approved);
                     return Ok(true);
                 }
                 let Some(manager) = self.session_manager.clone() else {
@@ -1955,28 +1946,12 @@ impl App {
         {
             return;
         }
-        // The full-screen view of a joined host shows only the newest rows;
-        // PageUp opens the transcript a page above them.
-        if key_event.kind == KeyEventKind::Press
-            && key_event.code == KeyCode::PageUp
-            && self.joined.is_some()
-            && self.screen.is_full_screen()
-            && !self.chat_widget.has_active_popup()
-        {
-            self.open_transcript_overlay(tui);
-            let _ = self
-                .handle_backtrack_overlay_event(tui, TuiEvent::Key(key_event))
-                .await;
-            return;
-        }
         if key_event.kind == KeyEventKind::Press && !self.chat_widget.has_active_popup() {
             let transcript_binding = self.hotkey_config.binding_for(HotkeyAction::OpenTranscript);
             if matches_binding(transcript_binding, &key_event)
                 || crate::key_hint::ctrl(KeyCode::Char('o')).is_press(key_event)
             {
-                let _ = tui.enter_alt_screen();
-                self.overlay = Some(Overlay::new_transcript(self.transcript_cells.clone()));
-                tui.frame_requester().schedule_frame();
+                self.open_transcript_overlay(tui);
                 return;
             }
 

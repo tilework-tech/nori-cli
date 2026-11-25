@@ -29,6 +29,16 @@ fn connection() -> HostConnection {
 }
 
 fn joined_app(home: &tempfile::TempDir, open_session: Option<&str>) -> App {
+    joined_app_with_events(home, open_session).0
+}
+
+fn joined_app_with_events(
+    home: &tempfile::TempDir,
+    open_session: Option<&str>,
+) -> (
+    App,
+    tokio::sync::mpsc::UnboundedReceiver<crate::app_event::AppEvent>,
+) {
     let config = NoriConfig {
         cwd: home.path().to_path_buf(),
         nori_home: home.path().to_path_buf(),
@@ -39,7 +49,7 @@ fn joined_app(home: &tempfile::TempDir, open_session: Option<&str>) -> App {
         false,
         codex_login::AuthCredentialsStoreMode::File,
     );
-    let (app, _events) = App::joined(
+    App::joined(
         FrameRequester::test_dummy(),
         false,
         Arc::clone(&auth_manager),
@@ -47,8 +57,30 @@ fn joined_app(home: &tempfile::TempDir, open_session: Option<&str>) -> App {
         connection(),
         open_session.map(str::to_owned),
         None,
-    );
-    app
+    )
+}
+
+/// The notices the terminal printed, one per line.
+fn printed(
+    events: &mut tokio::sync::mpsc::UnboundedReceiver<crate::app_event::AppEvent>,
+) -> String {
+    let mut text = Vec::new();
+    while let Ok(mut event) = events.try_recv() {
+        if let crate::app_event::AppEvent::SessionHistory { event: inner, .. } = event {
+            event = *inner;
+        }
+        if let crate::app_event::AppEvent::InsertHistoryCell(cell) = event {
+            for line in cell.display_lines(80) {
+                text.push(
+                    line.spans
+                        .iter()
+                        .map(|span| span.content.as_ref())
+                        .collect::<String>(),
+                );
+            }
+        }
+    }
+    text.join("\n")
 }
 
 fn row(id: &str, title: &str) -> Value {
@@ -170,4 +202,115 @@ async fn typing_before_a_picked_session_comes_on_screen_reaches_that_session() {
 
     assert_eq!(on_screen(&app).as_deref(), Some(AMBER));
     assert_eq!(app.chat_widget.composer_text(), "/q");
+}
+
+#[tokio::test]
+async fn an_ended_session_prints_only_the_ended_notice() {
+    let home = tempfile::tempdir().unwrap();
+    let (mut app, mut events) = joined_app_with_events(&home, Some(AMBER));
+    app.on_joined_sessions(
+        list(&[row(AMBER, "synthetic amber")]),
+        FrameRequester::test_dummy(),
+        &connection(),
+    );
+    let _ = printed(&mut events);
+
+    app.show_joined_placeholder(
+        FrameRequester::test_dummy(),
+        super::session_lifecycle::SESSION_ENDED,
+    );
+    app.refresh_joined_session_status();
+    app.refresh_joined_session_status();
+
+    let text = printed(&mut events);
+    assert!(!text.contains("No session selected"), "{text}");
+    insta::assert_snapshot!(text);
+}
+
+#[tokio::test]
+async fn closing_the_first_list_without_a_pick_says_how_to_get_a_session() {
+    let home = tempfile::tempdir().unwrap();
+    let (mut app, mut events) = joined_app_with_events(&home, None);
+    app.on_joined_sessions(
+        list(&[row(AMBER, "synthetic amber")]),
+        FrameRequester::test_dummy(),
+        &connection(),
+    );
+    app.chat_widget.close_session_list();
+    let _ = printed(&mut events);
+
+    app.refresh_joined_session_status();
+    app.refresh_joined_session_status();
+
+    let text = printed(&mut events);
+    assert_eq!(text.matches("No session selected").count(), 1, "{text}");
+    insta::assert_snapshot!(text);
+}
+
+#[tokio::test]
+async fn a_started_session_opens_once_the_screen_is_free() {
+    let home = tempfile::tempdir().unwrap();
+    let mut app = joined_app(&home, Some(AMBER));
+    app.on_joined_sessions(
+        list(&[row(AMBER, "synthetic amber")]),
+        FrameRequester::test_dummy(),
+        &connection(),
+    );
+    app.open_when_listed(BIRCH.to_owned());
+
+    app.pending_session_activation = Some(super::PendingSessionActivation::New);
+    let both = list(&[row(AMBER, "synthetic amber"), row(BIRCH, "synthetic birch")]);
+    app.on_joined_sessions(both.clone(), FrameRequester::test_dummy(), &connection());
+    assert_eq!(on_screen(&app).as_deref(), Some(AMBER));
+    app.pending_session_activation = None;
+    app.on_joined_sessions(both, FrameRequester::test_dummy(), &connection());
+
+    assert_eq!(on_screen(&app).as_deref(), Some(BIRCH));
+}
+
+#[tokio::test]
+async fn each_listed_row_names_the_folder_its_session_works_in() {
+    use crate::render::renderable::Renderable;
+    let home = tempfile::tempdir().unwrap();
+    let mut app = joined_app(&home, None);
+    let in_folder = |id: &str, title: &str, folder: &str, reply: &str| {
+        let mut row = row(id, title);
+        row["cwd"] = json!(format!("/synthetic/{folder}"));
+        row["reply_preview"] = json!(reply);
+        row["idle_seconds"] = json!(42);
+        row
+    };
+    app.on_joined_sessions(
+        list(&[
+            in_folder(
+                AMBER,
+                "synthetic amber",
+                "orchard",
+                "Pruned the pear trees.",
+            ),
+            in_folder(BIRCH, "synthetic birch", "harbor", "Counted the gulls."),
+        ]),
+        FrameRequester::test_dummy(),
+        &connection(),
+    );
+
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let list = crate::bottom_pane::session_list_view::SessionListView::new(
+        app.session_rows(),
+        crate::app_event_sender::AppEventSender::new(tx),
+    );
+    let area = ratatui::layout::Rect::new(0, 0, 80, list.desired_height(80));
+    let mut buffer = ratatui::buffer::Buffer::empty(area);
+    list.render(area, &mut buffer);
+    let screen = (0..area.height)
+        .map(|y| {
+            (0..area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    insta::assert_snapshot!(screen);
 }

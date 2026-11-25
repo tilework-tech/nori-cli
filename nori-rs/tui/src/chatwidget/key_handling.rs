@@ -47,11 +47,16 @@ impl ChatWidget {
             && !self.exiting
             && self.bottom_pane.can_interrupt_with_escape(key_event)
         {
-            if self.can_control_external_turn() {
+            // Only a joined host's controller interrupts; others are told why.
+            if let Some(refusal) = self.host_input_refusal() {
+                if self.external_turn.is_some() || self.bottom_pane.is_task_running() {
+                    self.add_error_message(refusal);
+                    return;
+                }
+            } else if self.can_control_external_turn() {
                 self.request_external_cancel();
                 return;
-            }
-            if self.interrupt_host_prompt() {
+            } else if self.interrupt_host_prompt() {
                 return;
             }
         }

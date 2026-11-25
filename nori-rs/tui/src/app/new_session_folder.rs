@@ -38,4 +38,17 @@ impl App {
             );
         }
     }
+
+    /// The joined host's folders for a `/new` Tab, kept only while the
+    /// session that asked is on screen.
+    pub(super) fn on_host_folders_found(
+        &mut self,
+        generation: crate::app_event::SessionGeneration,
+        text: &str,
+        found: serde_json::Value,
+    ) {
+        if generation == self.chat_widget.session_generation() {
+            self.chat_widget.on_host_folders(text, found);
+        }
+    }
 }

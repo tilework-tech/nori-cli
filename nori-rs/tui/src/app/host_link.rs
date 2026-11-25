@@ -289,7 +289,20 @@ impl HostLink {
                 tag: HostTag::List,
                 result,
             } => Ok(result.ok().map(HostUpdate::Sessions)),
-            HostEvent::Session(params) if joined => Ok(Some(HostUpdate::Session(params))),
+            HostEvent::Session(params) if joined => {
+                // A delegation, a notice about one, or a request opened by
+                // an agent changes what the list says, so it is listed at
+                // once: the keys a notice names then work without waiting
+                // for the heartbeat.
+                let event = &params["event"]["event"];
+                let changes_listing = ["delegation_changed", "notice"]
+                    .contains(&event["event_type"].as_str().unwrap_or_default())
+                    || event["message_type"] == "request";
+                if changes_listing && !self.client.has_pending(|tag| matches!(tag, HostTag::List)) {
+                    let _ = self.client.request(HostCall::List, HostTag::List);
+                }
+                Ok(Some(HostUpdate::Session(params)))
+            }
             HostEvent::Session(_) | HostEvent::Ignored => Ok(None),
             HostEvent::RoleChanged(role) if joined => {
                 // The client names a role it cannot read a watcher.

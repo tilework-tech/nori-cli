@@ -114,6 +114,51 @@ impl ChatWidget {
         }
     }
 
+    /// Ctrl+C on a joined host, before the draft or the exit sees it.
+    /// Returns whether the key was handled here.
+    ///
+    /// Only a connected controller interrupts; any other terminal is told
+    /// why while a turn runs, and keeps its draft. On a stopped host the key
+    /// clears the draft or leaves. A turn someone else started
+    /// is cancelled before the draft, which stays for the next prompt. Once
+    /// that cancel is on its way it is never resent: the key keeps a typed
+    /// draft and, with nothing typed, leaves the host as it does when idle.
+    pub(super) fn joined_ctrl_c(&mut self) -> bool {
+        if self.host_connection.is_none() || self.bottom_pane.has_active_view() {
+            return false;
+        }
+        // A stopped host runs nothing this terminal could still interrupt.
+        if self
+            .host_connection
+            .as_ref()
+            .is_some_and(|connection| connection.stopped.is_some())
+        {
+            if !self.bottom_pane.composer_is_empty() {
+                return false;
+            }
+            self.begin_exit();
+            return true;
+        }
+        if let Some(refusal) = self.host_input_refusal() {
+            let turn_running = self.external_turn.is_some() || self.bottom_pane.is_task_running();
+            if turn_running {
+                self.add_error_message(refusal);
+            }
+            return turn_running;
+        }
+        if !self.can_control_external_turn() {
+            return false;
+        }
+        if self.external_cancel_status().is_some() {
+            if self.bottom_pane.composer_is_empty() {
+                self.begin_exit();
+            }
+        } else {
+            self.request_external_cancel();
+        }
+        true
+    }
+
     /// Alt+T. False when this terminal owns its host and the key is not ours.
     pub(super) fn take_host_control(&mut self) -> bool {
         let Some(connection) = &self.host_connection else {
