@@ -161,6 +161,7 @@ mod compact_host;
 mod context;
 mod context_host;
 mod delegation;
+mod exit_card;
 mod explore_details;
 mod goal_host;
 mod history_host;

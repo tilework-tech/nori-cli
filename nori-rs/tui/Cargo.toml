@@ -128,6 +128,15 @@ name = "status_card_storybook"
 path = "examples/status_card_storybook.rs"
 required-features = ["storybook"]
 
+[[example]]
+name = "exit_card_storybook"
+path = "examples/exit_card_storybook.rs"
+required-features = ["storybook"]
+
+[[test]]
+name = "storybook_exit_card"
+path = "examples/exit_card_storybook/e2e.rs"
+
 [[test]]
 name = "storybook_status_card"
 path = "examples/status_card_storybook/e2e.rs"

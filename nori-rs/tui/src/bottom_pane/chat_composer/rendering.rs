@@ -189,6 +189,13 @@ impl ChatComposer {
 
     /// Current context only: cumulative transcript billing totals must never
     /// be presented as the occupied portion of a context window.
+    /// Cumulative session cost from the agent's last usage update.
+    pub(crate) fn session_cost(
+        &self,
+    ) -> Option<&crate::presentation::session_runtime::SessionCost> {
+        self.session_usage.as_ref()?.cost.as_ref()
+    }
+
     pub(crate) fn context_usage_snapshot(&self) -> (ContextStatus, &'static str) {
         if let Some(usage) = &self.session_usage {
             return (

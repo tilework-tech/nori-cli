@@ -2218,7 +2218,7 @@ fn mock_agent() -> impl ConnectTo<Client> {
                         state: state.clone(),
                     };
                     cx.spawn(async move {
-                        let result = agent.run_prompt(arguments).await;
+                        let result = agent.run_prompt(arguments).await.map(with_prompt_usage);
                         responder.respond_with_result(result)
                     })?;
                     Ok(())
@@ -2420,4 +2420,16 @@ fn mock_agent() -> impl ConnectTo<Client> {
             },
             agent_client_protocol::on_receive_notification!(),
         )
+}
+
+/// `MOCK_AGENT_PROMPT_USAGE` attaches token usage to every prompt response as
+/// JSON in the ACP `Usage` shape, e.g.
+/// `{"totalTokens":1500,"inputTokens":1000,"outputTokens":500}`.
+fn with_prompt_usage(response: acp::PromptResponse) -> acp::PromptResponse {
+    let Ok(usage) = std::env::var("MOCK_AGENT_PROMPT_USAGE") else {
+        return response;
+    };
+    let usage: acp::Usage =
+        serde_json::from_str(&usage).expect("MOCK_AGENT_PROMPT_USAGE must be ACP Usage JSON");
+    response.usage(usage)
 }

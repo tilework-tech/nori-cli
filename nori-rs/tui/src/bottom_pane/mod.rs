@@ -799,6 +799,12 @@ impl BottomPane {
         self.composer.status_footer_values()
     }
 
+    pub(crate) fn session_cost(
+        &self,
+    ) -> Option<&crate::presentation::session_runtime::SessionCost> {
+        self.composer.session_cost()
+    }
+
     /// Whether the agent has reported usage for the session shown.
     pub(crate) fn has_session_usage(&self) -> bool {
         self.composer.has_session_usage()

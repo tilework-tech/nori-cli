@@ -1213,10 +1213,10 @@ fn session_update_info_from_usage(update: &acp::UsageUpdate) -> SessionUpdateInf
         usage: Some(session_runtime::SessionUsageState {
             used_tokens: update.used as i64,
             total_tokens: update.size as i64,
-            cost_display: update
+            cost: update
                 .cost
                 .as_ref()
-                .map(|cost| format!("{:.2} {}", cost.amount, cost.currency)),
+                .map(|cost| session_runtime::SessionCost::new(cost.amount, cost.currency.clone())),
         }),
         session_info_patch: None,
     }
@@ -2361,7 +2361,7 @@ mod tests {
             Some(session_runtime::SessionUsageState {
                 used_tokens: 128,
                 total_tokens: 4096,
-                cost_display: Some("0.42 USD".to_string()),
+                cost: Some(session_runtime::SessionCost::new(0.42, "USD")),
             })
         );
         assert_eq!(
