@@ -505,6 +505,70 @@ fn watcher_cannot_answer_a_permission_request_but_controller_can() {
         .expect("watcher receives the controller-approved result");
 }
 
+#[test]
+fn controller_and_watcher_report_the_selected_sessions_status_and_clear_on_detach() {
+    let host = Host::new();
+    let mut config = std::fs::OpenOptions::new()
+        .append(true)
+        .open(host.home.path().join("config.toml"))
+        .unwrap();
+    config
+        .write_all(b"\n[tui]\nprogram_status = true\n")
+        .unwrap();
+    host.start();
+    let mut controller = host.create_session();
+    ask(&mut controller, "status session");
+    let mut watcher = host.attach(Some(&host.session_id()));
+    wait_watching(&mut watcher);
+
+    controller
+        .submit_input("mock:request-permission:echo status-check")
+        .unwrap();
+    controller.wait_for_text("status-check", TIMEOUT).unwrap();
+    watcher.wait_for_text("status-check", TIMEOUT).unwrap();
+    let blocked = "state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk";
+    for client in [&mut controller, &mut watcher] {
+        tui_pty_e2e::wait_for_program_status(client, blocked);
+    }
+    controller.wait_out_answer_grace();
+    controller.send_key(Key::Enter).unwrap();
+    for client in [&mut controller, &mut watcher] {
+        client
+            .wait_for_text("Permission granted with option: allow", TIMEOUT)
+            .unwrap();
+        tui_pty_e2e::wait_for_program_status(client, "state=done:app=nori");
+        client.send_key(Key::Ctrl('d')).unwrap();
+        assert!(client.wait_for_process_exit(TIMEOUT));
+        client.settle(Duration::from_millis(200));
+    }
+
+    // Events that land in one burst report once, so only the milestones are
+    // fixed: each change is reported once, the approval is reported as
+    // pending, the turn finishes, and detaching clears the status. The
+    // controller opened the session, so it also reported idle first.
+    let milestones = |reports: Vec<String>| {
+        assert!(
+            reports.windows(2).all(|pair| pair[0] != pair[1]),
+            "each report is a change: {reports:?}"
+        );
+        (
+            reports.iter().any(|report| report == blocked),
+            reports[reports.len().saturating_sub(2)..].to_vec(),
+        )
+    };
+    let finished = vec!["state=done:app=nori".to_string(), "state=clear".to_string()];
+    let controller_reports = tui_pty_e2e::program_status_reports(controller.raw_output());
+    assert_eq!(
+        controller_reports.first().map(String::as_str),
+        Some("state=idle:app=nori")
+    );
+    assert_eq!(milestones(controller_reports), (true, finished.clone()));
+    assert_eq!(
+        milestones(tui_pty_e2e::program_status_reports(watcher.raw_output())),
+        (true, finished)
+    );
+}
+
 enum ProxyCommand {
     Pause(mpsc::Sender<()>),
     Blackhole(mpsc::Sender<()>),

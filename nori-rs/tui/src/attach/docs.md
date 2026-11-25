@@ -85,6 +85,15 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
   retaining transport cursors; reconnect replay only deduplicates by sequence.
   Permissions also clear on matching `RequestResolved`, idle or cancelling
   phases, and session end.
+- With `[tui] program_status` on, each `Conversation` folds its envelopes into
+  its own [`ProgramStatusTracker`](../program_status/tracker.rs), and the
+  [entry](mod.rs) reports the selected session's status to the terminal as
+  OSC 7501 (see [terminal program status](../../docs.md#terminal-program-status)).
+  It reports after a loop iteration only once the incoming event channel is
+  drained, so a replay burst produces one report. A selected session with no
+  events yet reports nothing, leaving the previous report in place; with no
+  session open it reports idle. `run_attach` clears the status on detach or
+  exit. Controller and watcher terminals both report.
 - [Rendering](render.rs) keeps role and connectivity visible beside the
   selected conversation or session list. Watchers receive the same content and
   permissions but must take control before sending mutations.

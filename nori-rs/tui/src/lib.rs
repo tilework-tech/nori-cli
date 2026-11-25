@@ -74,6 +74,7 @@ pub use nori_host_runtime::OwnedHost;
 mod pager_overlay;
 mod pinned_plan_drawer;
 mod presentation;
+mod program_status;
 pub mod public_widgets;
 mod render;
 mod resume_picker;

@@ -55,6 +55,11 @@ split across PTY reads still applies. On top of it, `TuiSession` offers:
 | `settle(duration)` | Keeps reading output for a fixed time so the emulator catches up |
 | `wait_out_answer_grace()` | Settles for `ANSWER_GRACE`, longer than the TUI's request answer grace period, so the next option key answers a request that just appeared |
 
+The free function `program_status_reports(raw)` pulls the body of every OSC
+7501 program status report out of `raw_output()`, in the order written (for
+example `state=working:app=nori`), so tests can assert on the sequence of
+reports, which the emulator never renders.
+
 By default each `TuiSession` gets a disposable home and generated
 `config.toml`. `SessionConfig::with_nori_home` instead points `NORI_HOME` and
 `CODEX_HOME` at a caller-owned directory that can be reused across launches;

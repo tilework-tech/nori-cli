@@ -49,6 +49,14 @@ scrollback after width changes. It defaults to `true`; the `/settings` toggle
 persists to this same key, so startup configuration and runtime changes share
 one source of truth.
 
+`[tui] program_status` (default `false`) turns on the TUI's OSC 7501 report of
+the foreground session's status to the terminal; it is opt-in because the
+sequence is not standard. `[tui] program_status_approval_titles` (default
+`false`) puts the real approval title in blocked reports instead of a generic
+message, since titles can contain command text that terminals may show in tab
+tooltips and notifications. Both resolve to plain booleans on `NoriConfig`;
+see [@/nori-rs/tui](../tui/docs.md#terminal-program-status).
+
 `NoriConfig::tool_output` (`ToolOutput::Full` by default, or `Compact`) picks
 the inline view for the TUI's tool call cells; the transcript overlay always
 shows the full view. It resolves from, in order: a `-c tui.tool_output=...`

@@ -152,6 +152,10 @@ pub(crate) struct App {
     /// Current footer segment visibility loaded from NoriConfig.
     footer_segment_config: nori_config::FooterSegmentConfig,
 
+    /// Writes the foreground session's status to the terminal when
+    /// `[tui] program_status` is on.
+    program_status: Option<crate::program_status::ProgramStatusReporter>,
+
     /// Plan drawer visibility mode.
     plan_drawer_mode: crate::chatwidget::PlanDrawerMode,
 
@@ -245,6 +249,7 @@ mod full_screen_frame;
 mod host_candidate;
 mod host_link;
 mod new_session_folder;
+mod program_status;
 mod resize_reflow;
 mod screen_mode;
 mod session_deck;
@@ -380,6 +385,7 @@ impl App {
         let footer_segment_config = config.footer_segment_config.clone();
         let footer_layout_config = config.footer_layout_config.clone();
         let skillset_per_session = !cloud_mode && config.skillset_per_session;
+        let program_status = crate::program_status::ProgramStatusReporter::from_config(&config);
 
         let mut app = Self {
             app_event_tx,
@@ -421,6 +427,7 @@ impl App {
             hotkey_config: nori_config::HotkeyConfig::default(),
             vim_mode: nori_config::VimEnterBehavior::Off,
             footer_segment_config,
+            program_status,
             footer_layout_config,
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
@@ -558,11 +565,14 @@ impl App {
                     host.handle(event).map_err(|error| color_eyre::eyre::eyre!(error))?;
                     true
                 }
-            } {}
+            } {
+                app.report_program_status();
+            }
             Ok::<(), color_eyre::eyre::Report>(())
         }
         .await;
 
+        app.clear_program_status();
         if let Err(error) = app.return_inline_for_exit(tui) {
             tracing::warn!(%error, "could not return to the inline view on exit");
         }

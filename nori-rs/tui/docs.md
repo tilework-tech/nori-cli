@@ -1408,8 +1408,9 @@ App
 - **Background sessions.** Parked widgets keep receiving their
   `SessionEvent`s and commit ticks, so streams finish into their own
   transcript. A parked widget never writes the terminal title
-  (`set_foreground`). Its notifications are posted by `App`, prefixed with the
-  session title, only for top-level sessions (a child's news reaches the user
+  (`set_foreground`) or the [program status](#terminal-program-status),
+  though it keeps its own status current. Its notifications are posted by
+  `App`, prefixed with the session title, only for top-level sessions (a child's news reaches the user
   through its parent) and only while the terminal is unfocused.
 - **Failed sessions.** A session whose agent dies fails alone. From the
   session list, Ctrl+R on a failed row invokes
@@ -1920,6 +1921,74 @@ skillset project via `nori_skillsets::SkillsetsCli::layered`, with no
 `.nori-config.json` fallback and an empty list when the CLI is missing or fails.
 The flag reaches the worker through `SystemInfoRefreshRequest.skillsets_v2` and
 `SystemInfo::seed(dir, skillsets_v2)`.
+
+#### Terminal program status
+
+With `[tui] program_status = true` (off by default, because the sequence is
+not standard), the TUI tells its own terminal what the foreground session is
+doing through OSC 7501, the
+[Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status)
+(rev 0.4). Terminals that
+implement it, such as kitty and iTerm2, can show the state as a tab indicator
+or notification; terminals that do not ignore the unknown OSC. Nori does not
+probe for support: the only reliable probe is an `OSC 7501 ; ?` query followed
+by DA1, whose reply would race the TUI's own input reader.
+
+A report looks like `ESC ] 7501 ; state=working:app=nori ESC \`, and clearing
+sends `state=clear`. Every report replaces the whole record:
+
+| State | When |
+| --- | --- |
+| `blocked` | A permission request or a delegation waiting for approval is open (the oldest is reported) |
+| `working` | A **prompt turn** is prompting or cancelling, or an **agent-owned turn** is running |
+| `done` | The last turn ended with any stop reason other than cancelled, including refusal and max tokens |
+| `error` | The **prompt request** got an error response or a `RequestFailed`, or the session ended with a lost connection, spawn failure, or timeout |
+| `idle` | Before the first turn and after a cancelled one |
+
+- `done` and `error` persist until the next prompt starts; typing does not
+  change them. A session shut down or closed after its turn keeps that
+  outcome; one closed mid-turn goes idle. A restored transcript
+  (`ReplayStarted`) starts over at idle.
+- Blocked reports add `kind=permission:msg=<base64>`. The message is the
+  generic "Approval needed" unless `[tui] program_status_approval_titles =
+  true`, because an approval title can contain command text and terminals may
+  surface it in tab tooltips and desktop notifications. The title is the
+  permission request's own tool-call title, or `Start <agent>: <first line of
+  the task>` for a delegation. An opted-in title is
+  made single-line (control and bidi characters become spaces) and cut to
+  the protocol's 2048-byte limit on a character boundary.
+- Reports carry no `id` key, so they address the root record, which is the
+  only one tmux forwards. They never carry a `title` key: the
+  [terminal title](src/terminal_title.rs) (OSC 0) keeps naming the agent and
+  never shows status text.
+
+[`ProgramStatusTracker`](src/program_status/tracker.rs) is a pure fold over one
+session's `SessionEvent`s. It settles each turn from the prompt's own response,
+matched by request ID, which the host publishes before the phase returns to
+idle. [`ProgramStatusReporter`](src/program_status/report.rs) encodes a status,
+writes only when the bytes change, skips writing when stdout is not a TTY, and
+clears once if it ever reported.
+
+Every `ChatWidget`, parked ones included, folds its events in
+`handle_session_event`, so a session brought forward already knows its state.
+[`App`](src/app/program_status.rs) reports `chat_widget`'s status after every
+main-loop event, so a foreground switch reports the new session at once and
+background sessions never write. The App clears the status after the loop ends,
+on exit and on a cloud-mode detach. Switching between the inline and
+full-screen view (`/screen`, Ctrl+L) neither changes nor clears it.
+`nori attach` reports the same way from its own state; see
+[@/nori-rs/tui/src/attach](src/attach/docs.md).
+
+Under tmux, releases through 3.8 drop OSC 7501 like any unknown OSC. tmux
+master (unreleased as of November 2026) parses it natively, forwards only the
+active pane's root record to an outer terminal that answered its probe, and
+clears on detach. Nori
+deliberately does not wrap reports in DCS passthrough, which would leak a
+hidden pane's status and bypass tmux's own tracking.
+
+The panic hook clears a reported status too. Two gaps remain: a Ctrl+Z
+suspend leaves the last status in place until the TUI resumes, and an attached
+terminal whose host stops keeps its last report until it exits.
 
 #### Session-info verbosity
 

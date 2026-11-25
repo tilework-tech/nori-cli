@@ -431,6 +431,7 @@ include!("tests_acp.rs");
 include!("tests_close.rs");
 include!("tests_commands.rs");
 include!("tests_approvals.rs");
+include!("tests_program_status.rs");
 
 fn working_runtime() -> (
     super::runtime::Runtime,

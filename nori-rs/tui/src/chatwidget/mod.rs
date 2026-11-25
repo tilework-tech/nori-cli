@@ -283,6 +283,10 @@ pub(crate) struct ChatWidget {
     terminal_title_animation_origin: Instant,
     // Terminal title state: cache to avoid redundant OSC writes.
     last_terminal_title: Option<String>,
+    /// What this widget's session is doing, for the terminal's program
+    /// status report. Followed while parked so a foreground switch reports
+    /// the session's real state at once.
+    pub(crate) program_status: crate::program_status::ProgramStatusTracker,
     /// False while the session is parked behind another one. A parked
     /// session never writes the terminal title.
     foreground: bool,

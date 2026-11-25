@@ -34,11 +34,17 @@ pub async fn run_attach(
 ) -> anyhow::Result<()> {
     let initial = ManagedClient::connect(&options.endpoint, &options.token).await?;
     let mut tui = crate::tui::Tui::new(crate::tui::init()?);
+    let mut program_status = crate::program_status::ProgramStatusReporter::from_config(&config);
     let result = async {
         tui.enter_alt_screen()?;
-        run(&mut tui, options, initial, config).await
+        run(&mut tui, options, initial, config, &mut program_status).await
     }
     .await;
+    if let Some(reporter) = program_status.as_mut()
+        && let Err(error) = reporter.clear_terminal()
+    {
+        tracing::debug!(%error, "could not clear program status");
+    }
     let leave = tui.leave_alt_screen();
     let restore = crate::tui::restore();
     result?;
@@ -52,6 +58,7 @@ async fn run(
     options: AttachOptions,
     initial: ManagedClient,
     config: nori_config::NoriConfig,
+    program_status: &mut Option<crate::program_status::ProgramStatusReporter>,
 ) -> anyhow::Result<()> {
     let hotkeys = config.hotkeys;
     let (request_tx, request_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -96,6 +103,15 @@ async fn run(
                     }
                 }
                 _ = refresh.tick() => runtime.refresh_list(),
+            }
+            // Replayed history arrives as a burst; report once it has landed.
+            // A stopped connection delivers nothing more, so report at once.
+            if (event_rx.is_empty() || runtime.state.stopped.is_some())
+                && let Some(reporter) = program_status.as_mut()
+                && let Some(status) = runtime.state.foreground_program_status()
+                && let Err(error) = reporter.report_to_terminal(&status)
+            {
+                tracing::debug!(%error, "could not report program status");
             }
             runtime.composer.flush_paste_burst_if_due();
             runtime.search_files();
