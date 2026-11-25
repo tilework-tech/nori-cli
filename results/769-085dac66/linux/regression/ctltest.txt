@@ -1,0 +1,22 @@
+tree ctltest e2e98ba32dcad099615d3ec9a37a0019982c1a5d dirty:  M nori-rs/harness/tests/managed_remote.rs 
+run 1 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 2 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 3 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 4 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 5 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 6 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 7 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 8 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 9 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 10 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 11 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 12 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 13 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 14 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 15 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 16 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 17 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 18 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 19 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+run 20 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+whole file exit 101 test result: FAILED. 11 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.67s

@@ -1,0 +1,1042 @@
+{
+ "summary": {
+  "base immediate": {
+   "n": 5,
+   "key_handled_median_ms": 8.0,
+   "picker_median_ms": 9.2,
+   "all_ok": true
+  },
+  "base delayed": {
+   "n": 5,
+   "key_handled_median_ms": 310.0,
+   "picker_median_ms": 311.3,
+   "all_ok": true
+  },
+  "base missing": {
+   "n": 5,
+   "key_handled_median_ms": 2008.2,
+   "picker_median_ms": 2009.6,
+   "all_ok": true
+  },
+  "fix773 immediate": {
+   "n": 5,
+   "key_handled_median_ms": 7.8,
+   "picker_median_ms": 9.2,
+   "all_ok": true
+  },
+  "fix773 delayed": {
+   "n": 5,
+   "key_handled_median_ms": 7.9,
+   "picker_median_ms": 9.2,
+   "all_ok": true
+  },
+  "fix773 missing": {
+   "n": 5,
+   "key_handled_median_ms": 7.8,
+   "picker_median_ms": 9.2,
+   "all_ok": true
+  }
+ },
+ "samples": [
+  {
+   "mode": "immediate",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.3,
+    "key_handled": 8.4,
+    "picker_populated": 9.6,
+    "session_content": 427.7
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.3
+    ],
+    [
+     "c",
+     7.4
+    ],
+    [
+     "10",
+     7.5
+    ],
+    [
+     "11",
+     7.6
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "base",
+   "index": 0
+  },
+  {
+   "mode": "immediate",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 6.8,
+    "key_handled": 7.8,
+    "picker_populated": 9.2,
+    "session_content": 427.4
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     6.8
+    ],
+    [
+     "c",
+     6.9
+    ],
+    [
+     "10",
+     7.0
+    ],
+    [
+     "11",
+     7.0
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 0
+  },
+  {
+   "mode": "delayed",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 6.9,
+    "key_handled": 309.7,
+    "picker_populated": 310.5,
+    "session_content": 728.6
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     6.9
+    ],
+    [
+     "c",
+     6.9
+    ],
+    [
+     "10",
+     7.0
+    ],
+    [
+     "11",
+     158.0
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "base",
+   "index": 0
+  },
+  {
+   "mode": "delayed",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.1,
+    "key_handled": 8.0,
+    "picker_populated": 9.2,
+    "session_content": 457.9
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.1
+    ],
+    [
+     "c",
+     7.2
+    ],
+    [
+     "10",
+     7.2
+    ],
+    [
+     "11",
+     7.2
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 0
+  },
+  {
+   "mode": "missing",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.0,
+    "key_handled": 2008.1,
+    "picker_populated": 2009.6,
+    "session_content": 2458.4
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.0
+    ],
+    [
+     "c",
+     7.1
+    ],
+    [
+     "10",
+     7.2
+    ]
+   ],
+   "osc_queries": 1,
+   "build": "base",
+   "index": 0
+  },
+  {
+   "mode": "missing",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.2,
+    "key_handled": 8.1,
+    "picker_populated": 9.4,
+    "session_content": 459.2
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.2
+    ],
+    [
+     "c",
+     7.3
+    ],
+    [
+     "10",
+     7.3
+    ],
+    [
+     "11",
+     7.3
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 0
+  },
+  {
+   "mode": "immediate",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.2,
+    "key_handled": 8.1,
+    "picker_populated": 9.2,
+    "session_content": 427.0
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.2
+    ],
+    [
+     "c",
+     7.3
+    ],
+    [
+     "10",
+     7.4
+    ],
+    [
+     "11",
+     7.4
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 1
+  },
+  {
+   "mode": "immediate",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.3,
+    "key_handled": 8.4,
+    "picker_populated": 9.2,
+    "session_content": 427.9
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.2
+    ],
+    [
+     "c",
+     7.3
+    ],
+    [
+     "10",
+     7.4
+    ],
+    [
+     "11",
+     7.4
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "base",
+   "index": 1
+  },
+  {
+   "mode": "delayed",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.0,
+    "key_handled": 7.9,
+    "picker_populated": 9.1,
+    "session_content": 425.6
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.0
+    ],
+    [
+     "c",
+     7.1
+    ],
+    [
+     "10",
+     7.2
+    ],
+    [
+     "11",
+     7.2
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 1
+  },
+  {
+   "mode": "delayed",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.0,
+    "key_handled": 310.3,
+    "picker_populated": 311.6,
+    "session_content": 728.2
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.0
+    ],
+    [
+     "c",
+     7.1
+    ],
+    [
+     "10",
+     7.1
+    ],
+    [
+     "11",
+     158.2
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "base",
+   "index": 1
+  },
+  {
+   "mode": "missing",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 6.9,
+    "key_handled": 7.7,
+    "picker_populated": 9.1,
+    "session_content": 425.8
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     6.9
+    ],
+    [
+     "c",
+     7.0
+    ],
+    [
+     "10",
+     7.0
+    ],
+    [
+     "11",
+     7.0
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 1
+  },
+  {
+   "mode": "missing",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 6.7,
+    "key_handled": 2007.8,
+    "picker_populated": 2009.1,
+    "session_content": 2426.9
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     6.7
+    ],
+    [
+     "c",
+     6.8
+    ],
+    [
+     "10",
+     6.9
+    ]
+   ],
+   "osc_queries": 1,
+   "build": "base",
+   "index": 1
+  },
+  {
+   "mode": "immediate",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 6.8,
+    "key_handled": 7.8,
+    "picker_populated": 9.0,
+    "session_content": 426.3
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     6.8
+    ],
+    [
+     "c",
+     6.9
+    ],
+    [
+     "10",
+     6.9
+    ],
+    [
+     "11",
+     7.0
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "base",
+   "index": 2
+  },
+  {
+   "mode": "immediate",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 6.7,
+    "key_handled": 7.5,
+    "picker_populated": 8.7,
+    "session_content": 427.6
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     6.7
+    ],
+    [
+     "c",
+     6.8
+    ],
+    [
+     "10",
+     7.5
+    ],
+    [
+     "11",
+     7.5
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 2
+  },
+  {
+   "mode": "delayed",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 6.9,
+    "key_handled": 309.8,
+    "picker_populated": 311.3,
+    "session_content": 728.5
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     6.9
+    ],
+    [
+     "c",
+     7.0
+    ],
+    [
+     "10",
+     7.1
+    ],
+    [
+     "11",
+     158.1
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "base",
+   "index": 2
+  },
+  {
+   "mode": "delayed",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.1,
+    "key_handled": 8.0,
+    "picker_populated": 9.3,
+    "session_content": 428.3
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.1
+    ],
+    [
+     "c",
+     7.2
+    ],
+    [
+     "10",
+     7.3
+    ],
+    [
+     "11",
+     7.3
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 2
+  },
+  {
+   "mode": "missing",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.4,
+    "key_handled": 2008.4,
+    "picker_populated": 2009.9,
+    "session_content": 2426.1
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.4
+    ],
+    [
+     "c",
+     7.4
+    ],
+    [
+     "10",
+     7.5
+    ]
+   ],
+   "osc_queries": 1,
+   "build": "base",
+   "index": 2
+  },
+  {
+   "mode": "missing",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 6.1,
+    "key_handled": 6.9,
+    "picker_populated": 8.2,
+    "session_content": 454.6
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     6.1
+    ],
+    [
+     "c",
+     6.2
+    ],
+    [
+     "10",
+     6.2
+    ],
+    [
+     "11",
+     6.3
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 2
+  },
+  {
+   "mode": "immediate",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.1,
+    "key_handled": 7.9,
+    "picker_populated": 9.7,
+    "session_content": 461.0
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.1
+    ],
+    [
+     "c",
+     7.2
+    ],
+    [
+     "10",
+     7.2
+    ],
+    [
+     "11",
+     7.2
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 3
+  },
+  {
+   "mode": "immediate",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 6.7,
+    "key_handled": 7.7,
+    "picker_populated": 9.0,
+    "session_content": 425.6
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     6.7
+    ],
+    [
+     "c",
+     6.8
+    ],
+    [
+     "10",
+     6.9
+    ],
+    [
+     "11",
+     6.9
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "base",
+   "index": 3
+  },
+  {
+   "mode": "delayed",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.1,
+    "key_handled": 7.9,
+    "picker_populated": 9.2,
+    "session_content": 426.8
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.1
+    ],
+    [
+     "c",
+     7.2
+    ],
+    [
+     "10",
+     7.2
+    ],
+    [
+     "11",
+     7.2
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 3
+  },
+  {
+   "mode": "delayed",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.0,
+    "key_handled": 310.8,
+    "picker_populated": 312.2,
+    "session_content": 729.6
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.0
+    ],
+    [
+     "c",
+     7.1
+    ],
+    [
+     "10",
+     7.1
+    ],
+    [
+     "11",
+     158.4
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "base",
+   "index": 3
+  },
+  {
+   "mode": "missing",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.2,
+    "key_handled": 8.1,
+    "picker_populated": 9.4,
+    "session_content": 427.7
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.2
+    ],
+    [
+     "c",
+     7.4
+    ],
+    [
+     "10",
+     7.4
+    ],
+    [
+     "11",
+     7.4
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 3
+  },
+  {
+   "mode": "missing",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.2,
+    "key_handled": 2008.2,
+    "picker_populated": 2009.6,
+    "session_content": 2427.6
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.2
+    ],
+    [
+     "c",
+     7.3
+    ],
+    [
+     "10",
+     7.3
+    ]
+   ],
+   "osc_queries": 1,
+   "build": "base",
+   "index": 3
+  },
+  {
+   "mode": "immediate",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.0,
+    "key_handled": 8.0,
+    "picker_populated": 9.2,
+    "session_content": 425.6
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.0
+    ],
+    [
+     "c",
+     7.1
+    ],
+    [
+     "10",
+     7.1
+    ],
+    [
+     "11",
+     7.2
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "base",
+   "index": 4
+  },
+  {
+   "mode": "immediate",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 6.2,
+    "key_handled": 7.0,
+    "picker_populated": 8.1,
+    "session_content": 425.5
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     6.2
+    ],
+    [
+     "c",
+     6.2
+    ],
+    [
+     "10",
+     6.3
+    ],
+    [
+     "11",
+     6.3
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 4
+  },
+  {
+   "mode": "delayed",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.0,
+    "key_handled": 310.0,
+    "picker_populated": 311.3,
+    "session_content": 729.3
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.0
+    ],
+    [
+     "c",
+     7.2
+    ],
+    [
+     "10",
+     7.2
+    ],
+    [
+     "11",
+     158.2
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "base",
+   "index": 4
+  },
+  {
+   "mode": "delayed",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 6.1,
+    "key_handled": 6.9,
+    "picker_populated": 8.0,
+    "session_content": 425.3
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     6.1
+    ],
+    [
+     "c",
+     6.2
+    ],
+    [
+     "10",
+     6.2
+    ],
+    [
+     "11",
+     6.2
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 4
+  },
+  {
+   "mode": "missing",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.2,
+    "key_handled": 2008.3,
+    "picker_populated": 2009.7,
+    "session_content": 2458.5
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.1
+    ],
+    [
+     "c",
+     7.2
+    ],
+    [
+     "10",
+     7.3
+    ]
+   ],
+   "osc_queries": 1,
+   "build": "base",
+   "index": 4
+  },
+  {
+   "mode": "missing",
+   "key_handled": true,
+   "picker_populated": true,
+   "opened_session": true,
+   "ms": {
+    "key_sent": 7.0,
+    "key_handled": 7.8,
+    "picker_populated": 9.2,
+    "session_content": 427.0
+   },
+   "exit_code": 0,
+   "queries": [
+    [
+     "6n",
+     7.0
+    ],
+    [
+     "c",
+     7.1
+    ],
+    [
+     "10",
+     7.2
+    ],
+    [
+     "11",
+     7.2
+    ]
+   ],
+   "osc_queries": 2,
+   "build": "fix773",
+   "index": 4
+  }
+ ]
+}

@@ -1,0 +1,32 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.45s
+     Running tests/managed_remote.rs (/home/sprite/org/workspace/cli/.worktrees/perfwork/target-test-ctltest/debug/deps/managed_remote-2f26d75626796d5b)
+
+running 12 tests
+test a_waiting_sessions_list_row_says_what_it_asks_for ... ok
+test default_target_follows_selection_and_explicit_target_wins ... ok
+test delegation_remote_decline_and_duplicate_approval_never_spawn_a_child ... ok
+test delegation_remote_admission_approval_and_child_events_keep_their_identity ... ok
+test invalid_cursors_are_errors_and_overflow_drops_only_subscriber ... ok
+test managed_endpoint_requires_initialize_first ... ok
+test malformed_requests_and_unknown_targets_do_not_drive_any_session ... ok
+test selection_filters_events_and_permissions_survive_disconnect ... ok
+test session_list_rows_carry_the_live_title_reply_model_activity_and_context ... ok
+test websocket_two_sessions_reconnect_without_lost_or_duplicate_envelopes ... ok
+test websocket_subscription_and_precrash_cursor_follow_the_same_id_after_resume ... ok
+test a_subscriber_may_pause_until_it_is_one_journal_behind ... FAILED
+
+failures:
+
+---- a_subscriber_may_pause_until_it_is_one_journal_behind stdout ----
+
+thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+the paused subscriber was dropped
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_subscriber_may_pause_until_it_is_one_journal_behind
+
+test result: FAILED. 11 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.67s
+
+error: test failed, to rerun pass `-p nori-harness --test managed_remote`

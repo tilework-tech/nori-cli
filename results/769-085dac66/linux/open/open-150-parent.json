@@ -1,0 +1,107 @@
+{
+ "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+ "args": {
+  "build": "[['fix', '/home/sprite/org/workspace/cli/.worktrees/perfwork/bin/nori-fix3'], ['parent', '/home/sprite/org/workspace/cli/.worktrees/perfwork/bin/nori-parent']]",
+  "mode": "open",
+  "sections": "150",
+  "extra_rows": "0",
+  "native": "False",
+  "samples": "1",
+  "cols": "100",
+  "rows": "30",
+  "keep_scrollback": "False",
+  "out": "/home/sprite/org/workspace/cli/.worktrees/accept769/results/769-085dac66/linux/open/open-150-parent.json"
+ },
+ "builds": {
+  "fix": "9ae1c6fd5b4735cab9308ed1b449d0c69bca16617b9e76d8f5178469f9d1c6ac",
+  "parent": "8cbe37b12d9412b8304b67e5cb4e04ab2df9ff17da1be0ce4c6dd058fec2a3db"
+ },
+ "samples": [
+  {
+   "launch_to_list_ms": 9.36,
+   "enter_to_first_content_ms": 17.52,
+   "draft_ms": 22.21,
+   "enter_to_latest_reply_ms": 69.94,
+   "enter_to_final_tool_ms": 69.94,
+   "enter_to_live_reply_ms": 69.94,
+   "frames_to_catchup": 57,
+   "bytes_to_catchup": 81194,
+   "key_during_stream_ms": 15.64,
+   "stream_complete_ms": 440.57,
+   "settled_key_ms": 15.32,
+   "draft_line": "\u203a \u04361\u04362q",
+   "draft_intact": true,
+   "final_history_sha256": "55cb79519d6a444e35bda4c9f0d85b9be782ff2b039b762bc35dd02cf3fe5352",
+   "final_screen": " Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n Closing note 080 for the run.\n Closing note 081 for the run.\n Closing note 082 for the run.\n Closing note 083 for the run.\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u2022 Explored 1 read\n   \u2022 Read final.txt\n\n KilnLive0001\n\n tick1 tick2 tick3 tick4 tick5 tick6 tick7 tick8 tick9 tick10 tick11 tick12 tick13 tick14 tick15\n tick16 tick17 tick18 tick19 tick20 tick21 tick22 tick23 tick24 tick25 tick26 tick27 tick28 tick29\n KilnLive0002\n\n\n\u203a \u04361\u04362q\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n",
+   "final_ansi": "\u001b[1m Nori host  \u001b[0m\u001b[38;5;2m\u001b[49mCONTROLLING\u001b[39m\n \u001b[2mkiln \u00b7 \u001b[0;1m\u001b[39m\u001b[49mkiln seed history\u001b[0;2m\u001b[39m\u001b[49m \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\u001b[0m\u001b[39m\u001b[49m\n\n Closing note 080 for the run.\n Closing note 081 for the run.\n Closing note 082 for the run.\n Closing note 083 for the run.\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u001b[1m\u001b[38;5;2m\u2022\u001b[0m\u001b[39m\u001b[49m \u001b[1mExplored\u001b[0m\u001b[39m\u001b[49m \u001b[2m1 read\u001b[0m\u001b[39m\u001b[49m\n   \u001b[1m\u001b[38;5;2m\u2022\u001b[0m\u001b[39m\u001b[49m \u001b[38;5;6mRead\u001b[39m final.txt\n\n KilnLive0001\n\n tick1 tick2 tick3 tick4 tick5 tick6 tick7 tick8 tick9 tick10 tick11 tick12 tick13 tick14 tick15\n tick16 tick17 tick18 tick19 tick20 tick21 tick22 tick23 tick24 tick25 tick26 tick27 tick28 tick29\n KilnLive0002\n\n\n\u001b[1m\u203a\u001b[0m\u001b[39m\u001b[49m \u04361\u04362q\n\n   \u001b[1malt+s\u001b[0m\u001b[39m\u001b[49m sessions    \u001b[1malt+down\u001b[0m\u001b[39m\u001b[49m next waiting    \u001b[1malt+t\u001b[0m\u001b[39m\u001b[49m take control    \u001b[1mctrl+d\u001b[0m\u001b[39m\u001b[49m detach    \u001b[1m/delegate\u001b[0m\u001b[39m\u001b[49m deleg\n",
+   "reached_start": true,
+   "page_up_first_ms": 4.34,
+   "page_up_ms_median": 11.47,
+   "page_up_ms_max": 26.24,
+   "page_up_ms_last5_median": 18.85,
+   "page_ups": 344,
+   "audit": {
+    "ordered_exactly_once": true,
+    "duplicates": [],
+    "duplicate_count": 0,
+    "missing": [],
+    "rows": 3454,
+    "sha256": "ccc7a8ae778acdeafddceba450d94332706e15c7001ed189aaed4506498f0ebc"
+   },
+   "disconnect_notices": 0,
+   "restored_notices": 0,
+   "scrollback_disconnect_rows": 0,
+   "fixture": {
+    "sections": 150,
+    "extra_rows": 0,
+    "native_load": false,
+    "geometry": "100x30"
+   },
+   "build": "fix",
+   "index": 0
+  },
+  {
+   "launch_to_list_ms": 9.45,
+   "enter_to_first_content_ms": 15.59,
+   "draft_ms": 12.97,
+   "enter_to_latest_reply_ms": 22695.0,
+   "enter_to_final_tool_ms": 22710.09,
+   "enter_to_live_reply_ms": 22805.62,
+   "frames_to_catchup": 3267,
+   "bytes_to_catchup": 3870044,
+   "key_during_stream_ms": 80.82,
+   "stream_complete_ms": 472.53,
+   "settled_key_ms": 43.53,
+   "draft_line": "\u203a \u04361\u04362q",
+   "draft_intact": true,
+   "final_history_sha256": "23479ab9835b9bdb50ed21ae606c15f0089c1c7bec734e3526170b90b622f758",
+   "final_screen": " Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u2022 Explored 1 read\n   \u2022 Read final.txt\n\n KilnLive0001\n\n Connection lost. Reconnecting\u2026 Host stopped responding\n\n Connection lost. Reconnecting\u2026 Host stopped responding\n\n tick1 tick2 tick3 tick4 tick5 tick6 tick7 tick8 tick9 tick10 tick11 tick12 tick13 tick14 tick15\n tick16 tick17 tick18 tick19 tick20 tick21 tick22 tick23 tick24 tick25 tick26 tick27 tick28 tick29\n KilnLive0002\n\n\n\u203a \u04361\u04362q\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n",
+   "final_ansi": "\u001b[1m Nori host  \u001b[0m\u001b[38;5;2m\u001b[49mCONTROLLING\u001b[39m\n \u001b[2mkiln \u00b7 \u001b[0;1m\u001b[39m\u001b[49mkiln seed history\u001b[0;2m\u001b[39m\u001b[49m \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\u001b[0m\u001b[39m\u001b[49m\n\n Closing note 084 for the run.\n Closing note 085 for the run.\n Closing note 086 for the run.\n Closing note 087 for the run.\n Closing note 088 for the run.\n Closing note 089 for the run.\n Closing note 090 for the run.\n\n KilnLatestEnd\n\n \u001b[1m\u001b[38;5;2m\u2022\u001b[0m\u001b[39m\u001b[49m \u001b[1mExplored\u001b[0m\u001b[39m\u001b[49m \u001b[2m1 read\u001b[0m\u001b[39m\u001b[49m\n   \u001b[1m\u001b[38;5;2m\u2022\u001b[0m\u001b[39m\u001b[49m \u001b[38;5;6mRead\u001b[39m final.txt\n\n KilnLive0001\n\n \u001b[38;5;6mConnection lost. Reconnecting\u2026 Host stopped responding\n\u001b[39m\n \u001b[38;5;6mConnection lost. Reconnecting\u2026 Host stopped responding\n\u001b[39m\n tick1 tick2 tick3 tick4 tick5 tick6 tick7 tick8 tick9 tick10 tick11 tick12 tick13 tick14 tick15\n tick16 tick17 tick18 tick19 tick20 tick21 tick22 tick23 tick24 tick25 tick26 tick27 tick28 tick29\n KilnLive0002\n\n\n\u001b[1m\u203a\u001b[0m\u001b[39m\u001b[49m \u04361\u04362q\n\n   \u001b[1malt+s\u001b[0m\u001b[39m\u001b[49m sessions    \u001b[1malt+down\u001b[0m\u001b[39m\u001b[49m next waiting    \u001b[1malt+t\u001b[0m\u001b[39m\u001b[49m take control    \u001b[1mctrl+d\u001b[0m\u001b[39m\u001b[49m detach    \u001b[1m/delegate\u001b[0m\u001b[39m\u001b[49m deleg\n",
+   "reached_start": true,
+   "page_up_first_ms": 19.11,
+   "page_up_ms_median": 18.79,
+   "page_up_ms_max": 21.17,
+   "page_up_ms_last5_median": 18.58,
+   "page_ups": 344,
+   "audit": {
+    "ordered_exactly_once": true,
+    "duplicates": [],
+    "duplicate_count": 0,
+    "missing": [],
+    "rows": 3458,
+    "sha256": "7d139d7a5a2e2b8c08e346b188341d7b064edf1a419f3af5c2fd2470560e197c"
+   },
+   "disconnect_notices": 10,
+   "restored_notices": 0,
+   "scrollback_disconnect_rows": 2,
+   "fixture": {
+    "sections": 150,
+    "extra_rows": 0,
+    "native_load": false,
+    "geometry": "100x30"
+   },
+   "build": "parent",
+   "index": 0
+  }
+ ]
+}

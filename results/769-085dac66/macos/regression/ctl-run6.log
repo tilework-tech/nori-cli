@@ -1,0 +1,24 @@
++ cd ctl/nori-rs
++ CARGO_TARGET_DIR=/Users/runner/_work/_temp/test-ctl
++ cargo test --locked -p nori-harness --test managed_remote -- --exact a_subscriber_may_pause_until_it_is_one_journal_behind
+[1m[32m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+[1m[32m     Running[0m tests/managed_remote.rs (/Users/runner/_work/_temp/test-ctl/debug/deps/managed_remote-511c59ae134b3ebb)
+
+running 1 test
+test a_subscriber_may_pause_until_it_is_one_journal_behind ... FAILED
+
+failures:
+
+---- a_subscriber_may_pause_until_it_is_one_journal_behind stdout ----
+
+thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+the paused subscriber was dropped
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_subscriber_may_pause_until_it_is_one_journal_behind
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 11 filtered out; finished in 3.99s
+
+[1m[31merror[0m[1m:[0m test failed, to rerun pass `-p nori-harness --test managed_remote`

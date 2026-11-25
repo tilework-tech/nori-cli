@@ -1,0 +1,3 @@
+{
+ "error": "TimeoutError: terminal never matched:\n Nori host  CONTROLLING\n kiln \u00b7 kiln seed history \u00b7 workbench \u00b7 ready \u00b7 Approvals: Agent\n\n cursor for session 93e9ba35-43bc-45d5-8a96-e1b1dd11becc has expired; first available sequence is\n 953; list sessions to choose a newer cursor explicitly\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n Replay unavailable: cursor for session 93e9ba35-43bc-45d5-8a96-e1b1dd11becc has expired; first\navailable sequence is 953; list sessions to choose a newer cursor explicitly. Existing conversation\nretained.\n\n\u203a Send a prompt\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg\n\n"
+}

@@ -1,0 +1,1259 @@
+{
+  "candidate": {
+    "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+    "binary_sha256": "4cfb340983f78ccb3635666d080f1d293784025c3e39fc0502d04aaf9df0e363",
+    "dimensions": [
+      120,
+      40
+    ],
+    "delayed_reply_ms": 150,
+    "very_late_reply_ms": 450,
+    "samples": {
+      "attach/immediate": [
+        {
+          "time_ms": {
+            "query_10": 7.0,
+            "send_early": 7.015,
+            "query_11": 7.04,
+            "reply_10": 7.053,
+            "reply_11": 7.056,
+            "first_handled": 7.732,
+            "stripe": 9.148,
+            "ready": 9.155,
+            "send_second": 9.171,
+            "second_handled": 9.454,
+            "send_focus_key": 9.472,
+            "focus_reply_10": 9.533,
+            "focus_reply_11": 9.535,
+            "focus_handled": 9.893,
+            "focus_stripe": 10.115,
+            "exit": 30.357
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 7.395,
+            "send_early": 7.409,
+            "query_11": 7.425,
+            "reply_10": 7.436,
+            "reply_11": 7.445,
+            "first_handled": 8.227,
+            "stripe": 9.579,
+            "ready": 9.585,
+            "send_second": 9.599,
+            "second_handled": 9.867,
+            "send_focus_key": 9.885,
+            "focus_reply_10": 9.947,
+            "focus_reply_11": 9.949,
+            "focus_handled": 10.294,
+            "focus_stripe": 10.493,
+            "exit": 30.875
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 7.014,
+            "send_early": 7.025,
+            "query_11": 7.035,
+            "reply_10": 7.042,
+            "reply_11": 7.045,
+            "first_handled": 7.965,
+            "ready": 9.152,
+            "send_second": 9.166,
+            "stripe": 9.213,
+            "second_handled": 9.429,
+            "send_focus_key": 9.463,
+            "focus_reply_10": 9.502,
+            "focus_reply_11": 9.504,
+            "focus_handled": 9.893,
+            "focus_stripe": 10.103,
+            "exit": 30.395
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "attach/delayed": [
+        {
+          "time_ms": {
+            "query_10": 8.458,
+            "send_early": 8.471,
+            "query_11": 8.509,
+            "first_handled": 8.871,
+            "ready": 9.649,
+            "send_second": 9.663,
+            "second_handled": 9.921,
+            "reply_10": 158.574,
+            "reply_11": 158.586,
+            "stripe": 159.195,
+            "send_focus_key": 159.228,
+            "focus_handled": 159.702,
+            "focus_reply_10": 309.38,
+            "focus_reply_11": 309.392,
+            "focus_stripe": 309.889,
+            "exit": 330.264
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 6.628,
+            "send_early": 6.645,
+            "query_11": 6.664,
+            "first_handled": 7.323,
+            "ready": 8.591,
+            "send_second": 8.603,
+            "second_handled": 8.895,
+            "reply_10": 156.707,
+            "reply_11": 156.722,
+            "stripe": 157.295,
+            "send_focus_key": 157.319,
+            "focus_handled": 157.752,
+            "focus_reply_10": 307.463,
+            "focus_reply_11": 307.483,
+            "focus_stripe": 307.935,
+            "exit": 328.31
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 6.324,
+            "send_early": 6.335,
+            "query_11": 6.349,
+            "first_handled": 7.08,
+            "ready": 8.373,
+            "send_second": 8.383,
+            "second_handled": 8.651,
+            "reply_10": 156.41,
+            "reply_11": 156.422,
+            "stripe": 157.0,
+            "send_focus_key": 157.023,
+            "focus_handled": 157.445,
+            "focus_reply_10": 307.169,
+            "focus_reply_11": 307.181,
+            "focus_stripe": 307.62,
+            "exit": 327.976
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "attach/missing": [
+        {
+          "time_ms": {
+            "query_10": 7.726,
+            "send_early": 7.739,
+            "query_11": 7.748,
+            "first_handled": 8.509,
+            "ready": 9.842,
+            "send_second": 9.856,
+            "second_handled": 10.137,
+            "send_focus_key": 10.148,
+            "focus_handled": 10.543,
+            "status_query": 10.728,
+            "focus_reply_status": 10.745,
+            "exit": 30.883
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 7.124,
+            "send_early": 7.133,
+            "query_11": 7.142,
+            "first_handled": 7.84,
+            "ready": 9.167,
+            "send_second": 9.177,
+            "second_handled": 9.429,
+            "send_focus_key": 9.438,
+            "focus_handled": 9.935,
+            "status_query": 10.122,
+            "focus_reply_status": 10.136,
+            "exit": 30.274
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.239,
+            "send_early": 8.254,
+            "query_11": 8.267,
+            "first_handled": 8.699,
+            "ready": 9.494,
+            "send_second": 9.509,
+            "second_handled": 9.748,
+            "send_focus_key": 9.757,
+            "focus_handled": 10.164,
+            "status_query": 10.338,
+            "focus_reply_status": 10.353,
+            "exit": 30.468
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "resume/immediate": [
+        {
+          "time_ms": {
+            "query_10": 8.93,
+            "send_early": 8.939,
+            "query_11": 8.953,
+            "reply_10": 8.966,
+            "reply_11": 8.969,
+            "ready": 95.928,
+            "first_handled": 95.938,
+            "send_second": 95.95,
+            "second_handled": 97.564,
+            "send_focus_key": 97.575,
+            "focus_reply_10": 97.73,
+            "focus_reply_11": 97.737,
+            "focus_handled": 98.223,
+            "exit": 118.407
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.094,
+            "send_early": 8.104,
+            "query_11": 8.121,
+            "reply_10": 8.131,
+            "reply_11": 8.134,
+            "ready": 81.084,
+            "first_handled": 81.09,
+            "send_second": 81.1,
+            "second_handled": 81.827,
+            "send_focus_key": 81.839,
+            "focus_reply_10": 81.916,
+            "focus_reply_11": 81.924,
+            "focus_handled": 82.283,
+            "exit": 102.433
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.752,
+            "send_early": 8.763,
+            "query_11": 8.775,
+            "reply_10": 8.783,
+            "reply_11": 8.785,
+            "ready": 97.241,
+            "first_handled": 97.254,
+            "send_second": 97.268,
+            "second_handled": 98.014,
+            "send_focus_key": 98.026,
+            "focus_reply_10": 98.119,
+            "focus_reply_11": 98.129,
+            "focus_handled": 98.477,
+            "exit": 118.651
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "resume/delayed": [
+        {
+          "time_ms": {
+            "query_10": 8.619,
+            "send_early": 8.629,
+            "query_11": 8.641,
+            "ready": 95.026,
+            "first_handled": 95.034,
+            "send_second": 95.047,
+            "second_handled": 96.434,
+            "reply_10": 158.667,
+            "reply_11": 158.677,
+            "send_focus_key": 159.107,
+            "focus_handled": 160.758,
+            "focus_reply_10": 309.353,
+            "focus_reply_11": 309.364,
+            "exit": 330.026
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.768,
+            "send_early": 8.776,
+            "query_11": 8.794,
+            "ready": 71.984,
+            "first_handled": 71.992,
+            "send_second": 72.007,
+            "second_handled": 73.491,
+            "reply_10": 158.821,
+            "reply_11": 158.83,
+            "send_focus_key": 159.253,
+            "focus_handled": 160.992,
+            "focus_reply_10": 309.466,
+            "focus_reply_11": 309.484,
+            "exit": 330.09
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.818,
+            "send_early": 8.827,
+            "query_11": 8.845,
+            "ready": 89.206,
+            "first_handled": 89.212,
+            "send_second": 89.223,
+            "second_handled": 90.609,
+            "reply_10": 158.918,
+            "reply_11": 158.936,
+            "send_focus_key": 159.342,
+            "focus_handled": 160.956,
+            "focus_reply_10": 309.533,
+            "focus_reply_11": 309.546,
+            "exit": 330.21
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "resume/missing": [
+        {
+          "time_ms": {
+            "query_10": 8.73,
+            "send_early": 8.746,
+            "query_11": 8.753,
+            "ready": 103.19,
+            "first_handled": 103.198,
+            "send_second": 103.212,
+            "second_handled": 104.561,
+            "send_focus_key": 104.572,
+            "focus_handled": 106.071,
+            "status_query": 106.155,
+            "focus_reply_status": 106.166,
+            "exit": 126.306
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.994,
+            "send_early": 9.006,
+            "query_11": 9.014,
+            "ready": 102.393,
+            "first_handled": 102.402,
+            "send_second": 102.413,
+            "second_handled": 103.792,
+            "send_focus_key": 103.804,
+            "focus_handled": 105.288,
+            "status_query": 105.378,
+            "focus_reply_status": 105.391,
+            "exit": 125.523
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.132,
+            "send_early": 8.143,
+            "query_11": 8.236,
+            "ready": 68.857,
+            "first_handled": 68.864,
+            "send_second": 68.873,
+            "second_handled": 70.245,
+            "send_focus_key": 70.256,
+            "focus_handled": 71.726,
+            "status_query": 71.801,
+            "focus_reply_status": 71.812,
+            "exit": 91.952
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "host-ls/immediate": [
+        {
+          "time_ms": {
+            "ready": 7.208,
+            "exit": 27.291
+          },
+          "palette_queries": [],
+          "restored": true,
+          "next_owner_received_typeahead": true,
+          "stripe": false
+        },
+        {
+          "time_ms": {
+            "ready": 7.432,
+            "exit": 27.516
+          },
+          "palette_queries": [],
+          "restored": true,
+          "next_owner_received_typeahead": true,
+          "stripe": false
+        },
+        {
+          "time_ms": {
+            "ready": 7.343,
+            "exit": 27.406
+          },
+          "palette_queries": [],
+          "restored": true,
+          "next_owner_received_typeahead": true,
+          "stripe": false
+        }
+      ],
+      "host-ls/delayed": [
+        {
+          "time_ms": {
+            "ready": 7.698,
+            "exit": 27.758
+          },
+          "palette_queries": [],
+          "restored": true,
+          "next_owner_received_typeahead": true,
+          "stripe": false
+        },
+        {
+          "time_ms": {
+            "ready": 7.17,
+            "exit": 27.24
+          },
+          "palette_queries": [],
+          "restored": true,
+          "next_owner_received_typeahead": true,
+          "stripe": false
+        },
+        {
+          "time_ms": {
+            "ready": 7.42,
+            "exit": 27.481
+          },
+          "palette_queries": [],
+          "restored": true,
+          "next_owner_received_typeahead": true,
+          "stripe": false
+        }
+      ],
+      "host-ls/missing": [
+        {
+          "time_ms": {
+            "ready": 9.783,
+            "exit": 29.884
+          },
+          "palette_queries": [],
+          "restored": true,
+          "next_owner_received_typeahead": true,
+          "stripe": false
+        },
+        {
+          "time_ms": {
+            "ready": 7.094,
+            "exit": 27.158
+          },
+          "palette_queries": [],
+          "restored": true,
+          "next_owner_received_typeahead": true,
+          "stripe": false
+        },
+        {
+          "time_ms": {
+            "ready": 8.054,
+            "exit": 28.121
+          },
+          "palette_queries": [],
+          "restored": true,
+          "next_owner_received_typeahead": true,
+          "stripe": false
+        }
+      ]
+    }
+  },
+  "base": {
+    "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+    "binary_sha256": "9ae1c6fd5b4735cab9308ed1b449d0c69bca16617b9e76d8f5178469f9d1c6ac",
+    "dimensions": [
+      120,
+      40
+    ],
+    "delayed_reply_ms": 150,
+    "very_late_reply_ms": 450,
+    "samples": {
+      "attach/immediate": [
+        {
+          "time_ms": {
+            "query_10": 7.08,
+            "send_early": 7.089,
+            "reply_10": 7.111,
+            "query_11": 7.155,
+            "reply_11": 7.164,
+            "first_handled": 8.023,
+            "stripe": 9.3,
+            "ready": 9.306,
+            "send_second": 9.319,
+            "second_handled": 9.59,
+            "send_focus_key": 9.611,
+            "focus_reply_10": 9.68,
+            "focus_reply_11": 9.734,
+            "focus_handled": 10.178,
+            "focus_stripe": 10.183,
+            "exit": 30.528
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 7.531,
+            "send_early": 7.549,
+            "reply_10": 7.571,
+            "query_11": 7.616,
+            "reply_11": 7.629,
+            "first_handled": 8.52,
+            "stripe": 9.659,
+            "ready": 9.667,
+            "send_second": 9.68,
+            "second_handled": 9.946,
+            "send_focus_key": 9.964,
+            "focus_reply_10": 10.06,
+            "focus_reply_11": 10.12,
+            "focus_handled": 10.589,
+            "focus_stripe": 10.599,
+            "exit": 30.926
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 7.256,
+            "send_early": 7.265,
+            "reply_10": 7.285,
+            "query_11": 7.32,
+            "reply_11": 7.329,
+            "first_handled": 8.366,
+            "ready": 9.175,
+            "send_second": 9.187,
+            "stripe": 9.216,
+            "second_handled": 9.449,
+            "send_focus_key": 9.464,
+            "focus_reply_10": 9.543,
+            "focus_reply_11": 9.587,
+            "focus_handled": 10.003,
+            "focus_stripe": 10.008,
+            "exit": 30.268
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "attach/delayed": [
+        {
+          "time_ms": {
+            "query_10": 7.283,
+            "send_early": 7.294,
+            "reply_10": 157.36,
+            "query_11": 157.475,
+            "reply_11": 307.555,
+            "first_handled": 308.702,
+            "ready": 310.204,
+            "send_second": 310.223,
+            "stripe": 310.243,
+            "second_handled": 310.61,
+            "send_focus_key": 310.637,
+            "focus_reply_10": 460.773,
+            "focus_reply_11": 610.993,
+            "focus_handled": 611.625,
+            "focus_stripe": 611.639,
+            "exit": 632.169
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 6.661,
+            "send_early": 6.671,
+            "reply_10": 156.73,
+            "query_11": 156.907,
+            "reply_11": 306.984,
+            "first_handled": 308.215,
+            "stripe": 309.009,
+            "ready": 309.017,
+            "send_second": 309.032,
+            "second_handled": 309.311,
+            "send_focus_key": 309.332,
+            "focus_reply_10": 459.44,
+            "focus_reply_11": 609.731,
+            "focus_handled": 610.342,
+            "focus_stripe": 610.356,
+            "exit": 630.727
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 7.411,
+            "send_early": 7.42,
+            "reply_10": 157.499,
+            "query_11": 157.652,
+            "reply_11": 307.729,
+            "first_handled": 308.808,
+            "stripe": 310.27,
+            "ready": 310.283,
+            "send_second": 310.299,
+            "second_handled": 310.578,
+            "send_focus_key": 310.598,
+            "focus_reply_10": 460.688,
+            "focus_reply_11": 610.873,
+            "focus_handled": 611.469,
+            "focus_stripe": 611.48,
+            "exit": 631.843
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "attach/missing": [
+        {
+          "time_ms": {
+            "query_10": 7.552,
+            "send_early": 7.561,
+            "first_handled": 2008.635,
+            "ready": 2010.291,
+            "send_second": 2010.308,
+            "second_handled": 2010.629,
+            "send_focus_key": 2010.647,
+            "focus_handled": 2011.07,
+            "exit": 2031.484
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 7.27,
+            "send_early": 7.28,
+            "first_handled": 2008.508,
+            "ready": 2009.383,
+            "send_second": 2009.399,
+            "second_handled": 2009.677,
+            "send_focus_key": 2009.688,
+            "focus_handled": 2010.092,
+            "exit": 2030.392
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 7.739,
+            "send_early": 7.749,
+            "first_handled": 2008.96,
+            "ready": 2009.797,
+            "send_second": 2009.81,
+            "second_handled": 2010.071,
+            "send_focus_key": 2010.08,
+            "focus_handled": 2010.467,
+            "exit": 2030.711
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "resume/immediate": [
+        {
+          "time_ms": {
+            "query_10": 8.914,
+            "send_early": 8.924,
+            "reply_10": 8.945,
+            "query_11": 8.985,
+            "reply_11": 8.995,
+            "ready": 93.745,
+            "first_handled": 93.754,
+            "send_second": 93.766,
+            "second_handled": 95.188,
+            "send_focus_key": 95.208,
+            "focus_reply_10": 95.303,
+            "focus_reply_11": 95.376,
+            "focus_handled": 96.862,
+            "exit": 117.049
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.491,
+            "send_early": 8.504,
+            "reply_10": 8.526,
+            "query_11": 8.567,
+            "reply_11": 8.577,
+            "ready": 68.003,
+            "first_handled": 68.009,
+            "send_second": 68.022,
+            "second_handled": 69.444,
+            "send_focus_key": 69.453,
+            "focus_reply_10": 69.543,
+            "focus_reply_11": 69.586,
+            "focus_handled": 71.099,
+            "exit": 91.312
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 7.974,
+            "send_early": 7.985,
+            "reply_10": 8.001,
+            "query_11": 8.055,
+            "reply_11": 8.063,
+            "ready": 84.984,
+            "first_handled": 84.991,
+            "send_second": 85.003,
+            "second_handled": 86.34,
+            "send_focus_key": 86.353,
+            "focus_reply_10": 86.44,
+            "focus_reply_11": 86.517,
+            "focus_handled": 88.008,
+            "exit": 108.168
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "resume/delayed": [
+        {
+          "time_ms": {
+            "query_10": 8.865,
+            "send_early": 8.874,
+            "reply_10": 158.955,
+            "query_11": 159.135,
+            "reply_11": 309.178,
+            "ready": 391.502,
+            "first_handled": 391.51,
+            "send_second": 391.523,
+            "second_handled": 391.932,
+            "send_focus_key": 391.949,
+            "focus_reply_10": 542.069,
+            "focus_reply_11": 692.265,
+            "focus_handled": 694.214,
+            "exit": 714.455
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.927,
+            "send_early": 8.937,
+            "reply_10": 158.992,
+            "query_11": 159.171,
+            "reply_11": 309.215,
+            "ready": 396.903,
+            "first_handled": 396.911,
+            "send_second": 396.922,
+            "second_handled": 398.475,
+            "send_focus_key": 398.504,
+            "focus_reply_10": 548.679,
+            "focus_reply_11": 698.881,
+            "focus_handled": 700.757,
+            "exit": 720.992
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.671,
+            "send_early": 8.681,
+            "reply_10": 158.754,
+            "query_11": 158.95,
+            "reply_11": 308.988,
+            "ready": 402.11,
+            "first_handled": 402.117,
+            "send_second": 402.129,
+            "second_handled": 403.498,
+            "send_focus_key": 403.513,
+            "focus_reply_10": 553.653,
+            "focus_reply_11": 703.911,
+            "focus_handled": 705.846,
+            "exit": 726.087
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "resume/missing": [
+        {
+          "time_ms": {
+            "query_10": 9.371,
+            "send_early": 9.384,
+            "ready": 2091.683,
+            "first_handled": 2091.692,
+            "send_second": 2091.705,
+            "second_handled": 2093.048,
+            "send_focus_key": 2093.061,
+            "focus_handled": 2094.659,
+            "exit": 2114.839
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.365,
+            "send_early": 8.374,
+            "ready": 2086.707,
+            "first_handled": 2086.714,
+            "send_second": 2086.725,
+            "second_handled": 2088.091,
+            "send_focus_key": 2088.104,
+            "focus_handled": 2089.622,
+            "exit": 2109.817
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 8.795,
+            "send_early": 8.808,
+            "ready": 2065.19,
+            "first_handled": 2065.198,
+            "send_second": 2065.211,
+            "second_handled": 2066.597,
+            "send_focus_key": 2066.613,
+            "focus_handled": 2068.089,
+            "exit": 2088.273
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "host-ls/immediate": [
+        {
+          "time_ms": {
+            "query_10": 8.146,
+            "reply_10": 8.175,
+            "query_11": 8.239,
+            "reply_11": 8.248,
+            "stripe": 8.334,
+            "ready": 8.343,
+            "exit": 28.391
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "next_owner_received_typeahead": false,
+          "stripe": true
+        },
+        {
+          "time_ms": {
+            "query_10": 7.538,
+            "reply_10": 7.568,
+            "query_11": 7.631,
+            "reply_11": 7.641,
+            "stripe": 7.73,
+            "ready": 7.738,
+            "exit": 27.802
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "next_owner_received_typeahead": false,
+          "stripe": true
+        },
+        {
+          "time_ms": {
+            "query_10": 7.815,
+            "reply_10": 7.846,
+            "query_11": 7.911,
+            "reply_11": 7.921,
+            "stripe": 8.003,
+            "ready": 8.012,
+            "exit": 28.063
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "next_owner_received_typeahead": false,
+          "stripe": true
+        }
+      ],
+      "host-ls/delayed": [
+        {
+          "time_ms": {
+            "query_10": 7.213,
+            "reply_10": 157.268,
+            "query_11": 157.409,
+            "reply_11": 307.465,
+            "stripe": 307.663,
+            "ready": 307.684,
+            "exit": 327.774
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "next_owner_received_typeahead": false,
+          "stripe": true
+        },
+        {
+          "time_ms": {
+            "query_10": 7.806,
+            "reply_10": 157.881,
+            "query_11": 158.053,
+            "reply_11": 308.158,
+            "stripe": 308.45,
+            "ready": 308.471,
+            "exit": 328.535
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "next_owner_received_typeahead": false,
+          "stripe": true
+        },
+        {
+          "time_ms": {
+            "query_10": 7.689,
+            "reply_10": 157.739,
+            "query_11": 157.886,
+            "reply_11": 307.959,
+            "stripe": 308.156,
+            "ready": 308.175,
+            "exit": 328.26
+          },
+          "palette_queries": [
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "next_owner_received_typeahead": false,
+          "stripe": true
+        }
+      ],
+      "host-ls/missing": [
+        {
+          "time_ms": {
+            "query_10": 8.364,
+            "ready": 2008.576,
+            "exit": 2028.654
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "next_owner_received_typeahead": false,
+          "stripe": false
+        },
+        {
+          "time_ms": {
+            "query_10": 7.669,
+            "ready": 2007.911,
+            "exit": 2027.991
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "next_owner_received_typeahead": false,
+          "stripe": false
+        },
+        {
+          "time_ms": {
+            "query_10": 7.147,
+            "ready": 2007.407,
+            "exit": 2027.509
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "next_owner_received_typeahead": false,
+          "stripe": false
+        }
+      ]
+    }
+  }
+}

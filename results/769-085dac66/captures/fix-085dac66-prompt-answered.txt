@@ -1,0 +1,30 @@
+ Nori host  CONTROLLING
+ kiln · kiln seed history · workbench · working · Approvals: Agent
+
+ Closing note 079 for the run.
+ Closing note 080 for the run.
+ Closing note 081 for the run.
+ Closing note 082 for the run.
+ Closing note 083 for the run.
+ Closing note 084 for the run.
+ Closing note 085 for the run.
+ Closing note 086 for the run.
+ Closing note 087 for the run.
+ Closing note 088 for the run.
+ Closing note 089 for the run.
+ Closing note 090 for the run.
+
+ KilnLatestEnd
+
+ • Explored 1 read
+   • Read final.txt
+
+ › You
+ recovered probe 220729
+
+ Kiln answer to recovered probe 220729.
+
+
+› ж1q
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg

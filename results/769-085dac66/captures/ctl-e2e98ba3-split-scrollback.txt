@@ -1,0 +1,26 @@
+ }
+
+ • Explored 1 read
+   • Read kiln-48.log
+
+ › You
+ Check kiln batch 49 please.
+
+ ## KilnMark0049
+
+ Batch 49 fired at cone 2; glaze `celadon-
+
+ Connection lost. Reconnecting… host connection closed
+
+ 49` held.
+
+ shelf  temp
+ ━━━━━  ━━━━
+ 49     1249
+
+ 1. Loaded
+ 2. Fired
+ 3. Cooled
+
+ def batch_49():
+     return 49 * 3

@@ -1,0 +1,21 @@
+fix run 1 pass
+fix run 2 pass
+fix run 3 pass
+fix run 4 pass
+fix run 5 pass
+fix run 6 pass
+fix run 7 pass
+fix run 8 pass
+fix run 9 pass
+fix run 10 pass
+ctl run 1 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+ctl run 2 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+ctl run 3 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+ctl run 4 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+ctl run 5 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+ctl run 6 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+ctl run 7 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+ctl run 8 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+ctl run 9 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+ctl run 10 FAIL thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+fix whole file exit 0

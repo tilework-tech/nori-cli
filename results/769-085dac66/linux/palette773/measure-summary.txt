@@ -1,0 +1,9 @@
+attach/immediate | base: first 8.4 ready 9.3 n=3 | candidate: first 8.0 ready 9.2 n=3
+attach/delayed | base: first 308.7 ready 310.2 n=3 | candidate: first 7.3 ready 8.6 n=3
+attach/missing | base: first 2008.6 ready 2009.8 n=3 | candidate: first 8.5 ready 9.5 n=3
+resume/immediate | base: first 85.0 ready 85.0 n=3 | candidate: first 95.9 ready 95.9 n=3
+resume/delayed | base: first 396.9 ready 396.9 n=3 | candidate: first 89.2 ready 89.2 n=3
+resume/missing | base: first 2086.7 ready 2086.7 n=3 | candidate: first 102.4 ready 102.4 n=3
+host-ls/immediate | base: first - ready 8.0 n=3 | candidate: first - ready 7.3 n=3
+host-ls/delayed | base: first - ready 308.2 n=3 | candidate: first - ready 7.4 n=3
+host-ls/missing | base: first - ready 2007.9 n=3 | candidate: first - ready 8.1 n=3

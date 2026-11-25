@@ -1,0 +1,11 @@
++ cd fix/nori-rs
++ CARGO_TARGET_DIR=/Users/runner/_work/_temp/test-fix
++ cargo test --locked -p nori-harness --test managed_remote -- --exact a_subscriber_may_pause_until_it_is_one_journal_behind
+[1m[32m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+[1m[32m     Running[0m tests/managed_remote.rs (/Users/runner/_work/_temp/test-fix/debug/deps/managed_remote-511c59ae134b3ebb)
+
+running 1 test
+test a_subscriber_may_pause_until_it_is_one_journal_behind ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 9.34s
+

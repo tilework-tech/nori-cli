@@ -1,0 +1,2 @@
+measure exit 0
+DONE

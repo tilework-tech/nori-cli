@@ -1,0 +1,21 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.66s
+     Running tests/managed_remote.rs (/home/sprite/org/workspace/cli/.worktrees/perfwork/target-test-ctltest/debug/deps/managed_remote-2f26d75626796d5b)
+
+running 1 test
+test a_subscriber_may_pause_until_it_is_one_journal_behind ... FAILED
+
+failures:
+
+---- a_subscriber_may_pause_until_it_is_one_journal_behind stdout ----
+
+thread 'a_subscriber_may_pause_until_it_is_one_journal_behind' panicked at harness/tests/managed_remote.rs:560:28:
+the paused subscriber was dropped
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_subscriber_may_pause_until_it_is_one_journal_behind
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 11 filtered out; finished in 3.57s
+
+error: test failed, to rerun pass `-p nori-harness --test managed_remote`
