@@ -460,3 +460,57 @@ async fn lifecycle_connection_at_capacity_is_limited_to_host_management() {
             .is_err()
     );
 }
+
+#[test]
+fn stop_refuses_a_discovery_record_for_a_different_instance() {
+    let host = Host::new();
+    success(host.run(&["host", "--port", "0"]));
+    let path = host.0.path().join("host/host.json");
+    let original = std::fs::read(&path).unwrap();
+    let mut other: Value = serde_json::from_slice(&original).unwrap();
+    other["instanceId"] = json!(uuid::Uuid::new_v4().to_string());
+    std::fs::write(&path, other.to_string()).unwrap();
+    let stopped = host.run(&["host", "stop"]);
+    std::fs::write(path, original).unwrap();
+    assert!(!stopped.status.success(), "{stopped:?}");
+    success(host.run(&["host", "ls"]));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stop_completes_for_its_instance_while_a_replacement_serves_the_same_home() {
+    let host = host_with("[host]\nmax_clients = 1", &[]);
+    let first = discovery(&host);
+    let mut observer = tokio::task::block_in_place(|| host.observer());
+    let mut stopping = tokio::process::Command::from(host.command(&["host", "stop"]))
+        .kill_on_drop(true)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // The reserved stop connection works even with the only session slot held.
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while let Ok(Some(_)) = observer.recv_text().await {}
+    })
+    .await
+    .expect("stop never disconnected the existing observer");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let result = host.run(&["host", "--port", "0"]);
+        if result.status.success() && discovery(&host)["instanceId"] != first["instanceId"] {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "replacement never started: {result:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let replacement = discovery(&host);
+    assert_ne!(first["instanceId"], replacement["instanceId"]);
+    let stopped = tokio::time::timeout(Duration::from_secs(5), stopping.wait())
+        .await
+        .expect("stop waited for the replacement")
+        .unwrap();
+    assert!(stopped.success());
+    success(host.run(&["host", "ls"]));
+}

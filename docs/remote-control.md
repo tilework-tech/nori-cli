@@ -313,8 +313,9 @@ This section covers the default local host. Machine adapters that opt into
 `SessionManager`. The host owns the agent processes and remains alive when
 every terminal detaches or the last session ends. It binds only loopback,
 defaults to port 7420, and accepts `--port 0` to allocate a port. `nori host stop`
-authenticates, requests shutdown, and waits for the host's singleton lock to be
-released after cleanup. Startup and stop do not require a terminal.
+authenticates to the discovered instance, requests shutdown on that connection,
+and waits for that instance to release its state-file lock after cleanup. A
+replacement publishes a fresh state file and can keep serving independently. Startup and stop do not require a terminal.
 
 | Command | Behavior |
 | --- | --- |
@@ -345,10 +346,11 @@ permission checks.
 WebSocket upgrade, including on loopback; a missing or wrong token returns
 HTTP 401. Past `[host] max_clients` (default 16) concurrent connections the
 upgrade returns HTTP 503 with the limit in the body (values below 1 count as
-1). Every client counts, including `nori attach`, joined stdio clients and the
-short connections of `nori host ls`/`new`/`stop`; a full host still answers
-`nori host` with "already running", and `nori host stop` falls back to SIGTERM
-on the locked host's PID. The host is the only listener Nori serves.
+1). This limit covers `nori attach`, joined stdio clients and the short
+connections for `nori host ls` and `new`. Readiness and `nori host stop` use
+reserved authenticated connections, so they work even when all session slots
+are occupied. A failed identity or authentication check makes stop exit with
+an error. The host is the only listener Nori serves.
 
 Successful authenticated upgrades include `x-nori-host-instance`, a UUID
 generated for that router lifetime independently of the bearer token. It stays
