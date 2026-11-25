@@ -532,7 +532,11 @@ async fn run_ratatui_app(
         ..
     } = cli;
     let vertical_footer = config.vertical_footer;
-    let host = match nori_host_runtime::launch(&config, &overrides) {
+    let host = match nori_host_runtime::launch_with_context(
+        &config,
+        &overrides,
+        Some(chatwidget::agent::terminal_session_context()),
+    ) {
         Ok(host) => host,
         Err(error) => {
             restore();

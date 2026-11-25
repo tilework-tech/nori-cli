@@ -147,7 +147,11 @@ pub fn enhance_agent_error(
     {
         message = format!("{message} ({detail})");
     }
-    anyhow::anyhow!(message)
+    if message == error.to_string() {
+        error
+    } else {
+        error.context(message)
+    }
 }
 
 /// Configuration for spawning an ACP backend.

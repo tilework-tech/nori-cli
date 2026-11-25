@@ -157,9 +157,15 @@ plain nori TUI --pipe (controller)--> owned HostService --> its own SessionManag
   (version `<nori version>+contract.<HOST_CONTRACT>`),
   ACP `agentCapabilities` (load, list, resume, close, delete; only the
   baseline prompt and MCP capabilities, because the rest depend on each
-  session's adapter) and empty `authMethods` to the `initialize` reply, with
-  no Nori `_meta`; the reply still carries the managed-session keys `nori
-  attach` reads. The host picks its instance ID at startup and announces the
+  session's adapter) and empty `authMethods` to the `initialize` reply.
+  Capability metadata advertises the [prepared-agent selection](../../../host-runtime/src/host/acp/picker.rs).
+  The capability includes the agent select option with its choices and current
+  default, so an empty host can populate the picker. Each connection can
+  hold one unused adapter. The
+  [picker protocol](../../../../docs/remote-control.md#picking-a-saved-session-from-an-acp-agent-server)
+  consumes it through the same manager and attachment path as ordinary
+  session creation. The reply still carries the managed-session keys
+  `nori attach` reads. The host picks its instance ID at startup and announces the
   same value on upgrades and in `host.json`.
 - [Session lifecycle](../../../host-runtime/src/host/acp/session.rs): `session/new` loads the configuration
   of the requested folder as `_nori/session/new` does, adds the client's

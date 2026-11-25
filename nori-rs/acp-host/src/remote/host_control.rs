@@ -91,6 +91,8 @@ impl HostControl {
             | "_nori/session/status"
             | "_nori/session/subscribe"
             | "_nori/session/new"
+            | "_nori/host/prepare_agent"
+            | "_nori/host/discard_agent"
             | "_nori/host/stop"
             | "session/new"
             | "session/list"

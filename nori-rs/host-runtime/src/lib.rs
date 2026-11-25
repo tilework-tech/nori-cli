@@ -6,3 +6,4 @@ pub use host::state;
 pub use host::tui_owned::OwnedHost;
 pub use host::tui_owned::StopHost;
 pub use host::tui_owned::launch;
+pub use host::tui_owned::launch_with_context;

@@ -121,7 +121,7 @@ fn select(id: &str, name: &str, category: &str, current: &str, choices: Vec<Valu
 }
 
 /// The agents this host can start, each saying whether it can start now.
-fn agent_option(current: &str) -> Value {
+pub(super) fn agent_option(current: &str) -> Value {
     let choices = nori_harness::registry::list_available_agents()
         .into_iter()
         .map(|agent| {

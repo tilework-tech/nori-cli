@@ -12,7 +12,7 @@ const PROTOCOL_VERSION: i64 = 1;
 /// semver build metadata (`0.31.0+contract.1.0.0`), the same pair
 /// `host.json` publishes, so a client can check compatibility from standard
 /// ACP fields alone.
-pub(in crate::host) fn initialize(result: &mut Value) {
+pub(in crate::host) fn initialize(result: &mut Value, current_agent: &str) {
     // ACP v1 negotiation: a host that supports only version 1 answers 1,
     // and a client that cannot speak it disconnects.
     result["protocolVersion"] = json!(PROTOCOL_VERSION);
@@ -28,6 +28,7 @@ pub(in crate::host) fn initialize(result: &mut Value) {
     // each session's adapter, so the host promises only the baseline.
     result["agentCapabilities"] = json!({
         "loadSession": true,
+        "_meta": {(super::picker::KEY): {"version": 1, "agentOption": super::config::agent_option(current_agent)}},
         "promptCapabilities": {"image": false, "audio": false, "embeddedContext": false},
         "mcpCapabilities": {"http": false, "sse": false},
         "sessionCapabilities": {"list": {}, "resume": {}, "close": {}, "delete": {}},

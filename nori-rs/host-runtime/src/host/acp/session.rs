@@ -61,6 +61,14 @@ pub(super) fn mcp_server(server: &acp::McpServer) -> Result<(String, McpServerCo
     Ok((name, config))
 }
 
+pub(super) fn mcp_servers(params: &Value) -> Result<Vec<acp::McpServer>, AcpError> {
+    Ok(match params.get("mcpServers") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(servers) => serde_json::from_value(servers.clone())
+            .map_err(|error| AcpError::invalid_params(format!("mcpServers: {error}")))?,
+    })
+}
+
 impl HostService {
     pub(in crate::host) fn is_deleted(&self, id: &ConversationId) -> bool {
         self.deleted
@@ -86,11 +94,7 @@ impl HostService {
             .ok_or_else(|| AcpError::invalid_params("cwd must be an absolute path"))?;
         let folder =
             session_folder(cwd).map_err(|error| AcpError::invalid_params(format!("{error:#}")))?;
-        let servers: Vec<acp::McpServer> = match params.get("mcpServers") {
-            None | Some(Value::Null) => Vec::new(),
-            Some(servers) => serde_json::from_value(servers.clone())
-                .map_err(|error| AcpError::invalid_params(format!("mcpServers: {error}")))?,
-        };
+        let servers = mcp_servers(params)?;
         let meta: nori_protocol::NewSessionMeta = match params.get("_meta") {
             None | Some(Value::Null) => Default::default(),
             Some(meta) => serde_json::from_value(meta.clone())
@@ -99,6 +103,7 @@ impl HostService {
         // An agent may be named by one of its aliases.
         let meta = nori_protocol::NewSessionMeta {
             agent: meta.agent.as_deref().map(nori_harness::resolve_agent_slug),
+            ..meta
         };
         if let Some(agent) = &meta.agent {
             let known = nori_harness::registry::list_available_agents()
@@ -116,6 +121,17 @@ impl HostService {
             let (name, server) = mcp_server(server)?;
             config.mcp_servers.insert(name, server);
         }
+        self.apply_host_default_mode(&mut config);
+        self.start_and_attach(
+            client,
+            SessionAgent::Prepare(Self::prepare(config)),
+            SessionStart::New,
+            &servers,
+        )
+        .await
+    }
+
+    pub(super) fn apply_host_default_mode(&self, config: &mut nori_config::NoriConfig) {
         if let Some(mode) = self.config.host.default_mode {
             let mode = match mode {
                 nori_config::HostDefaultMode::Ask => PermissionMode::Ask,
@@ -124,11 +140,22 @@ impl HostService {
             };
             config.approval_policy = mode.approval_policy();
         }
+    }
+
+    pub(super) async fn start_and_attach(
+        &self,
+        client: i64,
+        agent: SessionAgent,
+        start: SessionStart,
+        servers: &[acp::McpServer],
+    ) -> Result<Value, AcpError> {
+        let awaiting_replay = matches!((&agent, &start),
+            (SessionAgent::Prepared(agent), SessionStart::Resume(_)) if agent.capabilities().load_session);
         let session = self
             .manager
             .start(StartSession {
-                agent: SessionAgent::Prepare(Self::prepare(config)),
-                start: SessionStart::New,
+                agent,
+                start,
                 parent: None,
                 source: SessionSource::User,
             })
@@ -140,7 +167,7 @@ impl HostService {
                 error => AcpError::internal(error),
             })?;
         let id = session.conversation_id;
-        if let Err(error) = self.attach_new(client, &id).await {
+        if let Err(error) = self.attach_new(client, &id, awaiting_replay).await {
             // A session that never started is not the client's to see.
             let ended = self
                 .manager
@@ -152,7 +179,7 @@ impl HostService {
             return Err(error);
         }
         if !servers.is_empty() {
-            let servers = serde_json::to_value(&servers).map_err(AcpError::internal)?;
+            let servers = serde_json::to_value(servers).map_err(AcpError::internal)?;
             self.settings
                 .update(&id, |settings| settings.mcp_servers = Some(servers));
         }
