@@ -126,6 +126,9 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
 - Avoid `black`, general-purpose `white`, `blue`, and `yellow` foregrounds.
   Use `reset` for the default. Identity, warning, and contrast over a fixed
   background are the exceptions.
+- Interactive screens request terminal foreground and background colors while
+  they own the input stream. Rendering uses the terminal default until each
+  reply arrives. Release the input reader before exposing the shell or editor.
 - Shared pickers get their styles from `nori-tui-components` through
   `component_theme` in `style.rs`.
 

@@ -281,7 +281,7 @@ incremental = false
 [patch.crates-io]
 # Uncomment to debug local changes.
 # ratatui = { path = "../../ratatui" }
-crossterm = { git = "https://github.com/openai-oss-forks/crossterm", rev = "45fecb9508105988f42fe6ff0441783ed3717f92" }
+crossterm = { git = "https://github.com/openai-oss-forks/crossterm", rev = "39d77d3feed5389173e16c703f7294695ed6278c" }
 
 # Uncomment to debug local changes.
 # rmcp = { path = "../../rust-sdk/crates/rmcp" }

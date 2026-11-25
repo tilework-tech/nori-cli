@@ -82,6 +82,9 @@ pub async fn run_resume_picker(
                     continue;
                 }
                 if let Some(sel) = state.handle_key(key).await? {
+                    if matches!(sel, ResumeSelection::Exit) {
+                        alt.tui.release_input();
+                    }
                     return Ok(sel);
                 }
             }
