@@ -1020,14 +1020,14 @@ fn attached_slash_menu_greys_what_this_terminal_cannot_run_and_refuses_it_with_t
     controller
         .wait_for_text("not available in nori attach yet", TIMEOUT)
         .expect("the controller's menu greys commands attach has no screen for");
-    controller.send_str("comp").unwrap();
+    controller.send_str("undo").unwrap();
     controller
         .wait_for_text("not available on this host yet", TIMEOUT)
         .expect("the menu names commands the host has no method for");
     controller.settle(Duration::from_millis(1000));
     controller.send_key(Key::Enter).unwrap();
     controller
-        .wait_for_text("/compact: not available on this host yet", TIMEOUT)
+        .wait_for_text("/undo: not available on this host yet", TIMEOUT)
         .expect("Enter on a greyed row refuses it with the menu's reason");
 
     watcher.send_str("/").unwrap();

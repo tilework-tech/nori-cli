@@ -64,6 +64,7 @@ mod context;
 mod context_host;
 mod delegation;
 pub(crate) use context::ContextSnapshot;
+mod compact_host;
 mod event_handlers;
 mod external_cancel;
 mod goal;

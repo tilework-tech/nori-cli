@@ -161,7 +161,7 @@ fn exec_runs_on_its_own_host_when_the_running_one_speaks_another_contract() {
 #[test]
 fn exec_runs_on_a_running_host_of_a_newer_compatible_contract() {
     let host = RunningHost::start();
-    host.advertise_contract("1.7.0");
+    host.advertise_contract("1.9.0");
     let folder = TempDir::new().unwrap();
 
     let output = host.exec(folder.path(), &["hello"]);

@@ -82,6 +82,8 @@ pub(crate) struct HostFeatures {
     pub goal: bool,
     /// `_nori/session/context` reports a session's context on the host.
     pub context: bool,
+    /// `_nori/session/compact` compacts a session on the host.
+    pub compact: bool,
 }
 
 impl HostConnection {
@@ -100,6 +102,7 @@ impl HostConnection {
                 prompts: true,
                 goal: true,
                 context: true,
+                compact: true,
             },
         }
     }
@@ -239,6 +242,10 @@ pub(crate) enum HostCall {
     SessionContext {
         session_id: String,
         skip_instructions: bool,
+    },
+    /// Compact the session. Only a controller may.
+    Compact {
+        session_id: String,
     },
 }
 
@@ -418,6 +425,10 @@ impl HostCall {
                     session_id,
                     skip_instructions,
                 }),
+            ),
+            Self::Compact { session_id } => (
+                "_nori/session/compact",
+                json!(nori_protocol::CompactParams { session_id }),
             ),
         }
     }
