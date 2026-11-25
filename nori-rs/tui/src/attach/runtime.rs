@@ -144,6 +144,17 @@ impl Runtime {
         runtime
     }
 
+    /// A request can arrive early in a replay batch. Give the user the full
+    /// answer grace period after the first frame that actually contains it.
+    pub(super) fn request_painted(&mut self, painted: &mut Option<String>) {
+        if *painted != self.request_on_screen {
+            if self.request_on_screen.is_some() {
+                self.answer_guard.shown();
+            }
+            painted.clone_from(&self.request_on_screen);
+        }
+    }
+
     /// Starts the answer grace period when a request other than the last one
     /// seen is now on screen.
     pub(super) fn note_request_on_screen(&mut self) {

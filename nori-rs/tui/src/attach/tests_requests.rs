@@ -487,3 +487,18 @@ fn esc_declines_a_pending_delegation() {
     let rendered = screen_with_composer(&runtime.state, &runtime.composer);
     assert!(rendered.contains("my draft"), "{rendered}");
 }
+
+#[test]
+fn a_request_first_painted_after_a_slow_replay_batch_gets_its_full_grace() {
+    let (mut runtime, mut rx, clock) = runtime_with_fresh_request(permission_event(1));
+    let mut painted_request = None;
+    clock.pass_grace();
+    runtime.request_painted(&mut painted_request);
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(rx.try_recv().is_err());
+
+    clock.pass_grace();
+    runtime.request_painted(&mut painted_request);
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(rx.try_recv().unwrap()["method"], "_nori/session/respond");
+}

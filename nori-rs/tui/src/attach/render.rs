@@ -1,5 +1,10 @@
 //! Terminal views shared by live attachments and snapshot tests.
 
+#[cfg(test)]
+mod tests;
+
+use std::collections::VecDeque;
+
 use nori_tui_components::KeyHint;
 use nori_tui_components::Picker;
 use nori_tui_components::PickerDensity;
@@ -314,8 +319,8 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
         area.height
             .saturating_sub(permission_height + delegation_height),
     );
-    let mut lines = Vec::new();
-    for part in &conversation.parts {
+    let blocks = conversation.parts.iter().map(|part| {
+        let mut lines = Vec::new();
         match part {
             Part::Message {
                 stream: MessageStream::User,
@@ -392,29 +397,22 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
             }
         }
         lines.push(Line::default());
-    }
-    if conversation.external_turn.is_none()
+        lines
+    });
+    let show_ready = conversation.external_turn.is_none()
         && conversation.active_prompt().is_none()
         && !conversation.cancelling_prompt()
         && !conversation
             .submitted_prompt
             .as_ref()
             .is_some_and(crate::host_client::PromptInterrupt::live)
-        && state.transcript_text(id).is_empty()
-    {
-        lines.push(Line::from("Ready. Send a prompt to begin.".dim()));
-    }
-    let start = lines
-        .len()
-        .saturating_sub(usize::from(history_area.height))
-        .saturating_sub(state.scroll);
-    Paragraph::new(
-        lines
-            .into_iter()
-            .skip(start)
-            .take(usize::from(history_area.height))
-            .collect::<Vec<_>>(),
-    )
+        && transcript_is_empty(&conversation.parts);
+    let ready = show_ready.then(|| vec![Line::from("Ready. Send a prompt to begin.".dim())]);
+    Paragraph::new(history_window(
+        blocks.chain(ready),
+        usize::from(history_area.height),
+        state.scroll,
+    ))
     .render(history_area, buf);
     if delegation_height > 0 {
         Paragraph::new(delegation_lines).render(
@@ -462,5 +460,45 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
             ),
             buf,
         );
+    }
+}
+
+/// Walk back from the newest part until the requested window is full.
+/// Keeping the oldest rows visited also clamps an overscroll to the first page.
+fn history_window(
+    blocks: impl DoubleEndedIterator<Item = Vec<Line<'static>>>,
+    height: usize,
+    scroll: usize,
+) -> Vec<Line<'static>> {
+    if height == 0 {
+        return Vec::new();
+    }
+    let mut visible = VecDeque::with_capacity(height);
+    for line in blocks
+        .rev()
+        .flat_map(|block| block.into_iter().rev())
+        .take(height.saturating_add(scroll))
+    {
+        if visible.len() == height {
+            visible.pop_back();
+        }
+        visible.push_front(line);
+    }
+    visible.into()
+}
+
+/// Parts are separated by blank lines in the plain-text transcript.
+fn transcript_is_empty(parts: &[Part]) -> bool {
+    match parts {
+        [] => true,
+        [Part::Message { text, .. } | Part::Notice(text)] => text.is_empty(),
+        [Part::Ended(Some(message))] => message.is_empty(),
+        [Part::Tool(tool)] => tool.title.is_empty(),
+        [Part::Plan(plan)] => match plan.entries.as_slice() {
+            [] => true,
+            [entry] => entry.step.is_empty(),
+            _ => false,
+        },
+        _ => false,
     }
 }

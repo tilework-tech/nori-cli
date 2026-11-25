@@ -15,6 +15,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
 
+#[cfg(test)]
 use crate::history_cell::HistoryCell;
 use crate::presentation::ClientEvent;
 use crate::presentation::ClientEventNormalizer;
@@ -292,8 +293,7 @@ impl AttachState {
         Ok(())
     }
 
-    /// Plain text also distinguishes an empty transcript before its cells have
-    /// been laid out at the current terminal width.
+    #[cfg(test)]
     pub fn transcript_text(&self, id: &str) -> String {
         self.conversations
             .get(id)
