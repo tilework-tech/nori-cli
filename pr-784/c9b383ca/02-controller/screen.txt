@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Survey the synthetic orchard
+
+
+• Synthetic orchard survey: 42 cedars, 7 maples.
+
+
+› ! for shell commands
+
+  controlling · project · mock-model · ready · Approvals: Agent · ctrl+d detach

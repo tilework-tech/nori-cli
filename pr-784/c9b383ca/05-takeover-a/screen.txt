@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Survey the synthetic orchard
+
+
+• Synthetic orchard survey: 42 cedars, 7 maples.
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+
+› ! for shell commands
+
+  watching · read-only · project · mock-model · ready · Approvals: Agent · alt+t take control · ctrl+d detach

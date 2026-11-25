@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Survey the synthetic orchard
+
+
+• Synthetic orchard survey: 42 cedars, 7 maples.
+
+■ Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting;
+your draft is kept.
+
+• Reconnected to the host. Watching; Alt+T takes control.
+
+
+› $ for skill listing
+
+  watching · read-only · project · mock-model · ready · Approvals: Agent · alt+t take control · ctrl+d detach
