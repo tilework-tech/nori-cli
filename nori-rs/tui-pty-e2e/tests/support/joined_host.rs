@@ -3,6 +3,8 @@
 //! attaching terminal gets a different `NORI_HOME`, `HOME` and folder. So
 //! anything an attached terminal shows that lives in a home came from the
 //! host.
+// Each test binary uses only some of these helpers.
+#![allow(dead_code)]
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -77,7 +79,6 @@ impl JoinedHost {
     /// The host reads the instruction files that are really on disk rather
     /// than the harness's fixed list, and runs the mock agent as a
     /// Codex-named agent, which loads `AGENTS.md`.
-    #[allow(dead_code)]
     pub fn with_real_instruction_files(mut self) -> Self {
         let mock = self
             .binary

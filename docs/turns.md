@@ -269,6 +269,24 @@ session's.
 - A queue that holds only hidden entries does not pause.
 - A failed compaction reports "Compact failed" and is not retried.
 
+### Compacting a session on a host
+
+On a host, `/compact` asks the host to compact the session on screen with
+`_nori/session/compact` {sessionId}, in plain `nori` and in any terminal
+attached to that host.
+
+- Only the controller may compact. A watcher gets `-32016`.
+- The host answers once the compaction is admitted. During a turn it waits
+  in the prompt queue, like any compaction.
+- The finish is the session's own `context_compacted` event, or its
+  "Compact failed" error. Every terminal following the session sees it, and
+  a terminal that follows later finds it in the replay. It lands in that
+  session's transcript even when another session is on screen by then.
+- Summarize-and-swap keeps the conversation ID, so terminals stay on the
+  same session.
+- Hosts advertise this as `capabilities.nori_sessions.compact` (host
+  contract 1.8.0).
+
 ## Delegation
 
 ### Starting a child session

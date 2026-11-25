@@ -266,6 +266,7 @@ impl HostLink {
                 self.connection.features.find_paths = sessions["find_paths"] == true;
                 self.connection.features.goal = sessions["goal"] == true;
                 self.connection.features.context = sessions["context"] == true;
+                self.connection.features.compact = sessions["compact"] == true;
                 if let Ok(control) =
                     serde_json::from_value::<nori_protocol::ControlStatus>(result["control"].take())
                 {
