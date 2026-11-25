@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+• Ran pwd
+  └ /tmp/nori-demo-785/harbor
+
+• Ran echo try2
+  └ try2
+
+• Ran echo try5
+  └ try5
+
+• Ran echo try6
+  └ try6
+
+• Ran echo try7
+  └ try7
+
+• Ran pwd
+  └ /tmp/nori-demo-785/harbor
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+
+› ? for shortcuts
+
+  watching · read-only · harbor · mock-model · ready · Approvals: Agent · alt+t take control · ctrl+d detach
