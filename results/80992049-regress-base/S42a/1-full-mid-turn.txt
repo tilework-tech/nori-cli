@@ -1,0 +1,36 @@
+  System       /tmp/nori-host-tui-acceptance-base/S42a/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› harbor opening line
+
+
+• claude-code heard: harbor opening line
+
+
+› relay 40 amber
+
+
+• - amber row 01
+  - amber row 02
+  - amber row 03
+  - amber row 04
+  - amber row 05
+  - amber row 06
+  - amber row 07
+  - amber row 08
+  - amber row 09
+  - amber row 10
+  - amber row 11
+  - amber row 12
+  - amber row 13
+  - amber row 14
+  - amber row 15
+
+• Rearranging deck chairs on the Titanic (3s • esc to interrupt)
+
+                                                                                                         [ acceptEdits ]
+› / for slash command menu
+

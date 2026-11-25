@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance/S45f/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hold the lamp
+
+
+• tick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7 tick 8 tick 9 tick 10 tick 11 tick 12 tick 13 tick 14 tick 15 tick 16
+  tick 17 tick 18 tick 19 tick 20 tick 21 tick 22 tick 23
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+
+  ● perm paint is waiting on you · approve: Paint the boathouse · alt + down to jump
+  1 waiting on you · 1 ready
+
+                                                                                                         [ acceptEdits ]
+› @ for file mentions
+

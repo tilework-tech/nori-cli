@@ -388,3 +388,22 @@ S42a–n (screen switch) and S43a–f (Ctrl+L) in `harness/run.py`; the adapter'
 | S42l resume while full-screen | 1/1 | **fails 8 of 18**: stale frame (`results/7e648413-s42l-stale/`) |
 | S43a–f Ctrl+L | — | all pass except S43d `?` list hard-codes Ctrl+L |
 | S42m permission order (inherited, also `bf0788f8`) | — | recorded |
+
+## #772 terminal program status (OSC 7501), `f7a2a5c1` (on `main` `80992049`), 2026-11-25
+
+S45a–k in `harness/run.py` read every OSC 7501 report from each pane's raw `pipe-pane` bytes. The adapter gained `fail` (JSON-RPC -32603) and `die` (exit 17 mid-prompt). `ACC_PROGRAM_STATUS=1` runs existing scenarios with `[tui] program_status = true`. Verdict: `results/f7a2a5c1-s45/VERDICT.md`, approve.
+
+| Scenario | `f7a2a5c1` (3 rounds) |
+|---|---|
+| S45a off by default (plain, attach controller + watcher) | 3/3, no OSC 7501 bytes |
+| S45b plain opt-in states, generic approval, `/screen` silent, `/quit` clears | 3/3 |
+| S45c opt-in approval title | 3/3 |
+| S45d error, cancel, recovery, Ctrl+C clears | 3/3 |
+| S45f plain foreground switch at once, background silent | 3/3 |
+| S45g attach controller + watcher, detach clears | 3/3 (attach coalesces bursts, so a fast turn can skip `working`) |
+| S45h attach session-list switch | 3/3 |
+| S45i Ctrl+Z (stated limit) / S45j host stop (stated limit) | confirmed, 3/3 |
+| S45k agent-started turn | 3/3 |
+| S45e/S45e0 agent dies mid-prompt, then `/quit` | `error` reported; **exit hangs at "Exiting…" at base `80992049` too** (pre-existing) |
+| Regression subset (20 scenarios) base / PR off / PR on | 168/171 each, same 3 pre-existing failures |
+| macOS 45576386761 PR PTY tests ×5 / A/B 45577851323 | 0 of 40 failed / inherited `host_attach` pair 8/8 fail at base and head |

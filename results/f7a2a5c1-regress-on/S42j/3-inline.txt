@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-pron/S42j/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› dune line
+
+
+• claude-code heard: dune line
+
+                                                                                                         [ acceptEdits ]
+/ screen
+
+  /screen  switch between the inline and the full-screen view
+[1]+  Stopped                 nori --skip-trust-directory
+shell$ fg
+nori --skip-trust-directory
+
+                                                                                                         [ acceptEdits ]
+› @ for file mentions
+
+
+
+
+
+
+
+
+
+
+
+

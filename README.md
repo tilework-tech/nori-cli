@@ -10,7 +10,7 @@ that stands in for Claude Code, Codex and OpenCode under their slugs.
 
 ```
 MATRIX.md                 requirements -> scenario checks -> status per commit
-harness/run.py            scenario runner (S01-S20)
+harness/run.py            scenario runner (S01-S45)
 harness/lantern_adapter.py  synthetic ACP agent server with a frame ledger
 harness/fixtures.py       synthetic homes, roots and [[agents]] config
 harness/term.py           tmux PTY driver (private socket, raw byte log)

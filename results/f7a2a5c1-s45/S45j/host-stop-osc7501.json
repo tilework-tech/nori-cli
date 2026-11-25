@@ -1,0 +1,17 @@
+[
+ {
+  "state": "idle",
+  "msg": null,
+  "raw": "state=idle:app=nori"
+ },
+ {
+  "state": "done",
+  "msg": null,
+  "raw": "state=done:app=nori"
+ },
+ {
+  "state": "clear",
+  "msg": null,
+  "raw": "state=clear"
+ }
+]

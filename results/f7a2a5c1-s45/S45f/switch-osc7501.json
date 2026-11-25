@@ -1,0 +1,57 @@
+[
+ {
+  "state": "idle",
+  "msg": null,
+  "raw": "state=idle:app=nori"
+ },
+ {
+  "state": "working",
+  "msg": null,
+  "raw": "state=working:app=nori"
+ },
+ {
+  "state": "idle",
+  "msg": null,
+  "raw": "state=idle:app=nori"
+ },
+ {
+  "state": "working",
+  "msg": null,
+  "raw": "state=working:app=nori"
+ },
+ {
+  "state": "idle",
+  "msg": null,
+  "raw": "state=idle:app=nori"
+ },
+ {
+  "state": "working",
+  "msg": null,
+  "raw": "state=working:app=nori"
+ },
+ {
+  "state": "blocked",
+  "msg": "Approval needed",
+  "raw": "state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk"
+ },
+ {
+  "state": "idle",
+  "msg": null,
+  "raw": "state=idle:app=nori"
+ },
+ {
+  "state": "blocked",
+  "msg": "Approval needed",
+  "raw": "state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk"
+ },
+ {
+  "state": "working",
+  "msg": null,
+  "raw": "state=working:app=nori"
+ },
+ {
+  "state": "done",
+  "msg": null,
+  "raw": "state=done:app=nori"
+ }
+]

@@ -1,0 +1,7 @@
+{"t": 1795595980.1125777, "adapter": "claude-code", "pid": 55019, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-pron/S25b/roots/alpha/app", "argv": []}
+{"t": 1795595980.1126673, "adapter": "claude-code", "pid": 55019, "kind": "request", "method": "initialize"}
+{"t": 1795595980.1136606, "adapter": "claude-code", "pid": 55019, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-pron/S25b/roots/alpha/app"}
+{"t": 1795595980.1163087, "adapter": "claude-code", "pid": 55019, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-pron/S25b/roots/alpha/app"}
+{"t": 1795595980.1236968, "adapter": "claude-code", "pid": 55019, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795595986.744458, "adapter": "claude-code", "pid": 55019, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "perm the boathouse"}
+{"t": 1795595990.016802, "adapter": "claude-code", "pid": 55019, "kind": "response", "id": 9000, "body": {"outcome": {"outcome": "selected", "optionId": "allow"}}}

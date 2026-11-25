@@ -1,0 +1,232 @@
+round 1: PASS S45a/off.plain_silent []
+round 1: PASS S45a/off.plain_exit.back_at_shell           │
+round 1: PASS S45a/off.plain_exit.normal_screen 0
+round 1: PASS S45a/off.plain_exit.cursor_visible 1
+round 1: PASS S45a/off.plain_exit.tty_cooked 
+round 1: PASS S45a/off.plain_exit.escapes_balanced {'alt_on': 0, 'alt_off': 0, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 12, 'cursor_show': 42, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 1: PASS S45a/off.controller_silent []
+round 1: PASS S45a/off.watcher_silent []
+round 1: PASS S45b/b.idle_at_launch ['idle']
+round 1: PASS S45b/b.simple_turn ['idle', 'working', 'done']
+round 1: PASS S45b/b.blocked_while_prompt_open ['working', 'blocked']
+round 1: PASS S45b/b.blocked_generic_message state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk
+round 1: PASS S45b/b.title_text_not_on_wire [None, None, None, None, 'Approval needed']
+round 1: PASS S45b/b.answer_then_done ['working', 'blocked', 'working', 'done']
+round 1: PASS S45b/b.deduplicated ['idle', 'working', 'done', 'working', 'blocked', 'working', 'done']
+round 1: PASS S45b/b.no_title_or_id_key ['state=idle:app=nori', 'state=working:app=nori', 'state=done:app=nori', 'state=working:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZ
+round 1: PASS S45b/b.app_is_nori ['state=idle:app=nori', 'state=working:app=nori', 'state=done:app=nori', 'state=working:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZ
+round 1: PASS S45b/b.typing_and_screen_switch_silent []
+round 1: PASS S45b/b.quit_clears_last ['working', 'done', 'clear']
+round 1: PASS S45b/b.exit.back_at_shell           │
+round 1: PASS S45b/b.exit.normal_screen 0
+round 1: PASS S45b/b.exit.cursor_visible 1
+round 1: PASS S45b/b.exit.tty_cooked 
+round 1: PASS S45b/b.exit.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 11, 'cursor_show': 31, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 1: PASS S45c/c.blocked_carries_title {'raw': 'state=blocked:app=nori:kind=permission:msg=UGFpbnQgdGhlIGJvYXRob3VzZQ==', 'msg': 'Paint the boathouse'}
+round 1: PASS S45c/c.quit_clears ['working', 'done', 'clear']
+round 1: PASS S45d/d.failed_prompt_reports_error ['idle', 'working', 'error']
+round 1: PASS S45d/d.cancel_reports_idle ['working', 'idle']
+round 1: PASS S45d/d.recovers ['working', 'done']
+round 1: PASS S45d/d.ctrl_c_exit_clears {'states': ['working', 'done', 'clear'], 'shell': True}
+round 1: PASS S45e/e.server_exit_reports_error {'states': ['idle', 'working', 'error'], 'waited': 0.0}
+round 1: FAIL S45e/e.quit_exits_within_45s {'seconds': None, 'tail': '› Exiting…'}
+round 1: FAIL S45e/e.exit_clears ['idle', 'working', 'error']
+round 1: FAIL S45e/e.ctrl_c_after_hang_exits › Exiting…
+round 1: FAIL S45e/e.ctrl_c_after_hang_clears ['idle', 'working', 'error']
+round 1: FAIL S45e0/e.quit_exits_within_45s {'seconds': None, 'tail': '› Exiting…'}
+round 1: FAIL S45e0/e.ctrl_c_after_hang_exits › Exiting…
+round 1: PASS S45f/f.first_working ['idle', 'working']
+round 1: PASS S45f/f.new_session_reports_idle {'states': ['idle', 'working', 'idle'], 'waited': 0.0}
+round 1: PASS S45f/f.background_working_silent {'ticks': [13, 23], 'new': []}
+round 1: PASS S45f/f.switch_back_reports_working_at_once {'waited_s': 0.0, 'states': ['working']}
+round 1: PASS S45f/f.foreground_blocked ['working', 'idle', 'working', 'blocked']
+round 1: PASS S45f/f.switch_away_from_blocked_reports_shown_session ['idle', 'working', 'blocked', 'idle']
+round 1: PASS S45f/f.background_blocked_silent []
+round 1: PASS S45f/f.switch_to_blocked_reports_at_once {'waited_s': 0.0, 'states': ['blocked']}
+round 1: PASS S45f/f.deduplicated ['idle', 'working', 'idle', 'working', 'idle', 'working', 'blocked', 'idle', 'blocked', 'working', 'done']
+round 1: PASS S45f/f.quit_clears ['working', 'done', 'clear']
+round 1: PASS S45g/g.watcher_idle_after_replay ['idle']
+round 1: PASS S45g/g.controller_turn ['idle', 'working', 'done']
+round 1: PASS S45g/g.watcher_turn ['idle', 'done']
+round 1: PASS S45g/g.both_blocked {'c': ['blocked'], 'w': ['blocked']}
+round 1: PASS S45g/g.generic_on_both [None, None, None, 'Approval needed', None, None, 'Approval needed']
+round 1: PASS S45g/g.controller_after_answer ['blocked', 'working', 'done']
+round 1: PASS S45g/g.watcher_after_answer ['blocked', 'done']
+round 1: PASS S45g/g.no_title_or_id_key ['state=idle:app=nori', 'state=working:app=nori', 'state=done:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk', 'state=working:app=n
+round 1: PASS S45g/g.watcher_detach_clears ['done', 'working', 'clear']
+round 1: PASS S45g/g.watcher_exit.back_at_shell shell$ nori attach bc8dadbd
+round 1: PASS S45g/g.watcher_exit.normal_screen 0
+round 1: PASS S45g/g.watcher_exit.cursor_visible 1
+round 1: PASS S45g/g.watcher_exit.tty_cooked 
+round 1: PASS S45g/g.watcher_exit.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 3, 'cursor_show': 42, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 1: PASS S45g/g.controller_detach_clears ['done', 'working', 'clear']
+round 1: PASS S45g/g.controller_exit.back_at_shell shell$ nori attach
+round 1: PASS S45g/g.controller_exit.normal_screen 0
+round 1: PASS S45g/g.controller_exit.cursor_visible 1
+round 1: PASS S45g/g.controller_exit.tty_cooked 
+round 1: PASS S45g/g.controller_exit.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 6, 'cursor_show': 127, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 1: PASS S45g/g.session_and_turn_survive_detach 6
+round 1: PASS S45h/h.new_session_reports_idle {'states': ['idle', 'working', 'idle'], 'waited': 0.0}
+round 1: PASS S45h/h.background_working_silent []
+round 1: PASS S45h/h.switch_reports_working {'seconds': 0.123, 'states': ['working']}
+round 1: PASS S45h/h.deduplicated ['idle', 'working', 'idle', 'working']
+round 1: PASS S45h/h.detach_clears ['working', 'done', 'clear']
+round 1: PASS S45i/i.suspended_at_shell                                                                                [ acceptEdits ]
+round 1: PASS S45i/i.limit_no_clear_on_suspend {'after_suspend': [], 'last': ['working']}
+round 1: PASS S45i/i.reports_after_fg ['idle']
+round 1: PASS S45i/i.quit_clears ['working', 'idle', 'clear']
+round 1: PASS S45j/j.limit_last_report_stays {'after_stop': [], 'host_stop': 'Host stopped.\n', 'screen': '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate del
+round 1: PASS S45j/j.client_exit_clears {'states': ['idle', 'done', 'clear'], 'shell': True}
+round 1: PASS S45k/k.agent_turn_working ['idle', 'working', 'done', 'working']
+round 1: PASS S45k/k.agent_turn_settles ['idle', 'working', 'done', 'working', 'idle']
+round 2: PASS S45a/off.plain_silent []
+round 2: PASS S45a/off.plain_exit.back_at_shell           │
+round 2: PASS S45a/off.plain_exit.normal_screen 0
+round 2: PASS S45a/off.plain_exit.cursor_visible 1
+round 2: PASS S45a/off.plain_exit.tty_cooked 
+round 2: PASS S45a/off.plain_exit.escapes_balanced {'alt_on': 0, 'alt_off': 0, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 12, 'cursor_show': 43, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 2: PASS S45a/off.controller_silent []
+round 2: PASS S45a/off.watcher_silent []
+round 2: PASS S45b/b.idle_at_launch ['idle']
+round 2: PASS S45b/b.simple_turn ['idle', 'working', 'done']
+round 2: PASS S45b/b.blocked_while_prompt_open ['working', 'blocked']
+round 2: PASS S45b/b.blocked_generic_message state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk
+round 2: PASS S45b/b.title_text_not_on_wire [None, None, None, None, 'Approval needed']
+round 2: PASS S45b/b.answer_then_done ['working', 'blocked', 'working', 'done']
+round 2: PASS S45b/b.deduplicated ['idle', 'working', 'done', 'working', 'blocked', 'working', 'done']
+round 2: PASS S45b/b.no_title_or_id_key ['state=idle:app=nori', 'state=working:app=nori', 'state=done:app=nori', 'state=working:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZ
+round 2: PASS S45b/b.app_is_nori ['state=idle:app=nori', 'state=working:app=nori', 'state=done:app=nori', 'state=working:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZ
+round 2: PASS S45b/b.typing_and_screen_switch_silent []
+round 2: PASS S45b/b.quit_clears_last ['working', 'done', 'clear']
+round 2: PASS S45b/b.exit.back_at_shell           │
+round 2: PASS S45b/b.exit.normal_screen 0
+round 2: PASS S45b/b.exit.cursor_visible 1
+round 2: PASS S45b/b.exit.tty_cooked 
+round 2: PASS S45b/b.exit.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 11, 'cursor_show': 33, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 2: PASS S45c/c.blocked_carries_title {'raw': 'state=blocked:app=nori:kind=permission:msg=UGFpbnQgdGhlIGJvYXRob3VzZQ==', 'msg': 'Paint the boathouse'}
+round 2: PASS S45c/c.quit_clears ['working', 'done', 'clear']
+round 2: PASS S45d/d.failed_prompt_reports_error ['idle', 'working', 'error']
+round 2: PASS S45d/d.cancel_reports_idle ['working', 'idle']
+round 2: PASS S45d/d.recovers ['working', 'done']
+round 2: PASS S45d/d.ctrl_c_exit_clears {'states': ['working', 'done', 'clear'], 'shell': True}
+round 2: PASS S45f/f.first_working ['idle', 'working']
+round 2: PASS S45f/f.new_session_reports_idle {'states': ['idle', 'working', 'idle'], 'waited': 0.0}
+round 2: PASS S45f/f.background_working_silent {'ticks': [13, 23], 'new': []}
+round 2: PASS S45f/f.switch_back_reports_working_at_once {'waited_s': 0.0, 'states': ['working']}
+round 2: PASS S45f/f.foreground_blocked ['working', 'idle', 'working', 'blocked']
+round 2: PASS S45f/f.switch_away_from_blocked_reports_shown_session ['idle', 'working', 'blocked', 'idle']
+round 2: PASS S45f/f.background_blocked_silent []
+round 2: PASS S45f/f.switch_to_blocked_reports_at_once {'waited_s': 0.0, 'states': ['blocked']}
+round 2: PASS S45f/f.deduplicated ['idle', 'working', 'idle', 'working', 'idle', 'working', 'blocked', 'idle', 'blocked', 'working', 'done']
+round 2: PASS S45f/f.quit_clears ['working', 'done', 'clear']
+round 2: PASS S45g/g.watcher_idle_after_replay ['idle']
+round 2: PASS S45g/g.controller_turn ['idle', 'done']
+round 2: PASS S45g/g.watcher_turn ['idle', 'done']
+round 2: PASS S45g/g.both_blocked {'c': ['working', 'blocked'], 'w': ['blocked']}
+round 2: PASS S45g/g.generic_on_both [None, None, None, 'Approval needed', None, None, 'Approval needed']
+round 2: PASS S45g/g.controller_after_answer ['working', 'blocked', 'done']
+round 2: PASS S45g/g.watcher_after_answer ['blocked', 'working', 'done']
+round 2: PASS S45g/g.no_title_or_id_key ['state=idle:app=nori', 'state=done:app=nori', 'state=working:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk', 'state=done:app=nori
+round 2: PASS S45g/g.watcher_detach_clears ['done', 'working', 'clear']
+round 2: PASS S45g/g.watcher_exit.back_at_shell shell$ nori attach c475e51b
+round 2: PASS S45g/g.watcher_exit.normal_screen 0
+round 2: PASS S45g/g.watcher_exit.cursor_visible 1
+round 2: PASS S45g/g.watcher_exit.tty_cooked 
+round 2: PASS S45g/g.watcher_exit.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 3, 'cursor_show': 42, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 2: PASS S45g/g.controller_detach_clears ['done', 'working', 'clear']
+round 2: PASS S45g/g.controller_exit.back_at_shell shell$ nori attach
+round 2: PASS S45g/g.controller_exit.normal_screen 0
+round 2: PASS S45g/g.controller_exit.cursor_visible 1
+round 2: PASS S45g/g.controller_exit.tty_cooked 
+round 2: PASS S45g/g.controller_exit.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 5, 'cursor_show': 128, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 2: PASS S45g/g.session_and_turn_survive_detach 6
+round 2: PASS S45h/h.new_session_reports_idle {'states': ['idle', 'working', 'idle'], 'waited': 0.0}
+round 2: PASS S45h/h.background_working_silent []
+round 2: PASS S45h/h.switch_reports_working {'seconds': 0.123, 'states': ['working']}
+round 2: PASS S45h/h.deduplicated ['idle', 'working', 'idle', 'working']
+round 2: PASS S45h/h.detach_clears ['working', 'done', 'clear']
+round 2: PASS S45i/i.suspended_at_shell                                                                           [ acceptEdits ]
+round 2: PASS S45i/i.limit_no_clear_on_suspend {'after_suspend': [], 'last': ['working']}
+round 2: PASS S45i/i.reports_after_fg ['idle']
+round 2: PASS S45i/i.quit_clears ['working', 'idle', 'clear']
+round 2: PASS S45j/j.limit_last_report_stays {'after_stop': [], 'host_stop': 'Host stopped.\n', 'screen': '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate del
+round 2: PASS S45j/j.client_exit_clears {'states': ['working', 'done', 'clear'], 'shell': True}
+round 2: PASS S45k/k.agent_turn_working ['idle', 'working', 'done', 'working']
+round 2: PASS S45k/k.agent_turn_settles ['idle', 'working', 'done', 'working', 'idle']
+round 3: PASS S45a/off.plain_silent []
+round 3: PASS S45a/off.plain_exit.back_at_shell           │
+round 3: PASS S45a/off.plain_exit.normal_screen 0
+round 3: PASS S45a/off.plain_exit.cursor_visible 1
+round 3: PASS S45a/off.plain_exit.tty_cooked 
+round 3: PASS S45a/off.plain_exit.escapes_balanced {'alt_on': 0, 'alt_off': 0, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 12, 'cursor_show': 42, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 3: PASS S45a/off.controller_silent []
+round 3: PASS S45a/off.watcher_silent []
+round 3: PASS S45b/b.idle_at_launch ['idle']
+round 3: PASS S45b/b.simple_turn ['idle', 'working', 'done']
+round 3: PASS S45b/b.blocked_while_prompt_open ['working', 'blocked']
+round 3: PASS S45b/b.blocked_generic_message state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk
+round 3: PASS S45b/b.title_text_not_on_wire [None, None, None, None, 'Approval needed']
+round 3: PASS S45b/b.answer_then_done ['working', 'blocked', 'working', 'done']
+round 3: PASS S45b/b.deduplicated ['idle', 'working', 'done', 'working', 'blocked', 'working', 'done']
+round 3: PASS S45b/b.no_title_or_id_key ['state=idle:app=nori', 'state=working:app=nori', 'state=done:app=nori', 'state=working:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZ
+round 3: PASS S45b/b.app_is_nori ['state=idle:app=nori', 'state=working:app=nori', 'state=done:app=nori', 'state=working:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZ
+round 3: PASS S45b/b.typing_and_screen_switch_silent []
+round 3: PASS S45b/b.quit_clears_last ['working', 'done', 'clear']
+round 3: PASS S45b/b.exit.back_at_shell           │
+round 3: PASS S45b/b.exit.normal_screen 0
+round 3: PASS S45b/b.exit.cursor_visible 1
+round 3: PASS S45b/b.exit.tty_cooked 
+round 3: PASS S45b/b.exit.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 11, 'cursor_show': 31, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 3: PASS S45c/c.blocked_carries_title {'raw': 'state=blocked:app=nori:kind=permission:msg=UGFpbnQgdGhlIGJvYXRob3VzZQ==', 'msg': 'Paint the boathouse'}
+round 3: PASS S45c/c.quit_clears ['working', 'done', 'clear']
+round 3: PASS S45d/d.failed_prompt_reports_error ['idle', 'working', 'error']
+round 3: PASS S45d/d.cancel_reports_idle ['working', 'idle']
+round 3: PASS S45d/d.recovers ['working', 'done']
+round 3: PASS S45d/d.ctrl_c_exit_clears {'states': ['working', 'done', 'clear'], 'shell': True}
+round 3: PASS S45f/f.first_working ['idle', 'working']
+round 3: PASS S45f/f.new_session_reports_idle {'states': ['idle', 'working', 'idle'], 'waited': 0.0}
+round 3: PASS S45f/f.background_working_silent {'ticks': [13, 23], 'new': []}
+round 3: PASS S45f/f.switch_back_reports_working_at_once {'waited_s': 0.0, 'states': ['working']}
+round 3: PASS S45f/f.foreground_blocked ['working', 'idle', 'working', 'blocked']
+round 3: PASS S45f/f.switch_away_from_blocked_reports_shown_session ['idle', 'working', 'blocked', 'idle']
+round 3: PASS S45f/f.background_blocked_silent []
+round 3: PASS S45f/f.switch_to_blocked_reports_at_once {'waited_s': 0.0, 'states': ['blocked']}
+round 3: PASS S45f/f.deduplicated ['idle', 'working', 'idle', 'working', 'idle', 'working', 'blocked', 'idle', 'blocked', 'working', 'done']
+round 3: PASS S45f/f.quit_clears ['working', 'done', 'clear']
+round 3: PASS S45g/g.watcher_idle_after_replay ['idle']
+round 3: PASS S45g/g.controller_turn ['idle', 'working', 'done']
+round 3: PASS S45g/g.watcher_turn ['idle', 'working', 'done']
+round 3: PASS S45g/g.both_blocked {'c': ['working', 'blocked'], 'w': ['blocked']}
+round 3: PASS S45g/g.generic_on_both [None, None, None, None, 'Approval needed', None, None, None, 'Approval needed']
+round 3: PASS S45g/g.controller_after_answer ['working', 'blocked', 'done']
+round 3: PASS S45g/g.watcher_after_answer ['blocked', 'working', 'done']
+round 3: PASS S45g/g.no_title_or_id_key ['state=idle:app=nori', 'state=working:app=nori', 'state=done:app=nori', 'state=working:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZ
+round 3: PASS S45g/g.watcher_detach_clears ['done', 'working', 'clear']
+round 3: PASS S45g/g.watcher_exit.back_at_shell shell$ nori attach 16a8074e
+round 3: PASS S45g/g.watcher_exit.normal_screen 0
+round 3: PASS S45g/g.watcher_exit.cursor_visible 1
+round 3: PASS S45g/g.watcher_exit.tty_cooked 
+round 3: PASS S45g/g.watcher_exit.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 3, 'cursor_show': 42, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 3: PASS S45g/g.controller_detach_clears ['done', 'working', 'clear']
+round 3: PASS S45g/g.controller_exit.back_at_shell shell$ nori attach
+round 3: PASS S45g/g.controller_exit.normal_screen 0
+round 3: PASS S45g/g.controller_exit.cursor_visible 1
+round 3: PASS S45g/g.controller_exit.tty_cooked 
+round 3: PASS S45g/g.controller_exit.escapes_balanced {'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 5, 'cursor_show': 128, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}
+round 3: PASS S45g/g.session_and_turn_survive_detach 6
+round 3: PASS S45h/h.new_session_reports_idle {'states': ['idle', 'working', 'idle'], 'waited': 0.0}
+round 3: PASS S45h/h.background_working_silent []
+round 3: PASS S45h/h.switch_reports_working {'seconds': 0.123, 'states': ['working']}
+round 3: PASS S45h/h.deduplicated ['idle', 'working', 'idle', 'working']
+round 3: PASS S45h/h.detach_clears ['working', 'done', 'clear']
+round 3: PASS S45i/i.suspended_at_shell                                                                                [ acceptEdits ]
+round 3: PASS S45i/i.limit_no_clear_on_suspend {'after_suspend': [], 'last': ['working']}
+round 3: PASS S45i/i.reports_after_fg ['idle']
+round 3: PASS S45i/i.quit_clears ['working', 'idle', 'clear']
+round 3: PASS S45j/j.limit_last_report_stays {'after_stop': [], 'host_stop': 'Host stopped.\n', 'screen': '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate del
+round 3: PASS S45j/j.client_exit_clears {'states': ['working', 'done', 'clear'], 'shell': True}
+round 3: PASS S45k/k.agent_turn_working ['idle', 'working', 'done', 'working']
+round 3: PASS S45k/k.agent_turn_settles ['idle', 'working', 'done', 'working', 'idle']
+round 1: {"nori": "nori", "passed": 75, "failed": 6, "checks": 81}
+round 2: {"nori": "nori", "passed": 74, "failed": 0, "checks": 74}
+round 3: {"nori": "nori", "passed": 74, "failed": 0, "checks": 74}

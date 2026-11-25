@@ -70,6 +70,12 @@ class Ctx:
         self.run_dir = WORK / sid
         if self.run_dir.exists():
             shutil.rmtree(self.run_dir)
+        if os.environ.get("ACC_PROGRAM_STATUS") and not sid.startswith("S45"):
+            # Regression lane: run an existing scenario with terminal program status turned on.
+            fixture_args = dict(fixture_args)
+            top = fixture_args.get("top_extra", "")
+            fixture_args["top_extra"] = (top.replace("[tui]", "[tui]\nprogram_status = true") if "[tui]\n" in top
+                                         else (top + "\n[tui]\nprogram_status = true").strip())
         self.fx = fixtures.build(self.run_dir, **fixture_args)
         self.terms, self.host_up = [], False
 
@@ -4349,6 +4355,490 @@ SCENARIOS = {
 CAP = "[tui]\ntool_output_max_lines = 10"
 FIXTURE_ARGS = {"S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
                 "S37b": {"host_extra": 'default_mode = "ask"', "top_extra": 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}
+
+
+# ---------------------------------------------------------------------------
+# S45: terminal program status (OSC 7501) for the foreground session
+# ---------------------------------------------------------------------------
+
+OSC7501 = re.compile(rb"\x1b\]7501;([^\x1b\x07]*)(?:\x1b\\|\x07)")
+PS_ON = "[tui]\nprogram_status = true"
+PS_TITLES = "[tui]\nprogram_status = true\nprogram_status_approval_titles = true"
+
+
+def ps_reports(t):
+    """Every OSC 7501 body the TUI wrote to this pane, in order."""
+    return [m.decode("latin-1") for m in OSC7501.findall(t.raw())]
+
+
+def ps_states(t):
+    return [ps_state(r) for r in ps_reports(t)]
+
+
+def ps_state(report):
+    fields = dict(kv.split("=", 1) for kv in report.split(":") if "=" in kv)
+    return fields.get("state", "?")
+
+
+def ps_fields(report):
+    return dict(kv.split("=", 1) for kv in report.split(":") if "=" in kv)
+
+
+def ps_msg(report):
+    import base64
+    msg = ps_fields(report).get("msg")
+    return base64.b64decode(msg).decode("utf-8") if msg else None
+
+
+def ps_wait(t, state, start=0, timeout=15):
+    """Wait for a report with `state` after index `start`; return (index, seconds waited) or (None, timeout)."""
+    began = time.time()
+    while time.time() - began < timeout:
+        states = ps_states(t)
+        for i in range(start, len(states)):
+            if states[i] == state:
+                return i, round(time.time() - began, 3)
+        time.sleep(0.05)
+    return None, timeout
+
+
+def ps_dedupe_ok(states):
+    return all(a != b for a, b in zip(states, states[1:]))
+
+
+def ps_save(ctx, t, label):
+    rows = [{"state": ps_state(r), "msg": ps_msg(r), "raw": r} for r in ps_reports(t)]
+    (ctx.dir / f"{label}-osc7501.json").write_text(json.dumps(rows, indent=1))
+    return rows
+
+
+def ps_no_title_key(t):
+    return all("title" not in ps_fields(r) and "id" not in ps_fields(r) for r in ps_reports(t))
+
+
+def s45a_default_off(ctx):
+    """No [tui] program_status: plain nori and nori attach write no OSC 7501 through a full approval turn."""
+    t = start_fg(ctx)
+    submit(t, "perm paint")
+    t.wait_for("Paint the boathouse", 15)
+    time.sleep(0.8)
+    t.keys("Enter")
+    t.wait_for("permission: {", 15)
+    submit(t, "hold the lamp")
+    wait_ticks(ctx, 3)
+    t.keys("Escape")
+    time.sleep(1.5)
+    t.capture("plain-after-turns")
+    quit_fg(t)
+    ctx.check("off.plain_silent", b"\x1b]7501" not in t.raw(), ps_reports(t))
+    restored(ctx, t, "off.plain_exit")
+    ctx.start_host()
+    c = ctx.term("controller")
+    c.run(f"{NORI} attach")
+    attach_new_session(c)
+    obs = ctx.observer()
+    sid = obs.sessions()[0]["sessionId"]
+    obs.close()
+    w = ctx.term("watcher")
+    w.run(f"{NORI} attach {sid[:8]}")
+    w.wait_for(r"(WATCHING|watching)", 20, regex=True)
+    submit(c, "perm paint")
+    c.wait_for("Paint the boathouse", 15)
+    w.wait_for("Paint the boathouse", 15)
+    time.sleep(0.8)
+    c.keys("Enter")
+    c.wait_for("permission: {", 15)
+    time.sleep(1.0)
+    w.keys("C-d")
+    c.keys("C-d")
+    time.sleep(2.0)
+    ctx.check("off.controller_silent", b"\x1b]7501" not in c.raw(), ps_reports(c))
+    ctx.check("off.watcher_silent", b"\x1b]7501" not in w.raw(), ps_reports(w))
+
+
+def s45b_plain_opt_in(ctx):
+    """[tui] program_status = true, plain nori: idle -> working -> done; approval -> blocked with the generic
+    message; answer -> working -> done; /quit clears. No title or id key, title text never leaves the process."""
+    t = start_fg(ctx)
+    i, _ = ps_wait(t, "idle", 0, 10)
+    ctx.check("b.idle_at_launch", i is not None and ps_states(t)[:1] == ["idle"], ps_states(t))
+    submit(t, "first light")
+    t.wait_for("heard: first light", 15)
+    ps_wait(t, "done", 0, 5)
+    ctx.check("b.simple_turn", ps_states(t) == ["idle", "working", "done"], ps_states(t))
+    n = len(ps_states(t))
+    submit(t, "perm paint")
+    t.wait_for("Paint the boathouse", 15)
+    j, _ = ps_wait(t, "blocked", n, 5)
+    t.capture("1-blocked")
+    blocked = ps_reports(t)[j] if j is not None else ""
+    ctx.check("b.blocked_while_prompt_open", j is not None and ps_states(t)[-1] == "blocked", ps_states(t)[n:])
+    ctx.check("b.blocked_generic_message", ps_msg(blocked) == "Approval needed"
+              and ps_fields(blocked).get("kind") == "permission", blocked)
+    ctx.check("b.title_text_not_on_wire", b"Paint the boathouse" not in b"".join(OSC7501.findall(t.raw()))
+              and all(ps_msg(r) in (None, "Approval needed") for r in ps_reports(t)), [ps_msg(r) for r in ps_reports(t)])
+    time.sleep(0.6)
+    t.keys("Enter")
+    t.wait_for("permission: {", 15)
+    ps_wait(t, "done", j + 1 if j is not None else n, 5)
+    ctx.check("b.answer_then_done", ps_states(t)[n:] == ["working", "blocked", "working", "done"], ps_states(t)[n:])
+    ctx.check("b.deduplicated", ps_dedupe_ok(ps_states(t)), ps_states(t))
+    ctx.check("b.no_title_or_id_key", ps_no_title_key(t), ps_reports(t))
+    ctx.check("b.app_is_nori", all(ps_fields(r).get("app") == "nori" for r in ps_reports(t)), ps_reports(t))
+    k = len(ps_states(t))
+    t.type("a draft not sent")
+    time.sleep(1.0)
+    t.keys("C-u")
+    toggle_screen(t, True)
+    toggle_screen(t, False)
+    time.sleep(1.0)
+    ctx.check("b.typing_and_screen_switch_silent", len(ps_states(t)) == k, ps_states(t)[k:])
+    t.capture("2-done")
+    rows = ps_save(ctx, t, "plain")
+    quit_fg(t)
+    ctx.check("b.quit_clears_last", ps_states(t)[-1:] == ["clear"] and ps_states(t).count("clear") == 1, ps_states(t)[-3:])
+    restored(ctx, t, "b.exit")
+    ps_save(ctx, t, "plain-final")
+    return rows
+
+
+def s45c_titles_opt_in(ctx):
+    """program_status_approval_titles = true: the blocked report carries the request's own title."""
+    t = start_fg(ctx)
+    ps_wait(t, "idle", 0, 10)
+    submit(t, "perm paint")
+    t.wait_for("Paint the boathouse", 15)
+    j, _ = ps_wait(t, "blocked", 0, 5)
+    blocked = ps_reports(t)[j] if j is not None else ""
+    ctx.check("c.blocked_carries_title", ps_msg(blocked) == "Paint the boathouse", {"raw": blocked, "msg": ps_msg(blocked) if blocked else None})
+    time.sleep(0.6)
+    t.keys("Enter")
+    t.wait_for("permission: {", 15)
+    ps_wait(t, "done", j + 1 if j is not None else 0, 5)
+    ps_save(ctx, t, "titles")
+    quit_fg(t)
+    ctx.check("c.quit_clears", ps_states(t)[-1:] == ["clear"], ps_states(t)[-3:])
+
+
+def s45d_error_and_cancel(ctx):
+    """Failed prompt -> error; Esc on a running turn -> idle; next turn -> working -> done; Ctrl+C exit clears."""
+    t = start_fg(ctx)
+    ps_wait(t, "idle", 0, 10)
+    submit(t, "fail the tide table")
+    i, _ = ps_wait(t, "error", 0, 10)
+    time.sleep(0.8)
+    t.capture("1-error")
+    ctx.check("d.failed_prompt_reports_error", i is not None and ps_states(t)[-2:] == ["working", "error"], ps_states(t))
+    n = len(ps_states(t))
+    submit(t, "hold the lamp")
+    wait_ticks(ctx, 3)
+    t.keys("Escape")
+    j, _ = ps_wait(t, "idle", n, 8)
+    ctx.check("d.cancel_reports_idle", j is not None and ps_states(t)[n:] == ["working", "idle"], ps_states(t)[n:])
+    m = len(ps_states(t))
+    submit(t, "after the squall")
+    t.wait_for("heard: after the squall", 15)
+    ps_wait(t, "done", m, 5)
+    ctx.check("d.recovers", ps_states(t)[m:] == ["working", "done"], ps_states(t)[m:])
+    t.keys("C-c")
+    time.sleep(0.4)
+    t.keys("C-c")
+    deadline = time.time() + 8
+    while time.time() < deadline and not t.at_shell():
+        time.sleep(0.3)
+    ctx.check("d.ctrl_c_exit_clears", t.at_shell() and ps_states(t)[-1:] == ["clear"], {"states": ps_states(t)[-3:], "shell": t.at_shell()})
+    ps_save(ctx, t, "error-cancel")
+
+
+def s45e_agent_dies(ctx, enabled=True):
+    """The agent server exits mid-prompt -> error; /quit then exits and clears.
+    With enabled=False the same exit runs with program status off, as the control."""
+    t = start_fg(ctx)
+    if enabled:
+        ps_wait(t, "idle", 0, 10)
+    submit(t, "die mid tide")
+    t.wait_for("exited unexpectedly", 15)
+    if enabled:
+        i, waited = ps_wait(t, "error", 0, 12)
+        ctx.check("e.server_exit_reports_error", i is not None, {"states": ps_states(t), "waited": waited})
+    time.sleep(1.0)
+    t.capture("1-after-exit")
+    started = time.time()
+    slash(t, "/quit", settle=0.2)
+    deadline = time.time() + 45
+    while time.time() < deadline and not t.at_shell():
+        time.sleep(0.3)
+    exited = round(time.time() - started, 1) if t.at_shell() else None
+    t.capture("2-after-quit")
+    ctx.check("e.quit_exits_within_45s", exited is not None, {"seconds": exited, "tail": last_nonblank(t.screen())})
+    if enabled:
+        ctx.check("e.exit_clears", ps_states(t)[-1:] == ["clear"], ps_states(t)[-3:])
+        ps_save(ctx, t, "agent-dies")
+    if not t.at_shell():
+        t.keys("C-c")
+        time.sleep(0.4)
+        t.keys("C-c")
+        deadline = time.time() + 15
+        while time.time() < deadline and not t.at_shell():
+            time.sleep(0.3)
+        t.capture("3-after-ctrl-c")
+        ctx.check("e.ctrl_c_after_hang_exits", t.at_shell(), last_nonblank(t.screen()))
+        if enabled:
+            ctx.check("e.ctrl_c_after_hang_clears", ps_states(t)[-1:] == ["clear"], ps_states(t)[-3:])
+
+
+def s45f_plain_foreground_switch(ctx):
+    """Plain nori, two sessions: a switch reports the shown session at once; the background never writes."""
+    t = start_fg(ctx)
+    ps_wait(t, "idle", 0, 10)
+    submit(t, "hold the lamp")
+    wait_ticks(ctx, 3)
+    ctx.check("f.first_working", ps_states(t)[-1:] == ["working"], ps_states(t))
+    news = len(ctx.ledger("request", "session/new"))
+    run_typed(t, "/new", settle=0.5)
+    wait_ledger(ctx, lambda r: r.get("method") == "session/new" and len(ctx.ledger("request", "session/new")) > news, 10)
+    n = len(ps_states(t))
+    i, t_new = ps_wait(t, "idle", n - 1 if ps_states(t)[-1:] == ["idle"] else n, 8)
+    t.capture("1-second-session")
+    ctx.check("f.new_session_reports_idle", ps_states(t)[-1:] == ["idle"], {"states": ps_states(t), "waited": t_new})
+    # Background session 1 keeps working: its ticks must not produce any report.
+    k = len(ps_states(t))
+    before = ctx.ticks()
+    time.sleep(2.0)
+    ctx.check("f.background_working_silent", ctx.ticks() > before and len(ps_states(t)) == k,
+              {"ticks": [before, ctx.ticks()], "new": ps_states(t)[k:]})
+    t.keys("M-,")
+    j, t_back = ps_wait(t, "working", k, 5)
+    t.capture("2-back-to-first")
+    ctx.check("f.switch_back_reports_working_at_once", j is not None and t_back < 1.0, {"waited_s": t_back, "states": ps_states(t)[k:]})
+    t.keys("Escape")
+    ps_wait(t, "idle", j + 1 if j is not None else k, 8)
+    # Now foreground = session 1 (idle). Send a permission turn in session 2 from the background.
+    t.keys("M-.")
+    time.sleep(1.5)
+    submit(t, "perm paint")
+    t.wait_for("Paint the boathouse", 15)
+    b, _ = ps_wait(t, "blocked", 0, 5)
+    ctx.check("f.foreground_blocked", b is not None and ps_states(t)[-1] == "blocked", ps_states(t)[-4:])
+    t.keys("M-,")
+    time.sleep(1.5)
+    m = len(ps_states(t))
+    t.capture("3-first-while-second-blocked")
+    ctx.check("f.switch_away_from_blocked_reports_shown_session", ps_states(t)[-1:] == ["idle"], ps_states(t)[-4:])
+    time.sleep(1.5)
+    ctx.check("f.background_blocked_silent", len(ps_states(t)) == m, ps_states(t)[m:])
+    t.keys("M-.")
+    q, t_blk = ps_wait(t, "blocked", m, 5)
+    ctx.check("f.switch_to_blocked_reports_at_once", q is not None and t_blk < 1.0, {"waited_s": t_blk, "states": ps_states(t)[m:]})
+    time.sleep(0.6)
+    t.keys("Enter")
+    t.wait_for("permission: {", 15)
+    ps_wait(t, "done", m, 5)
+    ctx.check("f.deduplicated", ps_dedupe_ok(ps_states(t)), ps_states(t))
+    ps_save(ctx, t, "switch")
+    quit_fg(t)
+    ctx.check("f.quit_clears", ps_states(t)[-1:] == ["clear"], ps_states(t)[-3:])
+
+
+def s45g_attach_controller_watcher(ctx):
+    """nori attach controller and watcher on one session both report its state; each clears on its own detach;
+    the session survives."""
+    ctx.start_host()
+    c = ctx.term("controller")
+    c.run(f"{NORI} attach")
+    attach_new_session(c)
+    ps_wait(c, "idle", 0, 10)
+    obs = ctx.observer()
+    sid = obs.sessions()[0]["sessionId"]
+    w = ctx.term("watcher")
+    w.run(f"{NORI} attach {sid[:8]}")
+    w.wait_for(r"(WATCHING|watching)", 20, regex=True)
+    wi, _ = ps_wait(w, "idle", 0, 10)
+    ctx.check("g.watcher_idle_after_replay", wi is not None, ps_states(w))
+    submit(c, "first light")
+    c.wait_for("heard: first light", 15)
+    ps_wait(c, "done", 0, 5)
+    ps_wait(w, "done", 0, 5)
+    # attach writes once an event burst has landed, so a fast synthetic turn may go idle -> done directly.
+    ctx.check("g.controller_turn", ps_states(c)[0] == "idle" and ps_states(c)[-1] == "done"
+              and set(ps_states(c)) <= {"idle", "working", "done"}, ps_states(c))
+    ctx.check("g.watcher_turn", ps_states(w)[-1] == "done" and set(ps_states(w)) <= {"idle", "working", "done"}, ps_states(w))
+    nc, nw = len(ps_states(c)), len(ps_states(w))
+    submit(c, "perm paint")
+    c.wait_for("Paint the boathouse", 15)
+    cb, _ = ps_wait(c, "blocked", nc, 5)
+    wb, _ = ps_wait(w, "blocked", nw, 5)
+    c.capture("1-controller-blocked")
+    w.capture("1-watcher-blocked")
+    ctx.check("g.both_blocked", cb is not None and wb is not None, {"c": ps_states(c)[nc:], "w": ps_states(w)[nw:]})
+    ctx.check("g.generic_on_both", all(ps_msg(r) in (None, "Approval needed") for r in ps_reports(c) + ps_reports(w)),
+              [ps_msg(r) for r in ps_reports(c) + ps_reports(w)])
+    time.sleep(0.6)
+    c.keys("Enter")
+    c.wait_for("permission: {", 15)
+    ps_wait(c, "done", nc, 5)
+    ps_wait(w, "done", nw, 5)
+    # attach reports once an event burst has landed, so a request that arrives in the same burst as the
+    # turn start can show as blocked without a working report first (plain nori writes after every event).
+    ctx.check("g.controller_after_answer", "blocked" in ps_states(c)[nc:] and ps_states(c)[-1] == "done"
+              and set(ps_states(c)[nc:]) <= {"working", "blocked", "done"}, ps_states(c)[nc:])
+    ctx.check("g.watcher_after_answer", "blocked" in ps_states(w)[nw:] and ps_states(w)[-1] == "done", ps_states(w)[nw:])
+    ctx.check("g.no_title_or_id_key", ps_no_title_key(c) and ps_no_title_key(w), ps_reports(c) + ps_reports(w))
+    submit(c, "hold the lamp")
+    wait_ticks(ctx, 3)
+    ps_wait(w, "working", nw + 1, 5)
+    w.keys("C-d")
+    time.sleep(2.0)
+    ctx.check("g.watcher_detach_clears", ps_states(w)[-1:] == ["clear"], ps_states(w)[-3:])
+    restored(ctx, w, "g.watcher_exit")
+    c.keys("C-d")
+    time.sleep(2.0)
+    ctx.check("g.controller_detach_clears", ps_states(c)[-1:] == ["clear"], ps_states(c)[-3:])
+    restored(ctx, c, "g.controller_exit")
+    before = ctx.ticks()
+    time.sleep(1.2)
+    ctx.check("g.session_and_turn_survive_detach", len(obs.sessions()) == 1 and ctx.ticks() > before, ctx.ticks() - before)
+    ps_save(ctx, c, "controller")
+    ps_save(ctx, w, "watcher")
+    obs.close()
+
+
+def s45h_attach_foreground_switch(ctx):
+    """nori attach with two sessions: the session list switch reports the selected one; the background is silent."""
+    ctx.start_host()
+    c = ctx.term("controller")
+    c.run(f"{NORI} attach")
+    attach_new_session(c)
+    ps_wait(c, "idle", 0, 10)
+    submit(c, "hold the lamp")
+    wait_ticks(ctx, 3)
+    ps_wait(c, "working", 0, 5)
+    news = len(ctx.ledger("request", "session/new"))
+    run_typed(c, "/new", settle=0.5)
+    wait_ledger(ctx, lambda r: r.get("method") == "session/new" and len(ctx.ledger("request", "session/new")) > news, 10)
+    i, waited = ps_wait(c, "idle", 2, 8)
+    c.capture("1-second-session")
+    ctx.check("h.new_session_reports_idle", i is not None, {"states": ps_states(c), "waited": waited})
+    k = len(ps_states(c))
+    before = ctx.ticks()
+    time.sleep(2.0)
+    ctx.check("h.background_working_silent", ctx.ticks() > before and len(ps_states(c)) == k, ps_states(c)[k:])
+    obs = ctx.observer()
+    sessions = obs.sessions()
+    obs.close()
+    # Select the other (working) session via the session list.
+    switched = None
+    for downs in range(len(sessions)):
+        c.keys("C-u")
+        c.keys("M-s")
+        time.sleep(1.2)
+        for _ in range(downs):
+            c.keys("Down")
+            time.sleep(0.2)
+        started = time.time()
+        c.keys("Enter")
+        j, waited = ps_wait(c, "working", k, 3)
+        if j is not None:
+            switched = round(time.time() - started, 3)
+            break
+    c.capture("2-switched-to-working")
+    ctx.check("h.switch_reports_working", switched is not None and switched < 1.5, {"seconds": switched, "states": ps_states(c)[k:]})
+    ctx.check("h.deduplicated", ps_dedupe_ok(ps_states(c)), ps_states(c))
+    ps_save(ctx, c, "attach-switch")
+    c.keys("Escape")
+    time.sleep(1.0)
+    c.keys("C-d")
+    time.sleep(2.0)
+    ctx.check("h.detach_clears", ps_states(c)[-1:] == ["clear"], ps_states(c)[-3:])
+
+
+def s45i_suspend(ctx):
+    """Stated limit: Ctrl+Z leaves the last report in place (no clear while suspended); fg resumes reporting."""
+    t = start_fg(ctx)
+    ps_wait(t, "idle", 0, 10)
+    submit(t, "hold the lamp")
+    wait_ticks(ctx, 3)
+    ps_wait(t, "working", 0, 5)
+    n = len(ps_states(t))
+    t.keys("C-z")
+    time.sleep(1.5)
+    t.capture("1-suspended")
+    ctx.check("i.suspended_at_shell", "shell$" in t.screen() and not t.alt_screen(), t.screen()[-200:])
+    ctx.check("i.limit_no_clear_on_suspend", ps_states(t)[n:] == [] and ps_states(t)[-1] == "working",
+              {"after_suspend": ps_states(t)[n:], "last": ps_states(t)[-1:]})
+    t.run("fg")
+    time.sleep(2.0)
+    t.keys("Escape")
+    j, _ = ps_wait(t, "idle", n, 8)
+    ctx.check("i.reports_after_fg", j is not None, ps_states(t)[n:])
+    ps_save(ctx, t, "suspend")
+    quit_fg(t)
+    ctx.check("i.quit_clears", ps_states(t)[-1:] == ["clear"], ps_states(t)[-3:])
+
+
+def s45j_host_stops(ctx):
+    """Stated limit: an attached terminal whose host stops keeps its last report until the client exits."""
+    ctx.start_host()
+    c = ctx.term("controller")
+    c.run(f"{NORI} attach")
+    attach_new_session(c)
+    ps_wait(c, "idle", 0, 10)
+    submit(c, "first light")
+    c.wait_for("heard: first light", 15)
+    ps_wait(c, "done", 0, 5)
+    n = len(ps_states(c))
+    out = ctx.nori("host", "stop")
+    ctx.host_up = False
+    time.sleep(3.0)
+    c.capture("1-after-host-stop")
+    ctx.check("j.limit_last_report_stays", ps_states(c)[n:] == [] and ps_states(c)[-1] == "done",
+              {"after_stop": ps_states(c)[n:], "host_stop": (out.stdout + out.stderr)[-200:], "screen": last_nonblank(c.screen())})
+    c.keys("C-d")
+    deadline = time.time() + 8
+    while time.time() < deadline and not c.at_shell():
+        time.sleep(0.3)
+    if not c.at_shell():
+        c.keys("C-c")
+        time.sleep(2)
+    ctx.check("j.client_exit_clears", c.at_shell() and ps_states(c)[-1:] == ["clear"], {"states": ps_states(c)[-3:], "shell": c.at_shell()})
+    ps_save(ctx, c, "host-stop")
+
+
+def s45k_agent_turn(ctx):
+    """An agent-started turn (no prompt) reports working, then idle when cancelled."""
+    t = start_fg(ctx)
+    ps_wait(t, "idle", 0, 10)
+    submit(t, "wake the keeper")
+    t.wait_for("heard: wake the keeper", 15)
+    wait_ledger(ctx, lambda r: r.get("kind") == "agent_turn_start", 10)
+    n = ps_states(t).index("done") + 1 if "done" in ps_states(t) else 0
+    i, _ = ps_wait(t, "working", n, 6)
+    ctx.check("k.agent_turn_working", i is not None, ps_states(t))
+    t.keys("Escape")
+    wait_ledger(ctx, lambda r: r.get("kind") == "agent_turn_end", 10)
+    time.sleep(1.0)
+    ctx.check("k.agent_turn_settles", ps_states(t)[-1] in ("idle", "done"), ps_states(t))
+    ps_save(ctx, t, "agent-turn")
+    quit_fg(t)
+
+
+SCENARIOS.update({
+    "S45a": ("program status: off by default in plain nori and attach controller/watcher", s45a_default_off),
+    "S45b": ("program status: plain nori opt-in states, generic approval, screen switch silent, /quit clears", s45b_plain_opt_in),
+    "S45c": ("program status: opt-in approval titles", s45c_titles_opt_in),
+    "S45d": ("program status: error, cancel, recover, Ctrl+C clears", s45d_error_and_cancel),
+    "S45e": ("program status: agent server exits mid-prompt", s45e_agent_dies),
+    "S45e0": ("control: agent server exits mid-prompt, program status off", lambda c: s45e_agent_dies(c, False)),
+    "S45f": ("program status: plain foreground switch at once, background silent", s45f_plain_foreground_switch),
+    "S45g": ("program status: attach controller + watcher report and clear on detach", s45g_attach_controller_watcher),
+    "S45h": ("program status: attach session-list switch, background silent", s45h_attach_foreground_switch),
+    "S45i": ("program status: Ctrl+Z limit", s45i_suspend),
+    "S45j": ("program status: host stop limit", s45j_host_stops),
+    "S45k": ("program status: agent-started turn", s45k_agent_turn),
+})
+for _sid in ("S45b", "S45d", "S45e", "S45f", "S45g", "S45h", "S45i", "S45j", "S45k"):
+    FIXTURE_ARGS[_sid] = {"top_extra": PS_ON}
+FIXTURE_ARGS["S45c"] = {"top_extra": PS_TITLES}
 
 
 def main():

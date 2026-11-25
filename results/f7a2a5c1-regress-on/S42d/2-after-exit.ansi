@@ -1,0 +1,35 @@
+
+
+[1;2m› [0m[39m[49mrelay 30 moss
+
+
+[2m• [0m[39m[49m- moss row 01
+  - moss row 02
+  - moss row 03
+  - moss row 04
+  - moss row 05
+  - moss row 06
+  - moss row 07
+  - moss row 08
+  - moss row 09
+  - moss row 10
+
+[2m╭───────────────────────────────────────────────╮
+│ [0;1m[38;5;2m[49mGoodbye! [0;2m[39m[49mThanks for using Nori.               │
+│                                               │
+│ Session: [0m[39m[49mfa89cdcb-ff5a-4566-bf0d-0bce14a9271b[2m │
+│                                               │
+│ [0;1m[39m[49mMessages[0;2m[39m[49m      User: 2  Assistant: 1  Total: 3 │
+│ [0;1m[39m[49mTool Calls[0m[39m[49m    [2m(none)                          │
+│                                               │
+│ [0;1m[39m[49mSkills Used[0;2m[39m[49m                                   │
+│   (none)                                      │
+│                                               │
+│ [0;1m[39m[49mSubagents Used[0;2m[39m[49m                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+[0m[39m[49mTo continue this session, run:
+[36mnori resume fa89cdcb-ff5a-4566-bf0d-0bce14a9271b
+[39mshell$
+
+

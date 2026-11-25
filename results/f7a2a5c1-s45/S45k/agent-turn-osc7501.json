@@ -1,0 +1,27 @@
+[
+ {
+  "state": "idle",
+  "msg": null,
+  "raw": "state=idle:app=nori"
+ },
+ {
+  "state": "working",
+  "msg": null,
+  "raw": "state=working:app=nori"
+ },
+ {
+  "state": "done",
+  "msg": null,
+  "raw": "state=done:app=nori"
+ },
+ {
+  "state": "working",
+  "msg": null,
+  "raw": "state=working:app=nori"
+ },
+ {
+  "state": "idle",
+  "msg": null,
+  "raw": "state=idle:app=nori"
+ }
+]

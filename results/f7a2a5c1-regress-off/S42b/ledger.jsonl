@@ -1,0 +1,88 @@
+{"t": 1795596649.1072736, "adapter": "claude-code", "pid": 74516, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-proff/S42b/roots/alpha/app", "argv": []}
+{"t": 1795596649.1073573, "adapter": "claude-code", "pid": 74516, "kind": "request", "method": "initialize"}
+{"t": 1795596649.1084063, "adapter": "claude-code", "pid": 74516, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-proff/S42b/roots/alpha/app"}
+{"t": 1795596649.11016, "adapter": "claude-code", "pid": 74516, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-proff/S42b/roots/alpha/app"}
+{"t": 1795596649.114393, "adapter": "claude-code", "pid": 74516, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795596650.324105, "adapter": "claude-code", "pid": 74516, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nalpha marker"}
+{"t": 1795596650.3257606, "adapter": "claude-code", "pid": 74516, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795596651.7383592, "adapter": "claude-code", "pid": 74575, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-proff/S42b/roots/alpha/app", "argv": []}
+{"t": 1795596651.738433, "adapter": "claude-code", "pid": 74575, "kind": "request", "method": "initialize"}
+{"t": 1795596651.73927, "adapter": "claude-code", "pid": 74575, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-proff/S42b/roots/alpha/app"}
+{"t": 1795596651.7409172, "adapter": "claude-code", "pid": 74575, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-proff/S42b/roots/alpha/app"}
+{"t": 1795596651.7449486, "adapter": "claude-code", "pid": 74575, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795596657.0008185, "adapter": "claude-code", "pid": 74575, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nbeta marker"}
+{"t": 1795596657.0013812, "adapter": "claude-code", "pid": 74575, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn"}
+{"t": 1795596659.0760636, "adapter": "claude-code", "pid": 74575, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 70 beta"}
+{"t": 1795596659.0769582, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 1}
+{"t": 1795596659.3273704, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 2}
+{"t": 1795596659.5775967, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 3}
+{"t": 1795596659.8278, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 4}
+{"t": 1795596660.0780025, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 5}
+{"t": 1795596660.3282077, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 6}
+{"t": 1795596660.5783994, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 7}
+{"t": 1795596660.8285892, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 8}
+{"t": 1795596661.078781, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 9}
+{"t": 1795596661.3289914, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 10}
+{"t": 1795596661.5793939, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 11}
+{"t": 1795596661.8295598, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 12}
+{"t": 1795596662.079737, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 13}
+{"t": 1795596662.329942, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 14}
+{"t": 1795596662.5801265, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 15}
+{"t": 1795596662.8303134, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 16}
+{"t": 1795596663.080486, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 17}
+{"t": 1795596663.330697, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 18}
+{"t": 1795596663.580909, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 19}
+{"t": 1795596663.831127, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 20}
+{"t": 1795596664.0812945, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 21}
+{"t": 1795596664.3315074, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 22}
+{"t": 1795596664.5817056, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 23}
+{"t": 1795596664.83188, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 24}
+{"t": 1795596665.0821037, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 25}
+{"t": 1795596665.332327, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 26}
+{"t": 1795596665.5824878, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 27}
+{"t": 1795596665.8332407, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 28}
+{"t": 1795596666.0834239, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 29}
+{"t": 1795596666.3336365, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 30}
+{"t": 1795596666.5838072, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 31}
+{"t": 1795596666.8339963, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 32}
+{"t": 1795596667.0841985, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 33}
+{"t": 1795596667.3344035, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 34}
+{"t": 1795596667.5846186, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 35}
+{"t": 1795596667.834845, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 36}
+{"t": 1795596668.0850532, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 37}
+{"t": 1795596668.3352795, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 38}
+{"t": 1795596668.5855134, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 39}
+{"t": 1795596668.8357146, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 40}
+{"t": 1795596669.0859337, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 41}
+{"t": 1795596669.3361702, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 42}
+{"t": 1795596669.586376, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 43}
+{"t": 1795596669.8366027, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 44}
+{"t": 1795596670.0868697, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 45}
+{"t": 1795596670.3371146, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 46}
+{"t": 1795596670.5872877, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 47}
+{"t": 1795596670.8374896, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 48}
+{"t": 1795596671.087717, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 49}
+{"t": 1795596671.3379393, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 50}
+{"t": 1795596671.5881298, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 51}
+{"t": 1795596671.8383253, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 52}
+{"t": 1795596672.0885367, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 53}
+{"t": 1795596672.338746, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 54}
+{"t": 1795596672.5889666, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 55}
+{"t": 1795596672.8391936, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 56}
+{"t": 1795596673.0893996, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 57}
+{"t": 1795596673.3396163, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 58}
+{"t": 1795596673.5898354, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 59}
+{"t": 1795596673.840065, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 60}
+{"t": 1795596674.0902503, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 61}
+{"t": 1795596674.3404613, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 62}
+{"t": 1795596674.590665, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 63}
+{"t": 1795596674.8408759, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 64}
+{"t": 1795596675.0910597, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 65}
+{"t": 1795596675.3412614, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 66}
+{"t": 1795596675.5914466, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 67}
+{"t": 1795596675.8416295, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 68}
+{"t": 1795596676.0918446, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 69}
+{"t": 1795596676.3420804, "adapter": "claude-code", "pid": 74575, "kind": "relay", "sessionId": "claude-code-0", "tag": "beta", "n": 70}
+{"t": 1795596676.5922918, "adapter": "claude-code", "pid": 74575, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 70}
+{"t": 1795596681.2929182, "adapter": "claude-code", "pid": 74575, "kind": "stdin_eof"}
+{"t": 1795596681.2955766, "adapter": "claude-code", "pid": 74516, "kind": "stdin_eof"}

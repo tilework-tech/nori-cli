@@ -1,0 +1,22 @@
+{"t": 1795596853.2037632, "adapter": "claude-code", "pid": 78156, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S45a/roots/alpha/app", "argv": []}
+{"t": 1795596853.2038734, "adapter": "claude-code", "pid": 78156, "kind": "request", "method": "initialize"}
+{"t": 1795596853.2055402, "adapter": "claude-code", "pid": 78156, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S45a/roots/alpha/app"}
+{"t": 1795596853.208031, "adapter": "claude-code", "pid": 78156, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance/S45a/roots/alpha/app"}
+{"t": 1795596853.2144737, "adapter": "claude-code", "pid": 78156, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795596854.4165552, "adapter": "claude-code", "pid": 78156, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "<context>\nSource: this message is from Nori CLI.\n\nYou are operating over ACP.\nFor Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.\nMCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.\n</context>\n\nperm paint"}
+{"t": 1795596855.337767, "adapter": "claude-code", "pid": 78156, "kind": "response", "id": 9000, "body": {"outcome": {"outcome": "selected", "optionId": "allow"}}}
+{"t": 1795596856.6167362, "adapter": "claude-code", "pid": 78156, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "hold the lamp"}
+{"t": 1795596856.616933, "adapter": "claude-code", "pid": 78156, "kind": "tick", "sessionId": "claude-code-0", "n": 1}
+{"t": 1795596856.8170924, "adapter": "claude-code", "pid": 78156, "kind": "tick", "sessionId": "claude-code-0", "n": 2}
+{"t": 1795596857.0172951, "adapter": "claude-code", "pid": 78156, "kind": "tick", "sessionId": "claude-code-0", "n": 3}
+{"t": 1795596857.1377664, "adapter": "claude-code", "pid": 78156, "kind": "request", "method": "session/cancel", "sessionId": "claude-code-0"}
+{"t": 1795596857.217424, "adapter": "claude-code", "pid": 78156, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "cancelled", "ticks": 3}
+{"t": 1795596859.916553, "adapter": "claude-code", "pid": 78156, "kind": "stdin_eof"}
+{"t": 1795596864.6150064, "adapter": "claude-code", "pid": 78428, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/S45a/roots/alpha/app", "argv": []}
+{"t": 1795596864.6150825, "adapter": "claude-code", "pid": 78428, "kind": "request", "method": "initialize"}
+{"t": 1795596864.6162024, "adapter": "claude-code", "pid": 78428, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/S45a/roots/alpha/app"}
+{"t": 1795596864.616981, "adapter": "claude-code", "pid": 78428, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance/S45a/roots/alpha/app"}
+{"t": 1795596864.6208827, "adapter": "claude-code", "pid": 78428, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795596869.6982934, "adapter": "claude-code", "pid": 78428, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "perm paint"}
+{"t": 1795596870.6241689, "adapter": "claude-code", "pid": 78428, "kind": "response", "id": 9000, "body": {"outcome": {"outcome": "selected", "optionId": "allow"}}}
+{"t": 1795596874.0165777, "adapter": "claude-code", "pid": 78428, "kind": "stdin_eof"}

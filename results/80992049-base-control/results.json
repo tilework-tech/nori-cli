@@ -1,0 +1,14 @@
+[
+  {
+    "scenario": "S45e0",
+    "check": "e.quit_exits_within_45s",
+    "passed": false,
+    "detail": "{'seconds': None, 'tail': '\u203a Exiting\u2026'}"
+  },
+  {
+    "scenario": "S45e0",
+    "check": "e.ctrl_c_after_hang_exits",
+    "passed": false,
+    "detail": "\u203a Exiting\u2026"
+  }
+]

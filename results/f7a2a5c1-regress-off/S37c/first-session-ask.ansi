@@ -1,0 +1,35 @@
+shell$ nori --skip-trust-directory
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/nori-host-tui-acceptance-proff/S37c/roots/alpha/app
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude
+
+[2m[39m• [0m[39m[49mLantern Claude options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mfirst light
+
+
+[2m• [0m[39m[49mclaude-code heard: first light
+
+                                                                                                             [2m[ default ]
+[0;1m[39m[49m›[0m[39m[49m [2m$ for skill listing
+
+[0m[39m[49m  [38;5;5mApprovals: Ask
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,36 @@
+
+
+• claude-code heard: quay line
+
+
+› relay 30 moss
+
+
+• - moss row 01
+  - moss row 02
+  - moss row 03
+  - moss row 04
+  - moss row 05
+  - moss row 06
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+
+╭───────────────────────────────────────────────╮
+│ Goodbye! Thanks for using Nori.               │
+│                                               │
+│ Session: 17946639-63a4-4a55-ba7a-0f0a494224f1 │
+│                                               │
+│ Messages      User: 2  Assistant: 2  Total: 4 │
+│ Tool Calls    (none)                          │
+│                                               │
+│ Skills Used                                   │
+│   (none)                                      │
+│                                               │
+│ Subagents Used                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+To continue this session, run:
+nori resume 17946639-63a4-4a55-ba7a-0f0a494224f1
+shell$
+

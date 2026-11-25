@@ -29,6 +29,8 @@ Prompt words (first word of the prompt text):
   wake     reply, then start an agent-started turn (broker-style
            nori/turnId) that ticks until session/cancel, then reports
            idle with stopReason cancelled for the same turn id
+  fail     wait 0.5 s, then answer the prompt with JSON-RPC error -32603
+  die      wait 0.5 s, then exit the server mid-prompt (status 17)
   relay N TAG  stream N list rows "TAG row NN" one every 250 ms (records each
            row), then reply; stops early on cancel
   anything else: reply "<name> heard: <text>"
@@ -186,6 +188,15 @@ def run_prompt(rid, sid, text):
         update(sid, {"sessionUpdate": "tool_call", "toolCallId": "bulky-1", "kind": "execute",
                      "title": "count rows", "status": "completed",
                      "content": [{"type": "content", "content": {"type": "text", "text": body}}]})
+    if word == "fail":
+        time.sleep(0.5)
+        ledger("prompt_failed", sessionId=sid)
+        send(id=rid, error={"code": -32603, "message": f"the synthetic tide table is unreadable for {NAME}"})
+        return
+    if word == "die":
+        time.sleep(0.5)
+        ledger("server_exit", sessionId=sid)
+        os._exit(17)
     if word == "perm":
         pid = next_request[0]
         next_request[0] += 1

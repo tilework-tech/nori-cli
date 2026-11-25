@@ -1,0 +1,488 @@
+[
+  {
+    "scenario": "S45a",
+    "check": "off.plain_silent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S45a",
+    "check": "off.plain_exit.back_at_shell",
+    "passed": true,
+    "detail": "          \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume decf8753-7581-4beb-8445-3688ddae9893\nshell$\n\n"
+  },
+  {
+    "scenario": "S45a",
+    "check": "off.plain_exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S45a",
+    "check": "off.plain_exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S45a",
+    "check": "off.plain_exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S45a",
+    "check": "off.plain_exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 0, 'alt_off': 0, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 12, 'cursor_show': 42, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S45a",
+    "check": "off.controller_silent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S45a",
+    "check": "off.watcher_silent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.idle_at_launch",
+    "passed": true,
+    "detail": "['idle']"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.simple_turn",
+    "passed": true,
+    "detail": "['idle', 'working', 'done']"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.blocked_while_prompt_open",
+    "passed": true,
+    "detail": "['working', 'blocked']"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.blocked_generic_message",
+    "passed": true,
+    "detail": "state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.title_text_not_on_wire",
+    "passed": true,
+    "detail": "[None, None, None, None, 'Approval needed']"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.answer_then_done",
+    "passed": true,
+    "detail": "['working', 'blocked', 'working', 'done']"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.deduplicated",
+    "passed": true,
+    "detail": "['idle', 'working', 'done', 'working', 'blocked', 'working', 'done']"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.no_title_or_id_key",
+    "passed": true,
+    "detail": "['state=idle:app=nori', 'state=working:app=nori', 'state=done:app=nori', 'state=working:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk', 'state=working:app=nori', 'state=done:app=nori']"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.app_is_nori",
+    "passed": true,
+    "detail": "['state=idle:app=nori', 'state=working:app=nori', 'state=done:app=nori', 'state=working:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk', 'state=working:app=nori', 'state=done:app=nori']"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.typing_and_screen_switch_silent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.quit_clears_last",
+    "passed": true,
+    "detail": "['working', 'done', 'clear']"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.exit.back_at_shell",
+    "passed": true,
+    "detail": "          \u2502\n\u2502                                               \u2502\n\u2502 Subagents Used                                \u2502\n\u2502   (none)                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nTo continue this session, run:\nnori resume 215bf79c-0972-47b7-bdfd-f773410f04a2\nshell$\n\n"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S45b",
+    "check": "b.exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 11, 'cursor_show': 31, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S45c",
+    "check": "c.blocked_carries_title",
+    "passed": true,
+    "detail": "{'raw': 'state=blocked:app=nori:kind=permission:msg=UGFpbnQgdGhlIGJvYXRob3VzZQ==', 'msg': 'Paint the boathouse'}"
+  },
+  {
+    "scenario": "S45c",
+    "check": "c.quit_clears",
+    "passed": true,
+    "detail": "['working', 'done', 'clear']"
+  },
+  {
+    "scenario": "S45d",
+    "check": "d.failed_prompt_reports_error",
+    "passed": true,
+    "detail": "['idle', 'working', 'error']"
+  },
+  {
+    "scenario": "S45d",
+    "check": "d.cancel_reports_idle",
+    "passed": true,
+    "detail": "['working', 'idle']"
+  },
+  {
+    "scenario": "S45d",
+    "check": "d.recovers",
+    "passed": true,
+    "detail": "['working', 'done']"
+  },
+  {
+    "scenario": "S45d",
+    "check": "d.ctrl_c_exit_clears",
+    "passed": true,
+    "detail": "{'states': ['working', 'done', 'clear'], 'shell': True}"
+  },
+  {
+    "scenario": "S45e",
+    "check": "e.server_exit_reports_error",
+    "passed": true,
+    "detail": "{'states': ['idle', 'working', 'error'], 'waited': 0.0}"
+  },
+  {
+    "scenario": "S45e",
+    "check": "e.quit_exits_within_45s",
+    "passed": false,
+    "detail": "{'seconds': None, 'tail': '\u203a Exiting\u2026'}"
+  },
+  {
+    "scenario": "S45e",
+    "check": "e.exit_clears",
+    "passed": false,
+    "detail": "['idle', 'working', 'error']"
+  },
+  {
+    "scenario": "S45e",
+    "check": "e.ctrl_c_after_hang_exits",
+    "passed": false,
+    "detail": "\u203a Exiting\u2026"
+  },
+  {
+    "scenario": "S45e",
+    "check": "e.ctrl_c_after_hang_clears",
+    "passed": false,
+    "detail": "['idle', 'working', 'error']"
+  },
+  {
+    "scenario": "S45e0",
+    "check": "e.quit_exits_within_45s",
+    "passed": false,
+    "detail": "{'seconds': None, 'tail': '\u203a Exiting\u2026'}"
+  },
+  {
+    "scenario": "S45e0",
+    "check": "e.ctrl_c_after_hang_exits",
+    "passed": false,
+    "detail": "\u203a Exiting\u2026"
+  },
+  {
+    "scenario": "S45f",
+    "check": "f.first_working",
+    "passed": true,
+    "detail": "['idle', 'working']"
+  },
+  {
+    "scenario": "S45f",
+    "check": "f.new_session_reports_idle",
+    "passed": true,
+    "detail": "{'states': ['idle', 'working', 'idle'], 'waited': 0.0}"
+  },
+  {
+    "scenario": "S45f",
+    "check": "f.background_working_silent",
+    "passed": true,
+    "detail": "{'ticks': [13, 23], 'new': []}"
+  },
+  {
+    "scenario": "S45f",
+    "check": "f.switch_back_reports_working_at_once",
+    "passed": true,
+    "detail": "{'waited_s': 0.0, 'states': ['working']}"
+  },
+  {
+    "scenario": "S45f",
+    "check": "f.foreground_blocked",
+    "passed": true,
+    "detail": "['working', 'idle', 'working', 'blocked']"
+  },
+  {
+    "scenario": "S45f",
+    "check": "f.switch_away_from_blocked_reports_shown_session",
+    "passed": true,
+    "detail": "['idle', 'working', 'blocked', 'idle']"
+  },
+  {
+    "scenario": "S45f",
+    "check": "f.background_blocked_silent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S45f",
+    "check": "f.switch_to_blocked_reports_at_once",
+    "passed": true,
+    "detail": "{'waited_s': 0.0, 'states': ['blocked']}"
+  },
+  {
+    "scenario": "S45f",
+    "check": "f.deduplicated",
+    "passed": true,
+    "detail": "['idle', 'working', 'idle', 'working', 'idle', 'working', 'blocked', 'idle', 'blocked', 'working', 'done']"
+  },
+  {
+    "scenario": "S45f",
+    "check": "f.quit_clears",
+    "passed": true,
+    "detail": "['working', 'done', 'clear']"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.watcher_idle_after_replay",
+    "passed": true,
+    "detail": "['idle']"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.controller_turn",
+    "passed": true,
+    "detail": "['idle', 'working', 'done']"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.watcher_turn",
+    "passed": true,
+    "detail": "['idle', 'done']"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.both_blocked",
+    "passed": true,
+    "detail": "{'c': ['blocked'], 'w': ['blocked']}"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.generic_on_both",
+    "passed": true,
+    "detail": "[None, None, None, 'Approval needed', None, None, 'Approval needed']"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.controller_after_answer",
+    "passed": true,
+    "detail": "['blocked', 'working', 'done']"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.watcher_after_answer",
+    "passed": true,
+    "detail": "['blocked', 'done']"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.no_title_or_id_key",
+    "passed": true,
+    "detail": "['state=idle:app=nori', 'state=working:app=nori', 'state=done:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk', 'state=working:app=nori', 'state=done:app=nori', 'state=idle:app=nori', 'state=done:app=nori', 'state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbmVlZGVk', 'state=done:app=nori']"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.watcher_detach_clears",
+    "passed": true,
+    "detail": "['done', 'working', 'clear']"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.watcher_exit.back_at_shell",
+    "passed": true,
+    "detail": "shell$ nori attach bc8dadbd\nshell$\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.watcher_exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.watcher_exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.watcher_exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.watcher_exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 3, 'cursor_show': 42, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.controller_detach_clears",
+    "passed": true,
+    "detail": "['done', 'working', 'clear']"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.controller_exit.back_at_shell",
+    "passed": true,
+    "detail": "shell$ nori attach\nshell$\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.controller_exit.normal_screen",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.controller_exit.cursor_visible",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.controller_exit.tty_cooked",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.controller_exit.escapes_balanced",
+    "passed": true,
+    "detail": "{'alt_on': 1, 'alt_off': 1, 'paste_on': 3, 'paste_off': 3, 'cursor_hide': 6, 'cursor_show': 127, 'kbd_push': 1, 'kbd_pop': 1, 'focus_on': 1, 'focus_off': 1}"
+  },
+  {
+    "scenario": "S45g",
+    "check": "g.session_and_turn_survive_detach",
+    "passed": true,
+    "detail": "6"
+  },
+  {
+    "scenario": "S45h",
+    "check": "h.new_session_reports_idle",
+    "passed": true,
+    "detail": "{'states': ['idle', 'working', 'idle'], 'waited': 0.0}"
+  },
+  {
+    "scenario": "S45h",
+    "check": "h.background_working_silent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S45h",
+    "check": "h.switch_reports_working",
+    "passed": true,
+    "detail": "{'seconds': 0.123, 'states': ['working']}"
+  },
+  {
+    "scenario": "S45h",
+    "check": "h.deduplicated",
+    "passed": true,
+    "detail": "['idle', 'working', 'idle', 'working']"
+  },
+  {
+    "scenario": "S45h",
+    "check": "h.detach_clears",
+    "passed": true,
+    "detail": "['working', 'done', 'clear']"
+  },
+  {
+    "scenario": "S45i",
+    "check": "i.suspended_at_shell",
+    "passed": true,
+    "detail": "                                                                               [ acceptEdits ]\n\u203a $ for skill listing\n\n[1]+  Stopped                 nori --skip-trust-directory\nshell$\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "S45i",
+    "check": "i.limit_no_clear_on_suspend",
+    "passed": true,
+    "detail": "{'after_suspend': [], 'last': ['working']}"
+  },
+  {
+    "scenario": "S45i",
+    "check": "i.reports_after_fg",
+    "passed": true,
+    "detail": "['idle']"
+  },
+  {
+    "scenario": "S45i",
+    "check": "i.quit_clears",
+    "passed": true,
+    "detail": "['working', 'idle', 'clear']"
+  },
+  {
+    "scenario": "S45j",
+    "check": "j.limit_last_report_stays",
+    "passed": true,
+    "detail": "{'after_stop': [], 'host_stop': 'Host stopped.\\n', 'screen': '   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task'}"
+  },
+  {
+    "scenario": "S45j",
+    "check": "j.client_exit_clears",
+    "passed": true,
+    "detail": "{'states': ['idle', 'done', 'clear'], 'shell': True}"
+  },
+  {
+    "scenario": "S45k",
+    "check": "k.agent_turn_working",
+    "passed": true,
+    "detail": "['idle', 'working', 'done', 'working']"
+  },
+  {
+    "scenario": "S45k",
+    "check": "k.agent_turn_settles",
+    "passed": true,
+    "detail": "['idle', 'working', 'done', 'working', 'idle']"
+  }
+]

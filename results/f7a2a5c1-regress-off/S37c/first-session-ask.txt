@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-proff/S37c/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+                                                                                                             [ default ]
+› $ for skill listing
+
+  Approvals: Ask
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

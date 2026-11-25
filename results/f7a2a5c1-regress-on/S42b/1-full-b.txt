@@ -1,0 +1,36 @@
+
+  System       /tmp/nori-host-tui-acceptance-pron/S42b/roots/alpha/app · Approvals: Agent
+  Agent        Claude · acceptEdits
+
+
+› beta marker
+
+
+• claude-code heard: beta marker
+
+
+› relay 70 beta
+
+
+• - beta row 01
+  - beta row 02
+  - beta row 03
+  - beta row 04
+  - beta row 05
+  - beta row 06
+  - beta row 07
+  - beta row 08
+  - beta row 09
+  - beta row 10
+  - beta row 11
+  - beta row 12
+  - beta row 13
+  - beta row 14
+
+  1 working · 1 ready
+
+• Deploying to production on a Friday (3s • esc to interrupt)
+
+                                                                                                         [ acceptEdits ]
+› @ for file mentions
+

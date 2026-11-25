@@ -1,0 +1,35 @@
+
+
+[2m• [0m[39m[49mclaude-code heard: quay line
+
+
+[1;2m› [0m[39m[49mrelay 30 moss
+
+
+[2m• [0m[39m[49m- moss row 01
+  - moss row 02
+  - moss row 03
+  - moss row 04
+  - moss row 05
+  - moss row 06
+
+[38;5;1m■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+
+[2m[39m╭───────────────────────────────────────────────╮
+│ [0;1m[38;5;2m[49mGoodbye! [0;2m[39m[49mThanks for using Nori.               │
+│                                               │
+│ Session: [0m[39m[49m65d6b380-2141-46df-8eca-322b398d5364[2m │
+│                                               │
+│ [0;1m[39m[49mMessages[0;2m[39m[49m      User: 2  Assistant: 2  Total: 4 │
+│ [0;1m[39m[49mTool Calls[0m[39m[49m    [2m(none)                          │
+│                                               │
+│ [0;1m[39m[49mSkills Used[0;2m[39m[49m                                   │
+│   (none)                                      │
+│                                               │
+│ [0;1m[39m[49mSubagents Used[0;2m[39m[49m                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+[0m[39m[49mTo continue this session, run:
+[36mnori resume 65d6b380-2141-46df-8eca-322b398d5364
+[39mshell$

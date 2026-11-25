@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-pron/S20a/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› wake the keeper
+
+
+• claude-code heard: wake the keeper
+
+• rm -rf-ing my doubts (0s • esc to interrupt)
+
+                                                                                                         [ acceptEdits ]
+› ? for shortcuts
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
