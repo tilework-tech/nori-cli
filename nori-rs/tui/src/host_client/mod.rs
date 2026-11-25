@@ -225,6 +225,12 @@ pub(crate) enum HostCall {
     Compact {
         session_id: String,
     },
+    /// Run a `!` command on the host in the session's folder. Only a
+    /// controller may.
+    Shell {
+        session_id: String,
+        command: String,
+    },
 }
 
 impl HostCall {
@@ -405,6 +411,16 @@ impl HostCall {
             Self::Compact { session_id } => (
                 "_nori/session/compact",
                 json!(nori_protocol::CompactParams { session_id }),
+            ),
+            Self::Shell {
+                session_id,
+                command,
+            } => (
+                "_nori/session/shell",
+                json!(nori_protocol::ShellParams {
+                    session_id,
+                    command
+                }),
             ),
         }
     }

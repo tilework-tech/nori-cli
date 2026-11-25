@@ -79,8 +79,8 @@ question in the item.
   `_nori/session/find_paths`, `_nori/session/queue/{resume,take,discard}`, and
   `_nori/host/history/{add,entry,search,metadata}`, `_nori/host/prompts`,
   `_nori/session/prompts/run`, `_nori/session/goal/{get,set}`,
-  `_nori/session/context`, and `_nori/session/compact`, which the rule's
-  list does not name yet.
+  `_nori/session/context`, `_nori/session/compact`, and
+  `_nori/session/shell`, which the rule's list does not name yet.
 - **Done when:** no cli client calls those four methods; the host still serves
   them, marked deprecated in the registry, until the next major.
 - **Depends on:** G03.
