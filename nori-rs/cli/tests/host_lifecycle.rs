@@ -404,7 +404,10 @@ async fn the_host_refuses_a_malformed_new_session_without_starting_one() {
     let host = Host::writing_files();
     let mut client = tokio::task::block_in_place(|| host.client());
     for (params, expected) in [
-        (serde_json::json!({"cwd": "relative/path"}), "absolute"),
+        (
+            serde_json::json!({"cwd": "no-such/folder"}),
+            "does not exist",
+        ),
         (
             serde_json::json!({"prompt": [{"type": "text", "text": "hi"}]}),
             "prompt must be a string",
@@ -631,3 +634,6 @@ mod remote_transport;
 
 #[path = "host_lifecycle/explicit_close.rs"]
 mod explicit_close;
+
+#[path = "host_lifecycle/find_paths.rs"]
+mod find_paths;

@@ -10,6 +10,8 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
+codex-file-search = { workspace = true }
+dirs = { workspace = true }
 futures = { workspace = true }
 nori-config = { workspace = true }
 nori-harness = { workspace = true }

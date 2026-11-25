@@ -69,6 +69,7 @@ mod goal;
 mod helpers;
 mod key_handling;
 mod login;
+mod new_session_folder;
 mod pickers;
 mod queue_list;
 mod queue_recall;

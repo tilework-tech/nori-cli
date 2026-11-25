@@ -15,12 +15,17 @@ use super::state::CancelDelivery;
 use crate::host_client::HostCall;
 use crate::slash_command::SlashCommand;
 
+/// Folders a host lists for one Tab, the most it returns. A list this long
+/// may have been cut short, so Tab then only lists it.
+pub(super) const FOLDER_MATCHES: i32 = 50;
+
 impl Runtime {
     /// False means detach. It never requests host or session shutdown.
     pub fn key(&mut self, key: KeyEvent) -> bool {
         self.note_request_on_screen();
         self.sync_command_menu();
         let handled = self.handle_key(key);
+        self.search_files();
         self.note_request_on_screen();
         handled
     }
@@ -185,9 +190,28 @@ impl Runtime {
             }
             _ => {}
         }
+        if key.code == KeyCode::Tab && self.find_paths {
+            let text = self.composer.text();
+            if let Some(typed) = crate::session_folder::typed_folder(&text) {
+                // The host completes the folder from its own disk, where the
+                // session on screen works.
+                let query = typed.to_owned();
+                self.send(
+                    HostCall::FindPaths {
+                        session_id: self.state.selected.clone(),
+                        query,
+                        kind: nori_protocol::PathKind::Folders,
+                        limit: FOLDER_MATCHES,
+                    },
+                    Pending::CompleteFolder { text },
+                );
+                return true;
+            }
+        }
         if key.code == KeyCode::Tab
+            && !self.find_paths
             && let Some((completed, candidates)) =
-                super::new_session::complete(&self.composer.text(), &self.cwd)
+                crate::session_folder::complete(&self.composer.text(), &self.cwd)
         {
             self.composer.set_text(completed);
             if !candidates.is_empty() {

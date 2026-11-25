@@ -367,3 +367,47 @@ fn an_error_without_a_message_is_reported_as_such() {
         HostEvent::Reply { tag: "take", result: Err(error) } if error.message.is_none()
     ));
 }
+
+#[test]
+fn find_paths_names_the_session_only_when_there_is_one() {
+    let (mut client, mut rx) = client();
+    client
+        .request(
+            HostCall::FindPaths {
+                session_id: Some("session-1".into()),
+                query: "needle".into(),
+                kind: nori_protocol::PathKind::Files,
+                limit: 20,
+            },
+            "files",
+        )
+        .unwrap();
+    client
+        .request(
+            HostCall::FindPaths {
+                session_id: None,
+                query: "~/pro".into(),
+                kind: nori_protocol::PathKind::Folders,
+                limit: 8,
+            },
+            "folders",
+        )
+        .unwrap();
+    let outgoing: Vec<(Value, Value)> = sent(&mut rx)
+        .into_iter()
+        .map(|message| (message["method"].clone(), message["params"].clone()))
+        .collect();
+    assert_eq!(
+        outgoing,
+        vec![
+            (
+                json!("_nori/session/find_paths"),
+                json!({"sessionId":"session-1","query":"needle","kind":"files","limit":20})
+            ),
+            (
+                json!("_nori/session/find_paths"),
+                json!({"query":"~/pro","kind":"folders","limit":8})
+            ),
+        ]
+    );
+}

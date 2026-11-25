@@ -86,7 +86,9 @@ impl HostControl {
             }
             // Starting a session leaves every existing one alone, so any
             // authenticated client may do it, as with stopping the host.
+            // Finding paths only reads the host's filesystem.
             "_nori/session/list"
+            | "_nori/session/find_paths"
             | "_nori/session/ensure"
             | "_nori/session/status"
             | "_nori/session/subscribe"

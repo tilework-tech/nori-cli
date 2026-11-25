@@ -6,6 +6,10 @@
 //! the frontend's own tag for that call.
 
 mod connection;
+mod file_search;
+pub(crate) use file_search::FileSearch;
+pub(crate) use file_search::HostFileSearch;
+pub(crate) use file_search::file_matches;
 mod prompt_interrupt;
 pub(crate) use prompt_interrupt::PromptInterrupt;
 #[cfg(test)]
@@ -110,6 +114,14 @@ pub(crate) enum HostCall {
         session_id: String,
         mode: nori_protocol::ApprovalMode,
     },
+    /// Files or folders on the host, in the session's folder or, without
+    /// one, the host's own.
+    FindPaths {
+        session_id: Option<String>,
+        query: String,
+        kind: nori_protocol::PathKind,
+        limit: i32,
+    },
 }
 
 impl HostCall {
@@ -211,6 +223,20 @@ impl HostCall {
             Self::SetMode { session_id, mode } => (
                 "session/set_mode",
                 json!({"sessionId": session_id, "modeId": mode}),
+            ),
+            Self::FindPaths {
+                session_id,
+                query,
+                kind,
+                limit,
+            } => (
+                "_nori/session/find_paths",
+                json!(nori_protocol::FindPathsParams {
+                    session_id,
+                    query,
+                    kind,
+                    limit: Some(limit),
+                }),
             ),
         }
     }

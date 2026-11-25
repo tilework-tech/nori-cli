@@ -29,6 +29,8 @@ pub struct ComposerInput {
     inner: ChatComposer,
     _tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
     rx: tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    /// The newest `@` query the composer asked results for, not yet taken.
+    file_search: Option<String>,
 }
 
 impl ComposerInput {
@@ -50,7 +52,12 @@ impl ComposerInput {
         let sender = AppEventSender::new(tx.clone());
         // `enhanced_keys_supported=true` enables Shift+Enter newline hint/behavior.
         let inner = ChatComposer::new(true, sender, true, placeholder.to_string(), false);
-        Self { inner, _tx: tx, rx }
+        Self {
+            inner,
+            _tx: tx,
+            rx,
+            file_search: None,
+        }
     }
 
     /// Returns true if the input is empty.
@@ -178,8 +185,28 @@ impl ComposerInput {
         crate::bottom_pane::ChatComposer::recommended_paste_flush_delay()
     }
 
+    /// The newest `@` query typed since the last call, whose matches go to
+    /// [`Self::on_file_search_result`].
+    pub(crate) fn take_file_search(&mut self) -> Option<String> {
+        self.drain_app_events();
+        self.file_search.take()
+    }
+
+    /// Show `matches` for `query` if its `@` token is still being edited.
+    pub(crate) fn on_file_search_result(
+        &mut self,
+        query: String,
+        matches: Vec<codex_file_search::FileMatch>,
+    ) {
+        self.inner.on_file_search_result(query, matches);
+    }
+
     fn drain_app_events(&mut self) {
-        while self.rx.try_recv().is_ok() {}
+        while let Ok(event) = self.rx.try_recv() {
+            if let AppEvent::StartFileSearch(query) = event {
+                self.file_search = Some(query);
+            }
+        }
     }
 }
 

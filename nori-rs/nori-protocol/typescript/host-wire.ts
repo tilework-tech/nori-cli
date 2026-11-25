@@ -44,7 +44,9 @@ export type NoriHostWire =
   | HostStopResult
   | DelegateParams
   | ResolveDelegationParams
-  | Delegation;
+  | Delegation
+  | FindPathsParams
+  | FindPathsResult;
 /**
  * The encoding used for character offsets in positions.
  *
@@ -585,6 +587,10 @@ export type DelegationStatus =
  * How a session answers its agent's permission requests.
  */
 export type ApprovalMode = "ask" | "agent" | "approve-all";
+/**
+ * What `_nori/session/find_paths` looks for.
+ */
+export type PathKind = "files" | "folders";
 
 /**
  * Request parameters for the initialize method.
@@ -4148,4 +4154,47 @@ export interface ResolveDelegationParams {
   approved: boolean;
   request_id: string;
   session_id?: string | null;
+}
+/**
+ * Params of `_nori/session/find_paths`.
+ */
+export interface FindPathsParams {
+  kind: PathKind;
+  /**
+   * At most this many matches, clamped to 1..=50. Defaults to 20.
+   */
+  limit?: number | null;
+  /**
+   * For files, the fuzzy pattern. For folders, the folder as typed:
+   * relative to the root, absolute, or under `~`.
+   */
+  query: string;
+  /**
+   * Search this session's folder; the host's own folder when absent.
+   */
+  sessionId?: string | null;
+}
+/**
+ * Result of `_nori/session/find_paths`.
+ */
+export interface FindPathsResult {
+  matches: PathMatch[];
+  /**
+   * The absolute folder on the host that was searched.
+   */
+  root: string;
+}
+/**
+ * One `_nori/session/find_paths` match.
+ */
+export interface PathMatch {
+  /**
+   * Character positions in `path` that matched the query, for files.
+   */
+  indices?: number[] | null;
+  /**
+   * For files, the path relative to the root. For folders, the query
+   * completed to one folder, in the form it was typed, ending in `/`.
+   */
+  path: string;
 }

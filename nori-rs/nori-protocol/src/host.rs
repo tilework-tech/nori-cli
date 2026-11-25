@@ -121,7 +121,7 @@ pub struct HostDiscovery {
 /// methods, and `host.json`. A change that a client of the previous contract
 /// could not use bumps the major; an addition such clients can ignore bumps
 /// the minor; a fix that changes no message bumps the patch.
-pub const HOST_CONTRACT: &str = "1.1.0";
+pub const HOST_CONTRACT: &str = "1.2.0";
 
 /// Whether a host advertising contract `host` serves a client built for
 /// contract `client`: `host` must satisfy the caret requirement `^client`.
@@ -212,6 +212,51 @@ pub struct ResolveDelegationParams {
     pub approved: bool,
 }
 
+/// What `_nori/session/find_paths` looks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PathKind {
+    /// Files under the root whose paths fuzzy-match the query.
+    Files,
+    /// Folders completing the folder the query names.
+    Folders,
+}
+
+/// Params of `_nori/session/find_paths`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FindPathsParams {
+    /// Search this session's folder; the host's own folder when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    /// For files, the fuzzy pattern. For folders, the folder as typed:
+    /// relative to the root, absolute, or under `~`.
+    pub query: String,
+    pub kind: PathKind,
+    /// At most this many matches, clamped to 1..=50. Defaults to 20.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i32>,
+}
+
+/// One `_nori/session/find_paths` match.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct PathMatch {
+    /// For files, the path relative to the root. For folders, the query
+    /// completed to one folder, in the form it was typed, ending in `/`.
+    pub path: String,
+    /// Character positions in `path` that matched the query, for files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indices: Option<Vec<i32>>,
+}
+
+/// Result of `_nori/session/find_paths`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct FindPathsResult {
+    /// The absolute folder on the host that was searched.
+    pub root: std::path::PathBuf,
+    pub matches: Vec<PathMatch>,
+}
+
 /// JSON Schema (draft 2020-12) of the types exchanged with `nori host`: the
 /// ACP v1 messages it serves and Nori's additions, with every type under
 /// `$defs` and keys sorted so the output is stable.
@@ -262,6 +307,8 @@ pub fn host_wire_schema() -> Value {
         generator.subschema_for::<DelegateParams>(),
         generator.subschema_for::<ResolveDelegationParams>(),
         generator.subschema_for::<Delegation>(),
+        generator.subschema_for::<FindPathsParams>(),
+        generator.subschema_for::<FindPathsResult>(),
     ];
     let definitions = generator.take_definitions(true);
     sorted(json!({

@@ -92,7 +92,31 @@ impl Runtime {
         }
         self.state.notice = None;
         if command == SlashCommand::New {
-            match super::new_session::params(args, &self.cwd, self.session_folders, self.remote) {
+            let session_folder = self.state.selected.as_ref().and_then(|id| {
+                self.state
+                    .sessions
+                    .iter()
+                    .find(|row| &row.session_id == id)
+                    .and_then(|row| row.cwd.clone())
+                    .or_else(|| {
+                        self.state
+                            .conversations
+                            .get(id)
+                            .map(|conversation| conversation.cwd.clone())
+                            .filter(|cwd| !cwd.as_os_str().is_empty())
+                    })
+            });
+            let base = match &session_folder {
+                Some(folder) => super::new_session::Base::Session(folder),
+                None => super::new_session::Base::Terminal(&self.cwd),
+            };
+            match super::new_session::params(
+                args,
+                base,
+                self.session_folders,
+                self.find_paths,
+                self.remote,
+            ) {
                 Ok(params) => {
                     self.send(HostCall::NewSession(params), Pending::New);
                 }

@@ -386,7 +386,7 @@ per-session folders. Clients send `cwd` only when it is advertised.
 | --- | --- |
 | `_nori/control/status` | Return this connection's role and whether a controller is connected. |
 | `_nori/control/take` | Transfer control to the caller without closing another connection. |
-| `_nori/session/new` | Start a session; any authenticated initialized client may call it, since it changes no existing session; the new session becomes the host's selected session. Optional `cwd` (absolute; canonicalized, and refused when relative, missing, or not a directory) loads the host's configuration in that folder with the host's command-line overrides, so the folder's own project trust and approval settings apply; without it the host's start configuration is used. Optional `agent` selects the agent; optional `prompt` is sent as the first prompt after the session starts, without delaying the reply. `[host] default_mode`, when set, replaces the folder's approval policy, as for `session/new`. Replies `{session_id, cwd}`. Resume reloads configuration from the record's cwd the same way. |
+| `_nori/session/new` | Start a session; any authenticated initialized client may call it, since it changes no existing session; the new session becomes the host's selected session. Optional `cwd` (`~` and `~/…` name the host's home and other relative folders the host's own folder; `~user` stays relative; then canonicalized, and refused when relative, missing, or not a directory) loads the host's configuration in that folder with the host's command-line overrides, so the folder's own project trust and approval settings apply; without it the host's start configuration is used. Optional `agent` selects the agent; optional `prompt` is sent as the first prompt after the session starts, without delaying the reply. `[host] default_mode`, when set, replaces the folder's approval policy, as for `session/new`. Replies `{session_id, cwd}`. Resume reloads configuration from the record's cwd the same way. |
 | `_nori/session/close`, `_nori/session/cancel`, `_nori/session/resume` | Apply the operation to the required `session_id`. The close alias forces tree shutdown. Resume retains the Nori conversation ID. Resume also accepts the ID of a [stored session](#12-standard-acp-v1-on-the-background-host) and restarts it from its transcript. On the background host, `_nori/session/list` and `_nori/session/resume` are aliases kept for `nori attach` and `nori host ls`; new clients use `session/list` and `session/resume`. |
 | `_nori/session/cancel_observed` | A controller sends `{sessionId, observedTurnId}` using either the ID from the session’s `external_turn_changed` event or the request UUID of its admitted prompt. The host replies with `{sessionId}`. The host rejects an expired observation and suppresses a second cancel for one already pending. A successful reply acknowledges the request. The agent can confirm cancellation later. |
 | `_nori/host/stop` | Request host shutdown; any authenticated initialized client may call it. |
@@ -426,12 +426,20 @@ command shows the same reason and sends nothing. Slash names that are not
 Nori commands go to the agent as a prompt.
 Session commands address the host; they do not launch local agents.
 `/new [DIR] [AGENT]` (which still requires control in the terminal) starts a
-session in the attaching terminal's directory (the host's own folder for a `--host` host), or in `DIR`, made absolute
-first. A lone argument is a folder when it starts with `/`, `~`, or `.`,
-contains `/`, or names an existing folder under the attaching directory;
-otherwise it is an agent. Tab completes the folder against the attaching
-machine's filesystem like a shell, listing several matches in the notice
-line. The identity line reads `agent · title · folder · status`, and list
+session in the folder of the session on screen, or with none, in the attaching
+terminal's directory (the host's own folder for a `--host` host), or in `DIR`,
+resolved against that folder. A lone argument is a
+folder when it starts with `/`, `~`, or `.`, or contains `/` (on a local host,
+also when it names an existing folder); otherwise it is an agent. A host with
+`find_paths` gets `~` folders as typed and names them from its own home, and
+with no session on screen a `--host` host also gets relative folders as typed.
+Other folders are made absolute first; for an older host `~` is expanded with
+the attaching machine's home folder. Tab completes the folder
+like a shell, listing several matches in the notice line; a host with
+`find_paths` (below) completes it from its own disk, an older host from the
+attaching machine's. `@` mentions list files from the session's folder on the
+host through the same call.
+The identity line reads `agent · title · folder · status`, and list
 rows show the short folder before the reply.
 `/approvals` sets the permission mode of the session on screen with
 `session/set_mode`. Without an argument it opens a menu of Ask, Agent and
@@ -526,7 +534,7 @@ unchanged and stays as legacy until durable sessions get their own design.
 - `protocolVersion: 1`, whatever the client asked for (the host speaks only
   ACP v1; a client that cannot speak it disconnects);
 - `agentInfo` `{name: "nori-host", version: "<nori version>+contract.<host contract>"}`,
-  for example `0.31.0+contract.1.1.0`: the host contract rides as semver
+  for example `0.31.0+contract.1.2.0`: the host contract rides as semver
   build metadata, so a client splits at `+contract.`;
 - `agentCapabilities`: `loadSession: true`,
   `sessionCapabilities` with `list`, `resume`, `close` and `delete`, and the
@@ -555,7 +563,7 @@ and `token`, and removes it on stop:
 do not write it.
 
 `contract` is the semver string of the host wire contract,
-`nori_protocol::HOST_CONTRACT` (`1.1.0`). It covers ACP v1 on `/sessions`,
+`nori_protocol::HOST_CONTRACT` (`1.2.0`). It covers ACP v1 on `/sessions`,
 the `nori/*` `_meta` keys, the `_nori/*` methods, and `host.json` itself. A
 change that a client of the previous contract cannot use bumps the major; an
 addition such clients can ignore bumps the minor; a fix that changes no
@@ -631,7 +639,7 @@ sign-in, not `ACP agent did not accept the prompt`.
 covers the ACP v1 messages above, metadata for host sessions and prepared
 selections, the `host.json` file, and the `_nori/*` extension (control,
 subscribe with its `SessionEnvelope`, prepared-agent selection, host stop,
-delegation). `nori-protocol/typescript/host-wire.ts`
+delegation, path search). `nori-protocol/typescript/host-wire.ts`
 is generated from it by a pinned `json-schema-to-typescript`. Regenerate both
 with `scripts/generate-host-wire-types.sh`; `cargo test -p nori-cli --test
 host_wire_schema` fails when either drifts (the TypeScript half is skipped
@@ -645,6 +653,7 @@ without Node.js).
 | `control` | `_nori/control/status`, `_nori/control/take`, `_nori/control/changed` |
 | `host` | `_nori/host/stop`, `_nori/host/prepare_agent`, `_nori/host/discard_agent` |
 | `delegation` | `_nori/session/delegate`, `_nori/session/delegation/resolve` |
+| `paths` | `_nori/session/find_paths` |
 
 `_nori/session/list`, `new`, `prompt`, `respond`, `cancel`, `close` and
 `resume` are deprecated aliases, kept for one more release.
@@ -660,6 +669,24 @@ lack what they need (row status, family and delegation fields, replay
 cursors, prompt admission without waiting for the turn, a first prompt from
 an observer). `_nori/agents/list` and `_nori/session/set_approval_policy`
 were never released and do not exist.
+
+### Finding paths on the host
+
+`_nori/session/find_paths` lets a client complete paths against the host's
+filesystem, which may be another machine. Check
+`capabilities.nori_sessions.find_paths` in the `initialize` reply. Params are
+`{sessionId?, query, kind, limit?}`. The root is the named session's folder,
+or the host's own folder without `sessionId`; an unknown session fails with
+`-32602`. `limit` defaults to 20 and is clamped to 1–50. `kind: "files"`
+fuzzy-matches `query` against files under the root, honoring gitignore and
+skipping `.git`, and returns root-relative paths with matched character
+`indices`; an empty query matches nothing, and files reached through a link
+that leaves the root are left out. `kind: "folders"` treats `query` as a
+folder typed after `/new` (relative, absolute, or under `~`, the host user's
+home) and returns the subfolders that complete its last segment, sorted, in
+the form typed with a trailing `/`; hidden folders appear only when the
+segment starts with `.`. The result is `{root, matches: [{path, indices?}]}`
+with `root` absolute. Watchers may call it.
 
 ### Sessions on the host
 
