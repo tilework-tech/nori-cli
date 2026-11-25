@@ -76,6 +76,7 @@ The monorepo host contract owns the meaning of `lock`, `host.json`,
 | Path | Mode | Lifetime |
 |---|---|---|
 | `lock` | `0600` | Permanent; never removed. See the host contract. |
+| `start.lock` | `0600` | Permanent. Held by the `nori` process that starts or checks the host, so only one process starts it. |
 | `host.json` | `0600` | Written at start through `host.json.tmp`; removed on stop. A managed host does not write it. See the host contract. |
 | `state.json` | `0600` | Written at start; removed on stop and at the next start. See the host contract. |
 | `token` | `0600` | Replaced at every start. See the host contract. |

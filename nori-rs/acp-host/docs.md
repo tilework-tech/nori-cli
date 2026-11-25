@@ -66,8 +66,9 @@ on the ACP SDK (`nori-cli` uses it only as a dev-dependency for tests).
 - Publish raw ACP as received. `ConnectionEvent::Acp` carries the exact
   agent traffic. Reduction happens in the session runtime.
 - Shutdown closes the child's stdin first. The agent treats stdin EOF as its
-  shutdown signal. After `SHUTDOWN_GRACE` (25 s) the host kills what is left,
-  including the process group on Unix. `nori-handroll cloud-acp` depends on
+  shutdown signal. After a grace period the host kills what is left, including
+  the process group on Unix. The default is `SHUTDOWN_GRACE` (25 s). A
+  stopping `nori host` gives its adapters 2 s. `nori-handroll cloud-acp` depends on
   this to release its broker session cleanly.
 - Only the exit-watcher task owns the `Child`. Other code observes the exit
   through a watch channel and requests a kill through a `Notify`.

@@ -197,10 +197,5 @@ it.
 
 ## Where `main` differs
 
-- `/approvals` shows the Codex presets "Read Only", "Agent", and "Agent
-  (full access)". Each pairs an approval policy with a sandbox mode. "Read
-  Only" uses `on-request`, which reads as `agent`; no preset gives `ask`.
-- "Agent (full access)" opens a full-access confirmation that can be hidden
-  with the `hide_full_access_warning` notice.
-- `/approvals` changes only Nori's approval policy. It does not set the
-  adapter's mode or the mode the host remembers.
+- Choosing Approve all in `/approvals` opens a full-access confirmation.
+  In plain `nori`, the `hide_full_access_warning` notice hides it.

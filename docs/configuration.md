@@ -202,6 +202,7 @@ lowercased. `"none"` unbinds the action.
 | `next_waiting_session` | `alt+down` | Next session waiting on you (empty prompt only) |
 | `open_session_list` | `alt+s` | Open the session list |
 | `parent_session` | `alt+up` | From a delegated child to its parent session |
+| `toggle_screen` | `ctrl+l` | Switch between the inline and the full-screen view |
 
 ### `[tui.footer_segments]`
 
@@ -245,7 +246,8 @@ placement removes it from the others.
 | `textarea_bottom_left` | empty |
 | `textarea_bottom_right` | empty |
 
-A segment renders only when `[tui.footer_segments]` enables it.
+A segment renders only when `[tui.footer_segments]` enables it. The one
+exception is `approval_mode`, which always shows Ask and Approve all.
 
 ## `[projects."<path>"]`
 
@@ -364,12 +366,13 @@ Scripts get `NORI_HOOK_EVENT` and, by event, `NORI_HOOK_PROMPT_TEXT` or
 
 ## `[notice]`
 
-Nori sets these when you dismiss a warning.
+Nori sets these when you dismiss a warning or finish a one-time migration.
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
 | `hide_full_access_warning` | boolean | unset | Hide the full-access warning. |
 | `hide_world_writable_warning` | boolean | unset | Hide the world-writable folder warning. |
+| `approval_presets_migrated` | boolean | unset | Records that `nori` moved a retired `/approvals` preset pair to `[host] default_mode`. |
 
 ## `[cli]`
 

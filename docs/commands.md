@@ -229,8 +229,10 @@ Discovery, endpoints, auth, and the managed wire:
 ### `nori host stop`
 
 Stops the host and all of its sessions. Prints "No host running." when none
-runs. When the host refuses the connection (for example at its client limit),
-Nori sends it SIGTERM. Waits up to 30 seconds, then prints "Host stopped."
+runs. Stop uses the connection the host reserves for lifecycle calls, so it
+works when the host is at its client limit. It fails when the host it reaches
+is not the instance recorded in the host files. Waits up to 30 seconds, then
+prints "Host stopped."
 
 ### `nori host ls`
 

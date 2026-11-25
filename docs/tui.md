@@ -237,7 +237,7 @@ shows `RECONNECTING · sessions continue on the host`, and after a fatal error
 | `alt+up` | Go to the parent session. |
 | Ctrl+R (in the list) | Resume a failed session. |
 | PgUp / PgDn | Scroll 10 lines. |
-| `/new [folder] [agent]` | Start a session. Without a folder, a local host uses the terminal's folder and a `--host` host uses its own folder. |
+| `/new [folder] [agent]` | Start a session. Without a folder, it uses the folder of the session on screen. With no session, a local host uses the terminal's folder and a `--host` host uses its own folder. |
 | `/delegate <agent> <task>` | Delegate a task from the session on screen. |
 | `/close` | Close the session on screen. |
 | `/resume` | Resume the session on screen. |
@@ -300,6 +300,7 @@ Columns:
 | `/approvals` | no | all | Choose what Nori can do without approval, for this session. See [permissions.md](permissions.md). |
 | `/settings` | no | all | Open the Nori settings, including hotkeys and footer segments. |
 | `/vim` | no | all | Choose Vim mode and what Enter does. |
+| `/screen` | yes | all | Switch between the inline and the full-screen view. Greyed in `nori attach`, which is always full-screen. |
 | `/goal [text\|pause\|resume\|clear\|edit]` | yes | all | Show, set, replace, pause, resume, clear, or edit the session goal. See [turns.md](turns.md). |
 | `/new` | beside | all | Start a session. |
 | `/sessions` | yes | all | Open the session list. |
@@ -369,6 +370,7 @@ already bound swaps the two.
 | `next_waiting_session` | `alt+down` |
 | `open_session_list` | `alt+s` |
 | `parent_session` | `alt+up` |
+| `toggle_screen` | `ctrl+l` |
 
 `nori attach` uses `next_waiting_session`, `parent_session`, and
 `open_session_list` too.
@@ -419,7 +421,8 @@ prompt does not answer it. When several requests wait, the newest shows first.
 
 ### Composer features
 
-- **`@` file mention:** fuzzy search from the git root. Tab or Enter inserts
+- **`@` file mention:** fuzzy search in the session's folder, on the host
+  that runs it. Without a host session, Nori searches the launch folder. Tab or Enter inserts
   the path, quoted if it contains spaces. An image file is attached.
 - **History search:** Ctrl+R searches up to 500 earlier prompts from
   `$NORI_HOME/history.jsonl`.
@@ -434,9 +437,9 @@ prompt does not answer it. When several requests wait, the newest shows first.
 
 ## Where `main` differs
 
-- `/approvals` shows the Codex presets "Read Only", "Agent", and
-  "Agent (full access)" instead of the three permission modes `ask`, `agent`,
-  and `approve-all`.
+- `/close` on the only open session closes it and opens the saved-session
+  picker. Only Ctrl+D in the session list refuses to close the last open
+  session.
 - The `/fork` picker is titled "Fork conversation" and its fork row reads
   "Branch from current point"; it does not offer separate "Fork" and "Rewind"
   entries.

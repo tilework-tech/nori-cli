@@ -129,9 +129,9 @@ coverage.
 
 ## Where `main` differs
 
-- c06: `/approvals` and the footer use the Codex presets from
-  `codex_common::approval_presets` ("Read Only", "Agent", "Agent (full
-  access)"), not `ask`, `agent`, `approve-all`.
+- c06: Approve all in `/approvals` still opens the full-access
+  confirmation behind `notices.hide_full_access_warning`, and
+  `codex_common::approval_presets` remains for the Windows sandbox prompt.
 - c03: the picker titled "Fork conversation" (`nori/fork_picker.rs`) offers
   both ACP fork ("Branch from current point") and rewind to a message.
   Internal rewind code is named "backtrack" (`app_backtrack.rs`).

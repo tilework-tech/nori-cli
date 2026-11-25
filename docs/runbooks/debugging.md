@@ -140,8 +140,10 @@ tail -n 100 ~/.nori/cli/host/host.log
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `host exited during startup (...); check .../host.log` | The host process failed. | Read `host.log`. A common cause is a port in use (default `7420`; `--port 0` picks a free one). |
-| `host startup timed out; check .../host.log` | The host did not answer within 15 s. `nori` killed it. | Read `host.log`. |
+| `host startup failed; check .../host.log: host exited before publishing readiness` | The host process failed before it reported ready. | Read `host.log`. A common cause is a port in use (default `7420`; `--port 0` picks a free one). |
+| `host startup failed; check .../host.log: host startup timed out` | The host did not report ready within 15 s. `nori` killed it. | Read `host.log`. |
+| `timed out waiting for another host operation` | Another `nori` held `start.lock` for 15 s while it started or checked the host. | Run the command again. If it repeats, read `host.log`. |
+| `a host owns this home but did not confirm readiness` | A process holds `lock` but does not answer the lifecycle probe. | Read `host.log`. Find the process with the PID from `state.json`. |
 | `another host is already starting or running` | Another process holds `lock`. | Use the running host, or stop it with `nori host stop`. |
 | `the running host (pid N, nori V, contract C) does not serve this nori's contract C2; ...` | The running host comes from a different `nori` version with an incompatible host contract. | `nori host stop`, then `nori host`. Or run a second host in another home: `NORI_HOME=<dir> nori host`. |
 | `no host running; start one with \`nori host\`` | No process holds `lock`. | Start a host. Leftover `host.json` or `state.json` from a crash does not matter; the next start replaces them. |
@@ -152,7 +154,6 @@ tail -n 100 ~/.nori/cli/host/host.log
 | HTTP `401`: `A valid host bearer token is required.` | Missing or old token. The token changes on every host start. | Local: run the command again; it rereads `token`. Remote (`--host`): copy the new token into the `--token-file`. |
 | HTTP `426` | A plain HTTP request, not a WebSocket upgrade. | Connect with a WebSocket client. |
 | HTTP `503`: `This nori host already serves N clients, its limit. ...` | `[host] max_clients` (default 16) clients are connected. | Close a client, or raise `[host] max_clients` and restart the host. |
-| `Host already running; it refused this connection: ...` | `nori host` found a host that holds the lock but refused the probe, usually at the client limit. | As for `503`. |
 | Attach shows `Host restarted; sessions were lost. Re-run nori attach.` | The host instance ID changed. | Run `nori attach` again. |
 | Attach shows `Authentication failed; host may have restarted. Re-run nori attach.` | The token was rejected and could not be refreshed. | Run `nori attach` again. |
 | Attach shows `Host identity unavailable; cannot safely resume. Re-run nori attach.` | The host sent no instance ID. | Run `nori attach` again. |
@@ -162,10 +163,10 @@ tail -n 100 ~/.nori/cli/host/host.log
 ### How `nori host stop` works
 
 1. If no process holds `lock`, it prints `No host running.`
-2. It connects and sends `_nori/host/stop`.
-3. If it cannot connect (for example, the host is at its client limit), it
-   sends `SIGTERM` to the PID in `state.json`. The host shuts down the same
-   way. On a non-Unix system it fails instead.
+2. It connects on the host's reserved lifecycle connection, which works at
+   the client limit. It checks that the host is the instance recorded in
+   `host.json` and `state.json`, and fails with `retry stop` when it is not.
+3. It sends `_nori/host/stop`.
 4. It waits up to 30 s for the host to release `lock`, then prints
    `Host stopped.` Otherwise it fails with
    `host is still shutting down; check .../host.log`.
