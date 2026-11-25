@@ -22,6 +22,7 @@ mod compact;
 mod context;
 mod goal;
 mod queue;
+mod shell;
 
 /// A transport-independent view of a manager. Disconnection does not stop sessions.
 pub struct ManagedRemoteHost {
@@ -378,6 +379,9 @@ impl ManagedRemoteHost {
             }
             compact::COMPACT if self.authenticated_controller => {
                 self.compact(params).await.map(|result| (result, None))
+            }
+            shell::SHELL if self.authenticated_controller => {
+                self.shell(params).await.map(|result| (result, None))
             }
             goal::GET | goal::SET if self.authenticated_controller => {
                 self.goal(method, params).await.map(|result| (result, None))

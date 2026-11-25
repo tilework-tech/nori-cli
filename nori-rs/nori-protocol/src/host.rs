@@ -123,7 +123,7 @@ pub struct HostDiscovery {
 /// methods, and `host.json`. A change that a client of the previous contract
 /// could not use bumps the major; an addition such clients can ignore bumps
 /// the minor; a fix that changes no message bumps the patch.
-pub const HOST_CONTRACT: &str = "1.8.0";
+pub const HOST_CONTRACT: &str = "1.9.0";
 
 /// Whether a host advertising contract `host` serves a client built for
 /// contract `client`: `host` must satisfy the caret requirement `^client`.
@@ -455,6 +455,15 @@ pub struct CompactParams {
     pub session_id: String,
 }
 
+/// Params of `_nori/session/shell`: a `!` command for the host to run in
+/// that session's folder.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ShellParams {
+    pub session_id: String,
+    pub command: String,
+}
+
 /// JSON Schema (draft 2020-12) of the types exchanged with `nori host`: the
 /// ACP v1 messages it serves and Nori's additions, with every type under
 /// `$defs` and keys sorted so the output is stable.
@@ -528,6 +537,7 @@ pub fn host_wire_schema() -> Value {
         generator.subschema_for::<crate::ContextParams>(),
         generator.subschema_for::<crate::ContextReport>(),
         generator.subschema_for::<CompactParams>(),
+        generator.subschema_for::<ShellParams>(),
     ];
     let definitions = generator.take_definitions(true);
     sorted(json!({
@@ -576,6 +586,8 @@ mod contract_tests {
             ("1.6.0", "1.7.0", false),
             ("1.8.0", "1.7.0", true),
             ("1.7.0", "1.8.0", false),
+            ("1.9.0", "1.8.0", true),
+            ("1.8.0", "1.9.0", false),
             ("2.0.0", "1.9.0", false),
             ("1.9.0", "2.0.0", false),
             ("0.3.1", "0.3.0", true),

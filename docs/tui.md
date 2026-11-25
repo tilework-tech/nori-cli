@@ -430,7 +430,7 @@ already bound swaps the two.
 | Enter on an empty prompt | Resume a paused queue. |
 | Left on an empty prompt | Open the session list. |
 | `?` on an empty prompt | Show the shortcut overlay. |
-| `!` at the start | Shell mode: run the line as a shell command. |
+| `!` at the start | Shell mode: run the line as a shell command on the session's host, in the session's folder. The command and its output show in the transcript, for every terminal following the session. A watcher cannot run one; the line goes back to its prompt. |
 | `@` | Mention a file (fuzzy search). |
 | `$` | Pick an agent skill or command. |
 | Ctrl+Z | Suspend Nori. |
@@ -466,6 +466,17 @@ prompt does not answer it. When several requests wait, the newest shows first.
   `$NORI_HOME/history.jsonl`. For a session on a host, that is the host's
   file, so Up and Ctrl+R also find prompts sent from another terminal on the
   same host. Up sees those after the next turn ends.
+- **`!` shell commands:** `!cmd` runs `$SHELL -lc cmd` on the host that
+  runs the session, in the session's folder, as the host's user, with no
+  sandbox and no approval (see [permissions](permissions.md)). The host
+  method is `_nori/session/shell` {sessionId, command}. It replies once the
+  command starts; an empty command gets `-32602`, a watcher `-32016`, and an
+  unknown session `-32002`. The command, its output and its exit code arrive
+  as that session's `user_shell` events, so every terminal following the
+  session shows a `Ran` cell, also on replay. A failed command's bullet is
+  red. Output is shown once the command finishes. Hosts advertise this as
+  `capabilities.nori_sessions.shell` (host contract 1.9.0). Without a host
+  session the command runs in process, the same way.
 - **Paste:** a paste over 1000 characters shows as
   `[Pasted Content N chars]` and expands on send. A pasted image path becomes
   an attachment.

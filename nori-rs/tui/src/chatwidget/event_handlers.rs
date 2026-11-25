@@ -368,7 +368,17 @@ impl ChatWidget {
                 self.flush_thought_block();
                 self.replay_source = None;
             }
-            nori_protocol::NoriEvent::Undo(_) | nori_protocol::NoriEvent::UserShell(_) => {}
+            nori_protocol::NoriEvent::Undo(_) => {}
+            nori_protocol::NoriEvent::UserShell(event) => {
+                if let Some(snapshot) = self.user_shell_runs.apply(event) {
+                    let event = crate::presentation::ClientEvent::ToolSnapshot(snapshot);
+                    if self.replay_source.is_some() {
+                        self.handle_replay_client_event(event);
+                    } else {
+                        self.handle_client_event(event);
+                    }
+                }
+            }
             // A request another client answered stops waiting here too.
             nori_protocol::NoriEvent::RequestResolved(resolved) => {
                 if self.bottom_pane.dismiss_request(&resolved.request_id) {

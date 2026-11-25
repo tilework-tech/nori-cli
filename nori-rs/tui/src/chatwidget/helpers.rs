@@ -335,6 +335,7 @@ impl ChatWidget {
             .and_then(|action| self.prompts_action_on_host(action))
             .and_then(|action| self.goal_action_on_host(action))
             .and_then(|action| self.compact_action_on_host(action))
+            .and_then(|action| self.shell_action_on_host(action))
         else {
             return;
         };
