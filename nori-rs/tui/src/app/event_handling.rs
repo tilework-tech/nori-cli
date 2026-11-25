@@ -58,6 +58,17 @@ impl App {
     /// spawn is now due; `false` while agent preparation is still in
     /// flight or no spawn was deferred. Shared by the skillset-applied and
     /// picker-dismissed paths so their guard cannot drift.
+    /// Start the session a per-session skillset choice deferred: through
+    /// the owned host locally, in-process in cloud mode.
+    fn start_deferred_session(&mut self) {
+        if self.cloud_mode {
+            self.pending_session_activation = Some(PendingSessionActivation::New);
+            self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
+        } else {
+            self.begin_host_startup();
+        }
+    }
+
     pub(super) fn take_deferred_spawn(&mut self) -> bool {
         if self.deferred_spawn_pending && self.primary_agent_preparation.is_none() {
             self.deferred_spawn_pending = false;
@@ -79,8 +90,7 @@ impl App {
         if self.take_deferred_spawn() {
             // The chosen skillset has written its workspace state, so activate
             // the session now instead of waiting for the first prompt.
-            self.pending_session_activation = Some(PendingSessionActivation::New);
-            self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
+            self.start_deferred_session();
         }
         self.request_system_info_refresh(
             self.config.cwd.clone(),
@@ -181,7 +191,7 @@ impl App {
                     return Ok(true);
                 }
 
-                if self.new_session_return.is_some() {
+                if self.new_session_return.is_some() || self.host_start_holds_input() {
                     // The pending screen holds this prompt for the session
                     // the host is starting.
                     return Ok(true);
@@ -240,8 +250,12 @@ impl App {
                 }
 
                 if !self.chat_widget.has_harness_session() {
-                    self.pending_session_activation = Some(PendingSessionActivation::New);
-                    self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
+                    if self.cloud_mode {
+                        self.pending_session_activation = Some(PendingSessionActivation::New);
+                        self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
+                    } else {
+                        self.begin_host_startup();
+                    }
                     return Ok(true);
                 }
 
@@ -482,6 +496,9 @@ impl App {
                 // The host prepares a server for the listing, except before
                 // the first session starts: the startup preparation's live
                 // catalog is reused below.
+                if self.offer_startup_catalog() {
+                    return Ok(true);
+                }
                 if !self.cloud_mode
                     && self.primary_agent_preparation.is_none()
                     && self.prepared_agent.is_none()
@@ -658,8 +675,7 @@ impl App {
                             display_name,
                             widget,
                             resumes,
-                            announce_agent,
-                            carries_draft,
+                            purpose,
                             ..
                         }) = self.candidate_agent.take()
                         else {
@@ -667,7 +683,7 @@ impl App {
                         };
                         let (initial_prompt, initial_images) =
                             self.chat_widget.take_initial_input();
-                        let carried = carries_draft.then(|| {
+                        let carried = purpose.starts_new().then(|| {
                             (
                                 self.chat_widget.take_composer_draft(),
                                 self.chat_widget.loop_state(),
@@ -703,7 +719,7 @@ impl App {
                         {
                             tracing::error!(%error, "failed to persist activated agent selection");
                         }
-                        if announce_agent {
+                        if purpose == host_candidate::PickerPurpose::Switch {
                             self.chat_widget.add_info_message(
                                 format!("Started new conversation with agent: {display_name}"),
                                 None,
@@ -1105,6 +1121,7 @@ impl App {
                     })
                 );
                 self.discard_candidate();
+                self.release_held_input();
                 if switching {
                     self.chat_widget
                         .add_info_message("Agent switch cancelled.".to_string(), None);
@@ -1410,8 +1427,7 @@ impl App {
                 // (behaves as if skillset_per_session is disabled) and activate
                 // the session, matching plain local startup.
                 if self.take_deferred_spawn() {
-                    self.pending_session_activation = Some(PendingSessionActivation::New);
-                    self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
+                    self.start_deferred_session();
                 }
             }
             AppEvent::ExecuteScript { prompt, args } => {

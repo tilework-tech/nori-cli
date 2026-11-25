@@ -236,6 +236,11 @@ impl ChatWidget {
         (Some(text).filter(|text| !text.is_empty()), image_paths)
     }
 
+    /// A prompt submitted before any session existed waits for one.
+    pub(crate) fn holds_initial_input(&self) -> bool {
+        self.initial_user_message.is_some()
+    }
+
     pub(crate) fn has_harness_session(&self) -> bool {
         self.harness_handle.is_some()
     }

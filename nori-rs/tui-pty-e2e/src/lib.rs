@@ -412,7 +412,7 @@ trust_level = "trusted"
         // Enable debug logging for nori_harness to capture timing information
         cmd.env(
             "RUST_LOG",
-            "codex_core=info,nori_tui=info,codex_rmcp_client=info,nori_harness=debug,nori_acp_host=debug",
+            "codex_core=info,nori_tui=info,codex_rmcp_client=info,nori_harness=debug,nori_acp_host=debug,nori_host_runtime=debug",
         );
 
         let spawned_at = Instant::now();
