@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 1 dawn
+
+
+• - dawn row 01
+
+  dawn relay finished.
+
+• Ran echo shell-in-$(basename $(dirname $PWD)) && touch shell-canary-local
+  └ shell-in-beta
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+• Ran touch shell-canary-remote
+
+                                                                                                                [ auto ]
+› / for slash command menu
+
+  watching · read-only · app · claude-code · ready · Approvals: Agent · alt+t take control · ctrl+d detach

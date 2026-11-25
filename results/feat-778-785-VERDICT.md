@@ -2,6 +2,8 @@
 
 ## Current heads (restacked onto #784 `abc6125f`, re-checked)
 
+Latest push (21:47 UTC): #778 `ae430d5d`, #779 `845d31d7`, #780 `6ab3a77c`, #781 `e534881a`, #782 `9744b3eb`, #783 `a99c9518`, #785 `01841f57`. Compared with `805aeec5`, the tree changes only composer prompt-history recall (#779) and tests. At `01841f57`, R03, R05a/b, R06 and R07 pass again, and R05c (D1) and R11 (shell) fail as below (`feat-785-01841f57/`). The table lists the `805aeec5`-round heads; the verdicts carry over.
+
 | PR | Head | Result |
 |---|---|---|
 | #778 | `68aff31b` | Own take-back once, also after reconnect (R05a/b). Same `requestKey` retries get the same answer and other keys get null. **D1 open.** |

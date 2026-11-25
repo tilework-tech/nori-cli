@@ -1,0 +1,22 @@
+{"t": 1795644057.054513, "adapter": "claude-code", "pid": 55844, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-r018/R05a/roots/alpha/app", "argv": []}
+{"t": 1795644057.0546112, "adapter": "claude-code", "pid": 55844, "kind": "request", "method": "initialize"}
+{"t": 1795644057.0548599, "adapter": "claude-code", "pid": 55844, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-r018/R05a/roots/alpha/app"}
+{"t": 1795644057.0550814, "adapter": "claude-code", "pid": 55844, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-r018/R05a/roots/alpha/app"}
+{"t": 1795644057.0587864, "adapter": "claude-code", "pid": 55844, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795644057.0588534, "adapter": "claude-code", "pid": 55844, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 1 dawn"}
+{"t": 1795644057.0591457, "adapter": "claude-code", "pid": 55844, "kind": "relay", "sessionId": "claude-code-0", "tag": "dawn", "n": 1}
+{"t": 1795644057.3093557, "adapter": "claude-code", "pid": 55844, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 1}
+{"t": 1795644057.8906035, "adapter": "claude-code", "pid": 55844, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "hold on"}
+{"t": 1795644057.8909266, "adapter": "claude-code", "pid": 55844, "kind": "tick", "sessionId": "claude-code-0", "n": 1}
+{"t": 1795644058.0910478, "adapter": "claude-code", "pid": 55844, "kind": "tick", "sessionId": "claude-code-0", "n": 2}
+{"t": 1795644058.2912023, "adapter": "claude-code", "pid": 55844, "kind": "tick", "sessionId": "claude-code-0", "n": 3}
+{"t": 1795644058.491344, "adapter": "claude-code", "pid": 55844, "kind": "tick", "sessionId": "claude-code-0", "n": 4}
+{"t": 1795644058.691492, "adapter": "claude-code", "pid": 55844, "kind": "tick", "sessionId": "claude-code-0", "n": 5}
+{"t": 1795644058.8916433, "adapter": "claude-code", "pid": 55844, "kind": "tick", "sessionId": "claude-code-0", "n": 6}
+{"t": 1795644059.0917764, "adapter": "claude-code", "pid": 55844, "kind": "tick", "sessionId": "claude-code-0", "n": 7}
+{"t": 1795644059.2863727, "adapter": "claude-code", "pid": 55844, "kind": "request", "method": "session/cancel", "sessionId": "claude-code-0"}
+{"t": 1795644059.2918613, "adapter": "claude-code", "pid": 55844, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "cancelled", "ticks": 7}
+{"t": 1795644063.0788174, "adapter": "claude-code", "pid": 55844, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 1 after"}
+{"t": 1795644063.079338, "adapter": "claude-code", "pid": 55844, "kind": "relay", "sessionId": "claude-code-0", "tag": "after", "n": 1}
+{"t": 1795644063.3295383, "adapter": "claude-code", "pid": 55844, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 1}
+{"t": 1795644066.417888, "adapter": "claude-code", "pid": 55844, "kind": "stdin_eof"}
