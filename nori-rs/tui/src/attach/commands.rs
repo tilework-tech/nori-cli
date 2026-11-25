@@ -54,11 +54,11 @@ impl Runtime {
             SlashCommand::New
             | SlashCommand::Delegate
             | SlashCommand::Resume
-            | SlashCommand::Close => {}
+            | SlashCommand::Close
+            | SlashCommand::Approvals => {}
             SlashCommand::Agent
             | SlashCommand::Model
             | SlashCommand::Config
-            | SlashCommand::Approvals
             | SlashCommand::Settings
             | SlashCommand::Vim
             | SlashCommand::Goal
@@ -108,6 +108,10 @@ impl Runtime {
             self.state.show_notice(CHOOSE_SESSION);
             return true;
         };
+        if command == SlashCommand::Approvals {
+            self.approvals_command(id, args, draft);
+            return true;
+        }
         if command == SlashCommand::Delegate {
             match crate::delegation::parse_command(draft.trim()) {
                 Some(Ok((agent, task))) => {

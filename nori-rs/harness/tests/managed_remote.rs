@@ -95,7 +95,8 @@ impl Fixture {
         }
     }
 
-    /// Connect as the controller, once any previous controller has left.
+    /// Connect as the controller, once any previous controller has left,
+    /// declaring every session event this build decodes.
     async fn connect(&self) -> Socket {
         tokio::time::timeout(WAIT, async {
             while self.server.controller_connected().await {
@@ -105,7 +106,13 @@ impl Fixture {
         .await
         .unwrap();
         let mut socket = self.open().await;
-        send(&mut socket, 0, "initialize", json!({})).await;
+        send(
+            &mut socket,
+            0,
+            "initialize",
+            json!({"capabilities":{"nori_sessions":{"approval_modes":true}}}),
+        )
+        .await;
         let initialized = receive(&mut socket).await;
         assert!(
             initialized["result"]["capabilities"]["nori_sessions"].is_object(),

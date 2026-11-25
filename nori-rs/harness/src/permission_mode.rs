@@ -24,11 +24,7 @@ impl PermissionMode {
     }
 
     pub fn name(self) -> &'static str {
-        match self {
-            Self::Ask => "Ask",
-            Self::Agent => "Agent",
-            Self::ApproveAll => "Approve all",
-        }
+        nori_protocol::ApprovalMode::from(self).name()
     }
 
     pub fn description(self) -> &'static str {
@@ -60,4 +56,44 @@ impl PermissionMode {
             AskForApproval::Never => Self::ApproveAll,
         }
     }
+}
+
+impl From<PermissionMode> for nori_protocol::ApprovalMode {
+    fn from(mode: PermissionMode) -> Self {
+        match mode {
+            PermissionMode::Ask => Self::Ask,
+            PermissionMode::Agent => Self::Agent,
+            PermissionMode::ApproveAll => Self::ApproveAll,
+        }
+    }
+}
+
+impl From<nori_protocol::ApprovalMode> for PermissionMode {
+    fn from(mode: nori_protocol::ApprovalMode) -> Self {
+        match mode {
+            nori_protocol::ApprovalMode::Ask => Self::Ask,
+            nori_protocol::ApprovalMode::Agent => Self::Agent,
+            nori_protocol::ApprovalMode::ApproveAll => Self::ApproveAll,
+        }
+    }
+}
+
+/// The modes a session offers: all three when its agent can ask before
+/// every edit and command, otherwise Agent and Approve all.
+pub fn available(ask_available: bool) -> Vec<nori_protocol::ApprovalMode> {
+    PermissionMode::ALL
+        .into_iter()
+        .filter(|mode| ask_available || *mode != PermissionMode::Ask)
+        .map(nori_protocol::ApprovalMode::from)
+        .collect()
+}
+
+/// What clients are told about a session running under `policy`.
+pub fn announced(policy: AskForApproval, ask_available: bool) -> nori_protocol::SessionEvent {
+    nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ApprovalModeChanged(
+        nori_protocol::SessionApprovalModes {
+            current: PermissionMode::from_approval_policy(policy).into(),
+            available: available(ask_available),
+        },
+    ))
 }

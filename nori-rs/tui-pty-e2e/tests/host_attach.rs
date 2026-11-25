@@ -1130,3 +1130,75 @@ fn cancel_in_an_attached_terminal_ends_the_running_turn() {
         host.list()
     );
 }
+
+fn wait_mode(client: &mut Client, name: &str) {
+    let label = format!("Approvals: {name}");
+    client
+        .wait_for(|screen| screen.contains(&label), TIMEOUT)
+        .unwrap_or_else(|_| panic!("never showed {label}:\n{}", client.screen_contents()));
+}
+
+#[test]
+fn only_the_controller_changes_a_session_mode_and_every_terminal_shows_it() {
+    let host = Host::new();
+    host.start();
+    let mut first = host.create_session();
+    ask(&mut first, "approvals shared session");
+    let id = host.session_id();
+    let mut second = host.attach(Some(&id));
+    wait_controlling(&mut first);
+    wait_watching(&mut second);
+    wait_mode(&mut second, "Agent");
+
+    first.submit_input("/approvals approve-all").unwrap();
+    first
+        .wait_for_text("Approve every request in this session?", TIMEOUT)
+        .unwrap();
+    first.send_key(Key::Enter).unwrap();
+    wait_mode(&mut first, "Approve all");
+    wait_mode(&mut second, "Approve all");
+
+    // Refused in the watcher, before anything is sent.
+    second.submit_input("/approvals agent").unwrap();
+    second
+        .wait_for_text("/approvals: watching · Alt+T to take control", TIMEOUT)
+        .unwrap();
+
+    second.send_key(Key::Ctrl('u')).unwrap();
+    second.send_key(Key::Alt('t')).unwrap();
+    wait_controlling(&mut second);
+    wait_watching(&mut first);
+    // The menu's current row proves the watcher's choice never reached the host.
+    open_mode_menu(&mut second, "Approve all (current)");
+    second.send_key(Key::Up).unwrap();
+    second.settle(Duration::from_millis(200));
+    second.send_key(Key::Enter).unwrap();
+    wait_mode(&mut second, "Agent");
+    wait_mode(&mut first, "Agent");
+
+    first.submit_input("/approvals approve-all").unwrap();
+    first
+        .wait_for_text("/approvals: watching · Alt+T to take control", TIMEOUT)
+        .unwrap();
+    open_mode_menu(&mut second, "Agent (current)");
+    second.send_key(Key::Escape).unwrap();
+}
+
+/// Open `/approvals` and wait until its rows are drawn, with `current` the
+/// row marked current; the title can land a frame before the rows do.
+fn open_mode_menu(client: &mut Client, current: &str) {
+    client.send_str("/approvals").unwrap();
+    client.settle(Duration::from_millis(500));
+    client.send_key(Key::Enter).unwrap();
+    client
+        .wait_for(
+            |screen| screen.contains(current) && screen.contains("esc close"),
+            TIMEOUT,
+        )
+        .unwrap_or_else(|_| {
+            panic!(
+                "menu with {current} never drawn:\n{}",
+                client.screen_contents()
+            )
+        });
+}

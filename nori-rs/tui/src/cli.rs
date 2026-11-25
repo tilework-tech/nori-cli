@@ -25,6 +25,11 @@ pub struct Cli {
     #[clap(skip)]
     pub resume_picker: bool,
 
+    /// Internal: one-line notices the CLI produced before the TUI started,
+    /// shown at the top of the transcript.
+    #[clap(skip)]
+    pub startup_notices: Vec<String>,
+
     #[clap(skip)]
     pub resume_last: bool,
 

@@ -109,6 +109,9 @@ the harness.
 Each WebSocket text frame is a JSON-RPC 2.0 request with an ID and object
 params. `initialize` must come first and advertises
 `result.capabilities.nori_sessions` with version 1, envelopes, and reconnect.
+A client declares the session events it decodes beyond the original set in
+its own `params.capabilities.nori_sessions`; today the only one is
+`approval_modes: true` (see `approval_mode_changed` below).
 
 | Method | Params | Result |
 | --- | --- | --- |
@@ -132,7 +135,8 @@ approval, as `approve: <subject>` or `approve: start <agent> · <task>`; lists
 show it instead of the reply on a row whose own status is `waiting_on_you`),
 `model` (the display name of the agent's model option), `idle_seconds` (since
 the session's latest event), and `context_used` / `context_size` (from the
-agent's latest `usage_update`). `replay_cursors` includes every
+agent's latest `usage_update`), and `approval_mode` (`ask`, `agent`, or
+`approve-all`, from the session's approval policy). `replay_cursors` includes every
 conversation known to the journal. Restarting a failed session with Ctrl+R keeps
 its Nori conversation ID, list row, and sequence counter. Existing subscriptions
 and saved cursors continue to address that ID after the new agent process
@@ -155,7 +159,17 @@ the correlated response in the event stream for the completed turn. Busy
 sessions return `-32015` for `_nori/session/prompt`. The authenticated background host additionally accepts an explicit [mid-turn follow-up](../nori-rs/cli/src/host/docs.md#mid-turn-follow-ups) from its controller. Permission replies
 address the pair of conversation and request IDs, and a repeated managed answer
 is rejected once claimed. `RequestResolved` tells subscribers that the request
-has been answered.
+has been answered. `approval_mode_changed` gives a session's permission mode
+(`ask`, `agent`, or `approve-all`): once just before its `session_started`,
+once for a fork's child right after the fork, and after every change. A client
+that subscribes after the announcement has left the replay window reads the
+mode from the list row's `approval_mode` instead. The host sends this event
+only to connections whose `initialize` declared
+`capabilities.nori_sessions.approval_modes: true`, as plain `nori` and
+`nori attach` do. Any other connection, such as an older `nori attach` that
+would refuse the unknown variant, gets a `notice` event in its place under the
+same `seq`, with a message such as `Approvals: Approve all`, so its sequence
+has no gap.
 
 Keep event payloads as raw JSON when storing or forwarding envelopes. ACP
 response types are untagged; interpret a response using its correlated request
@@ -372,7 +386,7 @@ per-session folders. Clients send `cwd` only when it is advertised.
 | --- | --- |
 | `_nori/control/status` | Return this connection's role and whether a controller is connected. |
 | `_nori/control/take` | Transfer control to the caller without closing another connection. |
-| `_nori/session/new` | Start a session; any authenticated initialized client may call it, since it changes no existing session; the new session becomes the host's selected session. Optional `cwd` (absolute; canonicalized, and refused when relative, missing, or not a directory) loads the host's configuration in that folder with the host's command-line overrides, so the folder's own project trust and approval settings apply; without it the host's start configuration is used. Optional `agent` selects the agent; optional `prompt` is sent as the first prompt after the session starts, without delaying the reply. Replies `{session_id, cwd}`. Resume reloads configuration from the record's cwd the same way. |
+| `_nori/session/new` | Start a session; any authenticated initialized client may call it, since it changes no existing session; the new session becomes the host's selected session. Optional `cwd` (absolute; canonicalized, and refused when relative, missing, or not a directory) loads the host's configuration in that folder with the host's command-line overrides, so the folder's own project trust and approval settings apply; without it the host's start configuration is used. Optional `agent` selects the agent; optional `prompt` is sent as the first prompt after the session starts, without delaying the reply. `[host] default_mode`, when set, replaces the folder's approval policy, as for `session/new`. Replies `{session_id, cwd}`. Resume reloads configuration from the record's cwd the same way. |
 | `_nori/session/close`, `_nori/session/cancel`, `_nori/session/resume` | Apply the operation to the required `session_id`. The close alias forces tree shutdown. Resume retains the Nori conversation ID. Resume also accepts the ID of a [stored session](#12-standard-acp-v1-on-the-background-host) and restarts it from its transcript. On the background host, `_nori/session/list` and `_nori/session/resume` are aliases kept for `nori attach` and `nori host ls`; new clients use `session/list` and `session/resume`. |
 | `_nori/session/cancel_observed` | A controller sends `{sessionId, observedTurnId}` using either the ID from the session’s `external_turn_changed` event or the request UUID of its admitted prompt. The host replies with `{sessionId}`. The host rejects an expired observation and suppresses a second cancel for one already pending. A successful reply acknowledges the request. The agent can confirm cancellation later. |
 | `_nori/host/stop` | Request host shutdown; any authenticated initialized client may call it. |
@@ -407,7 +421,7 @@ Typing `/` opens the same command menu as plain `nori`. Commands this terminal
 cannot run stay listed but greyed with a reason: `not available on this host
 yet` (the host has no method for it, e.g. `/compact`), `not available in nori
 attach yet` (e.g. `/model`), or, for a watcher, `watching · Alt+T to take
-control` on `/new`, `/close`, `/resume` and `/delegate`. Running a greyed
+control` on `/new`, `/close`, `/resume`, `/delegate` and `/approvals`. Running a greyed
 command shows the same reason and sends nothing. Slash names that are not
 Nori commands go to the agent as a prompt.
 Session commands address the host; they do not launch local agents.
@@ -419,6 +433,16 @@ otherwise it is an agent. Tab completes the folder against the attaching
 machine's filesystem like a shell, listing several matches in the notice
 line. The identity line reads `agent · title · folder · status`, and list
 rows show the short folder before the reply.
+`/approvals` sets the permission mode of the session on screen with
+`session/set_mode`. Without an argument it opens a menu of Ask, Agent and
+Approve all with the current mode marked; `/approvals ask`, `agent` or
+`approve-all` sets it directly. Approve all always asks for a second Enter
+first. The choice changes only that session; new sessions start in the host
+default (see [Session configuration](#session-configuration)). The identity
+line ends with `· Approvals: <mode>` once the host has announced the mode.
+The menu closes when this terminal loses control or another session is
+selected, and takes only unmodified arrow, `j`/`k`, Enter and Esc keys, so
+Alt+T and session moves still work while it is open.
 `/delegate <agent> <task>` is the delegation entry point; the list does not
 start delegations. The configured `hotkeys.next_waiting_session` binding
 (Alt+Down by default) selects the next waiting child or other session, even
@@ -765,7 +789,9 @@ is always the controller; a failed initialize or a closed pipe ends the TUI
 with an error. Quitting stops the host, which ends every **session** it runs,
 including one mid-turn. The same host also hands the TUI its own manager for
 foreground features that have no wire method yet, so both paths reach the
-same sessions; `nori attach` never gets that in-process half. See the
+same sessions; `nori attach` never gets that in-process half. `/approvals`
+uses the wire: it sends `session/set_mode` for the session on screen, and the
+footer follows `approval_mode_changed`. See the
 [owned TUI host](../nori-rs/cli/src/host/docs.md#owned-tui-host).
 
 ### Session configuration
@@ -813,8 +839,11 @@ what the host saves and reports. An adapter's "always allow" answer can
 still stop it asking about later calls of that kind; clients wanting `ask` to
 hold should offer the allow-once option.
 
-A session's mode starts from the `approval_policy` its folder's configuration
-sets (`on-failure` reads as `agent`). The adapter's mode is set whenever its
+A session's mode starts from `[host] default_mode` when it is set, else from
+the `approval_policy` its folder's configuration sets (`on-failure` reads as
+`agent`). This holds for ACP `session/new`, `_nori/session/new`, and prepared
+agents alike. A client's mode change applies to that session only and is not
+written to any configuration. The adapter's mode is set whenever its
 process starts: on ACP `session/new`, `session/load` and `session/resume`
 (including the restart they may trigger), on an agent change, and once the
 process is up after `_nori/session/new` or `_nori/session/resume`. Mode

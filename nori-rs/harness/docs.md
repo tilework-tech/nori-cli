@@ -354,7 +354,8 @@ between the WebSocket `/acp` (alias `/sessions`) adapter and managed ACP stdio. 
 manager records and journal cursors (each row also carries `family_status`,
 the record's `SessionManager::family_status`, else its own status, plus the
 additive display fields `reply_preview`, `waiting_request`, `idle_seconds`,
-`context_used`, and `context_size` from the replay journal and `model` from the record), resolves explicit conversation IDs before
+`context_used`, and `context_size` from the replay journal, and `model` and
+`approval_mode` from the record), resolves explicit conversation IDs before
 using the frontend's selected default, and opens one-session or all-session
 subscriptions. Its `_nori/session/event` notifications retain the complete
 manager envelope, including Nori events.
@@ -656,7 +657,9 @@ parent transcript and retains its observation identities. See the
 
 #### Session manager and envelopes
 
-See [session lifecycle and envelope delivery](src/session_manager/docs.md#session-manager-and-envelopes) for status, reconnect replay, recovery and process capacity.
+See [session lifecycle and envelope delivery](src/session_manager/docs.md#session-manager-and-envelopes) for status, reconnect replay, recovery, process capacity, and how each session's permission mode is announced.
+
+[`permission_mode.rs`](src/permission_mode.rs) maps the three host modes (Ask, Agent, Approve all) onto `AskForApproval` and back, and converts them to and from the wire type `nori_protocol::ApprovalMode`. The host, both terminals, and the footer all read mode names from it, so the names and the policy mapping exist once.
 
 #### Delegation between managed sessions
 

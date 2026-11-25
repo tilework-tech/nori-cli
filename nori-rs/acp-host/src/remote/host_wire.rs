@@ -366,6 +366,7 @@ where
 {
     let mut subscription: Option<ManagedSubscription> = None;
     let mut initialized = false;
+    let mut approval_modes = false;
     let mut registration = None;
     let (changes, mut roles) = watch::channel("watcher");
     let (outbound, mut queued) = tokio::sync::mpsc::channel::<Value>(OUTBOUND_CAPACITY);
@@ -434,6 +435,7 @@ where
                                     Transport::WebSocket => request["params"]["observe"] == true,
                                     Transport::Lines(_) => false,
                                 };
+                                let declares_approval_modes = request["params"]["capabilities"]["nori_sessions"]["approval_modes"] == true;
                                 let mut reply = state.host.request_from(client, request).await;
                                 if reply.response.get("error").is_none() {
                                     reply.response["result"]["control"] = state.control.lock().await.register(client, &changes, observe);
@@ -441,6 +443,7 @@ where
                                     // not from a change notification.
                                     roles.borrow_and_update();
                                     if !initialized {
+                                        approval_modes = declares_approval_modes;
                                         registration = Some(RegisteredClient(state.host.as_ref(), client));
                                         state.host.connection_opened(super::managed::HostConnection {
                                             client,
@@ -487,7 +490,7 @@ where
                             drop(reply.delivery_guard);
                             if let Some(mut next) = reply.subscription {
                                 for envelope in next.replay.drain(..) {
-                                    send_frame(&mut sink, Message::Text(managed_event(&envelope).to_string().into())).await?;
+                                    send_frame(&mut sink, Message::Text(managed_event(&envelope, approval_modes).to_string().into())).await?;
                                 }
                                 subscription = Some(next);
                             }
@@ -515,7 +518,7 @@ where
                             }
                         }
                     };
-                    send_frame(&mut sink, Message::Text(managed_event(&envelope).to_string().into())).await?;
+                    send_frame(&mut sink, Message::Text(managed_event(&envelope, approval_modes).to_string().into())).await?;
                 }
             }
         }

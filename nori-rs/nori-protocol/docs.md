@@ -54,7 +54,8 @@ pub enum AcpEvent {
 `NoriEvent` variants cover session lifecycle (started, phase changed, ended,
 forked), queue and replay bracketing, compaction, goals, capabilities, undo,
 user-shell and hook output, prompt summaries, notices, request failure and
-resolution, and delegation changes (`DelegationChanged`).
+resolution, delegation changes (`DelegationChanged`), and permission mode
+changes (`ApprovalModeChanged`).
 
 `QueueChanged` carries a `QueueSnapshot` of queued user prompts, oldest first.
 `prompts` holds their display texts. The additive `entries` list (serde
@@ -89,6 +90,16 @@ answered a pending agent request; `answered_by` is a responder label such as
 `client` or `remote_control`. Only the harness session manager emits it, on
 managed envelope streams, so clients following a session learn the request no
 longer waits on the user. Harness sessions and transcripts never carry it.
+
+`ApprovalModeChanged` carries an `ApprovalMode` (`ask`, `agent`, or
+`approve-all` on the wire; serialized as `approval_mode_changed`). It tells
+clients which of the host's permission modes a session runs in, so plain
+`nori`'s footer and `nori attach`'s header can show it without reading
+host configuration. Only the harness session manager emits it, at session
+start, after a fork, and when the mode changes; see the
+[session manager](../harness/src/session_manager/docs.md#approval-policy-permission-mode-and-agent-replacement).
+`ApprovalMode` is the wire twin of the harness's `PermissionMode`, which owns
+the mapping to approval policies; this crate keeps only the values.
 
 `SessionEnvelope` (in [`session_envelope.rs`](src/session_envelope.rs)) wraps
 one `SessionEvent` with the `conversation_id` it belongs to, the `agent` name
@@ -244,6 +255,14 @@ exact ACP wire `RequestId` for harness-issued operations.
 - The crate contains no reducer, normalizer, transcript compatibility
   decoder, or presentation state. The delegation text helpers are plain
   strings with no styling; each frontend applies its own colors.
+- `NoriEvent` has no catch-all variant, so a client decodes envelopes
+  strictly: a new variant makes an older client fail on that envelope.
+  Adding a `NoriEvent` variant is a wire change for every deployed client, not
+  only a schema regeneration. `ApprovalModeChanged` is gated: the host sends it
+  only to clients whose `initialize` declares
+  `capabilities.nori_sessions.approval_modes`, and gives every other client a
+  `Notice` naming the mode (`ApprovalMode::name`) under the same `seq`. A
+  future variant needs the same treatment.
 - `ReplayStarted` and `ReplayFinished` bracket historical ACP notifications
   only. Current setup responses and Nori lifecycle events remain outside the
   replay body.

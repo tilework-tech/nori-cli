@@ -248,7 +248,10 @@ plain nori TUI --pipe (controller)--> owned HostService --> its own SessionManag
   `NoriConfig` with that folder as cwd plus its own stored command-line
   overrides, so the folder's project trust and approval settings apply rather
   than the host's start folder's. Without `cwd` the host's own configuration is
-  used. A `prompt` is sent as the first prompt from a spawned task after the
+  used. Either way `apply_host_default_mode` then replaces the approval policy
+  with `[host] default_mode` when it is set, as ACP `session/new` and
+  `_nori/host/prepare_agent` already do, so every way of starting a session
+  on the host starts in the same mode. A `prompt` is sent as the first prompt from a spawned task after the
   session starts, so the reply does not wait for it; a rejected prompt is only
   logged. Resume reloads configuration the same way from the record's cwd,
   then applies the stored agent, retaining the conversation identity. Stop
@@ -750,7 +753,10 @@ registry the TUI already loaded, including agents supplied by `nori cloud`.
   configuration. Only agents prepared over the foreground pipe use it, so
   settings the person changed mid-session (a `/model` default, for example)
   reach sessions they start through the host, while independent clients and
-  watchers keep the launch configuration.
+  watchers keep the launch configuration. `/approvals` is not one of those
+  settings: it sends `session/set_mode` for the session on screen over the
+  pipe and leaves the TUI's configuration alone, so the next session still
+  starts in `[host] default_mode` or the folder's `approval_policy`.
 - **Private.** Like the in-process exec host, it binds no socket, writes no
   token or discovery files, and takes no lock. It and a background host in
   the same `NORI_HOME` never see each other's live sessions.

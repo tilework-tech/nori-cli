@@ -101,10 +101,26 @@ from `HotkeyAction::default_binding`. The session-move actions
 action.
 
 `[host]` configures the background host. `default_mode` (`ask`, `agent` or
-`approve-all`, as `HostDefaultMode`) is the permission mode a local host gives
-sessions that clients start with ACP `session/new`; unset keeps each folder's
-own `approval_policy`. A default of `ask` gives `agent` to sessions whose
-adapter cannot ask every time. `max_clients` (default `DEFAULT_MAX_CLIENTS`,
+`approve-all`, as `HostDefaultMode`) is the permission mode a host gives every
+new session, whether it starts through ACP `session/new`, `_nori/session/new`,
+or a prepared agent; unset keeps each folder's own `approval_policy`. A default
+of `ask` gives `agent` to sessions whose adapter cannot ask every time. The
+host applies it; this crate only parses it. `/approvals` never writes it.
+
+[`approval_presets.rs`](src/approval_presets.rs) holds
+`migrate_approval_presets(nori_home)`, the one-time move from the retired
+`/approvals` presets (Read Only, Agent, Full Access, each an
+`approval_policy` and `sandbox_mode` pair) to `[host] default_mode`. The CLI
+calls it at every launch. It does nothing when the home `config.toml` is
+missing, already carries `[notice] approval_presets_migrated`, already sets
+`[host] default_mode`, or sets neither of the two keys. Otherwise an exact
+preset pair gains the matching `default_mode` and any other pair is only
+reported; both original keys are left untouched, the marker is written, and
+the returned line tells the caller what happened. It edits through the same
+lock and atomic write as `NoriConfigEdits` (`read_for_edit` and `write_config`
+in [`edits.rs`](src/edits.rs)), so comments survive. Per-folder configs are
+not examined. The user-facing rules are in
+[`config.md`](../config.md#background-host-host). `max_clients` (default `DEFAULT_MAX_CLIENTS`,
 16) is the most WebSocket clients a non-managed background host serves at once
 across `/acp` and `/sessions`; the loader does not clamp it, and the host treats
 a value below 1 as 1. The other keys configure the managed machine listener.
@@ -177,5 +193,9 @@ environment reference. An unbound Pi uses its native settings. The [configuratio
   merge layers. Reusable agent behavior belongs to Nori Skillsets.
 - The crate remains independent of `codex-core` and the deleted
   `codex-protocol` crate.
+- The preset migration is the only code that writes `config.toml` without a
+  user action. Its marker, not the presence of `default_mode`, is what keeps
+  it from reporting the same unmatched pair on every launch; a user who later
+  deletes `default_mode` is not migrated again.
 
 Created and maintained by Nori.

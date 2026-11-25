@@ -369,6 +369,21 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         if let Err(e) = init_rolling_file_tracing(&log_dir, "nori-acp") {
             eprintln!("Warning: Failed to initialize ACP file tracing: {e}");
         }
+        match nori_config::migrate_approval_presets(&nori_home) {
+            // The TUI repaints the terminal, so it shows the notice itself.
+            Ok(Some(message))
+                if !print
+                    && matches!(
+                        subcommand,
+                        None | Some(Subcommand::Resume(_)) | Some(Subcommand::Cloud(_))
+                    ) =>
+            {
+                interactive.startup_notices.push(message);
+            }
+            Ok(Some(message)) => eprintln!("{message}"),
+            Ok(None) => {}
+            Err(error) => eprintln!("Warning: could not move the approval presets: {error:#}"),
+        }
     }
 
     // `-p` selects a mode, so a subcommand that selects a different one is a

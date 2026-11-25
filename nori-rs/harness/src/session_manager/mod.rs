@@ -538,6 +538,17 @@ impl SessionManager {
         })
     }
 
+    /// The permission modes `conversation_id` offers.
+    pub fn available_modes(
+        &self,
+        conversation_id: &ConversationId,
+    ) -> Vec<nori_protocol::ApprovalMode> {
+        self.shared
+            .state()
+            .registry
+            .available_modes(conversation_id)
+    }
+
     pub fn get(&self, conversation_id: &ConversationId) -> Option<SessionRecord> {
         self.shared.state().registry.record(conversation_id)
     }
@@ -592,10 +603,19 @@ impl SessionManager {
             .ok_or_else(|| anyhow::anyhow!("session is not running"))?
             .set_approval_policy(policy)
             .await?;
-        self.shared
-            .state()
+        let mut state = self.shared.state();
+        let mode = crate::permission_mode::PermissionMode::from_approval_policy;
+        let changed = state
             .registry
-            .set_approval_policy(conversation_id, policy);
+            .record(conversation_id)
+            .is_none_or(|record| mode(record.approval_policy) != mode(policy));
+        state.registry.set_approval_policy(conversation_id, policy);
+        if changed && let Some(envelope) = state.registry.mode_announcement(conversation_id) {
+            state.journal.publish(&envelope);
+            if let Some(primary) = state.primary.get(conversation_id) {
+                let _ = primary.send(envelope);
+            }
+        }
         Ok(())
     }
 

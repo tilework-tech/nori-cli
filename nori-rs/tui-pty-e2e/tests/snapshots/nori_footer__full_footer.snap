@@ -1,10 +1,11 @@
 ---
 source: tui-pty-e2e/tests/nori_footer.rs
+assertion_line: 171
 expression: normalize_for_input_snapshot(contents)
 ---
   › Nori CLI v0.0.0
 
-  System       [TMP_DIR] · Agent approvals
+  System       [TMP_DIR]
   Agent        Mock ACP
 
 • Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)

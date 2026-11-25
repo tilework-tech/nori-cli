@@ -4,12 +4,12 @@ Path: @/nori-rs/common
 
 ### Overview
 
-The common crate provides small shared utilities for the Nori CLI and TUI, including CLI argument types, fuzzy matching, approval presets, and sandbox summaries.
+The common crate provides small shared utilities for the Nori CLI and TUI, including CLI argument types, fuzzy matching, the legacy approval presets, and sandbox summaries.
 
 ### How it fits into the larger codebase
 
 Used by:
-- `@/nori-rs/tui/` - for CLI argument parsing, approval presets, sandbox summaries, and fuzzy matching
+- `@/nori-rs/tui/` - for CLI argument parsing, sandbox summaries, fuzzy matching, and (Windows only) approval presets
 - `@/nori-rs/cli/` - for the shared raw `-c` override argument surface
 
 ### Core Implementation
@@ -27,7 +27,7 @@ Used by:
 
 These inherited presets are compatibility data; Nori's runtime agent and default-model choices come from `nori-config` and ACP session configuration rather than a migration flow in the TUI.
 
-**Approval Presets** (`approval_presets.rs`): Combines approval mode and sandbox policy into coherent presets.
+**Approval Presets** (`approval_presets.rs`): The Read Only / Agent / Full Access pairs of approval policy and sandbox policy. `/approvals` no longer offers them; it picks one of the host's permission modes from `nori_harness::permission_mode` and leaves the sandbox alone. The presets remain only for the TUI's Windows sandbox prompts, which are compiled only on Windows and not built in CI. The one-time move of saved presets to `[host] default_mode` lives in `@/nori-rs/nori-config/`, not here.
 
 **Sandbox Summary** (`sandbox_summary.rs`, feature-gated by `sandbox_summary`): Generates human-readable summaries of sandbox policies.
 

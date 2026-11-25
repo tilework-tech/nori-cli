@@ -233,7 +233,10 @@ fn every_call_reaches_the_host_method_it_names() {
     assert_eq!(
         outgoing,
         vec![
-            (json!("initialize"), json!({})),
+            (
+                json!("initialize"),
+                json!({"capabilities":{"nori_sessions":{"approval_modes":true}}})
+            ),
             (
                 json!("_nori/session/subscribe"),
                 json!({"session_id":"one","cursors":{"one":7}})

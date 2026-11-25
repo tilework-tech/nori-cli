@@ -112,8 +112,10 @@ pub(super) fn render(
         Paragraph::new(" No session selected. Use /sessions to browse or /new to start.")
             .render(body, buf);
     }
-    // A request on screen has the keyboard; the draft waits hidden.
-    if !state.request_on_screen() || state.list_open {
+    if state.mode_menu_on_screen() {
+        super::approvals::render_mode_menu(state, body, buf);
+    } else if !state.request_on_screen() || state.list_open {
+        // A request on screen has the keyboard; the draft waits hidden.
         composer.render_ref(input, buf);
     }
 }
@@ -166,10 +168,17 @@ fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
         });
     let Some(current) = row(id) else {
         return Line::from(
-            match activity {
-                Some(label) => format!(" session · {id} · {label}"),
-                None => format!(" session · {id}"),
-            }
+            [
+                Some(format!(" session · {id}")),
+                activity.map(str::to_owned),
+                state
+                    .approval_mode(id)
+                    .map(|mode| format!("Approvals: {}", mode.name())),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" · ")
             .dim(),
         );
     };
@@ -181,6 +190,10 @@ fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
         current.status
     };
     let label = activity.unwrap_or_else(|| crate::session_status::status_label(shown));
+    let label = match state.approval_mode(id) {
+        Some(mode) => format!("{label} · Approvals: {}", mode.name()),
+        None => label.to_owned(),
+    };
     let status = match &current.cwd {
         Some(cwd) => format!(
             " · {} · {label}",

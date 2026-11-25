@@ -77,6 +77,9 @@ struct Entry {
     acp_session_id: Option<String>,
     /// The display name of the model the agent says it runs.
     model_name: Option<String>,
+    /// Whether the agent can ask before every edit and command, read from
+    /// the options it advertised when the session started.
+    ask_available: bool,
 }
 
 impl Entry {
@@ -98,6 +101,7 @@ impl Entry {
             transcript_path: None,
             acp_session_id: None,
             model_name: None,
+            ask_available: false,
         }
     }
 
@@ -332,6 +336,29 @@ impl Registry {
         Ok(())
     }
 
+    /// Tell clients the session's current mode and the modes it offers.
+    pub(crate) fn mode_announcement(
+        &mut self,
+        conversation: &ConversationId,
+    ) -> Option<SessionEnvelope> {
+        let entry = self.sessions.get(conversation)?;
+        let event =
+            crate::permission_mode::announced(entry.settings.approval_policy, entry.ask_available);
+        self.emit(conversation, event)
+    }
+
+    /// The modes `conversation` offers.
+    pub(crate) fn available_modes(
+        &self,
+        conversation: &ConversationId,
+    ) -> Vec<nori_protocol::ApprovalMode> {
+        crate::permission_mode::available(
+            self.sessions
+                .get(conversation)
+                .is_some_and(|entry| entry.ask_available),
+        )
+    }
+
     /// Number manager-owned events even when the session has no live process.
     pub(crate) fn emit(
         &mut self,
@@ -488,8 +515,28 @@ impl Registry {
             }) => Some(request_id.clone()),
             _ => None,
         };
-        let mut envelopes: Vec<SessionEnvelope> =
-            self.observe(process, event).into_iter().collect();
+        // Clients learn the mode before the session's start, so whatever
+        // they show for the started session already has it.
+        let mut envelopes = Vec::new();
+        if let SessionEvent::Nori(NoriEvent::SessionStarted(started)) = &event
+            && let Some(id) = self.processes.get(&process).copied()
+            && let Some(entry) = self.sessions.get_mut(&id)
+        {
+            entry.ask_available =
+                crate::adapter_modes::offers_ask(&entry.settings.agent, &started.config_options);
+            envelopes.extend(self.mode_announcement(&id));
+        }
+        let forked = matches!(&event, SessionEvent::Nori(NoriEvent::SessionForked(_)));
+        envelopes.extend(self.observe(process, event));
+        // A fork's child starts with no start event, so it is told its mode
+        // right after the fork.
+        if forked
+            && let Some(child) = envelopes
+                .last()
+                .and_then(|envelope| ConversationId::from_string(&envelope.conversation_id).ok())
+        {
+            envelopes.extend(self.mode_announcement(&child));
+        }
         let early = request_id.and_then(|request_id| {
             let entry = self
                 .processes
@@ -528,6 +575,7 @@ impl Registry {
             .as_ref()
             .and_then(|path| path.parent().map(std::path::Path::to_path_buf));
         let mut settings = parent_entry.settings.clone();
+        let ask_available = parent_entry.ask_available;
         parent_entry.end(SessionStatus::Closed);
         parent_entry.forked_into = Some(child);
 
@@ -540,6 +588,7 @@ impl Registry {
         let mut entry = Entry::new(settings, order, Some(process));
         entry.reservation = reservation;
         entry.started = true;
+        entry.ask_available = ask_available;
         entry.acp_session_id = Some(acp_session_id);
         entry.transcript_path = transcript_dir.map(|dir| dir.join(format!("{child}.jsonl")));
         self.sessions.insert(child, entry);

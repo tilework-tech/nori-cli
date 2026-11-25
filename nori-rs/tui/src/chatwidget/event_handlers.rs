@@ -250,6 +250,14 @@ impl ChatWidget {
             nori_protocol::NoriEvent::DelegationChanged(delegation) => {
                 self.handle_delegation_changed(delegation);
             }
+            nori_protocol::NoriEvent::ApprovalModeChanged(modes) => {
+                self.approval_mode = Some(modes.current);
+                self.available_approval_modes = Some(modes.available);
+                self.update_approval_mode_label();
+                // The host moves the agent's own mode with it, without the
+                // agent announcing it, so read the agent's mode again.
+                self.refresh_acp_mode_config_snapshot();
+            }
             nori_protocol::NoriEvent::SessionEnded(ended) => {
                 let pending = self.external_cancel_status().is_some();
                 if self.external_turn.take().is_some() {

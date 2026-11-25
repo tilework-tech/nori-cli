@@ -502,6 +502,10 @@ export type NoriEvent =
   | {
       event: Delegation;
       event_type: "delegation_changed";
+    }
+  | {
+      event: SessionApprovalModes;
+      event_type: "approval_mode_changed";
     };
 /**
  * A unique identifier for a conversation session between a client and agent.
@@ -577,6 +581,10 @@ export type HookOutputLevel = "info" | "warn" | "error";
 export type RequestFailureKind = "retryable" | "fatal";
 export type DelegationStatus =
   "awaiting_approval" | "running" | "declined" | "completed" | "failed" | "cancelled";
+/**
+ * How a session answers its agent's permission requests.
+ */
+export type ApprovalMode = "ask" | "agent" | "approve-all";
 
 /**
  * Request parameters for the initialize method.
@@ -4103,6 +4111,18 @@ export interface Delegation {
   result?: string | null;
   status: DelegationStatus;
   task: string;
+}
+/**
+ * A session's permission mode and the modes its agent can honor.
+ */
+export interface SessionApprovalModes {
+  /**
+   * The modes `session/set_mode` accepts for this session. Ask is left
+   * out for an agent with no mode that asks before every edit and
+   * command.
+   */
+  available: ApprovalMode[];
+  current: ApprovalMode;
 }
 /**
  * Result of `_nori/host/stop`.

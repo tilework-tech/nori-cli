@@ -131,7 +131,7 @@ impl HostService {
         .await
     }
 
-    pub(super) fn apply_host_default_mode(&self, config: &mut nori_config::NoriConfig) {
+    pub(in crate::host) fn apply_host_default_mode(&self, config: &mut nori_config::NoriConfig) {
         if let Some(mode) = self.config.host.default_mode {
             let mode = match mode {
                 nori_config::HostDefaultMode::Ask => PermissionMode::Ask,

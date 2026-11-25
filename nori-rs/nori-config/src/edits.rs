@@ -227,7 +227,7 @@ impl NoriConfigEdits {
 }
 
 // The lock lives beside config.toml so it survives atomic replacement of the config inode.
-fn read_for_edit(nori_home: &Path) -> Result<(std::fs::File, DocumentMut)> {
+pub(crate) fn read_for_edit(nori_home: &Path) -> Result<(std::fs::File, DocumentMut)> {
     std::fs::create_dir_all(nori_home)?;
     let lock = OpenOptions::new()
         .read(true)
@@ -356,7 +356,7 @@ fn descend<'a>(mut table: &'a mut Table, path: &[String], create: bool) -> Optio
     Some(table)
 }
 
-fn write_config(path: &Path, contents: &[u8]) -> Result<()> {
+pub(crate) fn write_config(path: &Path, contents: &[u8]) -> Result<()> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(parent)
         .with_context(|| format!("Failed to create {}", parent.display()))?;

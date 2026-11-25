@@ -26,7 +26,7 @@ expression: rendered
   /agent            not available in nori attach yet
   /model            not available in nori attach yet
   /config           not available in nori attach yet
-  /approvals        not available in nori attach yet
+  /approvals        set how this session asks for approval
   /settings         not available in nori attach yet
   /vim              not available in nori attach yet
   /goal             not available on this host yet

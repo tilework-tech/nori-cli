@@ -177,6 +177,7 @@ impl HostService {
             if let Some(agent) = agent {
                 config.active_agent = agent.to_owned();
             }
+            self.apply_host_default_mode(&mut config);
             let cwd = config
                 .cwd
                 .to_str()
