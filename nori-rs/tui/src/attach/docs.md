@@ -88,6 +88,13 @@ The controller uses the [host follow-up operation](../../../cli/src/host/docs.md
 - [Rendering](render.rs) keeps role and connectivity visible beside the
   selected conversation or session list. Watchers receive the same content and
   permissions but must take control before sending mutations.
+- During catch-up, the [event loop](mod.rs) applies queued host events in
+  arrival order and draws once per bounded batch. Between batches it can
+  handle keyboard input and refresh the list. The renderer formats transcript
+  parts from newest to oldest until it covers the scroll offset and visible
+  rows, then displays those rows in reading order. Scrolling past the start
+  leaves the first page visible. An idle conversation with empty transcript
+  text shows the ready prompt.
 - Consecutive thought chunks join, as sent, into one part whatever their
   message ids, and render as the chat view's `ThoughtCell` block before the
   answer that ends them. `[tui] thoughts_in_history = false` hides them.

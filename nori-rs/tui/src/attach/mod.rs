@@ -73,16 +73,24 @@ async fn run(
     ));
     let mut events = tui.event_stream();
     let mut refresh = tokio::time::interval(std::time::Duration::from_secs(1));
+    // A subscription can deliver retained events faster than the terminal can paint.
+    // Bound each batch so keyboard input and list refreshes still get a turn.
+    const EVENTS_PER_FRAME: usize = 64;
+    let mut painted_request = None;
+    let mut incoming_events = Vec::with_capacity(EVENTS_PER_FRAME);
     let result = async {
         loop {
             tokio::select! {
-                incoming = event_rx.recv(), if runtime.state.stopped.is_none() => {
-                    let Some(incoming) = incoming else { anyhow::bail!("Host connection worker stopped"); };
-                    if let Err(error) = runtime.connection_event(incoming) {
-                        runtime.state.show_notice(error.to_string());
-                    }
-                    if runtime.state.stopped.is_some() {
-                        connection.abort();
+                count = event_rx.recv_many(&mut incoming_events, EVENTS_PER_FRAME), if runtime.state.stopped.is_none() => {
+                    if count == 0 { anyhow::bail!("Host connection worker stopped"); }
+                    for incoming in incoming_events.drain(..) {
+                        if let Err(error) = runtime.connection_event(incoming) {
+                            runtime.state.show_notice(error.to_string());
+                        }
+                        if runtime.state.stopped.is_some() {
+                            connection.abort();
+                            break;
+                        }
                     }
                 }
                 event = events.next() => {
@@ -107,6 +115,7 @@ async fn run(
                     frame.set_cursor_position(position);
                 }
             })?;
+            runtime.request_painted(&mut painted_request);
             if runtime.composer.is_in_paste_burst() {
                 tui.frame_requester().schedule_frame_in(crate::ComposerInput::recommended_flush_delay());
             }
