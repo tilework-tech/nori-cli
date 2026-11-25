@@ -175,6 +175,7 @@ mod queue_host;
 mod queue_list;
 mod queue_recall;
 mod session_title_envelope;
+mod shell_host;
 mod skillsets_v2;
 mod terminal_title;
 mod thought_history;

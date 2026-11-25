@@ -83,6 +83,7 @@ mod queue_list;
 mod queue_recall;
 mod session_close;
 mod session_config_mode;
+mod shell_host;
 mod skillsets_v2;
 mod user_input;
 use crate::nori::session_header::CloudSessionInfo;
@@ -164,6 +165,8 @@ pub(crate) struct ChatWidget {
     external_turn: Option<nori_protocol::ExternalTurn>,
     unpaired_prompt_error_ids: HashSet<nori_protocol::acp::v1::RequestId>,
     completed_client_tool_calls: HashSet<String>,
+    /// `!` commands that have started and not yet finished.
+    user_shell_runs: shell_host::UserShellRuns,
     client_event_normalizer: crate::presentation::ClientEventNormalizer,
     replay_source: Option<nori_protocol::ReplaySource>,
     replay_message: Option<ReplayMessage>,
