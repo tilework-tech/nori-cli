@@ -1,0 +1,36 @@
+[
+  {
+    "launch": 0.0,
+    "first_composer": 91.801,
+    "first_handled_input": 94.239,
+    "ui_ready": 110.944,
+    "submit": 110.9525,
+    "delivered_on_screen": 114.158,
+    "agent_enter": 103.9645,
+    "initialize_rx": 104.00999999999999,
+    "initialize_reply": 104.0135,
+    "session/list_rx": 104.269,
+    "session/list_reply": 104.2745,
+    "session/new_rx": 104.801,
+    "session/new_reply": 104.81450000000001,
+    "session/prompt_rx": 112.3715,
+    "session/prompt_reply": 112.4925
+  },
+  {
+    "launch": 0.0,
+    "first_composer": 89.702,
+    "first_handled_input": 91.1875,
+    "ui_ready": 109.4885,
+    "submit": 109.498,
+    "delivered_on_screen": 113.224,
+    "agent_enter": 102.1245,
+    "initialize_rx": 102.1685,
+    "initialize_reply": 102.17150000000001,
+    "session/list_rx": 102.40899999999999,
+    "session/list_reply": 102.413,
+    "session/new_rx": 102.967,
+    "session/new_reply": 102.98949999999999,
+    "session/prompt_rx": 111.34450000000001,
+    "session/prompt_reply": 111.394
+  }
+]

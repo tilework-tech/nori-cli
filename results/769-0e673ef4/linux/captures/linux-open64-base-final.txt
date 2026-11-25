@@ -1,0 +1,30 @@
+ Nori host  CONTROLLING
+ kiln · kiln seed history · workbench · ready · Approvals: Agent
+
+ Closing note 080 for the run.
+ Closing note 081 for the run.
+ Closing note 082 for the run.
+ Closing note 083 for the run.
+ Closing note 084 for the run.
+ Closing note 085 for the run.
+ Closing note 086 for the run.
+ Closing note 087 for the run.
+ Closing note 088 for the run.
+ Closing note 089 for the run.
+ Closing note 090 for the run.
+
+ KilnLatestEnd
+
+ • Explored 1 read
+   • Read final.txt
+
+ KilnLive0001
+
+ tick1 tick2 tick3 tick4 tick5 tick6 tick7 tick8 tick9 tick10 tick11 tick12 tick13 tick14 tick15
+ tick16 tick17 tick18 tick19 tick20 tick21 tick22 tick23 tick24 tick25 tick26 tick27 tick28 tick29
+ KilnLive0002
+
+
+› ж1ж2q
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg

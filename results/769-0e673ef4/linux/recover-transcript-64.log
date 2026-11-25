@@ -1,0 +1,45 @@
+{"launch_to_list_ms": 9.34, "ctrl_r_to_ready_row_ms": 39.06, "enter_to_first_content_ms": 11.39, "draft_ms": 19.87, "enter_to_latest_reply_ms": 3018.78, "enter_to_final_tool_ms": 3022.23, "frames_to_catchup": 1412, "bytes_to_catchup": 1656967, "enter_to_new_answer_ms": 6112.51, "answered_by_replacement": true, "settled_key_ms": 23.72, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 6.69, "page_up_ms_median": 6.73, "page_up_ms_max": 10.94, "page_up_ms_last5_median": 7.47, "page_ups": 151, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1532, "sha256": "764b52f4098766b89da7a1c205e48a6ed8196a72fc7952573d7366525655fcff"}, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "base", "index": 0}
+{"launch_to_list_ms": 9.82, "ctrl_r_to_ready_row_ms": 33.93, "enter_to_first_content_ms": 13.2, "draft_ms": 21.24, "enter_to_latest_reply_ms": 779.5, "enter_to_final_tool_ms": 779.51, "frames_to_catchup": 57, "bytes_to_catchup": 79036, "enter_to_new_answer_ms": 966.45, "answered_by_replacement": true, "settled_key_ms": 12.9, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 2.82, "page_up_ms_median": 6.72, "page_up_ms_max": 8.99, "page_up_ms_last5_median": 6.31, "page_ups": 152, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1534, "sha256": "9711e38925e5b176f9ad0ffd5e7b264f56058e249745caa03ae0ad9bedd05f58"}, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "fix", "index": 0}
+{"launch_to_list_ms": 9.85, "ctrl_r_to_ready_row_ms": 35.25, "enter_to_first_content_ms": 11.74, "draft_ms": 9.88, "enter_to_latest_reply_ms": 820.89, "enter_to_final_tool_ms": 820.9, "frames_to_catchup": 58, "bytes_to_catchup": 78562, "enter_to_new_answer_ms": 1047.2, "answered_by_replacement": true, "settled_key_ms": 13.28, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 3.25, "page_up_ms_median": 6.51, "page_up_ms_max": 8.57, "page_up_ms_last5_median": 6.92, "page_ups": 152, "audit": {"ordered_exactly_once": false, "duplicates": [], "duplicate_count": 0, "missing": ["note:31"], "rows": 1536, "sha256": "1909b6fb80e522c4d04d47ad93a5d03d2f757ba73abbe9e9cb6c99b8facce63b"}, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "fix", "index": 1}
+Traceback (most recent call last):
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 278, in <module>
+    main()
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 269, in main
+    row = open_sample(binary, args, Path(d))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 198, in open_sample
+    pane.wait(lambda s: f"Kiln answer to {prompt}." in history_text(s))
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/kiln.py", line 149, in wait
+    raise TimeoutError("terminal never matched:\n" + s)
+TimeoutError: terminal never matched:
+ Nori host  CONTROLLING
+ kiln · kiln seed history · workbench · ready · Approvals: Agent
+
+ Closing note 076 for the run.
+ Closing note 077 for the run.
+ Closing note 078 for the run.
+ Closing note 079 for the run.
+ Closing note 080 for the run.
+ Closing note 081 for the run.
+ Closing note 082 for the run.
+ Closing note 083 for the run.
+ Closing note 084 for the run.
+ Closing note 085 for the run.
+ Closing note 086 for the run.
+ Closing note 087 for the run.
+ Closing note 088 for the run.
+ Closing note 089 for the run.
+ Closing note 090 for the run.
+
+ KilnLatestEnd
+
+ • Explored 1 read
+   • Read final.txt
+
+ Connection restored. A previous request may have reached the host and was not retried; check the
+conversation before submitting again.
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg
+

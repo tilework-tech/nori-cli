@@ -1,0 +1,36 @@
+[
+  {
+    "launch": 0.0,
+    "first_composer": 86.272,
+    "first_handled_input": 87.775,
+    "ui_ready": 104.632,
+    "submit": 104.641,
+    "delivered_on_screen": 107.987,
+    "agent_enter": 98.794,
+    "initialize_rx": 98.828,
+    "initialize_reply": 98.832,
+    "session/list_rx": 99.049,
+    "session/list_reply": 99.052,
+    "session/new_rx": 99.477,
+    "session/new_reply": 99.497,
+    "session/prompt_rx": 105.883,
+    "session/prompt_reply": 105.918
+  },
+  {
+    "launch": 0.0,
+    "first_composer": 94.371,
+    "first_handled_input": 95.83,
+    "ui_ready": 113.239,
+    "submit": 113.244,
+    "delivered_on_screen": 116.417,
+    "agent_enter": 105.96,
+    "initialize_rx": 105.991,
+    "initialize_reply": 105.994,
+    "session/list_rx": 106.974,
+    "session/list_reply": 106.978,
+    "session/new_rx": 107.493,
+    "session/new_reply": 107.498,
+    "session/prompt_rx": 114.553,
+    "session/prompt_reply": 114.576
+  }
+]

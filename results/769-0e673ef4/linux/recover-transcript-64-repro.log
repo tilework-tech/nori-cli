@@ -1,0 +1,51 @@
+{"launch_to_list_ms": 8.54, "ctrl_r_to_ready_row_ms": 35.9, "enter_to_first_content_ms": 16.48, "draft_ms": 13.06, "enter_to_latest_reply_ms": 3032.77, "enter_to_final_tool_ms": 3036.27, "frames_to_catchup": 1412, "bytes_to_catchup": 1656973, "enter_to_new_answer_ms": 6163.65, "answered_by_replacement": true, "settled_key_ms": 23.04, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 6.41, "page_up_ms_median": 6.49, "page_up_ms_max": 10.61, "page_up_ms_last5_median": 6.4, "page_ups": 151, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1532, "sha256": "adfa3664086d89a596fcf478f2664b698b9a8493d3182a576b396e5e4c4d6123"}, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "base", "index": 0}
+{"launch_to_list_ms": 9.87, "ctrl_r_to_ready_row_ms": 36.66, "enter_to_first_content_ms": 9.91, "draft_ms": 17.86, "enter_to_latest_reply_ms": 51.14, "enter_to_final_tool_ms": 51.14, "frames_to_catchup": 51, "bytes_to_catchup": 70478, "enter_to_new_answer_ms": 274.43, "answered_by_replacement": true, "settled_key_ms": 14.18, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 3.0, "page_up_ms_median": 6.43, "page_up_ms_max": 8.35, "page_up_ms_last5_median": 6.63, "page_ups": 151, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1532, "sha256": "adfa3664086d89a596fcf478f2664b698b9a8493d3182a576b396e5e4c4d6123"}, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "fix", "index": 0}
+{"launch_to_list_ms": 9.73, "ctrl_r_to_ready_row_ms": 36.8, "enter_to_first_content_ms": 12.06, "draft_ms": 24.73, "enter_to_latest_reply_ms": 58.01, "enter_to_final_tool_ms": 58.01, "frames_to_catchup": 51, "bytes_to_catchup": 71593, "enter_to_new_answer_ms": 286.01, "answered_by_replacement": true, "settled_key_ms": 13.3, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 2.95, "page_up_ms_median": 6.4, "page_up_ms_max": 8.37, "page_up_ms_last5_median": 6.23, "page_ups": 151, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1532, "sha256": "adfa3664086d89a596fcf478f2664b698b9a8493d3182a576b396e5e4c4d6123"}, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "fix", "index": 1}
+{"launch_to_list_ms": 8.5, "ctrl_r_to_ready_row_ms": 32.33, "enter_to_first_content_ms": 10.96, "draft_ms": 17.26, "enter_to_latest_reply_ms": 3015.79, "enter_to_final_tool_ms": 3019.3, "frames_to_catchup": 1412, "bytes_to_catchup": 1656960, "enter_to_new_answer_ms": 6150.21, "answered_by_replacement": true, "settled_key_ms": 24.71, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 6.44, "page_up_ms_median": 6.59, "page_up_ms_max": 11.53, "page_up_ms_last5_median": 6.59, "page_ups": 151, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1532, "sha256": "adfa3664086d89a596fcf478f2664b698b9a8493d3182a576b396e5e4c4d6123"}, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "base", "index": 1}
+{"launch_to_list_ms": 9.71, "ctrl_r_to_ready_row_ms": 39.93, "enter_to_first_content_ms": 15.23, "draft_ms": 15.43, "enter_to_latest_reply_ms": 3027.3, "enter_to_final_tool_ms": 3030.75, "frames_to_catchup": 1412, "bytes_to_catchup": 1656970, "enter_to_new_answer_ms": 6133.18, "answered_by_replacement": true, "settled_key_ms": 21.6, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 6.39, "page_up_ms_median": 6.57, "page_up_ms_max": 10.89, "page_up_ms_last5_median": 6.53, "page_ups": 151, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1532, "sha256": "adfa3664086d89a596fcf478f2664b698b9a8493d3182a576b396e5e4c4d6123"}, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "base", "index": 2}
+{"launch_to_list_ms": 8.63, "ctrl_r_to_ready_row_ms": 36.04, "enter_to_first_content_ms": 12.6, "draft_ms": 21.12, "enter_to_latest_reply_ms": 52.9, "enter_to_final_tool_ms": 52.9, "frames_to_catchup": 51, "bytes_to_catchup": 73164, "enter_to_new_answer_ms": 276.71, "answered_by_replacement": true, "settled_key_ms": 15.1, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 3.1, "page_up_ms_median": 6.43, "page_up_ms_max": 8.76, "page_up_ms_last5_median": 6.41, "page_ups": 151, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1532, "sha256": "adfa3664086d89a596fcf478f2664b698b9a8493d3182a576b396e5e4c4d6123"}, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "fix", "index": 2}
+{"launch_to_list_ms": 8.72, "ctrl_r_to_ready_row_ms": 35.95, "enter_to_first_content_ms": 10.93, "draft_ms": 18.76, "enter_to_latest_reply_ms": 51.76, "enter_to_final_tool_ms": 51.77, "frames_to_catchup": 52, "bytes_to_catchup": 70623, "enter_to_new_answer_ms": 278.29, "answered_by_replacement": true, "settled_key_ms": 15.13, "draft_line": "\u203a \u04361q", "draft_intact": true, "reached_start": true, "page_up_first_ms": 2.94, "page_up_ms_median": 6.41, "page_up_ms_max": 8.68, "page_up_ms_last5_median": 7.44, "page_ups": 151, "audit": {"ordered_exactly_once": true, "duplicates": [], "duplicate_count": 0, "missing": [], "rows": 1532, "sha256": "adfa3664086d89a596fcf478f2664b698b9a8493d3182a576b396e5e4c4d6123"}, "fixture": {"sections": 64, "extra_rows": 0, "native_load": false, "geometry": "100x30"}, "build": "fix", "index": 3}
+Traceback (most recent call last):
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 278, in <module>
+    "samples": []}
+
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 269, in main
+    p.add_argument("--samples", type=int, default=3)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 198, in open_sample
+    try:
+    ^^^^^
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/kiln.py", line 149, in wait
+    raise TimeoutError("terminal never matched:\n" + s)
+TimeoutError: terminal never matched:
+ Nori host  CONTROLLING
+ kiln · kiln seed history · workbench · ready · Approvals: Agent
+
+ Closing note 076 for the run.
+ Closing note 077 for the run.
+ Closing note 078 for the run.
+ Closing note 079 for the run.
+ Closing note 080 for the run.
+ Closing note 081 for the run.
+ Closing note 082 for the run.
+ Closing note 083 for the run.
+ Closing note 084 for the run.
+ Closing note 085 for the run.
+ Closing note 086 for the run.
+ Closing note 087 for the run.
+ Closing note 088 for the run.
+ Closing note 089 for the run.
+ Closing note 090 for the run.
+
+ KilnLatestEnd
+
+ • Explored 1 read
+   • Read final.txt
+
+ Connection restored. A previous request may have reached the host and was not retried; check the
+conversation before submitting again.
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg
+

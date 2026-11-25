@@ -1,0 +1,42 @@
+Traceback (most recent call last):
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 278, in <module>
+    main()
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 269, in main
+    row = open_sample(binary, args, Path(d))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/replay769.py", line 163, in open_sample
+    pane.wait(has_content)
+  File "/home/sprite/org/workspace/cli/.worktrees/accept769/harness/perf/kiln.py", line 149, in wait
+    raise TimeoutError("terminal never matched:\n" + s)
+TimeoutError: terminal never matched:
+ Nori host  CONTROLLING
+ kiln · kiln seed history · workbench · ready · Approvals: Agent
+
+ cursor for session b53b83dd-6271-45c3-a44e-369b5ce9d657 has expired; first available sequence is
+ 1410; list sessions to choose a newer cursor explicitly
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Replay unavailable: cursor for session b53b83dd-6271-45c3-a44e-369b5ce9d657 has expired; first
+available sequence is 1410; list sessions to choose a newer cursor explicitly. Existing conversation
+retained.
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg
+

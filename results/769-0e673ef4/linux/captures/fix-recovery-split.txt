@@ -1,0 +1,30 @@
+ Nori host  CONTROLLING
+ kiln · kiln seed history · workbench · ready · Approvals: Agent
+
+ Closing note 058
+
+ Connection lost. Reconnecting… host connection closed
+
+ for the run.
+ Closing note 059 for the run.
+ Closing note 060 for the run.
+ Closing note 061 for the run.
+ Closing note 062 for the run.
+ Closing note 063 for the run.
+ Closing note 064 for the run.
+ Closing note 065 for the run.
+ Closing note 066 for the run.
+ Closing note 067 for the run.
+ Closing note 068 for the run.
+ Closing note 069 for the run.
+ Closing note 070 for the run.
+ Closing note 071 for the run.
+ Closing note 072 for the run.
+ Closing note 073 for the run.
+ Closing note 074 for the run.
+ Closing note 075 for the run.
+ Closing note 076 for the run.
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate deleg

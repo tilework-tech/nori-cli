@@ -41,3 +41,12 @@ For each stack PR the verifier builds the PR head, runs the full matrix into
 --test managed_recovery`, `tui-pty-e2e --test host_attach --test attached_external_cancel`),
 reads Linux CI for the head and an exact-commit native macOS run on
 `verify/pr-<N>-<sha8>-native-host`, and posts a commit-specific verdict on the PR.
+
+## Attach replay performance (#769 / #770)
+
+`harness/perf/` measures `nori attach` opening a saved host session with a
+synthetic `kiln_agent.py` history in a draining tmux pane, and stitches the
+full scrollback to prove exactly-once ordering. `replay769.py` runs base/fix
+pairs (`open` and failed-session `recover` modes); `summarize.py` tabulates
+them; `run_linux*.sh` hold the Linux matrix (run with `bash`). Results and the verdict are in
+`results/769-0e673ef4/`.
