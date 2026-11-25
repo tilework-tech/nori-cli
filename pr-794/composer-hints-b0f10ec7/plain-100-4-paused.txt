@@ -1,0 +1,30 @@
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/hints-demo/plain/orchard
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Sketch the orchard plan
+
+
+• Survey in progress.
+
+• Queued for the next turn.
+
+⚠ Agent is slow to cancel. Will force-cancel in 7s…
+
+  1 queued · paused (interrupted) · enter resumes
+  ↳ Count the cedar trees
+    ↑ select
+
+
+›
+
+  Enter resume queue · / commands · ! shell · @ files · ? help                                ⎇ main

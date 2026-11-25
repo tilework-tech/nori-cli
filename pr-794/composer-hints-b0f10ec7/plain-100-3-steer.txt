@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/hints-demo/plain/orchard
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› Sketch the orchard plan
+
+
+• Survey in progress.
+
+• Shifting bits left and right (5s • esc to interrupt)
+
+
+› Count the cedar trees
+
+  Enter steer · Tab queue · Ctrl+J newline                                                    ⎇ main
