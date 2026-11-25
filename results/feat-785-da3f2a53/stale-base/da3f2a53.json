@@ -1,0 +1,236 @@
+[
+  {
+    "scenario": "S06",
+    "check": "cwd.empty_remote_falls_back_to_host_folder",
+    "passed": true,
+    "detail": "[{'t': 1795641201.8480563, 'adapter': 'claude-code', 'pid': 105682, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance-iso4hda3/S06/roots/alpha/app'}]"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.explicit_override",
+    "passed": false,
+    "detail": "{'t': 1795641201.8480563, 'adapter': 'claude-code', 'pid': 105682, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance-iso4hda3/S06/roots/alpha/app'}"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.plain_new_inherits_foreground",
+    "passed": false,
+    "detail": "{'t': 1795641201.8480563, 'adapter': 'claude-code', 'pid': 105682, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance-iso4hda3/S06/roots/alpha/app'}"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.confirmation_names_folder",
+    "passed": true,
+    "detail": "['\u2315  new /tmp/nori-host-tui-acceptance-iso4hda3/S06/roots/beta/app/new']"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.dir_completion_from_session_fs",
+    "passed": false,
+    "detail": "['\u2315  new /tmp/nori-host-tui-acceptance-iso4hda3/S06/roots/beta/app/new/new assets/']"
+  },
+  {
+    "scenario": "S07",
+    "check": "at.alpha_files_offered",
+    "passed": false,
+    "detail": " search\n\nAll  waiting on you\n\n  Session                                                                      Agent         Status\n\u203a \u25cb new session (current)                                                      claude-code   ready\n    no reply yet                                                                             2s ago\n\n\u2191\u2193/j/k move  enter open  ctrl+d close  tab waiting on you  esc close\n\n"
+  },
+  {
+    "scenario": "S07",
+    "check": "at.no_laptop_files",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S07",
+    "check": "at.laptop_file_not_found",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S07",
+    "check": "at.beta_files_offered_same_logical_path",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\nSessions 1 \u00b7 1 ready  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\u2315  new /tmp/nori-host-tui-acceptance-iso4hda3/S07/roots/beta/app@src/\n\n\u25c7 No matching options\n  Try a different search term or category.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  esc close\n\n"
+  },
+  {
+    "scenario": "S07",
+    "check": "at.no_stale_alpha_results",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S10",
+    "check": "approvals.offers_host_modes",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\nSessions 1 \u00b7 1 ready  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\u2315  approvals\n\n\u25c7 No matching options\n  Try a different search term or category.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  esc close\n\n"
+  },
+  {
+    "scenario": "S10",
+    "check": "approvals.no_legacy_presets",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S10",
+    "check": "approvals.not_sent_as_prompt",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S12",
+    "check": "default.first_new_uses_host_default",
+    "passed": true,
+    "detail": "[('claude-code-0', 'default')]"
+  },
+  {
+    "scenario": "S12",
+    "check": "approvals.controller_can_pick_approve_all",
+    "passed": false,
+    "detail": "\u2191\u2193/j/k move  enter open  tab waiting on you  esc close"
+  },
+  {
+    "scenario": "S12",
+    "check": "default.second_new_does_not_copy_foreground",
+    "passed": false,
+    "detail": "{'session/new': 1, 'mode sets': [('claude-code-0', 'default')]}"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.ask_unavailable_for_adapter_without_ask",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\nSessions 1 \u00b7 1 ready  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\u2315  new opencode/approvals\n\n\u25c7 No matching options\n  Try a different search term or category.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  esc close\n\n"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.change_reaches_only_foreground",
+    "passed": false,
+    "detail": "[('claude-code-0', 'acceptEdits')]"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.footer_shows_foreground_mode",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.watcher_sees_greyed_with_take_control",
+    "passed": true,
+    "detail": "  /approvals  watching \u00b7 Alt+T to take control"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_1_shown",
+    "passed": false,
+    "detail": "{'rows': [], 'working': []}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_1_on_working_row",
+    "passed": false,
+    "detail": "{'rows': [], 'working': []}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_2_shown",
+    "passed": false,
+    "detail": "{'rows': [], 'working': []}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_2_on_working_row",
+    "passed": false,
+    "detail": "{'rows': [], 'working': []}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_3_shown",
+    "passed": false,
+    "detail": "{'rows': [], 'working': []}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_3_on_working_row",
+    "passed": false,
+    "detail": "{'rows': [], 'working': []}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.second_heading_replaces_first",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.plain_thought_replaces_heading",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S18b",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S18b-attach: 'heard: ponder the harbor' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n                                                                                                                [ auto ]\n\u203a ! for shell commands\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.first_launch_used_host",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new', '_nori/host/prompts']"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.last_session_loaded",
+    "passed": true,
+    "detail": "[('session/load', 'claude-code-0')]"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.no_host_requests",
+    "passed": false,
+    "detail": "['_nori/host/history/metadata', '_nori/host/prompts']"
+  },
+  {
+    "scenario": "S37d",
+    "check": "approveall.host_reports_mode",
+    "passed": false,
+    "detail": "agent"
+  },
+  {
+    "scenario": "S37d",
+    "check": "approveall.permission_answered_without_prompt",
+    "passed": false,
+    "detail": "\u2191\u2193/j/k move  enter open  tab waiting on you  esc close"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'none', 'error_lines': [], 'tail': ['Sessions 1 \u00b7 1 ready  tab: waiting only \u00b7 / search', 'All  waiting on you', '  Session                                                                      Agent         Status', '\u203a \u25cb new session (current)                                                      claude-code   ready', '    no reply yet                                                                             3s ago', '\u2191\u2193/j/k move  enter open  ctrl+d close  tab waiting on you  esc close']}"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.prompt_reached_adapter_once",
+    "passed": false,
+    "detail": "0"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_shows_reply",
+    "passed": false,
+    "detail": "['Sessions 1 \u00b7 1 ready  tab: waiting only \u00b7 / search', 'All  waiting on you', '\u2315  resh errand', '\u25c7 No matching options', '  Try a different search term or category.', '\u2191\u2193/j/k move  enter open  tab waiting on you  esc close']"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_label_matches_host",
+    "passed": true,
+    "detail": "{'ui': 'none', 'host': 'agent'}"
+  }
+]

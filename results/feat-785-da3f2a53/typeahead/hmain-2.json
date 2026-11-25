@@ -1,0 +1,14 @@
+[
+  {
+    "scenario": "R03",
+    "check": "typeahead.delivered_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'relay 1 early']"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.reply_shown_once",
+    "passed": true,
+    "detail": " app \u00b7 ready \u00b7 Approvals: Agent\n\n \u203a You\n relay 1 dawn\n\n - dawn row 01\n\n dawn relay finished.\n\n \u203a You\n relay 1 early\n\n - early row 01\n\n early relay finished.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u203a Send a prompt\n\n   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task\n"
+  }
+]

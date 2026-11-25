@@ -1,0 +1,218 @@
+[
+  {
+    "scenario": "S39a",
+    "check": "host.opencode_list_has_no_ask",
+    "passed": true,
+    "detail": "{'c583d185-c9e2-4ed2-be9b-af94cf98ec1c': {'availableModes': ['agent', 'approve-all'], 'mode_option': ['agent', 'approve-all'], 'current': 'agent'}, 'a733dd1d-b1be-4384-9e47-33be2cd595a6': {'availableModes': ['ask', 'agent', 'approve-all'], 'mode_option': ['ask', 'agent', 'approve-all'], 'current': 'agent'}}"
+  },
+  {
+    "scenario": "S39a",
+    "check": "host.claude_list_has_ask",
+    "passed": true,
+    "detail": "{'c583d185-c9e2-4ed2-be9b-af94cf98ec1c': {'availableModes': ['agent', 'approve-all'], 'mode_option': ['agent', 'approve-all'], 'current': 'agent'}, 'a733dd1d-b1be-4384-9e47-33be2cd595a6': {'availableModes': ['ask', 'agent', 'approve-all'], 'mode_option': ['ask', 'agent', 'approve-all'], 'current': 'agent'}}"
+  },
+  {
+    "scenario": "S39a",
+    "check": "menu.matches_host_list",
+    "passed": false,
+    "detail": "{'menu': ['approve-all'], 'host': ['agent', 'approve-all']}"
+  },
+  {
+    "scenario": "S39a",
+    "check": "menu.ask_shown_disabled",
+    "passed": true,
+    "detail": "['1. Ask (not available)']"
+  },
+  {
+    "scenario": "S39a",
+    "check": "ask.not_applied",
+    "passed": true,
+    "detail": "{'picked': True, 'host': 'agent'}"
+  },
+  {
+    "scenario": "S39a",
+    "check": "ask.reason_shown_or_not_offered",
+    "passed": true,
+    "detail": "['\u25a0 /approvals: OpenCode has no mode that asks before every edit and command.']"
+  },
+  {
+    "scenario": "S39a",
+    "check": "ask.no_adapter_mode_change",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S39a",
+    "check": "ask.client_sent_no_mode_request",
+    "passed": true,
+    "detail": "{'before': [], 'after': [], 'host_log_requests': 8}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "a.session_one_in_alpha",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance-iso3h784/S41a/roots/alpha/app"
+  },
+  {
+    "scenario": "S41a",
+    "check": "a.controller_at_offers_alpha",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n                                                                                                                [ auto ]\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "b.tilde_expands_with_host_home",
+    "passed": true,
+    "detail": "{'cwd': '/tmp/nori-host-tui-acceptance-iso3h784/S41a/homes/host/spool/app', 'host_home': '/tmp/nori-host-tui-acceptance-iso3h784/S41a/homes/host/spool/app', 'client_home': '/tmp/nori-host-tui-acceptance-iso3h784/S41a/homes/laptop/spool/app'}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "b.controller_at_follows_new_session",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a @spool\n\n  src/spool_thread.rs\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "host.session_cwds",
+    "passed": true,
+    "detail": "{'4889cd95-1d0c-4afb-9719-4b4e1ae02bc4': '/tmp/nori-host-tui-acceptance-iso3h784/S41a/roots/alpha/app', '1cb64d07-5db8-4e61-a08b-3d1056b3bcec': '/tmp/nori-host-tui-acceptance-iso3h784/S41a/homes/host/spool/app'}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_at_offers_its_session_folder",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.find_paths_answered_for_watcher_client",
+    "passed": true,
+    "detail": "{'before': {'2': 2}, 'after': {'2': 2, '4': 2}}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_tab_completes_from_host",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_still_watching",
+    "passed": false,
+    "detail": "  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.plain_new_inherits_foreground_folder",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance-iso3h784/S41a/homes/host/spool/app"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.tab_completes_from_host_home",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.tab_completes_spool",
+    "passed": true,
+    "detail": "['/ new ~/spool/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "s.at_follows_switched_session",
+    "passed": false,
+    "detail": "[{'lan': [], 'spool': ['spool_thread'], 'identity': 'controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach'}, {'lan': [], 'spool': ['spool_thread'], 'identity': 'controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach'}, {'lan': [], 'spool': ['spool_thread'], 'identity': 'controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach'}]"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.at_offers_host_folder",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches\n\n\n\u203a @lan\n\n  docs/laptop_notes.md\n"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_relative_from_host_folder",
+    "passed": true,
+    "detail": "['/ new ./assets/alpha-only/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_tilde_from_host_home",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.relative_new_uses_host_folder",
+    "passed": true,
+    "detail": "{'cwd': '/tmp/nori-host-tui-acceptance-iso3h784/S41c/roots/alpha/app/docs', 'host': '/tmp/nori-host-tui-acceptance-iso3h784/S41c/roots/alpha/app/docs', 'client': '/tmp/nori-host-tui-acceptance-iso3h784/S41c/roots/laptop/app/docs'}"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.relative_no_session_joined_to_terminal",
+    "passed": false,
+    "detail": "/tmp/nori-host-tui-acceptance-iso3h784/S41f/roots/alpha/app/docs"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.tilde_expanded_with_client_home",
+    "passed": false,
+    "detail": "{'cwd': '/tmp/nori-host-tui-acceptance-iso3h784/S41f/homes/host/spool/app', 'client': '/tmp/nori-host-tui-acceptance-iso3h784/S41f/homes/laptop/spool/app', 'host': '/tmp/nori-host-tui-acceptance-iso3h784/S41f/homes/host/spool/app'}"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.tab_completes_locally",
+    "passed": false,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.at_shows_nothing",
+    "passed": false,
+    "detail": "['spool_thread']"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.no_find_paths_sent",
+    "passed": false,
+    "detail": "['_nori/session/find_paths']"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.prompt_delivered",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S41f",
+    "check": "o.still_connected",
+    "passed": false,
+    "detail": "  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "S42h",
+    "check": "f.attach_screen_greyed_with_reason",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n                                                                                                                [ auto ]\n/ scr\n\n  /screen  switch between the inline and the full-screen view\n"
+  },
+  {
+    "scenario": "S42h",
+    "check": "f.attach_screen_does_nothing",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "S43e",
+    "check": "e.attach_ctrl_l_noop_keeps_draft",
+    "passed": false,
+    "detail": "attach draft stays"
+  },
+  {
+    "scenario": "S43e",
+    "check": "e.attach_hints_do_not_offer_noop_key",
+    "passed": false,
+    "detail": "['ctrl + l to toggle full screen          ctrl + t to view transcript']"
+  }
+]

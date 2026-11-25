@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+[2m• [0m[39m[49mClaude Code options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mrelay 1 dawn
+
+
+[2m• [0m[39m[49m- dawn row 01
+
+  dawn relay finished.
+
+
+[1;2m› [0m[39m[49mhold on
+
+
+[2m• [0m[39m[49mQueued for the next turn.
+
+[2m• [0m[39m[49mtick 1 tick 2 tick 3 tick 4 tick 5 tick 6 tick 7
+
+[38;5;1m■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at
+https://github.com/tilework-tech/nori-cli/issues
+[39m
+  [2m1 queued · [0m[38;5;6m[49mpaused[2m[39m (interrupted) · enter resumes
+  ↳ [3mrelay 1 lamp
+[0;2m[39m[49m    ↑ select[0m[39m[49m
+
+                                                                                                                [2m[ auto ]
+[0;1m[39m[49m›[0m[39m[49m [2m@ for file mentions[0m[39m[49m
+
+  [38;5;2mcontrolling[2m[39m · app · claude-code · ready · Approvals: Agent · ctrl+d detach[0m[39m[49m

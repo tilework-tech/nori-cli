@@ -1,0 +1,14 @@
+{"t": 1795638574.528309, "adapter": "claude-code", "pid": 84552, "kind": "spawn", "cwd": "/private/tmp/nori-host-tui-acceptance/J01/roots/alpha/app", "argv": []}
+{"t": 1795638574.528484, "adapter": "claude-code", "pid": 84552, "kind": "request", "method": "initialize"}
+{"t": 1795638574.531839, "adapter": "claude-code", "pid": 84552, "kind": "request", "method": "session/list", "cwd": "/private/tmp/nori-host-tui-acceptance/J01/roots/alpha/app"}
+{"t": 1795638574.532894, "adapter": "claude-code", "pid": 84552, "kind": "request", "method": "session/new", "cwd": "/private/tmp/nori-host-tui-acceptance/J01/roots/alpha/app"}
+{"t": 1795638574.549597, "adapter": "claude-code", "pid": 84552, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795638574.550422, "adapter": "claude-code", "pid": 84552, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 2 dawn"}
+{"t": 1795638574.550675, "adapter": "claude-code", "pid": 84552, "kind": "relay", "sessionId": "claude-code-0", "tag": "dawn", "n": 1}
+{"t": 1795638574.817877, "adapter": "claude-code", "pid": 84552, "kind": "relay", "sessionId": "claude-code-0", "tag": "dawn", "n": 2}
+{"t": 1795638575.084824, "adapter": "claude-code", "pid": 84552, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 2}
+{"t": 1795638577.192675, "adapter": "claude-code", "pid": 84552, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 2 noon"}
+{"t": 1795638577.193061, "adapter": "claude-code", "pid": 84552, "kind": "relay", "sessionId": "claude-code-0", "tag": "noon", "n": 1}
+{"t": 1795638577.4620001, "adapter": "claude-code", "pid": 84552, "kind": "relay", "sessionId": "claude-code-0", "tag": "noon", "n": 2}
+{"t": 1795638577.7220852, "adapter": "claude-code", "pid": 84552, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 2}
+{"t": 1795638579.1078458, "adapter": "claude-code", "pid": 84552, "kind": "stdin_eof"}

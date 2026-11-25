@@ -1,0 +1,36 @@
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 2 dawn
+
+
+• - dawn row 01
+  - dawn row 02
+
+  dawn relay finished.
+
+• claude-code heard: - Anything related to 'tone'
+
+• Context compacted
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-rda3/R10/roots/alpha/app · Approvals: Agent
+  Agent        Claude · auto
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• claude-code heard: - Anything related to 'tone'
+
+⚠ Heads up: Long conversations and multiple compactions can cause the model to be less accurate. Start a new
+  conversation when possible to keep conversations small and targeted.
+
+                                                                                                                [ auto ]
+› $ for skill listing
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

@@ -1,0 +1,98 @@
+[
+  {
+    "scenario": "S09",
+    "check": "reconnect.controller_draft_kept",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S09",
+    "check": "reconnect.controller_role_restored",
+    "passed": true,
+    "detail": "controlling"
+  },
+  {
+    "scenario": "S16",
+    "check": "watcher_reconnect.shows_reconnecting",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S16",
+    "check": "watcher_reconnect.draft_kept_while_down",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S16",
+    "check": "watcher_reconnect.draft_kept_after",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S16",
+    "check": "watcher_reconnect.still_watching",
+    "passed": true,
+    "detail": "watching"
+  },
+  {
+    "scenario": "S16",
+    "check": "watcher_reconnect.controller_unchanged",
+    "passed": true,
+    "detail": "controlling"
+  },
+  {
+    "scenario": "S16",
+    "check": "watcher_reconnect.sees_new_turns",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S16",
+    "check": "watcher_reconnect.enter_still_not_delivered",
+    "passed": true,
+    "detail": "['first light', 'second light']"
+  },
+  {
+    "scenario": "S16",
+    "check": "watcher_reconnect.draft_kept_after_enter",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.open_menu_shows_reason",
+    "passed": true,
+    "detail": "/new              reconnecting"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_refused_with_reason",
+    "passed": true,
+    "detail": "['\u25a0 Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting;', '\u25a0 /new: reconnecting']"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.draft_kept",
+    "passed": false,
+    "detail": "\u203a ! for shell commands"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.nothing_sent_while_down",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.menu_enabled_after",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_runs_once_after",
+    "passed": true,
+    "detail": "2"
+  }
+]

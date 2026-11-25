@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sessions 2 · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+  Session                                                                      Agent         Status
+› ○ relay 1 first                                                              claude-code   ready
+    app · - first row 01 first relay finished.                                               4s ago
+  ○ relay 1 second                                                             claude-code   ready
+    app · - second row 01 second relay finished.                                             2s ago
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

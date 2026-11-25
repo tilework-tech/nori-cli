@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 1 first
+
+
+• - first row 01
+
+  first relay finished.
+
+  2 ready
+
+                                                                                                                [ auto ]
+› ! for shell commands
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

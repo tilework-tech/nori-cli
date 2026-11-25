@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 2 one
+
+
+• - one row 01
+  - one row 02
+
+  one relay finished.
+
+
+› relay 2 hid
+
+
+• - hid row 01
+  - hid row 02
+
+  hid relay finished.
+
+  2 ready
+
+                                                                                                                [ auto ]
+› draft kept in one
+

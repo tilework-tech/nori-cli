@@ -1,0 +1,134 @@
+{
+ "platform": "macOS-15.7.4-arm64-arm-64bit-Mach-O",
+ "builds": {
+  "pr784-c8f3ee3b": "488d4cb2c57a640992ba1cb99c990ce58559344ac1dcd3ede71aae624b68346d"
+ },
+ "samples": [
+  {
+   "build": "pr784-c8f3ee3b",
+   "sections": 64,
+   "key_ms": 61.02,
+   "first_mark_ms": 67.76,
+   "latest_ms": 308.41,
+   "final_tool_ms": 308.43,
+   "raw_bytes": 185095,
+   "alt_screen_at_open": true,
+   "audit": {
+    "marks_in_order_once": false,
+    "mark_count": 66,
+    "dup_marks": 2,
+    "opening": 1,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a \u0436\n\n  controlling \u00b7 workbench \u00b7 kiln \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n",
+   "index": 0
+  },
+  {
+   "build": "pr784-c8f3ee3b",
+   "sections": 64,
+   "first_mark_ms": 60.9,
+   "key_ms": 60.94,
+   "latest_ms": 309.61,
+   "final_tool_ms": 309.63,
+   "raw_bytes": 179550,
+   "alt_screen_at_open": true,
+   "audit": {
+    "marks_in_order_once": true,
+    "mark_count": 64,
+    "dup_marks": 0,
+    "opening": 1,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a \u0436\n\n  controlling \u00b7 workbench \u00b7 kiln \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n",
+   "index": 1
+  },
+  {
+   "build": "pr784-c8f3ee3b",
+   "sections": 64,
+   "first_mark_ms": 64.12,
+   "key_ms": 64.16,
+   "final_tool_ms": 286.48,
+   "latest_ms": 301.13,
+   "raw_bytes": 169868,
+   "alt_screen_at_open": true,
+   "audit": {
+    "marks_in_order_once": true,
+    "mark_count": 64,
+    "dup_marks": 0,
+    "opening": 1,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a \u0436\n\n  controlling \u00b7 workbench \u00b7 kiln \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n",
+   "index": 2
+  },
+  {
+   "build": "pr784-c8f3ee3b",
+   "sections": 170,
+   "first_mark_ms": 61.75,
+   "key_ms": 61.8,
+   "latest_ms": 1389.26,
+   "final_tool_ms": 1389.29,
+   "raw_bytes": 505364,
+   "alt_screen_at_open": true,
+   "audit": {
+    "marks_in_order_once": false,
+    "mark_count": 173,
+    "dup_marks": 3,
+    "opening": 1,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a \u0436\n\n  controlling \u00b7 workbench \u00b7 kiln \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n",
+   "index": 0
+  },
+  {
+   "build": "pr784-c8f3ee3b",
+   "sections": 170,
+   "first_mark_ms": 60.81,
+   "key_ms": 60.85,
+   "latest_ms": 1369.12,
+   "final_tool_ms": 1369.14,
+   "raw_bytes": 480392,
+   "alt_screen_at_open": true,
+   "audit": {
+    "marks_in_order_once": false,
+    "mark_count": 174,
+    "dup_marks": 4,
+    "opening": 1,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a \u0436\n\n  controlling \u00b7 workbench \u00b7 kiln \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n",
+   "index": 1
+  },
+  {
+   "build": "pr784-c8f3ee3b",
+   "sections": 170,
+   "first_mark_ms": 62.65,
+   "key_ms": 62.69,
+   "latest_ms": 1313.97,
+   "final_tool_ms": 1313.99,
+   "raw_bytes": 459246,
+   "alt_screen_at_open": true,
+   "audit": {
+    "marks_in_order_once": false,
+    "mark_count": 177,
+    "dup_marks": 7,
+    "opening": 1,
+    "latest": 1,
+    "closing_090": 1,
+    "disconnect_rows": 0
+   },
+   "final_screen": "  Closing note 071 for the run.\n  Closing note 072 for the run.\n  Closing note 073 for the run.\n  Closing note 074 for the run.\n  Closing note 075 for the run.\n  Closing note 076 for the run.\n  Closing note 077 for the run.\n  Closing note 078 for the run.\n  Closing note 079 for the run.\n  Closing note 080 for the run.\n  Closing note 081 for the run.\n  Closing note 082 for the run.\n  Closing note 083 for the run.\n  Closing note 084 for the run.\n  Closing note 085 for the run.\n  Closing note 086 for the run.\n  Closing note 087 for the run.\n  Closing note 088 for the run.\n  Closing note 089 for the run.\n  Closing note 090 for the run.\n\n  KilnLatestEnd\n\n\u2022 Explored 1 read\n  \u2022 Read final.txt\n\n\n\u203a \u0436\n\n  controlling \u00b7 workbench \u00b7 kiln \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n",
+   "index": 2
+  }
+ ]
+}

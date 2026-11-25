@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 2 two
+
+
+• - two row 01
+  - two row 02
+
+  two relay finished.
+
+• Another terminal took control. Watching; Alt+T takes it back.
+
+Sessions 2 · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+  Session                                                                      Agent         Status
+  ○ relay 2 one                                                                claude-code   ready
+    app · - one row 01 - one row 02 one relay finished.                                      8s ago
+› ○ relay 2 two (current)                                                      claude-code   ready
+    app · - two row 01 - two row 02 two relay finished.                                      4s ago
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

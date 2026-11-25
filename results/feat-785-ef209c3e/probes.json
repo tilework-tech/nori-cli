@@ -1,0 +1,500 @@
+[
+  {
+    "probe": "queue",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "queue",
+    "check": "paused_row_lists_three_in_order",
+    "passed": true,
+    "detail": "{'prompts': ['queued alpha', 'queued beta', 'queued gamma'], 'entries': [{'id': 'probe-q0-1795638949998306563', 'text': 'queued alpha', 'editable': False}, {'id': 'probe-q1-1795638950000009285', 'text': 'queued beta', 'editable': False}, {'id': 'probe-q2-1795638950001457018', 'text': 'queued gamma', 'editable': False}], 'paused': 'interrupted'}"
+  },
+  {
+    "probe": "queue",
+    "check": "late_watcher_sees_paused_queue",
+    "passed": true,
+    "detail": "{'prompts': ['queued alpha', 'queued beta', 'queued gamma'], 'entries': [{'id': 'probe-q0-1795638949998306563', 'text': 'queued alpha', 'editable': False}, {'id': 'probe-q1-1795638950000009285', 'text': 'queued beta', 'editable': False}, {'id': 'probe-q2-1795638950001457018', 'text': 'queued gamma', 'editable': False}], 'paused': 'interrupted'}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_take_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_resume_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_discard_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 5, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "own_wire_prompt_marked_editable",
+    "passed": false,
+    "detail": "{'id': 'probe-q0-1795638949998306563', 'text': 'queued alpha', 'editable': False}"
+  },
+  {
+    "probe": "queue",
+    "check": "queuing_connection_takes_its_text_once",
+    "passed": false,
+    "detail": "[{'jsonrpc': '2.0', 'id': 9, 'result': {'text': None}}, {'jsonrpc': '2.0', 'id': 10, 'result': {'text': None}}]"
+  },
+  {
+    "probe": "queue",
+    "check": "resume_ok",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 11, 'result': {}}"
+  },
+  {
+    "probe": "queue",
+    "check": "resume_delivers_remaining_once_in_order",
+    "passed": false,
+    "detail": "['queued alpha', 'queued beta', 'queued gamma']"
+  },
+  {
+    "probe": "queue",
+    "check": "taken_prompt_never_sent",
+    "passed": false,
+    "detail": "['relay 1 seed', 'hold the line', 'queued alpha', 'queued beta', 'queued gamma']"
+  },
+  {
+    "probe": "queue",
+    "check": "take_after_started_is_null",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 12, 'result': {'text': None}}"
+  },
+  {
+    "probe": "queue",
+    "check": "discard_sends_nothing",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "probe": "queue",
+    "check": "discard_clears_queue_and_pause",
+    "passed": true,
+    "detail": "{'prompts': []}"
+  },
+  {
+    "probe": "queue",
+    "check": "unknown_session_refused",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 21, 'error': {'code': -32002, 'message': 'unknown session id'}}"
+  },
+  {
+    "probe": "queue",
+    "check": "watcher_cannot_take_others_prompt",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "history",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "history",
+    "check": "controller_add_ok:lighthouse b",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {}}"
+  },
+  {
+    "probe": "history",
+    "check": "controller_add_ok:harbor tide ",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'result': {}}"
+  },
+  {
+    "probe": "history",
+    "check": "controller_add_ok:lighthouse l",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'result': {}}"
+  },
+  {
+    "probe": "history",
+    "check": "watcher_add_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "history",
+    "check": "metadata_counts_three_more",
+    "passed": true,
+    "detail": "[{'logId': 0, 'entryCount': 0}, {'logId': 14771160, 'entryCount': 3}]"
+  },
+  {
+    "probe": "history",
+    "check": "watcher_reads_each_entry_in_order",
+    "passed": true,
+    "detail": "['{\"entry\": {\"sessionId\": \"1602ee4a-4893-49ff-972d-6b9fad0b949b\", \"ts\": 1795638957, \"text\": \"lighthouse beam audit\"}}', '{\"entry\": {\"sessionId\": \"1602ee4a-4893-49ff-972d-6b9fad0b949b\", \"ts\": 1795638957, \"text\": \"harbor tide table\"}}', '{\"entry\": {\"sessionId\": \"1602ee4a-4893-49ff-972d-6b9fad0b949b\", \"ts\": 1795638957, \"text\": \"lighthouse lens polish\"}}']"
+  },
+  {
+    "probe": "history",
+    "check": "search_returns_entries",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 8, \"result\": {\"entries\": [{\"sessionId\": \"1602ee4a-4893-49ff-972d-6b9fad0b949b\", \"ts\": 1795638957, \"text\": \"lighthouse beam audit\"}, {\"sessionId\": \"1602ee4a-4893-49ff-972d-6b9fad0b949b\", \"ts\": 1795638957, \"text\": \"lighthouse lens polish\"}, {\"sessionId\": \"1602ee4a-4893-49ff-97"
+  },
+  {
+    "probe": "history",
+    "check": "stored_in_host_nori_home",
+    "passed": true,
+    "detail": "/tmp/nori-feature-probes/history/homes/host/history.jsonl"
+  },
+  {
+    "probe": "history",
+    "check": "client_home_untouched",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "history",
+    "check": "out_of_range_offset_is_not_a_crash",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 5, 'result': {'entry': None}}"
+  },
+  {
+    "probe": "history",
+    "check": "unknown_session_add_refused",
+    "passed": false,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'result': {}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "prompts",
+    "check": "watcher_lists_host_prompts_with_body",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 2, \"result\": {\"prompts\": [{\"name\": \"harbor-review\", \"description\": \"Review the harbor log\", \"argumentHint\": \"<area>\", \"kind\": {\"type\": \"markdown\"}, \"content\": \"Review the $1 section of the harbor log.\\n\"}, {\"name\": \"where\", \"description\": null, \"argumentHint\": null, \"kind\": {\"type\": \"script\", \"interpreter\": \"bash\"}, \"content\": \"\"}]}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "client_home_prompt_not_listed",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "prompts",
+    "check": "script_runs_in_session_folder_on_host",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 2, \"result\": {\"stdout\": \"cwd=/tmp/nori-feature-probes/prompts/roots/beta/app\\nargc=3\\narg=a b\\narg=$(touch /tmp/nori-feature-probes/prompts/INJECTED)\\narg=; touch /tmp/nori-feature-probes/prompts/INJECTED\\n\"}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "args_passed_verbatim_three",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 2, \"result\": {\"stdout\": \"cwd=/tmp/nori-feature-probes/prompts/roots/beta/app\\nargc=3\\narg=a b\\narg=$(touch /tmp/nori-feature-probes/prompts/INJECTED)\\narg=; touch /tmp/nori-feature-probes/prompts/INJECTED\\n\"}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "no_shell_injection_from_args",
+    "passed": true,
+    "detail": "/tmp/nori-feature-probes/prompts/INJECTED"
+  },
+  {
+    "probe": "prompts",
+    "check": "watcher_run_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "refuses_name:outside",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32602, 'message': 'no script prompt named ../outside'}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "refuses_name:outside.sh",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32602, 'message': 'no script prompt named ../outside.sh'}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "refuses_name:outside.sh",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 5, 'error': {'code': -32602, 'message': 'no script prompt named /tmp/nori-feature-probes/prompts/outside.sh'}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "refuses_name:missing",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'error': {'code': -32602, 'message': 'no script prompt named missing'}}"
+  },
+  {
+    "probe": "prompts",
+    "check": "markdown_prompt_not_executed_as_script",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 7, 'error': {'code': -32602, 'message': 'no script prompt named harbor-review'}}"
+  },
+  {
+    "probe": "goal",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "goal",
+    "check": "starts_empty",
+    "passed": true,
+    "detail": "[None, None]"
+  },
+  {
+    "probe": "goal",
+    "check": "controller_set_ok",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'result': {'goal': {'objective': 'chart the north harbor', 'status': 'active', 'tokens_used': 0, 'time_used_seconds': 0, 'created_at': 1795638962, 'updated_at': 1795638962}}}"
+  },
+  {
+    "probe": "goal",
+    "check": "watcher_sees_goal_changed_live",
+    "passed": true,
+    "detail": "['{\"jsonrpc\": \"2.0\", \"method\": \"_nori/session/event\", \"params\": {\"conversation_id\": \"fea9dce2-09fb-471c-9c35-6fc091ad2afc\", \"agent\": \"claude-code\", \"seq\": 15, \"ev', '{\"jsonrpc\": \"2.0\", \"method\": \"_nori/session/event\", \"params\": {\"conversation_id\": \"fea9dce2-09fb-471c-9c35-6fc091ad2afc\", \"agent\": \"claude-code\", \"seq\": 16, \"ev', '{\"jsonrpc\": \"2.0\", \"method\": \"_nori/session/event\", \"params\": {\"conversation_id\": \"fea9dce2-09fb-471c-9c35-6fc091ad2afc\", \"agent\": \"claude-code\", \"seq\": 17, \"ev', '{\"json"
+  },
+  {
+    "probe": "goal",
+    "check": "watcher_reads_goal",
+    "passed": true,
+    "detail": "{'objective': 'chart the north harbor', 'status': 'active', 'tokens_used': 0, 'time_used_seconds': 3, 'created_at': 1795638962, 'updated_at': 1795638962}"
+  },
+  {
+    "probe": "goal",
+    "check": "other_session_unchanged",
+    "passed": true,
+    "detail": "None"
+  },
+  {
+    "probe": "goal",
+    "check": "watcher_set_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 5, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "goal",
+    "check": "pause_ok",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 9, 'result': {'goal': {'objective': 'chart the north harbor', 'status': 'paused', 'tokens_used': 0, 'time_used_seconds': 3, 'created_at': 1795638962, 'updated_at': 1795638965}}}"
+  },
+  {
+    "probe": "goal",
+    "check": "resume_ok",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 10, 'result': {'goal': {'objective': 'chart the north harbor', 'status': 'active', 'tokens_used': 0, 'time_used_seconds': 3, 'created_at': 1795638962, 'updated_at': 1795638965}}}"
+  },
+  {
+    "probe": "goal",
+    "check": "late_joiner_list_row_carries_goal",
+    "passed": true,
+    "detail": "{'objective': 'chart the north harbor', 'status': 'active', 'tokens_used': 0, 'time_used_seconds': 3, 'created_at': 1795638962, 'updated_at': 1795638965}"
+  },
+  {
+    "probe": "goal",
+    "check": "clear_ok_then_empty",
+    "passed": true,
+    "detail": "[{'jsonrpc': '2.0', 'id': 11, 'result': {'goal': None}}, None]"
+  },
+  {
+    "probe": "goal",
+    "check": "unknown_session_-32002",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 14, 'error': {'code': -32002, 'message': 'unknown session id'}}"
+  },
+  {
+    "probe": "context",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "context",
+    "check": "watcher_may_read",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 2, \"result\": {\"timeline\": {\"turns\": [{\"number\": 1, \"requestId\": \"96712580-d59f-4db0-97d4-a655184a5d7d\", \"start\": {\"recordedAt\": \"2026-11-25T20:36:05.704Z\", \"observation\": null, \"epoch\": 0}, \"end\": {\"recordedAt\": \"2026-11-25T20:36:05.954Z\", \"observation\": null, \"epoch\": 0}}],"
+  },
+  {
+    "probe": "context",
+    "check": "has_timeline_instructions_usage",
+    "passed": true,
+    "detail": "['timeline', 'instructions', 'usage']"
+  },
+  {
+    "probe": "context",
+    "check": "reads_claude_md_in_session_folder_on_host",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 2, \"result\": {\"timeline\": {\"turns\": [{\"number\": 1, \"requestId\": \"96712580-d59f-4db0-97d4-a655184a5d7d\", \"start\": {\"recordedAt\": \"2026-11-25T20:36:05.704Z\", \"observation\": null, \"epoch\": 0}, \"end\": {\"recordedAt\": \"2026-11-25T20:36:05.954Z\", \"observation\": null, \"epoch\": 0}}], \"current\": null, \"segments\": [], \"incompleteHistory\": false, \"epoch\": 0}, \"instructions\": [{\"path\":"
+  },
+  {
+    "probe": "context",
+    "check": "other_session_does_not_list_beta_file",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 3, \"result\": {\"timeline\": {\"turns\": [{\"number\": 1, \"requestId\": \"7b7dc0fe-feb1-4d33-94d0-e2ede6eff2d9\", \"start\": {\"recordedAt\": \"2026-11-25T20:36:06.516Z\", \"observation\": null, \"epoch\": 0}, \"end\": {\"recordedAt\": \"2026-11-25T20:36:06.767Z\", \"observation\": null, \"epoch\": 0}}],"
+  },
+  {
+    "probe": "context",
+    "check": "skip_instructions_omits_them",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 4, \"result\": {\"timeline\": {\"turns\": [{\"number\": 1, \"requestId\": \"96712580-d59f-4db0-97d4-a655184a5d7d\", \"start\": {\"recordedAt\": \"2026-11-25T20:36:05.704Z\", \"observation\": null, \"epoch\": 0}, \"end\": {\"recordedAt\": \"2026-11-25T20:36:05.954Z\", \"observation\": null, \"epoch\": 0}}],"
+  },
+  {
+    "probe": "context",
+    "check": "unknown_session_-32002",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'error': {'code': -32002, 'message': 'unknown session id'}}"
+  },
+  {
+    "probe": "compact",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "compact",
+    "check": "watcher_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "compact",
+    "check": "controller_admitted",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {}}"
+  },
+  {
+    "probe": "compact",
+    "check": "watcher_sees_finish_once",
+    "passed": true,
+    "detail": "['{\"jsonrpc\": \"2.0\", \"method\": \"_nori/session/event\", \"params\": {\"conversation_id\": \"cd8c41c9-a6e9-4431-a880-dd4200a70139\", \"agent\": \"claude-code\", \"seq\": 22, \"event\": {\"source\": \"nori\", \"event\": {\"event_type\": \"context_compacted\", \"event\": {\"summary\": \"claude-code heard: - Anything related to \\'tone\\'\"}}}}}']"
+  },
+  {
+    "probe": "compact",
+    "check": "agent_asked_to_summarize",
+    "passed": true,
+    "detail": "[\"You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\\n\\nInclude:\\n- A copy of the exact initial prompt the user made\\n- A copy of the entire plan and the discussion I had with the agent about the plan\\n- A copy of any critical research that was done that informs the plan\\n- The current progress\\n- Important context, constraints, or user preferences discovered during this conversation\\n- What remains to be done (clear next steps"
+  },
+  {
+    "probe": "compact",
+    "check": "same_session_listed",
+    "passed": true,
+    "detail": "cd8c41c9-a6e9-4431-a880-dd4200a70139"
+  },
+  {
+    "probe": "compact",
+    "check": "late_joiner_replay_has_finish",
+    "passed": true,
+    "detail": "25"
+  },
+  {
+    "probe": "compact",
+    "check": "next_prompt_delivered_once",
+    "passed": true,
+    "detail": "[\"Another language model started to solve this problem and produced a summary of its thinking process. You also have access to the state of the tools that were used by that language model. Use this to build on the work that has already been done and avoid duplicating work. Here is the summary produced by the other language model, use the information in this summary to assist with your own analysis:\\nclaude-code heard: - Anything related to 'tone'\\n\\nrelay 1 after\"]"
+  },
+  {
+    "probe": "compact",
+    "check": "unknown_session_-32002",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'error': {'code': -32002, 'message': 'unknown session id'}}"
+  },
+  {
+    "probe": "shell",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "shell",
+    "check": "watcher_refused_-32016",
+    "passed": true,
+    "detail": "[{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}, []]"
+  },
+  {
+    "probe": "shell",
+    "check": "controller_wire_result",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {}}"
+  },
+  {
+    "probe": "shell",
+    "check": "controller_wire_ran",
+    "passed": true,
+    "detail": "['roots/beta/app/probe-canary-ctl']"
+  },
+  {
+    "probe": "shell",
+    "check": "ran_in_session_folder",
+    "passed": true,
+    "detail": "['roots/beta/app/probe-canary-ctl']"
+  },
+  {
+    "probe": "shell",
+    "check": "watcher_sees_user_shell_with_output",
+    "passed": true,
+    "detail": "[['started', 'output', 'finished'], 'cwd=/tmp/nori-feature-probes/shell/roots/beta/app\\n']"
+  },
+  {
+    "probe": "shell",
+    "check": "empty_command_-32602",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32602, 'message': 'the command is empty'}}"
+  },
+  {
+    "probe": "shell",
+    "check": "unknown_session_-32002",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'error': {'code': -32002, 'message': 'unknown session id'}}"
+  },
+  {
+    "probe": "shell",
+    "check": "nothing_sent_to_agent",
+    "passed": true,
+    "detail": "['relay 1 seed']"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "composer_prompts_editable",
+    "passed": true,
+    "detail": "[{'id': 'probe-q0-1795638987401383815', 'text': 'queued alpha', 'editable': True}, {'id': 'probe-q1-1795638987403185798', 'text': 'queued beta', 'editable': True}, {'id': 'probe-q2-1795638987404670760', 'text': 'queued gamma', 'editable': True}]"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "own_take_once_then_null",
+    "passed": true,
+    "detail": "[{'jsonrpc': '2.0', 'id': 8, 'result': {'text': 'queued alpha'}}, {'jsonrpc': '2.0', 'id': 9, 'result': {'text': None}}]"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "after_reconnect_take_once",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {'text': 'queued beta'}}"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "second_terminal_takes_control",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {'role': 'controller', 'controller_connected': True}}"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "other_composer_terminal_cannot_take",
+    "passed": false,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'result': {'text': 'queued gamma'}}"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "non_composer_client_take_result",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'result': {'text': 'queued delta'}}"
+  }
+]

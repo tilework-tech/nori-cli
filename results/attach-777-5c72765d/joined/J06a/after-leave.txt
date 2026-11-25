@@ -1,0 +1,36 @@
+
+• - dawn row 01
+  - dawn row 02
+
+  dawn relay finished.
+
+
+› relay 60 tk
+
+
+• - tk row 01
+  - tk row 02
+  - tk row 03
+
+• Left the host; its sessions keep running. join again with `nori attach`
+
+╭───────────────────────────────────────────────╮
+│ Goodbye! Thanks for using Nori.               │
+│                                               │
+│ Session: e5a94bcf-6054-4c6c-b3e6-4a1a9ad38bab │
+│                                               │
+│ Messages      User: 2  Assistant: 1  Total: 3 │
+│ Tool Calls    (none)                          │
+│                                               │
+│ Skills Used                                   │
+│   (none)                                      │
+│                                               │
+│ Subagents Used                                │
+│   (none)                                      │
+╰───────────────────────────────────────────────╯
+shell$
+
+
+
+
+

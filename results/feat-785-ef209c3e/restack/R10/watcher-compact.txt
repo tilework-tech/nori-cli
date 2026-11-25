@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 2 dawn
+
+
+• - dawn row 01
+  - dawn row 02
+
+  dawn relay finished.
+
+■ /compact: watching · Alt+T to take control
+
+                                                                                                                [ auto ]
+› $ for skill listing
+
+  watching · read-only · app · claude-code · ready · Approvals: Agent · alt+t take control · ctrl+d detach

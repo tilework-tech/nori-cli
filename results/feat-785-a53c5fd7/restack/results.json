@@ -1,0 +1,320 @@
+[
+  {
+    "scenario": "R01",
+    "check": "restored.unterminated_reply_shown",
+    "passed": true,
+    "detail": "e)\n\n\n\u203a relay 2 dawn\n\n\n\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.noon_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.dusk_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.alternate_screen",
+    "passed": true,
+    "detail": "True"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.picker_shown",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 0  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n\u25c7 No options available\n  The caller has not supplied any rows.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  e"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.session_on_host",
+    "passed": true,
+    "detail": "ID                                    AGENT             STATUS               AGE  CWD                                                     TITLE\nbb1aac80-6ab3-485b-b30d-c3bfd4001490  claude-code       ready                 0s  /tmp/nori-host-tui-acceptance-r785/R02/roots/alpha/app  -\n"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.first_prompt_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "detach.back_at_shell",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.lists_two",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 2 \u00b7 2 ready  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n  Session                                                                      Agent         Status\n\u203a \u25cb relay 1 first                                                              claude-code   ready\n    "
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.enter_opens_a_session",
+    "passed": true,
+    "detail": " change)\n\n\n\u203a relay 1 first\n\n\n\u2022 - first row 01\n\n  first relay finished.\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.delivered_once",
+    "passed": false,
+    "detail": "['relay 1 dawn']"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.reply_shown_once",
+    "passed": false,
+    "detail": "to (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.up_focuses_queue_not_history",
+    "passed": false,
+    "detail": "history-recall"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.text_in_composer",
+    "passed": false,
+    "detail": "\u203a ! for shell commands"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.queue_row_gone",
+    "passed": false,
+    "detail": "['  1 queued \u00b7 paused (interrupted) \u00b7 enter resumes']"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.never_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reconnect.queue_still_listed",
+    "passed": true,
+    "detail": " to the host.\n\n  1 queued \u00b7 paused (interrupted) \u00b7 enter resumes\n  \u21b3 relay 1 lamp\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.up_focuses_queue_not_history",
+    "passed": false,
+    "detail": "history-recall"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.text_in_composer",
+    "passed": false,
+    "detail": "\u203a ? for shortcuts"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.queue_row_gone",
+    "passed": false,
+    "detail": "['  1 queued \u00b7 paused (interrupted) \u00b7 enter resumes']"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.never_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R05c",
+    "check": "other.up_does_not_take_it",
+    "passed": true,
+    "detail": "history-recall"
+  },
+  {
+    "scenario": "R05c",
+    "check": "other.not_taken_into_composer",
+    "passed": true,
+    "detail": "\u203a ! for shell commands"
+  },
+  {
+    "scenario": "R05c",
+    "check": "other.resume_sends_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.up_in_other_terminal",
+    "passed": true,
+    "detail": "\u203a relay 1 cormorant"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.ctrl_r_in_other_terminal",
+    "passed": true,
+    "detail": " - cormorant row 01\n\n  cormorant relay finished.\n\n\u2022 This terminal now controls the host.\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  relay 1 cormorant\n  esc close  enter select  j/k move  / search\n"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.stored_once_on_host",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.client_home_untouched",
+    "passed": true,
+    "detail": "laptop history"
+  },
+  {
+    "scenario": "R07",
+    "check": "prompts.host_prompt_listed",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n/ harbor\n\n  /prompts:harbor-review  Review the harbor log\n"
+  },
+  {
+    "scenario": "R07",
+    "check": "prompts.client_prompt_not_listed",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n/ laptop\n\n  no matches\n"
+  },
+  {
+    "scenario": "R07",
+    "check": "prompts.markdown_expands_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R07",
+    "check": "prompts.script_ran_in_session_folder_once",
+    "passed": true,
+    "detail": "[\"Output from script 'wherescript':\\nrelay 1 ran-in-beta\\n\"]"
+  },
+  {
+    "scenario": "R08",
+    "check": "goal.controller_shows_it",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n\u25a0 /goal: not available on this host yet\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R08",
+    "check": "goal.watcher_shows_it",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R08",
+    "check": "goal.watcher_change_refused",
+    "passed": true,
+    "detail": "tions: Mode=auto (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n\u25a0 /goal: not available on this host yet\n\n\u25a0 /goal: not available on this host yet\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R10",
+    "check": "compact.watcher_refused",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R10",
+    "check": "compact.controller_sees_finish",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 2 dawn\n\n\n\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n\u25a0 /compact: not available on this host yet\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R10",
+    "check": "compact.watcher_sees_finish",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 2 dawn\n\n\n\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n\u25a0 /compact: not available on this host yet\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R10",
+    "check": "compact.session_kept",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "R10",
+    "check": "compact.next_turn_works",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R11",
+    "check": "local.output_from_session_folder",
+    "passed": true,
+    "detail": "hell-in-$(basename $(dirname $PWD)) && touch shell-canary-local\n  \u2514 shell-in-beta\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R11",
+    "check": "local.ran_in_session_folder",
+    "passed": true,
+    "detail": "['roots/beta/app/shell-canary-local']"
+  },
+  {
+    "scenario": "R11",
+    "check": "watcher.sees_local_command_cell",
+    "passed": true,
+    "detail": "PWD)) && touch shell-canary-local\n  \u2514 shell-in-beta\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R11",
+    "check": "watcher.nothing_ran",
+    "passed": true,
+    "detail": "['roots/beta/app/shell-canary-local']"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.hint_shown",
+    "passed": false,
+    "detail": "ge)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n\u2022 Ran echo shell-in-$(basename $(dirname $PWD)) && touch shell-canary-local\n  \u2514 shell-in-beta\n\n\u2022 This terminal now controls the host.\n\n                                                                                                                [ auto ]\n!\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.nothing_ran",
+    "passed": false,
+    "detail": "['roots/beta/app/shell-canary-local', 'roots/beta/app/shell-canary-remote']"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.not_sent_as_prompt",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R09",
+    "check": "context.report_printed",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n\u25a0 /context: not available on this host yet\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R09",
+    "check": "context.names_session_claude_md",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n\u25a0 /context: not available on this host yet\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  }
+]

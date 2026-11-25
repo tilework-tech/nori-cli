@@ -1,0 +1,206 @@
+[
+  {
+    "scenario": "S35b",
+    "check": "ctl.host_route_reason",
+    "passed": true,
+    "detail": "/compact  not available on this host yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.attach_screen_reason",
+    "passed": true,
+    "detail": "/agent  not available in nori attach yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.host_commands_enabled",
+    "passed": true,
+    "detail": "['/new  start a new chat during a conversation', '/sessions  list sessions and move between them']"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.quit_enabled",
+    "passed": true,
+    "detail": "/quit  exit Nori"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.tab_completes_builtin",
+    "passed": true,
+    "detail": "/sessions"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_refused_with_reason",
+    "passed": true,
+    "detail": "  /compact  not available on this host yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_refusal_count",
+    "passed": true,
+    "detail": "shown 2 time(s)"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_draft_kept",
+    "passed": true,
+    "detail": "/compact"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_refused_with_reason",
+    "passed": true,
+    "detail": "  /agent  not available in nori attach yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_refusal_count",
+    "passed": true,
+    "detail": "shown 2 time(s)"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_draft_kept",
+    "passed": true,
+    "detail": "/agent"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_review_args_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/review the parser']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_review_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/review the parser', '/review']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_lanternize_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/review the parser', '/review', '/lanternize']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.leading_space_quit_is_a_prompt",
+    "passed": true,
+    "detail": "['/review', '/lanternize', 'quit']"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.bare_quit_detaches",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.detach_keeps_session",
+    "passed": true,
+    "detail": "['6103daaf-e4a1-4ae0-bf3a-628ec7844ea9']"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.control_commands_greyed",
+    "passed": true,
+    "detail": "{'/new': '/new  watching \u00b7 Alt+T to take control', '/close': '/close  watching \u00b7 Alt+T to take control', '/resume': '/resume           watching \u00b7 Alt+T to take control', '/delegate': '/delegate  watching \u00b7 Alt+T to take control', '/sessions': '/sessions  list sessions and move between them'}"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.sessions_enabled",
+    "passed": true,
+    "detail": "/sessions  list sessions and move between them"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_refused_with_reason",
+    "passed": true,
+    "detail": "  /new  watching \u00b7 Alt+T to take control"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_draft_kept",
+    "passed": true,
+    "detail": "/new"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.controller_menu_enabled_before",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.open_menu_regreys",
+    "passed": true,
+    "detail": "/new              watching \u00b7 Alt+T to take control"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.new_controller_menu_enabled",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.demoted_new_refused",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.promoted_new_runs_once",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.menu_open_during_turn",
+    "passed": true,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.first_escape_closes_menu",
+    "passed": true,
+    "detail": "   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.first_escape_does_not_cancel",
+    "passed": true,
+    "detail": "{'cancels': 0, 'ticks': [9, 16]}"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.refused_command_mid_turn_not_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.cancelled_exactly_once",
+    "passed": true,
+    "detail": "1"
+  }
+]

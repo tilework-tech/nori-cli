@@ -93,6 +93,8 @@ def env_for(home: Path, extra=None):
         "COLORTERM": "truecolor",
         "LANG": "C.UTF-8",
     }
+    if os.environ.get("NORI_VERIFY_JOINED_APP"):
+        env["NORI_VERIFY_JOINED_APP"] = "1"  # #777's verifier-only joined App entry
     env.update(extra or {})
     return env
 

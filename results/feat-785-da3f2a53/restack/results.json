@@ -1,0 +1,326 @@
+[
+  {
+    "scenario": "R11",
+    "check": "local.output_from_session_folder",
+    "passed": true,
+    "detail": "hell-in-$(basename $(dirname $PWD)) && touch shell-canary-local\n  \u2514 shell-in-beta\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R11",
+    "check": "local.ran_in_session_folder",
+    "passed": true,
+    "detail": "['roots/beta/app/shell-canary-local']"
+  },
+  {
+    "scenario": "R11",
+    "check": "watcher.sees_local_command_cell",
+    "passed": true,
+    "detail": ") && touch shell-canary-local\n  \u2514 shell-in-beta\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R11",
+    "check": "watcher.nothing_ran",
+    "passed": true,
+    "detail": "['roots/beta/app/shell-canary-local']"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.hint_shown",
+    "passed": true,
+    "detail": " shell-in-$(basename $(dirname $PWD)) && touch shell-canary-local\n  \u2514 shell-in-beta\n\n\u2022 This terminal now controls the host.\n\n\u2022 Remote shell commands are not yet supported.\n\n                                                                                                                [ auto ]\n! touch shell-canary-remote\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.hint_is_gray_not_red",
+    "passed": true,
+    "detail": "'\\x1b[38;5;8m\u2022 Remote shell commands are not yet supported.'"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.command_back_in_prompt",
+    "passed": true,
+    "detail": "['! touch shell-canary-remote']"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.nothing_ran_anywhere",
+    "passed": true,
+    "detail": "['roots/beta/app/shell-canary-local']"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.not_sent_as_prompt",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R11",
+    "check": "remote.local_terminal_no_new_ran_cell",
+    "passed": true,
+    "detail": "(1, 1)"
+  },
+  {
+    "scenario": "R01",
+    "check": "restored.unterminated_reply_shown",
+    "passed": true,
+    "detail": "e)\n\n\n\u203a relay 2 dawn\n\n\n\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.noon_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.dusk_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.alternate_screen",
+    "passed": true,
+    "detail": "True"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.picker_shown",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 0  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n\u25c7 No options available\n  The caller has not supplied any rows.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  e"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.session_on_host",
+    "passed": true,
+    "detail": "ID                                    AGENT             STATUS               AGE  CWD                                                     TITLE\n900d3e37-e15f-40e2-b318-993150265a0c  claude-code       ready                 0s  /tmp/nori-host-tui-acceptance-rda3/R02/roots/alpha/app  -\n"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.first_prompt_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "detach.back_at_shell",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.lists_two",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 2 \u00b7 2 ready  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n  Session                                                                      Agent         Status\n\u203a \u25cb relay 1 first                                                              claude-code   ready\n    "
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.enter_opens_a_session",
+    "passed": true,
+    "detail": " change)\n\n\n\u203a relay 1 first\n\n\n\u2022 - first row 01\n\n  first relay finished.\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.up_focuses_queue_not_history",
+    "passed": true,
+    "detail": "list"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.text_in_composer",
+    "passed": true,
+    "detail": "\u203a relay 1 lamp"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.queue_row_gone",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.never_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reconnect.queue_still_listed",
+    "passed": true,
+    "detail": "1 queued \u00b7 paused (interrupted) \u00b7 enter resumes\n  \u21b3 relay 1 lamp\n    \u2191 select\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.up_focuses_queue_not_history",
+    "passed": true,
+    "detail": "list"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.text_in_composer",
+    "passed": true,
+    "detail": "\u203a relay 1 lamp"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.queue_row_gone",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.never_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.up_in_other_terminal",
+    "passed": true,
+    "detail": "\u203a relay 1 cormorant"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.ctrl_r_in_other_terminal",
+    "passed": true,
+    "detail": " - cormorant row 01\n\n  cormorant relay finished.\n\n\u2022 This terminal now controls the host.\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  relay 1 cormorant\n  esc close  enter select  j/k move  / search\n"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.stored_once_on_host",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.client_home_untouched",
+    "passed": true,
+    "detail": "laptop history"
+  },
+  {
+    "scenario": "R07",
+    "check": "prompts.host_prompt_listed",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n/ harbor\n\n  /prompts:harbor-review  Review the harbor log\n"
+  },
+  {
+    "scenario": "R07",
+    "check": "prompts.client_prompt_not_listed",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n/ laptop\n\n  no matches\n"
+  },
+  {
+    "scenario": "R07",
+    "check": "prompts.markdown_expands_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R07",
+    "check": "prompts.script_ran_in_session_folder_once",
+    "passed": true,
+    "detail": "[\"Output from script 'wherescript':\\nrelay 1 ran-in-beta\\n\"]"
+  },
+  {
+    "scenario": "R08",
+    "check": "goal.runs_in_attach",
+    "passed": true,
+    "detail": "['Commands: /goal edit, /goal pause, /goal clear']"
+  },
+  {
+    "scenario": "R08",
+    "check": "goal.controller_shows_it",
+    "passed": true,
+    "detail": "re deciding that the goal is achieved, treat completion as unproven and verify it against the\n  actual current state. If completion is not proven, keep working toward the objective.\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R08",
+    "check": "goal.watcher_shows_it",
+    "passed": true,
+    "detail": "chieved, treat completion as unproven and verify it against the\n  actual current state. If completion is not proven, keep working toward the objective.\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R08",
+    "check": "goal.watcher_change_refused",
+    "passed": true,
+    "detail": "is not proven, keep working toward the objective.\n\nGoal\nStatus: active\nObjective: chart the north harbor\nTime used: 6s\nTokens used: 0\n\nCommands: /goal edit, /goal pause, /goal clear\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R09",
+    "check": "context.runs_in_attach",
+    "passed": true,
+    "detail": "['  Claude Code \u00b7 1 user turn \u00b7 /context']"
+  },
+  {
+    "scenario": "R09",
+    "check": "context.lists_session_folder_instructions",
+    "passed": true,
+    "detail": "['  /tmp/nori-host-tui-acceptance-rda3/R09/roots/beta/...  ~10    None observed                None observed']"
+  },
+  {
+    "scenario": "R09",
+    "check": "context.instruction_row_shows_file_name",
+    "passed": false,
+    "detail": "['  /tmp/nori-host-tui-acceptance-rda3/R09/roots/beta/...  ~10    None observed                None observed']"
+  },
+  {
+    "scenario": "R10",
+    "check": "compact.watcher_refused",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R10",
+    "check": "compact.runs_in_attach",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R10",
+    "check": "compact.controller_sees_finish",
+    "passed": true,
+    "detail": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n\u2022 claude-code heard: - Anything related to 'tone'\n\n\u26a0 Heads up: Long conversations and multiple compactions can cause the model to be less accurate. Start a new\n  conversation when possible to keep conversations small and targeted.\n\n                                                                                                                [ auto ]\n\u203a $ for skill listing\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R10",
+    "check": "compact.watcher_sees_finish",
+    "passed": true,
+    "detail": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n\u2022 claude-code heard: - Anything related to 'tone'\n\n\u26a0 Heads up: Long conversations and multiple compactions can cause the model to be less accurate. Start a new\n  conversation when possible to keep conversations small and targeted.\n\n                                                                                                                [ auto ]\n\u203a ! for shell commands\n\n  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R10",
+    "check": "compact.session_kept",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "R10",
+    "check": "compact.next_turn_works",
+    "passed": true,
+    "detail": "1"
+  }
+]

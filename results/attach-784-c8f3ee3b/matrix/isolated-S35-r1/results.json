@@ -1,0 +1,224 @@
+[
+  {
+    "scenario": "S35b",
+    "check": "ctl.host_route_reason",
+    "passed": true,
+    "detail": "/compact  not available on this host yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.attach_screen_reason",
+    "passed": true,
+    "detail": "/agent  not available in nori attach yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.host_commands_enabled",
+    "passed": true,
+    "detail": "['/new  start a new chat during a conversation', '/sessions  list sessions and move between them']"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.quit_enabled",
+    "passed": true,
+    "detail": "/quit  exit Nori"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.tab_completes_builtin",
+    "passed": true,
+    "detail": "/sessions"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_refused_with_reason",
+    "passed": true,
+    "detail": "  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_refusal_count",
+    "passed": true,
+    "detail": "shown 1 time(s)"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_draft_kept",
+    "passed": false,
+    "detail": "\u203a ! for shell commands"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_refused_with_reason",
+    "passed": true,
+    "detail": "  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_refusal_count",
+    "passed": true,
+    "detail": "shown 1 time(s)"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_draft_kept",
+    "passed": false,
+    "detail": "\u203a ! for shell commands"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_review_args_sent_once",
+    "passed": false,
+    "detail": "{'sent': 0, 'prompts': ['first light']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_review_sent_once",
+    "passed": false,
+    "detail": "{'sent': 0, 'prompts': ['first light']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_lanternize_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/lanternize']}"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.leading_space_quit_is_a_prompt",
+    "passed": true,
+    "detail": "['first light', '/lanternize', 'quit']"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.bare_quit_detaches",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.detach_keeps_session",
+    "passed": true,
+    "detail": "['db5dd464-0dde-4461-8454-93d9d71119d8']"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.control_commands_greyed",
+    "passed": false,
+    "detail": "{'/new': '/new  watching \u00b7 Alt+T to take control', '/close': '/close  watching \u00b7 Alt+T to take control', '/resume': '/resume           not available in nori attach yet', '/delegate': '/delegate  watching \u00b7 Alt+T to take control', '/sessions': '/sessions  list sessions and move between them'}"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.sessions_enabled",
+    "passed": true,
+    "detail": "/sessions  list sessions and move between them"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_refused_with_reason",
+    "passed": true,
+    "detail": "  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_draft_kept",
+    "passed": false,
+    "detail": "\u203a /for slash command menu"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.controller_menu_enabled_before",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35c",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S35c-watcher: 'CONTROLLING' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a first light\n\n\n\u2022 claude-code heard: first light\n\n\u25a0 /new: watching \u00b7 Alt+T to take control\n\n\u2022 This terminal now controls the host.\n\n                                                                                                                [ auto ]\n\u203a / for slash command menu\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.menu_open_during_turn",
+    "passed": true,
+    "detail": "  /delegate         delegate a task: /delegate <agent> <task>"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.first_escape_closes_menu",
+    "passed": true,
+    "detail": "  controlling \u00b7 app \u00b7 claude-code \u00b7 working \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.first_escape_does_not_cancel",
+    "passed": true,
+    "detail": "{'cancels': 0, 'ticks': [8, 16]}"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.refused_command_mid_turn_not_sent",
+    "passed": false,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35e",
+    "check": "esc.cancelled_exactly_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.open_menu_shows_reason",
+    "passed": true,
+    "detail": "/new              reconnecting"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_refused_with_reason",
+    "passed": true,
+    "detail": "['\u25a0 Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting;', '\u25a0 /new: reconnecting']"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.draft_kept",
+    "passed": false,
+    "detail": "\u203a @ for file mentions"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.nothing_sent_while_down",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.menu_enabled_after",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_runs_once_after",
+    "passed": true,
+    "detail": "2"
+  }
+]

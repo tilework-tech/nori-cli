@@ -1,0 +1,36 @@
+
+[2m• [0m[39m[49mClaude Code options: Mode=[1m[38;5;6mauto[0;2m[39m[49m (/config to change)
+
+
+[1m› [0m[39m[49mrelay 2 dawn
+
+
+[2m• [0m[39m[49m- dawn row 01
+  - dawn row 02
+
+  dawn relay finished.
+
+[38;5;1m■ /compact: watching · Alt+T to take control
+[39m
+[2m─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+[0m[39m[49m
+[2m• [0m[39m[49mclaude-code heard: - Anything related to 'tone'
+
+[2m• [0m[39m[49mContext compacted
+
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+[0m[39m[49m
+[2m  System       [0m[39m[49m/tmp/nori-host-tui-acceptance-rda3/R10/roots/alpha/app[2m · [0m[39m[49mApprovals: Agent
+[2m  Agent        [0m[38;2;255;158;100m[49mClaude[2m[39m · [0m[39m[49mauto
+
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[0m[39m[49m
+[2m• [0m[39m[49mclaude-code heard: - Anything related to 'tone'
+
+[38;5;3m⚠ Heads up: Long conversations and multiple compactions can cause the model to be less accurate. Start a new
+[39m  [38;5;3mconversation when possible to keep conversations small and targeted.[39m
+
+                                                                                                                [2m[ auto ]
+[0;1m[39m[49m›[0m[39m[49m [2m! for shell commands
+
+[0m[39m[49m  [38;5;6mwatching · read-only[2m[39m · app · claude-code · ready · Approvals: Agent · alt+t take control · ctrl+d detach

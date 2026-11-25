@@ -764,6 +764,10 @@ def role_of(screen):
     for role in ("CONTROLLING", "WATCHING", "RECONNECTING"):
         if role in header:
             return role.lower()
+    # Shared joined TUI (#784 on): the role leads the footer row, e.g. `controlling · app · ...`.
+    footer = next((l for l in reversed(screen.splitlines()) if re.match(r"\s*(controlling|watching|RECONNECTING|reconnecting) ·", l)), "")
+    if footer:
+        return footer.strip().split(" ·")[0].lower()
     return f"unknown: {header.strip()!r}"
 
 
@@ -5275,7 +5279,9 @@ def r09_context(ctx):
     b.capture("context")
     hist = r_inline_history(b)
     ctx.check("context.runs_in_attach", NOT_ON_HOST not in hist, [l for l in hist.splitlines() if "/context" in l][-2:])
-    ctx.check("context.names_session_claude_md", "CLAUDE.md" in hist, hist[-600:])
+    rows = [l for l in hist.splitlines() if "~" in l and ("CLAUDE.md" in l or "roots/beta" in l)]
+    ctx.check("context.lists_session_folder_instructions", bool(rows), rows[:2])
+    ctx.check("context.instruction_row_shows_file_name", any("CLAUDE.md" in l for l in rows), rows[:2])
     proxy.close()
 
 
@@ -5352,24 +5358,30 @@ def r11_shell(ctx):
     w.capture("watcher")
     ctx.check("watcher.nothing_ran", "shell-canary-watcher" not in " ".join(canaries()), canaries())
     proxy = Proxy(endpoint)
-    r = ctx.term("remote", home="laptop")
+    r = ctx.term("remote", home="laptop", cwd="laptop")
     j_open(ctx, r, sid, via=proxy)
     r.wait_for("dawn relay finished.", 15)
     r.keys("M-t")
     time.sleep(1.5)
-    r.type("!")
-    time.sleep(0.8)
-    r.capture("remote-bang")
-    ctx.check("remote.hint_shown", re.search(r"(?i)remote shell commands are not (yet )?supported", r.screen()) is not None,
-              r.screen()[-400:])
-    r.type("touch shell-canary-remote")
+    ran_cells_local = a.history().count("Ran ")
+    r.type("!touch shell-canary-remote")
     r.keys("Enter")
     time.sleep(2.5)
-    r.capture("remote-enter", expect=None)
-    ctx.check("remote.nothing_ran", "shell-canary-remote" not in " ".join(canaries()), canaries())
+    r.capture("remote-enter")
+    hint = [l for l in r.screen().splitlines() if re.search(r"(?i)remote shell commands are not (yet )?supported", l)]
+    ctx.check("remote.hint_shown", bool(hint), r.screen()[-400:])
+    if hint:
+        ansi = r.screen(ansi=True)
+        line = next((l for l in ansi.splitlines() if "emote shell commands" in l), "")
+        ctx.check("remote.hint_is_gray_not_red", ("[90m" in line or "38;5;8" in line or "[2m" in line or "38;5;24" in line) and "[31m" not in line, repr(line[:160]))
+    shell_row = [l for l in r.screen().splitlines() if l.lstrip().startswith("!") and "touch shell-canary-remote" in l]
+    ctx.check("remote.command_back_in_prompt", bool(shell_row), shell_row or r_composer(r))
+    ctx.check("remote.nothing_ran_anywhere", "shell-canary-remote" not in " ".join(canaries()), canaries())
     ctx.check("remote.not_sent_as_prompt", not r_sent(ctx, "shell-canary-remote"), len(r_sent(ctx, "shell-canary-remote")))
+    time.sleep(0.5)
+    a.capture("local-after-remote")
+    ctx.check("remote.local_terminal_no_new_ran_cell", a.history().count("Ran ") == ran_cells_local, (ran_cells_local, a.history().count("Ran ")))
     proxy.close()
-
 
 SCENARIOS.update({
     "R01": ("restack: no-newline replies restored and live, once and in order, late joiner too", r01_no_newline_order),
@@ -5387,9 +5399,37 @@ SCENARIOS.update({
 })
 
 
+def r12_partial_line_live(ctx):
+    """A live line without a newline yet (hold: `tick 1 tick 2 ...`): visible mid-turn in plain nori and in attach?"""
+    ctx.start_host()
+    sid = seed(ctx, "relay 1 dawn")
+    a = ctx.term("attach")
+    j_open(ctx, a, sid)
+    a.wait_for("dawn relay finished.", 15)
+    a.type("hold the lamp")
+    a.keys("Enter")
+    wait_ledger(ctx, lambda r: r["kind"] == "tick")
+    time.sleep(2.0)
+    a.capture("attach-mid-turn")
+    ticks = ctx.ticks()
+    ctx.check("attach.partial_line_visible_mid_turn", "tick 3" in a.screen(), {"ticks_sent": ticks})
+    a.keys("Escape")
+    time.sleep(1.5)
+    p = k_plain(ctx, "plain")
+    p.type("hold the lamp")
+    p.keys("Enter")
+    time.sleep(2.5)
+    p.capture("plain-mid-turn")
+    ctx.check("plain.partial_line_visible_mid_turn", "tick 3" in p.screen(), p.screen()[-200:])
+    p.keys("Escape")
+
+
+SCENARIOS.update({"R12": ("restack: a live line without a newline, attach vs plain nori", r12_partial_line_live)})
+
+
 CAP = "[tui]\ntool_output_max_lines = 10"
 NO_UPDATE = "check_for_update_on_startup = false"
-FIXTURE_ARGS = {"S34m": {"top_extra": NO_UPDATE}, "K01": {"top_extra": NO_UPDATE}, "S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
+FIXTURE_ARGS = {"S34m": {"top_extra": NO_UPDATE}, "R12": {"top_extra": NO_UPDATE}, "K01": {"top_extra": NO_UPDATE}, "S43d": {"top_extra": '[tui.hotkeys]\ntoggle_screen = "alt+j"'},"S12": {"host_extra": 'default_mode = "ask"'}, "S40b": {"host_extra": 'default_mode = "ask"'},
                 "S37b": {"host_extra": 'default_mode = "ask"', "top_extra": 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true'}, "S19a": {"top_extra": CAP}, "S19b": {"top_extra": CAP}}
 
 

@@ -1,0 +1,1 @@
+Intermediate run at #785 `a53c5fd7` (stack on `c9b383ca`), replaced by `ef209c3e`. Findings here that the restack fixed: `/goal`, `/context` and `/compact` were refused in `nori attach` ("not available on this host yet"), and the joined terminal could not take back its own queued prompt. Current verdict: `../feat-778-785-VERDICT.md`.

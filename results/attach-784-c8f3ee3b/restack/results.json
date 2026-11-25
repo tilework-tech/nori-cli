@@ -1,0 +1,98 @@
+[
+  {
+    "scenario": "R01",
+    "check": "restored.unterminated_reply_shown",
+    "passed": true,
+    "detail": "e)\n\n\n\u203a relay 2 dawn\n\n\n\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a @ for file mentions\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.noon_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.dusk_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.alternate_screen",
+    "passed": true,
+    "detail": "True"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.picker_shown",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 0  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n\u25c7 No options available\n  The caller has not supplied any rows.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  e"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.session_on_host",
+    "passed": true,
+    "detail": "ID                                    AGENT             STATUS               AGE  CWD                                                     TITLE\n3383157e-dbd0-44db-90a1-a42fce557349  claude-code       ready                 0s  /tmp/nori-host-tui-acceptance-r784/R02/roots/alpha/app  -\n"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.first_prompt_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "detach.back_at_shell",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.lists_two",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 2 \u00b7 2 ready  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n  Session                                                                      Agent         Status\n\u203a \u25cb relay 1 first                                                              claude-code   ready\n    "
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.enter_opens_a_session",
+    "passed": true,
+    "detail": "ge)\n\n\n\u203a relay 1 first\n\n\n\u2022 - first row 01\n\n  first relay finished.\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a ! for shell commands\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.delivered_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'relay 1 early']"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.reply_shown_once",
+    "passed": true,
+    "detail": "awn relay finished.\n\n\n\u203a relay 1 early\n\n\n\u2022 - early row 01\n\n  early relay finished.\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  }
+]

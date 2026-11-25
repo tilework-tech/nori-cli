@@ -30,13 +30,14 @@ def host_endpoint(home: Path, timeout=15):
 
 
 class Wire:
-    def __init__(self, endpoint, token, observe=True, log=None):
+    def __init__(self, endpoint, token, observe=True, log=None, init_params=None, headers=None):
         url = urlsplit(endpoint)
         self.sock = socket.create_connection((url.hostname, url.port), timeout=10)
         key = base64.b64encode(os.urandom(16)).decode()
         request = (f"GET {url.path or '/'} HTTP/1.1\r\nHost: {url.netloc}\r\nUpgrade: websocket\r\n"
                    f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n"
-                   f"Authorization: Bearer {token}\r\n\r\n")
+                   f"Authorization: Bearer {token}\r\n"
+                   + "".join(f"{k}: {v}\r\n" for k, v in (headers or {}).items()) + "\r\n")
         self.sock.sendall(request.encode())
         head = b""
         while b"\r\n\r\n" not in head:
@@ -47,7 +48,9 @@ class Wire:
         if expected not in head:
             raise RuntimeError("bad websocket accept")
         self.next_id, self.notes, self.log = 1, [], log
-        self.init = self.call("initialize", {"observe": True} if observe else {})
+        params = {"observe": True} if observe else {}
+        params.update(init_params or {})
+        self.init = self.call("initialize", params)
 
     def _exact(self, n):
         data = b""

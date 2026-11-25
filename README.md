@@ -69,3 +69,11 @@ them; `run_linux*.sh` hold the Linux matrix (run with `bash`). Results and the v
   lantern `http-mcp` control switch makes the agent advertise HTTP MCP, which host
   goal management requires. Subscribe with `{"session_id", "cursors": {id: n}}`; the
   host ignores `sessionId`/`cursor` and falls back to the selected session.
+
+## Restacked heads (#777 fix, real #784 launcher, #778–#785)
+
+- `run.py` R01–R12 drive the real `nori attach` from #784 on (set `NORI_VERIFY_JOINED_APP=1` to run them on #777's verifier entry): reply order without trailing newlines, the picker and `/new`, typeahead, queue take-back (own, after reconnect, another terminal's), and the seven host features from a second or remote terminal.
+- `feature_probes.py` adds `compact`, `shell` (local vs remote via `host/local-token`) and `queue_composer`.
+- `perf/joined_open.py` audits alternate-screen attach after Ctrl+L; `perf/dup_probe.py` shows duplicated rows.
+- `render_strip.sh` renders captures with the trailing newline stripped.
+- Verdicts: `results/attach-777-5c72765d/`, `results/attach-784-c8f3ee3b/`, `results/feat-778-785-VERDICT.md`.

@@ -1,0 +1,9 @@
+{"t": 1795636348.834286, "adapter": "claude-code", "pid": 94460, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance-r785/R08/roots/alpha/app", "argv": []}
+{"t": 1795636348.834381, "adapter": "claude-code", "pid": 94460, "kind": "request", "method": "initialize"}
+{"t": 1795636348.8347728, "adapter": "claude-code", "pid": 94460, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance-r785/R08/roots/alpha/app"}
+{"t": 1795636348.8351054, "adapter": "claude-code", "pid": 94460, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance-r785/R08/roots/alpha/app"}
+{"t": 1795636348.8456457, "adapter": "claude-code", "pid": 94460, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795636348.8457227, "adapter": "claude-code", "pid": 94460, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 1 dawn"}
+{"t": 1795636348.8472877, "adapter": "claude-code", "pid": 94460, "kind": "relay", "sessionId": "claude-code-0", "tag": "dawn", "n": 1}
+{"t": 1795636349.097727, "adapter": "claude-code", "pid": 94460, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 1}
+{"t": 1795636361.3487203, "adapter": "claude-code", "pid": 94460, "kind": "stdin_eof"}

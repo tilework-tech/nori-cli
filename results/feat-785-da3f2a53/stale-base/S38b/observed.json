@@ -1,0 +1,29 @@
+{
+  "host_mode": "agent",
+  "after_new": {
+    "running": true,
+    "mode_label": "none",
+    "error_lines": [],
+    "tail": [
+      "Sessions 1 \u00b7 1 ready  tab: waiting only \u00b7 / search",
+      "All  waiting on you",
+      "  Session                                                                      Agent         Status",
+      "\u203a \u25cb new session (current)                                                      claude-code   ready",
+      "    no reply yet                                                                             3s ago",
+      "\u2191\u2193/j/k move  enter open  ctrl+d close  tab waiting on you  esc close"
+    ]
+  },
+  "after_prompt": {
+    "running": true,
+    "mode_label": "none",
+    "error_lines": [],
+    "tail": [
+      "Sessions 1 \u00b7 1 ready  tab: waiting only \u00b7 / search",
+      "All  waiting on you",
+      "\u2315  resh errand",
+      "\u25c7 No matching options",
+      "  Try a different search term or category.",
+      "\u2191\u2193/j/k move  enter open  tab waiting on you  esc close"
+    ]
+  }
+}

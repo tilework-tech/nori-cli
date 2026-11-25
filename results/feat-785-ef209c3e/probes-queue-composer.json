@@ -1,0 +1,38 @@
+[
+  {
+    "probe": "queue_composer",
+    "check": "composer_prompts_editable",
+    "passed": true,
+    "detail": "[{'id': 'probe-q0-1795638937567917137', 'text': 'queued alpha', 'editable': True}, {'id': 'probe-q1-1795638937569827960', 'text': 'queued beta', 'editable': True}, {'id': 'probe-q2-1795638937571305513', 'text': 'queued gamma', 'editable': True}]"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "own_take_once_then_null",
+    "passed": true,
+    "detail": "[{'jsonrpc': '2.0', 'id': 9, 'result': {'text': 'queued alpha'}}, {'jsonrpc': '2.0', 'id': 10, 'result': {'text': None}}]"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "after_reconnect_take_once",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {'text': 'queued beta'}}"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "second_terminal_takes_control",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {'role': 'controller', 'controller_connected': True}}"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "other_composer_terminal_cannot_take",
+    "passed": false,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'result': {'text': 'queued gamma'}}"
+  },
+  {
+    "probe": "queue_composer",
+    "check": "non_composer_client_take_result",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'result': {'text': 'queued delta'}}"
+  }
+]

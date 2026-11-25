@@ -1,0 +1,36 @@
+shell$ nori --skip-trust-directory
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance-r12hmain/R12/roots/alpha/app
+  Agent        Claude
+
+• Lantern Claude options: Mode=auto (/config to change)
+
+
+› hold the lamp
+
+
+• Googling Stack Overflow (2s • esc to interrupt)
+
+                                                                                                         [ acceptEdits ]
+› $ for skill listing
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,36 @@
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 1 dawn
+
+
+• - dawn row 01
+
+  dawn relay finished.
+
+
+› relay 1 review-north
+
+
+• - review-north row 01
+
+  review-north relay finished.
+
+• Running script 'wherescript'...
+
+
+› Output from script 'wherescript':
+  relay 1 ran-in-beta
+
+
+• - ran-in-beta row 01
+
+  ran-in-beta relay finished.
+
+                                                                                                                [ auto ]
+› ! for shell commands
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

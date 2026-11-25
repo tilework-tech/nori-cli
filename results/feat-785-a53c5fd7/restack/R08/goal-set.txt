@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 1 dawn
+
+
+• - dawn row 01
+
+  dawn relay finished.
+
+■ /goal: not available on this host yet
+
+                                                                                                                [ auto ]
+› @ for file mentions
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

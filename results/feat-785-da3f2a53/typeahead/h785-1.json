@@ -1,0 +1,14 @@
+[
+  {
+    "scenario": "R03",
+    "check": "typeahead.delivered_once",
+    "passed": false,
+    "detail": "['relay 1 dawn']"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.reply_shown_once",
+    "passed": false,
+    "detail": "to (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  }
+]

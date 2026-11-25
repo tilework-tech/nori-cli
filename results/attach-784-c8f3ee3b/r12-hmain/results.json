@@ -1,0 +1,14 @@
+[
+  {
+    "scenario": "R12",
+    "check": "attach.partial_line_visible_mid_turn",
+    "passed": true,
+    "detail": "{'ticks_sent': 11}"
+  },
+  {
+    "scenario": "R12",
+    "check": "plain.partial_line_visible_mid_turn",
+    "passed": false,
+    "detail": "ck Overflow (2s \u2022 esc to interrupt)\n\n                                                                                                         [ acceptEdits ]\n\u203a $ for skill listing\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  }
+]

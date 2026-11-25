@@ -1,0 +1,56 @@
+[
+  {
+    "scenario": "R01",
+    "check": "restored.unterminated_reply_shown",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 2 dawn\n\n\n\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a ! for shell commands\n\n"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.noon_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.dusk_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.delivered_once",
+    "passed": false,
+    "detail": "['relay 1 dawn']"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.reply_shown_once",
+    "passed": false,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a relay 1 dawn\n\n\n\u2022 - dawn row 01\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a ! for shell commands\n\n"
+  }
+]

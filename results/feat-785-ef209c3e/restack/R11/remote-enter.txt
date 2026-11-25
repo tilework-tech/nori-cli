@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 1 dawn
+
+
+• - dawn row 01
+
+  dawn relay finished.
+
+• Ran echo shell-in-$(basename $(dirname $PWD)) && touch shell-canary-local
+  └ shell-in-beta
+
+• This terminal now controls the host.
+
+• Ran touch shell-canary-remote
+
+                                                                                                                [ auto ]
+› ? for shortcuts
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

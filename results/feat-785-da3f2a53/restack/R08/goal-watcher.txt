@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 1 dawn
+
+
+• - dawn row 01
+
+  dawn relay finished.
+
+Goal
+Status: active
+Objective: chart the north harbor
+Time used: 0s
+Tokens used: 0
+
+Commands: /goal edit, /goal pause, /goal clear
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• claude-code heard: Before deciding that the goal is achieved, treat completion as unproven and verify it against the
+  actual current state. If completion is not proven, keep working toward the objective.
+
+                                                                                                                [ auto ]
+› ? for shortcuts
+
+  watching · read-only · app · claude-code · ready · Approvals: Agent · alt+t take control · ctrl+d detach

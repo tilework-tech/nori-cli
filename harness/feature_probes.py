@@ -44,8 +44,12 @@ class Run:
         self.ep, self.tok = wire.host_endpoint(self.fx["homes"]["host"])
         return self
 
-    def link(self, observe=False):
-        w = wire.Wire(self.ep, self.tok, observe=observe, log=self.dir / f"wire-{len(self.links)}.jsonl")
+    def link(self, observe=False, composer=False, local=False):
+        extra = {"capabilities": {"nori_sessions": {"composer": True}}} if composer else None
+        lt = self.fx["homes"]["host"] / "host" / "local-token"
+        headers = {"x-nori-local-token": lt.read_text().strip()} if local and lt.exists() else None
+        w = wire.Wire(self.ep, self.tok, observe=observe, log=self.dir / f"wire-{len(self.links)}.jsonl",
+                      init_params=extra, headers=headers)
         self.links.append(w)
         return w
 
@@ -139,20 +143,20 @@ def probe_queue():
         for m, p in (("take", {"sessionId": sid, "entryId": ents[0]["id"]}), ("resume", {"sessionId": sid}), ("discard", {"sessionId": sid})):
             r = late.call(f"_nori/session/queue/{m}", p)
             check("queue", f"watcher_{m}_refused_-32016", err(r) == -32016, r)
-        check("queue", "own_wire_prompt_marked_editable", ents[0].get("editable") is True, ents[0])
+        # e1a1e4b4 contract: this client declares no `composer` capability (like the Sessions broker),
+        # so its prompts can be resumed or discarded but not taken. Own-take is in probe_queue_composer.
+        check("queue", "unmarked_client_prompt_not_editable", ents[0].get("editable") is False, ents[0])
         r1 = ctl.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[0]["id"]})
-        r2 = ctl.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[0]["id"]})
-        check("queue", "queuing_connection_takes_its_text_once", (r1.get("result") or {}).get("text") == "queued alpha" and (r2.get("result") or {}).get("text") is None, [r1, r2])
+        check("queue", "unmarked_client_prompt_take_null", "result" in r1 and r1["result"].get("text") is None, r1)
         before = len(run.prompts())
         r = ctl.call("_nori/session/queue/resume", {"sessionId": sid})
         check("queue", "resume_ok", "result" in r, r)
         deadline = time.time() + 20
-        while time.time() < deadline and len(run.prompts()) < before + 2:
+        while time.time() < deadline and len(run.prompts()) < before + 3:
             time.sleep(0.1)
         time.sleep(2.0)
         after = run.prompts()[before:]
-        check("queue", "resume_delivers_remaining_once_in_order", after == ["queued beta", "queued gamma"], after)
-        check("queue", "taken_prompt_never_sent", "queued alpha" not in run.prompts(), run.prompts())
+        check("queue", "resume_delivers_all_once_in_order", after == ["queued alpha", "queued beta", "queued gamma"], after)
         r3 = ctl.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[1]["id"]})
         check("queue", "take_after_started_is_null", "result" in r3 and r3["result"].get("text") is None, r3)
         # discard on a fresh pause
@@ -340,38 +344,87 @@ def probe_compact():
 
 # --------------------------------------------------------------- shell (#785)
 def probe_shell():
+    """Cliff's local-only rule: a local controller runs ! in the session folder; a remote one gets
+    -32018 and nothing runs; watchers stay read-only. Local = presents host/local-token (da3f2a53)."""
     with Run("shell") as run:
-        ctl = run.link()
+        lt = run.fx["homes"]["host"] / "host" / "local-token"
+        ctl = run.link(local=True)
         if not has_cap(ctl, "shell"):
             check("shell", "capability", False, "absent"); RESULTS[-1]["absent"] = True; return
-        check("shell", "capability_advertised", True)
         sid = run.new(cwd=run.fx["roots"]["beta"])
-        watcher = run.link()
-        watcher.call("_nori/session/subscribe", {"session_id": sid, "cursors": {sid: 0}}); watcher.drain(1.0); watcher.notes.clear()
         canary = lambda n: sorted(str(p.relative_to(run.dir)) for p in run.dir.rglob(f"probe-canary-{n}"))
+        shell_cap = lambda w: (caps(w) or {}).get("shell")
+        check("shell", "local_token_exists_0600", lt.exists() and oct(lt.stat().st_mode & 0o777) == "0o600",
+              oct(lt.stat().st_mode & 0o777) if lt.exists() else "missing")
+        if lt.exists():
+            secret = lt.read_text().strip()
+            leaks = [str(p.relative_to(run.dir)) for p in (run.fx["homes"]["host"]).rglob("*")
+                     if p.is_file() and p != lt and secret and secret in p.read_text(errors="ignore")]
+            check("shell", "local_token_in_no_other_host_file", not leaks, leaks)
+        check("shell", "local_initialize_shell_true", shell_cap(ctl) is True, shell_cap(ctl))
+        watcher = run.link(local=True)
+        watcher.call("_nori/session/subscribe", {"session_id": sid, "cursors": {sid: 0}}); watcher.drain(1.0); watcher.notes.clear()
         r = watcher.call("_nori/session/shell", {"sessionId": sid, "command": "touch probe-canary-watcher"})
         time.sleep(1.0)
-        check("shell", "watcher_refused_-32016", err(r) == -32016 and not canary("watcher"), [r, canary("watcher")])
+        check("shell", "local_watcher_refused_-32016", err(r) == -32016 and not canary("watcher"), [r, canary("watcher")])
         r = ctl.call("_nori/session/shell", {"sessionId": sid, "command": "echo cwd=$PWD; touch probe-canary-ctl"})
         notes = [json.dumps(n) for n in watcher.drain(4.0)]
         shell = [b for b in notes if "user_shell" in b]
-        # A wire controller on 127.0.0.1: recorded as-is; the local/remote split is judged in the TUI scenarios (R11).
-        check("shell", "controller_wire_result", "result" in r or "error" in r, r)
-        check("shell", "controller_wire_ran", canary("ctl"), canary("ctl"))
-        if canary("ctl"):
-            check("shell", "ran_in_session_folder", canary("ctl") == ["roots/beta/app/probe-canary-ctl"], canary("ctl"))
-            out = "".join(bytes(json.loads(b)["params"]["event"]["event"]["event"].get("chunk") or []).decode()
-                          for b in shell)
-            states = [json.loads(b)["params"]["event"]["event"]["event"].get("state") for b in shell]
-            check("shell", "watcher_sees_user_shell_with_output", f"cwd={run.fx['roots']['beta']}" in out and states[0] == "started" and states[-1] == "finished", [states, out[:200]])
+        check("shell", "local_controller_ran_in_session_folder", canary("ctl") == ["roots/beta/app/probe-canary-ctl"], [r, canary("ctl")])
+        out = "".join(bytes(json.loads(b)["params"]["event"]["event"]["event"].get("chunk") or []).decode() for b in shell)
+        states = [json.loads(b)["params"]["event"]["event"]["event"].get("state") for b in shell]
+        check("shell", "watcher_sees_user_shell_with_output", f"cwd={run.fx['roots']['beta']}" in out and states[:1] == ["started"] and states[-1:] == ["finished"], [states, out[:200]])
         r = ctl.call("_nori/session/shell", {"sessionId": sid, "command": ""})
         check("shell", "empty_command_-32602", err(r) == -32602, r)
         r = ctl.call("_nori/session/shell", {"sessionId": "00000000-0000-4000-8000-00000000dead", "command": "true"})
-        check("shell", "unknown_session_-32002", err(r) == -32002, r)
+        check("shell", "local_unknown_session_-32002", err(r) == -32002, r)
+        remote = run.link()
+        check("shell", "remote_initialize_shell_false", shell_cap(remote) in (False, None), shell_cap(remote))
+        remote.call("_nori/control/take", {})
+        watcher.notes.clear()
+        r = remote.call("_nori/session/shell", {"sessionId": sid, "command": "touch probe-canary-remote"})
+        time.sleep(1.5)
+        check("shell", "remote_controller_-32018_nothing_ran", err(r) == -32018 and not canary("remote"), [r, canary("remote")])
+        check("shell", "remote_no_user_shell_event", not [n for n in watcher.drain(1.0) if "user_shell" in json.dumps(n)], "")
+        r = remote.call("_nori/session/shell", {"sessionId": "00000000-0000-4000-8000-00000000dead", "command": "true"})
+        check("shell", "remote_unknown_session_-32018", err(r) == -32018, r)
+        bad = run.link()
+        bad_hdr = wire.Wire(run.ep, run.tok, observe=False, log=run.dir / "wire-badtoken.jsonl", headers={"x-nori-local-token": "not-the-token"})
+        run.links.append(bad_hdr)
+        check("shell", "wrong_local_token_is_remote", shell_cap(bad_hdr) in (False, None), shell_cap(bad_hdr))
         check("shell", "nothing_sent_to_agent", not any("probe-canary" in p for p in run.prompts()), run.prompts()[-2:])
 
+# ------------------------------------------- queue with a composer client (#778 e1a1e4b4)
+def probe_queue_composer():
+    """A client that declares `composer` (as the shared TUI does) queues over the wire; who can take it back?"""
+    with Run("queue-composer") as run:
+        a = run.link(composer=True)
+        sid, q = paused_queue(run, a, ["queued alpha", "queued beta", "queued gamma"])
+        ents = q.get("entries") or []
+        check("queue_composer", "composer_prompts_editable", all(e.get("editable") for e in ents), ents)
+        r1 = a.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[0]["id"]})
+        r2 = a.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[0]["id"]})
+        check("queue_composer", "own_take_once_then_null", (r1.get("result") or {}).get("text") == "queued alpha"
+              and "result" in r2 and r2["result"].get("text") is None, [r1, r2])
+        a.close(); run.links.remove(a)
+        a2 = run.link(composer=True)
+        r3 = a2.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[1]["id"]})
+        check("queue_composer", "after_reconnect_take_once", (r3.get("result") or {}).get("text") == "queued beta", r3)
+        b = run.link(composer=True)
+        tk = b.call("_nori/control/take", {})
+        check("queue_composer", "second_terminal_takes_control", "result" in tk, tk)
+        r4 = b.call("_nori/session/queue/take", {"sessionId": sid, "entryId": ents[2]["id"]})
+        # Coordinator's reading of #778: a terminal takes back only its own prompts.
+        check("queue_composer", "other_composer_terminal_cannot_take", (r4.get("result") or {}).get("text") is None, r4)
+        plain = run.link()
+        sid2, q2 = paused_queue(run, b, ["queued delta"])
+        e2 = (q2.get("entries") or [])[0]
+        plain.call("_nori/control/take", {})
+        r5 = plain.call("_nori/session/queue/take", {"sessionId": sid2, "entryId": e2["id"]})
+        check("queue_composer", "non_composer_client_take_result", True, r5)
 
-PROBES = {"queue": probe_queue, "history": probe_history, "prompts": probe_prompts, "goal": probe_goal, "context": probe_context, "compact": probe_compact, "shell": probe_shell}
+
+PROBES = {"queue": probe_queue, "history": probe_history, "prompts": probe_prompts, "goal": probe_goal, "context": probe_context, "compact": probe_compact, "shell": probe_shell, "queue_composer": probe_queue_composer}
 only = [x for x in A.only.split(",") if x]
 for name, fn in PROBES.items():
     if only and name not in only:

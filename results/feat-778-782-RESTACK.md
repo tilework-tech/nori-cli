@@ -12,3 +12,7 @@ These results were taken at the main-based heads below. During the run, the stac
 
 - **Still valid at the current heads:** the wire-probe results (`probes*.json`) and findings #778 F1 and #779 L1.
 - **Re-run at the current heads:** the plain-`nori` K scenarios, S34m, the matrix, and every joined-terminal check.
+
+## Update: restacked heads of 20:15 UTC
+
+The heads above were replaced by #778 `e1a1e4b4` … #785 `ef209c3e`. For their verdict, and for the shell patch `da3f2a53`, see [`feat-778-785-VERDICT.md`](feat-778-785-VERDICT.md). `feat-785-a53c5fd7/` holds the intermediate run at the 19:00 heads (`/goal`, `/context` and `/compact` were refused in `nori attach` there).

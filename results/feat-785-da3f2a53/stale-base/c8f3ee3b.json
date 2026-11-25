@@ -1,0 +1,242 @@
+[
+  {
+    "scenario": "S06",
+    "check": "cwd.empty_remote_falls_back_to_host_folder",
+    "passed": true,
+    "detail": "[{'t': 1795641388.0556653, 'adapter': 'claude-code', 'pid': 112287, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance-iso4h784/S06/roots/alpha/app'}]"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.explicit_override",
+    "passed": true,
+    "detail": "{'t': 1795641389.8350747, 'adapter': 'claude-code', 'pid': 112360, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance-iso4h784/S06/roots/beta/app'}"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.plain_new_inherits_foreground",
+    "passed": true,
+    "detail": "{'t': 1795641392.1102567, 'adapter': 'claude-code', 'pid': 112424, 'kind': 'request', 'method': 'session/new', 'cwd': '/tmp/nori-host-tui-acceptance-iso4h784/S06/roots/beta/app'}"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.confirmation_names_folder",
+    "passed": false,
+    "detail": "['  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach']"
+  },
+  {
+    "scenario": "S06",
+    "check": "cwd.dir_completion_from_session_fs",
+    "passed": true,
+    "detail": "['/ new assets/beta-only/']"
+  },
+  {
+    "scenario": "S07",
+    "check": "at.alpha_files_offered",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n                                                                                                                [ auto ]\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S07",
+    "check": "at.no_laptop_files",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S07",
+    "check": "at.laptop_file_not_found",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S07",
+    "check": "at.beta_files_offered_same_logical_path",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a @src/\n\n  src/harbor_bell.rs\n  src/harbor_tide.rs\n"
+  },
+  {
+    "scenario": "S07",
+    "check": "at.no_stale_alpha_results",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S10",
+    "check": "approvals.offers_host_modes",
+    "passed": true,
+    "detail": ")\n\n\n  Approvals for this session\n  New sessions start in the host default. The sandbox is set separately.\n\n   1. Ask\n      Ask before every edit and command.\n  \u258f2. Agent (current)                                                                                                \u2595\n  \u258f   The agent asks when it judges it needs to.                                                                     \u2595\n   3. Approve all\n      Nori approves every permission request.\n  \u2191\u2193/j/k move  enter select  esc close\n\n"
+  },
+  {
+    "scenario": "S10",
+    "check": "approvals.no_legacy_presets",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S10",
+    "check": "approvals.not_sent_as_prompt",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S12",
+    "check": "default.first_new_uses_host_default",
+    "passed": true,
+    "detail": "[('claude-code-0', 'default')]"
+  },
+  {
+    "scenario": "S12",
+    "check": "approvals.controller_can_pick_approve_all",
+    "passed": true,
+    "detail": "  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Approve all \u00b7 ctrl+d detach \u00b7 Approvals: Approve all"
+  },
+  {
+    "scenario": "S12",
+    "check": "default.second_new_does_not_copy_foreground",
+    "passed": true,
+    "detail": "{'session/new': 2, 'mode sets': [('claude-code-0', 'default'), ('claude-code-0', 'acceptEdits'), ('claude-code-0', 'default')]}"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.ask_unavailable_for_adapter_without_ask",
+    "passed": true,
+    "detail": "Code has no mode that asks before every edit and command.\n  \u258f2. Agent (current)                                                                                                \u2595\n  \u258f   The agent asks when it judges it needs to.                                                                     \u2595\n   3. Approve all\n      Nori approves every permission request.\n  \u2191\u2193/j/k move  enter select  esc close\n\n"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.change_reaches_only_foreground",
+    "passed": true,
+    "detail": "[('claude-code-0', 'acceptEdits')]"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.footer_shows_foreground_mode",
+    "passed": true,
+    "detail": "['  controlling \u00b7 app \u00b7 opencode \u00b7 ready \u00b7 Approvals: Approve all \u00b7 ctrl+d detach \u00b7 Approvals: Approve all']"
+  },
+  {
+    "scenario": "S13",
+    "check": "approvals.watcher_sees_greyed_with_take_control",
+    "passed": true,
+    "detail": "  /approvals  watching \u00b7 Alt+T to take control"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_1_shown",
+    "passed": true,
+    "detail": "{'rows': ['\u2022 Charting the breakwater (0s \u2022 esc to interrupt)'], 'working': ['\u2022 Charting the breakwater (0s \u2022 esc to interrupt)']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_1_on_working_row",
+    "passed": true,
+    "detail": "{'rows': ['\u2022 Charting the breakwater (0s \u2022 esc to interrupt)'], 'working': ['\u2022 Charting the breakwater (0s \u2022 esc to interrupt)']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_2_shown",
+    "passed": true,
+    "detail": "{'rows': ['\u2022 Sorting the buoy colours (2s \u2022 esc to interrupt)'], 'working': ['\u2022 Sorting the buoy colours (2s \u2022 esc to interrupt)']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_2_on_working_row",
+    "passed": true,
+    "detail": "{'rows': ['\u2022 Sorting the buoy colours (2s \u2022 esc to interrupt)'], 'working': ['\u2022 Sorting the buoy colours (2s \u2022 esc to interrupt)']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_3_shown",
+    "passed": true,
+    "detail": "{'rows': ['\u2022 Listening for the foghorn cadence (4s \u2022 esc to interrupt)'], 'working': ['\u2022 Listening for the foghorn cadence (4s \u2022 esc to interrupt)']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thought_3_on_working_row",
+    "passed": true,
+    "detail": "{'rows': ['\u2022 Listening for the foghorn cadence (4s \u2022 esc to interrupt)'], 'working': ['\u2022 Listening for the foghorn cadence (4s \u2022 esc to interrupt)']}"
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.second_heading_replaces_first",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.plain_thought_replaces_heading",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.cleared_after_turn",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S18b",
+    "check": "indicator.thoughts_in_history",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.first_launch_used_host",
+    "passed": true,
+    "detail": "['_nori/host/prepare_agent', 'session/list', 'session/new']"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.last_session_loaded",
+    "passed": true,
+    "detail": "[('session/load', 'claude-code-0')]"
+  },
+  {
+    "scenario": "S34m",
+    "check": "control.no_host_requests",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S37d",
+    "check": "approveall.host_reports_mode",
+    "passed": true,
+    "detail": "approve-all"
+  },
+  {
+    "scenario": "S37d",
+    "check": "approveall.permission_answered_without_prompt",
+    "passed": true,
+    "detail": "  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Approve all \u00b7 ctrl+d detach \u00b7 Approvals: Approve all"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_running",
+    "passed": true,
+    "detail": "{'running': True, 'mode_label': 'agent', 'error_lines': [], 'tail': ['\u2022 Claude Code options: Mode=auto (/config to change)', '                                                                                                                [ auto ]', '\u203a / for slash command menu', '  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach']}"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.no_error",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.prompt_reached_adapter_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_shows_reply",
+    "passed": true,
+    "detail": "['\u2022 Claude Code options: Mode=auto (/config to change)', '\u203a fresh errand', '\u2022 claude-code heard: fresh errand', '                                                                                                                [ auto ]', '\u203a / for slash command menu', '  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach']"
+  },
+  {
+    "scenario": "S38b",
+    "check": "new.client_label_matches_host",
+    "passed": true,
+    "detail": "{'ui': 'agent', 'host': 'agent'}"
+  }
+]
