@@ -147,7 +147,8 @@ jobs:
           sed -i.bak '/^#!\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/host_attach.rs
           sed -i.bak '/^#\[cfg(target_os = "linux")\]$/d' tui-pty-e2e/tests/explicit_host_close.rs
           ! grep -n 'cfg(target_os = "linux")' tui-pty-e2e/tests/host_attach.rs tui-pty-e2e/tests/explicit_host_close.rs
-          for round in 1 2 3; do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach --test host_approvals --test attached_external_cancel --test explicit_host_close 2>&1 | grep -E "^test .* (ok|FAILED)$" | sed "s/^/round $round: /"; done | tee attach-rounds.txt
+          for round in 1 2 3; do cargo test --profile ci-test --target ${{ matrix.target }} -p tui-pty-e2e --no-fail-fast --test host_attach --test host_approvals --test attached_external_cancel --test explicit_host_close > round-$round.log 2>&1 || true; grep -E "^test .* (ok|FAILED)$" round-$round.log | sed "s/^/round $round: /"; done | tee attach-rounds.txt
+          for round in 1 2 3; do sed -n '/^failures:$/,/^test result/p' round-$round.log | head -400; done
           echo "attach rounds FAILED: $(grep -c FAILED attach-rounds.txt) of $(grep -c '^round' attach-rounds.txt)"
           ! grep -q FAILED attach-rounds.txt
           test "$(grep -c '^round' attach-rounds.txt)" -ge 132
