@@ -1,36 +1,26 @@
-Nori CLI brand marks, study 01. Plain-text frames. Synthetic content.
-Every frame of the face is 7 cells wide: * 〉 _ * space ▐, where 〉 (U+3009) takes 2 cells.
+Nori CLI face, study 02. Plain-text frames. Synthetic content.
+〉 (U+3009) and 〈 (U+3008) take 2 cells. Eyes are green, the mouth is foreground.
 
-FACE            *〉_* ▐
-FACE, FALLBACK  *> _* |        ("> " replaces 〉, "|" replaces ▐, still 7 cells)
+FACE      〉_ ▐              (5 cells)
+WORDMARK  〉nori CLI v0.42.0  (version dim)
 
-HELLO           *〉_* ▐      nori〉hello  v0.42.0
-GOODBYE         *〉_* ▐      nori〉goodbye
-PROMPT          〉plot them on the chart
+BLINK, both eyes, after a 900 ms rest
+  B1 dash        - _ -                      80 ms
+  B2 dot         · _ ·                      80 ms
+  B3 squash      › _ ▗   - _ ▁   › _ ▗      40 ms each
+  B4 flat        _ _ _                      80 ms
 
-BLINK A, cursor (tick 80 ms)
-     0 ms  hold 1120   *〉_* ▐
-  1120 ms  hold  560   *〉_*
-  1680 ms  hold  560   *〉_* ▐
-  2240 ms  hold  560   *〉_*
-  2800 ms  rest        *〉_* ▐
+WINK, right eye
+  W1 dash        〉_ -                      240 ms
+  W2 squash      〉_ ▗   〉_ ▁   〉_ ▗      40, 240, 40 ms
+  W3 underscore  〉_ _                      240 ms
 
-BLINK B, stars
-     0 ms  hold 1120   *〉_* ▐
-  1120 ms  hold  160   -〉_- ▐
-  1280 ms  hold  240   *〉_* ▐
-  1520 ms  hold  160   -〉_- ▐
-  1680 ms  rest        *〉_* ▐
+LOOK (left, right), 7-cell field, 500 ms holds
+  L1 glyph swap      〉_ ▌      〈_ ▐
+  L2 one-cell shift 〉_ ▐         〉_ ▐
+  L3 eyes only       〉_ ▌       >_ ▐
 
-RETYPED GREETING, then blink A
-     0 ms  hold  240   *〉_* ▐      nori〉
-   240 ms  hold   80   *〉_* ▐      nori〉h
-   320 ms  hold   80   *〉_* ▐      nori〉he
-   400 ms  hold   80   *〉_* ▐      nori〉hel
-   480 ms  hold   80   *〉_* ▐      nori〉hell
-   560 ms  hold  240   *〉_* ▐      nori〉hello
-   800 ms  hold  480   *〉_* ▐      nori〉hello  v0.42.0
-  1280 ms  blink A from its second frame, ending on the still
-
-STATIC ALTERNATIVE
-  The rest frame, printed once. No timers.
+RETYPE, face into wordmark, 60 ms per letter
+  R1 mouth types   〉_ ▐  〉n_ ▐  〉no_ ▐  ...  〉nori CLI_ ▐  〉nori CLI  〉nori CLI v0.42.0
+  R2 eye types     〉_ ▐  〉▐  〉n▐  〉no▐  ...  〉nori CLI▐  〉nori CLI  〉nori CLI v0.42.0
+  R3 overwrite     〉_ ▐  〉n ▐  〉no▐  〉nor  〉nori  ...  〉nori CLI  〉nori CLI v0.42.0

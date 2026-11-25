@@ -2,273 +2,151 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Nori CLI brand marks: study 01</title>
+<title>Nori CLI face: study 02</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <!-- Fonts are optional. Cells are fixed-width boxes, so the grid holds with any fallback. -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;600&text=%E3%80%89&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@500&text=%E3%80%88%E3%80%89&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --base:#161616; --deep:#0e0e0e; --overlay:#262626; --muted:#525252;
-    --fg:#dde1e6; --hi:#f2f4f8; --dim:#8a8f98; --green:#42be65;
+  :root{--base:#161616;--deep:#0e0e0e;--overlay:#262626;--muted:#525252;--fg:#dde1e6;--hi:#f2f4f8;--dim:#8a8f98;--green:#42be65;
     --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
-    --wide:'IBM Plex Sans JP','Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans CJK JP','Yu Gothic','MS Gothic',sans-serif;
-    --fs:14px;
-  }
+    --wide:'IBM Plex Sans JP','Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans CJK JP','Yu Gothic','MS Gothic',sans-serif}
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--deep);color:var(--fg);font-family:var(--mono);font-size:13px}
   body{padding:20px}
-  h1{font-size:15px;font-weight:600;margin:0 0 4px}
-  p.sub{margin:0 0 16px;color:var(--dim)}
-  #shot{display:inline-block;background:var(--deep);padding:14px}
-  .label{color:var(--dim);font-size:11px;letter-spacing:.09em;text-transform:uppercase;margin:0 0 6px}
-  .label b{color:var(--fg);font-weight:500}
-  .term{background:var(--base);border:1px solid var(--overlay);padding:10px 0;margin:0 0 14px;
-        font-family:var(--mono);font-size:var(--fs);line-height:1.45;white-space:pre}
-  .term:last-child{margin-bottom:0}
-  .r{display:block;height:1.45em;overflow:hidden}
-  /* One terminal cell. Wide glyphs take exactly two. */
-  .c{display:inline-block;width:1ch;height:1.45em;vertical-align:top;overflow:visible;white-space:pre}
+  h1{font-size:15px;font-weight:600;margin:0 0 4px} p.sub{margin:0 0 14px;color:var(--dim)}
+  #shot{display:inline-block;background:var(--deep);padding:16px}
+  h2{font-size:12px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
+  .grp{margin:0 0 22px} .grp:last-child{margin:0}
+  .opt{display:flex;align-items:center;gap:18px;margin:0 0 8px}
+  .id{width:150px;flex:none} .id b{color:var(--green);font-weight:600;margin-right:8px} .id span{color:var(--fg)}
+  .note{color:var(--dim);font-size:12px;max-width:330px}
+  .term{background:var(--base);border:1px solid var(--overlay);padding:.3em 1ch;line-height:1.5;white-space:pre;flex:none}
+  .strip{display:flex;gap:10px;flex-wrap:wrap} .strip .term{position:relative;margin-bottom:14px}
+  .strip .ms{position:absolute;left:0;bottom:-16px;font-size:10px;color:var(--muted)}
+  .c{display:inline-block;width:1ch;height:1.5em;vertical-align:top;white-space:pre}
   .c.w2{width:2ch}
-  .c.w2 i{font-style:normal;font-family:var(--wide);font-size:1.2em;line-height:1;display:inline-block;width:1.6667ch;text-align:left}
+  .c.w2 i{font-style:normal;font-family:var(--wide);font-weight:500;font-size:1.2em;line-height:1.25;display:inline-block;width:1.6667ch;text-align:center}
   .g{color:var(--green)} .b{font-weight:600;color:var(--hi)} .d{color:var(--dim)}
-  .cur{background:var(--fg);color:var(--base)}
-  .grid .c{outline:1px solid rgba(255,255,255,.07);outline-offset:-1px}
-  .ms{color:var(--muted)}
-  .frames .term{padding:8px 0}
-  /* controls */
-  #panel{margin-top:18px;max-width:900px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 22px}
-  fieldset{border:1px solid var(--overlay);padding:8px 10px;margin:0;min-width:0}
-  legend{color:var(--dim);font-size:11px;letter-spacing:.09em;text-transform:uppercase;padding:0 4px}
-  label{display:block;cursor:pointer;padding:1px 0}
-  input,button,select{font:inherit;color:inherit;accent-color:var(--green)}
-  button{background:var(--overlay);border:1px solid var(--muted);padding:3px 10px;cursor:pointer}
-  button:hover{border-color:var(--fg)}
-  #plain{margin-top:14px;max-width:900px;background:var(--base);border:1px solid var(--overlay);padding:10px;white-space:pre;overflow:auto;color:var(--fg)}
-  .bare #panel,.bare #plain,.bare h1,.bare p.sub{display:none}
-  .bare body,body.bare{padding:0}
+  #bar{margin:0 0 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  select,button{font:inherit;color:inherit;background:var(--overlay);border:1px solid var(--muted);padding:3px 8px}
+  .bare #bar,.bare h1,.bare p.sub{display:none} body.bare{padding:0}
 </style>
 </head>
 <body>
-<h1>Nori CLI brand marks · study 01</h1>
-<p class="sub">Design study only. Synthetic content. Every glyph sits in a fixed cell, so nothing shifts between frames.</p>
-
-<div id="shot"></div>
-
-<div id="panel">
-  <fieldset><legend>Hello line</legend>
-    <label><input type="radio" name="mode" value="still" checked> Still (static alternative)</label>
-    <label><input type="radio" name="mode" value="blinkA"> Blink A: cursor</label>
-    <label><input type="radio" name="mode" value="blinkB"> Blink B: stars</label>
-    <label><input type="radio" name="mode" value="retype"> Retyped greeting</label>
-  </fieldset>
-  <fieldset><legend>Playback</legend>
-    <button id="play">Pause</button> <button id="step">Step</button>
-    <label style="margin-top:6px">Speed
-      <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
-    <label><input type="checkbox" id="loop" checked> Loop (the product would play once)</label>
-    <div class="ms" id="clock"></div>
-  </fieldset>
-  <fieldset><legend>Glyphs</legend>
-    <label><input type="radio" name="glyph" value="uni" checked> 〉 U+3009 and ▐ U+2590</label>
-    <label><input type="radio" name="glyph" value="ascii"> Fallback: &gt; and |</label>
-    <label style="margin-top:6px"><input type="checkbox" id="space"> Add a space after the prompt 〉</label>
-    <label><input type="checkbox" id="grid"> Show cell grid</label>
-  </fieldset>
-  <fieldset><legend>Terminal</legend>
-    <label>Columns
-      <select id="cols"><option>80</option><option>60</option><option>40</option><option>24</option></select></label>
-    <label>Cell size
-      <select id="fs"><option value="14">14 px</option><option value="12">12 px</option><option value="16">16 px</option></select></label>
-  </fieldset>
+<h1>Nori CLI face · study 02</h1>
+<p class="sub">Face <b>〉_ ▐</b> and wordmark <b>〉nori CLI</b>. Eyes green, mouth foreground. Design study, synthetic content. Every frame keeps its cells.</p>
+<div id="bar">
+  <label>Speed <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.2">0.2×</option></select></label>
+  <label>Size <select id="size"><option>34</option><option>22</option><option>14</option></select> px</label>
+  <label>View <select id="view"><option value="live">Live</option><option value="sheet">All frames</option></select></label>
+  <button id="pause">Pause</button>
 </div>
-<pre id="plain"></pre>
-
+<div id="shot"></div>
 <script>
-/* ---------- model ---------- */
-const TICK = 80;                         // ms. One typed character per tick.
-const HALF = 7;                          // ticks. 560 ms on, 560 ms off: the Nori 1.1 s cursor blink.
+const WIDE = new Set(['〉','〈']);
 const Q = new URLSearchParams(location.search);
-const S = {
-  mode: Q.get('mode') || 'still',
-  glyph: Q.get('glyph') || 'uni',
-  space: Q.get('space') === '1',
-  grid: Q.get('grid') === '1',
-  cols: +(Q.get('cols') || 80),
-  fs: +(Q.get('fs') || 14),
-  view: Q.get('view') || 'surfaces',     // surfaces | frames | face
-  frame: Q.has('frame') ? +Q.get('frame') : null,
-  speed: 1, loop: true, playing: !Q.has('frame') && !Q.has('tick'),
-};
 if (Q.get('bare') === '1') document.body.classList.add('bare');
+const S = {size:+(Q.get('size')||34), view:Q.get('view')||'live', group:Q.get('group'), speed:1, paused:Q.has('t')};
 
-const VERSION = 'v0.42.0';
-const SID = '019b2f4a-7c1e-7d3b-a5f0-3e9c8b1d6a42';   // synthetic
-
-/* A frame of the hello line: cursor on/off, star glyph, typed letters, version shown. */
-const FULL = {cursor:true, star:'*', typed:5, ver:true};
-const f = (o, ticks) => ({s:Object.assign({}, FULL, o), ticks});
-const SEQ = {
-  still:  [f({}, 40)],
-  blinkA: [f({},14), f({cursor:false},HALF), f({},HALF), f({cursor:false},HALF), f({},45)],
-  blinkB: [f({},14), f({star:'-'},2), f({},3), f({star:'-'},2), f({},59)],
-  retype: [f({typed:0,ver:false},3), f({typed:1,ver:false},1), f({typed:2,ver:false},1), f({typed:3,ver:false},1),
-           f({typed:4,ver:false},1), f({typed:5,ver:false},3), f({},6),
-           f({cursor:false},HALF), f({},HALF), f({cursor:false},HALF), f({},43)],
-};
-
-/* ---------- glyph helpers ---------- */
-const P = () => S.glyph === 'uni' ? '〉' : '> ';          // always two cells
-const CUR = () => S.glyph === 'uni' ? '▐' : '|';
-const seg = (t, cls) => ({t, cls: cls || ''});
-
-function face(s) {
-  return [seg(s.star,'d'), seg(P(),'g'), seg('_'), seg(s.star,'d'), seg(' '), seg(s.cursor ? CUR() : ' ')];
-}
-function wordmark(word, n) {
-  return [seg('nori','b'), seg(P(),'g'), seg(word.slice(0, n)), seg(' '.repeat(word.length - n))];
-}
-function helloLine(s) {
-  const out = [seg('  '), ...face(s)];
-  if (S.cols >= 34) out.push(seg('      '), ...wordmark('hello', s.typed));
-  else if (S.cols >= 22) out.push(seg('  '), ...wordmark('hello', s.typed));
-  if (S.cols >= 44) out.push(seg('  '), seg(s.ver ? VERSION : ' '.repeat(VERSION.length), 'd'));
+/* A frame is a compact string: lowercase tags switch style for what follows.
+   {g} green  {f} foreground  {b} bold  {d} dim */
+function parse(str) {
+  const out = []; let cls = 'f';
+  str.replace(/\{(\w)\}|([\s\S])/gu, (m, tag, ch) => { if (tag) cls = tag; else out.push([ch, cls]); });
   return out;
 }
-function byeLine() {
-  const out = [seg('  '), ...face(FULL)];
-  if (S.cols >= 34) out.push(seg('      '), ...wordmark('goodbye', 7));
-  else if (S.cols >= 22) out.push(seg('  '), ...wordmark('goodbye', 7));
+const REST = '{g}〉{f}_ {g}▐';
+const WORD = '{g}〉{b}nori CLI {d}v0.42.0';
+const fr = (s, ms) => ({s, ms});
+
+function typing(build) {            // build(i, typedText) -> frame string
+  const text = 'nori CLI', out = [];
+  for (let i = 1; i <= text.length; i++) out.push(fr(build(i, text.slice(0, i)), 60));
   return out;
 }
-const kv = (k, v, cls) => [seg('  '), seg(k.padEnd(13)), seg(v, cls)];
-const promptSeg = () => S.glyph === 'uni' ? (S.space ? '〉 ' : '〉') : (S.space ? '>  ' : '> ');
 
-function surfaces(s) {
-  const hello = [
-    helloLine(s), [],
-    kv('System', '~/code/tide-table · Approvals: Agent'),
-    kv('Agent', 'Claude · Opus 5 · xhigh · Plan'),
-  ];
-  const prompt = [
-    [seg(promptSeg(),'g'), seg('which stations are missing a low-tide reading?','d')],
-    [],
-    [seg(promptSeg(),'g'), seg('plot them on the ch'), seg(' ','cur')],
-  ];
-  const bye = [
-    byeLine(), [],
-    kv('Session', SID),
-    [seg(' '.repeat(15)), seg('Title  ','d'), seg('Chart the missing tide readings')],
-    [seg(' '.repeat(15)), seg('Agent  ','d'), seg('Claude Code')],
-    kv('Messages', '6 prompts · 9 replies'),
-    kv('Tools', '14  Read'),
-    [seg(' '.repeat(15)), seg(' 9  Bash')],
-    [seg(' '.repeat(15)), seg(' 4  Edit')],
-    [],
-    kv('Context', '48,120 of 200,000 · 24% full'),
-    kv('Tokens', '312,400  total'),
-    kv('Cost', '$0.58 · reported by the agent'),
-    [],
-    [seg('nori resume ' + SID, 'g')],
-  ];
-  return [['hello', 'welcome card, first line', hello], ['prompt', 'history echo and composer', prompt], ['goodbye', 'exit card, first line', bye]];
+const GROUPS = [
+ {key:'blink', title:'Blink · both eyes · 40 to 80 ms frames', rest:REST, opts:[
+  {id:'B1', name:'Dash', note:'One frame. Eyes become dashes.', f:[fr(REST,900), fr('{g}- {f}_ {g}-',80)]},
+  {id:'B2', name:'Dot', note:'One frame. Eyes shrink to dots.', f:[fr(REST,900), fr('{g}· {f}_ {g}·',80)]},
+  {id:'B3', name:'Squash', note:'Three frames. Eyes get smaller, close, reopen.', f:[fr(REST,900), fr('{g}› {f}_ {g}▗',40), fr('{g}- {f}_ {g}▁',40), fr('{g}› {f}_ {g}▗',40)]},
+  {id:'B4', name:'Flat', note:'One frame. Eyes drop to the mouth line.', f:[fr(REST,900), fr('{g}_ {f}_ {g}_',80)]},
+ ]},
+ {key:'wink', title:'Wink · right eye only', rest:REST, opts:[
+  {id:'W1', name:'Dash', note:'Block becomes a dash, holds 240 ms.', f:[fr(REST,900), fr('{g}〉{f}_ {g}-',240)]},
+  {id:'W2', name:'Squash', note:'Block shrinks to a low bar, holds, reopens.', f:[fr(REST,900), fr('{g}〉{f}_ {g}▗',40), fr('{g}〉{f}_ {g}▁',240), fr('{g}〉{f}_ {g}▗',40)]},
+  {id:'W3', name:'Underscore', note:'Eye joins the mouth line.', f:[fr(REST,900), fr('{g}〉{f}_ {g}_',240)]},
+ ]},
+ {key:'look', title:'Look · left, centre, right', rest:' '+REST+' ', opts:[
+  {id:'L1', name:'Glyph swap', note:'Left: ▐ to ▌. Right: 〉 to 〈. Nothing shifts; the bracket flips.',
+    f:[fr(' '+REST+' ',700), fr(' {g}〉{f}_ {g}▌ ',500), fr(' '+REST+' ',300), fr(' {g}〈{f}_ {g}▐ ',500)]},
+  {id:'L2', name:'One-cell shift', note:'The whole face moves one cell.',
+    f:[fr(' '+REST+' ',700), fr(REST+'  ',500), fr(' '+REST+' ',300), fr('  '+REST,500)]},
+  {id:'L3', name:'Eyes only', note:'Left: ▐ to ▌. Right: the chevron steps one cell as a narrow >.',
+    f:[fr(' '+REST+' ',700), fr(' {g}〉{f}_ {g}▌ ',500), fr(' '+REST+' ',300), fr(' {g} >{f}_ {g}▐ ',500)]},
+ ]},
+ {key:'retype', title:'Retype · face into wordmark · 60 ms per letter', rest:WORD, opts:[
+  {id:'R1', name:'Mouth types', note:'The underscore is the cursor. It pushes the right eye along.',
+    f:[fr(REST,700), ...typing((i,t)=>`{g}〉{b}${t}{f}_ {g}▐`), fr('{g}〉{b}nori CLI{f}_ {g}▐',240), fr('{g}〉{b}nori CLI',120), fr(WORD,1600)]},
+  {id:'R2', name:'Eye types', note:'The mouth goes. The right eye is the block cursor.',
+    f:[fr(REST,700), fr('{g}〉▐',120), ...typing((i,t)=>`{g}〉{b}${t}{g}▐`), fr('{g}〉{b}nori CLI{g}▐',240), fr('{g}〉{b}nori CLI',120), fr(WORD,1600)]},
+  {id:'R3', name:'Overwrite', note:'Letters replace the face in place. No cursor.',
+    f:[fr(REST,700), fr('{g}〉{b}n{f} {g}▐',60), fr('{g}〉{b}no{g}▐',60), fr('{g}〉{b}nor',60), fr('{g}〉{b}nori',60), fr('{g}〉{b}nori C',60), fr('{g}〉{b}nori CL',60), fr('{g}〉{b}nori CLI',240), fr(WORD,1600)]},
+ ]},
+];
+// Pad every option in a group to the same loop length, ending on the rest frame.
+for (const g of GROUPS) {
+  for (const o of g.opts) o.len = o.f.reduce((a, x) => a + x.ms, 0);
+  g.len = Math.max(...g.opts.map(o => o.len)) + 500;
+  g.cols = Math.max(...g.opts.flatMap(o => o.f.map(x => width(parse(x.s)))), width(parse(g.rest)));
 }
-
-/* ---------- render ---------- */
-const WIDE = new Set(['〉']);
+function width(cells) { return cells.reduce((a, [ch]) => a + (WIDE.has(ch) ? 2 : 1), 0); }
 const esc = c => c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '&' ? '&amp;' : c;
-function rowHTML(segs) {
+function cellsHTML(str, cols) {
   let h = '', used = 0;
-  for (const {t, cls} of segs) for (const ch of t) {
-    const w = WIDE.has(ch) ? 2 : 1;
-    if (used + w > S.cols) break;
-    used += w;
+  for (const [ch, cls] of parse(str)) {
+    const w = WIDE.has(ch) ? 2 : 1; used += w;
     h += w === 2 ? `<span class="c w2 ${cls}"><i>${ch}</i></span>` : `<span class="c ${cls}">${esc(ch)}</span>`;
   }
-  return `<span class="r">${h || ' '}</span>`;
+  for (; used < cols; used++) h += '<span class="c"> </span>';
+  return h;
 }
-const rowText = segs => segs.map(x => x.t).join('').replace(/\s+$/, '');
-function term(rows, cols) {
-  return `<div class="term${S.grid ? ' grid' : ''}" style="width:calc(${cols || S.cols}ch + 2px);font-size:${S.fs}px">${rows.map(rowHTML).join('')}</div>`;
+const term = (str, cols, size, extra) => `<div class="term" style="font-size:${size}px">${cellsHTML(str, cols)}${extra || ''}</div>`;
+function at(o, g, t) {
+  t = t % g.len;
+  for (const x of o.f) { if (t < x.ms) return x.s; t -= x.ms; }
+  return g.rest;
 }
-
-function frameAt(tick) {
-  const seq = SEQ[S.mode]; let t = tick, i = 0;
-  for (; i < seq.length; i++) { if (t < seq[i].ticks) break; t -= seq[i].ticks; }
-  return {i: Math.min(i, seq.length - 1), s: seq[Math.min(i, seq.length - 1)].s};
-}
-const total = () => SEQ[S.mode].reduce((a, x) => a + x.ticks, 0);
-
-let tick = Q.has('tick') ? +Q.get('tick') : 0;
-window.setTick = t => { tick = t; S.playing = false; draw(); };
+let T = Q.has('t') ? +Q.get('t') : 0;
 function draw() {
-  const shot = document.getElementById('shot');
-  if (S.view === 'frames') { shot.innerHTML = framesView(); return; }
-  if (S.view === 'compare') { shot.innerHTML = compareView(); return; }
-  const cur = S.frame !== null ? {i: S.frame, s: SEQ[S.mode][S.frame].s} : frameAt(tick);
-  if (S.view === 'face') {
-    shot.innerHTML = term([helloLine(cur.s)], Math.min(S.cols, 44));
-  } else {
-    shot.innerHTML = surfaces(cur.s).map(([name, note, rows]) =>
-      `<div class="label"><b>${name}</b> · ${note}</div>` + term(rows)).join('');
-  }
-  document.getElementById('clock').textContent =
-    `${S.mode} · frame ${cur.i + 1}/${SEQ[S.mode].length} · ${tick * TICK} ms of ${total() * TICK} ms`;
-  document.getElementById('plain').textContent =
-    surfaces(cur.s).map(([name, , rows]) => `# ${name}\n` + rows.map(rowText).join('\n')).join('\n\n');
-}
-function framesView() {
-  const saved = S.mode; let h = '';
-  for (const [mode, title] of [['blinkA','Blink A · cursor'], ['blinkB','Blink B · stars'], ['retype','Retyped greeting']]) {
-    S.mode = mode; let at = 0;
-    const rows = SEQ[mode].map((fr, i) => {
-      const from = at * TICK; at += fr.ticks;
-      const last = i === SEQ[mode].length - 1;
-      const stamp = (String(from).padStart(5) + ' ms ').padEnd(10) + (last ? 'rest' : fr.ticks * TICK + ' ms').padStart(7).padEnd(9);
-      return [seg(' ' + stamp, 'ms'), ...helloLine(fr.s)];
-    });
-    h += `<div class="label"><b>${title}</b> · start, hold, frame</div>` + term(rows, 60);
-  }
-  S.mode = saved; return `<div class="frames">${h}</div>`;
-}
-
-function compareView() {
-  const saved = S.mode; let h = '';
-  for (const [mode, title] of [['blinkA','A · cursor blink'], ['blinkB','B · star blink'], ['retype','Retyped greeting, then A']]) {
-    S.mode = mode;
-    h += `<div class="label"><b>${title}</b></div>` + term([helloLine(frameAt(tick).s)], 44);
-  }
-  S.mode = saved; return h;
-}
-
-/* ---------- loop and controls ---------- */
-let last = performance.now(), acc = 0;
-function loop(now) {
-  if (S.playing && S.frame === null) {
-    acc += (now - last) * S.speed;
-    while (acc >= TICK) {
-      acc -= TICK; tick++;
-      if (tick >= total()) { if (S.loop) tick = 0; else { tick = total() - 1; S.playing = false; } }
+  let h = '';
+  for (const g of GROUPS) {
+    if (S.group && S.group !== g.key) continue;
+    h += `<div class="grp"><h2>${g.title}</h2>`;
+    for (const o of g.opts) {
+      if (S.view === 'sheet') {
+        const uniq = o.f.filter((x, i) => i === 0 || x.s !== o.f[i - 1].s);
+        h += `<div class="opt"><div class="id"><b>${o.id}</b><span>${o.name}</span></div><div class="strip">` +
+          uniq.map(x => term(x.s, 0, Math.min(S.size, 20), `<span class="ms">${x.ms} ms</span>`)).join('') + `</div></div>`;
+      } else {
+        h += `<div class="opt"><div class="id"><b>${o.id}</b><span>${o.name}</span></div>${term(at(o, g, T), g.cols, S.size)}<div class="note">${o.note}</div></div>`;
+      }
     }
-    draw();
+    h += '</div>';
   }
-  last = now; requestAnimationFrame(loop);
+  document.getElementById('shot').innerHTML = h;
 }
+window.setT = t => { T = t; S.paused = true; draw(); };
+window.groupLen = k => GROUPS.find(g => g.key === k).len;
+let last = performance.now();
+function loop(now) { if (!S.paused) { T += (now - last) * S.speed; if (S.view === 'live') draw(); } last = now; requestAnimationFrame(loop); }
 const $ = id => document.getElementById(id);
-document.querySelectorAll('input[name=mode]').forEach(r => { r.checked = r.value === S.mode; r.onchange = () => { S.mode = r.value; S.frame = null; tick = 0; S.playing = true; $('play').textContent = 'Pause'; draw(); }; });
-document.querySelectorAll('input[name=glyph]').forEach(r => { r.checked = r.value === S.glyph; r.onchange = () => { S.glyph = r.value; draw(); }; });
-$('space').checked = S.space; $('space').onchange = e => { S.space = e.target.checked; draw(); };
-$('grid').checked = S.grid; $('grid').onchange = e => { S.grid = e.target.checked; draw(); };
-$('cols').value = S.cols; $('cols').onchange = e => { S.cols = +e.target.value; draw(); };
-$('fs').value = S.fs; $('fs').onchange = e => { S.fs = +e.target.value; draw(); };
-$('speed').onchange = e => { S.speed = +e.target.value; };
-$('loop').onchange = e => { S.loop = e.target.checked; };
-$('play').onclick = () => { S.frame = null; S.playing = !S.playing; $('play').textContent = S.playing ? 'Pause' : 'Play'; };
-$('step').onclick = () => { S.frame = null; S.playing = false; $('play').textContent = 'Play'; tick = (tick + 1) % total(); draw(); };
-if (matchMedia('(prefers-reduced-motion: reduce)').matches && !Q.has('mode')) S.mode = 'still';
+$('speed').onchange = e => S.speed = +e.target.value;
+$('size').value = S.size; $('size').onchange = e => { S.size = +e.target.value; draw(); };
+$('view').value = S.view; $('view').onchange = e => { S.view = e.target.value; draw(); };
+$('pause').onclick = () => { S.paused = !S.paused; $('pause').textContent = S.paused ? 'Play' : 'Pause'; };
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => { draw(); document.title = 'ready'; requestAnimationFrame(loop); });
-draw();
 </script>
 </body>
 </html>
