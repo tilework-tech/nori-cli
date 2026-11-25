@@ -67,23 +67,13 @@ function typing(build) {            // build(i, typedText) -> frame string
 }
 
 const GROUPS = [
- {key:'blink', title:'Blink · chosen', rest:REST, opts:[
-  {id:'B3', name:'Squash', note:'Three frames. Eyes get smaller, close, reopen.', f:[fr(REST,900), fr('{g}› {f}_ {g}▗',40), fr('{g}- {f}_ {g}▁',40), fr('{g}› {f}_ {g}▗',40)]},
+ {key:'blink', title:'Blink B3 · three speeds (was 40 ms frames)', rest:REST, opts:[
+  {id:'B3-a', name:'60 ms frames', note:'Squash blink, 180 ms in total.', f:[fr(REST,900), fr('{g}› {f}_ {g}▗',60), fr('{g}- {f}_ {g}▁',60), fr('{g}› {f}_ {g}▗',60)]},
+  {id:'B3-b', name:'80 ms frames', note:'Squash blink, 240 ms in total.', f:[fr(REST,900), fr('{g}› {f}_ {g}▗',80), fr('{g}- {f}_ {g}▁',80), fr('{g}› {f}_ {g}▗',80)]},
+  {id:'B3-c', name:'100 ms frames', note:'Squash blink, 300 ms in total.', f:[fr(REST,900), fr('{g}› {f}_ {g}▗',100), fr('{g}- {f}_ {g}▁',100), fr('{g}› {f}_ {g}▗',100)]},
  ]},
  {key:'wink', title:'Wink · chosen', rest:REST, opts:[
   {id:'W1', name:'Dash', note:'Block becomes a dash, holds 240 ms.', f:[fr(REST,900), fr('{g}〉{f}_ {g}-',240)]},
- ]},
- {key:'look', title:'Look · both eyes move together · mouth fixed', rest:' '+REST+' ', opts:[
-  {id:'K1', name:'Glance', note:'Both eyes slide one cell. Left, centre, right, 500 ms holds.',
-    f:[fr(' '+REST+' ',700), fr('{g}〉 {f}_{g}▐  ',500), fr(' '+REST+' ',300), fr('{g}  >{f}_{g}  ▐',500)]},
-  {id:'K2', name:'Dart', note:'Same cells as K1, quick: 160 ms each side, no stop at centre.',
-    f:[fr(' '+REST+' ',700), fr('{g}〉 {f}_{g}▐  ',160), fr('{g}  >{f}_{g}  ▐',160), fr('{g}〉 {f}_{g}▐  ',160), fr('{g}  >{f}_{g}  ▐',160)]},
-  {id:'K3', name:'Side-eye', note:'No cell moves. Both eyes flip to face left, then back.',
-    f:[fr(' '+REST+' ',700), fr(' {g}< {f}_ {g}▌ ',600)]},
- ]},
- {key:'extra', title:'One extra · working hum · eyes fixed, mouth moves', rest:REST, opts:[
-  {id:'H1', name:'Hum', note:'While the agent works the mouth steps low, mid, high, mid at 120 ms.',
-    f:[fr(REST,120), fr('{g}〉{f}- {g}▐',120), fr('{g}〉{f}‾ {g}▐',120), fr('{g}〉{f}- {g}▐',120), fr(REST,120), fr('{g}〉{f}- {g}▐',120), fr('{g}〉{f}‾ {g}▐',120), fr('{g}〉{f}- {g}▐',120)]},
  ]},
  {key:'retype', title:'Retype into the wordmark · chosen', rest:WORD, opts:[
   {id:'R1', name:'Mouth types', note:'The underscore is the cursor. It pushes the right eye along.',

@@ -1,4 +1,4 @@
-# Nori CLI face: study 03
+# Nori CLI face: study 04
 
 Design study only. Nothing here changes product code. All content is synthetic.
 
@@ -12,17 +12,15 @@ Open `index.html` to play every option (speed, size, all-frames view).
 ![All frames](img/all-frames.png)
 
 Chosen by Cliff: blink B3 (squash), wink W1 (dash), retype R1 (mouth types).
+Open: blink speed, 60, 80 or 100 ms per frame.
 
-| Open | Options | Preview |
-|---|---|---|
-| Look: both eyes move together, mouth fixed | K1 glance, K2 dart, K3 side-eye | ![](img/look.gif) |
-| One extra: working hum | H1 | ![](img/extra.gif) |
+![Blink speeds](img/blink.gif)
+
+Dropped: every look option and the working hum.
 
 ## Notes
 
 - Every option changes glyphs in place. No frame changes the width of the cells it uses,
   except the retype, which grows to the wordmark.
-- `〉` cannot sit in the cell next to the mouth on the right-look frame, because it is 2 cells
-  wide. That frame uses the 1-cell `>`, which is smaller.
 - `▗` and `▁` need a font with block elements. `-`, `·` and `_` are the safe choices.
 - Earlier studies are in this branch's history.
