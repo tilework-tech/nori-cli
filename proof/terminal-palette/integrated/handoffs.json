@@ -1,0 +1,132 @@
+{
+  "editor": [
+    {
+      "time_ms": {
+        "query_10": 7.461,
+        "query_11": 7.498,
+        "ready": 62.635,
+        "shortcut": 62.646,
+        "status_query": 62.771,
+        "reply_10": 157.55,
+        "reply_11": 157.569,
+        "reply_status": 157.573,
+        "editor": 175.494,
+        "resumed": 179.25,
+        "handled_after_resume": 180.168,
+        "exit": 350.21
+      },
+      "restored": true,
+      "canonical": true,
+      "typed": true,
+      "osc": 0,
+      "operating_status": 0
+    },
+    {
+      "time_ms": {
+        "query_10": 7.232,
+        "query_11": 7.245,
+        "ready": 59.204,
+        "shortcut": 59.213,
+        "status_query": 59.341,
+        "reply_10": 157.323,
+        "reply_11": 157.34,
+        "reply_status": 157.342,
+        "editor": 175.285,
+        "resumed": 178.724,
+        "handled_after_resume": 178.849,
+        "exit": 350.047
+      },
+      "restored": true,
+      "canonical": true,
+      "typed": true,
+      "osc": 0,
+      "operating_status": 0
+    },
+    {
+      "time_ms": {
+        "query_10": 7.527,
+        "query_11": 7.54,
+        "ready": 92.948,
+        "shortcut": 92.956,
+        "status_query": 93.096,
+        "reply_10": 157.578,
+        "reply_11": 157.598,
+        "reply_status": 157.605,
+        "editor": 175.075,
+        "resumed": 179.897,
+        "handled_after_resume": 181.207,
+        "exit": 350.032
+      },
+      "restored": true,
+      "canonical": true,
+      "typed": true,
+      "osc": 0,
+      "operating_status": 0
+    }
+  ],
+  "suspend": [
+    {
+      "time_ms": {
+        "query_10": 6.776,
+        "query_11": 6.791,
+        "ready": 9.602,
+        "shortcut": 9.605,
+        "status_query": 9.657,
+        "reply_10": 156.85,
+        "reply_11": 156.865,
+        "reply_status": 156.867,
+        "shell": 157.117,
+        "resumed": 157.88,
+        "handled_after_resume": 158.368,
+        "job_complete": 308.691,
+        "exit": 328.739
+      },
+      "restored": true,
+      "typed": true,
+      "osc": 0,
+      "operating_status": 0
+    },
+    {
+      "time_ms": {
+        "query_10": 7.221,
+        "query_11": 7.235,
+        "ready": 9.872,
+        "shortcut": 9.877,
+        "status_query": 9.951,
+        "reply_10": 157.259,
+        "reply_11": 157.278,
+        "reply_status": 157.283,
+        "shell": 157.509,
+        "resumed": 158.321,
+        "handled_after_resume": 158.764,
+        "job_complete": 309.261,
+        "exit": 329.346
+      },
+      "restored": true,
+      "typed": true,
+      "osc": 0,
+      "operating_status": 0
+    },
+    {
+      "time_ms": {
+        "query_10": 7.8,
+        "query_11": 7.817,
+        "ready": 10.367,
+        "shortcut": 10.372,
+        "status_query": 10.417,
+        "reply_10": 157.86,
+        "reply_11": 157.882,
+        "reply_status": 157.887,
+        "shell": 158.166,
+        "resumed": 158.979,
+        "handled_after_resume": 159.439,
+        "job_complete": 310.092,
+        "exit": 330.201
+      },
+      "restored": true,
+      "typed": true,
+      "osc": 0,
+      "operating_status": 0
+    }
+  ]
+}

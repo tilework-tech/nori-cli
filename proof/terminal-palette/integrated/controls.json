@@ -1,0 +1,531 @@
+{
+  "candidate": {
+    "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+    "binary_sha256": "dbe2cf28e0dd068ea8db41565fa9a433f552450b4269e1c2911ebdd8ae6eefdb",
+    "dimensions": [
+      120,
+      40
+    ],
+    "delayed_reply_ms": 150,
+    "very_late_reply_ms": 450,
+    "samples": {
+      "attach/silent-all": [
+        {
+          "time_ms": {
+            "send_early": 6.162,
+            "query_cursor": 6.193,
+            "exit": 2026.881
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": true,
+          "canonical_after_exit": true,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        },
+        {
+          "time_ms": {
+            "send_early": 6.108,
+            "query_cursor": 6.133,
+            "exit": 2026.745
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": true,
+          "canonical_after_exit": true,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        },
+        {
+          "time_ms": {
+            "send_early": 6.312,
+            "query_cursor": 6.338,
+            "exit": 2026.936
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": true,
+          "canonical_after_exit": true,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        }
+      ],
+      "attach/background-only": [
+        {
+          "time_ms": {
+            "query_10": 5.358,
+            "send_early": 5.37,
+            "query_11": 5.38,
+            "first_handled": 6.304,
+            "ready": 8.274,
+            "send_second": 8.288,
+            "second_handled": 8.691,
+            "reply_11": 155.427,
+            "stripe": 156.122,
+            "send_focus_key": 216.276,
+            "focus_handled": 217.205,
+            "focus_reply_11": 366.562,
+            "focus_stripe": 367.46,
+            "status_query": 367.779,
+            "focus_reply_status": 367.793,
+            "exit": 387.901
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 5.618,
+            "send_early": 5.628,
+            "query_11": 5.637,
+            "first_handled": 6.62,
+            "ready": 8.616,
+            "send_second": 8.628,
+            "second_handled": 8.973,
+            "reply_11": 155.668,
+            "stripe": 156.358,
+            "send_focus_key": 216.487,
+            "focus_handled": 217.355,
+            "focus_reply_11": 366.73,
+            "focus_stripe": 367.424,
+            "status_query": 367.789,
+            "focus_reply_status": 367.815,
+            "exit": 387.975
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 6.603,
+            "send_early": 6.617,
+            "query_11": 6.626,
+            "first_handled": 7.612,
+            "ready": 9.509,
+            "send_second": 9.524,
+            "second_handled": 9.867,
+            "reply_11": 156.733,
+            "stripe": 157.429,
+            "send_focus_key": 217.586,
+            "focus_handled": 218.545,
+            "focus_reply_11": 367.829,
+            "focus_stripe": 368.588,
+            "status_query": 368.931,
+            "focus_reply_status": 368.956,
+            "exit": 389.231
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "attach/device-silent": [
+        {
+          "time_ms": {
+            "query_device": 5.352,
+            "send_early": 5.364,
+            "query_10": 2005.631,
+            "query_11": 2005.661,
+            "reply_10": 2005.693,
+            "reply_11": 2005.696,
+            "first_handled": 2006.71,
+            "ready": 2009.079,
+            "send_second": 2009.102,
+            "stripe": 2009.117,
+            "second_handled": 2009.461,
+            "send_focus_key": 2009.482,
+            "focus_reply_10": 2009.555,
+            "focus_reply_11": 2009.558,
+            "focus_handled": 2010.077,
+            "focus_stripe": 2010.482,
+            "exit": 2030.857
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_device": 6.063,
+            "send_early": 6.075,
+            "query_10": 2006.218,
+            "query_11": 2006.24,
+            "reply_10": 2006.261,
+            "reply_11": 2006.263,
+            "first_handled": 2007.279,
+            "ready": 2009.323,
+            "send_second": 2009.341,
+            "stripe": 2009.368,
+            "second_handled": 2010.127,
+            "send_focus_key": 2010.154,
+            "focus_reply_10": 2010.525,
+            "focus_reply_11": 2010.527,
+            "focus_handled": 2011.504,
+            "focus_stripe": 2011.517,
+            "exit": 2032.413
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_device": 5.428,
+            "send_early": 5.438,
+            "query_10": 2005.595,
+            "query_11": 2005.618,
+            "reply_10": 2005.642,
+            "reply_11": 2005.644,
+            "first_handled": 2006.584,
+            "ready": 2008.818,
+            "send_second": 2008.836,
+            "stripe": 2008.855,
+            "second_handled": 2009.189,
+            "send_focus_key": 2009.209,
+            "focus_reply_10": 2009.284,
+            "focus_reply_11": 2009.288,
+            "focus_handled": 2009.796,
+            "focus_stripe": 2010.187,
+            "exit": 2030.45
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "plain/silent-all": [
+        {
+          "time_ms": {
+            "send_early": 7.755,
+            "query_cursor": 7.776,
+            "exit": 2029.224
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": true,
+          "canonical_after_exit": true,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        },
+        {
+          "time_ms": {
+            "send_early": 7.519,
+            "query_cursor": 7.539,
+            "exit": 2029.266
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": true,
+          "canonical_after_exit": true,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        },
+        {
+          "time_ms": {
+            "send_early": 7.808,
+            "query_cursor": 7.827,
+            "exit": 2029.043
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": true,
+          "canonical_after_exit": true,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        }
+      ]
+    }
+  },
+  "base": {
+    "platform": "Linux-7.3.4-x86_64-with-glibc2.36",
+    "binary_sha256": "5e0e0d252b79d35cc08002712b5836795da7ae3b1bdea5010ad219df24054195",
+    "dimensions": [
+      120,
+      40
+    ],
+    "delayed_reply_ms": 150,
+    "very_late_reply_ms": 450,
+    "samples": {
+      "attach/silent-all": [
+        {
+          "time_ms": {
+            "send_early": 6.004,
+            "query_cursor": 6.029,
+            "exit": 2026.758
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": false,
+          "canonical_after_exit": false,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        },
+        {
+          "time_ms": {
+            "send_early": 5.86,
+            "query_cursor": 5.889,
+            "exit": 2026.391
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": false,
+          "canonical_after_exit": false,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        },
+        {
+          "time_ms": {
+            "send_early": 6.07,
+            "query_cursor": 6.098,
+            "exit": 2026.716
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": false,
+          "canonical_after_exit": false,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        }
+      ],
+      "attach/background-only": [
+        {
+          "time_ms": {
+            "query_10": 6.464,
+            "send_early": 6.476,
+            "first_handled": 2008.418,
+            "ready": 2009.873,
+            "send_second": 2009.897,
+            "second_handled": 2010.267,
+            "send_focus_key": 2411.088,
+            "focus_handled": 2412.171,
+            "exit": 2933.325
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 5.582,
+            "send_early": 5.592,
+            "first_handled": 2006.87,
+            "ready": 2008.828,
+            "send_second": 2008.848,
+            "second_handled": 2009.297,
+            "send_focus_key": 2409.875,
+            "focus_handled": 2410.843,
+            "exit": 2932.621
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_10": 5.847,
+            "send_early": 5.857,
+            "first_handled": 2007.137,
+            "ready": 2009.075,
+            "send_second": 2009.093,
+            "second_handled": 2009.438,
+            "send_focus_key": 2410.254,
+            "focus_handled": 2411.323,
+            "exit": 2933.359
+          },
+          "palette_queries": [
+            "10"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": false,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "attach/device-silent": [
+        {
+          "time_ms": {
+            "query_device": 5.653,
+            "send_early": 5.663,
+            "query_10": 2005.86,
+            "reply_10": 2005.9,
+            "query_11": 2005.959,
+            "reply_11": 2005.971,
+            "first_handled": 2007.836,
+            "ready": 2009.283,
+            "send_second": 2009.303,
+            "stripe": 2009.321,
+            "second_handled": 2009.654,
+            "send_focus_key": 2009.677,
+            "focus_reply_10": 2009.749,
+            "focus_reply_11": 2009.798,
+            "focus_handled": 2010.517,
+            "focus_stripe": 2010.521,
+            "exit": 2030.916
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_device": 5.614,
+            "send_early": 5.625,
+            "query_10": 2005.769,
+            "reply_10": 2005.802,
+            "query_11": 2005.843,
+            "reply_11": 2005.852,
+            "first_handled": 2007.725,
+            "ready": 2009.192,
+            "send_second": 2009.21,
+            "stripe": 2009.226,
+            "second_handled": 2009.568,
+            "send_focus_key": 2009.591,
+            "focus_reply_10": 2009.675,
+            "focus_reply_11": 2009.731,
+            "focus_handled": 2010.439,
+            "focus_stripe": 2010.445,
+            "exit": 2030.761
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        },
+        {
+          "time_ms": {
+            "query_device": 5.828,
+            "send_early": 5.837,
+            "query_10": 2006.02,
+            "reply_10": 2006.059,
+            "query_11": 2006.102,
+            "reply_11": 2006.112,
+            "first_handled": 2007.46,
+            "ready": 2009.364,
+            "send_second": 2009.382,
+            "stripe": 2009.404,
+            "second_handled": 2009.796,
+            "send_focus_key": 2009.818,
+            "focus_reply_10": 2009.894,
+            "focus_reply_11": 2009.937,
+            "focus_handled": 2010.662,
+            "focus_stripe": 2010.667,
+            "exit": 2030.971
+          },
+          "palette_queries": [
+            "10",
+            "11",
+            "10",
+            "11"
+          ],
+          "restored": true,
+          "alternate_screen_paired": true,
+          "stripe": true,
+          "input_contains_osc_payload": false
+        }
+      ],
+      "plain/silent-all": [
+        {
+          "time_ms": {
+            "send_early": 7.705,
+            "query_cursor": 7.729,
+            "exit": 2028.739
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": false,
+          "canonical_after_exit": false,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        },
+        {
+          "time_ms": {
+            "send_early": 7.565,
+            "query_cursor": 7.588,
+            "exit": 2029.329
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": false,
+          "canonical_after_exit": false,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        },
+        {
+          "time_ms": {
+            "send_early": 7.62,
+            "query_cursor": 7.643,
+            "exit": 2029.525
+          },
+          "palette_queries": [],
+          "exit_code": 1,
+          "startup_exited": true,
+          "restored": false,
+          "canonical_after_exit": false,
+          "last_output": "Error: The cursor position could not be read within a normal duration"
+        }
+      ]
+    }
+  }
+}
