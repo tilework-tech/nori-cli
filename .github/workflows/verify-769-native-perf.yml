@@ -81,7 +81,8 @@ jobs:
       - name: Attach unit tests at the fix head
         continue-on-error: true
         working-directory: fix/nori-rs
-        run: cargo test --locked -p nori-tui --lib attach:: 2>&1 | tee "$GITHUB_WORKSPACE/out/attach-unit.txt" | grep -E "^test result|FAILED|panicked"
+        run: |
+          cargo test --locked -p nori-tui --lib attach:: 2>&1 | tee "$GITHUB_WORKSPACE/out/attach-unit.txt" | grep -E "^test result|FAILED|panicked"
 
       - uses: actions/upload-artifact@v4
         if: always()
