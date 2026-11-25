@@ -181,6 +181,21 @@ impl App {
                     return Ok(true);
                 }
 
+                if self.new_session_return.is_some() {
+                    // The pending screen holds this prompt for the session
+                    // the host is starting.
+                    return Ok(true);
+                }
+                if !self.cloud_mode
+                    && self.chat_widget.has_harness_session()
+                    && self.primary_agent_preparation.is_none()
+                    && self.prepared_agent.is_none()
+                {
+                    self.begin_host_new_session();
+                    self.show_pending_new_session(tui.frame_requester());
+                    tui.frame_requester().schedule_frame();
+                    return Ok(true);
+                }
                 self.discard_candidate();
                 if let Some(preparation) = &mut self.primary_agent_preparation {
                     preparation.intent = crate::app_event::AgentPrepareIntent::Idle;
@@ -644,6 +659,7 @@ impl App {
                             widget,
                             resumes,
                             announce_agent,
+                            carries_draft,
                             ..
                         }) = self.candidate_agent.take()
                         else {
@@ -651,12 +667,25 @@ impl App {
                         };
                         let (initial_prompt, initial_images) =
                             self.chat_widget.take_initial_input();
+                        let carried = carries_draft.then(|| {
+                            (
+                                self.chat_widget.take_composer_draft(),
+                                self.chat_widget.loop_state(),
+                            )
+                        });
                         self.shutdown_current_conversation();
                         if resumes {
                             self.begin_replacing_session_transcript(tui)?;
                         }
                         self.install_active_widget(*widget);
                         self.deferred_spawn_pending = false;
+                        self.new_session_return = None;
+                        if let Some((composer_draft, loop_state)) = carried {
+                            self.chat_widget.restore_composer_draft(composer_draft);
+                            if let Some((remaining, total)) = loop_state {
+                                self.chat_widget.set_loop_state(remaining, total);
+                            }
+                        }
                         self.config.active_agent = agent_name.clone();
                         self.config.agent = agent_name;
                         self.configure_new_chat_widget();

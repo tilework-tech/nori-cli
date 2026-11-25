@@ -33,6 +33,8 @@ pub(crate) enum PickerPurpose {
     /// `/resume` or the picker after the last `/close`: restore one of the
     /// current agent's saved sessions or start a new one.
     Restore,
+    /// `/new`: start a session on the current agent without a picker.
+    New,
 }
 
 /// The saved session a switch restores, with the title its row showed.
@@ -77,6 +79,14 @@ impl App {
         self.begin_host_picker(agent_name, display_name, PickerPurpose::Restore);
     }
 
+    /// Start a session beside the current one on a server the host prepares
+    /// in the foreground session's folder.
+    pub(crate) fn begin_host_new_session(&mut self) {
+        let agent_name = self.config.active_agent.clone();
+        let display_name = nori_harness::get_agent_display_name(&agent_name);
+        self.begin_host_picker(agent_name, display_name, PickerPurpose::New);
+    }
+
     fn begin_host_picker(
         &mut self,
         agent_name: String,
@@ -85,7 +95,13 @@ impl App {
     ) {
         self.discard_candidate();
         let generation = crate::chatwidget::agent::next_session_generation();
-        let cwd = self.config_for_agent(&agent_name).cwd;
+        let cwd = self.chat_widget.config_ref().cwd.clone();
+        let cwd = nori_harness::managed_launch::session_folder(&cwd).unwrap_or(cwd);
+        // One slot per host: a newer picker replaces both this config and
+        // the candidate that would have used it.
+        let mut live = self.config_for_agent(&agent_name);
+        live.cwd.clone_from(&cwd);
+        self.foreground_config.set(live);
         let tx = self.app_event_tx.clone();
         let prepared_agent_name = agent_name.clone();
         tokio::spawn(async move {
@@ -145,13 +161,18 @@ impl App {
                     selection,
                     purpose,
                 });
-                self.chat_widget
-                    .show_acp_resume_session_picker(sessions, true);
+                if purpose == PickerPurpose::New {
+                    self.activate_host_candidate(None);
+                } else {
+                    self.chat_widget
+                        .show_acp_resume_session_picker(sessions, true);
+                }
             }
             Err(error) => {
                 if purpose == PickerPurpose::Switch {
                     self.chat_widget.set_login_agent_override(Some(agent_name));
                 }
+                self.return_from_refused_new();
                 self.chat_widget
                     .add_error_message(format!("Couldn't prepare {display_name}: {error}"));
                 self.hint_when_sessionless();
@@ -239,6 +260,7 @@ impl App {
                 if purpose == PickerPurpose::Switch {
                     self.chat_widget.set_login_agent_override(Some(agent_name));
                 }
+                self.return_from_refused_new();
                 self.chat_widget
                     .add_error_message(format!("Couldn't activate {display_name}: {error}"));
                 return;
@@ -254,7 +276,7 @@ impl App {
                 drop(self.app_event_tx.host_receipt(HostCall::Close {
                     session_id: id.to_string(),
                 }));
-                self.chat_widget.set_login_agent_override(Some(agent_name));
+                self.return_from_refused_new();
                 self.chat_widget
                     .add_error_message(format!("Couldn't show {display_name}: {error}"));
                 return;
@@ -285,6 +307,7 @@ impl App {
             activation_error: None,
             resumes,
             announce_agent: purpose == PickerPurpose::Switch,
+            carries_draft: purpose == PickerPurpose::New,
         });
     }
 
@@ -293,6 +316,39 @@ impl App {
         if !self.chat_widget.has_harness_session() {
             self.chat_widget
                 .add_info_message(NO_SESSION_HINT.to_string(), None);
+        }
+    }
+
+    /// `/new` moves the screen to a blank session at once, so anything typed
+    /// waits for the requested session instead of reaching the current one,
+    /// which keeps running parked.
+    pub(super) fn show_pending_new_session(&mut self, frame_requester: crate::tui::FrameRequester) {
+        let previous = self.chat_widget.session_generation();
+        let draft = self.chat_widget.take_composer_draft();
+        let loop_state = self.chat_widget.loop_state();
+        self.shutdown_current_conversation();
+        let init = self.chat_widget_init(frame_requester, None, Vec::new(), None, true, None);
+        self.install_active_widget(ChatWidget::new(init));
+        self.configure_new_chat_widget();
+        self.chat_widget.restore_composer_draft(draft);
+        if let Some((remaining, total)) = loop_state {
+            self.chat_widget.set_loop_state(remaining, total);
+        }
+        self.new_session_return = Some(previous);
+    }
+
+    /// The host refused `/new`: bring the previous session back and leave
+    /// what the person typed meanwhile in its composer, unsent.
+    fn return_from_refused_new(&mut self) {
+        let Some(previous) = self.new_session_return.take() else {
+            return;
+        };
+        let (held, _images) = self.chat_widget.take_initial_input();
+        let draft = self.chat_widget.take_composer_draft();
+        self.show_session(previous);
+        match held {
+            Some(text) => self.chat_widget.set_composer_text(text),
+            None => self.chat_widget.restore_composer_draft(draft),
         }
     }
 

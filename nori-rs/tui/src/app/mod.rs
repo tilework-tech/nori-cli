@@ -62,6 +62,11 @@ pub(crate) struct App {
     /// Registry of every session this process runs. The active widget's
     /// session and a hidden `/agent` switch candidate are both entries.
     session_manager: nori_harness::session_manager::SessionManager,
+    /// Where the host this terminal owns reads the terminal's current config.
+    foreground_config: nori_host_runtime::ForegroundConfig,
+    /// While `/new` waits for the host, the session to bring back if the
+    /// host refuses.
+    new_session_return: Option<crate::app_event::SessionGeneration>,
 
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: NoriConfig,
@@ -217,6 +222,8 @@ enum CandidateAgent {
         resumes: bool,
         /// The candidate moves to another agent, which the screen announces.
         announce_agent: bool,
+        /// `/new`: the composer draft and loop state move to the new session.
+        carries_draft: bool,
     },
 }
 
@@ -266,7 +273,7 @@ impl App {
         host: crate::OwnedHost,
     ) -> Result<AppExitInfo> {
         // Sessions belong to the host the CLI built for this run.
-        let (session_manager, mut host) = host_link::HostLink::start(host);
+        let (session_manager, foreground_config, mut host) = host_link::HostLink::start(host);
         let ran = Self::run_on_host(
             tui,
             auth_manager,
@@ -279,6 +286,7 @@ impl App {
             cloud_onboard,
             analytics,
             session_manager,
+            foreground_config,
             &mut host,
         )
         .await;
@@ -301,6 +309,7 @@ impl App {
         cloud_onboard: bool,
         analytics: Option<nori_installed::AnalyticsReporter>,
         session_manager: nori_harness::session_manager::SessionManager,
+        foreground_config: nori_host_runtime::ForegroundConfig,
         host: &mut host_link::HostLink,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
@@ -377,6 +386,8 @@ impl App {
             chat_widget,
             auth_manager: auth_manager.clone(),
             session_manager,
+            foreground_config,
+            new_session_return: None,
             config,
             vertical_footer,
             cloud_mode,

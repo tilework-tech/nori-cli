@@ -77,6 +77,9 @@ for line in sys.stdin:
             update(sid, "agent_message_chunk", f"{name}/{sid}/{decision['outcome']}")
             send(id=prompt, result={"stopReason": "end_turn", "_meta": {"decision": decision, "receivedPromptMeta": metadata}})
     elif method == "initialize":
+        if Path("fixture-slow-init").exists():
+            import time
+            time.sleep(1.5)
         if params.get("_meta", {}).get("fixture.rejectInitialize"):
             send(id=rid, error={"code": -32603, "message": "fixture unavailable", "data": {"retry": True}})
             continue
@@ -92,6 +95,10 @@ for line in sys.stdin:
     elif method == "session/list":
         send(id=rid, result={"sessions": [saved] if params.get("cwd") in (None, saved["cwd"]) else []})
     elif method == "session/new":
+        if Path("fixture-refuse-new").exists():
+            Path("fixture-refuse-new").unlink()
+            send(id=rid, error={"code": -32004, "message": "new session unavailable"})
+            continue
         sid = str(next(ids))
         sessions.add(sid)
         modes[sid] = mode_ids[0]
