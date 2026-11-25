@@ -25,12 +25,16 @@ use super::host_link::HostLink;
 use super::joined_feed::FeedOutput;
 use super::joined_feed::JoinedFeed;
 use super::session_deck::ParkedSession;
+use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
 use crate::app_event_sender::HostReply;
 use crate::chatwidget::ChatWidget;
 use crate::host_client::HostConnection;
 use crate::host_client::HostEndpoint;
 use crate::tui;
+
+/// How long a refused subscription waits before it is asked again.
+const SUBSCRIBE_RETRY: std::time::Duration = std::time::Duration::from_secs(1);
 
 pub(crate) struct JoinedSessions {
     feed: JoinedFeed,
@@ -84,16 +88,46 @@ impl App {
         analytics: Option<nori_installed::AnalyticsReporter>,
     ) -> Result<AppExitInfo> {
         let mut host = HostLink::join(endpoint, initial);
+        let (app, app_event_rx) = Self::joined(
+            tui.frame_requester(),
+            tui.enhanced_keys_supported(),
+            auth_manager,
+            config,
+            host.connection(),
+            open_session,
+            analytics,
+        );
+        let ran = app.drive(tui, app_event_rx, &mut host).await;
+        let left = host.stop_or_leave().await;
+        let exit = ran?;
+        left.map_err(|error| color_eyre::eyre::eyre!(error))?;
+        Ok(exit)
+    }
+
+    /// The App before it joins: a placeholder on screen until the host lists
+    /// its sessions.
+    pub(super) fn joined(
+        frame_requester: tui::FrameRequester,
+        enhanced_keys_supported: bool,
+        auth_manager: Arc<AuthManager>,
+        config: NoriConfig,
+        connection: HostConnection,
+        open_session: Option<String>,
+        analytics: Option<nori_installed::AnalyticsReporter>,
+    ) -> (
+        Self,
+        tokio::sync::mpsc::UnboundedReceiver<crate::app_event::AppEvent>,
+    ) {
         let (app_event_tx, app_event_rx) = unbounded_channel();
         let app_event_tx = AppEventSender::new(app_event_tx);
         // Shown until the host lists its sessions; it never starts one.
         let mut placeholder = ChatWidget::new(crate::chatwidget::ChatWidgetInit {
             config: config.clone(),
-            frame_requester: tui.frame_requester(),
+            frame_requester,
             app_event_tx: app_event_tx.clone(),
             initial_prompt: None,
             initial_images: Vec::new(),
-            enhanced_keys_supported: tui.enhanced_keys_supported(),
+            enhanced_keys_supported,
             auth_manager: auth_manager.clone(),
             vertical_footer: config.vertical_footer,
             footer_segment_config: config.footer_segment_config.clone(),
@@ -107,10 +141,10 @@ impl App {
             clock: crate::answer_guard::Clock::system(),
         });
         placeholder.suppress_welcome_card();
-        placeholder.set_host_connection(host.connection());
+        placeholder.set_host_connection(connection);
         let vertical_footer = config.vertical_footer;
         let mut app = Self::assemble(
-            tui,
+            enhanced_keys_supported,
             app_event_tx,
             placeholder,
             auth_manager,
@@ -127,11 +161,7 @@ impl App {
             open_session,
             rows: HashMap::new(),
         });
-        let ran = app.drive(tui, app_event_rx, &mut host).await;
-        let left = host.stop_or_leave().await;
-        let exit = ran?;
-        left.map_err(|error| color_eyre::eyre::eyre!(error))?;
-        Ok(exit)
+        (app, app_event_rx)
     }
 
     /// What the host last listed about `id`.
@@ -144,7 +174,7 @@ impl App {
     pub(super) fn on_joined_sessions(
         &mut self,
         list: Value,
-        tui: &mut tui::Tui,
+        frame_requester: tui::FrameRequester,
         connection: &HostConnection,
     ) {
         let Some(joined) = self.joined.as_mut() else {
@@ -188,7 +218,7 @@ impl App {
 
         for (id, row) in new {
             let mut init =
-                self.chat_widget_init(tui.frame_requester(), None, Vec::new(), None, true, None);
+                self.chat_widget_init(frame_requester.clone(), None, Vec::new(), None, true, None);
             if let Some(cwd) = row.cwd {
                 init.config.cwd = cwd;
             }
@@ -305,6 +335,37 @@ impl App {
         else {
             return;
         };
-        host.request(call, HostReply::ReportError(self.app_event_tx.clone()));
+        let (reply, receipt) = tokio::sync::oneshot::channel();
+        host.request(call, HostReply::Receipt(reply));
+        let tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            let result = match receipt.await {
+                Ok(Ok(_)) => Ok(()),
+                Ok(Err(error)) => Err(error.to_string()),
+                // The link dropped the call with its connection; the
+                // reconnect subscribes again.
+                Err(_) => return,
+            };
+            tx.send(AppEvent::JoinedSubscribed { id, result });
+        });
+    }
+
+    /// The host's answer to subscribing to `id`. A refusal is retried after
+    /// [`SUBSCRIBE_RETRY`] and reported once until a subscription succeeds.
+    pub(super) fn on_joined_subscribed(&mut self, id: ConversationId, result: Result<(), String>) {
+        let Some(joined) = self.joined.as_mut() else {
+            return;
+        };
+        match result {
+            Ok(()) => joined.feed.subscribed(id),
+            Err(error) => {
+                let retry_at = std::time::Instant::now() + SUBSCRIBE_RETRY;
+                if joined.feed.subscribe_failed(id, retry_at) {
+                    self.chat_widget.add_error_message(format!(
+                        "The host did not send this session's history ({error}). Retrying."
+                    ));
+                }
+            }
+        }
     }
 }

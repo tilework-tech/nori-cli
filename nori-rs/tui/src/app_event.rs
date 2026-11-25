@@ -99,6 +99,12 @@ pub(crate) enum AppEvent {
     /// `/new DIR`: start a new session in this existing folder.
     NewSessionIn(std::path::PathBuf),
 
+    /// A joined host's answer to subscribing to the session on screen.
+    JoinedSubscribed {
+        id: nori_harness::ConversationId,
+        result: Result<(), String>,
+    },
+
     /// `/screen`: switch between the inline and the full-screen view.
     ToggleScreenMode,
 

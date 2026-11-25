@@ -258,6 +258,8 @@ mod joined_feed;
 #[cfg(test)]
 mod joined_feed_tests;
 mod joined_sessions;
+#[cfg(test)]
+mod joined_sessions_tests;
 mod new_session_folder;
 mod program_status;
 mod resize_reflow;
@@ -391,7 +393,7 @@ impl App {
         let upgrade_version = crate::updates::get_upgrade_version(&config);
         let skillset_per_session = !cloud_mode && config.skillset_per_session;
         let mut app = Self::assemble(
-            tui,
+            tui.enhanced_keys_supported(),
             app_event_tx,
             chat_widget,
             auth_manager,
@@ -489,7 +491,7 @@ impl App {
     /// The App before it runs, with the settings every entry shares.
     #[allow(clippy::too_many_arguments)]
     fn assemble(
-        tui: &mut tui::Tui,
+        enhanced_keys_supported: bool,
         app_event_tx: AppEventSender,
         chat_widget: ChatWidget,
         auth_manager: Arc<AuthManager>,
@@ -522,7 +524,7 @@ impl App {
             analytics,
             file_search,
             file_mentions: Default::default(),
-            enhanced_keys_supported: tui.enhanced_keys_supported(),
+            enhanced_keys_supported,
             transcript_cells: Default::default(),
             session_deck: Default::default(),
             adopted_delegations: Default::default(),

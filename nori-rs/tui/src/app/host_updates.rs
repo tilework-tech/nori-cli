@@ -18,7 +18,9 @@ impl App {
     ) {
         let connection = host.connection();
         match update {
-            HostUpdate::Sessions(list) => self.on_joined_sessions(list, tui, &connection),
+            HostUpdate::Sessions(list) => {
+                self.on_joined_sessions(list, tui.frame_requester(), &connection)
+            }
             HostUpdate::Session(params) => self.on_joined_session_event(params),
             HostUpdate::Ready { reconnected } => {
                 let role = connection.role;

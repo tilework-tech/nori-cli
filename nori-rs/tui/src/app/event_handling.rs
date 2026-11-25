@@ -184,6 +184,7 @@ impl App {
             }
             AppEvent::ToggleScreenMode => self.toggle_screen_mode(tui)?,
             AppEvent::TakeHostControl => host.take_control(),
+            AppEvent::JoinedSubscribed { id, result } => self.on_joined_subscribed(id, result),
             AppEvent::NewSessionIn(folder) => {
                 self.new_session_in(folder, tui.frame_requester());
                 tui.frame_requester().schedule_frame();

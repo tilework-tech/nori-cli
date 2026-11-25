@@ -10,6 +10,7 @@
 //! applies nothing more until it is subscribed again from its cursor.
 
 use std::collections::HashMap;
+use std::time::Instant;
 
 use nori_harness::ConversationId;
 use nori_protocol::NoriEvent;
@@ -48,6 +49,8 @@ struct Followed {
 pub(crate) struct JoinedFeed {
     conversations: HashMap<ConversationId, Followed>,
     subscribed: Option<ConversationId>,
+    /// The host refused the last subscription; try again after this.
+    retry_at: Option<(ConversationId, Instant)>,
 }
 
 impl JoinedFeed {
@@ -74,12 +77,41 @@ impl JoinedFeed {
         if self.subscribed == Some(id) && !followed.gap {
             return None;
         }
+        if let Some((refused, at)) = self.retry_at
+            && refused == id
+            && Instant::now() < at
+        {
+            return None;
+        }
         followed.replaying = std::mem::take(&mut followed.gap);
         self.subscribed = Some(id);
         Some(HostCall::Subscribe {
             session_id: id.to_string(),
             cursor: followed.cursor,
         })
+    }
+
+    /// The host refused to subscribe to `id`. The next [`Self::subscribe`]
+    /// after `retry_at` asks again from the same cursor. True for the first
+    /// refusal since the last subscription the host accepted.
+    pub fn subscribe_failed(&mut self, id: ConversationId, retry_at: Instant) -> bool {
+        let first = self.retry_at.is_none_or(|(refused, _)| refused != id);
+        self.retry_at = Some((id, retry_at));
+        if self.subscribed == Some(id) {
+            self.subscribed = None;
+        }
+        if let Some(followed) = self.conversations.get_mut(&id) {
+            // Events lost before the refusal still need the replay.
+            followed.gap |= std::mem::take(&mut followed.replaying);
+        }
+        first
+    }
+
+    /// The host accepted the subscription to `id`.
+    pub fn subscribed(&mut self, id: ConversationId) {
+        if self.retry_at.is_some_and(|(refused, _)| refused == id) {
+            self.retry_at = None;
+        }
     }
 
     /// The connection's subscription ended with it.

@@ -209,3 +209,40 @@ fn one_subscription_follows_the_session_on_screen_and_returns_after_a_reconnect(
         Some((first.to_string(), 1))
     );
 }
+
+#[test]
+fn a_refused_subscription_is_retried_from_the_same_cursor_once_its_delay_passes() {
+    let id = ConversationId::new();
+    let mut feed = JoinedFeed::default();
+    feed.follow(id, next_session_generation());
+    feed.subscribe(id);
+    feed.apply(said(id, 1));
+
+    // Seen again after a gap, so the retry must replay from the cursor.
+    feed.apply(said(id, 3));
+    assert_eq!(subscription(feed.subscribe(id)), Some((id.to_string(), 1)));
+
+    let later = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    assert!(
+        feed.subscribe_failed(id, later),
+        "the first refusal is reported"
+    );
+    assert_eq!(
+        subscription(feed.subscribe(id)),
+        None,
+        "waits out the delay"
+    );
+    assert!(
+        !feed.subscribe_failed(id, later),
+        "a repeated refusal is not reported again"
+    );
+
+    feed.subscribe_failed(id, std::time::Instant::now());
+    assert_eq!(subscription(feed.subscribe(id)), Some((id.to_string(), 1)));
+    let shown = shown(feed.apply(said(id, 2)));
+    assert_eq!(
+        shown.len(),
+        1,
+        "the replay applies once subscribed: {shown:?}"
+    );
+}

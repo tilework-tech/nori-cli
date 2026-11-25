@@ -203,3 +203,48 @@ fn a_long_replay_applies_quickly() {
         "replaying 4,000 events took {elapsed:?}"
     );
 }
+
+fn prompt_done(request_id: &str) -> nori_protocol::SessionEvent {
+    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+        request_id: nori_protocol::acp::v1::RequestId::Str(request_id.to_string()),
+        response: Ok(nori_protocol::acp::v1::AgentResponse::PromptResponse(
+            nori_protocol::acp::v1::PromptResponse::new(
+                nori_protocol::acp::v1::StopReason::EndTurn,
+            ),
+        )),
+    })
+}
+
+fn idle() -> nori_protocol::SessionEvent {
+    nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionPhaseChanged(
+        nori_protocol::SessionPhase::Idle,
+    ))
+}
+
+/// Events as a joined terminal receives them: decoded from the host's JSON.
+fn feed_wire(chat: &mut ChatWidget, events: impl IntoIterator<Item = nori_protocol::SessionEvent>) {
+    feed(
+        chat,
+        events
+            .into_iter()
+            .map(|event| serde_json::from_value(serde_json::to_value(&event).unwrap()).unwrap()),
+    );
+}
+
+#[test]
+fn an_answer_without_a_final_newline_prints_when_its_turn_ends() {
+    let (mut chat, mut rx) = host_feed_widget();
+
+    feed_wire(
+        &mut chat,
+        [
+            prompting("synthetic-request"),
+            answer("synthetic host answer"),
+            prompt_done("synthetic-request"),
+            idle(),
+        ],
+    );
+
+    let (text, _) = printed(&mut rx);
+    assert!(text.contains("synthetic host answer"), "{text}");
+}
