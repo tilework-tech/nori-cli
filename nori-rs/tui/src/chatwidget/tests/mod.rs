@@ -157,6 +157,7 @@ mod agent_status;
 mod api_key;
 mod approvals;
 mod close_refusal;
+mod compact_host;
 mod context;
 mod context_host;
 mod delegation;

@@ -435,6 +435,7 @@ impl ManagedAgent for HostService {
                 sessions["history"] = json!(true);
                 sessions["prompts"] = json!(true);
                 sessions["goal"] = json!(true);
+                sessions["compact"] = json!(true);
                 sessions["context"] = json!(true);
                 sessions["follow_up"] = json!(1);
             }

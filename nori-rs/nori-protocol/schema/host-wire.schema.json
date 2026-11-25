@@ -946,6 +946,19 @@
       ],
       "type": "object"
     },
+    "CompactParams": {
+      "additionalProperties": false,
+      "description": "Params of `_nori/session/compact`.",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "type": "object"
+    },
     "CompleteElicitationNotification": {
       "description": "**UNSTABLE**\n\nThis capability is not part of the spec yet, and may be removed or changed at any point.\n\nNotification sent by the agent when a URL-based elicitation is complete.",
       "properties": {
@@ -8989,6 +9002,9 @@
     },
     {
       "$ref": "#/$defs/ContextReport"
+    },
+    {
+      "$ref": "#/$defs/CompactParams"
     }
   ],
   "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",

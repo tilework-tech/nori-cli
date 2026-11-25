@@ -231,7 +231,7 @@ fn starting_beside_a_host_whose_contract_cannot_be_read_fails() {
 fn starting_beside_a_host_of_a_compatible_contract_reuses_it() {
     let host = Host::new();
     success(host.run(&["host", "--port", "0"]));
-    advertise_contract(&host, "1.7.0");
+    advertise_contract(&host, "1.9.0");
     let before = discovery(&host);
 
     let again = success(host.run(&["host", "--port", "0"]));
@@ -649,6 +649,9 @@ mod prompts;
 mod context;
 #[path = "host_lifecycle/goal.rs"]
 mod goal;
+
+#[path = "host_lifecycle/compact.rs"]
+mod compact;
 
 #[path = "host_lifecycle/find_paths.rs"]
 mod find_paths;

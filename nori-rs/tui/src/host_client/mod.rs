@@ -170,6 +170,10 @@ pub(crate) enum HostCall {
         session_id: String,
         skip_instructions: bool,
     },
+    /// Compact the session. Only a controller may.
+    Compact {
+        session_id: String,
+    },
 }
 
 impl HostCall {
@@ -346,6 +350,10 @@ impl HostCall {
                     session_id,
                     skip_instructions,
                 }),
+            ),
+            Self::Compact { session_id } => (
+                "_nori/session/compact",
+                json!(nori_protocol::CompactParams { session_id }),
             ),
         }
     }
