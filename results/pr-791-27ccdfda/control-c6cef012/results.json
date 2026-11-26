@@ -1,0 +1,188 @@
+[
+  {
+    "scenario": "S50",
+    "check": "controller.rows_once_in_order",
+    "passed": false,
+    "detail": "{'rows_once_in_order': False, 'row_count': 75, 'dup_rows': 35, 'missing': [], 'plans_once': True, 'plan_counts': {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}, 'plan_place': ['before its rows'], 'finished_once': 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "controller.plans_once",
+    "passed": true,
+    "detail": "{1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "controller.finished_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S50",
+    "check": "controller.plans_after_their_rows",
+    "passed": false,
+    "detail": "['before its rows']"
+  },
+  {
+    "scenario": "S50",
+    "check": "watcher.rows_once_in_order",
+    "passed": false,
+    "detail": "{'rows_once_in_order': False, 'row_count': 75, 'dup_rows': 35, 'missing': [], 'plans_once': True, 'plan_counts': {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}, 'plan_place': ['before its rows'], 'finished_once': 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "watcher.plans_once",
+    "passed": true,
+    "detail": "{1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "watcher.finished_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S50",
+    "check": "watcher.plans_after_their_rows",
+    "passed": false,
+    "detail": "['before its rows']"
+  },
+  {
+    "scenario": "S50",
+    "check": "fresh_attach_replay.rows_once_in_order",
+    "passed": true,
+    "detail": "{'rows_once_in_order': True, 'row_count': 40, 'dup_rows': 0, 'missing': [], 'plans_once': True, 'plan_counts': {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}, 'plan_place': ['before its rows'], 'finished_once': 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "fresh_attach_replay.plans_once",
+    "passed": true,
+    "detail": "{1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "fresh_attach_replay.finished_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S50",
+    "check": "fresh_attach_replay.plans_after_their_rows",
+    "passed": false,
+    "detail": "['before its rows']"
+  },
+  {
+    "scenario": "S50",
+    "check": "plain_nori_live.rows_once_in_order",
+    "passed": true,
+    "detail": "{'rows_once_in_order': True, 'row_count': 40, 'dup_rows': 0, 'missing': [], 'plans_once': True, 'plan_counts': {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}, 'plan_place': ['before its rows'], 'finished_once': 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "plain_nori_live.plans_once",
+    "passed": true,
+    "detail": "{1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "plain_nori_live.finished_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S50",
+    "check": "plain_nori_live.plans_after_their_rows",
+    "passed": false,
+    "detail": "['before its rows']"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_no_session.try1_answered",
+    "passed": false,
+    "detail": "{'query': '@lan', 'shown_ms': None, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_no_session.try2_answered",
+    "passed": false,
+    "detail": "{'query': '@lan', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_no_session.try3_answered",
+    "passed": false,
+    "detail": "{'query': 'lan', 'shown_ms': None, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_no_session.try4_answered",
+    "passed": false,
+    "detail": "{'query': '@lan', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_no_session.never_client_file",
+    "passed": true,
+    "detail": "[{'query': '@lan', 'shown_ms': None, 'loading_stuck': False, 'client_file': False}, {'query': '@lan', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}, {'query': 'lan', 'shown_ms': None, 'loading_stuck': False, 'client_file': False}, {'query': '@lan', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}]"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_in_session.try1_answered",
+    "passed": true,
+    "detail": "{'query': '@harb', 'shown_ms': 154, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_in_session.try2_answered",
+    "passed": false,
+    "detail": "{'query': '@harb', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_in_session.try3_answered",
+    "passed": true,
+    "detail": "{'query': 'harb', 'shown_ms': 155, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_in_session.try4_answered",
+    "passed": false,
+    "detail": "{'query': '@harb', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_in_session.never_client_file",
+    "passed": true,
+    "detail": "[{'query': '@harb', 'shown_ms': 154, 'loading_stuck': False, 'client_file': False}, {'query': '@harb', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}, {'query': 'harb', 'shown_ms': 155, 'loading_stuck': False, 'client_file': False}, {'query': '@harb', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}]"
+  },
+  {
+    "scenario": "S41i",
+    "check": "plain_nori.try1_answered",
+    "passed": true,
+    "detail": "{'query': '@lan', 'shown_ms': 154, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "plain_nori.try2_answered",
+    "passed": false,
+    "detail": "{'query': '@lan', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "plain_nori.try3_answered",
+    "passed": true,
+    "detail": "{'query': 'lan', 'shown_ms': 155, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "plain_nori.try4_answered",
+    "passed": false,
+    "detail": "{'query': '@lan', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "plain_nori.never_client_file",
+    "passed": true,
+    "detail": "[{'query': '@lan', 'shown_ms': 154, 'loading_stuck': False, 'client_file': False}, {'query': '@lan', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}, {'query': 'lan', 'shown_ms': 155, 'loading_stuck': False, 'client_file': False}, {'query': '@lan', 'shown_ms': None, 'loading_stuck': True, 'client_file': False}]"
+  }
+]

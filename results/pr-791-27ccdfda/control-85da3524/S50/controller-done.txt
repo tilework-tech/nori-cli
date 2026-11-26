@@ -1,0 +1,36 @@
+  - gull row 12 of the long streamed reply
+  - gull row 13 of the long streamed reply
+  - gull row 14 of the long streamed reply
+  - gull row 15 of the long streamed reply
+  - gull row 16 of the long streamed reply
+  - gull row 17 of the long streamed reply
+  - gull row 18 of the long streamed reply
+  - gull row 19 of the long streamed reply
+  - gull row 20 of the long streamed reply
+  - gull row 21 of the long streamed reply
+  - gull row 22 of the long streamed reply
+  - gull row 23 of the long streamed reply
+  - gull row 24 of the long streamed reply
+  - gull row 25 of the long streamed reply
+  - gull row 26 of the long streamed reply
+  - gull row 27 of the long streamed reply
+  - gull row 28 of the long streamed reply
+  - gull row 29 of the long streamed reply
+  - gull row 30 of the long streamed reply
+  - gull row 31 of the long streamed reply
+  - gull row 32 of the long streamed reply
+  - gull row 33 of the long streamed reply
+  - gull row 34 of the long streamed reply
+  - gull row 35 of the long streamed reply
+  - gull row 36 of the long streamed reply
+  - gull row 37 of the long streamed reply
+  - gull row 38 of the long streamed reply
+  - gull row 39 of the long streamed reply
+  - gull row 40 of the long streamed reply
+
+  gull stage finished.
+
+                                                                                                                [ auto ]
+› ! for shell commands
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

@@ -1,0 +1,476 @@
+[
+  {
+    "scenario": "S35h",
+    "check": "reconnect.open_menu_shows_reason",
+    "passed": true,
+    "detail": "/new              reconnecting"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_refused_with_reason",
+    "passed": true,
+    "detail": "['\u25a0 Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting;', '\u25a0 /new: reconnecting', '/new  reconnecting']"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.draft_kept",
+    "passed": true,
+    "detail": "/new"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.nothing_sent_while_down",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.menu_enabled_after",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_runs_once_after",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.at_offers_host_folder",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches\n\n\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_relative_from_host_folder",
+    "passed": true,
+    "detail": "['/ new ./assets/alpha-only/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_tilde_from_host_home",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.relative_new_uses_host_folder",
+    "passed": true,
+    "detail": "{'cwd': '/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'host': '/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'client': '/tmp/nori-host-tui-acceptance/S41c/roots/laptop/app/docs'}"
+  },
+  {
+    "scenario": "R01",
+    "check": "restored.unterminated_reply_shown",
+    "passed": true,
+    "detail": "\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a\n\n  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help \u00b7 controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.noon_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.dusk_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.alternate_screen",
+    "passed": true,
+    "detail": "True"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.picker_shown",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 0  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n\u25c7 No options available\n  The caller has not supplied any rows.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  e"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.session_on_host",
+    "passed": true,
+    "detail": "ID                                    AGENT             STATUS               AGE  CWD                                                TITLE\n26d6b7b7-8ebc-4803-8fd4-a5e4a14b68d9  claude-code       ready                 0s  /tmp/nori-host-tui-acceptance/R02/roots/alpha/app  -\n"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.first_prompt_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "detach.back_at_shell",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.lists_two",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 2 \u00b7 2 ready  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n   Session                                                                    Agent         Status\n\u258f\u203a \u25cb relay 1 first                                                            claude-code   ready       "
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.enter_opens_a_session",
+    "passed": true,
+    "detail": "\n\n\n\u2022 - first row 01\n\n  first relay finished.\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a\n\n  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help \u00b7 controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.delivered_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'relay 1 early']"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.reply_shown_once",
+    "passed": true,
+    "detail": "lay 1 early\n\n\n\u2022 - early row 01\n\n  early relay finished.\n\n                                                                                                                [ auto ]\n\u203a\n\n  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help \u00b7 controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.up_focuses_queue_not_history",
+    "passed": true,
+    "detail": "list"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.text_in_composer",
+    "passed": true,
+    "detail": "\u203a relay 1 lamp"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.queue_row_gone",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.never_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reconnect.queue_still_listed",
+    "passed": true,
+    "detail": "rupted) \u00b7 enter resumes\n  \u21b3 relay 1 lamp\n    \u2191 select\n\n                                                                                                                [ auto ]\n\u203a\n\n  Enter resume queue \u00b7 / commands \u00b7 @ files \u00b7 controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.up_focuses_queue_not_history",
+    "passed": true,
+    "detail": "list"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.text_in_composer",
+    "passed": true,
+    "detail": "\u203a relay 1 lamp"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.queue_row_gone",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.never_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.up_in_other_terminal",
+    "passed": true,
+    "detail": "\u203a relay 1 cormorant"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.ctrl_r_in_other_terminal",
+    "passed": true,
+    "detail": "elay 1 cormorant\n\n\n\u2022 - cormorant row 01\n\n  cormorant relay finished.\n\n\u2022 This terminal now controls the host.\n\n                                                                                                                [ auto ]\n\u203a\n\n  relay 1 cormorant\n  esc close  enter select  j/k move  / search\n"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.stored_once_on_host",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.client_home_untouched",
+    "passed": true,
+    "detail": "laptop history"
+  },
+  {
+    "scenario": "R09",
+    "check": "context.runs_in_attach",
+    "passed": true,
+    "detail": "['  Claude Code \u00b7 1 user turn \u00b7 /context']"
+  },
+  {
+    "scenario": "R09",
+    "check": "context.lists_session_folder_instructions",
+    "passed": true,
+    "detail": "['  /tmp/nori-host-tui-acceptance/R09/\u2026/app/CLAUDE.md      ~10    None observed                None observed']"
+  },
+  {
+    "scenario": "R09",
+    "check": "context.instruction_row_shows_file_name",
+    "passed": true,
+    "detail": "['  /tmp/nori-host-tui-acceptance/R09/\u2026/app/CLAUDE.md      ~10    None observed                None observed']"
+  },
+  {
+    "scenario": "R12",
+    "check": "attach.partial_line_visible_mid_turn",
+    "passed": false,
+    "detail": "{'ticks_sent': 11}"
+  },
+  {
+    "scenario": "R12",
+    "check": "plain.partial_line_visible_mid_turn",
+    "passed": false,
+    "detail": " to interrupt)\n\n                                                                                                         [ acceptEdits ]\n\u203a\n\n  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.a_detached",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.up_is_not_history_recall",
+    "passed": true,
+    "detail": "{'queued': '3', 'composer': '\u203a'}"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.take_removes_from_queue_into_composer",
+    "passed": true,
+    "detail": "{'queued': '2', 'composer': '\u203a relay 1 third'}"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.correction_sent_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.original_never_sent",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.others_once_in_order",
+    "passed": true,
+    "detail": "['relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "watcher.queue_unchanged",
+    "passed": true,
+    "detail": "('3', '3')"
+  },
+  {
+    "scenario": "R14b",
+    "check": "watcher.nothing_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.up_is_not_history_recall",
+    "passed": true,
+    "detail": "{'queued': '3', 'composer': '\u203a'}"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.take_removes_from_queue_into_composer",
+    "passed": true,
+    "detail": "{'queued': '2', 'composer': '\u203a relay 1 third'}"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.correction_sent_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.original_never_sent",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.others_once_in_order",
+    "passed": true,
+    "detail": "['relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.runs_in_attach",
+    "passed": true,
+    "detail": "/context\n\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8    Not reported / unknown tokens\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8    Waiting for context usage\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8    Current turn  1 \u00b7 ended\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.five_instruction_rows",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.rows_distinct",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.each_row_ends_with_its_file_name",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.hidden_claude_folder_visible",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.client_decoy_absent",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.runs_in_attach",
+    "passed": true,
+    "detail": "/context\n\n  Not reported / unknown tokens\n  Waiting for context usage\n\n  Current turn  1 \u00b7 ended\n  Turn tokens   unknown\n\n  \u25a8 Usage not reported\n  Each cell = 0.5% of the window\n\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.five_instruction_rows",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.rows_distinct",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.each_row_ends_with_its_file_name",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.hidden_claude_folder_visible",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.client_decoy_absent",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.no_session_at_shows_host_file",
+    "passed": true,
+    "detail": "{'want': 'lantern_wick', 'shown_ms': 155, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.no_session_at_never_client_file",
+    "passed": true,
+    "detail": "{'want': 'lantern_wick', 'shown_ms': 155, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.no_session_client_only_name_not_offered",
+    "passed": true,
+    "detail": "{'want': 'decoy_laptop', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.after_new_dir_at_follows_beta",
+    "passed": true,
+    "detail": "{'want': 'harbor_tide', 'shown_ms': 186, 'files_seen': ['harbor_tide'], 'no_matches_seen': False}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.after_new_dir_old_folder_not_offered",
+    "passed": true,
+    "detail": "{'want': 'lantern_wick', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.after_alt_s_at_follows_switched_session",
+    "passed": true,
+    "detail": "[{'want': 'beta', 'own': {'want': 'harbor_tide', 'shown_ms': 154, 'files_seen': ['harbor_tide'], 'no_matches_seen': False}, 'other': {'want': 'lantern_wick', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}, {'want': 'alpha', 'own': {'want': 'lantern_wick', 'shown_ms': 155, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}, 'other': {'want': 'harbor_tide', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}]"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.never_client_files",
+    "passed": true,
+    "detail": "[{'want': 'beta', 'own': {'want': 'harbor_tide', 'shown_ms': 154, 'files_seen': ['harbor_tide'], 'no_matches_seen': False}, 'other': {'want': 'lantern_wick', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}, {'want': 'alpha', 'own': {'want': 'lantern_wick', 'shown_ms': 155, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}, 'other': {'want': 'harbor_tide', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}]"
+  },
+  {
+    "scenario": "S35r",
+    "check": "r.review_the_parser_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/review the parser'], 'composer': '\u203a /review the parser'}"
+  },
+  {
+    "scenario": "S35r",
+    "check": "r.review_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/review the parser', '/review'], 'composer': '\u203a /review'}"
+  },
+  {
+    "scenario": "S35r",
+    "check": "r.lanternize_now_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['/review the parser', '/review', '/lanternize now'], 'composer': '\u203a /lanternize now'}"
+  }
+]

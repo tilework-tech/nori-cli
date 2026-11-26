@@ -1,0 +1,66 @@
+[
+  {
+    "want": "lantern_wick",
+    "shown_ms": null,
+    "files_seen": [],
+    "no_matches_seen": false
+  },
+  {
+    "want": "decoy_laptop",
+    "shown_ms": 172,
+    "files_seen": [
+      "decoy_laptop"
+    ],
+    "no_matches_seen": false
+  },
+  {
+    "want": "harbor_tide",
+    "shown_ms": 195,
+    "files_seen": [
+      "harbor_tide"
+    ],
+    "no_matches_seen": false
+  },
+  {
+    "want": "lantern_wick",
+    "shown_ms": null,
+    "files_seen": [],
+    "no_matches_seen": true
+  },
+  [
+    {
+      "want": "beta",
+      "own": {
+        "want": "harbor_tide",
+        "shown_ms": 195,
+        "files_seen": [
+          "harbor_tide"
+        ],
+        "no_matches_seen": false
+      },
+      "other": {
+        "want": "lantern_wick",
+        "shown_ms": null,
+        "files_seen": [],
+        "no_matches_seen": true
+      }
+    },
+    {
+      "want": "alpha",
+      "own": {
+        "want": "lantern_wick",
+        "shown_ms": 194,
+        "files_seen": [
+          "lantern_wick"
+        ],
+        "no_matches_seen": false
+      },
+      "other": {
+        "want": "harbor_tide",
+        "shown_ms": null,
+        "files_seen": [],
+        "no_matches_seen": true
+      }
+    }
+  ]
+]

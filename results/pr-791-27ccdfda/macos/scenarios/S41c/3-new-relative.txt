@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+                                                                                                                [ auto ]
+›
+
+  / commands · @ files · ? help · controlling · docs · claude-code · ready · Approvals: Agent · ctrl+d detach

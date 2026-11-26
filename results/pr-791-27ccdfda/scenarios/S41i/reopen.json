@@ -1,0 +1,80 @@
+{
+  "remote_no_session": [
+    {
+      "query": "@lan",
+      "shown_ms": 154,
+      "loading_stuck": false,
+      "client_file": false
+    },
+    {
+      "query": "@lan",
+      "shown_ms": 155,
+      "loading_stuck": false,
+      "client_file": false
+    },
+    {
+      "query": "lan",
+      "shown_ms": 155,
+      "loading_stuck": false,
+      "client_file": false
+    },
+    {
+      "query": "@lan",
+      "shown_ms": 154,
+      "loading_stuck": false,
+      "client_file": false
+    }
+  ],
+  "remote_in_session": [
+    {
+      "query": "@harb",
+      "shown_ms": 154,
+      "loading_stuck": false,
+      "client_file": false
+    },
+    {
+      "query": "@harb",
+      "shown_ms": 154,
+      "loading_stuck": false,
+      "client_file": false
+    },
+    {
+      "query": "harb",
+      "shown_ms": 155,
+      "loading_stuck": false,
+      "client_file": false
+    },
+    {
+      "query": "@harb",
+      "shown_ms": 155,
+      "loading_stuck": false,
+      "client_file": false
+    }
+  ],
+  "plain_nori": [
+    {
+      "query": "@lan",
+      "shown_ms": 154,
+      "loading_stuck": false,
+      "client_file": false
+    },
+    {
+      "query": "@lan",
+      "shown_ms": 155,
+      "loading_stuck": false,
+      "client_file": false
+    },
+    {
+      "query": "lan",
+      "shown_ms": 155,
+      "loading_stuck": false,
+      "client_file": false
+    },
+    {
+      "query": "@lan",
+      "shown_ms": 155,
+      "loading_stuck": false,
+      "client_file": false
+    }
+  ]
+}

@@ -1,0 +1,350 @@
+[
+  {
+    "scenario": "S41c",
+    "check": "n.at_offers_host_folder",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches\n\n\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_relative_from_host_folder",
+    "passed": true,
+    "detail": "['/ new ./assets/alpha-only/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_tilde_from_host_home",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.relative_new_uses_host_folder",
+    "passed": true,
+    "detail": "{'cwd': '/private/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'host': '/private/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'client': '/private/tmp/nori-host-tui-acceptance/S41c/roots/laptop/app/docs'}"
+  },
+  {
+    "scenario": "R01",
+    "check": "restored.unterminated_reply_shown",
+    "passed": true,
+    "detail": "\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a\n\n  / commands \u00b7 ! shell \u00b7 @ files \u00b7 ? help \u00b7 controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.noon_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.dusk_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.a_detached",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.up_is_not_history_recall",
+    "passed": true,
+    "detail": "{'queued': '3', 'composer': '\u203a'}"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.take_removes_from_queue_into_composer",
+    "passed": true,
+    "detail": "{'queued': '2', 'composer': '\u203a relay 1 third'}"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.correction_sent_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.original_never_sent",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.others_once_in_order",
+    "passed": true,
+    "detail": "['relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.no_session_at_shows_host_file",
+    "passed": true,
+    "detail": "{'want': 'lantern_wick', 'shown_ms': 165, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.no_session_at_never_client_file",
+    "passed": true,
+    "detail": "{'want': 'lantern_wick', 'shown_ms': 165, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.no_session_client_only_name_not_offered",
+    "passed": true,
+    "detail": "{'want': 'decoy_laptop', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.after_new_dir_at_follows_beta",
+    "passed": true,
+    "detail": "{'want': 'harbor_tide', 'shown_ms': 176, 'files_seen': ['harbor_tide'], 'no_matches_seen': False}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.after_new_dir_old_folder_not_offered",
+    "passed": true,
+    "detail": "{'want': 'lantern_wick', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.after_alt_s_at_follows_switched_session",
+    "passed": true,
+    "detail": "[{'want': 'beta', 'own': {'want': 'harbor_tide', 'shown_ms': 179, 'files_seen': ['harbor_tide'], 'no_matches_seen': False}, 'other': {'want': 'lantern_wick', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}, {'want': 'alpha', 'own': {'want': 'lantern_wick', 'shown_ms': 178, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}, 'other': {'want': 'harbor_tide', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}]"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.never_client_files",
+    "passed": true,
+    "detail": "[{'want': 'beta', 'own': {'want': 'harbor_tide', 'shown_ms': 179, 'files_seen': ['harbor_tide'], 'no_matches_seen': False}, 'other': {'want': 'lantern_wick', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}, {'want': 'alpha', 'own': {'want': 'lantern_wick', 'shown_ms': 178, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}, 'other': {'want': 'harbor_tide', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}]"
+  },
+  {
+    "scenario": "S35r",
+    "check": "r.review_the_parser_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/review the parser'], 'composer': '\u203a /review the parser'}"
+  },
+  {
+    "scenario": "S35r",
+    "check": "r.review_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', '/review the parser', '/review'], 'composer': '\u203a /review'}"
+  },
+  {
+    "scenario": "S35r",
+    "check": "r.lanternize_now_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['/review the parser', '/review', '/lanternize now'], 'composer': '\u203a /lanternize now'}"
+  },
+  {
+    "scenario": "S50",
+    "check": "controller.rows_once_in_order",
+    "passed": true,
+    "detail": "{'rows_once_in_order': True, 'row_count': 40, 'dup_rows': 0, 'missing': [], 'plans_once': True, 'plan_counts': {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}, 'plan_place': ['after its rows', 'before its rows'], 'finished_once': 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "controller.plans_once",
+    "passed": true,
+    "detail": "{1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "controller.finished_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S50",
+    "check": "controller.plans_after_their_rows",
+    "passed": false,
+    "detail": "['after its rows', 'before its rows']"
+  },
+  {
+    "scenario": "S50",
+    "check": "watcher.rows_once_in_order",
+    "passed": true,
+    "detail": "{'rows_once_in_order': True, 'row_count': 40, 'dup_rows': 0, 'missing': [], 'plans_once': True, 'plan_counts': {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}, 'plan_place': ['after its rows', 'before its rows'], 'finished_once': 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "watcher.plans_once",
+    "passed": true,
+    "detail": "{1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "watcher.finished_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S50",
+    "check": "watcher.plans_after_their_rows",
+    "passed": false,
+    "detail": "['after its rows', 'before its rows']"
+  },
+  {
+    "scenario": "S50",
+    "check": "fresh_attach_replay.rows_once_in_order",
+    "passed": true,
+    "detail": "{'rows_once_in_order': True, 'row_count': 40, 'dup_rows': 0, 'missing': [], 'plans_once': True, 'plan_counts': {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}, 'plan_place': ['before its rows'], 'finished_once': 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "fresh_attach_replay.plans_once",
+    "passed": true,
+    "detail": "{1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "fresh_attach_replay.finished_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S50",
+    "check": "fresh_attach_replay.plans_after_their_rows",
+    "passed": false,
+    "detail": "['before its rows']"
+  },
+  {
+    "scenario": "S50",
+    "check": "plain_nori_live.rows_once_in_order",
+    "passed": true,
+    "detail": "{'rows_once_in_order': True, 'row_count': 40, 'dup_rows': 0, 'missing': [], 'plans_once': True, 'plan_counts': {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}, 'plan_place': ['after its rows', 'before its rows'], 'finished_once': 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "plain_nori_live.plans_once",
+    "passed": true,
+    "detail": "{1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}"
+  },
+  {
+    "scenario": "S50",
+    "check": "plain_nori_live.finished_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S50",
+    "check": "plain_nori_live.plans_after_their_rows",
+    "passed": false,
+    "detail": "['after its rows', 'before its rows']"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_no_session.try1_answered",
+    "passed": true,
+    "detail": "{'query': '@lan', 'shown_ms': 175, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_no_session.try2_answered",
+    "passed": true,
+    "detail": "{'query': '@lan', 'shown_ms': 179, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_no_session.try3_answered",
+    "passed": true,
+    "detail": "{'query': 'lan', 'shown_ms': 177, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_no_session.try4_answered",
+    "passed": true,
+    "detail": "{'query': '@lan', 'shown_ms': 170, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_no_session.never_client_file",
+    "passed": true,
+    "detail": "[{'query': '@lan', 'shown_ms': 175, 'loading_stuck': False, 'client_file': False}, {'query': '@lan', 'shown_ms': 179, 'loading_stuck': False, 'client_file': False}, {'query': 'lan', 'shown_ms': 177, 'loading_stuck': False, 'client_file': False}, {'query': '@lan', 'shown_ms': 170, 'loading_stuck': False, 'client_file': False}]"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_in_session.try1_answered",
+    "passed": true,
+    "detail": "{'query': '@harb', 'shown_ms': 176, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_in_session.try2_answered",
+    "passed": true,
+    "detail": "{'query': '@harb', 'shown_ms': 170, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_in_session.try3_answered",
+    "passed": true,
+    "detail": "{'query': 'harb', 'shown_ms': 167, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_in_session.try4_answered",
+    "passed": true,
+    "detail": "{'query': '@harb', 'shown_ms': 170, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "remote_in_session.never_client_file",
+    "passed": true,
+    "detail": "[{'query': '@harb', 'shown_ms': 176, 'loading_stuck': False, 'client_file': False}, {'query': '@harb', 'shown_ms': 170, 'loading_stuck': False, 'client_file': False}, {'query': 'harb', 'shown_ms': 167, 'loading_stuck': False, 'client_file': False}, {'query': '@harb', 'shown_ms': 170, 'loading_stuck': False, 'client_file': False}]"
+  },
+  {
+    "scenario": "S41i",
+    "check": "plain_nori.try1_answered",
+    "passed": true,
+    "detail": "{'query': '@lan', 'shown_ms': 180, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "plain_nori.try2_answered",
+    "passed": true,
+    "detail": "{'query': '@lan', 'shown_ms': 177, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "plain_nori.try3_answered",
+    "passed": true,
+    "detail": "{'query': 'lan', 'shown_ms': 174, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "plain_nori.try4_answered",
+    "passed": true,
+    "detail": "{'query': '@lan', 'shown_ms': 168, 'loading_stuck': False, 'client_file': False}"
+  },
+  {
+    "scenario": "S41i",
+    "check": "plain_nori.never_client_file",
+    "passed": true,
+    "detail": "[{'query': '@lan', 'shown_ms': 180, 'loading_stuck': False, 'client_file': False}, {'query': '@lan', 'shown_ms': 177, 'loading_stuck': False, 'client_file': False}, {'query': 'lan', 'shown_ms': 174, 'loading_stuck': False, 'client_file': False}, {'query': '@lan', 'shown_ms': 168, 'loading_stuck': False, 'client_file': False}]"
+  }
+]

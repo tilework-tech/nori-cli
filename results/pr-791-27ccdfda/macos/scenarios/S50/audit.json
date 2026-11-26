@@ -1,0 +1,89 @@
+{
+  "controller": {
+    "rows_once_in_order": true,
+    "row_count": 40,
+    "dup_rows": 0,
+    "missing": [],
+    "plans_once": true,
+    "plan_counts": {
+      "1": 1,
+      "2": 1,
+      "3": 1,
+      "4": 1,
+      "5": 1,
+      "6": 1,
+      "7": 1,
+      "8": 1
+    },
+    "plan_place": [
+      "after its rows",
+      "before its rows"
+    ],
+    "finished_once": 1
+  },
+  "watcher": {
+    "rows_once_in_order": true,
+    "row_count": 40,
+    "dup_rows": 0,
+    "missing": [],
+    "plans_once": true,
+    "plan_counts": {
+      "1": 1,
+      "2": 1,
+      "3": 1,
+      "4": 1,
+      "5": 1,
+      "6": 1,
+      "7": 1,
+      "8": 1
+    },
+    "plan_place": [
+      "after its rows",
+      "before its rows"
+    ],
+    "finished_once": 1
+  },
+  "fresh_attach_replay": {
+    "rows_once_in_order": true,
+    "row_count": 40,
+    "dup_rows": 0,
+    "missing": [],
+    "plans_once": true,
+    "plan_counts": {
+      "1": 1,
+      "2": 1,
+      "3": 1,
+      "4": 1,
+      "5": 1,
+      "6": 1,
+      "7": 1,
+      "8": 1
+    },
+    "plan_place": [
+      "before its rows"
+    ],
+    "finished_once": 1
+  },
+  "plain_nori_live": {
+    "rows_once_in_order": true,
+    "row_count": 40,
+    "dup_rows": 0,
+    "missing": [],
+    "plans_once": true,
+    "plan_counts": {
+      "1": 1,
+      "2": 1,
+      "3": 1,
+      "4": 1,
+      "5": 1,
+      "6": 1,
+      "7": 1,
+      "8": 1
+    },
+    "plan_place": [
+      "after its rows",
+      "before its rows"
+    ],
+    "finished_once": 1
+  }
+}

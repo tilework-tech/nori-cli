@@ -1,0 +1,36 @@
+  └ ✔ heron step 5 done
+    □ heron step 6 next
+  - heron row 26 of the long streamed reply
+  - heron row 27 of the long streamed reply
+  - heron row 28 of the long streamed reply
+  - heron row 29 of the long streamed reply
+
+• Updated Plan
+  └ ✔ heron step 6 done
+    □ heron step 7 next
+  - heron row 30 of the long streamed reply
+  - heron row 31 of the long streamed reply
+  - heron row 32 of the long streamed reply
+  - heron row 33 of the long streamed reply
+  - heron row 34 of the long streamed reply
+  - heron row 35 of the long streamed reply
+
+• Updated Plan
+  └ ✔ heron step 7 done
+    □ heron step 8 next
+  - heron row 36 of the long streamed reply
+  - heron row 37 of the long streamed reply
+  - heron row 38 of the long streamed reply
+  - heron row 39 of the long streamed reply
+
+• Updated Plan
+  └ ✔ heron step 8 done
+    □ heron step 9 next
+  - heron row 40 of the long streamed reply
+
+  heron stage finished.
+
+                                                                                                         [ acceptEdits ]
+›
+
+  / commands · ! shell · @ files · ? help

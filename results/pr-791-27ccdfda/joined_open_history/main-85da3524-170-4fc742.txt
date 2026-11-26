@@ -1,0 +1,4096 @@
+
+› kiln seed history
+
+
+
+› Check kiln batch 1 please.
+
+
+• KilnOpening
+
+  ## KilnMark0001
+
+  Batch 1 fired at cone 2; glaze celadon-1 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  1      1201
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_1():
+      return 1 * 3
+
+• Explored 1 read
+  • Read kiln-1.log
+
+
+› Check kiln batch 2 please.
+
+
+• ## KilnMark0002
+
+  Batch 2 fired at cone 3; glaze celadon-2 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  2      1202
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_2() -> u32 {
+      2 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-2.log
+
+
+› Check kiln batch 3 please.
+
+
+• ## KilnMark0003
+
+  Batch 3 fired at cone 4; glaze celadon-3 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  3      1203
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_3():
+      return 3 * 3
+
+• Explored 1 read
+  • Read kiln-3.log
+
+
+› Check kiln batch 4 please.
+
+
+• ## KilnMark0004
+
+  Batch 4 fired at cone 5; glaze celadon-4 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  4      1204
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_4() -> u32 {
+      4 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-4.log
+
+
+› Check kiln batch 5 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 5
+    □ Record batch 5
+
+• ## KilnMark0005
+
+  Batch 5 fired at cone 6; glaze celadon-5 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  5      1205
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_5():
+      return 5 * 3
+
+• Explored 1 read
+  • Read kiln-5.log
+
+
+› Check kiln batch 6 please.
+
+
+• ## KilnMark0006
+
+  Batch 6 fired at cone 7; glaze celadon-6 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  6      1206
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_6() -> u32 {
+      6 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-6.log
+
+
+› Check kiln batch 7 please.
+
+
+• ## KilnMark0007
+
+  Batch 7 fired at cone 8; glaze celadon-7 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  7      1207
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_7():
+      return 7 * 3
+
+• Explored 1 read
+  • Read kiln-7.log
+
+
+› Check kiln batch 8 please.
+
+
+• ## KilnMark0008
+
+  Batch 8 fired at cone 9; glaze celadon-8 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  8      1208
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_8() -> u32 {
+      8 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-8.log
+
+
+› Check kiln batch 9 please.
+
+
+• ## KilnMark0009
+
+  Batch 9 fired at cone 10; glaze celadon-9 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  9      1209
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_9():
+      return 9 * 3
+
+• Explored 1 read
+  • Read kiln-9.log
+
+
+› Check kiln batch 10 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 10
+    □ Record batch 10
+
+• ## KilnMark0010
+
+  Batch 10 fired at cone 11; glaze celadon-10 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  10     1210
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_10() -> u32 {
+      10 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-10.log
+
+
+› Check kiln batch 11 please.
+
+
+• ## KilnMark0011
+
+  Batch 11 fired at cone 12; glaze celadon-11 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  11     1211
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_11():
+      return 11 * 3
+
+• Explored 1 read
+  • Read kiln-11.log
+
+
+› Check kiln batch 12 please.
+
+
+• ## KilnMark0012
+
+  Batch 12 fired at cone 1; glaze celadon-12 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  12     1212
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_12() -> u32 {
+      12 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-12.log
+
+
+› Check kiln batch 13 please.
+
+
+• ## KilnMark0013
+
+  Batch 13 fired at cone 2; glaze celadon-13 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  13     1213
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_13():
+      return 13 * 3
+
+• Explored 1 read
+  • Read kiln-13.log
+
+
+› Check kiln batch 14 please.
+
+
+• ## KilnMark0014
+
+  Batch 14 fired at cone 3; glaze celadon-14 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  14     1214
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_14() -> u32 {
+      14 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-14.log
+
+
+› Check kiln batch 15 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 15
+    □ Record batch 15
+
+• ## KilnMark0015
+
+  Batch 15 fired at cone 4; glaze celadon-15 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  15     1215
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_15():
+      return 15 * 3
+
+• Explored 1 read
+  • Read kiln-15.log
+
+
+› Check kiln batch 16 please.
+
+
+• ## KilnMark0016
+
+  Batch 16 fired at cone 5; glaze celadon-16 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  16     1216
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_16() -> u32 {
+      16 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-16.log
+
+
+› Check kiln batch 17 please.
+
+
+• ## KilnMark0017
+
+  Batch 17 fired at cone 6; glaze celadon-17 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  17     1217
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_17():
+      return 17 * 3
+
+• Explored 1 read
+  • Read kiln-17.log
+
+
+› Check kiln batch 18 please.
+
+
+• ## KilnMark0018
+
+  Batch 18 fired at cone 7; glaze celadon-18 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  18     1218
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_18() -> u32 {
+      18 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-18.log
+
+
+› Check kiln batch 19 please.
+
+
+• ## KilnMark0019
+
+  Batch 19 fired at cone 8; glaze celadon-19 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  19     1219
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_19():
+      return 19 * 3
+
+• Explored 1 read
+  • Read kiln-19.log
+
+
+› Check kiln batch 20 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 20
+    □ Record batch 20
+
+• ## KilnMark0020
+
+  Batch 20 fired at cone 9; glaze celadon-20 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  20     1220
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_20() -> u32 {
+      20 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-20.log
+
+
+› Check kiln batch 21 please.
+
+
+• ## KilnMark0021
+
+  Batch 21 fired at cone 10; glaze celadon-21 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  21     1221
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_21():
+      return 21 * 3
+
+• Explored 1 read
+  • Read kiln-21.log
+
+
+› Check kiln batch 22 please.
+
+
+• ## KilnMark0022
+
+  Batch 22 fired at cone 11; glaze celadon-22 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  22     1222
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_22() -> u32 {
+      22 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-22.log
+
+
+› Check kiln batch 23 please.
+
+
+• ## KilnMark0023
+
+  Batch 23 fired at cone 12; glaze celadon-23 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  23     1223
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_23():
+      return 23 * 3
+
+• Explored 1 read
+  • Read kiln-23.log
+
+
+› Check kiln batch 24 please.
+
+
+• ## KilnMark0024
+
+  Batch 24 fired at cone 1; glaze celadon-24 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  24     1224
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_24() -> u32 {
+      24 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-24.log
+
+
+› Check kiln batch 25 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 25
+    □ Record batch 25
+
+• ## KilnMark0025
+
+  Batch 25 fired at cone 2; glaze celadon-25 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  25     1225
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_25():
+      return 25 * 3
+
+• Explored 1 read
+  • Read kiln-25.log
+
+
+› Check kiln batch 26 please.
+
+
+• ## KilnMark0026
+
+  Batch 26 fired at cone 3; glaze celadon-26 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  26     1226
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_26() -> u32 {
+      26 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-26.log
+
+
+› Check kiln batch 27 please.
+
+
+• ## KilnMark0027
+
+  Batch 27 fired at cone 4; glaze celadon-27 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  27     1227
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_27():
+      return 27 * 3
+
+• Explored 1 read
+  • Read kiln-27.log
+
+
+› Check kiln batch 28 please.
+
+
+• ## KilnMark0028
+
+  Batch 28 fired at cone 5; glaze celadon-28 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  28     1228
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_28() -> u32 {
+      28 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-28.log
+
+
+› Check kiln batch 29 please.
+
+
+• ## KilnMark0029
+
+  Batch 29 fired at cone 6; glaze celadon-29 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  29     1229
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_29():
+      return 29 * 3
+
+• Explored 1 read
+  • Read kiln-29.log
+
+
+› Check kiln batch 30 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 30
+    □ Record batch 30
+
+• ## KilnMark0030
+
+  Batch 30 fired at cone 7; glaze celadon-30 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  30     1230
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_30() -> u32 {
+      30 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-30.log
+
+
+› Check kiln batch 31 please.
+
+
+• ## KilnMark0031
+
+  Batch 31 fired at cone 8; glaze celadon-31 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  31     1231
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_31():
+      return 31 * 3
+
+• Explored 1 read
+  • Read kiln-31.log
+
+
+› Check kiln batch 32 please.
+
+
+• ## KilnMark0032
+
+  Batch 32 fired at cone 9; glaze celadon-32 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  32     1232
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_32() -> u32 {
+      32 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-32.log
+
+
+› Check kiln batch 33 please.
+
+
+• ## KilnMark0033
+
+  Batch 33 fired at cone 10; glaze celadon-33 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  33     1233
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_33():
+      return 33 * 3
+
+• Explored 1 read
+  • Read kiln-33.log
+
+
+› Check kiln batch 34 please.
+
+
+• ## KilnMark0034
+
+  Batch 34 fired at cone 11; glaze celadon-34 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  34     1234
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_34() -> u32 {
+      34 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-34.log
+
+
+› Check kiln batch 35 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 35
+    □ Record batch 35
+
+• ## KilnMark0035
+
+  Batch 35 fired at cone 12; glaze celadon-35 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  35     1235
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_35():
+      return 35 * 3
+
+• Explored 1 read
+  • Read kiln-35.log
+
+
+› Check kiln batch 36 please.
+
+
+• ## KilnMark0036
+
+  Batch 36 fired at cone 1; glaze celadon-36 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  36     1236
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_36() -> u32 {
+      36 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-36.log
+
+
+› Check kiln batch 37 please.
+
+
+• ## KilnMark0037
+
+  Batch 37 fired at cone 2; glaze celadon-37 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  37     1237
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_37():
+      return 37 * 3
+
+• Explored 1 read
+  • Read kiln-37.log
+
+
+› Check kiln batch 38 please.
+
+
+• ## KilnMark0038
+
+  Batch 38 fired at cone 3; glaze celadon-38 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  38     1238
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_38() -> u32 {
+      38 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-38.log
+
+
+› Check kiln batch 39 please.
+
+
+• ## KilnMark0039
+
+  Batch 39 fired at cone 4; glaze celadon-39 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  39     1239
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_39():
+      return 39 * 3
+
+• Explored 1 read
+  • Read kiln-39.log
+
+
+› Check kiln batch 40 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 40
+    □ Record batch 40
+
+• ## KilnMark0040
+
+  Batch 40 fired at cone 5; glaze celadon-40 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  40     1240
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_40() -> u32 {
+      40 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-40.log
+
+
+› Check kiln batch 41 please.
+
+
+• ## KilnMark0041
+
+  Batch 41 fired at cone 6; glaze celadon-41 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  41     1241
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_41():
+      return 41 * 3
+
+• Explored 1 read
+  • Read kiln-41.log
+
+
+› Check kiln batch 42 please.
+
+
+• ## KilnMark0042
+
+  Batch 42 fired at cone 7; glaze celadon-42 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  42     1242
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_42() -> u32 {
+      42 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-42.log
+
+
+› Check kiln batch 43 please.
+
+
+• ## KilnMark0043
+
+  Batch 43 fired at cone 8; glaze celadon-43 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  43     1243
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_43():
+      return 43 * 3
+
+• Explored 1 read
+  • Read kiln-43.log
+
+
+› Check kiln batch 44 please.
+
+
+• ## KilnMark0044
+
+  Batch 44 fired at cone 9; glaze celadon-44 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  44     1244
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_44() -> u32 {
+      44 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-44.log
+
+
+› Check kiln batch 45 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 45
+    □ Record batch 45
+
+• ## KilnMark0045
+
+  Batch 45 fired at cone 10; glaze celadon-45 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  45     1245
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_45():
+      return 45 * 3
+
+• Explored 1 read
+  • Read kiln-45.log
+
+
+› Check kiln batch 46 please.
+
+
+• ## KilnMark0046
+
+  Batch 46 fired at cone 11; glaze celadon-46 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  46     1246
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_46() -> u32 {
+      46 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-46.log
+
+
+› Check kiln batch 47 please.
+
+
+• ## KilnMark0047
+
+  Batch 47 fired at cone 12; glaze celadon-47 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  47     1247
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_47():
+      return 47 * 3
+
+• Explored 1 read
+  • Read kiln-47.log
+
+
+› Check kiln batch 48 please.
+
+
+• ## KilnMark0048
+
+  Batch 48 fired at cone 1; glaze celadon-48 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  48     1248
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_48() -> u32 {
+      48 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-48.log
+
+
+› Check kiln batch 49 please.
+
+
+• ## KilnMark0049
+
+  Batch 49 fired at cone 2; glaze celadon-49 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  49     1249
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_49():
+      return 49 * 3
+
+• Explored 1 read
+  • Read kiln-49.log
+
+
+› Check kiln batch 50 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 50
+    □ Record batch 50
+
+• ## KilnMark0050
+
+  Batch 50 fired at cone 3; glaze celadon-50 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  50     1250
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_50() -> u32 {
+      50 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-50.log
+
+
+› Check kiln batch 51 please.
+
+
+• ## KilnMark0051
+
+  Batch 51 fired at cone 4; glaze celadon-51 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  51     1251
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_51():
+      return 51 * 3
+
+• Explored 1 read
+  • Read kiln-51.log
+
+
+› Check kiln batch 52 please.
+
+
+• ## KilnMark0052
+
+  Batch 52 fired at cone 5; glaze celadon-52 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  52     1252
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_52() -> u32 {
+      52 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-52.log
+
+
+› Check kiln batch 53 please.
+
+
+• ## KilnMark0053
+
+  Batch 53 fired at cone 6; glaze celadon-53 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  53     1253
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_53():
+      return 53 * 3
+
+• Explored 1 read
+  • Read kiln-53.log
+
+
+› Check kiln batch 54 please.
+
+
+• ## KilnMark0054
+
+  Batch 54 fired at cone 7; glaze celadon-54 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  54     1254
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_54() -> u32 {
+      54 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-54.log
+
+
+› Check kiln batch 55 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 55
+    □ Record batch 55
+
+• ## KilnMark0055
+
+  Batch 55 fired at cone 8; glaze celadon-55 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  55     1255
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_55():
+      return 55 * 3
+
+• Explored 1 read
+  • Read kiln-55.log
+
+
+› Check kiln batch 56 please.
+
+
+• ## KilnMark0056
+
+  Batch 56 fired at cone 9; glaze celadon-56 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  56     1256
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_56() -> u32 {
+      56 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-56.log
+
+
+› Check kiln batch 57 please.
+
+
+• ## KilnMark0057
+
+  Batch 57 fired at cone 10; glaze celadon-57 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  57     1257
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_57():
+      return 57 * 3
+
+• Explored 1 read
+  • Read kiln-57.log
+
+
+› Check kiln batch 58 please.
+
+
+• ## KilnMark0058
+
+  Batch 58 fired at cone 11; glaze celadon-58 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  58     1258
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_58() -> u32 {
+      58 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-58.log
+
+
+› Check kiln batch 59 please.
+
+
+• ## KilnMark0059
+
+  Batch 59 fired at cone 12; glaze celadon-59 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  59     1259
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_59():
+      return 59 * 3
+
+• Explored 1 read
+  • Read kiln-59.log
+
+
+› Check kiln batch 60 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 60
+    □ Record batch 60
+
+• ## KilnMark0060
+
+  Batch 60 fired at cone 1; glaze celadon-60 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  60     1260
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_60() -> u32 {
+      60 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-60.log
+
+
+› Check kiln batch 61 please.
+
+
+• ## KilnMark0061
+
+  Batch 61 fired at cone 2; glaze celadon-61 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  61     1261
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_61():
+      return 61 * 3
+
+• Explored 1 read
+  • Read kiln-61.log
+
+
+› Check kiln batch 62 please.
+
+
+• ## KilnMark0062
+
+  Batch 62 fired at cone 3; glaze celadon-62 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  62     1262
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_62() -> u32 {
+      62 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-62.log
+
+
+› Check kiln batch 63 please.
+
+
+• ## KilnMark0063
+
+  Batch 63 fired at cone 4; glaze celadon-63 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  63     1263
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_63():
+      return 63 * 3
+
+• Explored 1 read
+  • Read kiln-63.log
+
+
+› Check kiln batch 64 please.
+
+
+• ## KilnMark0064
+
+  Batch 64 fired at cone 5; glaze celadon-64 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  64     1264
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_64() -> u32 {
+      64 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-64.log
+
+
+› Check kiln batch 65 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 65
+    □ Record batch 65
+
+• ## KilnMark0065
+
+  Batch 65 fired at cone 6; glaze celadon-65 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  65     1265
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_65():
+      return 65 * 3
+
+• Explored 1 read
+  • Read kiln-65.log
+
+
+› Check kiln batch 66 please.
+
+
+• ## KilnMark0066
+
+  Batch 66 fired at cone 7; glaze celadon-66 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  66     1266
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_66() -> u32 {
+      66 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-66.log
+
+
+› Check kiln batch 67 please.
+
+
+• ## KilnMark0067
+
+  Batch 67 fired at cone 8; glaze celadon-67 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  67     1267
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_67():
+      return 67 * 3
+
+• Explored 1 read
+  • Read kiln-67.log
+
+
+› Check kiln batch 68 please.
+
+
+• ## KilnMark0068
+
+  Batch 68 fired at cone 9; glaze celadon-68 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  68     1268
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_68() -> u32 {
+      68 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-68.log
+
+
+› Check kiln batch 69 please.
+
+
+• ## KilnMark0069
+
+  Batch 69 fired at cone 10; glaze celadon-69 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  69     1269
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_69():
+      return 69 * 3
+
+• Explored 1 read
+  • Read kiln-69.log
+
+
+› Check kiln batch 70 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 70
+    □ Record batch 70
+
+• ## KilnMark0070
+
+  Batch 70 fired at cone 11; glaze celadon-70 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  70     1270
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_70() -> u32 {
+      70 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-70.log
+
+
+› Check kiln batch 71 please.
+
+
+• ## KilnMark0071
+
+  Batch 71 fired at cone 12; glaze celadon-71 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  71     1271
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_71():
+      return 71 * 3
+
+• Explored 1 read
+  • Read kiln-71.log
+
+
+› Check kiln batch 72 please.
+
+
+• ## KilnMark0072
+
+  Batch 72 fired at cone 1; glaze celadon-72 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  72     1272
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_72() -> u32 {
+      72 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-72.log
+
+
+› Check kiln batch 73 please.
+
+
+• ## KilnMark0073
+
+  Batch 73 fired at cone 2; glaze celadon-73 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  73     1273
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_73():
+      return 73 * 3
+
+• Explored 1 read
+  • Read kiln-73.log
+
+
+› Check kiln batch 74 please.
+
+
+• ## KilnMark0074
+
+  Batch 74 fired at cone 3; glaze celadon-74 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  74     1274
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_74() -> u32 {
+      74 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-74.log
+
+
+› Check kiln batch 75 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 75
+    □ Record batch 75
+
+• ## KilnMark0075
+
+  Batch 75 fired at cone 4; glaze celadon-75 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  75     1275
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_75():
+      return 75 * 3
+
+• Explored 1 read
+  • Read kiln-75.log
+
+
+› Check kiln batch 76 please.
+
+
+• ## KilnMark0076
+
+  Batch 76 fired at cone 5; glaze celadon-76 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  76     1276
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_76() -> u32 {
+      76 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-76.log
+
+
+› Check kiln batch 77 please.
+
+
+• ## KilnMark0077
+
+  Batch 77 fired at cone 6; glaze celadon-77 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  77     1277
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_77():
+      return 77 * 3
+
+• Explored 1 read
+  • Read kiln-77.log
+
+
+› Check kiln batch 78 please.
+
+
+• ## KilnMark0078
+
+  Batch 78 fired at cone 7; glaze celadon-78 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  78     1278
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_78() -> u32 {
+      78 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-78.log
+
+
+› Check kiln batch 79 please.
+
+
+• ## KilnMark0079
+
+  Batch 79 fired at cone 8; glaze celadon-79 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  79     1279
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_79():
+      return 79 * 3
+
+• Explored 1 read
+  • Read kiln-79.log
+
+
+› Check kiln batch 80 please.
+
+
+• ## KilnMark0080
+
+• Updated Plan
+  └ ✔ Inspect batch 80
+    □ Record batch 80
+
+• ## KilnMark0080
+
+  Batch 80 fired at cone 9; glaze celadon-80 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  80     1280
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_80() -> u32 {
+      80 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-80.log
+
+
+› Check kiln batch 81 please.
+
+
+• ## KilnMark0081
+
+  Batch 81 fired at cone 10; glaze celadon-81 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  81     1281
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_81():
+      return 81 * 3
+
+• Explored 1 read
+  • Read kiln-81.log
+
+
+› Check kiln batch 82 please.
+
+
+• ## KilnMark0082
+
+  Batch 82 fired at cone 11; glaze celadon-82 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  82     1282
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_82() -> u32 {
+      82 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-82.log
+
+
+› Check kiln batch 83 please.
+
+
+• ## KilnMark0083
+
+  Batch 83 fired at cone 12; glaze celadon-83 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  83     1283
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_83():
+      return 83 * 3
+
+• Explored 1 read
+  • Read kiln-83.log
+
+
+› Check kiln batch 84 please.
+
+
+• ## KilnMark0084
+
+  Batch 84 fired at cone 1; glaze celadon-84 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  84     1284
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_84() -> u32 {
+      84 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-84.log
+
+
+› Check kiln batch 85 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 85
+    □ Record batch 85
+
+• ## KilnMark0085
+
+  Batch 85 fired at cone 2; glaze celadon-85 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  85     1285
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_85():
+      return 85 * 3
+
+• Explored 1 read
+  • Read kiln-85.log
+
+
+› Check kiln batch 86 please.
+
+
+• ## KilnMark0086
+
+  Batch 86 fired at cone 3; glaze celadon-86 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  86     1286
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_86() -> u32 {
+      86 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-86.log
+
+
+› Check kiln batch 87 please.
+
+
+• ## KilnMark0087
+
+  Batch 87 fired at cone 4; glaze celadon-87 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  87     1287
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_87():
+      return 87 * 3
+
+• Explored 1 read
+  • Read kiln-87.log
+
+
+› Check kiln batch 88 please.
+
+
+• ## KilnMark0088
+
+  Batch 88 fired at cone 5; glaze celadon-88 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  88     1288
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_88() -> u32 {
+      88 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-88.log
+
+
+› Check kiln batch 89 please.
+
+
+• ## KilnMark0089
+
+  Batch 89 fired at cone 6; glaze celadon-89 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  89     1289
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_89():
+      return 89 * 3
+
+• Explored 1 read
+  • Read kiln-89.log
+
+
+› Check kiln batch 90 please.
+
+
+• ## KilnMark0090
+
+• Updated Plan
+  └ ✔ Inspect batch 90
+    □ Record batch 90
+
+• ## KilnMark0090
+
+  Batch 90 fired at cone 7; glaze celadon-90 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  90     1290
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_90() -> u32 {
+      90 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-90.log
+
+
+› Check kiln batch 91 please.
+
+
+• ## KilnMark0091
+
+  Batch 91 fired at cone 8; glaze celadon-91 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  91     1291
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_91():
+      return 91 * 3
+
+• Explored 1 read
+  • Read kiln-91.log
+
+
+› Check kiln batch 92 please.
+
+
+• ## KilnMark0092
+
+  Batch 92 fired at cone 9; glaze celadon-92 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  92     1292
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_92() -> u32 {
+      92 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-92.log
+
+
+› Check kiln batch 93 please.
+
+
+• ## KilnMark0093
+
+  Batch 93 fired at cone 10; glaze celadon-93 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  93     1293
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_93():
+      return 93 * 3
+
+• Explored 1 read
+  • Read kiln-93.log
+
+
+› Check kiln batch 94 please.
+
+
+• ## KilnMark0094
+
+  Batch 94 fired at cone 11; glaze celadon-94 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  94     1294
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_94() -> u32 {
+      94 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-94.log
+
+
+› Check kiln batch 95 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 95
+    □ Record batch 95
+
+• ## KilnMark0095
+
+  Batch 95 fired at cone 12; glaze celadon-95 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  95     1295
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_95():
+      return 95 * 3
+
+• Explored 1 read
+  • Read kiln-95.log
+
+
+› Check kiln batch 96 please.
+
+
+• ## KilnMark0096
+
+  Batch 96 fired at cone 1; glaze celadon-96 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  96     1296
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_96() -> u32 {
+      96 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-96.log
+
+
+› Check kiln batch 97 please.
+
+
+• ## KilnMark0097
+
+  Batch 97 fired at cone 2; glaze celadon-97 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  97     1297
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_97():
+      return 97 * 3
+
+• Explored 1 read
+  • Read kiln-97.log
+
+
+› Check kiln batch 98 please.
+
+
+• ## KilnMark0098
+
+  Batch 98 fired at cone 3; glaze celadon-98 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  98     1298
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_98() -> u32 {
+      98 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-98.log
+
+
+› Check kiln batch 99 please.
+
+
+• ## KilnMark0099
+
+  Batch 99 fired at cone 4; glaze celadon-99 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  99     1299
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_99():
+      return 99 * 3
+
+• Explored 1 read
+  • Read kiln-99.log
+
+
+› Check kiln batch 100 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 100
+    □ Record batch 100
+
+• ## KilnMark0100
+
+  Batch 100 fired at cone 5; glaze celadon-100 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  100    1300
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_100() -> u32 {
+      100 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-100.log
+
+
+› Check kiln batch 101 please.
+
+
+• ## KilnMark0101
+
+  Batch 101 fired at cone 6; glaze celadon-101 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  101    1301
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_101():
+      return 101 * 3
+
+• Explored 1 read
+  • Read kiln-101.log
+
+
+› Check kiln batch 102 please.
+
+
+• ## KilnMark0102
+
+  Batch 102 fired at cone 7; glaze celadon-102 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  102    1302
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_102() -> u32 {
+      102 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-102.log
+
+
+› Check kiln batch 103 please.
+
+
+• ## KilnMark0103
+
+  Batch 103 fired at cone 8; glaze celadon-103 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  103    1303
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_103():
+      return 103 * 3
+
+• Explored 1 read
+  • Read kiln-103.log
+
+
+› Check kiln batch 104 please.
+
+
+• ## KilnMark0104
+
+  Batch 104 fired at cone 9; glaze celadon-104 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  104    1304
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_104() -> u32 {
+      104 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-104.log
+
+
+› Check kiln batch 105 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 105
+    □ Record batch 105
+
+• ## KilnMark0105
+
+  Batch 105 fired at cone 10; glaze celadon-105 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  105    1305
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_105():
+      return 105 * 3
+
+• Explored 1 read
+  • Read kiln-105.log
+
+
+› Check kiln batch 106 please.
+
+
+• ## KilnMark0106
+
+  Batch 106 fired at cone 11; glaze celadon-106 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  106    1306
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_106() -> u32 {
+      106 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-106.log
+
+
+› Check kiln batch 107 please.
+
+
+• ## KilnMark0107
+
+  Batch 107 fired at cone 12; glaze celadon-107 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  107    1307
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_107():
+      return 107 * 3
+
+• Explored 1 read
+  • Read kiln-107.log
+
+
+› Check kiln batch 108 please.
+
+
+• ## KilnMark0108
+
+  Batch 108 fired at cone 1; glaze celadon-108 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  108    1308
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_108() -> u32 {
+      108 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-108.log
+
+
+› Check kiln batch 109 please.
+
+
+• ## KilnMark0109
+
+  Batch 109 fired at cone 2; glaze celadon-109 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  109    1309
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_109():
+      return 109 * 3
+
+• Explored 1 read
+  • Read kiln-109.log
+
+
+› Check kiln batch 110 please.
+
+
+• ## KilnMark0110
+
+• Updated Plan
+  └ ✔ Inspect batch 110
+    □ Record batch 110
+
+• ## KilnMark0110
+
+  Batch 110 fired at cone 3; glaze celadon-110 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  110    1310
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_110() -> u32 {
+      110 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-110.log
+
+
+› Check kiln batch 111 please.
+
+
+• ## KilnMark0111
+
+  Batch 111 fired at cone 4; glaze celadon-111 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  111    1311
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_111():
+      return 111 * 3
+
+• Explored 1 read
+  • Read kiln-111.log
+
+
+› Check kiln batch 112 please.
+
+
+• ## KilnMark0112
+
+  Batch 112 fired at cone 5; glaze celadon-112 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  112    1312
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_112() -> u32 {
+      112 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-112.log
+
+
+› Check kiln batch 113 please.
+
+
+• ## KilnMark0113
+
+  Batch 113 fired at cone 6; glaze celadon-113 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  113    1313
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_113():
+      return 113 * 3
+
+• Explored 1 read
+  • Read kiln-113.log
+
+
+› Check kiln batch 114 please.
+
+
+• ## KilnMark0114
+
+  Batch 114 fired at cone 7; glaze celadon-114 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  114    1314
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_114() -> u32 {
+      114 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-114.log
+
+
+› Check kiln batch 115 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 115
+    □ Record batch 115
+
+• ## KilnMark0115
+
+  Batch 115 fired at cone 8; glaze celadon-115 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  115    1315
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_115():
+      return 115 * 3
+
+• Explored 1 read
+  • Read kiln-115.log
+
+
+› Check kiln batch 116 please.
+
+
+• ## KilnMark0116
+
+  Batch 116 fired at cone 9; glaze celadon-116 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  116    1316
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_116() -> u32 {
+      116 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-116.log
+
+
+› Check kiln batch 117 please.
+
+
+• ## KilnMark0117
+
+  Batch 117 fired at cone 10; glaze celadon-117 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  117    1317
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_117():
+      return 117 * 3
+
+• Explored 1 read
+  • Read kiln-117.log
+
+
+› Check kiln batch 118 please.
+
+
+• ## KilnMark0118
+
+  Batch 118 fired at cone 11; glaze celadon-118 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  118    1318
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_118() -> u32 {
+      118 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-118.log
+
+
+› Check kiln batch 119 please.
+
+
+• ## KilnMark0119
+
+  Batch 119 fired at cone 12; glaze celadon-119 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  119    1319
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_119():
+      return 119 * 3
+
+• Explored 1 read
+  • Read kiln-119.log
+
+
+› Check kiln batch 120 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 120
+    □ Record batch 120
+
+• ## KilnMark0120
+
+  Batch 120 fired at cone 1; glaze celadon-120 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  120    1320
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_120() -> u32 {
+      120 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-120.log
+
+
+› Check kiln batch 121 please.
+
+
+• ## KilnMark0121
+
+  Batch 121 fired at cone 2; glaze celadon-121 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  121    1321
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_121():
+      return 121 * 3
+
+• Explored 1 read
+  • Read kiln-121.log
+
+
+› Check kiln batch 122 please.
+
+
+• ## KilnMark0122
+
+  Batch 122 fired at cone 3; glaze celadon-122 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  122    1322
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_122() -> u32 {
+      122 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-122.log
+
+
+› Check kiln batch 123 please.
+
+
+• ## KilnMark0123
+
+  Batch 123 fired at cone 4; glaze celadon-123 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  123    1323
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_123():
+      return 123 * 3
+
+• Explored 1 read
+  • Read kiln-123.log
+
+
+› Check kiln batch 124 please.
+
+
+• ## KilnMark0124
+
+  Batch 124 fired at cone 5; glaze celadon-124 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  124    1324
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_124() -> u32 {
+      124 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-124.log
+
+
+› Check kiln batch 125 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 125
+    □ Record batch 125
+
+• ## KilnMark0125
+
+  Batch 125 fired at cone 6; glaze celadon-125 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  125    1325
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_125():
+      return 125 * 3
+
+• Explored 1 read
+  • Read kiln-125.log
+
+
+› Check kiln batch 126 please.
+
+
+• ## KilnMark0126
+
+  Batch 126 fired at cone 7; glaze celadon-126 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  126    1326
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_126() -> u32 {
+      126 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-126.log
+
+
+› Check kiln batch 127 please.
+
+
+• ## KilnMark0127
+
+  Batch 127 fired at cone 8; glaze celadon-127 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  127    1327
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_127():
+      return 127 * 3
+
+• Explored 1 read
+  • Read kiln-127.log
+
+
+› Check kiln batch 128 please.
+
+
+• ## KilnMark0128
+
+  Batch 128 fired at cone 9; glaze celadon-128 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  128    1328
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_128() -> u32 {
+      128 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-128.log
+
+
+› Check kiln batch 129 please.
+
+
+• ## KilnMark0129
+
+  Batch 129 fired at cone 10; glaze celadon-129 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  129    1329
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_129():
+      return 129 * 3
+
+• Explored 1 read
+  • Read kiln-129.log
+
+
+› Check kiln batch 130 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 130
+    □ Record batch 130
+
+• ## KilnMark0130
+
+  Batch 130 fired at cone 11; glaze celadon-130 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  130    1330
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_130() -> u32 {
+      130 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-130.log
+
+
+› Check kiln batch 131 please.
+
+
+• ## KilnMark0131
+
+  Batch 131 fired at cone 12; glaze celadon-131 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  131    1331
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_131():
+      return 131 * 3
+
+• Explored 1 read
+  • Read kiln-131.log
+
+
+› Check kiln batch 132 please.
+
+
+• ## KilnMark0132
+
+  Batch 132 fired at cone 1; glaze celadon-132 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  132    1332
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_132() -> u32 {
+      132 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-132.log
+
+
+› Check kiln batch 133 please.
+
+
+• ## KilnMark0133
+
+  Batch 133 fired at cone 2; glaze celadon-133 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  133    1333
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_133():
+      return 133 * 3
+
+• Explored 1 read
+  • Read kiln-133.log
+
+
+› Check kiln batch 134 please.
+
+
+• ## KilnMark0134
+
+  Batch 134 fired at cone 3; glaze celadon-134 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  134    1334
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_134() -> u32 {
+      134 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-134.log
+
+
+› Check kiln batch 135 please.
+
+
+• ## KilnMark0135
+
+
+• Updated Plan
+  └ ✔ Inspect batch 135
+    □ Record batch 135
+
+• ## KilnMark0135
+
+  Batch 135 fired at cone 4; glaze celadon-135 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  135    1335
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_135():
+      return 135 * 3
+
+• Explored 1 read
+  • Read kiln-135.log
+
+
+› Check kiln batch 136 please.
+
+
+• ## KilnMark0136
+
+  Batch 136 fired at cone 5; glaze celadon-136 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  136    1336
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_136() -> u32 {
+      136 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-136.log
+
+
+› Check kiln batch 137 please.
+
+
+• ## KilnMark0137
+
+  Batch 137 fired at cone 6; glaze celadon-137 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  137    1337
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_137():
+      return 137 * 3
+
+• Explored 1 read
+  • Read kiln-137.log
+
+
+› Check kiln batch 138 please.
+
+
+• ## KilnMark0138
+
+  Batch 138 fired at cone 7; glaze celadon-138 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  138    1338
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_138() -> u32 {
+      138 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-138.log
+
+
+› Check kiln batch 139 please.
+
+
+• ## KilnMark0139
+
+  Batch 139 fired at cone 8; glaze celadon-139 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  139    1339
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_139():
+      return 139 * 3
+
+• Explored 1 read
+  • Read kiln-139.log
+
+
+› Check kiln batch 140 please.
+
+
+• ## KilnMark0140
+
+
+• Updated Plan
+  └ ✔ Inspect batch 140
+    □ Record batch 140
+
+• ## KilnMark0140
+
+  Batch 140 fired at cone 9; glaze celadon-140 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  140    1340
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_140() -> u32 {
+      140 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-140.log
+
+
+› Check kiln batch 141 please.
+
+
+• ## KilnMark0141
+
+  Batch 141 fired at cone 10; glaze celadon-141 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  141    1341
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_141():
+      return 141 * 3
+
+• Explored 1 read
+  • Read kiln-141.log
+
+
+› Check kiln batch 142 please.
+
+
+• ## KilnMark0142
+
+  Batch 142 fired at cone 11; glaze celadon-142 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  142    1342
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_142() -> u32 {
+      142 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-142.log
+
+
+› Check kiln batch 143 please.
+
+
+• ## KilnMark0143
+
+  Batch 143 fired at cone 12; glaze celadon-143 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  143    1343
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_143():
+      return 143 * 3
+
+• Explored 1 read
+  • Read kiln-143.log
+
+
+› Check kiln batch 144 please.
+
+
+• ## KilnMark0144
+
+  Batch 144 fired at cone 1; glaze celadon-144 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  144    1344
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_144() -> u32 {
+      144 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-144.log
+
+
+› Check kiln batch 145 please.
+
+
+• ## KilnMark0145
+
+  Batch 145 fired at cone 2; glaze celadon-145 held.
+
+• Updated Plan
+  └ ✔ Inspect batch 145
+    □ Record batch 145
+
+• ## KilnMark0145
+
+  Batch 145 fired at cone 2; glaze celadon-145 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  145    1345
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_145():
+      return 145 * 3
+
+• Explored 1 read
+  • Read kiln-145.log
+
+
+› Check kiln batch 146 please.
+
+
+• ## KilnMark0146
+
+  Batch 146 fired at cone 3; glaze celadon-146 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  146    1346
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_146() -> u32 {
+      146 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-146.log
+
+
+› Check kiln batch 147 please.
+
+
+• ## KilnMark0147
+
+  Batch 147 fired at cone 4; glaze celadon-147 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  147    1347
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_147():
+      return 147 * 3
+
+• Explored 1 read
+  • Read kiln-147.log
+
+
+› Check kiln batch 148 please.
+
+
+• ## KilnMark0148
+
+  Batch 148 fired at cone 5; glaze celadon-148 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  148    1348
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_148() -> u32 {
+      148 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-148.log
+
+
+› Check kiln batch 149 please.
+
+
+• ## KilnMark0149
+
+  Batch 149 fired at cone 6; glaze celadon-149 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  149    1349
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_149():
+      return 149 * 3
+
+• Explored 1 read
+  • Read kiln-149.log
+
+
+› Check kiln batch 150 please.
+
+
+• ## KilnMark0150
+
+
+• Updated Plan
+  └ ✔ Inspect batch 150
+    □ Record batch 150
+
+• ## KilnMark0150
+
+  Batch 150 fired at cone 7; glaze celadon-150 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  150    1350
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_150() -> u32 {
+      150 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-150.log
+
+
+› Check kiln batch 151 please.
+
+
+• ## KilnMark0151
+
+  Batch 151 fired at cone 8; glaze celadon-151 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  151    1351
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_151():
+      return 151 * 3
+
+• Explored 1 read
+  • Read kiln-151.log
+
+
+› Check kiln batch 152 please.
+
+
+• ## KilnMark0152
+
+  Batch 152 fired at cone 9; glaze celadon-152 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  152    1352
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_152() -> u32 {
+      152 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-152.log
+
+
+› Check kiln batch 153 please.
+
+
+• ## KilnMark0153
+
+  Batch 153 fired at cone 10; glaze celadon-153 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  153    1353
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_153():
+      return 153 * 3
+
+• Explored 1 read
+  • Read kiln-153.log
+
+
+› Check kiln batch 154 please.
+
+
+• ## KilnMark0154
+
+  Batch 154 fired at cone 11; glaze celadon-154 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  154    1354
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_154() -> u32 {
+      154 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-154.log
+
+
+› Check kiln batch 155 please.
+
+
+• ## KilnMark0155
+
+
+• Updated Plan
+  └ ✔ Inspect batch 155
+    □ Record batch 155
+
+• ## KilnMark0155
+
+  Batch 155 fired at cone 12; glaze celadon-155 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  155    1355
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_155():
+      return 155 * 3
+
+• Explored 1 read
+  • Read kiln-155.log
+
+
+› Check kiln batch 156 please.
+
+
+• ## KilnMark0156
+
+  Batch 156 fired at cone 1; glaze celadon-156 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  156    1356
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_156() -> u32 {
+      156 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-156.log
+
+
+› Check kiln batch 157 please.
+
+
+• ## KilnMark0157
+
+  Batch 157 fired at cone 2; glaze celadon-157 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  157    1357
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_157():
+      return 157 * 3
+
+• Explored 1 read
+  • Read kiln-157.log
+
+
+› Check kiln batch 158 please.
+
+
+• ## KilnMark0158
+
+  Batch 158 fired at cone 3; glaze celadon-158 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  158    1358
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_158() -> u32 {
+      158 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-158.log
+
+
+› Check kiln batch 159 please.
+
+
+• ## KilnMark0159
+
+  Batch 159 fired at cone 4; glaze celadon-159 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  159    1359
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_159():
+      return 159 * 3
+
+• Explored 1 read
+  • Read kiln-159.log
+
+
+› Check kiln batch 160 please.
+
+
+• ## KilnMark0160
+
+
+• Updated Plan
+  └ ✔ Inspect batch 160
+    □ Record batch 160
+
+• ## KilnMark0160
+
+  Batch 160 fired at cone 5; glaze celadon-160 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  160    1360
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_160() -> u32 {
+      160 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-160.log
+
+
+› Check kiln batch 161 please.
+
+
+• ## KilnMark0161
+
+  Batch 161 fired at cone 6; glaze celadon-161 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  161    1361
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_161():
+      return 161 * 3
+
+• Explored 1 read
+  • Read kiln-161.log
+
+
+› Check kiln batch 162 please.
+
+
+• ## KilnMark0162
+
+  Batch 162 fired at cone 7; glaze celadon-162 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  162    1362
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_162() -> u32 {
+      162 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-162.log
+
+
+› Check kiln batch 163 please.
+
+
+• ## KilnMark0163
+
+  Batch 163 fired at cone 8; glaze celadon-163 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  163    1363
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_163():
+      return 163 * 3
+
+• Explored 1 read
+  • Read kiln-163.log
+
+
+› Check kiln batch 164 please.
+
+
+• ## KilnMark0164
+
+  Batch 164 fired at cone 9; glaze celadon-164 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  164    1364
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_164() -> u32 {
+      164 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-164.log
+
+
+› Check kiln batch 165 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 165
+    □ Record batch 165
+
+• ## KilnMark0165
+
+  Batch 165 fired at cone 10; glaze celadon-165 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  165    1365
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_165():
+      return 165 * 3
+
+• Explored 1 read
+  • Read kiln-165.log
+
+
+› Check kiln batch 166 please.
+
+
+• ## KilnMark0166
+
+  Batch 166 fired at cone 11; glaze celadon-166 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  166    1366
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_166() -> u32 {
+      166 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-166.log
+
+
+› Check kiln batch 167 please.
+
+
+• ## KilnMark0167
+
+  Batch 167 fired at cone 12; glaze celadon-167 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  167    1367
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_167():
+      return 167 * 3
+
+• Explored 1 read
+  • Read kiln-167.log
+
+
+› Check kiln batch 168 please.
+
+
+• ## KilnMark0168
+
+  Batch 168 fired at cone 1; glaze celadon-168 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  168    1368
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_168() -> u32 {
+      168 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-168.log
+
+
+› Check kiln batch 169 please.
+
+
+• ## KilnMark0169
+
+  Batch 169 fired at cone 2; glaze celadon-169 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  169    1369
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  def batch_169():
+      return 169 * 3
+
+• Explored 1 read
+  • Read kiln-169.log
+
+
+› Check kiln batch 170 please.
+
+
+• Updated Plan
+  └ ✔ Inspect batch 170
+    □ Record batch 170
+
+• ## KilnMark0170
+
+  Batch 170 fired at cone 3; glaze celadon-170 held.
+
+  shelf  temp
+  ━━━━━  ━━━━
+  170    1370
+
+  1. Loaded
+  2. Fired
+  3. Cooled
+
+  fn batch_170() -> u32 {
+      170 * 3
+  }
+
+• Explored 1 read
+  • Read kiln-170.log
+
+─ Worked for 1s ────────────────────────────────────────────────────────────────────────────────────
+
+• Final summary across 170 batches.
+
+  Closing note 001 for the run.
+  Closing note 002 for the run.
+  Closing note 003 for the run.
+  Closing note 004 for the run.
+  Closing note 005 for the run.
+  Closing note 006 for the run.
+  Closing note 007 for the run.
+  Closing note 008 for the run.
+  Closing note 009 for the run.
+  Closing note 010 for the run.
+  Closing note 011 for the run.
+  Closing note 012 for the run.
+  Closing note 013 for the run.
+  Closing note 014 for the run.
+  Closing note 015 for the run.
+  Closing note 016 for the run.
+  Closing note 017 for the run.
+  Closing note 018 for the run.
+  Closing note 019 for the run.
+  Closing note 020 for the run.
+  Closing note 021 for the run.
+  Closing note 022 for the run.
+  Closing note 023 for the run.
+  Closing note 024 for the run.
+  Closing note 025 for the run.
+  Closing note 026 for the run.
+  Closing note 027 for the run.
+  Closing note 028 for the run.
+  Closing note 029 for the run.
+  Closing note 030 for the run.
+  Closing note 031 for the run.
+  Closing note 032 for the run.
+  Closing note 033 for the run.
+  Closing note 034 for the run.
+  Closing note 035 for the run.
+  Closing note 036 for the run.
+  Closing note 037 for the run.
+  Closing note 038 for the run.
+  Closing note 039 for the run.
+  Closing note 040 for the run.
+  Closing note 041 for the run.
+  Closing note 042 for the run.
+  Closing note 043 for the run.
+  Closing note 044 for the run.
+  Closing note 045 for the run.
+  Closing note 046 for the run.
+  Closing note 047 for the run.
+  Closing note 048 for the run.
+  Closing note 049 for the run.
+  Closing note 050 for the run.
+  Closing note 051 for the run.
+  Closing note 052 for the run.
+  Closing note 053 for the run.
+  Closing note 054 for the run.
+  Closing note 055 for the run.
+  Closing note 056 for the run.
+  Closing note 057 for the run.
+  Closing note 058 for the run.
+  Closing note 059 for the run.
+  Closing note 060 for the run.
+  Closing note 061 for the run.
+  Closing note 062 for the run.
+  Closing note 063 for the run.
+  Closing note 064 for the run.
+  Closing note 065 for the run.
+  Closing note 066 for the run.
+  Closing note 067 for the run.
+  Closing note 068 for the run.
+  Closing note 069 for the run.
+  Closing note 070 for the run.
+  Closing note 071 for the run.
+  Closing note 072 for the run.
+  Closing note 073 for the run.
+  Closing note 074 for the run.
+  Closing note 075 for the run.
+  Closing note 076 for the run.
+  Closing note 077 for the run.
+  Closing note 078 for the run.
+  Closing note 079 for the run.
+  Closing note 080 for the run.
+  Closing note 081 for the run.
+  Closing note 082 for the run.
+  Closing note 083 for the run.
+  Closing note 084 for the run.
+  Closing note 085 for the run.
+  Closing note 086 for the run.
+  Closing note 087 for the run.
+  Closing note 088 for the run.
+  Closing note 089 for the run.
+  Closing note 090 for the run.
+
+  KilnLatestEnd
+
+• Explored 1 read
+  • Read final.txt
+
+
+› ж
+
+  controlling · workbench · kiln · ready · Approvals: Agent · ctrl+d detach

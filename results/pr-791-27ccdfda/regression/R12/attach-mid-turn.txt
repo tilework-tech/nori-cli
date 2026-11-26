@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 1 dawn
+
+
+• - dawn row 01
+
+  dawn relay finished.
+
+
+› hold the lamp
+
+
+• Compiling War and Peace (2s • esc to interrupt)
+
+                                                                                                                [ auto ]
+›
+
+  / commands · ! shell · @ files · ? help · controlling · app · claude-code · working · Approvals: Agent · ctrl+d detach

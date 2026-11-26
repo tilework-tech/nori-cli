@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+• Unrecognized command '/review'. Type "/" for a list of supported commands.
+
+• Unrecognized command '/review'. Type "/" for a list of supported commands.
+
+                                                                                                                [ auto ]
+/ review
+
+  /resume-viewonly  not available on this host yet
+  /claude-code:review
+    Review the synthetic change
