@@ -356,3 +356,97 @@ async fn an_unknown_session_is_refused() {
 
     assert_eq!(refused.code, -32002, "{refused:?}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn whichever_terminal_controls_the_session_takes_a_terminal_prompt_back_once() {
+    let (host, logs) = logging_host();
+    let folder = TempDir::new().unwrap();
+    let mut first = composer(&host);
+    let id = paused_with(
+        &mut first,
+        folder.path(),
+        &["prune the roses", "plant the cedar row"],
+    )
+    .await;
+    let queue = row(&mut first, &id).await["queue"].clone();
+    let roses = entry_id(&queue, "prune the roses");
+    let cedar = entry_id(&queue, "plant the cedar row");
+    // The terminal that queued them detaches.
+    drop(first);
+
+    // A fresh terminal attaches and takes control.
+    let mut fresh = composer(&host);
+    fresh.call("_nori/control/take", json!({})).await.unwrap();
+    let fresh_takes = fresh
+        .call("_nori/session/queue/take", take(&id, &roses, "fresh-roses"))
+        .await
+        .unwrap();
+
+    // Another terminal takes control from it; the first one now watches.
+    let mut other = composer(&host);
+    other.call("_nori/control/take", json!({})).await.unwrap();
+    let watcher_refused = fresh
+        .call("_nori/session/queue/take", take(&id, &cedar, "watching"))
+        .await
+        .unwrap_err();
+    let other_takes = other
+        .call("_nori/session/queue/take", take(&id, &cedar, "other-cedar"))
+        .await
+        .unwrap();
+    let taken_again = other
+        .call("_nori/session/queue/take", take(&id, &cedar, "again"))
+        .await
+        .unwrap();
+
+    // The edited prompt goes out as a new submission.
+    other
+        .call(
+            "_nori/session/prompt",
+            json!({"session_id": id, "prompt": text("plant the cedar row by the fence")}),
+        )
+        .await
+        .unwrap();
+    wait_for_log(&logs, 2).await;
+    settled(&mut other, &id).await;
+
+    assert_eq!(fresh_takes, json!({"text": "prune the roses"}));
+    assert_eq!(watcher_refused.code, -32016);
+    assert_eq!(other_takes, json!({"text": "plant the cedar row"}));
+    assert_eq!(taken_again, json!({"text": null}));
+    assert_eq!(
+        prompt_log(&logs),
+        vec![
+            "mock:stream-until-cancel",
+            "plant the cedar row by the fence"
+        ],
+        "only the corrected prompt reaches the agent"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_terminal_in_control_cannot_take_back_a_brokers_prompt() {
+    let (host, _logs) = logging_host();
+    let folder = TempDir::new().unwrap();
+    let mut broker = controller(&host);
+    let id = paused_with(&mut broker, folder.path(), &["from the broker"]).await;
+    let queue = row(&mut broker, &id).await["queue"].clone();
+    let mut terminal = composer(&host);
+    terminal
+        .call("_nori/control/take", json!({}))
+        .await
+        .unwrap();
+
+    let taken = terminal
+        .call(
+            "_nori/session/queue/take",
+            take(&id, &entry_id(&queue, "from the broker"), "terminal"),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(taken, json!({"text": null}));
+    assert_eq!(
+        texts(&row(&mut terminal, &id).await["queue"]),
+        vec!["from the broker"]
+    );
+}
