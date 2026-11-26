@@ -23,9 +23,7 @@ args = ["hello"]
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -58,9 +56,7 @@ fn test_mcp_command_no_servers_opens_picker() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 

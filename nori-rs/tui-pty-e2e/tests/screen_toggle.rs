@@ -17,9 +17,7 @@ const ANSWER: &str = "The lighthouse keeper counted nine gulls.";
 
 fn spawn(config: SessionConfig) -> TuiSession {
     let mut session = TuiSession::spawn_with_config(30, 100, config).expect("spawn");
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
     session
 }

@@ -51,8 +51,12 @@ fn dismissing_resume_keeps_the_current_session_and_reaps_the_listing_server() {
     tui.wait_for_text("saved-1", TIMEOUT).unwrap();
     let amber = pids(home.path(), "amber");
     assert_eq!(amber.len(), 2);
-    tui.send_key(Key::Escape).unwrap();
-    tui.wait_for(|_| !running(&amber[1]), TIMEOUT).unwrap();
+    tui.press(
+        Key::Escape,
+        |_| !running(&amber[1]),
+        "the listing server is reaped",
+    )
+    .unwrap();
     ask(&mut tui, "whoami");
     tui.wait_for_text("amber is answering (2).", TIMEOUT)
         .unwrap();
@@ -88,8 +92,12 @@ fn dismissing_the_picker_after_the_last_close_says_how_to_continue() {
     let (_home, mut tui) = terminal(&[]);
     ask(&mut tui, "/close");
     tui.wait_for_text("saved-1", TIMEOUT).unwrap();
-    tui.send_key(Key::Escape).unwrap();
-    tui.wait_for_text("No session is active", TIMEOUT).unwrap();
+    tui.press(
+        Key::Escape,
+        |screen| screen.contains("No session is active"),
+        "No session is active",
+    )
+    .unwrap();
     ask(&mut tui, "whoami");
     tui.wait_for_text("amber is answering (1).", TIMEOUT)
         .unwrap();

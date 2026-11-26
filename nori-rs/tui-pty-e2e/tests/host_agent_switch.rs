@@ -47,8 +47,12 @@ fn dismissing_the_switch_picker_keeps_the_current_session() {
     let (home, mut tui) = terminal(&[]);
     open_birch_picker(&mut tui);
     let birch = pids(home.path(), "birch");
-    tui.send_key(Key::Escape).unwrap();
-    tui.wait_for(|_| !running(&birch[0]), TIMEOUT).unwrap();
+    tui.press(
+        Key::Escape,
+        |_| !running(&birch[0]),
+        "the switch candidate is reaped",
+    )
+    .unwrap();
     ask(&mut tui, "whoami");
     tui.wait_for_text("amber is answering (2).", TIMEOUT)
         .unwrap();

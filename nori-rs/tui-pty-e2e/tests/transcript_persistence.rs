@@ -91,9 +91,7 @@ fn test_transcript_created_on_session() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn session");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -176,9 +174,7 @@ fn test_transcript_contains_assistant_message() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn session");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -260,9 +256,7 @@ fn test_multiple_sessions_same_project() {
     let mut session1 =
         TuiSession::spawn_with_config(24, 80, config1).expect("Failed to spawn session 1");
 
-    session1
-        .wait_for_composer(TIMEOUT)
-        .expect("Session 1 should start");
+    session1.wait_until_ready().expect("Session 1 should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     let nori_home = session1.nori_home_path().expect("Should have NORI_HOME");
@@ -295,9 +289,7 @@ fn test_multiple_sessions_same_project() {
     let mut session2 =
         TuiSession::spawn_with_config(24, 80, config2).expect("Failed to spawn session 2");
 
-    session2
-        .wait_for_composer(TIMEOUT)
-        .expect("Session 2 should start");
+    session2.wait_until_ready().expect("Session 2 should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     let nori_home2 = session2.nori_home_path().expect("Should have NORI_HOME");
@@ -353,9 +345,7 @@ fn test_project_metadata_created() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn session");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     let nori_home = session.nori_home_path().expect("Should have NORI_HOME");
@@ -424,9 +414,7 @@ fn test_session_meta_fields() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn session");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     let nori_home = session.nori_home_path().expect("Should have NORI_HOME");
@@ -506,9 +494,7 @@ fn test_resume_viewonly_shows_transcript() {
         TuiSession::spawn_with_config(30, 100, config).expect("Failed to spawn session");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Turn 1: Send first user message with unique marker
@@ -533,7 +519,7 @@ fn test_resume_viewonly_shows_transcript() {
     session.submit_input("/new").unwrap();
 
     session
-        .wait_for_composer(TIMEOUT)
+        .wait_for_composer()
         .expect("New session should start");
     std::thread::sleep(TIMEOUT_INPUT);
 

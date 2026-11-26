@@ -57,7 +57,7 @@ fn spawn_session(log: &Path, delay_ms: &str) -> TuiSession {
         .with_agent_env("MOCK_AGENT_DELAY_MS", delay_ms)
         .with_agent_env("MOCK_AGENT_PROMPT_LOG", log.display().to_string());
     let mut session = TuiSession::spawn_with_config(30, 90, config).expect("spawn nori");
-    session.wait_for_composer(TIMEOUT).expect("composer ready");
+    session.wait_until_ready().expect("composer ready");
     std::thread::sleep(TIMEOUT_INPUT);
     session
 }
@@ -134,7 +134,13 @@ fn the_selected_message_is_removed_and_never_delivered() {
     session
         .wait_for(|screen| queued_rows(screen) == ["> dup", "dup"], TIMEOUT)
         .expect("alpha leaves the queue and the selection moves to its neighbour");
-    key(&mut session, Key::Escape);
+    session
+        .press(
+            Key::Escape,
+            |screen| queued_rows(screen) == ["dup", "dup"],
+            "the queue selection ends",
+        )
+        .unwrap();
     session.type_input("draft kept").unwrap();
     session
         .wait_for(

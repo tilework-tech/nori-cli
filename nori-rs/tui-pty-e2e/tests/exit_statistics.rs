@@ -54,9 +54,7 @@ fn test_exit_message_displays_on_ctrl_d() {
     let mut session = TuiSession::spawn_with_config(30, 100, config).unwrap();
 
     // Wait for the prompt to appear
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("Prompt did not appear");
+    session.wait_until_ready().expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit a test prompt to generate some session activity
@@ -96,9 +94,7 @@ fn test_exit_message_displays_on_slash_exit() {
     let mut session = TuiSession::spawn_with_config(30, 100, config).unwrap();
 
     // Wait for the prompt to appear
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("Prompt did not appear");
+    session.wait_until_ready().expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit a test prompt to generate some session activity

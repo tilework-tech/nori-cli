@@ -212,6 +212,23 @@ Terminals do not render OSC 7501 status reports. `program_status_reports(raw)`
 in `tui-pty-e2e` returns the body of each report in `raw_output()` in order
 (for example `state=working:app=nori`).
 
+Write each step as one action that waits for its own observable effect:
+
+- Start with `wait_until_ready()`: it waits for the composer and the first
+  session's options banner (or, in `nori cloud`, the model on the header's
+  agent row). Do not wait for a bare `›`; the session header draws one before
+  the composer and the session exist. The harness's own tests fail if
+  `wait_for_text("›", ..)` appears in `tests/`.
+- Use `wait_for_composer()` only when the test means to type while the agent is
+  still starting, for example with `MOCK_AGENT_STARTUP_DELAY_MS`.
+- Type with `type_input` / `submit_input`, which wait for the composer to render
+  the text.
+- Send a key that more input follows with `press(key, until, what)`. `until`
+  must be false before the key, for example "the list header is gone" rather
+  than a status the open list also shows. An Escape written right before more
+  bytes can be read as an Alt chord; `send_key(Key::Escape)` pauses 100 ms
+  (`ESCAPE_GAP`) as a backstop, but only waiting for the effect is reliable.
+
 Tests that need real agents and credentials are marked `#[ignore]`. Run them
 with:
 

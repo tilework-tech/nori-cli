@@ -2,6 +2,7 @@
 //! cannot hold the private host open when the terminal quits.
 #![cfg(unix)]
 use std::fs;
+use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TuiSession;
@@ -163,8 +164,12 @@ fn attach_reports_a_refused_close_once_and_keeps_the_session_for_a_retry() {
 
     let mut tui = host_terminal(&folder, &["attach"]);
     tui.wait_for_text("Sessions", TIMEOUT).unwrap();
-    tui.send_key(tui_pty_e2e::Key::Escape).unwrap();
-    tui.wait_for_text("No session selected", TIMEOUT).unwrap();
+    tui.press(
+        Key::Escape,
+        |screen| screen.contains("No session selected"),
+        "No session selected",
+    )
+    .unwrap();
     tui.submit_input("/new").unwrap();
     tui.wait_for_text("ready", TIMEOUT).unwrap();
     tui.submit_input("finish").unwrap();

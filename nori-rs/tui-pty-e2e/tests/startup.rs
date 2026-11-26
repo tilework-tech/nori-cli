@@ -1,12 +1,13 @@
 use insta::assert_snapshot;
 use std::time::Duration;
 use std::time::Instant;
-#[cfg(target_os = "linux")]
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
+#[cfg(target_os = "linux")]
+use tui_pty_e2e::has_composer_row;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
 fn has_prompt_ready_marker(contents: &str) -> bool {
@@ -25,7 +26,7 @@ fn has_prompt_ready_marker(contents: &str) -> bool {
 #[cfg(target_os = "linux")]
 fn activate_new_session(session: &mut TuiSession) {
     session
-        .wait_for_composer(TIMEOUT)
+        .wait_for_composer()
         .expect("Sessionless composer did not appear");
     session.submit_input("/new").expect("Failed to enter /new");
     // Startup already wrote a card, so "Nori CLI" is no longer a readiness
@@ -102,9 +103,7 @@ fn test_startup_with_dimensions() {
         TuiSession::spawn_with_config(10, 120, SessionConfig::default()).expect("Failed to spawn");
 
     // Wait for prompt - in a 10-row terminal, the header may scroll off.
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("Prompt did not appear");
+    session.wait_until_ready().expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Verify terminal size is respected
@@ -143,11 +142,8 @@ fn test_runs_in_temp_directory_by_default() {
 fn test_trust_screen_is_skipped_with_default_config() {
     let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn");
 
-    // The welcome card also starts with `›`, so wait for the composer's
-    // hint row instead.
-    session
-        .wait_for_text("/ commands · ", TIMEOUT)
-        .expect("Prompt did not appear");
+    // Wait for the prompt to appear (indicated by the chevron character)
+    session.wait_until_ready().expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let contents = session.screen_contents();
@@ -313,7 +309,7 @@ fn test_trust_directory_saves_to_config() {
     // screen giving way to the composer is the signal.
     session
         .wait_for(
-            |contents| contents.contains("›") && !contents.contains("You are running Nori in"),
+            |contents| has_composer_row(contents) && !contents.contains("You are running Nori in"),
             TIMEOUT,
         )
         .expect("Main prompt did not appear after trust selection");
@@ -355,9 +351,7 @@ fn test_poll_does_not_block_when_no_data() {
     let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn");
 
     // Wait for initial startup to complete
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("Initial startup failed");
+    session.wait_until_ready().expect("Initial startup failed");
 
     // Wait for screen to stabilize - keep polling until contents don't change
     let mut prev_contents = String::new();
@@ -396,9 +390,7 @@ fn startup_activates_session_without_input() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("composer did not appear");
+    session.wait_until_ready().expect("composer did not appear");
     session
         .wait_for_text("Mock Default Model", TIMEOUT)
         .expect("session should activate on startup without any input");
@@ -413,9 +405,7 @@ fn model_command_works_before_first_prompt() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("composer did not appear");
+    session.wait_until_ready().expect("composer did not appear");
     session
         .wait_for_text("Mock Default Model", TIMEOUT)
         .expect("session should activate on startup");
@@ -456,11 +446,11 @@ fn picker_choice_supersedes_an_alias_override_in_the_next_session() {
     session.send_key(Key::Down).unwrap();
     session.send_key(Key::Enter).unwrap();
     session.wait_for_text("saved as default", TIMEOUT).unwrap();
-    session.send_key(Key::Escape).unwrap();
     session
-        .wait_for(
+        .press(
+            Key::Escape,
             |screen| !screen.contains("Select an ACP session setting"),
-            TIMEOUT,
+            "the settings picker closes",
         )
         .unwrap();
     session.submit_input("/new").unwrap();

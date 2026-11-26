@@ -27,7 +27,6 @@
 
 use std::time::Duration;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
@@ -58,9 +57,7 @@ fn test_acp_tool_call_rendered_in_tui() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -120,9 +117,7 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -178,9 +173,7 @@ fn test_acp_tool_call_no_duplicate_messages() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -250,9 +243,7 @@ fn test_acp_tool_call_snapshot() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -291,9 +282,7 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -385,9 +374,7 @@ fn test_exploring_cell_flushed_immediately_without_agent_text() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -459,9 +446,7 @@ fn test_tool_calls_during_final_stream_not_shown_after() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -550,9 +535,7 @@ fn test_no_orphan_tool_cells_from_cascade_deferral() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -628,9 +611,7 @@ fn test_stuck_tool_calls_dont_block_agent_message() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -697,9 +678,7 @@ fn test_acp_generic_tool_call_shows_resolved_name() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 

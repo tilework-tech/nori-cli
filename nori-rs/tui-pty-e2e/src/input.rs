@@ -78,6 +78,26 @@ impl TuiSession {
             .map_err(|error| format!("the composer never rendered {needle:?}: {error}"))
     }
 
+    /// Send one `key` and wait until `until` holds for the screen, its
+    /// observable effect. `what` names the effect for the error message.
+    ///
+    /// Use this for any key followed by more input. Pass an effect that the
+    /// state before the key does not already satisfy (for example "the list
+    /// header is gone" when closing a list, not a status that the open list
+    /// also shows), otherwise the wait passes at once and the next write can
+    /// race the key.
+    pub fn press(
+        &mut self,
+        key: Key,
+        until: impl Fn(&str) -> bool,
+        what: &str,
+    ) -> Result<(), String> {
+        self.send_key(key)
+            .map_err(|error| format!("press {key:?}: {error}"))?;
+        self.wait_for(until, TIMEOUT)
+            .map_err(|error| format!("after pressing {key:?}, {what}: {error}"))
+    }
+
     /// Type `input` and submit it once the composer has rendered it.
     pub fn submit_input(&mut self, input: &str) -> Result<(), String> {
         self.type_input(input)?;

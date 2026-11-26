@@ -9,7 +9,7 @@ use tui_pty_e2e::TuiSession;
 #[cfg(target_os = "linux")]
 fn a_bang_command_shows_its_output_in_the_transcript() {
     let mut session = TuiSession::spawn(24, 100).unwrap();
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_until_ready().unwrap();
     session.wait_for_text("Mock ACP options", TIMEOUT).unwrap();
 
     session.send_str("!echo lantern-$((6*7))").unwrap();

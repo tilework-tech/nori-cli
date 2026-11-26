@@ -17,7 +17,7 @@ fn test_footer_displays_git_branch() {
 
     // Wait for the TUI to start. The branch segment is the idle footer anchor:
     // approvals and the other metadata chips are off by default.
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_until_ready().unwrap();
     session.wait_for_text("⎇", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
@@ -58,7 +58,7 @@ approval_mode = true
     .expect("Failed to spawn");
 
     // Wait for the TUI to start
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_until_ready().unwrap();
     session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
@@ -121,7 +121,7 @@ git_stats = true
     .expect("Failed to spawn");
 
     // Wait for the composer and the fully populated footer.
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_until_ready().unwrap();
     session.wait_for_text("Skillsets v", TIMEOUT).unwrap();
     // Startup activates the session, so the model announcement lands
     // asynchronously; wait for it so the snapshot is deterministic.
@@ -193,7 +193,7 @@ approval_mode = true
     )
     .expect("Failed to spawn");
 
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_until_ready().unwrap();
     session.wait_for_text("Approvals", TIMEOUT).unwrap();
     // Startup activates the session, so the model announcement lands
     // asynchronously; wait for it so the snapshot is deterministic.
@@ -252,7 +252,7 @@ approval_mode = false
 
     // Startup prepares the agent without creating a session, so the composer
     // is the readiness signal rather than a post-activation session header.
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_until_ready().unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -301,7 +301,7 @@ fn test_default_idle_footer_has_no_metadata_clutter() {
     let mut session =
         TuiSession::spawn_with_config(24, 120, SessionConfig::new()).expect("Failed to spawn");
 
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_until_ready().unwrap();
     session.wait_for_text("⎇", TIMEOUT).unwrap();
     // Startup activates the session, so the model announcement lands
     // asynchronously; wait for it so the snapshot is deterministic.
@@ -368,7 +368,7 @@ exit 1
     )
     .expect("Failed to spawn");
 
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_until_ready().unwrap();
     session.wait_for_text("Skillsets v", TIMEOUT).unwrap();
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     session.screen_contents()

@@ -22,9 +22,7 @@ fn multi_session_config() -> SessionConfig {
 
 fn spawn(config: SessionConfig) -> TuiSession {
     let mut session = TuiSession::spawn_with_config(30, 100, config).expect("spawn");
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
     session
 }
@@ -202,9 +200,7 @@ fn jump_timing_on_a_long_history() {
         "A three line answer\nwith a second line\nand a third line",
     );
     let mut session = TuiSession::spawn_with_config(40, 120, config).expect("spawn");
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
     for turn in 0..turns {
         let prompt = format!("long history turn {turn}");

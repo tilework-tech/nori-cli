@@ -1,4 +1,5 @@
 /// Key input types
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
     Enter,
     Escape,

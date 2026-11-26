@@ -51,7 +51,7 @@ command = {command}
 "#
         ));
     let mut session = TuiSession::spawn_with_config(70, 220, config).expect("start real CLI");
-    session.wait_for_composer(TIMEOUT).expect("composer ready");
+    session.wait_until_ready().expect("composer ready");
     let cwd = session.nori_home_path().expect("isolated project");
     let paths = [
         cwd.join("CLAUDE.md"),

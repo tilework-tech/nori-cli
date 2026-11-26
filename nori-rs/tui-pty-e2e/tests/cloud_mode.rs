@@ -225,7 +225,7 @@ fn test_cloud_mode_round_trips_prompt_through_handroll() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
     session
-        .wait_for_composer(TIMEOUT)
+        .wait_until_ready()
         .expect("nori cloud should start the TUI against the fake handroll");
 
     assert!(
@@ -260,9 +260,7 @@ fn test_cloud_mode_sends_eof_detach_to_handroll_on_exit() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("nori cloud should start");
+    session.wait_until_ready().expect("nori cloud should start");
     std::thread::sleep(TIMEOUT_INPUT);
     // Prove the prepared child was activated and is live.
     session.submit_input("prove the session is live").unwrap();
@@ -475,7 +473,7 @@ fn test_plain_nori_does_not_boot_into_the_agent_session_picker() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori");
 
     session
-        .wait_for_composer(TIMEOUT)
+        .wait_until_ready()
         .expect("plain nori should boot straight to the composer");
     let contents = session.screen_contents();
     assert!(
@@ -514,7 +512,7 @@ fn test_cloud_entry_picker_resume_row_reattaches_live() {
         .wait_for_text("Reattaching to mock-session-1", TIMEOUT)
         .expect("reattach must identify the selected cloud session");
     session
-        .wait_for_composer(TIMEOUT)
+        .wait_until_ready()
         .expect("the composer should be ready after reattach");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -551,7 +549,7 @@ fn test_cloud_entry_picker_create_new_starts_fresh_session() {
     session.send_key(Key::Enter).unwrap();
 
     session
-        .wait_for_composer(TIMEOUT)
+        .wait_until_ready()
         .expect("picking create-new should start a fresh session");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -692,7 +690,7 @@ fn test_cloud_close_returns_to_the_picker() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_composer(TIMEOUT)
+        .wait_until_ready()
         .expect("create-new should start a session");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -747,9 +745,7 @@ fn test_cloud_quit_exits_fast_even_if_child_ignores_eof() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("nori cloud should start");
+    session.wait_until_ready().expect("nori cloud should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     session.submit_input("/quit").unwrap();
@@ -774,9 +770,7 @@ fn test_cloud_mode_child_death_mid_session_surfaces_error() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("nori cloud should start");
+    session.wait_until_ready().expect("nori cloud should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Prove the session is live first.
@@ -815,9 +809,7 @@ fn test_cloud_mode_writes_local_transcript() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("nori cloud should start");
+    session.wait_until_ready().expect("nori cloud should start");
     let nori_home = session.nori_home_path().expect("nori home");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -880,7 +872,7 @@ fn test_cloud_mode_overrides_agent_flag() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
     session
-        .wait_for_composer(TIMEOUT)
+        .wait_until_ready()
         .expect("cloud mode should start with the handroll adapter despite --agent");
     assert!(
         fake.wait_for_marker("argv", TIMEOUT),
@@ -899,9 +891,7 @@ fn test_cloud_mode_passes_broker_url_from_config() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("nori cloud should start");
+    session.wait_until_ready().expect("nori cloud should start");
     assert!(
         fake.wait_for_marker_text("broker_url", "http://broker.test:19400", TIMEOUT),
         "[cloud] broker_url must be passed to the child as NORI_BROKER_URL"

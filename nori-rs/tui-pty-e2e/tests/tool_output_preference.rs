@@ -11,6 +11,7 @@ use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
+use tui_pty_e2e::has_composer_row;
 
 const TRUST_PROMPT: &str = "You are running Nori in";
 const COMPACT_QUESTION: &str = "compact tool output in this project?";
@@ -88,7 +89,7 @@ fn run_command(session: &mut TuiSession) -> String {
     session
         .wait_for(
             |screen| {
-                screen.contains('›')
+                has_composer_row(screen)
                     && !screen.contains(TRUST_PROMPT)
                     && !screen.contains(COMPACT_QUESTION)
             },
