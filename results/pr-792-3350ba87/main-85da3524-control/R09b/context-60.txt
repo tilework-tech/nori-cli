@@ -1,0 +1,36 @@
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+
+  Current · usage not reported
+
+  Turn checkpoints
+  T1 · unknown · not reported
+  Start unknown · End unknown
+  Starts carry the latest prior observation.
+
+  Local instructions · estimated tokens
+  ~/.claude/CLAUDE.md                                 ~108
+  /tmp/nori-host-tui-acceptance/R09b/roots/beta/ap...  ~83
+  /tmp/nori-host-tui-acceptance/R09b/roots/beta/ap...  ~23
+  /tmp/nori-host-tui-acceptance/R09b/roots/beta/ap...  ~44
+  /tmp/nori-host-tui-acceptance/R09b/roots/beta/ap...  ~67
+
+  Skills observed
+  None observed
+
+  Subagents observed
+  None observed
+
+  Local file sizes; inclusion in the current context is
+  not verified.
+
+                                                    [ auto ]
+› / for slash command menu
+
+  controlling · tidewater-beacon-survey · claude-code · read

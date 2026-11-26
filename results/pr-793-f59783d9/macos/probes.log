@@ -1,0 +1,20 @@
+PASS history/capability_advertised 
+PASS history/controller_add_ok:lighthouse b {'jsonrpc': '2.0', 'id': 2, 'result': {}}
+PASS history/controller_add_ok:harbor tide  {'jsonrpc': '2.0', 'id': 3, 'result': {}}
+PASS history/controller_add_ok:lighthouse l {'jsonrpc': '2.0', 'id': 4, 'result': {}}
+PASS history/watcher_add_refused_-32016 {'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}
+PASS history/metadata_counts_three_more [{'logId': 0, 'entryCount': 0}, {'logId': 4069289, 'entryCount': 3}]
+PASS history/watcher_reads_each_entry_in_order ['{"entry": {"sessionId": "27df632f-bfea-49a4-9641-fad201d9e442", "ts": 1795652136, "text": "lighthouse beam audit"}}', '{"entry": {"sessionId": "27df
+PASS history/search_returns_entries {"jsonrpc": "2.0", "id": 8, "result": {"entries": [{"sessionId": "27df632f-bfea-49a4-9641-fad201d9e442", "ts": 1795652136, "text": "lighthouse beam au
+PASS history/stored_in_host_nori_home /private/tmp/nori-feature-probes/history/homes/host/history.jsonl
+PASS history/client_home_untouched 
+PASS history/out_of_range_offset_is_not_a_crash {'jsonrpc': '2.0', 'id': 5, 'result': {'entry': None}}
+PASS history/unknown_session_add_refused {'jsonrpc': '2.0', 'id': 6, 'error': {'code': -32002, 'message': 'unknown session id'}}
+PASS history/unknown_session_add_-32002 {'jsonrpc': '2.0', 'id': 6, 'error': {'code': -32002, 'message': 'unknown session id'}}
+PASS history/malformed_session_add_-32002 {'jsonrpc': '2.0', 'id': 7, 'error': {'code': -32002, 'message': 'unknown session id'}}
+PASS history/watcher_unknown_session_still_-32016 {'jsonrpc': '2.0', 'id': 9, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}
+PASS history/refused_adds_leave_count_unchanged [{'logId': 4069289, 'entryCount': 3}, {'logId': 4069289, 'entryCount': 3}]
+PASS history/refused_adds_not_written {"session_id":"27df632f-bfea-49a4-9641-fad201d9e442","ts":1795652136,"text":"lighthouse beam audit"}
+{"session_id":"27df632f-bfea-49a4-9641-fad201d9e4
+PASS history/valid_add_after_refusal_recorded_and_searchable [{'jsonrpc': '2.0', 'id': 8, 'result': {}}, {'logId': 4069289, 'entryCount': 4}]
+{"passed": 18, "failed": 0, "absent": []}

@@ -1,0 +1,36 @@
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+
+  Current · usage not reported
+
+  Turn checkpoints
+  T1 · unknown · not reported
+  Start unknown · End unknown
+  Starts carry the latest prior observation.
+
+  Local instructions · estimated tokens
+  ~/.claude/CLAUDE.md                                 ~108
+  /tmp/…/northern-estuary-soundings/CLAUDE.md          ~83
+  /tmp/…/tidewater-beacon-survey/CLAUDE.md             ~23
+  /tmp/…/tidewater-beacon-survey/CLAUDE.local.md       ~44
+  /tmp/nori-host-tui-acceptance/…/.claude/CLAUDE.md    ~67
+
+  Skills observed
+  None observed
+
+  Subagents observed
+  None observed
+
+  Local file sizes; inclusion in the current context is
+  not verified.
+
+                                                    [ auto ]
+› ! for shell commands
+
+  controlling · tidewater-beacon-survey · claude-code · read

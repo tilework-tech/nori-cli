@@ -1,0 +1,12 @@
+== R06 restack #779: host-wide recall and search from a remote terminal
+PASS R06/history.up_in_other_terminal › relay 1 cormorant
+PASS R06/history.ctrl_r_in_other_terminal  - cormorant row 01
+
+  cormorant relay finished.
+
+• This terminal now controls the host.
+
+                                                                      
+PASS R06/history.stored_once_on_host 1
+PASS R06/history.client_home_untouched laptop history
+{"nori": "nori", "passed": 4, "failed": 0, "checks": 4}

@@ -1,0 +1,92 @@
+[
+  {
+    "scenario": "R09",
+    "check": "context.runs_in_attach",
+    "passed": true,
+    "detail": "['  Claude Code \u00b7 1 user turn \u00b7 /context']"
+  },
+  {
+    "scenario": "R09",
+    "check": "context.lists_session_folder_instructions",
+    "passed": true,
+    "detail": "['  /tmp/nori-host-tui-acceptance/R09/\u2026/app/CLAUDE.md      ~10    None observed                None observed']"
+  },
+  {
+    "scenario": "R09",
+    "check": "context.instruction_row_shows_file_name",
+    "passed": true,
+    "detail": "['  /tmp/nori-host-tui-acceptance/R09/\u2026/app/CLAUDE.md      ~10    None observed                None observed']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.runs_in_attach",
+    "passed": true,
+    "detail": "/context\n\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8    Not reported / unknown tokens\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8    Waiting for context usage\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8    Current turn  1 \u00b7 ended\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.five_instruction_rows",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.rows_distinct",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.each_row_ends_with_its_file_name",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.hidden_claude_folder_visible",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context120.client_decoy_absent",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.runs_in_attach",
+    "passed": true,
+    "detail": "/context\n\n  Not reported / unknown tokens\n  Waiting for context usage\n\n  Current turn  1 \u00b7 ended\n  Turn tokens   unknown\n\n  \u25a8 Usage not reported\n  Each cell = 0.5% of the window\n\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8\n  \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8 \u25a8"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.five_instruction_rows",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.rows_distinct",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.each_row_ends_with_its_file_name",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.hidden_claude_folder_visible",
+    "passed": true,
+    "detail": "['~/.claude/CLAUDE.md', '/tmp/\u2026/northern-estuary-soundings/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.md', '/tmp/\u2026/tidewater-beacon-survey/CLAUDE.local.md', '/tmp/nori-host-tui-acceptance/\u2026/.claude/CLAUDE.md']"
+  },
+  {
+    "scenario": "R09b",
+    "check": "context60.client_decoy_absent",
+    "passed": true,
+    "detail": ""
+  }
+]

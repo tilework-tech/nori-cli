@@ -1,0 +1,36 @@
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
+
+  Current · usage not reported
+
+  Turn checkpoints
+  T1 · unknown · not reported
+  Start unknown · End unknown
+  Starts carry the latest prior observation.
+
+  Local instructions · estimated tokens
+  ~/.claude/CLAUDE.md                                 ~108
+  /private/tmp/…/northern-estuary-soundings/CLAUDE.md  ~83
+  /private/tmp/…/tidewater-beacon-survey/CLAUDE.md     ~23
+  /private/…/tidewater-beacon-survey/CLAUDE.local.md   ~44
+  /private/tmp/…/.claude/CLAUDE.md                     ~67
+
+  Skills observed
+  None observed
+
+  Subagents observed
+  None observed
+
+  Local file sizes; inclusion in the current context is
+  not verified.
+
+                                                    [ auto ]
+› @ for file mentions
+
+  controlling · tidewater-beacon-survey · claude-code · read

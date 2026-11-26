@@ -1,0 +1,31 @@
+== R09 restack #782: /context names the session folder's CLAUDE.md
+PASS R09/context.runs_in_attach ['  Claude Code · 1 user turn · /context']
+PASS R09/context.lists_session_folder_instructions ['  /private/tmp/nori-host-tui-acceptance/…/app/CLAUDE.md  ~10    None observed                None observed']
+PASS R09/context.instruction_row_shows_file_name ['  /private/tmp/nori-host-tui-acceptance/…/app/CLAUDE.md  ~10    None observed                None observed']
+== R09b #792: distinct long instruction paths keep their file names in /context
+PASS R09b/context120.runs_in_attach /context
+
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Not reported / unknown tokens
+  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨    Waiting for context usage
+  ▨ 
+PASS R09b/context120.five_instruction_rows ['~/.claude/CLAUDE.md', '/private/tmp/…/northern-estuary-soundings/CLAUDE.md', '/private/tmp/…/tidewater-beacon-survey/CLAUDE.md', '/private/…/tidewater-beacon-
+PASS R09b/context120.rows_distinct ['~/.claude/CLAUDE.md', '/private/tmp/…/northern-estuary-soundings/CLAUDE.md', '/private/tmp/…/tidewater-beacon-survey/CLAUDE.md', '/private/…/tidewater-beacon-
+PASS R09b/context120.each_row_ends_with_its_file_name ['~/.claude/CLAUDE.md', '/private/tmp/…/northern-estuary-soundings/CLAUDE.md', '/private/tmp/…/tidewater-beacon-survey/CLAUDE.md', '/private/…/tidewater-beacon-
+PASS R09b/context120.hidden_claude_folder_visible ['~/.claude/CLAUDE.md', '/private/tmp/…/northern-estuary-soundings/CLAUDE.md', '/private/tmp/…/tidewater-beacon-survey/CLAUDE.md', '/private/…/tidewater-beacon-
+PASS R09b/context120.client_decoy_absent 
+PASS R09b/context60.runs_in_attach /context
+
+  Not reported / unknown tokens
+  Waiting for context usage
+
+  Current turn  1 · ended
+  Turn tokens   unknown
+
+  ▨ Usage not reported
+  Each cell = 0
+PASS R09b/context60.five_instruction_rows ['~/.claude/CLAUDE.md', '/private/tmp/…/northern-estuary-soundings/CLAUDE.md', '/private/tmp/…/tidewater-beacon-survey/CLAUDE.md', '/private/…/tidewater-beacon-
+PASS R09b/context60.rows_distinct ['~/.claude/CLAUDE.md', '/private/tmp/…/northern-estuary-soundings/CLAUDE.md', '/private/tmp/…/tidewater-beacon-survey/CLAUDE.md', '/private/…/tidewater-beacon-
+PASS R09b/context60.each_row_ends_with_its_file_name ['~/.claude/CLAUDE.md', '/private/tmp/…/northern-estuary-soundings/CLAUDE.md', '/private/tmp/…/tidewater-beacon-survey/CLAUDE.md', '/private/…/tidewater-beacon-
+PASS R09b/context60.hidden_claude_folder_visible ['~/.claude/CLAUDE.md', '/private/tmp/…/northern-estuary-soundings/CLAUDE.md', '/private/tmp/…/tidewater-beacon-survey/CLAUDE.md', '/private/…/tidewater-beacon-
+PASS R09b/context60.client_decoy_absent 
+{"nori": "nori", "passed": 15, "failed": 0, "checks": 15}

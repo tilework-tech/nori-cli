@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› relay 1 dawn
+
+
+• - dawn row 01
+
+  dawn relay finished.
+
+
+› relay 1 cormorant
+
+
+• - cormorant row 01
+
+  cormorant relay finished.
+
+• This terminal now controls the host.
+
+                                                                                                                [ auto ]
+› $ for skill listing
+
+  relay 1 cormorant
+  esc close  enter select  j/k move  / search

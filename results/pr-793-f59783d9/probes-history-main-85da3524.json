@@ -1,0 +1,110 @@
+[
+  {
+    "probe": "history",
+    "check": "capability_advertised",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "history",
+    "check": "controller_add_ok:lighthouse b",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 2, 'result': {}}"
+  },
+  {
+    "probe": "history",
+    "check": "controller_add_ok:harbor tide ",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'result': {}}"
+  },
+  {
+    "probe": "history",
+    "check": "controller_add_ok:lighthouse l",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 4, 'result': {}}"
+  },
+  {
+    "probe": "history",
+    "check": "watcher_add_refused_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 3, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "history",
+    "check": "metadata_counts_three_more",
+    "passed": true,
+    "detail": "[{'logId': 0, 'entryCount': 0}, {'logId': 14688635, 'entryCount': 3}]"
+  },
+  {
+    "probe": "history",
+    "check": "watcher_reads_each_entry_in_order",
+    "passed": true,
+    "detail": "['{\"entry\": {\"sessionId\": \"94076a2d-c5b8-487a-924d-c9c116f822ef\", \"ts\": 1795650228, \"text\": \"lighthouse beam audit\"}}', '{\"entry\": {\"sessionId\": \"94076a2d-c5b8-487a-924d-c9c116f822ef\", \"ts\": 1795650228, \"text\": \"harbor tide table\"}}', '{\"entry\": {\"sessionId\": \"94076a2d-c5b8-487a-924d-c9c116f822ef\", \"ts\": 1795650228, \"text\": \"lighthouse lens polish\"}}']"
+  },
+  {
+    "probe": "history",
+    "check": "search_returns_entries",
+    "passed": true,
+    "detail": "{\"jsonrpc\": \"2.0\", \"id\": 8, \"result\": {\"entries\": [{\"sessionId\": \"94076a2d-c5b8-487a-924d-c9c116f822ef\", \"ts\": 1795650228, \"text\": \"lighthouse beam audit\"}, {\"sessionId\": \"94076a2d-c5b8-487a-924d-c9c116f822ef\", \"ts\": 1795650228, \"text\": \"harbor tide table\"}, {\"sessionId\": \"94076a2d-c5b8-487a-924d-c9"
+  },
+  {
+    "probe": "history",
+    "check": "stored_in_host_nori_home",
+    "passed": true,
+    "detail": "/tmp/nori-feature-probes/history/homes/host/history.jsonl"
+  },
+  {
+    "probe": "history",
+    "check": "client_home_untouched",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "probe": "history",
+    "check": "out_of_range_offset_is_not_a_crash",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 5, 'result': {'entry': None}}"
+  },
+  {
+    "probe": "history",
+    "check": "unknown_session_add_refused",
+    "passed": false,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'result': {}}"
+  },
+  {
+    "probe": "history",
+    "check": "unknown_session_add_-32002",
+    "passed": false,
+    "detail": "{'jsonrpc': '2.0', 'id': 6, 'result': {}}"
+  },
+  {
+    "probe": "history",
+    "check": "malformed_session_add_-32002",
+    "passed": false,
+    "detail": "{'jsonrpc': '2.0', 'id': 7, 'error': {'code': -32602, 'message': 'unknown session'}}"
+  },
+  {
+    "probe": "history",
+    "check": "watcher_unknown_session_still_-32016",
+    "passed": true,
+    "detail": "{'jsonrpc': '2.0', 'id': 9, 'error': {'code': -32016, 'message': 'watcher is read-only; take control before changing a session'}}"
+  },
+  {
+    "probe": "history",
+    "check": "refused_adds_leave_count_unchanged",
+    "passed": false,
+    "detail": "[{'logId': 14688635, 'entryCount': 3}, {'logId': 14688635, 'entryCount': 4}]"
+  },
+  {
+    "probe": "history",
+    "check": "refused_adds_not_written",
+    "passed": false,
+    "detail": "se beam audit\"}\n{\"session_id\":\"94076a2d-c5b8-487a-924d-c9c116f822ef\",\"ts\":1795650228,\"text\":\"harbor tide table\"}\n{\"session_id\":\"94076a2d-c5b8-487a-924d-c9c116f822ef\",\"ts\":1795650228,\"text\":\"lighthouse lens polish\"}\n{\"session_id\":\"00000000-0000-4000-8000-00000000dead\",\"ts\":1795650228,\"text\":\"ghost\"}\n"
+  },
+  {
+    "probe": "history",
+    "check": "valid_add_after_refusal_recorded_and_searchable",
+    "passed": false,
+    "detail": "[{'jsonrpc': '2.0', 'id': 8, 'result': {}}, {'logId': 14688635, 'entryCount': 5}]"
+  }
+]

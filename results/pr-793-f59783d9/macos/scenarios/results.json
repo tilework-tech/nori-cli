@@ -1,0 +1,26 @@
+[
+  {
+    "scenario": "R06",
+    "check": "history.up_in_other_terminal",
+    "passed": true,
+    "detail": "\u203a relay 1 cormorant"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.ctrl_r_in_other_terminal",
+    "passed": true,
+    "detail": " - cormorant row 01\n\n  cormorant relay finished.\n\n\u2022 This terminal now controls the host.\n\n                                                                                                                [ auto ]\n\u203a $ for skill listing\n\n  relay 1 cormorant\n  esc close  enter select  j/k move  / search\n"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.stored_once_on_host",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R06",
+    "check": "history.client_home_untouched",
+    "passed": true,
+    "detail": "laptop history"
+  }
+]
