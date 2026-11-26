@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+Sessions 2 · 2 ready  tab: waiting only · / search
+
+All  waiting on you
+
+  Session                                                                      Agent         Status
+  ○ new session (current)                                                      claude-code   ready
+    no reply yet                                                                             14s ago
+› ○ new session                                                                claude-code   ready
+    no reply yet                                                                             9s ago
+
+↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close
+

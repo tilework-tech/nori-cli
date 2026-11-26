@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+■ Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting;
+your draft is kept.
+
+■ /new: reconnecting
+
+                                                                                                                [ auto ]
+/ new
+
+  /new  reconnecting

@@ -1,0 +1,338 @@
+[
+  {
+    "scenario": "S35b",
+    "check": "ctl.host_route_reason",
+    "passed": false,
+    "detail": "/compact  summarize conversation to prevent hitting the context limit"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.attach_screen_reason",
+    "passed": true,
+    "detail": "/agent  not available in nori attach yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.host_commands_enabled",
+    "passed": true,
+    "detail": "['/new  start a new chat during a conversation', '/sessions  list sessions and move between them']"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.quit_enabled",
+    "passed": true,
+    "detail": "/quit  exit Nori"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.tab_completes_builtin",
+    "passed": true,
+    "detail": "/sessions"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_refused_with_reason",
+    "passed": false,
+    "detail": "  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_refusal_count",
+    "passed": true,
+    "detail": "shown 0 time(s)"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_draft_kept",
+    "passed": false,
+    "detail": "\u203a @ for file mentions"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.compact_nothing_sent",
+    "passed": false,
+    "detail": "['session/prompt', 'session/new']"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_refused_with_reason",
+    "passed": true,
+    "detail": "  /agent  not available in nori attach yet"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_refusal_count",
+    "passed": true,
+    "detail": "shown 1 time(s)"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_draft_kept",
+    "passed": true,
+    "detail": "/agent"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_review_args_sent_once",
+    "passed": false,
+    "detail": "{'sent': 0, 'prompts': ['first light', \"You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\\n\\nInclude:\\n- A copy of the exact initial prompt the user made\\n- A copy of the entire plan and the discussion I had with the agent about the plan\\n- A copy of any critical research that was done that informs the plan\\n- The current progress\\n- Important context, constraints, or user preferences discovered during this conversation\\n- What remains to be done (clear next steps)\\n- Any links that are necessary\\n\\nFollow the writing-plans "
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_review_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': ['first light', \"You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\\n\\nInclude:\\n- A copy of the exact initial prompt the user made\\n- A copy of the entire plan and the discussion I had with the agent about the plan\\n- A copy of any critical research that was done that informs the plan\\n- The current progress\\n- Important context, constraints, or user preferences discovered during this conversation\\n- What remains to be done (clear next steps)\\n- Any links that are necessary\\n\\nFollow the writing-plans "
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.agent_command_lanternize_sent_once",
+    "passed": true,
+    "detail": "{'sent': 1, 'prompts': [\"You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\\n\\nInclude:\\n- A copy of the exact initial prompt the user made\\n- A copy of the entire plan and the discussion I had with the agent about the plan\\n- A copy of any critical research that was done that informs the plan\\n- The current progress\\n- Important context, constraints, or user preferences discovered during this conversation\\n- What remains to be done (clear next steps)\\n- Any links that are necessary\\n\\nFollow the writing-plans skill.\\n\\nDo NO"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.leading_space_quit_is_a_prompt",
+    "passed": true,
+    "detail": "['/review', '/lanternize', 'quit']"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.bare_quit_detaches",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "S35b",
+    "check": "ctl.detach_keeps_session",
+    "passed": true,
+    "detail": "['6da2b98d-ef77-445a-b26d-928ebcd0ff2e']"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.control_commands_greyed",
+    "passed": false,
+    "detail": "{'/new': '/new  watching \u00b7 Alt+T to take control', '/close': '/close  watching \u00b7 Alt+T to take control', '/resume': '/resume           not available in nori attach yet', '/delegate': '/delegate  watching \u00b7 Alt+T to take control', '/sessions': '/sessions  list sessions and move between them'}"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.sessions_enabled",
+    "passed": true,
+    "detail": "/sessions  list sessions and move between them"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_refused_with_reason",
+    "passed": true,
+    "detail": "  /new  watching \u00b7 Alt+T to take control"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_nothing_sent",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "S35c",
+    "check": "watch.new_draft_kept",
+    "passed": true,
+    "detail": "/new"
+  },
+  {
+    "scenario": "S35c",
+    "check": "transfer.controller_menu_enabled_before",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35c",
+    "check": "scenario.completed",
+    "passed": false,
+    "detail": "TimeoutError: S35c-watcher: 'CONTROLLING' not on screen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n\n\u203a first light\n\n\n\u2022 claude-code heard: first light\n\n\u25a0 /new: watching \u00b7 Alt+T to take control\n\n\u2022 This terminal now controls the host.\n\n                                                                                                                [ auto ]\n\u203a ! for shell commands\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.open_menu_shows_reason",
+    "passed": true,
+    "detail": "/new              reconnecting"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_refused_with_reason",
+    "passed": true,
+    "detail": "['\u25a0 Lost the connection to the host (WebSocket protocol error: Connection reset without closing handshake). Reconnecting;', '\u25a0 /new: reconnecting', '/new  reconnecting']"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.draft_kept",
+    "passed": true,
+    "detail": "/new"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.nothing_sent_while_down",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.menu_enabled_after",
+    "passed": true,
+    "detail": "/new              start a new chat during a conversation"
+  },
+  {
+    "scenario": "S35h",
+    "check": "reconnect.new_runs_once_after",
+    "passed": true,
+    "detail": "2"
+  },
+  {
+    "scenario": "S41a",
+    "check": "a.session_one_in_alpha",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance/S41a/roots/alpha/app"
+  },
+  {
+    "scenario": "S41a",
+    "check": "a.controller_at_offers_alpha",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n                                                                                                                [ auto ]\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "b.tilde_expands_with_host_home",
+    "passed": true,
+    "detail": "{'cwd': '/tmp/nori-host-tui-acceptance/S41a/homes/host/spool/app', 'host_home': '/tmp/nori-host-tui-acceptance/S41a/homes/host/spool/app', 'client_home': '/tmp/nori-host-tui-acceptance/S41a/homes/laptop/spool/app'}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "b.controller_at_follows_new_session",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a @spool\n\n  src/spool_thread.rs\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "host.session_cwds",
+    "passed": true,
+    "detail": "{'85a4b97f-7348-4ddd-be85-5e516afda5a8': '/tmp/nori-host-tui-acceptance/S41a/roots/alpha/app', '60a61965-63b2-4ee5-9ed3-1513b080be2c': '/tmp/nori-host-tui-acceptance/S41a/homes/host/spool/app'}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_at_offers_its_session_folder",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 Claude Code options: Mode=auto (/config to change)\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.find_paths_answered_for_watcher_client",
+    "passed": true,
+    "detail": "{'before': {'2': 2}, 'after': {'2': 2, '4': 2}}"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_tab_completes_from_host",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "w.watcher_still_watching",
+    "passed": false,
+    "detail": "  watching \u00b7 read-only \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 alt+t take control \u00b7 ctrl+d detach"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.plain_new_inherits_foreground_folder",
+    "passed": true,
+    "detail": "/tmp/nori-host-tui-acceptance/S41a/homes/host/spool/app"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.tab_completes_from_host_home",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "c.tab_completes_spool",
+    "passed": true,
+    "detail": "['/ new ~/spool/']"
+  },
+  {
+    "scenario": "S41a",
+    "check": "s.at_follows_switched_session",
+    "passed": false,
+    "detail": "[{'lan': [], 'spool': ['spool_thread'], 'identity': 'controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach'}, {'lan': [], 'spool': ['spool_thread'], 'identity': 'controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach'}, {'lan': [], 'spool': ['spool_thread'], 'identity': 'controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach'}]"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.at_offers_host_folder",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\u2022 No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches\n\n\n\u203a @lan\n\n  src/lantern_glass.rs\n  src/lantern_wick.rs\n  docs/alpha_notes.md\n"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_relative_from_host_folder",
+    "passed": true,
+    "detail": "['/ new ./assets/alpha-only/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.tab_tilde_from_host_home",
+    "passed": true,
+    "detail": "['/ new ~/kiln_host/']"
+  },
+  {
+    "scenario": "S41c",
+    "check": "n.relative_new_uses_host_folder",
+    "passed": true,
+    "detail": "{'cwd': '/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'host': '/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'client': '/tmp/nori-host-tui-acceptance/S41c/roots/laptop/app/docs'}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.no_session_at_shows_host_file",
+    "passed": true,
+    "detail": "{'want': 'lantern_wick', 'shown_ms': 155, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.no_session_at_never_client_file",
+    "passed": true,
+    "detail": "{'want': 'lantern_wick', 'shown_ms': 155, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.no_session_client_only_name_not_offered",
+    "passed": true,
+    "detail": "{'want': 'decoy_laptop', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.after_new_dir_at_follows_beta",
+    "passed": true,
+    "detail": "{'want': 'harbor_tide', 'shown_ms': 155, 'files_seen': ['harbor_tide'], 'no_matches_seen': False}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.after_new_dir_old_folder_not_offered",
+    "passed": true,
+    "detail": "{'want': 'lantern_wick', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.after_alt_s_at_follows_switched_session",
+    "passed": false,
+    "detail": "[{'lan': {'want': 'lantern_wick', 'shown_ms': 154, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}, 'harb': {'want': 'harbor_tide', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}, {'lan': {'want': 'lantern_wick', 'shown_ms': 155, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}, 'harb': {'want': 'harbor_tide', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}]"
+  },
+  {
+    "scenario": "S41h",
+    "check": "h.never_client_files",
+    "passed": true,
+    "detail": "[{'lan': {'want': 'lantern_wick', 'shown_ms': 154, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}, 'harb': {'want': 'harbor_tide', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}, {'lan': {'want': 'lantern_wick', 'shown_ms': 155, 'files_seen': ['lantern_wick'], 'no_matches_seen': False}, 'harb': {'want': 'harbor_tide', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}}]"
+  }
+]

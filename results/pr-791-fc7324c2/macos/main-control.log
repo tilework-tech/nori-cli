@@ -1,0 +1,80 @@
+== S41c cwd: attach --host with no session: @, Tab and relative /new use the host folder
+FAIL S41c/n.at_offers_host_folder 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches
+
+
+› @lan
+
+  docs/laptop_notes.md
+
+PASS S41c/n.tab_relative_from_host_folder ['/ new ./assets/alpha-only/']
+PASS S41c/n.tab_tilde_from_host_home ['/ new ~/kiln_host/']
+PASS S41c/n.relative_new_uses_host_folder {'cwd': '/private/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'host': '/private/tmp/nori-host-tui-acceptance/S41c/roots/alpha/app/docs', 'client': 
+== R01 restack: no-newline replies restored and live, once and in order, late joiner too
+PASS R01/restored.unterminated_reply_shown e)
+
+
+› relay 2 dawn
+
+
+• - dawn row 01
+  - dawn row 02
+
+  dawn relay finished.
+
+                                                                                 
+PASS R01/controller.each_once_in_order ordered
+PASS R01/controller.no_tail_glued_to_next_row []
+PASS R01/late_joiner.each_once_in_order ordered
+PASS R01/late_joiner.no_tail_glued_to_next_row []
+PASS R01/live.noon_delivered_once 1
+PASS R01/live.dusk_delivered_once 1
+== R14a #790: fresh attach after Ctrl+D takes, edits and sends a queued prompt once
+PASS R14a/fresh.a_detached shell$
+PASS R14a/fresh.up_is_not_history_recall {'queued': '3', 'composer': '› @ for file mentions'}
+PASS R14a/fresh.take_removes_from_queue_into_composer {'queued': '2', 'composer': '› relay 1 third'}
+PASS R14a/fresh.correction_sent_once ['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']
+PASS R14a/fresh.original_never_sent ['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']
+PASS R14a/fresh.others_once_in_order ['relay 1 lamp', 'relay 1 second']
+== S41h #791: host-only @ with no session, right after /new DIR and after Alt+S, with no settle delay
+FAIL S41h/h.no_session_at_shows_host_file {'want': 'lantern_wick', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': False}
+PASS S41h/h.no_session_at_never_client_file {'want': 'lantern_wick', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': False}
+FAIL S41h/h.no_session_client_only_name_not_offered {'want': 'decoy_laptop', 'shown_ms': 163, 'files_seen': ['decoy_laptop'], 'no_matches_seen': False}
+PASS S41h/h.after_new_dir_at_follows_beta {'want': 'harbor_tide', 'shown_ms': 172, 'files_seen': ['harbor_tide'], 'no_matches_seen': False}
+PASS S41h/h.after_new_dir_old_folder_not_offered {'want': 'lantern_wick', 'shown_ms': None, 'files_seen': [], 'no_matches_seen': True}
+PASS S41h/h.after_alt_s_at_follows_switched_session [{'want': 'beta', 'own': {'want': 'harbor_tide', 'shown_ms': 179, 'files_seen': ['harbor_tide'], 'no_matches_seen': False}, 'other': {'want': 'lantern_wick', 's
+PASS S41h/h.never_client_files [{'want': 'beta', 'own': {'want': 'harbor_tide', 'shown_ms': 179, 'files_seen': ['harbor_tide'], 'no_matches_seen': False}, 'other': {'want': 'lantern_wick', 's
+== S35r #791 L2: agent commands with and without arguments reach the agent once
+FAIL S35r/r.review_the_parser_sent_once {'sent': 0, 'prompts': ['first light'], 'composer': '/review the parser'}
+FAIL S35r/r.review_sent_once {'sent': 0, 'prompts': ['first light'], 'composer': '/review'}
+FAIL S35r/r.lanternize_now_sent_once {'sent': 0, 'prompts': ['first light'], 'composer': '/lanternize now'}
+{"nori": "nori", "passed": 21, "failed": 6, "checks": 27}

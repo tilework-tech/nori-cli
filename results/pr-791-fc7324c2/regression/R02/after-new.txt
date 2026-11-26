@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+                                                                                                                [ auto ]
+› / for slash command menu
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+  3 ready
+
+                                                                                                                [ auto ]
+› @spool
+
+  src/spool_thread.rs

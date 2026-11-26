@@ -1,0 +1,45 @@
+Traceback (most recent call last):
+  File "/home/sprite/org/workspace/.worktrees/acc/harness/run.py", line 5673, in main
+    fn(ctx)
+  File "/home/sprite/org/workspace/.worktrees/acc/harness/run.py", line 2437, in s35_watcher_and_transfer
+    b.wait_for(r"CONTROLLING", 10, regex=True)
+  File "/home/sprite/org/workspace/.worktrees/acc/harness/term.py", line 90, in wait_for
+    raise TimeoutError(f"{self.name}: {needle!r} not on screen\n{self.screen()}")
+TimeoutError: S35c-watcher: 'CONTROLLING' not on screen
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+■ /new: watching · Alt+T to take control
+
+• This terminal now controls the host.
+
+                                                                                                                [ auto ]
+› ! for shell commands
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach
+

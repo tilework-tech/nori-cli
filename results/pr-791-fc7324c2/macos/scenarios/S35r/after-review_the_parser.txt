@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+
+› /review the parser
+
+
+• claude-code heard: /review the parser
+
+                                                                                                                [ auto ]
+› @ for file mentions
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

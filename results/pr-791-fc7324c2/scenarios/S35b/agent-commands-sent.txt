@@ -1,0 +1,36 @@
+
+• claude-code heard: - Anything related to 'tone'
+
+⚠ Heads up: Long conversations and multiple compactions can cause the model to be less accurate. Start a new
+  conversation when possible to keep conversations small and targeted.
+
+■ /agent: not available in nori attach yet
+
+
+› /review the parser
+
+
+• claude-code heard: /review the parser
+
+
+› /review
+
+
+• claude-code heard: /review
+
+
+› /lanternize
+
+
+• claude-code heard: /lanternize
+
+
+› quit
+
+
+• claude-code heard: quit
+
+                                                                                                                [ auto ]
+› @ for file mentions
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

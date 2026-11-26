@@ -1,0 +1,36 @@
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+• claude-code heard: - Anything related to 'tone'
+
+• Context compacted
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/nori-host-tui-acceptance/S35b/roots/alpha/app · Approvals: Agent
+  Agent        Claude · auto
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• claude-code heard: - Anything related to 'tone'
+
+⚠ Heads up: Long conversations and multiple compactions can cause the model to be less accurate. Start a new
+  conversation when possible to keep conversations small and targeted.
+
+■ /agent: not available in nori attach yet
+
+                                                                                                                [ auto ]
+› / for slash command menu
+
+  controlling · app · claude-code · ready · Approvals: Agent · ctrl+d detach

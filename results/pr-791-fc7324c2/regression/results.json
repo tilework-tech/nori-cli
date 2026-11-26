@@ -1,0 +1,242 @@
+[
+  {
+    "scenario": "R01",
+    "check": "restored.unterminated_reply_shown",
+    "passed": true,
+    "detail": "e)\n\n\n\u203a relay 2 dawn\n\n\n\u2022 - dawn row 01\n  - dawn row 02\n\n  dawn relay finished.\n\n                                                                                                                [ auto ]\n\u203a $ for skill listing\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "controller.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.each_once_in_order",
+    "passed": true,
+    "detail": "ordered"
+  },
+  {
+    "scenario": "R01",
+    "check": "late_joiner.no_tail_glued_to_next_row",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.noon_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R01",
+    "check": "live.dusk_delivered_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.alternate_screen",
+    "passed": true,
+    "detail": "True"
+  },
+  {
+    "scenario": "R02",
+    "check": "start.picker_shown",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 0  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n\u25c7 No options available\n  The caller has not supplied any rows.\n\n\n\u2191\u2193/j/k move  enter open  tab waiting on you  e"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.session_on_host",
+    "passed": true,
+    "detail": "ID                                    AGENT             STATUS               AGE  CWD                                                TITLE\ncd118a4c-8209-4b5d-a41f-6c4e2ef643ca  claude-code       ready                 0s  /tmp/nori-host-tui-acceptance/R02/roots/alpha/app  -\n"
+  },
+  {
+    "scenario": "R02",
+    "check": "new.first_prompt_once",
+    "passed": true,
+    "detail": "1"
+  },
+  {
+    "scenario": "R02",
+    "check": "detach.back_at_shell",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.lists_two",
+    "passed": true,
+    "detail": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nSessions 2 \u00b7 2 ready  tab: waiting only \u00b7 / search\n\nAll  waiting on you\n\n  Session                                                                      Agent         Status\n\u203a \u25cb relay 1 first                                                              claude-code   ready\n    "
+  },
+  {
+    "scenario": "R02",
+    "check": "picker.enter_opens_a_session",
+    "passed": true,
+    "detail": " change)\n\n\n\u203a relay 1 first\n\n\n\u2022 - first row 01\n\n  first relay finished.\n\n  2 ready\n\n                                                                                                                [ auto ]\n\u203a ? for shortcuts\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.delivered_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'relay 1 early']"
+  },
+  {
+    "scenario": "R03",
+    "check": "typeahead.reply_shown_once",
+    "passed": true,
+    "detail": " finished.\n\n\n\u203a relay 1 early\n\n\n\u2022 - early row 01\n\n  early relay finished.\n\n                                                                                                                [ auto ]\n\u203a / for slash command menu\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.up_focuses_queue_not_history",
+    "passed": true,
+    "detail": "list"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.text_in_composer",
+    "passed": true,
+    "detail": "\u203a relay 1 lamp"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.queue_row_gone",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R05a",
+    "check": "reclaim.never_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reconnect.queue_still_listed",
+    "passed": true,
+    "detail": "1 queued \u00b7 paused (interrupted) \u00b7 enter resumes\n  \u21b3 relay 1 lamp\n    \u2191 select\n\n                                                                                                                [ auto ]\n\u203a $ for skill listing\n\n  controlling \u00b7 app \u00b7 claude-code \u00b7 ready \u00b7 Approvals: Agent \u00b7 ctrl+d detach\n"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.up_focuses_queue_not_history",
+    "passed": true,
+    "detail": "list"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.text_in_composer",
+    "passed": true,
+    "detail": "\u203a relay 1 lamp"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.queue_row_gone",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "scenario": "R05b",
+    "check": "reclaim.never_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R12",
+    "check": "attach.partial_line_visible_mid_turn",
+    "passed": false,
+    "detail": "{'ticks_sent': 11}"
+  },
+  {
+    "scenario": "R12",
+    "check": "plain.partial_line_visible_mid_turn",
+    "passed": false,
+    "detail": "ing VC cash (2s \u2022 esc to interrupt)\n\n                                                                                                         [ acceptEdits ]\n\u203a @ for file mentions\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.a_detached",
+    "passed": true,
+    "detail": "shell$"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.up_is_not_history_recall",
+    "passed": true,
+    "detail": "{'queued': '3', 'composer': '\u203a $ for skill listing'}"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.take_removes_from_queue_into_composer",
+    "passed": true,
+    "detail": "{'queued': '2', 'composer': '\u203a relay 1 third'}"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.correction_sent_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.original_never_sent",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14a",
+    "check": "fresh.others_once_in_order",
+    "passed": true,
+    "detail": "['relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "watcher.queue_unchanged",
+    "passed": true,
+    "detail": "('3', '3')"
+  },
+  {
+    "scenario": "R14b",
+    "check": "watcher.nothing_sent",
+    "passed": true,
+    "detail": "0"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.up_is_not_history_recall",
+    "passed": true,
+    "detail": "{'queued': '3', 'composer': '\u203a ? for shortcuts'}"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.take_removes_from_queue_into_composer",
+    "passed": true,
+    "detail": "{'queued': '2', 'composer': '\u203a relay 1 third'}"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.correction_sent_once",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.original_never_sent",
+    "passed": true,
+    "detail": "['relay 1 dawn', 'hold on', 'relay 1 thirdfix', 'relay 1 lamp', 'relay 1 second']"
+  },
+  {
+    "scenario": "R14b",
+    "check": "takeover.others_once_in_order",
+    "passed": true,
+    "detail": "['relay 1 lamp', 'relay 1 second']"
+  }
+]

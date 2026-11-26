@@ -1,0 +1,12 @@
+{"t": 1795651671.6754239, "adapter": "claude-code", "pid": 198994, "kind": "spawn", "cwd": "/tmp/nori-host-tui-acceptance/R03/roots/alpha/app", "argv": []}
+{"t": 1795651671.6755142, "adapter": "claude-code", "pid": 198994, "kind": "request", "method": "initialize"}
+{"t": 1795651671.675819, "adapter": "claude-code", "pid": 198994, "kind": "request", "method": "session/list", "cwd": "/tmp/nori-host-tui-acceptance/R03/roots/alpha/app"}
+{"t": 1795651671.6760333, "adapter": "claude-code", "pid": 198994, "kind": "request", "method": "session/new", "cwd": "/tmp/nori-host-tui-acceptance/R03/roots/alpha/app"}
+{"t": 1795651671.679675, "adapter": "claude-code", "pid": 198994, "kind": "request", "method": "session/set_config_option", "sessionId": "claude-code-0", "configId": "mode", "value": "acceptEdits"}
+{"t": 1795651671.679749, "adapter": "claude-code", "pid": 198994, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 1 dawn"}
+{"t": 1795651671.6799293, "adapter": "claude-code", "pid": 198994, "kind": "relay", "sessionId": "claude-code-0", "tag": "dawn", "n": 1}
+{"t": 1795651671.9300807, "adapter": "claude-code", "pid": 198994, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 1}
+{"t": 1795651672.9575596, "adapter": "claude-code", "pid": 198994, "kind": "request", "method": "session/prompt", "sessionId": "claude-code-0", "text": "relay 1 early"}
+{"t": 1795651672.957754, "adapter": "claude-code", "pid": 198994, "kind": "relay", "sessionId": "claude-code-0", "tag": "early", "n": 1}
+{"t": 1795651673.2079115, "adapter": "claude-code", "pid": 198994, "kind": "turn_end", "sessionId": "claude-code-0", "stopReason": "end_turn", "rows": 1}
+{"t": 1795651674.0982678, "adapter": "claude-code", "pid": 198994, "kind": "stdin_eof"}

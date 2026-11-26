@@ -1,0 +1,36 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Claude Code options: Mode=auto (/config to change)
+
+
+› first light
+
+
+• claude-code heard: first light
+
+                                                                                                                [ auto ]
+/
+
+  /agent            not available in nori attach yet
+  /model            not available in nori attach yet
+  /config           not available in nori attach yet
+  /approvals        watching · Alt+T to take control
+  /settings         configure Nori CLI settings (theme, hotkeys, layout, …)
+  /vim              configure Vim mode and Enter key behavior
+  /goal             The active agent advertises neither HTTP MCP support nor the goal extension, so /goal is
+                    unavailable.
+  /new              watching · Alt+T to take control
+  /sessions         list sessions and move between them
+  /delegate         watching · Alt+T to take control
