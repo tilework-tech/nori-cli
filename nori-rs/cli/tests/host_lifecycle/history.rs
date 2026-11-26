@@ -155,3 +155,32 @@ async fn nothing_is_recorded_when_the_host_keeps_no_history() {
         .unwrap();
     assert_eq!(texts(&found), Vec::<&str>::new());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_prompt_for_a_session_the_host_does_not_know_is_not_recorded() {
+    let host = host_with("", &[]);
+    let mut acp = controller(&host);
+    let unknown = nori_harness::ConversationId::new().to_string();
+
+    let refused = acp
+        .call(
+            "_nori/host/history/add",
+            json!({"sessionId": unknown, "text": "water the ferns"}),
+        )
+        .await
+        .unwrap_err();
+    let malformed = acp
+        .call(
+            "_nori/host/history/add",
+            json!({"sessionId": "not-a-session", "text": "trim the hedge"}),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!((refused.code, malformed.code), (-32002, -32002));
+    let found = acp
+        .call("_nori/host/history/search", json!({"maxResults": 10}))
+        .await
+        .unwrap();
+    assert_eq!(texts(&found), Vec::<&str>::new());
+}
