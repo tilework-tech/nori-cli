@@ -445,6 +445,14 @@ already bound swaps the two.
 | `$` | Pick an agent skill or command. |
 | Ctrl+Z | Suspend Nori. |
 
+A dim row under the prompt shows the keys that work now: `/ commands · ! shell
+· @ files · ? help` on an empty prompt (`!` and `@` only where they work, and
+`Enter resume queue` first when the queue is paused), `Enter send ·
+Shift+Enter newline` once text is typed, `Enter steer · Tab queue` or
+`Enter queue` during a turn you started, and `Enter run` for a slash command
+or `!` line. Turn it off with the `composer_hints` footer segment
+([configuration](configuration.md#tuifooter_segments)).
+
 In the transcript overlay, `q`, Ctrl+C, Ctrl+T, or Ctrl+O closes it.
 
 In every picker: Up/Down or j/k move, PgUp/PgDn and Home/End page, `/`, `f`,

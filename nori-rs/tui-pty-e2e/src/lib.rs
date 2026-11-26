@@ -1295,7 +1295,10 @@ pub fn normalize_for_snapshot(contents: String) -> String {
     let lines: Vec<String> = normalized
         .lines()
         .map(|line| {
-            if line.trim_start().starts_with("› ")
+            if line.trim() == "›" {
+                // An empty prompt whose tips moved to the hint row below it.
+                "› [DEFAULT_PROMPT]".to_string()
+            } else if line.trim_start().starts_with("› ")
                 && (line.trim_start().starts_with("› ? for shortcuts")
                     || line.trim_start().starts_with("› / for slash command menu")
                     || line.trim_start().starts_with("› $ for skill listing")
@@ -1599,6 +1602,14 @@ mod tests {
             let input = format!("› {placeholder}\n");
             assert_eq!(normalize_for_input_snapshot(input), "› [DEFAULT_PROMPT]\n");
         }
+    }
+
+    #[test]
+    fn test_normalize_empty_prompt_shown_with_hints() {
+        assert_eq!(
+            normalize_for_input_snapshot("›\n  / commands · ? help\n".to_string()),
+            "› [DEFAULT_PROMPT]\n  / commands · ? help\n"
+        );
     }
 
     #[test]

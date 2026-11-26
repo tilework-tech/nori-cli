@@ -9,13 +9,14 @@ use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
-fn has_prompt_mode_placeholder(contents: &str) -> bool {
+fn has_prompt_ready_marker(contents: &str) -> bool {
     [
         "? for shortcuts",
         "/ for slash command menu",
         "$ for skill listing",
         "! for shell commands",
         "@ for file mentions",
+        "/ commands · ",
     ]
     .iter()
     .any(|placeholder| contents.contains(placeholder))
@@ -142,9 +143,10 @@ fn test_runs_in_temp_directory_by_default() {
 fn test_trust_screen_is_skipped_with_default_config() {
     let mut session = TuiSession::spawn(24, 80).expect("Failed to spawn");
 
-    // Wait for the prompt to appear (indicated by the chevron character)
+    // The welcome card also starts with `›`, so wait for the composer's
+    // hint row instead.
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_text("/ commands · ", TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
@@ -159,8 +161,8 @@ fn test_trust_screen_is_skipped_with_default_config() {
 
     // Should show the main prompt directly (skipping onboarding)
     assert!(
-        contents.contains("›") && has_prompt_mode_placeholder(&contents),
-        "Should show main prompt with a prompt-mode placeholder, got: {}",
+        contents.contains("›") && has_prompt_ready_marker(&contents),
+        "Should show main prompt with its placeholder or hint row, got: {}",
         contents
     );
 }

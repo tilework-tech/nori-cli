@@ -96,6 +96,8 @@ impl ChatWidget {
                 response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(response)),
                 ..
             } => {
+                self.session_steering = serde_json::to_value(&response)
+                    .is_ok_and(|value| nori_harness::follow_up::supports_guarded_steering(&value));
                 self.follow_only_attachment = response
                     .meta
                     .as_ref()

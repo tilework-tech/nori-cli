@@ -157,6 +157,7 @@ impl ChatComposer {
             acp_mode_label: self.acp_mode_label.clone(),
             cloud_session: self.cloud_session.clone(),
             host_status: self.host_status.clone(),
+            composer_hints: self.current_composer_hints(),
         }
     }
 

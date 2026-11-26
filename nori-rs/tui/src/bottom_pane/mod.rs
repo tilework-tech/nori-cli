@@ -27,6 +27,7 @@ mod chat_composer_history;
 mod command_popup;
 mod component_overlay_menu_view;
 mod component_picker_view;
+pub(crate) mod composer_hints;
 mod file_search_popup;
 mod footer;
 mod history_search_popup;
@@ -761,12 +762,17 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    /// Update the cloud session id displayed in the footer (None hides it).
+    /// What the session allows, for the hint row under the composer.
+    pub(crate) fn set_composer_hints(&self, hints: composer_hints::ComposerHints) {
+        self.composer.set_composer_hints(hints);
+    }
+
     pub(crate) fn set_host_status(&mut self, status: Option<ratatui::text::Line<'static>>) {
         self.composer.set_host_status(status);
         self.request_redraw();
     }
 
+    /// Update the cloud session id displayed in the footer (None hides it).
     pub(crate) fn set_cloud_session(&mut self, cloud_session: Option<String>) {
         self.composer.set_cloud_session(cloud_session);
         self.request_redraw();

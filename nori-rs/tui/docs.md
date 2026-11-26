@@ -124,6 +124,14 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   or Esc; during a turn either key prints the refusal and keeps the draft. On
   a stopped host Ctrl+C clears the draft or detaches. A `/new` session refused while another was being set up is retried
   at the next list.
+- Composer hints (`bottom_pane/composer_hints.rs`) are a footer segment,
+  drawn by `bottom_pane/footer.rs`. `ChatWidget` pushes its session facts
+  (watcher, own turn, paused queue, host shell and path search, guarded
+  steering from the agent's `initialize` reply) into `ChatComposer` on every render and
+  height query, so hints never go stale. Popups, Ctrl+C and Esc reminders, and
+  footer hint overrides replace the row. A watcher or reconnecting terminal
+  gets no send keys. While hints show, the composer draws no placeholder tip.
+  On a narrow row, hints drop whole from the end before the right group sheds.
 - Match `SessionEvent::Acp` and `SessionEvent::Nori` first, then project. Keep
   display inference private in `presentation/`. Never add a public normalized
   ACP enum for rendering.

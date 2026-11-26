@@ -221,3 +221,38 @@ fn host_status_line(
     }
     Line::from(spans)
 }
+
+impl ChatWidget {
+    /// The prompt this terminal started, while a follow-up typed now can
+    /// steer it or queue behind it.
+    pub(super) fn active_turn(&self) -> Option<&nori_protocol::acp::v1::RequestId> {
+        use crate::presentation::session_runtime::SessionPhaseView;
+        self.owned_prompt_request_id.as_ref().filter(|_| {
+            !self.cloud_mode
+                && !self.follow_only_attachment
+                && self.acp_session_phase == Some(SessionPhaseView::Prompt)
+        })
+    }
+
+    /// The keys the hint row under the composer may offer right now.
+    pub(super) fn composer_hints(&self) -> crate::bottom_pane::composer_hints::ComposerHints {
+        let (shell, files) = match &self.host_connection {
+            None => (true, true),
+            Some(connection) => (
+                self.follows_host_session() && connection.features.shell,
+                !connection.features.remote || connection.features.find_paths,
+            ),
+        };
+        crate::bottom_pane::composer_hints::ComposerHints {
+            draft: Default::default(),
+            can_submit: self.host_input_refusal().is_none()
+                && !self.follow_only_attachment
+                && (!self.cloud_mode || self.session_configured_received),
+            own_turn: self.active_turn().is_some(),
+            steering: self.session_steering,
+            queue_paused: self.bottom_pane.queued_messages_paused(),
+            shell,
+            files,
+        }
+    }
+}

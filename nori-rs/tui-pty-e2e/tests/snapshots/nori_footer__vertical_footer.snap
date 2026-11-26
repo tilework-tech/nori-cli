@@ -7,5 +7,6 @@ Level=Medium (/config to change)
 
 › [DEFAULT_PROMPT]
 
+  / commands · ! shell · @ files · ? help
   Approvals: Agent
   ⎇ master

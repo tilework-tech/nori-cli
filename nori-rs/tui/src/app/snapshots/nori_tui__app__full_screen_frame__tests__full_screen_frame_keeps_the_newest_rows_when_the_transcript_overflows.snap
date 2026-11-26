@@ -2,7 +2,6 @@
 source: tui/src/app/full_screen_frame.rs
 expression: "frame(&cells, 60, 18).backend()"
 ---
-"                                                            "
 "• answer 10                                                 "
 "                                                            "
 "                                                            "
@@ -20,3 +19,4 @@ expression: "frame(&cells, 60, 18).backend()"
 "                                                            "
 "› unsent draft about the gulls                              "
 "                                                            "
+"  Enter send · Ctrl+J newline                               "
