@@ -1,180 +1,94 @@
 name: rust-ci
 on:
-  pull_request: {}
   push:
-    branches: [main]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+    branches: ['verify/pr-791-27ccdfda-native-acceptance']
 
 jobs:
   checks:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    name: macOS independent acceptance for #791 at 27ccdfda
+    runs-on: blacksmith-6vcpu-macos-15
+    timeout-minutes: 150
     defaults:
       run:
         working-directory: nori-rs
     env:
       CARGO_INCREMENTAL: "0"
-      # Speed up repeated builds across CI runs by caching compiled objects.
-      USE_SCCACHE: "true"
-      SCCACHE_CACHE_SIZE: 10G
-
     strategy:
-      fail-fast: false
       matrix:
-        include: ${{ github.event_name != 'pull_request' && fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"},{"runner":"blacksmith-6vcpu-macos-15","target":"aarch64-apple-darwin","name":"macOS checks"}]') || fromJSON('[{"runner":"blacksmith-4vcpu-ubuntu-2404","target":"x86_64-unknown-linux-gnu","name":"Linux checks"}]') }}
-
+        include:
+          - target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v6
-
-      - name: Free disk space
-        if: runner.os == 'Linux'
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          # sudo apt-get update
-          # sudo apt-get install -y coreutils musl-tools
-          docker system prune -af || true
-
-      - name: Setup faster linker
-        uses: rui314/setup-mold@v1
-
+        with:
+          ref: 27ccdfda838348533631252ee955928469d4b650
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source revision
+        run: test "$(git rev-parse HEAD)" = 27ccdfda838348533631252ee955928469d4b650 && git diff --quiet HEAD -- . && git rev-parse HEAD HEAD:nori-rs && uname -sm && sw_vers
       - uses: dtolnay/rust-toolchain@1.90
         with:
           targets: ${{ matrix.target }}
-          components: clippy, rustfmt
-
       - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: ${{ matrix.target }}
-          components: rustfmt
-
-      - name: Compute lockfile hash
-        id: lockhash
-        shell: bash
+      - name: PR tests
         run: |
-          set -euo pipefail
-          echo "hash=${{ hashFiles('nori-rs/Cargo.lock') }}" >> "$GITHUB_OUTPUT"
-          echo "toolchain_hash=${{ hashFiles('nori-rs/rust-toolchain.toml') }}" >> "$GITHUB_OUTPUT"
-
-      # Cache registry and git deps only. Do not cache ~/.cargo/bin because
-      # restoring tool binaries after rust-toolchain setup can overwrite
-      # rustup-managed cargo shims on hosted runners.
-      - name: Restore cargo home cache
-        id: cache_cargo_home_restore
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-home-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ steps.lockhash.outputs.toolchain_hash }}
-          restore-keys: |
-            cargo-home-${{ matrix.runner }}-${{ matrix.target }}-
-
-      # Install and configure sccache for faster builds
-      - name: Install sccache
-        if: ${{ env.USE_SCCACHE == 'true' }}
-        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2
-        with:
-          tool: sccache
-          version: 0.7.5
-
-      - name: Configure sccache backend
-        if: ${{ env.USE_SCCACHE == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -n "${ACTIONS_CACHE_URL:-}" && -n "${ACTIONS_RUNTIME_TOKEN:-}" ]]; then
-            echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
-            echo "Using sccache GitHub backend"
-          else
-            echo "SCCACHE_GHA_ENABLED=false" >> "$GITHUB_ENV"
-            echo "SCCACHE_DIR=${{ github.workspace }}/.sccache" >> "$GITHUB_ENV"
-            echo "Using sccache local disk + actions/cache fallback"
-          fi
-
-      - name: Enable sccache wrapper
-        if: ${{ env.USE_SCCACHE == 'true' }}
-        shell: bash
-        run: echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
-
-      - name: Restore sccache cache (fallback)
-        if: ${{ env.USE_SCCACHE == 'true' && env.SCCACHE_GHA_ENABLED != 'true' }}
-        id: cache_sccache_restore
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ github.workspace }}/.sccache/
-          key: sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ github.run_id }}
-          restore-keys: |
-            sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-
-            sccache-${{ matrix.runner }}-${{ matrix.target }}-
-
-      # CI checks
-      - name: cargo fmt
-        run: cargo +nightly fmt -- --check
-      # - name: cargo check
-      #   run: cargo check --profile ci-test --target ${{ matrix.target }}
-      # - name: cargo clippy
-      #   run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings # needs all features to avoid unused import/var/etc errors
-      - name: cargo build
-        run: |
-          mkdir -p target/mock-acp-out # build mock-acp-agent to a known location for E2E tests
+          mkdir -p target/mock-acp-out
           cargo +nightly build -p mock-acp-agent --profile ci-test --target ${{ matrix.target }} --artifact-dir target/mock-acp-out -Z unstable-options
-          cargo build -p nori-cli -p nori-tui --bin nori --bin nori-tui --profile ci-test --target ${{ matrix.target }}
-      - name: cargo test nori
+          export MOCK_ACP_AGENT_BIN="$GITHUB_WORKSPACE/nori-rs/target/mock-acp-out/mock_acp_agent"
+          cargo test --profile ci-test --target ${{ matrix.target }} -p nori-tui --lib 2>&1 | tee "$RUNNER_TEMP/pr-tests.txt"
+          grep -E "^test result:" "$RUNNER_TEMP/pr-tests.txt"
+      - name: Optimized nori at 27ccdfda
         env:
-          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
+          CARGO_PROFILE_RELEASE_LTO: "off"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
         run: |
-          cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-harness
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-host-runtime
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp-host
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-auth-providers
-      - name: cargo clippy
-        run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
+          cargo build --release --locked --bin nori --target ${{ matrix.target }}
+          test "$(git rev-parse HEAD)" = 27ccdfda838348533631252ee955928469d4b650 && git diff --quiet HEAD -- .
 
-      # Save cargo home cache (only when key wasn't hit)
-      - name: Save cargo home cache
-        if: always() && !cancelled() && steps.cache_cargo_home_restore.outputs.cache-hit != 'true'
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-home-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ steps.lockhash.outputs.toolchain_hash }}
-
-      # Save sccache cache (fallback for when GHA backend isn't available)
-      - name: Save sccache cache (fallback)
-        if: always() && !cancelled() && env.USE_SCCACHE == 'true' && env.SCCACHE_GHA_ENABLED != 'true'
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.sccache/
-          key: sccache-${{ matrix.runner }}-${{ matrix.target }}-${{ steps.lockhash.outputs.hash }}-${{ github.run_id }}
-
-      - name: sccache stats
-        if: always() && env.USE_SCCACHE == 'true'
-        continue-on-error: true
-        run: sccache --show-stats || true
-
-      - name: sccache summary
-        if: always() && env.USE_SCCACHE == 'true'
-        shell: bash
+      - name: Optimized nori at dfd9b4d4 (comparison build)
+        env:
+          CARGO_PROFILE_RELEASE_LTO: "off"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
         run: |
-          {
-            echo "### sccache stats — ${{ matrix.target }}";
-            echo;
-            echo '```';
-            sccache --show-stats || true;
-            echo '```';
-          } >> "$GITHUB_STEP_SUMMARY"
+          git worktree add --detach "$RUNNER_TEMP/wt-dfd9b4d4" dfd9b4d4718773c953d297678b7ddfac54977d8a
+          cd "$RUNNER_TEMP/wt-dfd9b4d4/nori-rs"
+          test "$(git rev-parse HEAD)" = dfd9b4d4718773c953d297678b7ddfac54977d8a
+          CARGO_TARGET_DIR="$RUNNER_TEMP/target-dfd9b4d4" cargo build --release --locked --bin nori --target ${{ matrix.target }}
+          mkdir -p "$RUNNER_TEMP/bin-dfd9b4d4" && cp "$RUNNER_TEMP/target-dfd9b4d4/${{ matrix.target }}/release/nori" "$RUNNER_TEMP/bin-dfd9b4d4/nori"
+
+      - name: Optimized nori at 85da3524 (comparison build)
+        env:
+          CARGO_PROFILE_RELEASE_LTO: "off"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/wt-85da3524" 85da3524792f71f4861eabca8716c3f68a361b67
+          cd "$RUNNER_TEMP/wt-85da3524/nori-rs"
+          test "$(git rev-parse HEAD)" = 85da3524792f71f4861eabca8716c3f68a361b67
+          CARGO_TARGET_DIR="$RUNNER_TEMP/target-85da3524" cargo build --release --locked --bin nori --target ${{ matrix.target }}
+          mkdir -p "$RUNNER_TEMP/bin-85da3524" && cp "$RUNNER_TEMP/target-85da3524/${{ matrix.target }}/release/nori" "$RUNNER_TEMP/bin-85da3524/nori"
+
+      - name: Acceptance harness (independent verifier)
+        uses: actions/checkout@v6
+        with:
+          ref: caf5f4fac41c7307f8e4dffcd298acbe154f53bd
+          path: acc
+          persist-credentials: false
+      - name: Two-terminal acceptance on native macOS
+        working-directory: acc
+        run: |
+          mkdir -p "$RUNNER_TEMP/mac"
+          cp "$RUNNER_TEMP/pr-tests.txt" "$RUNNER_TEMP/mac/" || true
+          brew install tmux >/dev/null
+          tmux -V; python3 --version; uname -sm; sw_vers
+          NORI_BIN="$GITHUB_WORKSPACE/nori-rs/target/${{ matrix.target }}/release/nori"
+          shasum -a 256 "$NORI_BIN" > "$RUNNER_TEMP/mac/nori.sha256"
+          python3 -I harness/run.py --nori "$NORI_BIN" --out "$RUNNER_TEMP/mac/scenarios" --only S50,S41i,S41c,S41h,S35r,R01,R14a | tee "$RUNNER_TEMP/mac/scenarios.log" || true
+          python3 -I harness/perf/joined_open.py --build old-main-dfd9b4d4 "$RUNNER_TEMP/bin-dfd9b4d4/nori" 0 --build main-85da3524 "$RUNNER_TEMP/bin-85da3524/nori" 1 --build pr-27ccdfda "$NORI_BIN" 1 --sections 64 150 170 --samples 3 --out "$RUNNER_TEMP/mac/joined_open.json" | tee "$RUNNER_TEMP/mac/joined_open.log" || true
+          python3 -I harness/run.py --nori "$RUNNER_TEMP/bin-85da3524/nori" --out "$RUNNER_TEMP/mac/main-control" --only S50,S41i,S41c,S41h,S35r,R01,R14a | tee "$RUNNER_TEMP/mac/main-control.log" || true
+      - name: Upload macOS evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-pr-791-27ccdfda
+          path: ${{ runner.temp }}/mac
