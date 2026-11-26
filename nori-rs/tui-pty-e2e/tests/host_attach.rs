@@ -214,21 +214,19 @@ impl Host {
             Some(id) => self.terminal(&["attach", id]),
             None => self.terminal(&["attach"]),
         };
-        if id.is_some() {
-            client.wait_for_composer().unwrap();
-        } else {
-            client.wait_for_text("Sessions", TIMEOUT).unwrap();
-        }
+        client
+            .wait_for_text(if id.is_some() { "›" } else { "Sessions" }, TIMEOUT)
+            .unwrap();
         client
     }
 
     fn create_session(&self) -> Client {
         let mut client = self.attach(None);
+        client.send_key(Key::Escape).unwrap();
         client
-            .press(
-                Key::Escape,
+            .wait_for(
                 |screen| screen.contains("No session selected. Use"),
-                "the session picker closes",
+                TIMEOUT,
             )
             .unwrap();
         client.submit_input("/new").unwrap();
@@ -498,12 +496,6 @@ fn watcher_cannot_answer_a_permission_request_but_controller_can() {
         host.list().contains("waiting on you"),
         "watcher answer leaves permission pending"
     );
-    // "D2-permission" above also matches the prompt line; answer only once
-    // the request itself is on screen and past its answer grace.
-    controller
-        .wait_for_text("Would you like to allow", TIMEOUT)
-        .unwrap();
-    controller.wait_out_answer_grace();
     controller.send_key(Key::Enter).unwrap();
     controller
         .wait_for_text("Permission granted with option: allow", TIMEOUT)
@@ -865,19 +857,12 @@ fn same_port_host_restart_stops_reconnecting_and_explains_session_loss() {
         std::fs::read(host.home.path().join("host/token")).unwrap(),
         old_token
     );
-    // The notice and the hint row land in separate frames; wait for both
-    // rather than reading a screen caught between them.
-    client
-        .wait_for(
-            |screen| {
-                screen.contains("Host restarted; sessions were lost")
-                    && screen.contains("Re-run nori attach")
-                    && screen.contains("DISCONNECTED")
-            },
-            TIMEOUT,
-        )
-        .unwrap();
+    client.wait_for_text("Host restarted", TIMEOUT).unwrap();
     let screen = client.screen_contents();
+    assert!(
+        screen.contains("sessions were lost") && screen.contains("nori attach"),
+        "{screen}"
+    );
     assert!(
         !screen.contains("RECONNECTING") && !screen.contains("sessions continue"),
         "{screen}"
@@ -975,8 +960,6 @@ fn delegated_child_in_host_list_preserves_metadata_columns_and_can_be_opened() {
         parent_screen.contains("child-column-ch") && parent_screen.contains("parent host task"),
         "notice names child and parent by their tasks: {parent_screen}"
     );
-    // Alt+Down jumps as soon as the notice names the child, without waiting
-    // for the next list heartbeat.
     client.send_key(Key::AltDown).unwrap();
     client.wait_for_text("child-column-check", TIMEOUT).unwrap();
     client.wait_for_text("Allow", TIMEOUT).unwrap();
@@ -1022,14 +1005,14 @@ fn attached_slash_menu_greys_what_this_terminal_cannot_run_and_refuses_it_with_t
     controller
         .wait_for_text("not available in nori attach yet", TIMEOUT)
         .expect("the controller's menu greys commands attach has no screen for");
-    controller.send_str("undo").unwrap();
+    controller.send_str("comp").unwrap();
     controller
         .wait_for_text("not available on this host yet", TIMEOUT)
         .expect("the menu names commands the host has no method for");
     controller.settle(Duration::from_millis(1000));
     controller.send_key(Key::Enter).unwrap();
     controller
-        .wait_for_text("/undo: not available on this host yet", TIMEOUT)
+        .wait_for_text("/compact: not available on this host yet", TIMEOUT)
         .expect("Enter on a greyed row refuses it with the menu's reason");
 
     watcher.send_str("/").unwrap();
@@ -1060,18 +1043,27 @@ fn new_sessions_start_in_the_attaching_folder_or_a_tab_completed_one() {
     std::fs::create_dir(&third).unwrap();
     let mut client = host.terminal_in(&elsewhere, &["attach"]);
     client.wait_for_text("Sessions", TIMEOUT).unwrap();
+    client.send_key(Key::Escape).unwrap();
     client
-        .press(
-            Key::Escape,
+        .wait_for(
             |screen| screen.contains("No session selected. Use"),
-            "the session picker closes",
+            TIMEOUT,
         )
         .unwrap();
 
     client.submit_input("/new").unwrap();
     client
-        .wait_for(|screen| hint_row(screen).contains("elsewhere"), TIMEOUT)
-        .expect("plain /new starts in the attaching terminal's folder, shown on the hint row");
+        .wait_for(
+            |screen| {
+                screen
+                    .lines()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .contains("elsewhere")
+            },
+            TIMEOUT,
+        )
+        .expect("plain /new starts in the attaching terminal's folder, shown on the header");
     client.wait_for_text("ready", TIMEOUT).unwrap();
 
     client.type_input("/new ../thi").unwrap();
@@ -1081,8 +1073,17 @@ fn new_sessions_start_in_the_attaching_folder_or_a_tab_completed_one() {
         .expect("Tab completes the folder");
     client.send_key(Key::Enter).unwrap();
     client
-        .wait_for(|screen| hint_row(screen).contains("third-folder"), TIMEOUT)
-        .expect("the new session's hint row names its folder");
+        .wait_for(
+            |screen| {
+                screen
+                    .lines()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .contains("third-folder")
+            },
+            TIMEOUT,
+        )
+        .expect("the new session's header names its folder");
     ask(&mut client, "hello");
 
     let listing = host.list();
@@ -1107,18 +1108,27 @@ fn mentions_and_new_folder_completion_come_from_the_sessions_folder_on_the_host(
     std::fs::write(workdir.join("session-only-notes.md"), "notes").unwrap();
     let mut client = host.terminal_in(&terminal_folder, &["attach"]);
     client.wait_for_text("Sessions", TIMEOUT).unwrap();
+    client.send_key(Key::Escape).unwrap();
     client
-        .press(
-            Key::Escape,
+        .wait_for(
             |screen| screen.contains("No session selected. Use"),
-            "the session picker closes",
+            TIMEOUT,
         )
         .unwrap();
     client
         .submit_input(&format!("/new {}", workdir.display()))
         .unwrap();
     client
-        .wait_for(|screen| hint_row(screen).contains("workdir"), TIMEOUT)
+        .wait_for(
+            |screen| {
+                screen
+                    .lines()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .contains("workdir")
+            },
+            TIMEOUT,
+        )
         .expect("the session starts in the named folder");
     client.wait_for_text("ready", TIMEOUT).unwrap();
 
@@ -1139,7 +1149,16 @@ fn mentions_and_new_folder_completion_come_from_the_sessions_folder_on_the_host(
     client.settle(Duration::from_millis(300));
     client.send_key(Key::Enter).unwrap();
     client
-        .wait_for(|screen| hint_row(screen).contains("deep-folder"), TIMEOUT)
+        .wait_for(
+            |screen| {
+                screen
+                    .lines()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .contains("deep-folder")
+            },
+            TIMEOUT,
+        )
         .expect("plain folders resolve against the session's folder");
 }
 
@@ -1176,23 +1195,26 @@ fn a_named_host_names_and_completes_folders_from_its_own_home_and_folder() {
         &[("HOME", client_home.path())],
     );
     client.wait_for_text("Sessions", TIMEOUT).unwrap();
+    client.send_key(Key::Escape).unwrap();
     client
-        .press(
-            Key::Escape,
+        .wait_for(
             |screen| screen.contains("No session selected. Use"),
-            "the session picker closes",
+            TIMEOUT,
         )
         .unwrap();
-    let hint_row_names = |client: &mut Client, folder: &str| {
+    let header_names = |client: &mut Client, folder: &str| {
         client
-            .wait_for(|screen| hint_row(screen).contains(folder), TIMEOUT)
+            .wait_for(
+                |screen| screen.lines().nth(1).unwrap_or_default().contains(folder),
+                TIMEOUT,
+            )
             .unwrap_or_else(|error| panic!("the session starts in {folder}: {error}"));
         client.wait_for_text("ready", TIMEOUT).unwrap();
     };
 
     // With no session on screen, a relative folder is under the host's own.
     client.submit_input("/new ./greenhouse").unwrap();
-    hint_row_names(&mut client, "greenhouse");
+    header_names(&mut client, "greenhouse");
 
     // `~` is the host's home: Tab completes from it, and the session starts
     // there, although this terminal's home holds a different folder.
@@ -1204,7 +1226,7 @@ fn a_named_host_names_and_completes_folders_from_its_own_home_and_folder() {
     assert!(!client.screen_contents().contains("orchid"));
     client.settle(Duration::from_millis(300));
     client.send_key(Key::Enter).unwrap();
-    hint_row_names(&mut client, "orchard");
+    header_names(&mut client, "orchard");
 
     client.type_input("@pear-no").unwrap();
     client
@@ -1227,9 +1249,7 @@ fn attached_busy_enter_reports_fallback_and_tab_explicitly_queues() {
     host.start();
     let mut client = host.create_session();
     client.submit_input("mock:stream-until-cancel").unwrap();
-    // The streamed text has no final newline, so the status row shows the
-    // turn instead.
-    client.wait_for_text("esc to interrupt", TIMEOUT).unwrap();
+    client.wait_for_text("Streaming...", TIMEOUT).unwrap();
     client.submit_input("Chart the orchard first").unwrap();
     client
         .wait_for_text("Steering unavailable", TIMEOUT)
@@ -1276,13 +1296,13 @@ fn attached_escape_closes_the_menu_first_and_then_interrupts_the_turn() {
         .wait_for_text("not available in nori attach yet", TIMEOUT)
         .expect("the menu opens");
     client.settle(Duration::from_millis(500));
+    client.send_key(Key::Escape).unwrap();
     client
-        .press(
-            Key::Escape,
+        .wait_for(
             |screen| !screen.contains("not available in nori attach yet"),
-            "the first Escape closes the menu",
+            TIMEOUT,
         )
-        .unwrap();
+        .expect("the first Escape closes the menu");
     client.settle(Duration::from_millis(1000));
     assert!(
         !client
@@ -1413,191 +1433,4 @@ fn open_mode_menu(client: &mut Client, current: &str) {
                 client.screen_contents()
             )
         });
-}
-
-/// The bottom row, which names the session's folder, agent and status.
-fn hint_row(screen: &str) -> &str {
-    screen
-        .lines()
-        .rev()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or_default()
-}
-
-fn wait_screen(client: &mut Client, alternate: bool) {
-    let deadline = Instant::now() + TIMEOUT;
-    while client.is_alternate_screen() != alternate {
-        assert!(
-            Instant::now() < deadline,
-            "alternate screen should be {alternate}:\n{}",
-            client.screen_contents()
-        );
-        client.settle(Duration::from_millis(50));
-    }
-    client.settle(Duration::from_millis(200));
-}
-
-/// Leaving must not close `id`, even a moment later.
-fn stays_open(host: &Host, id: &str, how: &str) {
-    let until = Instant::now() + Duration::from_millis(600);
-    while Instant::now() < until {
-        assert!(
-            !row_status(host, id).contains("closed"),
-            "{how} closed the session: {}",
-            host.list()
-        );
-        std::thread::sleep(Duration::from_millis(100));
-    }
-}
-
-fn row_status(host: &Host, id: &str) -> String {
-    host.list()
-        .lines()
-        .find(|row| row.starts_with(id))
-        .unwrap_or_else(|| panic!("host lists {id}"))
-        .to_owned()
-}
-
-#[test]
-fn attach_opens_full_screen_and_screen_switches_inline_and_back_without_repeating_history() {
-    let host = Host::new();
-    host.start();
-    let mut client = host.create_session();
-    assert!(
-        client.is_alternate_screen(),
-        "nori attach starts on the alternate screen"
-    );
-    ask(&mut client, "D2 screen history");
-
-    client.submit_input("/screen").unwrap();
-    wait_screen(&mut client, false);
-    client.wait_for_text(ANSWER, TIMEOUT).unwrap();
-    assert_eq!(
-        client.history_contents().matches(ANSWER).count(),
-        1,
-        "the inline view prints the session's history once"
-    );
-
-    client.send_key(Key::Ctrl('l')).unwrap();
-    wait_screen(&mut client, true);
-    client
-        .wait_for_text(ANSWER, TIMEOUT)
-        .expect("the full-screen view shows the transcript");
-
-    client.send_key(Key::Ctrl('l')).unwrap();
-    wait_screen(&mut client, false);
-    assert_eq!(
-        client.history_contents().matches(ANSWER).count(),
-        1,
-        "returning inline does not print the history again"
-    );
-    ask(&mut client, "D2 inline turn");
-    assert_eq!(client.history_contents().matches(ANSWER).count(), 2);
-}
-
-#[test]
-fn detach_command_and_ctrl_d_leave_the_host_and_its_session_running() {
-    let host = Host::new();
-    host.start();
-    let mut client = host.create_session();
-    ask(&mut client, "D2 keeps running");
-    let id = host.session_id();
-    client.submit_input("/detach").unwrap();
-    assert!(
-        client.wait_for_process_exit(TIMEOUT),
-        "/detach leaves the terminal"
-    );
-    stays_open(&host, &id, "/detach");
-
-    let mut again = host.attach(Some(&id));
-    again.wait_for_text(ANSWER, TIMEOUT).unwrap();
-    again.send_key(Key::Ctrl('d')).unwrap();
-    assert!(again.wait_for_process_exit(TIMEOUT), "Ctrl+D detaches");
-    stays_open(&host, &id, "Ctrl+D");
-}
-
-#[test]
-fn new_on_an_attached_host_opens_the_session_the_host_started() {
-    let host = Host::new();
-    host.start();
-    let mut client = host.create_session();
-    ask(&mut client, "D2 first session");
-    let first = host.session_id();
-    client.submit_input("/new").unwrap();
-    let deadline = Instant::now() + TIMEOUT;
-    let second = loop {
-        if let Some(id) = host
-            .list()
-            .lines()
-            .skip(1)
-            .filter_map(|row| row.split_whitespace().next())
-            .find(|id| *id != first)
-        {
-            break id.to_owned();
-        }
-        assert!(
-            Instant::now() < deadline,
-            "the host starts a second session: {}",
-            host.list()
-        );
-        client.settle(Duration::from_millis(100));
-    };
-    client
-        .wait_for(
-            |screen| !screen.contains("D2 first session") && hint_row(screen).contains("ready"),
-            TIMEOUT,
-        )
-        .expect("the terminal shows the new, empty session");
-
-    ask(&mut client, "D2 second session");
-    let listing = host.list();
-    assert!(
-        row_status(&host, &second).contains("D2 second session"),
-        "the prompt went to the new session: {listing}"
-    );
-    assert!(
-        row_status(&host, &first).contains("D2 first session"),
-        "the first session keeps its own history: {listing}"
-    );
-    assert!(
-        listing.lines().skip(1).all(|row| !row.contains("closed")),
-        "both sessions keep running: {listing}"
-    );
-}
-
-#[test]
-fn page_up_in_full_screen_reaches_history_above_the_screen() {
-    let host = Host::new();
-    host.start();
-    let mut client = host.create_session();
-    ask(&mut client, "D2 earliest question");
-    for turn in 0..12 {
-        // Earlier answers leave the full-screen view, so wait for this
-        // turn's prompt and the end of the turn instead of counting answers.
-        let prompt = format!("D2 later question {turn}");
-        client.submit_input(&prompt).unwrap();
-        client
-            .wait_for(
-                |screen| screen.contains(&prompt) && !screen.contains("esc to interrupt"),
-                TIMEOUT,
-            )
-            .unwrap();
-        client.settle(Duration::from_millis(300));
-    }
-    assert!(
-        !client.screen_contents().contains("D2 earliest question"),
-        "the first turn has scrolled off the full-screen view"
-    );
-
-    let deadline = Instant::now() + TIMEOUT;
-    while !client.screen_contents().contains("D2 earliest question") {
-        assert!(
-            Instant::now() < deadline,
-            "PageUp never reached the first turn:\n{}",
-            client.screen_contents()
-        );
-        client.send_key(Key::PageUp).unwrap();
-        client.settle(Duration::from_millis(200));
-    }
-    assert!(client.is_alternate_screen());
 }

@@ -4,13 +4,7 @@
 //! the TUI sends when it reprints a session. This emulator applies it the way
 //! a terminal does: the visible screen stays and the history is dropped, even
 //! when the sequence is split across reads.
-//!
-//! It also applies synchronized output frames atomically; see
-//! [`crate::synchronized_update`].
 
-use crate::synchronized_update::SynchronizedUpdates;
-use crate::synchronized_update::find_subslice;
-use std::time::Instant;
 use vt100::Parser;
 
 /// Lines of terminal history kept by the emulator.
@@ -24,7 +18,6 @@ pub struct Emulator {
     cols: u16,
     /// Bytes held back because they may begin a split erase-scrollback.
     pending: Vec<u8>,
-    synchronized: SynchronizedUpdates,
 }
 
 impl Emulator {
@@ -34,30 +27,10 @@ impl Emulator {
             rows,
             cols,
             pending: Vec::new(),
-            synchronized: SynchronizedUpdates::default(),
         }
     }
 
-    /// Apply PTY output. Bytes of a synchronized frame are held until the
-    /// frame ends.
     pub fn process(&mut self, data: &[u8]) {
-        let ready = self.synchronized.feed(data, Instant::now());
-        self.apply(&ready);
-    }
-
-    /// Apply a synchronized frame that has stayed open too long.
-    pub fn release_stale_frame(&mut self) {
-        let ready = self.synchronized.release_stale_frame(Instant::now());
-        self.apply(&ready);
-    }
-
-    /// Whether a synchronized frame has begun and not yet ended, so the
-    /// screen is about to change.
-    pub fn is_frame_open(&self) -> bool {
-        self.synchronized.is_frame_open()
-    }
-
-    fn apply(&mut self, data: &[u8]) {
         let mut buffered = std::mem::take(&mut self.pending);
         buffered.extend_from_slice(data);
         let mut rest = buffered.as_slice();
@@ -114,6 +87,12 @@ impl Emulator {
     }
 }
 
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,37 +139,5 @@ mod tests {
         emulator.process(b"\x1b[2J\x1b[H\x1b[");
         emulator.process(b"3Jnew\r\n");
         assert_eq!(history_lines(&mut emulator), ["new"]);
-    }
-
-    #[test]
-    fn a_synchronized_frame_shows_whole_at_every_read_boundary() {
-        let before = b"old 1\r\nold 2";
-        let frame = b"\x1b[?2026h\x1b[H\x1b[2Knew 1\r\n\x1b[2Knew 2\x1b[?2026l";
-        let screen = |emulator: &Emulator| {
-            emulator
-                .screen_contents()
-                .lines()
-                .map(str::trim_end)
-                .filter(|line| !line.is_empty())
-                .collect::<Vec<_>>()
-                .join("|")
-        };
-        for first in 0..=frame.len() {
-            for second in first..=frame.len() {
-                let mut emulator = Emulator::new(3, 20);
-                emulator.process(before);
-                for chunk in [&frame[..first], &frame[first..second]] {
-                    emulator.process(chunk);
-                    let shown = screen(&emulator);
-                    assert!(
-                        shown == "old 1|old 2" || shown == "new 1|new 2",
-                        "reads split at {first} and {second} showed {shown:?}"
-                    );
-                }
-                emulator.process(&frame[second..]);
-                assert_eq!(screen(&emulator), "new 1|new 2");
-                assert!(!emulator.is_frame_open());
-            }
-        }
     }
 }

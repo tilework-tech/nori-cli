@@ -52,7 +52,7 @@ $NORI_HOME/
 | `log/session-<YYYYMMDDTHHMMSSZ>.jsonl` | umask | TUI, when `CODEX_TUI_RECORD_SESSION` is set | One per TUI run. `CODEX_TUI_SESSION_LOG_PATH` moves it. |
 | `acp-wire/<timestamp>-<pid>-<agent>.jsonl` | | Each agent process, when `[acp_proxy] enabled = true` | One per agent process. Holds raw ACP JSON-RPC, which can include prompts and secrets. Nori never deletes it. |
 | `host/` | `0700` | Background host | See [Host files](#host-files). |
-| `commands/` | | You | Custom prompts: `.md` files are prompt text; `.sh`, `.py`, and `.js` files are scripts limited by `[tui] script_timeout`. A host lists its own to every terminal on it and runs their scripts in the session's folder. |
+| `commands/` | | You | Custom prompts: `.md` files are prompt text; `.sh`, `.py`, and `.js` files are scripts limited by `[tui] script_timeout`. |
 | `browser-profile/` | | `/browser` with `browser_profile = "persistent"` | Permanent; keeps logins. The default `throwaway` profile is a temporary folder outside `NORI_HOME`, deleted on exit. |
 | `token-providers/<name>-pi-acp/sessions/` | `0700` | Pi agent launches bound to a token provider | Permanent; the Pi agent's own session history. |
 | `.pi-launches/` | `0700` | Pi agent launches bound to a token provider | One folder per launch, holding `models.json` and `settings.json` (`0600`), with a `.lease` lock file and a `.lock` file. A later launch deletes a folder once no process holds its lease. |
@@ -80,7 +80,6 @@ The monorepo host contract owns the meaning of `lock`, `host.json`,
 | `host.json` | `0600` | Written at start through `host.json.tmp`; removed on stop. A managed host does not write it. See the host contract. |
 | `state.json` | `0600` | Written at start; removed on stop and at the next start. See the host contract. |
 | `token` | `0600` | Replaced at every start. See the host contract. |
-| `local-token` | `0600` | Replaced at every start; not written by a managed host. A second secret that never leaves this machine and is in no published file. Local `nori attach` sends it in the `x-nori-local-token` upgrade header to prove it runs here, which only `!` commands require. A wrong or missing value connects as remote. Unlike `token`, never copy it to another machine. |
 | `host.log` | `0600` | stdout and stderr of a host started by `nori host`. Appended; never trimmed. |
 | `session-settings.json` | `0600` | Mode, adapter options, and ACP `mcpServers` per conversation, reapplied on resume. Written atomically through `session-settings.json.tmp` by any host on this home, including the TUI's private host; the write fails with a log warning while `host/` does not exist. An entry is removed when its session is deleted. |
 | `recovery/` | `0700` | Managed host only. Recovery journal: `journal.lock` and one `<sha256 of binding ID>.wal` file per binding. The managed wire is in the host contract. |
@@ -162,11 +161,6 @@ so it can hold any record type. The other types are read for older files.
 `ts` is Unix seconds. Each line is written with one append, so concurrent
 processes do not interleave lines. Nori resets the file mode to `0600` when it
 differs.
-
-A session on a host keeps its prompts in the host's `$NORI_HOME`, not the
-terminal's: every terminal attached to that host records into, recalls from and
-searches the same file, through `_nori/host/history/*`. The host records a
-prompt only for a session it knows; any other session ID gets `-32002`.
 
 ## Files outside `NORI_HOME`
 

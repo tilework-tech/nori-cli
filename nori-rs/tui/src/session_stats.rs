@@ -1,8 +1,7 @@
 //! Session statistics tracking and display.
 //!
 //! Tracks message counts, tool calls, skills used, and subagents invoked
-//! during a conversation session, plus agent-reported token totals. The exit
-//! card (`nori::exit_card`) shows them when the session ends.
+//! during a conversation session. Displays as a bordered table at session end.
 
 use crate::history_cell::HistoryCell;
 use crate::history_cell::with_border;
@@ -24,23 +23,7 @@ pub struct SessionStats {
     pub skills_used: Vec<String>,
     /// Subagents that were invoked during the session
     pub subagents_used: Vec<String>,
-    /// Token totals summed from every turn's agent-reported usage. `None`
-    /// until an agent reports usage for a turn.
-    pub tokens: Option<TokenTotals>,
     recorded_client_tool_call_ids: HashSet<String>,
-}
-
-/// Session token totals summed from the agent's per-turn usage reports.
-/// Optional fields are the ones agents may leave out; each stays `None`
-/// until some turn reports it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TokenTotals {
-    pub total: i64,
-    pub input: i64,
-    pub output: i64,
-    pub cached_read: Option<i64>,
-    pub cached_write: Option<i64>,
-    pub reasoning: Option<i64>,
 }
 
 impl SessionStats {
@@ -103,26 +86,6 @@ impl SessionStats {
         {
             self.record_subagent(&subagent_type);
         }
-    }
-
-    /// Add one turn's agent-reported token usage to the session totals.
-    pub fn record_prompt_usage(&mut self, usage: &nori_protocol::acp::v1::Usage) {
-        fn add(total: &mut Option<i64>, value: Option<u64>) {
-            if let Some(value) = value {
-                *total = Some(total.unwrap_or(0) + clamp(value));
-            }
-        }
-        fn clamp(value: u64) -> i64 {
-            i64::try_from(value).unwrap_or(i64::MAX)
-        }
-
-        let totals = self.tokens.get_or_insert_with(TokenTotals::default);
-        totals.total += clamp(usage.total_tokens);
-        totals.input += clamp(usage.input_tokens);
-        totals.output += clamp(usage.output_tokens);
-        add(&mut totals.cached_read, usage.cached_read_tokens);
-        add(&mut totals.cached_write, usage.cached_write_tokens);
-        add(&mut totals.reasoning, usage.thought_tokens);
     }
 
     /// Check if any statistics have been recorded.
@@ -350,29 +313,6 @@ fn collect_skills_from_json(value: &serde_json::Value, skills: &mut Vec<String>)
 mod tests {
     use super::*;
     use serde_json::json;
-
-    #[test]
-    fn prompt_usage_sums_into_totals_and_keeps_unreported_parts_absent() {
-        use nori_protocol::acp::v1::Usage;
-
-        let mut stats = SessionStats::new();
-        assert_eq!(stats.tokens, None);
-
-        stats.record_prompt_usage(&Usage::new(150, 100, 50).cached_read_tokens(40));
-        stats.record_prompt_usage(&Usage::new(30, 20, 10));
-
-        assert_eq!(
-            stats.tokens,
-            Some(TokenTotals {
-                total: 180,
-                input: 120,
-                output: 60,
-                cached_read: Some(40),
-                cached_write: None,
-                reasoning: None,
-            })
-        );
-    }
 
     // =========================================================================
     // RED PHASE: Tests for SessionStats struct

@@ -1,0 +1,12 @@
+   0.254  row19 - _ ▁                -:00cd00 _:00cd00 ▁:00cd00
+   0.651  row19 › _ ▗                ›:00cd00 _:00cd00 ▗:00cd00
+   0.730  row19 〉_ ▐                 〉:00cd00 _:00cd00 ▐:00cd00
+   1.131  row19 › _ ▗                ›:00cd00 _:00cd00 ▗:00cd00
+   1.211  row19 - _ ▁                -:00cd00 _:00cd00 ▁:00cd00
+   1.291  row19 › _ ▗                ›:00cd00 _:00cd00 ▗:00cd00
+   1.371  row19 〉_ ▐                 〉:00cd00 _:00cd00 ▐:00cd00
+   1.772  row19 › _ ▗                ›:00cd00 _:00cd00 ▗:00cd00
+   1.851  row19 - _ ▁                -:00cd00 _:00cd00 ▁:00cd00
+   1.931  row19 › _ ▗                ›:00cd00 _:00cd00 ▗:00cd00
+   2.011  row19 〉_ ▐                 〉:00cd00 _:00cd00 ▐:00cd00
+   2.893  row12 〉nori CLI v0.0.0     〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold I:default+bold v:default 0:default .:default 0:default .:default 0:default

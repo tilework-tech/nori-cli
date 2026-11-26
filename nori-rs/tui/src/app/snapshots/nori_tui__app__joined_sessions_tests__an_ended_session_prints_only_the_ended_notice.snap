@@ -1,6 +1,0 @@
----
-source: tui/src/app/joined_sessions_tests.rs
-assertion_line: 214
-expression: text
----
-• Session ended. Use /new to start one on this host, or Alt+S to pick one.

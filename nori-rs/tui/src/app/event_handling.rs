@@ -113,9 +113,7 @@ impl App {
         } else {
             match event {
                 TuiEvent::Key(key_event) => {
-                    if !self.page_up_into_joined_transcript(tui, key_event).await? {
-                        self.handle_key_event(tui, key_event).await;
-                    }
+                    self.handle_key_event(tui, key_event).await;
                 }
                 TuiEvent::Paste(pasted) => {
                     self.chat_widget.handle_paste(pasted);
@@ -123,12 +121,6 @@ impl App {
                 TuiEvent::Draw => {
                     self.adopt_delegated_sessions(tui);
                     self.refresh_session_overview(tui.terminal.size()?.width);
-                    if self.chat_widget.session_list_in_front() {
-                        // The list's "Ns ago" ages advance with the clock alone.
-                        tui.frame_requester()
-                            .schedule_frame_in(std::time::Duration::from_secs(1));
-                    }
-                    self.refresh_joined_session_status();
                     self.chat_widget.pre_draw_tick();
                     self.chat_widget.maybe_post_pending_notification(tui);
                     self.post_parked_session_notifications(tui);
@@ -191,14 +183,6 @@ impl App {
                     .handle_context_timeline(generation, conversation_id, result);
             }
             AppEvent::ToggleScreenMode => self.toggle_screen_mode(tui)?,
-            AppEvent::TakeHostControl => host.take_control(),
-            AppEvent::JoinedSubscribed { id, result } => self.on_joined_subscribed(id, result),
-            AppEvent::JoinedSessionStarted(id) => self.open_when_listed(id),
-            AppEvent::HostFoldersFound {
-                generation,
-                text,
-                found,
-            } => self.on_host_folders_found(generation, &text, found),
             AppEvent::NewSessionIn(folder) => {
                 self.new_session_in(folder, tui.frame_requester());
                 tui.frame_requester().schedule_frame();
@@ -575,15 +559,7 @@ impl App {
                 request_id,
                 approved,
             } => {
-                if self.joined.is_some() {
-                    self.resolve_delegation_on_host(host, parent, request_id, approved);
-                    return Ok(true);
-                }
-                let Some(manager) = self.session_manager.clone() else {
-                    self.chat_widget
-                        .add_error_message(crate::chatwidget::NEEDS_OWN_HOST_MESSAGE.to_string());
-                    return Ok(true);
-                };
+                let manager = self.session_manager.clone();
                 let tx = self.app_event_tx.clone();
                 let generation = self
                     .session_facts()
@@ -637,9 +613,6 @@ impl App {
                     }
                     Some(AppEvent::AgentSpawnFailed { agent_name, error }) => {
                         self.chat_widget.on_agent_spawn_failed(&agent_name, &error);
-                    }
-                    Some(AppEvent::ScriptExecutionComplete { name, result }) => {
-                        self.chat_widget.on_script_finished(name, result);
                     }
                     Some(_) | None => {}
                 }
@@ -725,11 +698,6 @@ impl App {
                                 self.chat_widget.loop_state(),
                             )
                         });
-                        // The startup placeholder never ran a session, so
-                        // anything open on it (a picker opened while the agent
-                        // started) belongs to the user, not to a session.
-                        let carried_views = (purpose == host_candidate::PickerPurpose::Startup)
-                            .then(|| self.chat_widget.take_bottom_pane_views());
                         self.shutdown_current_conversation();
                         if resumes {
                             self.begin_replacing_session_transcript(tui)?;
@@ -737,9 +705,6 @@ impl App {
                         self.install_active_widget(*widget);
                         self.deferred_spawn_pending = false;
                         self.new_session_return = None;
-                        if let Some(views) = carried_views {
-                            self.chat_widget.restore_bottom_pane_views(views);
-                        }
                         if let Some((composer_draft, loop_state)) = carried {
                             self.chat_widget.restore_composer_draft(composer_draft);
                             if let Some((remaining, total)) = loop_state {
@@ -786,8 +751,11 @@ impl App {
                         self.chat_widget.add_error_message(message);
                     }
                 } else {
-                    self.deliver_session_event(generation, event);
-                    tui.frame_requester().schedule_frame();
+                    let Some(event) = self.route_parked_session_event(generation, event) else {
+                        tui.frame_requester().schedule_frame();
+                        return Ok(true);
+                    };
+                    self.chat_widget.handle_session_event(generation, event);
                 }
             }
             AppEvent::ConversationHistory(ev) => {
@@ -803,12 +771,6 @@ impl App {
                 self.close_parked_sessions().await;
                 self.prepared_agent_initial_context = None;
                 self.discard_candidate();
-                // Leaving a joined host ends no session, so there is no
-                // session summary to print.
-                if self.joined.is_some() {
-                    tui.terminal.clear()?;
-                    return Ok(false);
-                }
                 // Create and insert exit message cell before exiting
                 let exit_cell = self.chat_widget.create_exit_message_cell();
 
@@ -861,16 +823,6 @@ impl App {
             } => self
                 .chat_widget
                 .on_history_entry_loaded(log_id, offset, entry),
-            AppEvent::UserShellRefused {
-                generation,
-                command,
-            } => {
-                if self.chat_widget.session_generation() == generation {
-                    self.chat_widget.on_user_shell_refused(command);
-                } else if let Some(parked) = self.session_deck.parked_mut(generation) {
-                    parked.widget.on_user_shell_refused(command);
-                }
-            }
             AppEvent::QueuedPromptReclaimed {
                 generation,
                 event_id,
@@ -886,20 +838,9 @@ impl App {
                         .on_queued_prompt_reclaimed(event_id, action, outcome);
                 }
             }
-            AppEvent::HostHistoryLanded { generation, event } => {
-                if self.chat_widget.session_generation() == generation {
-                    self.app_event_tx.send(*event);
-                }
-            }
             AppEvent::HistorySearchLoaded(entries) => {
                 self.chat_widget.on_history_search_loaded(entries);
             }
-            AppEvent::HistoryMetadataLoaded {
-                log_id,
-                entry_count,
-            } => self
-                .chat_widget
-                .on_history_metadata_loaded(log_id, entry_count),
             AppEvent::CustomPromptsLoaded(prompts) => {
                 self.chat_widget.on_custom_prompts_loaded(prompts);
             }
@@ -908,20 +849,6 @@ impl App {
             }
             AppEvent::GoalLoaded(Some(goal)) => self.chat_widget.handle_thread_goal_updated(goal),
             AppEvent::GoalLoaded(None) => self.chat_widget.handle_thread_goal_cleared(),
-            AppEvent::HostGoalLoaded {
-                session_id,
-                goal,
-                asked,
-            } => self
-                .chat_widget
-                .on_host_goal_loaded(&session_id, goal, asked),
-            AppEvent::HostContextLoaded {
-                session_id,
-                result,
-                asked,
-            } => self
-                .chat_widget
-                .on_host_context_loaded(&session_id, result, asked),
             AppEvent::HarnessActionFailed(message) => self.chat_widget.add_error_message(message),
             AppEvent::DiffResult(text) => {
                 // Clear the in-progress state in the bottom pane
@@ -1516,31 +1443,40 @@ impl App {
                 }
             }
             AppEvent::ExecuteScript { prompt, args } => {
-                // The result belongs to the session that ran the script, even
-                // if another one is on screen by the time it finishes.
-                let tx = self
-                    .app_event_tx
-                    .for_session(self.chat_widget.session_generation());
+                let tx = self.app_event_tx.clone();
                 let timeout = self.config.script_timeout.as_duration();
                 let name = prompt.name.clone();
                 self.chat_widget
                     .add_info_message(format!("Running script '{name}'..."), None);
-                let Some((prompt, args)) = self.chat_widget.run_script_on_host(prompt, args) else {
-                    return Ok(true);
-                };
                 tokio::spawn(async move {
                     let result =
-                        nori_harness::custom_prompts::execute_script(&prompt, &args, timeout, None)
-                            .await;
+                        nori_harness::custom_prompts::execute_script(&prompt, &args, timeout).await;
                     tx.send(AppEvent::ScriptExecutionComplete {
                         name: prompt.name.clone(),
                         result,
                     });
                 });
             }
-            AppEvent::ScriptExecutionComplete { name, result } => {
-                self.chat_widget.on_script_finished(name, result);
-            }
+            AppEvent::ScriptExecutionComplete { name, result } => match result {
+                Ok(stdout) => {
+                    if stdout.trim().is_empty() {
+                        self.chat_widget.add_info_message(
+                            format!("Script '{name}' completed with no output."),
+                            None,
+                        );
+                    } else {
+                        let message = format!("Output from script '{name}':\n{stdout}");
+                        self.chat_widget.queue_text_as_user_message(message);
+                    }
+                }
+                Err(err) => {
+                    self.chat_widget
+                        .add_error_message(format!("Script '{name}' failed: {err}"));
+                    let error_context =
+                        format!("Script '{name}' failed with the following error:\n{err}");
+                    self.chat_widget.queue_text_as_user_message(error_context);
+                }
+            },
             AppEvent::ShowViewonlySessionPicker {
                 sessions,
                 nori_home,
@@ -1993,7 +1929,9 @@ impl App {
             if matches_binding(transcript_binding, &key_event)
                 || crate::key_hint::ctrl(KeyCode::Char('o')).is_press(key_event)
             {
-                self.open_transcript_overlay(tui);
+                let _ = tui.enter_alt_screen();
+                self.overlay = Some(Overlay::new_transcript(self.transcript_cells.clone()));
+                tui.frame_requester().schedule_frame();
                 return;
             }
 
@@ -2067,10 +2005,7 @@ impl App {
     }
 
     pub(super) fn should_handle_backtrack_esc(&self, key_event: KeyEvent) -> bool {
-        // Editing an earlier prompt forks the in-process session; a joined
-        // host's sessions run elsewhere.
-        self.joined.is_none()
-            && self.chat_widget.is_normal_backtrack_mode()
+        self.chat_widget.is_normal_backtrack_mode()
             && self.chat_widget.composer_is_empty()
             && !self.chat_widget.should_handle_vim_insert_escape(key_event)
     }

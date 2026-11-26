@@ -15,9 +15,7 @@ use serde_json::Value;
 use serde_json::json;
 
 use crate::Delegation;
-use crate::QueueSnapshot;
 use crate::SessionEnvelope;
-use crate::ThreadGoal;
 use crate::acp::v1 as acp;
 
 /// `_meta` on a `session/list` row.
@@ -123,7 +121,7 @@ pub struct HostDiscovery {
 /// methods, and `host.json`. A change that a client of the previous contract
 /// could not use bumps the major; an addition such clients can ignore bumps
 /// the minor; a fix that changes no message bumps the patch.
-pub const HOST_CONTRACT: &str = "1.9.0";
+pub const HOST_CONTRACT: &str = "1.2.0";
 
 /// Whether a host advertising contract `host` serves a client built for
 /// contract `client`: `host` must satisfy the caret requirement `^client`.
@@ -259,226 +257,6 @@ pub struct FindPathsResult {
     pub matches: Vec<PathMatch>,
 }
 
-/// Params of `_nori/session/queue/resume` and `_nori/session/queue/discard`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct QueueParams {
-    pub session_id: String,
-}
-
-/// Params of `_nori/session/queue/take`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct QueueTakeParams {
-    pub session_id: String,
-    /// A [`crate::QueueEntry`] ID from the session's latest queue snapshot.
-    pub entry_id: String,
-    /// Chosen by the caller for this take. Asking again with the same key
-    /// returns the same answer, so a reply lost to a disconnect can be
-    /// fetched again; a different key gets null once the prompt is taken.
-    pub request_key: String,
-}
-
-/// Result of `_nori/session/queue/take`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct QueueTakeResult {
-    /// The text the user queued, returned to exactly one caller. Null when
-    /// the prompt already started, was already taken, or cannot return to a
-    /// composer without losing content.
-    pub text: Option<String>,
-}
-
-/// Result of `_nori/session/queue/discard`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct QueueDiscardResult {
-    /// How many queued prompts were dropped before being sent.
-    pub discarded: i32,
-}
-
-/// Params of `_nori/host/history/add`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct HistoryAddParams {
-    /// The session the prompt was sent to.
-    pub session_id: String,
-    pub text: String,
-}
-
-/// Params of `_nori/host/history/entry`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct HistoryEntryParams {
-    /// [`HistoryMetadata::log_id`] of the history the client counted in.
-    pub log_id: i64,
-    /// Zero-based, oldest first.
-    pub offset: i64,
-}
-
-/// One prompt in the host's history.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct HistoryRecord {
-    pub session_id: String,
-    /// Seconds since the Unix epoch.
-    pub ts: i64,
-    pub text: String,
-}
-
-/// Result of `_nori/host/history/entry`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct HistoryEntryResult {
-    /// Null when `offset` is past the end, or `logId` names a history the
-    /// host no longer keeps.
-    pub entry: Option<HistoryRecord>,
-}
-
-/// Params of `_nori/host/history/search`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct HistorySearchParams {
-    /// At most this many distinct prompts, newest first.
-    pub max_results: i32,
-}
-
-/// Result of `_nori/host/history/search`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct HistorySearchResult {
-    /// Distinct prompts, newest first; the client filters them as the user
-    /// types.
-    pub entries: Vec<HistoryRecord>,
-}
-
-/// Result of `_nori/host/history/metadata`: what a client counts in when it
-/// recalls prompts with `_nori/host/history/entry`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct HistoryMetadata {
-    /// Identifies the history file; it changes when the file is replaced.
-    pub log_id: i64,
-    pub entry_count: i64,
-}
-
-/// Params of `_nori/host/prompts`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PromptsListParams {
-    /// The session the list is for. The list is the host's either way.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
-}
-
-/// How a custom prompt is used.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum HostPromptKind {
-    /// `content` is sent as the prompt once the client fills in its
-    /// arguments.
-    Markdown,
-    /// Run on the host with `_nori/session/prompts/run`; its output is sent
-    /// as the prompt.
-    Script { interpreter: String },
-}
-
-/// One custom prompt from the host's `$NORI_HOME/commands`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct HostPrompt {
-    /// Invoked as `/prompts:<name>`.
-    pub name: String,
-    pub description: Option<String>,
-    pub argument_hint: Option<String>,
-    pub kind: HostPromptKind,
-    /// The prompt's body without its frontmatter; empty for a script.
-    pub content: String,
-}
-
-/// Result of `_nori/host/prompts`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct PromptsListResult {
-    /// Sorted by name.
-    pub prompts: Vec<HostPrompt>,
-}
-
-/// Params of `_nori/session/prompts/run`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PromptRunParams {
-    /// The session whose folder the script runs in.
-    pub session_id: String,
-    /// A script prompt's name from `_nori/host/prompts`.
-    pub name: String,
-    /// Positional arguments passed to the script.
-    pub args: Vec<String>,
-}
-
-/// Result of `_nori/session/prompts/run`: a script that exited zero.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct PromptRunResult {
-    pub stdout: String,
-}
-
-/// Params of `_nori/session/goal/get`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct GoalGetParams {
-    pub session_id: String,
-}
-
-/// One change to a session's goal.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum GoalOp {
-    /// Replace the goal with an active one.
-    Set {
-        objective: String,
-    },
-    Pause,
-    Resume,
-    Clear,
-}
-
-/// Params of `_nori/session/goal/set`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct GoalSetParams {
-    pub session_id: String,
-    pub op: GoalOp,
-}
-
-/// Result of `_nori/session/goal/get` and `_nori/session/goal/set`: the
-/// session's goal afterwards, null when it has none.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct GoalResult {
-    pub goal: Option<ThreadGoal>,
-}
-
-/// Params of `_nori/session/compact`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct CompactParams {
-    pub session_id: String,
-}
-
-/// The error code of `_nori/session/shell` from a client the host cannot
-/// prove runs on its own machine. The host runs nothing for it.
-pub const REMOTE_SHELL_UNSUPPORTED: i32 = -32018;
-
-/// The message that accompanies [`REMOTE_SHELL_UNSUPPORTED`].
-pub const REMOTE_SHELL_UNSUPPORTED_MESSAGE: &str = "Remote shell commands are not yet supported.";
-
-/// The upgrade header with which a client on the host's machine presents
-/// the host's private local token, `host/local-token`.
-pub const LOCAL_TOKEN_HEADER: &str = "x-nori-local-token";
-
-/// Params of `_nori/session/shell`: a `!` command for the host to run in
-/// that session's folder.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ShellParams {
-    pub session_id: String,
-    pub command: String,
-}
-
 /// JSON Schema (draft 2020-12) of the types exchanged with `nori host`: the
 /// ACP v1 messages it serves and Nori's additions, with every type under
 /// `$defs` and keys sorted so the output is stable.
@@ -531,28 +309,6 @@ pub fn host_wire_schema() -> Value {
         generator.subschema_for::<Delegation>(),
         generator.subschema_for::<FindPathsParams>(),
         generator.subschema_for::<FindPathsResult>(),
-        generator.subschema_for::<QueueParams>(),
-        generator.subschema_for::<QueueTakeParams>(),
-        generator.subschema_for::<QueueTakeResult>(),
-        generator.subschema_for::<QueueDiscardResult>(),
-        generator.subschema_for::<QueueSnapshot>(),
-        generator.subschema_for::<HistoryAddParams>(),
-        generator.subschema_for::<HistoryEntryParams>(),
-        generator.subschema_for::<HistoryEntryResult>(),
-        generator.subschema_for::<HistorySearchParams>(),
-        generator.subschema_for::<HistorySearchResult>(),
-        generator.subschema_for::<HistoryMetadata>(),
-        generator.subschema_for::<PromptsListParams>(),
-        generator.subschema_for::<PromptsListResult>(),
-        generator.subschema_for::<PromptRunParams>(),
-        generator.subschema_for::<PromptRunResult>(),
-        generator.subschema_for::<GoalGetParams>(),
-        generator.subschema_for::<GoalSetParams>(),
-        generator.subschema_for::<GoalResult>(),
-        generator.subschema_for::<crate::ContextParams>(),
-        generator.subschema_for::<crate::ContextReport>(),
-        generator.subschema_for::<CompactParams>(),
-        generator.subschema_for::<ShellParams>(),
     ];
     let definitions = generator.take_definitions(true);
     sorted(json!({
@@ -593,16 +349,6 @@ mod contract_tests {
             ("1.0.0", "1.0.3", false),
             ("1.4.0", "1.2.0", true),
             ("1.2.0", "1.4.0", false),
-            ("1.5.0", "1.4.0", true),
-            ("1.4.0", "1.5.0", false),
-            ("1.6.0", "1.5.0", true),
-            ("1.5.0", "1.6.0", false),
-            ("1.7.0", "1.6.0", true),
-            ("1.6.0", "1.7.0", false),
-            ("1.8.0", "1.7.0", true),
-            ("1.7.0", "1.8.0", false),
-            ("1.9.0", "1.8.0", true),
-            ("1.8.0", "1.9.0", false),
             ("2.0.0", "1.9.0", false),
             ("1.9.0", "2.0.0", false),
             ("0.3.1", "0.3.0", true),

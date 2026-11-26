@@ -1,0 +1,24 @@
+
+
+
+
+
+
+
+
+
+
+  〉_ ▐
+
+  System       /tmp/v801/s5-fail-new-session/tidepool
+  Agent        Mock ACP
+
+■ Couldn't activate Mock ACP: Failed to start ACP session: That session no
+longer exists on Mock ACP — it may have expired or been closed elsewhere. Pick
+another session from /resume or start a new one.: Mock new_session failure for
+testing
+
+
+〉still typing
+
+  Enter send · Ctrl+J newline

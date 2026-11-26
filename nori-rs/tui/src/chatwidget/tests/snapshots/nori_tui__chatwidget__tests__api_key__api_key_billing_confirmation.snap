@@ -1,13 +1,12 @@
 ---
 source: tui/src/chatwidget/tests/api_key.rs
-assertion_line: 93
 expression: render_bottom_pane(&chat)
 ---
   WARNING: this changes who you are billed
   Claude Code is signed in with a subscription (max). Preferring the saved API
   key bills usage to that API account, not the subscription.
 
-     1. Yes, bill the API key  Remember this answer and use the saved key
-  ▏› 2. Cancel                 Keep Claude Code on its own login             ▕
+  1. Yes, bill the API key  Remember this answer and use the saved key
+› 2. Cancel                 Keep Claude Code on its own login
 
-  ↑↓/j/k move, enter confirm, esc go back
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

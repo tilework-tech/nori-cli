@@ -17,7 +17,7 @@ fn working_indicator_shows_a_thought_without_a_bold_header() {
         )
         .with_agent_env("MOCK_AGENT_THOUGHT_DELAY_MS", "3000");
     let mut session = TuiSession::spawn_with_config(24, 100, config).expect("spawn nori");
-    session.wait_until_ready().expect("composer");
+    session.wait_for_text("›", TIMEOUT).expect("composer");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_str("change the default").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
@@ -45,7 +45,7 @@ fn thought_text_stays_in_history_after_the_turn_once() {
             "**Reading the config loader**\n\nThe loader merges three sources.",
         );
     let mut session = TuiSession::spawn_with_config(24, 100, config).expect("spawn nori");
-    session.wait_until_ready().expect("composer");
+    session.wait_for_text("›", TIMEOUT).expect("composer");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_str("change the default").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);

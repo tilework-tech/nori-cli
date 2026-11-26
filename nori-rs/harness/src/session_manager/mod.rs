@@ -7,7 +7,6 @@ mod delegation_driver;
 mod delegation_state;
 pub use delegation::DelegationContext;
 mod explicit_close;
-mod queue_takes;
 mod registry;
 mod replay;
 
@@ -189,7 +188,6 @@ struct Shared {
     state: Mutex<State>,
     process_ended: Notify,
     admission: tokio::sync::Mutex<()>,
-    queue_takes: Mutex<queue_takes::QueueTakes>,
 }
 
 struct State {
@@ -221,7 +219,6 @@ impl SessionManager {
                 config,
                 process_ended: Notify::new(),
                 admission: tokio::sync::Mutex::new(()),
-                queue_takes: Mutex::new(queue_takes::QueueTakes::default()),
                 state: Mutex::new(State {
                     registry: Registry::new(config.max_sessions),
                     handles: HashMap::new(),

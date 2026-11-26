@@ -1,8 +1,10 @@
 use insta::assert_snapshot;
+use std::time::Duration;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
+use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -19,7 +21,7 @@ fn composer_line_contains(screen: &str, expected: &str) -> bool {
 #[cfg(target_os = "linux")]
 fn test_ctrl_c_clears_input() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
-    session.wait_until_ready().unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
 
     // Type some text
     session.type_input("draft message").unwrap();
@@ -32,9 +34,10 @@ fn test_ctrl_c_clears_input() {
         .wait_for(|s| !s.contains("draft message"), TIMEOUT)
         .expect("Input was not cleared");
 
+    // std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     // assert_snapshot!(
     //     "ctrl_c_clears",
-    //     normalize_for_input_snapshot(session.settled_screen())
+    //     normalize_for_input_snapshot(session.screen_contents())
     // );
 }
 
@@ -42,7 +45,7 @@ fn test_ctrl_c_clears_input() {
 #[cfg(target_os = "linux")]
 fn test_backspace() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
-    session.wait_until_ready().unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
     // Startup activates the session; wait for the model announcement so the
     // snapshot is deterministic.
     session.wait_for_text("Mock ACP options", TIMEOUT).unwrap();
@@ -57,9 +60,10 @@ fn test_backspace() {
     session.wait_for_text("Hel", TIMEOUT).unwrap();
     session.wait_for(|s| !s.contains("Hello"), TIMEOUT).unwrap();
 
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "typing_and_backspace",
-        normalize_for_input_snapshot(session.settled_screen())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -67,33 +71,22 @@ fn test_backspace() {
 #[cfg(target_os = "linux")]
 fn test_arrows() {
     let mut session = TuiSession::spawn(40, 80).unwrap();
-    session.wait_until_ready().unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
     // Startup activates the session; wait for the model announcement so the
     // snapshot is deterministic.
     session.wait_for_text("Mock ACP options", TIMEOUT).unwrap();
 
     session.submit_input("/model").unwrap();
-    session
-        .wait_for_text("Select a value for this ACP session setting", TIMEOUT)
-        .unwrap();
-    session
-        .press(
-            Key::Down,
-            |screen| screen.contains("▏› 2. Mock Fast Model"),
-            "the second model is selected",
-        )
-        .unwrap();
-    session
-        .press(
-            Key::Down,
-            |screen| screen.contains("▏› 3. Use custom model"),
-            "the custom model row is selected",
-        )
-        .unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(Duration::from_millis(100));
 
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "model_changed",
-        normalize_for_input_snapshot(session.settled_screen())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -105,7 +98,7 @@ fn test_history_navigation_up_down() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
     // Wait for TUI to be ready
-    session.wait_until_ready().unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
 
     // Submit first message
     session.submit_input("first message").unwrap();
@@ -151,9 +144,10 @@ fn test_history_navigation_up_down() {
         .unwrap();
 
     // Snapshot the final state
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "history_navigation_up_down",
-        normalize_for_input_snapshot(session.settled_screen())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -165,7 +159,7 @@ fn test_history_navigation_multiple_messages() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
     // Wait for TUI to be ready
-    session.wait_until_ready().unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
 
     // Submit first message
     session.submit_input("first message").unwrap();
@@ -224,8 +218,9 @@ fn test_history_navigation_multiple_messages() {
         .unwrap();
 
     // Snapshot the final state
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "history_navigation_multiple_messages",
-        normalize_for_input_snapshot(session.settled_screen())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }

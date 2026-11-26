@@ -40,7 +40,7 @@ cli_main: MultitoolCli::parse, init $NORI_HOME/log/nori-acp.*
    +-- (none) / resume / cloud -----> nori_tui::run_main --> OwnedHost (nori-host-runtime)
    +-- -p / exec "prompt" ----------> host::run_one_shot --> running host or in-process host
    +-- exec --acp / host --stdio ---> host::serve_stdio  --> relay or private host
-   +-- host [stop|ls|new], attach --> host::run / host::attach --> nori_tui::run_joined_app
+   +-- host [stop|ls|new], attach --> host::run / host::attach --> nori_tui::run_attach
    +-- auth ------------------------> auth::run (blocking task)
    +-- sandbox, skillsets, completions, execpolicy, stdio-to-uds
 ```
@@ -60,10 +60,6 @@ frontend could need in the crate below it; this crate stays a dispatcher.
 
 ## Invariants
 
-- `nori host` writes a new `host/local-token` beside `host/token` and passes
-  it to the transport; a managed host serves no `!` commands, so it gets
-  none. `nori attach` sends it only with local discovery. With `--host` and
-  `--token-file` it sends none and is a remote client.
 - `nori exec --acp` and `nori host --stdio` own stdin as a JSON-RPC channel.
   `run_exec` returns into the host before it reads a prompt from stdin.
   Never read stdin upstream of that branch.

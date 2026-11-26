@@ -2,7 +2,6 @@
 
 use super::*;
 use pretty_assertions::assert_eq;
-use std::path::PathBuf;
 use std::time::Instant;
 
 #[test]

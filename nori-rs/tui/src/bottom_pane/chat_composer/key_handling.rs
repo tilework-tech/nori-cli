@@ -748,7 +748,10 @@ impl ChatComposer {
         {
             let draft = self.expand_pending_pastes(self.textarea.text().to_owned());
             let text = draft.trim();
-            if text.is_empty() || draft_runs_here(&draft) {
+            let is_command = text.starts_with('!')
+                || parse_slash_name(text).is_some_and(|(name, _)| !name.contains('/'))
+                || (!draft.starts_with(' ') && matches!(text, "exit" | "quit"));
+            if text.is_empty() || is_command {
                 if draft != self.textarea.text() {
                     self.textarea.set_text(&draft);
                 }
@@ -785,10 +788,6 @@ impl ChatComposer {
                 modifiers: KeyModifiers::CONTROL,
                 ..
             } => {
-                let recalls_older = matches!(key_event.code, KeyCode::Up | KeyCode::Char('p'));
-                if recalls_older && self.textarea.text().is_empty() && !self.history.has_entries() {
-                    self.history.defer_recall();
-                }
                 if self
                     .history
                     .should_handle_navigation(self.textarea.text(), self.textarea.cursor())
@@ -934,9 +933,6 @@ impl ChatComposer {
                 if let Some((name, _rest)) = parse_slash_name(&text) {
                     let treat_as_plain_text = input_starts_with_space
                         || name.contains('/')
-                        || (self.joined_host
-                            && crate::chatwidget::JOINED_COMMANDS.contains(&name)
-                            && _rest.is_empty())
                         || (self.pass_unknown_commands
                             && !built_in_slash_commands()
                                 .into_iter()

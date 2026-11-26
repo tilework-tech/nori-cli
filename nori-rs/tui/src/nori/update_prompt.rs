@@ -172,6 +172,7 @@ impl WidgetRef for &UpdatePromptScreen {
         .max_width(76)
         .density(MenuDensity::Dense)
         .row_pattern(MenuRowPattern::Zebra)
+        .fullscreen_selection_rails(true)
         .key_hints(crate::overlay_menu::default_hints())
         .render(area, buf, &mut state);
     }

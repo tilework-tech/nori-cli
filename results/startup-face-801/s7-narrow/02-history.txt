@@ -1,0 +1,24 @@
+
+
+
+
+
+
+
+
+
+  〉nori CLI v0.0.0
+
+  System       …row/tidepool
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock
+Default Model, Thought
+Level=Medium (/config to
+change)
+
+
+〉a narrow draft that wraps
+  past thirty
+
+  Enter send · Ctrl+J newline

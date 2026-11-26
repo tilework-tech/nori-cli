@@ -1,15 +1,14 @@
 ---
 source: tui/src/chatwidget/tests/api_key.rs
-assertion_line: 80
 expression: render_bottom_pane(&chat)
 ---
   Sign-in for Claude Code
   Applies the next time the agent starts.
 
-  ▏› 1. Use Claude Code's own login (current)  Default; a subscription sign- ▕
-  ▏                                            in keeps its plan             ▕
-     2. Use the saved API key                  Pass the saved anthropic key
-                                               at launch; usage is billed to
-                                               that API account
+› 1. Use Claude Code's own login (current)  Default; a subscription sign-in
+                                            keeps its plan
+  2. Use the saved API key                  Pass the saved anthropic key at
+                                            launch; usage is billed to that
+                                            API account
 
-  ↑↓/j/k move, enter confirm, esc go back
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

@@ -1,0 +1,21 @@
+---
+source: tui/src/attach/tests.rs
+expression: rendered
+---
+ Nori host  DISCONNECTED · ctrl+d to detach
+ session · one
+
+ Preserved history
+
+
+
+
+
+
+
+
+
+
+ Host restarted; sessions were lost. Re-run nori attach.
+
+› Send a prompt

@@ -99,28 +99,8 @@ pub(crate) enum AppEvent {
     /// `/new DIR`: start a new session in this existing folder.
     NewSessionIn(std::path::PathBuf),
 
-    /// A joined host's answer to subscribing to the session on screen.
-    JoinedSubscribed {
-        id: nori_harness::ConversationId,
-        result: Result<(), String>,
-    },
-
-    /// A joined host started this session for `/new`; show it once listed.
-    JoinedSessionStarted(String),
-
-    /// A joined host's folders for the `/new` Tab typed in `generation`'s
-    /// composer when it held `text`.
-    HostFoldersFound {
-        generation: SessionGeneration,
-        text: String,
-        found: serde_json::Value,
-    },
-
     /// `/screen`: switch between the inline and the full-screen view.
     ToggleScreenMode,
-
-    /// Alt+T in a terminal joined to a host: ask to become its controller.
-    TakeHostControl,
 
     /// A `/close` failed: surface the error and unblock the widget.
     SessionCloseFailed {
@@ -176,13 +156,6 @@ pub(crate) enum AppEvent {
     /// Request to exit the application gracefully.
     ExitRequest,
 
-    /// A history reply from the host for the widget of `generation`. It is
-    /// dropped once that widget is no longer on screen.
-    HostHistoryLanded {
-        generation: SessionGeneration,
-        event: Box<AppEvent>,
-    },
-
     HarnessAction(HarnessAction),
     HistoryEntryLoaded {
         log_id: i64,
@@ -190,11 +163,6 @@ pub(crate) enum AppEvent {
         entry: Option<nori_harness::HistoryEntry>,
     },
     HistorySearchLoaded(Vec<nori_harness::HistoryEntry>),
-    /// The host reported how many prompts its history holds now.
-    HistoryMetadataLoaded {
-        log_id: i64,
-        entry_count: i64,
-    },
     /// The harness answered a queued-prompt reclaim.
     QueuedPromptReclaimed {
         generation: SessionGeneration,
@@ -205,27 +173,6 @@ pub(crate) enum AppEvent {
     CustomPromptsLoaded(Vec<nori_harness::CustomPrompt>),
     UndoSnapshotsLoaded(Vec<nori_harness::UndoSnapshot>),
     GoalLoaded(Option<nori_protocol::ThreadGoal>),
-    /// The host refused a `!` command; it goes back to that widget's prompt.
-    UserShellRefused {
-        generation: SessionGeneration,
-        command: String,
-    },
-    /// A host session's goal, for whichever widget shows that session.
-    /// `asked` when the user asked to see it, rather than the widget
-    /// learning it when the session came on screen.
-    HostGoalLoaded {
-        session_id: String,
-        goal: Option<nori_protocol::ThreadGoal>,
-        asked: bool,
-    },
-    /// A host session's context report, for whichever widget shows that
-    /// session. `asked` when the user ran `/context`, rather than the widget
-    /// learning its usage when the session came on screen.
-    HostContextLoaded {
-        session_id: String,
-        result: Result<nori_protocol::ContextReport, String>,
-        asked: bool,
-    },
     HarnessActionFailed(String),
 
     /// Kick off an asynchronous file search for the given query (text after

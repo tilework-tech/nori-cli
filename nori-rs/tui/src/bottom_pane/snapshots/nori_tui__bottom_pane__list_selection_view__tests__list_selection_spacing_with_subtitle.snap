@@ -1,15 +1,12 @@
 ---
 source: tui/src/bottom_pane/list_selection_view.rs
-assertion_line: 827
 expression: render_lines(&view)
 ---
                                                 
   Select approval mode                          
   Switch between Nori approval presets          
                                                 
-  ▏› 1. Read Only (current)  Nori can read   ▕  
-  ▏                          files           ▕  
-     2. Full Access          Nori can edit      
-                             files              
+› 1. Read Only (current)  Nori can read files   
+  2. Full Access          Nori can edit files   
                                                 
-  ↑↓/j/k move, enter confirm, esc go back
+  ↑/k ↓/j to navigate, enter to confirm, esc to

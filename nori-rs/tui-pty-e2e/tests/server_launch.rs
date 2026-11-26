@@ -66,8 +66,8 @@ runtime_dir = {runtime:?}
     );
 
     for (key, row, label, scope) in [
-        ("\x1b[F", "▏›    Lab Agent", "Lab Agent", "child fixture"),
-        ("\x1b[H", "▏› 1. Mock ACP", "Mock ACP", "parent fixture"),
+        ("\x1b[F", "▏  Lab Agent", "Lab Agent", "child fixture"),
+        ("\x1b[H", "▏1. Mock ACP", "Mock ACP", "parent fixture"),
     ] {
         session.submit_input("/agent")?;
         session.wait_for_text("Select agent", TIMEOUT)?;

@@ -2,10 +2,10 @@
 source: cli/src/host/table.rs
 expression: "format_table(&sessions(), Some(width), false, None)"
 ---
-   Session                                         Agent         Status
-   ● Greeting in three words                       claude-code   waiting on you
-     greeter · Hi there, friend! Anything else y…  opus 5.5      2m ago
-   └─ ● inspect the parser recovery path           codex         waiting on you
-        greeter · Reading src/parser.rs            gpt-5.5       4s ago
-   … say hi in 3 words                             gemini        starting
-     no reply yet                                                0s ago
+  Session                                           Agent         Status
+  ● Greeting in three words                         claude-code   waiting on you
+    greeter · Hi there, friend! Anything else you…  opus 5.5      2m ago
+  └─ ● inspect the parser recovery path             codex         waiting on you
+       greeter · Reading src/parser.rs              gpt-5.5       4s ago
+  … say hi in 3 words                               gemini        starting
+    no reply yet                                                  0s ago

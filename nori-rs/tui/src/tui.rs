@@ -233,7 +233,7 @@ impl Tui {
         let (frame_schedule_tx, frame_schedule_rx) = tokio::sync::mpsc::unbounded_channel();
         let (draw_tx, _) = tokio::sync::broadcast::channel(1);
 
-        crate::frame_scheduler::spawn_frame_scheduler(frame_schedule_rx, draw_tx.clone());
+        spawn_frame_scheduler(frame_schedule_rx, draw_tx.clone());
 
         // Detect keyboard enhancement support before any EventStream is created so the
         // crossterm poller can acquire its lock without contention.
@@ -604,6 +604,51 @@ impl Tui {
             })
         })?
     }
+}
+
+/// Spawn background scheduler to coalesce frame requests and emit draws at deadlines.
+fn spawn_frame_scheduler(
+    frame_schedule_rx: tokio::sync::mpsc::UnboundedReceiver<Instant>,
+    draw_tx: tokio::sync::broadcast::Sender<()>,
+) {
+    tokio::spawn(async move {
+        use tokio::select;
+        use tokio::time::Instant as TokioInstant;
+        use tokio::time::sleep_until;
+
+        let mut rx = frame_schedule_rx;
+        let mut next_deadline: Option<Instant> = None;
+
+        loop {
+            let target = next_deadline
+                .unwrap_or_else(|| Instant::now() + Duration::from_secs(60 * 60 * 24 * 365));
+            let sleep_fut = sleep_until(TokioInstant::from_std(target));
+            tokio::pin!(sleep_fut);
+
+            select! {
+                recv = rx.recv() => {
+                    match recv {
+                        Some(at) => {
+                            if next_deadline.is_none_or(|cur| at < cur) {
+                                next_deadline = Some(at);
+                            }
+                            // Do not send a draw immediately here. By continuing the loop,
+                            // we recompute the sleep target so the draw fires once via the
+                            // sleep branch, coalescing multiple requests into a single draw.
+                            continue;
+                        }
+                        None => break,
+                    }
+                }
+                _ = &mut sleep_fut => {
+                    if next_deadline.is_some() {
+                        next_deadline = None;
+                        let _ = draw_tx.send(());
+                    }
+                }
+            }
+        }
+    });
 }
 
 /// Command that emits an OSC 9 desktop notification with a message.

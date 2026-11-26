@@ -298,6 +298,7 @@ impl Renderable for HotkeyPickerView {
         Picker::new(&state)
             .theme(crate::style::component_theme())
             .density(PickerDensity::Compact)
+            .fullscreen_selection_rails(true)
             .footer_hints(hints)
             .render(area, buf);
     }

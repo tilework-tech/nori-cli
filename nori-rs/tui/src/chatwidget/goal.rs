@@ -59,10 +59,7 @@ impl ChatWidget {
     ) {
         self.builtin_command_availability = update.builtin_commands;
         self.session_agent_capabilities = update.agent;
-        self.refresh_builtin_command_availability();
-    }
 
-    pub(super) fn refresh_builtin_command_availability(&mut self) {
         // Refresh the popup greying for every builtin from the merged
         // (server + client-scope) verdict. Iterating all variants — not just
         // the server map keys — both clears stale disabled state and applies
@@ -88,17 +85,13 @@ impl ChatWidget {
             return true;
         }
 
-        let reason = availability
-            .reason
-            .unwrap_or_else(|| default_command_unavailable_reason(command));
-        // A joined terminal refuses with the reason its menu shows, and
-        // keeps the command in the composer as it keeps a refused prompt.
-        if self.host_connection.is_some() {
-            self.add_error_message(format!("/{}: {reason}", command.command()));
-            self.set_composer_text(format!("/{}", command.command()));
-        } else {
-            self.add_error_message(format!("/{} is unavailable. {reason}", command.command()));
-        }
+        self.add_error_message(format!(
+            "/{} is unavailable. {}",
+            command.command(),
+            availability
+                .reason
+                .unwrap_or_else(|| default_command_unavailable_reason(command))
+        ));
         self.request_redraw();
         false
     }
@@ -116,9 +109,13 @@ impl ChatWidget {
         {
             return server.clone();
         }
-        if let Some(reason) =
-            crate::command_availability::unavailable_reason(command, self.command_surface())
-        {
+        if let Some(reason) = crate::command_availability::unavailable_reason(
+            command,
+            crate::command_availability::Surface::Owned {
+                cloud_mode: self.cloud_mode,
+                agent_session_close: self.session_agent_capabilities.session_close,
+            },
+        ) {
             return nori_protocol::CommandAvailability {
                 enabled: false,
                 reason: Some(reason),

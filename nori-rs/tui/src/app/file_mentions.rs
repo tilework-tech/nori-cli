@@ -1,9 +1,8 @@
 //! `@` file mentions in the plain terminal. A session on the host this
 //! terminal owns is searched by the host in that session's folder, so
-//! switching sessions switches where matches come from. With no session on
-//! screen, a joined host that serves `find_paths` searches its own folder;
-//! otherwise (cloud mode, or before the first session starts) the launch
-//! folder is searched locally.
+//! switching sessions switches where matches come from. A widget without a
+//! host session (cloud mode, or before the first session starts) searches
+//! the launch folder locally.
 
 use codex_file_search::FileMatch;
 use nori_harness::ConversationId;
@@ -27,21 +26,18 @@ pub(crate) struct FileMentions {
 
 impl FileMentions {
     /// Where `query`, typed in the session on screen, is searched now;
-    /// none while a host search is in flight (it waits) or repeats. With no
-    /// session on screen, a joined host that finds paths searches its own
-    /// folder.
+    /// none while a host search is in flight (it waits) or repeats.
     pub(super) fn route(
         &mut self,
         foreground: Option<ConversationId>,
-        joined_host_finds_paths: bool,
         query: String,
     ) -> Option<Route> {
         match foreground {
-            None if !joined_host_finds_paths => Some(Route::Local(query)),
-            foreground => self
+            None => Some(Route::Local(query)),
+            Some(id) => self
                 .host
                 .query(FileSearch {
-                    session_id: foreground.map(|id| id.to_string()),
+                    session_id: Some(id.to_string()),
                     query,
                 })
                 .map(Route::Host),
@@ -70,16 +66,10 @@ impl App {
         if query.is_empty() {
             return;
         }
-        let joined_host_finds_paths = self.is_joined()
-            && self
-                .chat_widget
-                .host_connection()
-                .is_some_and(|connection| connection.features.find_paths);
-        match self.file_mentions.route(
-            self.chat_widget.managed_conversation_id(),
-            joined_host_finds_paths,
-            query,
-        ) {
+        match self
+            .file_mentions
+            .route(self.chat_widget.managed_conversation_id(), query)
+        {
             Some(Route::Local(query)) => self.file_search.on_user_query(query),
             Some(Route::Host(search)) => self.send_host_file_search(search),
             None => {}
@@ -140,23 +130,20 @@ mod tests {
         let mut mentions = FileMentions::default();
         let one = ConversationId::new();
         assert_eq!(
-            mentions.route(None, false, "ma".into()),
+            mentions.route(None, "ma".into()),
             Some(Route::Local("ma".into()))
         );
-        assert_eq!(
-            mentions.route(Some(one), false, "ma".into()),
-            host(one, "ma")
-        );
+        assert_eq!(mentions.route(Some(one), "ma".into()), host(one, "ma"));
     }
 
     #[test]
     fn one_search_is_in_flight_and_the_newest_query_follows_it() {
         let mut mentions = FileMentions::default();
         let one = ConversationId::new();
-        let first = mentions.route(Some(one), false, "l".into());
+        let first = mentions.route(Some(one), "l".into());
         assert_eq!(first, host(one, "l"));
-        assert_eq!(mentions.route(Some(one), false, "le".into()), None);
-        assert_eq!(mentions.route(Some(one), false, "lex".into()), None);
+        assert_eq!(mentions.route(Some(one), "le".into()), None);
+        assert_eq!(mentions.route(Some(one), "lex".into()), None);
         let Some(Route::Host(first)) = first else {
             unreachable!()
         };
@@ -169,10 +156,10 @@ mod tests {
     fn switching_sessions_searches_the_new_one_and_drops_the_old_ones_matches() {
         let mut mentions = FileMentions::default();
         let (one, two) = (ConversationId::new(), ConversationId::new());
-        let Some(Route::Host(first)) = mentions.route(Some(one), false, "ma".into()) else {
+        let Some(Route::Host(first)) = mentions.route(Some(one), "ma".into()) else {
             panic!("the host searches session one");
         };
-        assert_eq!(mentions.route(Some(two), false, "ma".into()), None);
+        assert_eq!(mentions.route(Some(two), "ma".into()), None);
         let (matches, next) = mentions.landed(&first, Some(two), reply("one/main.rs"));
         assert_eq!(paths(matches), None, "session one's files never reach two");
         assert_eq!(next.map(Route::Host), host(two, "ma"));

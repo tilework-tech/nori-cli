@@ -82,27 +82,6 @@ pub(crate) fn reclaim_queued(runtime: &mut SessionRuntime, event_id: &str) -> Op
     })
 }
 
-/// Every queued user prompt, removed before it is sent, with the queue
-/// snapshot to publish. Prompts the harness queued itself stay queued.
-#[derive(Debug)]
-pub(crate) struct Discarded {
-    pub prompts: Vec<QueuedPrompt>,
-    pub queue_changed: ClientEvent,
-}
-
-/// Drop every queued user prompt, editable or not, and clear the pause.
-pub(crate) fn discard_queued(runtime: &mut SessionRuntime) -> Discarded {
-    let (prompts, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut runtime.queue)
-        .into_iter()
-        .partition(|prompt| prompt.kind == QueuedPromptKind::User);
-    runtime.queue = kept.into();
-    runtime.queue_pause = None;
-    Discarded {
-        prompts,
-        queue_changed: queue_changed(runtime),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -92,14 +92,11 @@ impl SessionListView {
     }
 
     /// Replace the rows, keeping the selection on the same session.
-    /// Show `rows`. Returns whether they differ from the rows shown.
-    pub(crate) fn replace_rows(&mut self, rows: Vec<SessionRow>) -> bool {
-        if rows == self.rows {
-            return false;
+    pub(crate) fn replace_rows(&mut self, rows: Vec<SessionRow>) {
+        if rows != self.rows {
+            self.state.replace_items(items(&rows));
+            self.rows = rows;
         }
-        self.state.replace_items(items(&rows));
-        self.rows = rows;
-        true
     }
 
     fn header(&self) -> Line<'static> {
@@ -126,10 +123,6 @@ impl SessionListView {
     /// busy session needs the key twice.
     fn close_selected(&mut self) {
         let Some(row) = self.selected_row() else {
-            // With nothing to close, Ctrl+D leaves as it does from the composer.
-            if self.rows.is_empty() {
-                self.app_event_tx.send(AppEvent::BeginExit);
-            }
             return;
         };
         let generation = row.generation;
@@ -211,7 +204,7 @@ fn items(rows: &[SessionRow]) -> Vec<PickerItem<SessionGeneration>> {
             )
             .search_text(format!("{} {}", row.title, row.agent))
             .depth(row.depth)
-            .on_screen(row.on_screen);
+            .current(row.on_screen);
             if let Some(provider) = row.provider {
                 item = item.cell_tone(AGENT, provider);
             }
@@ -294,7 +287,8 @@ impl BottomPaneView for SessionListView {
     }
 
     fn update_session_list(&mut self, rows: &[SessionRow]) -> bool {
-        self.replace_rows(rows.to_vec())
+        self.replace_rows(rows.to_vec());
+        true
     }
 }
 
@@ -433,26 +427,6 @@ mod tests {
     }
 
     #[test]
-    fn the_list_asks_for_a_redraw_only_when_its_rows_change() {
-        let mut view = view(rich_rows());
-        assert!(
-            !view.update_session_list(&rich_rows()),
-            "unchanged rows need no redraw"
-        );
-        let mut changed = rich_rows();
-        changed[2].status = SessionStatus::Ready;
-        assert!(view.update_session_list(&changed), "a changed row redraws");
-    }
-
-    #[test]
-    fn ctrl_d_in_an_empty_list_leaves() {
-        let (tx, mut rx) = unbounded_channel();
-        let mut view = SessionListView::new(Vec::new(), AppEventSender::new(tx));
-        view.handle_key_event(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL));
-        assert!(matches!(rx.try_recv(), Ok(AppEvent::BeginExit)));
-    }
-
-    #[test]
     fn a_parent_shows_the_glyph_of_its_family_status() {
         let mut parent = row(1, "parent session", SessionStatus::Ready);
         parent.family_status = SessionStatus::WaitingOnYou;
@@ -501,7 +475,7 @@ mod tests {
             );
             assert!(parent_line.matches('…').count() <= 1, "{parent_line}");
             assert!(child_line.contains("└─"), "{child_line}");
-            assert!(parent_line.contains("(on screen)"), "{parent_line}");
+            assert!(parent_line.contains("(current)"), "{parent_line}");
         }
     }
 
@@ -598,7 +572,7 @@ mod tests {
             .lines()
             .find_map(|line| {
                 let line = line.trim_start_matches('"');
-                line.strip_prefix("▏› ").map(|rest| {
+                line.strip_prefix("› ").map(|rest| {
                     rest.split("  ")
                         .next()
                         .unwrap_or_default()
@@ -708,7 +682,7 @@ mod tests {
     #[test]
     fn every_session_takes_two_rows_at_each_layout_width() {
         let list = view(rich_rows());
-        for width in [60, 80, 89, 120] {
+        for width in [58, 80, 87, 120] {
             assert_snapshot!(format!("two_row_sessions_{width}"), render(&list, width));
         }
     }

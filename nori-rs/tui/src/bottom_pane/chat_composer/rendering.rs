@@ -156,8 +156,6 @@ impl ChatComposer {
             footer_layout_config: self.footer_layout_config.clone(),
             acp_mode_label: self.acp_mode_label.clone(),
             cloud_session: self.cloud_session.clone(),
-            host_status: self.host_status.clone(),
-            composer_hints: self.current_composer_hints(),
         }
     }
 
@@ -190,13 +188,6 @@ impl ChatComposer {
 
     /// Current context only: cumulative transcript billing totals must never
     /// be presented as the occupied portion of a context window.
-    /// Cumulative session cost from the agent's last usage update.
-    pub(crate) fn session_cost(
-        &self,
-    ) -> Option<&crate::presentation::session_runtime::SessionCost> {
-        self.session_usage.as_ref()?.cost.as_ref()
-    }
-
     pub(crate) fn context_usage_snapshot(&self) -> (ContextStatus, &'static str) {
         if let Some(usage) = &self.session_usage {
             return (

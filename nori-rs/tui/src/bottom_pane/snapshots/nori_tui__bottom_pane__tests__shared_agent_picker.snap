@@ -6,20 +6,20 @@ expression: rendered
   Select agent                                                                                      
   Creates new conversation with selected agent (history not preserved)                              
                                                                                                     
-  ▏› 1. Mock ACP (current)                                                                       ▕  
-  ▏     Mock agent for testing                                                                   ▕  
-     2. Mock ACP Alt                                                                                
-        Alternate mock agent for testing                                                            
-     3. Claude Code                                                                                 
-        Anthropic                                                                                   
-     4. Codex                                                                                       
-        OpenAI                                                                                      
-     5. Antigravity                                                                                 
-        Google                                                                                      
-     6. Grok Build                                                                                  
-        xAI                                                                                         
-     7. OpenCode                                                                                    
-        Configured in OpenCode                                                                      
-     8. Cursor Agent                                                                                
-        Cursor                                                                                      
+  ▏1. Mock ACP (current)                                                                         ▕  
+  ▏   Mock agent for testing                                                                     ▕  
+   2. Mock ACP Alt                                                                                  
+      Alternate mock agent for testing                                                              
+   3. Claude Code                                                                                   
+      Anthropic                                                                                     
+   4. Codex                                                                                         
+      OpenAI                                                                                        
+   5. Antigravity                                                                                   
+      Google                                                                                        
+   6. Grok Build                                                                                    
+      xAI                                                                                           
+   7. OpenCode                                                                                      
+      Configured in OpenCode                                                                        
+   8. Cursor Agent                                                                                  
+      Cursor                                                                                        
   ↑↓/j/k move  enter select  shift-tab rec on  esc close

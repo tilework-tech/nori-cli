@@ -47,11 +47,10 @@ impl App {
     }
 
     fn status_of(&self, widget: &ChatWidget) -> SessionStatus {
-        let id = widget.managed_conversation_id();
-        id.and_then(|id| self.session_manager.as_ref()?.get(&id))
-            .map(|record| record.status)
-            .or_else(|| Some(self.listed_session(id?)?.status))
-            .unwrap_or(SessionStatus::Starting)
+        widget
+            .managed_conversation_id()
+            .and_then(|id| self.session_manager.get(&id))
+            .map_or(SessionStatus::Starting, |record| record.status)
     }
 
     /// Every session in navigation order, with its current status.
@@ -64,31 +63,23 @@ impl App {
                 let widget = self.widget_for(*generation)?;
                 let conversation_id = widget.managed_conversation_id();
                 let on_screen = *generation == active;
-                // A blank session that has not started is not counted. On a
-                // joined host every session has the ID the host gave it.
-                if conversation_id.is_none() && self.joined.is_some() {
-                    return None;
-                }
+                // A blank session that has not started is not counted.
                 if conversation_id.is_none()
                     && !widget.has_harness_session()
                     && !(on_screen && self.session_setup_pending())
                 {
                     return None;
                 }
-                let record = conversation_id.and_then(|id| self.session_manager.as_ref()?.get(&id));
+                let record = conversation_id.and_then(|id| self.session_manager.get(&id));
                 let status = self.status_of(widget);
                 Some(SessionFacts {
                     generation: *generation,
                     status,
                     family_status: conversation_id
-                        .and_then(|id| self.session_manager.as_ref()?.family_status(&id))
-                        .or_else(|| self.listed_session(conversation_id?)?.family_status)
+                        .and_then(|id| self.session_manager.family_status(&id))
                         .unwrap_or(status),
                     conversation_id,
-                    parent: record
-                        .as_ref()
-                        .and_then(|record| record.parent)
-                        .or_else(|| self.listed_session(conversation_id?)?.parent()),
+                    parent: record.as_ref().and_then(|record| record.parent),
                     agent: widget.config_ref().active_agent.clone(),
                     on_screen,
                 })
@@ -139,10 +130,6 @@ impl App {
         self.session_previews
             .title(generation)
             .or_else(|| widget.and_then(ChatWidget::first_prompt_text))
-            .or_else(|| {
-                let id = widget?.managed_conversation_id()?;
-                self.listed_session(id)?.title.clone()
-            })
             .map(|title| title.lines().next().unwrap_or_default().trim().to_owned())
             .filter(|title| !title.is_empty())
     }
@@ -171,11 +158,7 @@ impl App {
             .iter()
             .filter_map(|fact| fact.conversation_id)
             .collect();
-        let records = self
-            .session_manager
-            .as_ref()
-            .map(nori_harness::session_manager::SessionManager::list)
-            .unwrap_or_default();
+        let records = self.session_manager.list();
         let mut extra = Vec::new();
         loop {
             let found: Vec<_> = records
@@ -200,19 +183,6 @@ impl App {
                     on_screen: false,
                 });
             }
-        }
-    }
-
-    /// On a joined host each session can run in its own folder, so its row
-    /// names the folder before the reply.
-    fn with_joined_folder(&self, widget: Option<&ChatWidget>, reply: String) -> String {
-        let folder = widget
-            .filter(|_| self.joined.is_some())
-            .and_then(|widget| widget.config_ref().cwd.file_name())
-            .map(|name| name.to_string_lossy().into_owned());
-        match folder {
-            Some(folder) => format!("{folder} · {reply}"),
-            None => reply,
         }
     }
 
@@ -244,19 +214,12 @@ impl App {
             reply: (fact.status == SessionStatus::WaitingOnYou)
                 .then(|| self.session_previews.pending_request(fact.generation))
                 .flatten()
-                .or_else(|| self.session_previews.reply(fact.generation))
-                .or_else(|| {
-                    self.listed_session(fact.conversation_id?)?
-                        .reply_preview
-                        .clone()
-                })
-                .map(|reply| self.with_joined_folder(widget, reply)),
+                .or_else(|| self.session_previews.reply(fact.generation)),
             model: widget.and_then(ChatWidget::model_name),
             idle_seconds: self
                 .session_previews
                 .last_activity(fact.generation)
-                .map(|at| i64::try_from(at.elapsed().as_secs()).unwrap_or(i64::MAX))
-                .or_else(|| self.listed_session(fact.conversation_id?)?.idle_seconds),
+                .map(|at| i64::try_from(at.elapsed().as_secs()).unwrap_or(i64::MAX)),
             context: widget.and_then(ChatWidget::context_summary),
             depth,
             on_screen: fact.on_screen,
@@ -353,7 +316,7 @@ impl App {
                 let parent = parked
                     .widget
                     .managed_conversation_id()
-                    .and_then(|id| self.session_manager.as_ref()?.get(&id))
+                    .and_then(|id| self.session_manager.get(&id))
                     .and_then(|record| record.parent);
                 if parent.is_none() {
                     pending.push((generation, message));
@@ -429,7 +392,6 @@ impl App {
             .and_then(|fact| self.session_title(fact.generation, limit))
             .or_else(|| {
                 self.session_manager
-                    .as_ref()?
                     .replay_info(id)
                     .and_then(|info| info.title)
                     .and_then(|title| nori_protocol::session_full_name(&title))
@@ -442,7 +404,7 @@ impl App {
     pub(super) fn on_screen_parent(&self) -> Option<ConversationId> {
         self.chat_widget
             .managed_conversation_id()
-            .and_then(|id| self.session_manager.as_ref()?.get(&id))
+            .and_then(|id| self.session_manager.get(&id))
             .filter(|record| record.source == nori_harness::session_manager::SessionSource::Session)
             .and_then(|record| record.parent)
     }
@@ -460,14 +422,13 @@ impl App {
         }];
         let mut record = child
             .conversation_id
-            .and_then(|id| self.session_manager.as_ref()?.get(&id));
+            .and_then(|id| self.session_manager.get(&id));
         let mut seen = Vec::new();
         while let Some(current) = record
             && current.source == nori_harness::session_manager::SessionSource::Session
             && let Some(parent) = current.parent
             && !seen.contains(&parent)
-            && let Some(manager) = &self.session_manager
-            && let Some(parent_record) = manager.get(&parent)
+            && let Some(parent_record) = self.session_manager.get(&parent)
         {
             seen.push(parent);
             path.push(crate::session_path::PathStep {

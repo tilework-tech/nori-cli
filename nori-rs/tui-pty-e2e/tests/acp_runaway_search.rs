@@ -14,6 +14,7 @@ use pretty_assertions::assert_eq;
 use serde_json::Value;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
+use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
 
@@ -196,7 +197,7 @@ fn test_runaway_search_transcript_preserves_the_raw_acp_tool_stream() {
         TuiSession::spawn_with_config(24, 80, config).expect("failed to spawn runaway search TUI");
 
     session
-        .wait_until_ready()
+        .wait_for_text("›", TIMEOUT)
         .expect("TUI should start in ACP mode");
     std::thread::sleep(TIMEOUT_INPUT);
 

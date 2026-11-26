@@ -1,0 +1,37 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  〉nori CLI v0.0.0
+
+  System       /tmp/v801/s2-submit-early/tidepool
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config
+to change)
+
+
+› count the tide pools
+
+
+• Seven_pools_counted.
+
+
+〉
+
+  / commands · ! shell · @ files · ? help

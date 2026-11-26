@@ -1,0 +1,43 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+  〉_ ▐
+
+  System       /tmp/v801/s5-fail-initialize/tidepool
+  Agent        Mock ACP
+
+■ Couldn't prepare Mock ACP: ACP agent /home/sprite/target-801/debug/
+mock_acp_agent exited during startup (exit code 0): Mock agent: simulating
+initialize failure
+
+• No session is active - /resume retries the picker, /new starts a fresh
+session.
+
+
+  Select agent
+  ACP agent /home/sprite/target-801/debug/mock_acp_agent exited during startup
+
+  ▏› 1. Mock ACP (current)                                                   ▕
+  ▏     Mock agent for testing                                               ▕
+     2. Mock ACP Alt
+        Alternate mock agent for testing
+     3. Claude Code
+        Anthropic
+     4. Codex
+        OpenAI
+     5. Antigravity
+        Google
+     6. Grok Build
+        xAI
+  ↑↓/j/k move  enter select  shift-tab rec on  esc close
+

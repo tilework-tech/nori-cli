@@ -21,7 +21,12 @@ fn main() -> anyhow::Result<()> {
             .config_overrides
             .raw_overrides
             .splice(0..0, top_cli.config_overrides.raw_overrides);
-        run_main(inner, codex_linux_sandbox_exe, None).await?;
+        let exit_info = run_main(inner, codex_linux_sandbox_exe, None).await?;
+
+        let token_usage = exit_info.token_usage;
+        if !token_usage.is_zero() {
+            println!("{token_usage}");
+        }
         Ok(())
     })
 }

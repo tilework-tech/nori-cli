@@ -14,37 +14,20 @@
 use std::ops::Range;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct MarkdownSegment {
-    pub(crate) range: Range<usize>,
-    pub(crate) is_table: bool,
-}
-
-/// Segments of a source together with the line starts where the scanner holds no state.
-pub(crate) struct SegmentScan {
-    pub(crate) segments: Vec<MarkdownSegment>,
-    /// Starts of lines that are outside every fence and table, ascending. Scanning the source from
-    /// any of these offsets yields the same segments from that offset on as scanning it whole.
-    pub(crate) clean_line_starts: Vec<usize>,
+pub(super) struct MarkdownSegment {
+    pub(super) range: Range<usize>,
+    pub(super) is_table: bool,
 }
 
 /// Split `input` into alternating prose and table segments, in source order.
 pub(super) fn markdown_segments(input: &str) -> Vec<MarkdownSegment> {
-    scan_segments(input).segments
-}
-
-/// Split `input` like [`markdown_segments`] and also report its clean line starts.
-pub(crate) fn scan_segments(input: &str) -> SegmentScan {
     let lines = source_lines(input);
 
     let mut segments = Vec::new();
-    let mut clean_line_starts = Vec::new();
     let mut prose_start = 0;
     let mut index = 0;
     let mut open_fence = None;
     while index + 1 < lines.len() {
-        if open_fence.is_none() {
-            clean_line_starts.push(lines[index].start);
-        }
         let header = input[lines[index].clone()].trim();
         // Pipe rows inside a code fence are code. Skip until the fence closes, or to the end of the
         // source while it stays open.
@@ -105,9 +88,6 @@ pub(crate) fn scan_segments(input: &str) -> SegmentScan {
         prose_start = table_end;
         index = table_end_index;
     }
-    if index < lines.len() && open_fence.is_none() {
-        clean_line_starts.push(lines[index].start);
-    }
     if prose_start < input.len() {
         segments.push(MarkdownSegment {
             range: prose_start..input.len(),
@@ -120,10 +100,7 @@ pub(crate) fn scan_segments(input: &str) -> SegmentScan {
             is_table: false,
         });
     }
-    SegmentScan {
-        segments,
-        clean_line_starts,
-    }
+    segments
 }
 
 /// Length of the prefix of `input` whose rendering cannot be changed by more source.

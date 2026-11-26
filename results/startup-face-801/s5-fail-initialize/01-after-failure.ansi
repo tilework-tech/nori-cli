@@ -1,0 +1,24 @@
+[38;5;1mmock_acp_agent exited during startup (exit code 0): Mock agent: simulating
+initialize failure
+
+[2m[39m• [0m[39m[49mNo session is active - /resume retries the picker, /new starts a fresh
+session.
+
+
+  [1mSelect agent
+[0m[39m[49m  [38;5;8mACP agent /home/sprite/target-801/debug/mock_acp_agent exited during startup
+
+[39m  [1m[38;5;2m▏›[0m[39m[49m 1. Mock ACP (current)                                                   [1m[38;5;2m▕
+[0m[39m[49m  [1m[38;5;2m▏[0m[39m[49m     [38;5;8mMock agent for testing                                               [1m[38;5;2m▕
+[0m[39m[49m     2. Mock ACP Alt
+        [38;5;8mAlternate mock agent for testing
+[39m     3. Claude Code
+        [38;5;8mAnthropic
+[39m     4. Codex
+        [38;5;8mOpenAI
+[39m     5. Antigravity
+        [38;5;8mGoogle
+[39m     6. Grok Build
+        [38;5;8mxAI
+[39m  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mselect  [38;5;2mshift-tab[39m [38;5;8mrec on  [38;5;2mesc[39m [38;5;8mclose
+

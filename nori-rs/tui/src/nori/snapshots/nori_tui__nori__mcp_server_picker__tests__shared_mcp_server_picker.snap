@@ -6,7 +6,7 @@ expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
   Manage MCP server connections
 
      Server                          Transport   Status
-  ▏› + Add new...                                        ▕
+  ▏  + Add new...                                        ▕
      docs                            stdio       on
      remote-api                      http        on
   ↑↓/j/k move  enter toggle  l login  d delete  esc close

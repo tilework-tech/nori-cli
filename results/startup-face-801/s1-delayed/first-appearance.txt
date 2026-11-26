@@ -1,0 +1,4 @@
+first 'longer than expected': 10.929927
+first 'options': 10.938353
+first '〉_ -': 10.946641
+first 'nori CLI': 11.595844

@@ -87,6 +87,7 @@ strum_macros = { workspace = true }
 supports-color = { workspace = true }
 tempfile = { workspace = true }
 textwrap = { workspace = true }
+tiktoken-rs = { workspace = true }
 tokio = { workspace = true, features = [
     "io-std",
     "macros",
@@ -127,15 +128,6 @@ required-features = ["storybook"]
 name = "status_card_storybook"
 path = "examples/status_card_storybook.rs"
 required-features = ["storybook"]
-
-[[example]]
-name = "exit_card_storybook"
-path = "examples/exit_card_storybook.rs"
-required-features = ["storybook"]
-
-[[test]]
-name = "storybook_exit_card"
-path = "examples/exit_card_storybook/e2e.rs"
 
 [[test]]
 name = "storybook_status_card"

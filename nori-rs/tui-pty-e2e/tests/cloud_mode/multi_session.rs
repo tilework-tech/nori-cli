@@ -73,7 +73,7 @@ fn test_cloud_close_beside_another_session_lists_it_as_closed() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_until_ready()
+        .wait_for_text("›", TIMEOUT)
         .expect("create-new should start a session");
     std::thread::sleep(TIMEOUT_INPUT);
     session.submit_input("first cloud question").unwrap();
@@ -108,7 +108,8 @@ fn test_cloud_close_beside_another_session_lists_it_as_closed() {
     session
         .wait_for_text("Sessions 2", Duration::from_secs(3))
         .expect("the list opens");
-    let screen = session.settled_screen();
+    std::thread::sleep(Duration::from_millis(300));
+    let screen = session.screen_contents();
     assert!(
         screen
             .lines()

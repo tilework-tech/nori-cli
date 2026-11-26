@@ -5,37 +5,13 @@ use ratatui::text::Line;
 use crate::markdown;
 use crate::markdown_render::committable_prefix_len;
 
-mod split;
-
-/// A point in the buffer up to which the render is final.
-#[derive(Clone, Copy, Default)]
-struct Checkpoint {
-    /// Byte offset into the buffer; rendering resumes here.
-    offset: usize,
-    /// Number of lines `buffer[..offset]` renders to.
-    line_count: usize,
-    /// Whether the render places a blank line between `buffer[..offset]` and what follows.
-    blank_after: bool,
-    /// The checkpoint falls inside a paragraph that a setext underline could still rewrite.
-    inside_paragraph: bool,
-}
-
 /// Newline-gated accumulator that renders markdown and commits only fully
 /// completed logical lines.
-///
-/// Rendering resumes from the latest [`Checkpoint`] instead of the start of the buffer, so a
-/// streamed message costs time linear in its length. See [`split`] for when a checkpoint is safe.
 pub(crate) struct MarkdownStreamCollector {
     buffer: String,
     committed_line_count: usize,
     width: Option<usize>,
     cwd: Option<PathBuf>,
-    checkpoint: Checkpoint,
-    /// The latest checkpoint between blocks, which no later text can invalidate.
-    block_checkpoint: Checkpoint,
-    /// Cleared once the buffer may hold a link reference definition, which can change how text
-    /// anywhere in the message renders. Rendering then always starts from the beginning.
-    incremental: bool,
 }
 
 impl MarkdownStreamCollector {
@@ -45,26 +21,22 @@ impl MarkdownStreamCollector {
             committed_line_count: 0,
             width,
             cwd: None,
-            checkpoint: Checkpoint::default(),
-            block_checkpoint: Checkpoint::default(),
-            incremental: true,
         }
     }
 
     #[allow(dead_code)]
     pub fn new_with_cwd(width: Option<usize>, cwd: PathBuf) -> Self {
         Self {
+            buffer: String::new(),
+            committed_line_count: 0,
+            width,
             cwd: Some(cwd),
-            ..Self::new(width)
         }
     }
 
     pub fn clear(&mut self) {
         self.buffer.clear();
         self.committed_line_count = 0;
-        self.checkpoint = Checkpoint::default();
-        self.block_checkpoint = Checkpoint::default();
-        self.incremental = true;
     }
 
     pub fn push_delta(&mut self, delta: &str) {
@@ -72,7 +44,7 @@ impl MarkdownStreamCollector {
         self.buffer.push_str(delta);
     }
 
-    /// Render the buffer and return only the newly completed logical lines
+    /// Render the full buffer and return only the newly completed logical lines
     /// since the last commit. When the buffer does not end with a newline, the
     /// final rendered line is considered incomplete and is not emitted.
     ///
@@ -81,83 +53,34 @@ impl MarkdownStreamCollector {
     /// and each separator already emitted. An unfinished trailing table is therefore withheld until
     /// it closes (see [`committable_prefix_len`]) rather than committed row by row.
     pub fn commit_complete_lines(&mut self) -> Vec<Line<'static>> {
-        let Some(last_newline_idx) = self.buffer.rfind('\n') else {
+        let source = self.buffer.clone();
+        let last_newline_idx = source.rfind('\n');
+        let source = if let Some(last_newline_idx) = last_newline_idx {
+            source[..=last_newline_idx].to_string()
+        } else {
             return Vec::new();
         };
-        let source = std::mem::take(&mut self.buffer);
-        self.revalidate_checkpoint(&source);
-        let tail = &source[self.checkpoint.offset..=last_newline_idx];
-        let tail = &tail[..committable_prefix_len(tail)];
-        let (first_index, rendered) = self.render_after_checkpoint(tail);
-        let mut complete_line_count = first_index + rendered.len();
-        if rendered
-            .last()
-            .is_some_and(crate::render::line_utils::is_blank_line_spaces_only)
+        let source = source[..committable_prefix_len(&source)].to_string();
+        let mut rendered: Vec<Line<'static>> = Vec::new();
+        markdown::append_markdown_with_cwd(&source, self.width, self.cwd.as_deref(), &mut rendered);
+        let mut complete_line_count = rendered.len();
+        if complete_line_count > 0
+            && crate::render::line_utils::is_blank_line_spaces_only(
+                &rendered[complete_line_count - 1],
+            )
         {
             complete_line_count -= 1;
         }
 
-        let out = if self.committed_line_count >= complete_line_count {
-            Vec::new()
-        } else {
-            let out = rendered
-                [self.committed_line_count - first_index..complete_line_count - first_index]
-                .to_vec();
-            self.committed_line_count = complete_line_count;
-            out
-        };
-
-        let joint_len = usize::from(self.checkpoint.blank_after && !rendered.is_empty());
-        if self.incremental
-            && let Some(split) = split::latest_split(
-                tail,
-                &rendered[joint_len..],
-                self.width,
-                self.cwd.as_deref(),
-            )
-        {
-            let checkpoint = Checkpoint {
-                offset: self.checkpoint.offset + split.offset,
-                line_count: first_index + joint_len + split.line_count,
-                blank_after: split.blank_between,
-                inside_paragraph: split.inside_paragraph,
-            };
-            self.checkpoint = checkpoint;
-            if !checkpoint.inside_paragraph {
-                self.block_checkpoint = checkpoint;
-            }
+        if self.committed_line_count >= complete_line_count {
+            return Vec::new();
         }
-        self.buffer = source;
+
+        let out_slice = &rendered[self.committed_line_count..complete_line_count];
+
+        let out = out_slice.to_vec();
+        self.committed_line_count = complete_line_count;
         out
-    }
-
-    /// Move the checkpoint back when text after it may have changed how earlier text renders.
-    fn revalidate_checkpoint(&mut self, source: &str) {
-        let after = &source[self.checkpoint.offset..];
-        if self.incremental && after.contains("]:") {
-            self.incremental = false;
-            self.checkpoint = Checkpoint::default();
-            self.block_checkpoint = Checkpoint::default();
-        }
-        if self.checkpoint.inside_paragraph && split::contains_setext_underline(after) {
-            self.checkpoint = self.block_checkpoint;
-        }
-    }
-
-    /// Render `tail`, the source after the checkpoint. Returns the index in the full render of the
-    /// first returned line, and the lines from there on: the blank line joining the checkpoint to
-    /// `tail`, when there is one, followed by the render of `tail`.
-    fn render_after_checkpoint(&self, tail: &str) -> (usize, Vec<Line<'static>>) {
-        let mut rendered: Vec<Line<'static>> = Vec::new();
-        if self.checkpoint.blank_after {
-            rendered.push(Line::default());
-        }
-        let joint = rendered.len();
-        markdown::append_markdown_with_cwd(tail, self.width, self.cwd.as_deref(), &mut rendered);
-        if rendered.len() == joint {
-            rendered.clear();
-        }
-        (self.checkpoint.line_count, rendered)
     }
 
     /// Finalize the stream: emit all remaining lines beyond the last commit.
@@ -165,26 +88,27 @@ impl MarkdownStreamCollector {
     /// for rendering. Optionally unwraps ```markdown language fences in
     /// non-test builds.
     pub fn finalize_and_drain(&mut self) -> (Vec<Line<'static>>, String) {
-        let raw_buffer = std::mem::take(&mut self.buffer);
-        self.revalidate_checkpoint(&raw_buffer);
-        let mut source = raw_buffer[self.checkpoint.offset..].to_string();
-        if !raw_buffer.ends_with('\n') {
+        let raw_buffer = self.buffer.clone();
+        let mut source: String = raw_buffer.clone();
+        if !source.ends_with('\n') {
             source.push('\n');
         }
         tracing::debug!(
             raw_len = raw_buffer.len(),
-            source_len = self.checkpoint.offset + source.len(),
+            source_len = source.len(),
             "markdown finalize (raw length: {}, rendered length: {})",
             raw_buffer.len(),
-            self.checkpoint.offset + source.len()
+            source.len()
         );
-        tracing::trace!("markdown finalize (raw source):\n---\n{raw_buffer}\n---");
+        tracing::trace!("markdown finalize (raw source):\n---\n{source}\n---");
 
-        let (first_index, rendered) = self.render_after_checkpoint(&source);
-        let out = if self.committed_line_count >= first_index + rendered.len() {
+        let mut rendered: Vec<Line<'static>> = Vec::new();
+        markdown::append_markdown_with_cwd(&source, self.width, self.cwd.as_deref(), &mut rendered);
+
+        let out = if self.committed_line_count >= rendered.len() {
             Vec::new()
         } else {
-            rendered[self.committed_line_count - first_index..].to_vec()
+            rendered[self.committed_line_count..].to_vec()
         };
 
         // Reset collector state for next stream.
@@ -192,9 +116,6 @@ impl MarkdownStreamCollector {
         (out, raw_buffer)
     }
 }
-
-#[cfg(test)]
-mod incremental_tests;
 
 #[cfg(test)]
 pub(crate) fn simulate_stream_markdown_for_tests(

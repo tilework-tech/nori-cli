@@ -1,6 +1,5 @@
 ---
 source: tui-pty-e2e/tests/delegation.rs
-assertion_line: 191
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 • Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
@@ -15,7 +14,7 @@ expression: normalize_for_input_snapshot(session.screen_contents())
   runs on   mock-model-alt · a different agent from this session
   task      mock:request-permission:write-child-file
 
-  ▏› 1. Yes, start it                                                                                                          ▕
-     2. No, decline
+› 1. Yes, start it
+  2. No, decline
 
   Press enter to confirm or esc to decline

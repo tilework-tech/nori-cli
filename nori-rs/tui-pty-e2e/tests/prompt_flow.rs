@@ -2,6 +2,7 @@ use insta::assert_snapshot;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
+use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -10,7 +11,7 @@ use tui_pty_e2e::normalize_for_input_snapshot;
 fn test_submit_prompt_default_response() {
     let mut session = TuiSession::spawn(18, 80).expect("Failed to spawn");
 
-    session.wait_until_ready().unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
 
     // Type and submit prompt
     session.submit_input("Hello").unwrap();
@@ -25,9 +26,10 @@ fn test_submit_prompt_default_response() {
         .wait_for_text("Test message 2", TIMEOUT)
         .expect("Did not receive second mock response");
 
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "prompt_submitted",
-        normalize_for_input_snapshot(session.settled_screen())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
@@ -39,7 +41,7 @@ fn test_submit_prompt_custom_response() {
 
     let mut session = TuiSession::spawn_with_config(18, 80, config).expect("Failed to spawn");
 
-    session.wait_until_ready().unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
 
     session.submit_input("test prompt").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
@@ -48,16 +50,17 @@ fn test_submit_prompt_custom_response() {
         .wait_for_text("This is a custom test response", TIMEOUT)
         .expect("Did not receive custom response");
 
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "custom_response",
-        normalize_for_input_snapshot(session.settled_screen())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }
 
 #[test]
 fn test_multiline_input() {
     let mut session = TuiSession::spawn(30, 80).unwrap();
-    session.wait_until_ready().unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
 
     // Type multiline prompt
     session.type_input("Line 1\nLine 2\nLine 3").unwrap();
@@ -67,7 +70,8 @@ fn test_multiline_input() {
     session.wait_for_text("Line 2", TIMEOUT).unwrap();
     session.wait_for_text("Line 3", TIMEOUT).unwrap();
 
-    let normalized = normalize_for_input_snapshot(session.settled_screen());
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
+    let normalized = normalize_for_input_snapshot(session.screen_contents());
     let composer = normalized
         .lines()
         .skip_while(|line| !line.contains("Line 1"))

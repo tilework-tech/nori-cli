@@ -1,9 +1,9 @@
 ---
 source: tui-pty-e2e/tests/startup.rs
-assertion_line: 196
+assertion_line: 209
 expression: "normalize_for_snapshot(header_lines.join(\"\\n\"))"
 ---
   › Nori CLI v0.0.0
 
-  System       [TMP_DIR] · Approvals: Agent
-  Agent        Mock ACP · Mock Default Model · Medium
+  System       [TMP_DIR]
+  Agent        Mock ACP

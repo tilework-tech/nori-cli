@@ -81,12 +81,6 @@ impl ChatWidget {
                 Some("reattach later from the `nori cloud` picker".to_string()),
             ));
         }
-        if self.host_connection.is_some() {
-            self.add_to_history(history_cell::new_info_event(
-                "Left the host; its sessions keep running.".to_string(),
-                Some("join again with `nori attach`".to_string()),
-            ));
-        }
         self.request_redraw();
 
         let child_grace = if self.cloud_mode {
@@ -210,19 +204,6 @@ impl ChatWidget {
     }
 
     /// Move the full edit, including buffered input, before replacing this widget.
-    pub(crate) fn take_bottom_pane_views(
-        &mut self,
-    ) -> Vec<Box<dyn crate::bottom_pane::BottomPaneView>> {
-        self.bottom_pane.take_views()
-    }
-
-    pub(crate) fn restore_bottom_pane_views(
-        &mut self,
-        views: Vec<Box<dyn crate::bottom_pane::BottomPaneView>>,
-    ) {
-        self.bottom_pane.restore_views(views);
-    }
-
     pub(crate) fn take_composer_draft(&mut self) -> crate::bottom_pane::ComposerDraft {
         self.bottom_pane.take_composer_draft()
     }
@@ -261,7 +242,7 @@ impl ChatWidget {
     }
 
     pub(crate) fn has_harness_session(&self) -> bool {
-        self.harness_handle.is_some() || self.follows_host_session()
+        self.harness_handle.is_some()
     }
 
     pub(crate) fn loop_state(&self) -> Option<(i32, i32)> {
@@ -340,12 +321,7 @@ impl ChatWidget {
         } else {
             std::time::Duration::ZERO
         };
-        let Some(manager) = self.session_manager.clone() else {
-            self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
-                history_cell::new_error_event(NEEDS_OWN_HOST_MESSAGE.to_string()),
-            )));
-            return;
-        };
+        let manager = self.session_manager.clone();
         tokio::spawn(async move {
             if let Err(error) = manager.close(&conversation_id, child_grace).await {
                 tracing::warn!(%error, "failed to shut down replaced harness session");
@@ -354,62 +330,13 @@ impl ChatWidget {
     }
 
     pub(crate) fn submit_harness_action(&self, action: crate::app_event::HarnessAction) {
-        let Some(action) = self
-            .history_action_on_host(action)
-            .and_then(|action| self.prompts_action_on_host(action))
-            .and_then(|action| self.goal_action_on_host(action))
-            .and_then(|action| self.compact_action_on_host(action))
-            .and_then(|action| self.shell_action_on_host(action))
-        else {
-            return;
-        };
         let Some(handle) = self.harness_handle.clone() else {
-            use crate::app_event::HarnessAction;
-            match action {
-                // Leaving a joined host ends only this terminal's view.
-                HarnessAction::Shutdown { .. } => self.app_event_tx.send(AppEvent::ExitRequest),
-                // A joined session's history and prompts live on its host.
-                HarnessAction::AddHistory(_)
-                | HarnessAction::LoadCustomPrompts
-                | HarnessAction::LoadGoal
-                | HarnessAction::HistoryEntry { .. }
-                | HarnessAction::SearchHistory { .. }
-                    if self.follows_host_session() => {}
-                HarnessAction::Cancel
-                | HarnessAction::ReclaimQueuedPrompt { .. }
-                | HarnessAction::ResumeQueue
-                | HarnessAction::Compact
-                | HarnessAction::Branch
-                | HarnessAction::UndoTo(_)
-                | HarnessAction::LoadUndoSnapshots
-                | HarnessAction::RunUserShell(_)
-                | HarnessAction::SetGoal { .. }
-                | HarnessAction::SetGoalStatus(_)
-                | HarnessAction::ClearGoal
-                    if self.follows_host_session() =>
-                {
-                    self.app_event_tx.send(AppEvent::HarnessActionFailed(
-                        NEEDS_OWN_HOST_MESSAGE.to_string(),
-                    ));
-                }
-                HarnessAction::Cancel
-                | HarnessAction::ReclaimQueuedPrompt { .. }
-                | HarnessAction::ResumeQueue
-                | HarnessAction::Compact
-                | HarnessAction::Branch
-                | HarnessAction::UndoTo(_)
-                | HarnessAction::LoadUndoSnapshots
-                | HarnessAction::RunUserShell(_)
-                | HarnessAction::AddHistory(_)
-                | HarnessAction::HistoryEntry { .. }
-                | HarnessAction::SearchHistory { .. }
-                | HarnessAction::LoadCustomPrompts
-                | HarnessAction::LoadGoal
-                | HarnessAction::SetGoal { .. }
-                | HarnessAction::SetGoalStatus(_)
-                | HarnessAction::ClearGoal => self.app_event_tx.send(
-                    AppEvent::HarnessActionFailed("No active harness session".to_string()),
-                ),
+            if matches!(action, crate::app_event::HarnessAction::Shutdown { .. }) {
+                self.app_event_tx.send(AppEvent::ExitRequest);
+            } else {
+                self.app_event_tx.send(AppEvent::HarnessActionFailed(
+                    "No active harness session".to_string(),
+                ));
             }
             return;
         };

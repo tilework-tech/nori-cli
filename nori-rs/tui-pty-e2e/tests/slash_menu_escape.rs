@@ -16,7 +16,7 @@ const MENU_ROW: &str = "/approvals";
 #[test]
 fn the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn() {
     let mut session = TuiSession::spawn_with_config(40, 110, SessionConfig::new()).expect("spawn");
-    session.wait_until_ready().expect("TUI starts");
+    session.wait_for_text("›", TIMEOUT).expect("TUI starts");
     std::thread::sleep(TIMEOUT_INPUT);
     session.submit_input(STREAM).unwrap();
     session
@@ -28,13 +28,10 @@ fn the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn() {
         .wait_for_text(MENU_ROW, TIMEOUT)
         .expect("the menu opens");
     session.settle(Duration::from_millis(500));
+    session.send_key(Key::Escape).unwrap();
     session
-        .press(
-            Key::Escape,
-            |screen| !screen.contains(MENU_ROW),
-            "the first Escape closes the menu",
-        )
-        .unwrap();
+        .wait_for(|screen| !screen.contains(MENU_ROW), TIMEOUT)
+        .expect("the first Escape closes the menu");
     session.settle(Duration::from_millis(1000));
     let screen = session.screen_contents();
     assert!(
@@ -46,11 +43,8 @@ fn the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn() {
         "the draft is kept:\n{screen}"
     );
 
+    session.send_key(Key::Escape).unwrap();
     session
-        .press(
-            Key::Escape,
-            |screen| !screen.contains(RUNNING),
-            "the second Escape interrupts the turn",
-        )
-        .unwrap();
+        .wait_for(|screen| !screen.contains(RUNNING), TIMEOUT)
+        .expect("the second Escape interrupts the turn");
 }

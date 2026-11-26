@@ -1,0 +1,3 @@
+   0.273  row13 - _ ▁                -:00cd00 _:00cd00 ▁:00cd00
+   0.584  row18 5                    5:default
+   7.598  row7  〉                    〉:default+bold

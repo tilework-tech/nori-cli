@@ -1,0 +1,2 @@
+[s6-no-animations] before ready: wordmark=1 face=0
+[s6-no-animations] after ready: wordmarks=1 config rows=1

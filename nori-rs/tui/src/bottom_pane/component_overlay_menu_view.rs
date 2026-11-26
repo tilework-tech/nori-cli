@@ -163,6 +163,7 @@ impl Renderable for ComponentOverlayMenuView {
             .density(self.density)
             .row_pattern(self.row_pattern)
             .placement(self.placement)
+            .fullscreen_selection_rails(true)
             .key_hints(crate::overlay_menu::default_hints());
         if let Some(subtitle) = &self.subtitle {
             menu = menu.subtitle(subtitle.clone());

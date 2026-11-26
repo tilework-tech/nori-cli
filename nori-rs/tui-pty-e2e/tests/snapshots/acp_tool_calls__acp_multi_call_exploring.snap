@@ -23,4 +23,4 @@ expression: normalize_for_input_snapshot(contents)
 
 › [DEFAULT_PROMPT]
 
-  / commands · ! shell · @ files · ? help                               ⎇ master
+                                                                        ⎇ master

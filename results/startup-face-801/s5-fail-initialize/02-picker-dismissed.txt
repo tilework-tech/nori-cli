@@ -1,0 +1,30 @@
+  〉_ ▐
+
+  System       /tmp/v801/s5b/tidepool
+  Agent        Mock ACP
+
+■ Couldn't prepare Mock ACP: ACP agent /home/sprite/target-801/debug/
+mock_acp_agent exited during startup (exit code 0): Mock agent: simulating
+initialize failure
+
+• No session is active - /resume retries the picker, /new starts a fresh
+session.
+
+
+〉still typing
+
+  Enter send · Ctrl+J newline
+
+
+
+
+
+
+
+
+
+
+
+
+
+

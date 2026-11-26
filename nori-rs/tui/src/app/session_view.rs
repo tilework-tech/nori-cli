@@ -114,12 +114,6 @@ impl App {
         } else {
             // A blank session that never started has nothing to come back to.
             self.session_deck.remove(current);
-            // On a joined host that is the placeholder shown before a pick;
-            // keys typed while the pick lands belong to the picked session.
-            if self.joined.is_some() && self.chat_widget.composer_text().is_empty() {
-                self.chat_widget
-                    .restore_composer_draft(previous.take_composer_draft());
-            }
         }
         self.backtrack = crate::app_backtrack::BacktrackState::default();
         self.chat_widget.set_foreground(true);
@@ -184,19 +178,6 @@ impl App {
             generation,
             event,
         )
-    }
-
-    /// Show a session event in the widget of session `generation`, on screen
-    /// or parked. Events for a session this terminal no longer holds are
-    /// dropped.
-    pub(super) fn deliver_session_event(
-        &mut self,
-        generation: SessionGeneration,
-        event: nori_protocol::SessionEvent,
-    ) {
-        if let Some(event) = self.route_parked_session_event(generation, event) {
-            self.chat_widget.handle_session_event(generation, event);
-        }
     }
 
     /// Hand a session event to the parked widget it belongs to. Returns the
@@ -268,15 +249,11 @@ impl App {
         source: String,
         cwd: std::path::PathBuf,
     ) {
-        let consolidation = crate::transcript_reflow::agent_message_consolidation(
-            &self.transcript_cells,
+        let consolidation = crate::transcript_reflow::consolidate_agent_message_cells(
+            self.transcript_cells.edit(),
             source,
             &cwd,
         );
-        if let Some((range, replacement)) = &consolidation {
-            self.transcript_cells
-                .replace_tail(range.clone(), replacement.clone());
-        }
         if let Some((range, replacement)) = consolidation
             && let Some(Overlay::Transcript(transcript)) = &mut self.overlay
         {
@@ -306,13 +283,10 @@ impl App {
         } else {
             std::time::Duration::ZERO
         };
-        let Some(session_manager) = self.session_manager.clone() else {
-            return;
-        };
         let mut closing = tokio::task::JoinSet::new();
         for (_, parked) in self.session_deck.parked_sessions_mut() {
             if let Some(id) = parked.widget.managed_conversation_id() {
-                let manager = session_manager.clone();
+                let manager = self.session_manager.clone();
                 closing.spawn(async move { manager.close(&id, grace).await });
             }
         }
@@ -377,9 +351,6 @@ pub(crate) fn route_session_history_event(
         }
         AppEvent::AgentSpawnFailed { agent_name, error } => {
             parked.widget.on_agent_spawn_failed(&agent_name, &error);
-        }
-        AppEvent::ScriptExecutionComplete { name, result } => {
-            parked.widget.on_script_finished(name, result);
         }
         other => return Some(other),
     }

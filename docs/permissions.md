@@ -143,16 +143,7 @@ No setting turns bypass on by default.
 - **The agent's tools.** Nori does not confine the agent process or its
   tools on the user's machine. Any confinement comes from the agent itself,
   for example Codex's `read-only` mode behind `ask`.
-- **User shell commands** (`!` in the TUI). They run directly, as the
-  user the host runs as, on the host's machine, in the session's folder,
-  with no approval. Only the host's controller can run one
-  (`_nori/session/shell`), and only from the host's own machine: the client
-  must present the host's private `local-token`. Watchers get `-32016`;
-  remote controllers get `-32018` and nothing runs. A client that can read
-  `local-token` can already run commands as the host's user, so the token
-  grants nothing new. The host listens only on `127.0.0.1`, so the peer
-  address cannot tell a tunnel or relay from a local client; the token can.
-  See [tui](tui.md#composer-features).
+- **User shell commands** (`!` in the TUI). They run directly.
 - On a session machine, the machine is the isolation boundary
   (nori-sessions).
 

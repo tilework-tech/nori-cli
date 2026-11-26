@@ -86,17 +86,9 @@ impl HostControl {
             }
             // Starting a session leaves every existing one alone, so any
             // authenticated client may do it, as with stopping the host.
-            // Finding paths, reading prompt history and listing custom
-            // prompts only read the host's filesystem. Reading a session's goal
-            // or context report changes nothing.
+            // Finding paths only reads the host's filesystem.
             "_nori/session/list"
             | "_nori/session/find_paths"
-            | "_nori/host/history/entry"
-            | "_nori/host/history/search"
-            | "_nori/host/history/metadata"
-            | "_nori/host/prompts"
-            | "_nori/session/goal/get"
-            | "_nori/session/context"
             | "_nori/session/ensure"
             | "_nori/session/status"
             | "_nori/session/subscribe"

@@ -15,7 +15,7 @@ fn session_with_plan() -> TuiSession {
         .with_mock_response("Reply done")
         .with_agent_env("MOCK_AGENT_SEND_PLAN", "1");
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("spawn nori");
-    session.wait_until_ready().expect("composer");
+    session.wait_for_text("›", TIMEOUT).expect("composer");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_str("make a plan").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
@@ -42,7 +42,7 @@ fn assert_ctrl_o_toggles_transcript(session: &mut TuiSession) {
 fn ctrl_o_toggles_transcript() {
     let config = SessionConfig::new().with_agent("mock-model".to_owned());
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("spawn nori");
-    session.wait_until_ready().expect("composer");
+    session.wait_for_text("›", TIMEOUT).expect("composer");
     std::thread::sleep(TIMEOUT_INPUT);
 
     assert_ctrl_o_toggles_transcript(&mut session);

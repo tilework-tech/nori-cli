@@ -7,7 +7,6 @@
 
 mod connection;
 mod file_search;
-pub(crate) mod new_session;
 pub(crate) use file_search::FileSearch;
 pub(crate) use file_search::HostFileSearch;
 pub(crate) use file_search::file_matches;
@@ -34,100 +33,8 @@ use tokio::sync::mpsc;
 pub(crate) struct HostEndpoint {
     pub endpoint: String,
     pub token: String,
-    /// The host's local token, from local discovery only: it shows the host
-    /// this terminal runs on its machine, so `!` commands run.
-    pub local_token: Option<String>,
     /// Secure local discovery only; explicit remote credentials are never refreshed.
     pub refresh_local_token: Option<Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>>,
-}
-
-/// Connection parameters resolved by the CLI before entering the terminal.
-/// The token is deliberately excluded from Debug output.
-pub struct AttachOptions {
-    pub endpoint: String,
-    pub token: String,
-    pub session_id: Option<String>,
-    /// The host's local token, from local discovery only.
-    pub local_token: Option<String>,
-    /// Secure local discovery only; explicit remote credentials are never refreshed.
-    pub refresh_local_token: Option<Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>>,
-}
-
-/// This terminal's standing with the host it is connected to.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct HostConnection {
-    pub role: nori_protocol::ControlRole,
-    /// False while the connection is down and being re-established.
-    pub connected: bool,
-    /// Why the host can no longer serve this terminal, once it cannot.
-    pub stopped: Option<String>,
-    pub features: HostFeatures,
-}
-
-/// What the connected host can do, from its `initialize` reply.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct HostFeatures {
-    /// `_nori/session/new` takes a `cwd`.
-    pub session_folders: bool,
-    /// `_nori/session/find_paths` lists files and folders on the host's
-    /// disk, and the host names `~` and relative folders itself.
-    pub find_paths: bool,
-    /// The host runs on another machine, so this terminal's folders mean
-    /// nothing there.
-    pub remote: bool,
-    /// `_nori/session/queue/*` resumes a paused queue and takes prompts back.
-    pub queue: bool,
-    /// `_nori/host/history/*` records, recalls and searches the host's
-    /// prompt history.
-    pub history: bool,
-    /// `_nori/host/prompts` lists the host's custom prompts and
-    /// `_nori/session/prompts/run` runs their scripts there.
-    pub prompts: bool,
-    /// `_nori/session/goal/*` reads and changes a session's goal.
-    pub goal: bool,
-    /// `_nori/session/context` reports a session's context on the host.
-    pub context: bool,
-    /// `_nori/session/compact` compacts a session on the host.
-    pub compact: bool,
-    /// `_nori/session/shell` runs `!` commands on the host.
-    pub shell: bool,
-}
-
-impl HostConnection {
-    /// A host this terminal owns: it always controls and never reconnects.
-    pub fn owned() -> Self {
-        Self {
-            role: nori_protocol::ControlRole::Controller,
-            connected: true,
-            stopped: None,
-            features: HostFeatures {
-                session_folders: true,
-                find_paths: true,
-                remote: false,
-                queue: true,
-                history: true,
-                prompts: true,
-                goal: true,
-                context: true,
-                compact: true,
-                shell: true,
-            },
-        }
-    }
-}
-
-impl HostEndpoint {
-    /// Open an authenticated connection, presenting the local token if this
-    /// terminal has one.
-    pub(crate) async fn connect(
-        &self,
-    ) -> anyhow::Result<nori_harness::remote_agent::ManagedClient> {
-        use nori_harness::remote_agent::ManagedClient;
-        match &self.local_token {
-            Some(local) => ManagedClient::connect_local(&self.endpoint, &self.token, local).await,
-            None => ManagedClient::connect(&self.endpoint, &self.token).await,
-        }
-    }
 }
 
 /// The `_meta` key that scopes `session/list` and `session/new` to a
@@ -215,66 +122,6 @@ pub(crate) enum HostCall {
         kind: nori_protocol::PathKind,
         limit: i32,
     },
-    /// Let the session's paused queue send again. Only a controller may.
-    ResumeQueue {
-        session_id: String,
-    },
-    /// Take one queued prompt back before it is sent. Only a controller may.
-    TakeQueued {
-        session_id: String,
-        entry_id: String,
-        /// Asking again with this key returns the same answer.
-        request_key: String,
-    },
-    /// Keep a sent prompt in the host's history. Only a controller may.
-    AddHistory {
-        session_id: String,
-        text: String,
-    },
-    /// One prompt of the host's history, counted from the oldest.
-    HistoryEntry {
-        log_id: i64,
-        offset: i64,
-    },
-    /// The host's most recent distinct prompts, newest first.
-    SearchHistory {
-        max_results: i32,
-    },
-    /// How many prompts the host's history holds now.
-    HistoryMetadata,
-    /// The custom prompts kept in the host's home.
-    ListPrompts,
-    /// Run a script prompt on the host, in the session's folder. Only a
-    /// controller may.
-    RunPrompt {
-        session_id: String,
-        name: String,
-        args: Vec<String>,
-    },
-    /// The session's goal now. Watchers may read it.
-    GetGoal {
-        session_id: String,
-    },
-    /// Set, pause, resume or clear the session's goal. Only a controller may.
-    SetGoal {
-        session_id: String,
-        op: nori_protocol::GoalOp,
-    },
-    /// The session's context report. Watchers may read it.
-    SessionContext {
-        session_id: String,
-        skip_instructions: bool,
-    },
-    /// Compact the session. Only a controller may.
-    Compact {
-        session_id: String,
-    },
-    /// Run a `!` command on the host in the session's folder. Only a
-    /// controller may.
-    Shell {
-        session_id: String,
-        command: String,
-    },
 }
 
 impl HostCall {
@@ -283,7 +130,7 @@ impl HostCall {
             // Hosts send `approval_mode_changed` only to clients that declare it.
             Self::Initialize => (
                 "initialize",
-                json!({"capabilities":{"nori_sessions":{"approval_modes":true,"composer":true}}}),
+                json!({"capabilities":{"nori_sessions":{"approval_modes":true}}}),
             ),
             Self::List => ("_nori/session/list", json!({})),
             Self::Subscribe { session_id, cursor } => (
@@ -391,83 +238,6 @@ impl HostCall {
                     limit: Some(limit),
                 }),
             ),
-            Self::ResumeQueue { session_id } => (
-                "_nori/session/queue/resume",
-                json!(nori_protocol::QueueParams { session_id }),
-            ),
-            Self::TakeQueued {
-                session_id,
-                entry_id,
-                request_key,
-            } => (
-                "_nori/session/queue/take",
-                json!(nori_protocol::QueueTakeParams {
-                    session_id,
-                    entry_id,
-                    request_key,
-                }),
-            ),
-            Self::AddHistory { session_id, text } => (
-                "_nori/host/history/add",
-                json!(nori_protocol::HistoryAddParams { session_id, text }),
-            ),
-            Self::HistoryEntry { log_id, offset } => (
-                "_nori/host/history/entry",
-                json!(nori_protocol::HistoryEntryParams { log_id, offset }),
-            ),
-            Self::SearchHistory { max_results } => (
-                "_nori/host/history/search",
-                json!(nori_protocol::HistorySearchParams { max_results }),
-            ),
-            Self::HistoryMetadata => ("_nori/host/history/metadata", json!({})),
-            Self::ListPrompts => (
-                "_nori/host/prompts",
-                json!(nori_protocol::PromptsListParams::default()),
-            ),
-            Self::RunPrompt {
-                session_id,
-                name,
-                args,
-            } => (
-                "_nori/session/prompts/run",
-                json!(nori_protocol::PromptRunParams {
-                    session_id,
-                    name,
-                    args
-                }),
-            ),
-            Self::GetGoal { session_id } => (
-                "_nori/session/goal/get",
-                json!(nori_protocol::GoalGetParams { session_id }),
-            ),
-            Self::SetGoal { session_id, op } => (
-                "_nori/session/goal/set",
-                json!(nori_protocol::GoalSetParams { session_id, op }),
-            ),
-            Self::SessionContext {
-                session_id,
-                skip_instructions,
-            } => (
-                "_nori/session/context",
-                json!(nori_protocol::ContextParams {
-                    session_id,
-                    skip_instructions,
-                }),
-            ),
-            Self::Compact { session_id } => (
-                "_nori/session/compact",
-                json!(nori_protocol::CompactParams { session_id }),
-            ),
-            Self::Shell {
-                session_id,
-                command,
-            } => (
-                "_nori/session/shell",
-                json!(nori_protocol::ShellParams {
-                    session_id,
-                    command
-                }),
-            ),
         }
     }
 }
@@ -475,17 +245,8 @@ impl HostCall {
 /// A host error reply. The message is absent when the host sent none.
 #[derive(Debug)]
 pub(crate) struct HostError {
-    pub code: Option<i64>,
     pub message: Option<String>,
 }
-
-impl std::fmt::Display for HostError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.message.as_deref().unwrap_or("Host request failed."))
-    }
-}
-
-impl std::error::Error for HostError {}
 
 /// What the connection delivered, with replies matched to their tags.
 pub(crate) enum HostEvent<T> {
@@ -587,7 +348,6 @@ impl<T> HostSessionClient<T> {
                     };
                     let result = match message.get("error") {
                         Some(error) => Err(HostError {
-                            code: error["code"].as_i64(),
                             message: error["message"].as_str().map(str::to_owned),
                         }),
                         None => Ok(message["result"].take()),

@@ -947,6 +947,7 @@ impl Renderable for McpServerPickerView {
                 Picker::new(&state)
                     .theme(crate::style::component_theme())
                     .density(PickerDensity::Compact)
+                    .fullscreen_selection_rails(true)
                     .footer_hints([
                         KeyHint::new("↑↓/j/k", "move"),
                         KeyHint::new("enter", "toggle"),
@@ -962,6 +963,7 @@ impl Renderable for McpServerPickerView {
                 Picker::new(&state)
                     .theme(crate::style::component_theme())
                     .density(PickerDensity::Compact)
+                    .fullscreen_selection_rails(true)
                     .footer_hints([
                         KeyHint::new("↑↓/j/k", "move"),
                         KeyHint::new("enter", "choose"),

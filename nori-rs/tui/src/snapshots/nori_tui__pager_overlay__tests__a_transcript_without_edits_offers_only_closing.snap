@@ -1,7 +1,0 @@
----
-source: tui/src/pager_overlay.rs
-assertion_line: 693
-expression: footer.trim_end()
----
- ↑/↓ to scroll   pgup/pgdn to page   home/end to jump
- q/esc to quit

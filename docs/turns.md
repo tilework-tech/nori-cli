@@ -70,36 +70,8 @@ While the queue is paused:
 - After a resume, the queue sends one prompt per completed turn again. A
   later cancel or failure pauses what is left.
 - Reclaiming the last user prompt clears the pause.
-- **Discard** drops every queued user prompt, including ones that cannot be
-  edited, and clears the pause. None of them is sent.
 
 In the TUI, Enter on an empty composer resumes a paused queue.
-
-### The queue on the host
-
-The queue lives on the host, so a terminal that reconnects, or a second
-terminal on the same host, finds it as it was.
-
-- Every client sees the queue in `queue_changed` session events and on each
-  `_nori/session/list` row (`queue`: entries and pause reason). The row keeps
-  the latest snapshot after its event has left the replay window.
-- Only the controller changes the queue, with `_nori/session/queue/resume`,
-  `_nori/session/queue/take` and `_nori/session/queue/discard`. Watchers get
-  `-32016`. The host advertises them as `capabilities.nori_sessions.queue`.
-- `take` returns a prompt's text to exactly one caller. Each call carries a
-  `requestKey` the caller chose. The same key gets the same answer again, so
-  a terminal whose reply was lost to a disconnect asks again with it after
-  reconnecting. Any other key for that entry, or a take of a prompt that
-  already started, returns `{"text": null}`. The host remembers the latest
-  256 answers.
-- Only prompts a terminal's own user typed are editable: those from plain
-  `nori`'s own pipe, and `_nori/session/follow_up` calls from a client that
-  declared `capabilities.nori_sessions.composer` at `initialize`, as the
-  shared TUI does. Any controller terminal may take them back. A follow-up
-  from a client that does not declare it, such as the Sessions broker or an
-  older client, can be resumed or discarded, not taken into a composer.
-- The plain TUI and `nori attach` use these methods for any session on a
-  host. `nori attach` on a host without `queue` sends no queue calls.
 
 ### Reclaim
 
@@ -230,27 +202,6 @@ since it was set. Suspended time does not count.
 
 - Nori puts the goal context and the `nori-client` instructions in front of
   every prompt.
-
-### The goal on a host
-
-Each session on a host has its own goal, kept by the host. Every terminal on
-the host shows the goal of the session on screen and never another
-session's.
-
-- Any client reads a session's goal with `_nori/session/goal/get`
-  {sessionId}, follows changes in `goal_changed` session events, and finds
-  the latest goal on each `_nori/session/list` row (`goal`). The row keeps it
-  after its event has left the replay window.
-- Only the controller changes it, with `_nori/session/goal/set` {sessionId,
-  op}, where `op` is `{"set": {"objective": …}}`, `"pause"`, `"resume"` or
-  `"clear"`. Watchers get `-32016`. Both reply `{goal}`, which is null when
-  the session has no goal. An unknown session gets `-32002`.
-- The host advertises these as `capabilities.nori_sessions.goal`.
-- The plain TUI and `nori attach` use these methods for any session on a
-  host. A widget reads its session's goal when the session comes on screen,
-  so `/goal edit` and the replace prompt use that session's goal. `nori
-  attach` offers `/goal` only on a host that advertises `goal`; a watcher can
-  show the goal, but changing it is refused with the draft kept.
 - After a turn ends normally, if the goal is active, the session is idle, and
   the queue is empty, Nori queues a hidden goal continuation.
 - A user turn can always start one continuation. A continuation can follow a
@@ -271,24 +222,6 @@ session's.
 - Both kinds wait in the prompt queue as hidden entries.
 - A queue that holds only hidden entries does not pause.
 - A failed compaction reports "Compact failed" and is not retried.
-
-### Compacting a session on a host
-
-On a host, `/compact` asks the host to compact the session on screen with
-`_nori/session/compact` {sessionId}, in plain `nori` and in any terminal
-attached to that host.
-
-- Only the controller may compact. A watcher gets `-32016`.
-- The host answers once the compaction is admitted. During a turn it waits
-  in the prompt queue, like any compaction.
-- The finish is the session's own `context_compacted` event, or its
-  "Compact failed" error. Every terminal following the session sees it, and
-  a terminal that follows later finds it in the replay. It lands in that
-  session's transcript even when another session is on screen by then.
-- Summarize-and-swap keeps the conversation ID, so terminals stay on the
-  same session.
-- Hosts advertise this as `capabilities.nori_sessions.compact` (host
-  contract 1.8.0).
 
 ## Delegation
 
@@ -392,24 +325,3 @@ Rewind:
 - The `/fork` picker is titled "Fork conversation", its fork item reads
   "Branch from current point", and `/fork` is described as "rewind
   conversation to a previous message".
-
-### Context use on a host
-
-Each session on a host reports its own context use. Every terminal on the
-host shows the use of the session on screen.
-
-- Any client, watchers included, reads a session's report with
-  `_nori/session/context` {sessionId, skipInstructions?}. The reply is
-  `{timeline, instructions, usage}`:
-  - `timeline` holds the usage the agent reported at each prompt boundary.
-  - `instructions` lists the active instruction files in the session's
-    folder on the host, with token counts; `~` is the host's home.
-    `skipInstructions` leaves it empty.
-  - `usage` is the latest `{used, size}`, kept after its update has left
-    the replay window, as on the `_nori/session/list` row
-    (`context_used`, `context_size`).
-- An unknown session gets `-32002`. The host advertises the method as
-  `capabilities.nori_sessions.context`.
-- The plain TUI and `nori attach` use it for any session on a host. `/context`
-  prints the host's report. When a session comes on screen, the footer takes
-  its usage from the host unless the agent has already reported a newer one.

@@ -21,7 +21,6 @@ use ratatui::text::Text;
 mod table_segments;
 
 pub(crate) use table_segments::committable_prefix_len;
-pub(crate) use table_segments::scan_segments;
 
 struct MarkdownStyles {
     h1: Style,

@@ -10,10 +10,6 @@ pub(crate) struct StreamController {
     state: StreamState,
     finishing_after_drain: bool,
     header_emitted: bool,
-    /// A newline arrived since the last render. Lines only become visible
-    /// on a commit tick or at finalize, so rendering waits for those: a
-    /// burst of chunks between ticks renders once instead of once a chunk.
-    unrendered_lines: bool,
 }
 
 impl StreamController {
@@ -22,21 +18,24 @@ impl StreamController {
             state: StreamState::new(width),
             finishing_after_drain: false,
             header_emitted: false,
-            unrendered_lines: false,
         }
     }
 
-    /// Push a delta; true when it finished a line, so the commit animation
-    /// should run to show it.
+    /// Push a delta; if it contains a newline, commit completed lines and start animation.
     pub(crate) fn push(&mut self, delta: &str) -> bool {
         let state = &mut self.state;
         if !delta.is_empty() {
             state.has_seen_delta = true;
         }
         state.collector.push_delta(delta);
-        let finished_a_line = delta.contains('\n');
-        self.unrendered_lines |= finished_a_line;
-        finished_a_line
+        if delta.contains('\n') {
+            let newly_completed = state.collector.commit_complete_lines();
+            if !newly_completed.is_empty() {
+                state.enqueue(newly_completed);
+                return true;
+            }
+        }
+        false
     }
 
     /// Finalize the active stream. Drain and emit now.
@@ -60,7 +59,6 @@ impl StreamController {
         // Cleanup
         self.state.clear();
         self.finishing_after_drain = false;
-        self.unrendered_lines = false;
         let cell = self.emit(out_lines);
         let source = (!source.is_empty()).then_some(source);
         (cell, source)
@@ -68,10 +66,6 @@ impl StreamController {
 
     /// Step animation: commit at most one queued line and handle end-of-drain cleanup.
     pub(crate) fn on_commit_tick(&mut self) -> (Option<Box<dyn HistoryCell>>, bool) {
-        if std::mem::take(&mut self.unrendered_lines) {
-            let newly_completed = self.state.collector.commit_complete_lines();
-            self.state.enqueue(newly_completed);
-        }
         let step = self.state.step();
         (self.emit(step), self.state.is_idle())
     }
@@ -226,94 +220,6 @@ mod tests {
         assert_eq!(
             streamed, expected,
             "expected exact rendered lines for loose/tight section"
-        );
-    }
-
-    fn plain(cell: Option<Box<dyn HistoryCell>>) -> Vec<String> {
-        cell.map(|cell| lines_to_plain_strings(&cell.transcript_lines(u16::MAX)))
-            .unwrap_or_default()
-            .into_iter()
-            .map(|line| line.chars().skip(2).collect())
-            .collect()
-    }
-
-    #[test]
-    fn each_tick_shows_the_next_finished_line_and_finalize_shows_the_rest_once() {
-        let mut controller = StreamController::new(None);
-        controller.push("first synthetic line\nsecond synthetic line\n");
-        controller.push("third synthetic ");
-        assert_eq!(
-            plain(controller.on_commit_tick().0),
-            vec!["first synthetic line"]
-        );
-        controller.push("line\nfourth");
-        assert_eq!(
-            plain(controller.on_commit_tick().0),
-            vec!["second synthetic line"]
-        );
-        assert_eq!(
-            plain(controller.on_commit_tick().0),
-            vec!["third synthetic line"]
-        );
-        let (idle_cell, idle) = controller.on_commit_tick();
-        assert!(
-            idle_cell.is_none() && idle,
-            "the unfinished line waits for its newline"
-        );
-        assert_eq!(plain(controller.finalize().0), vec!["fourth"]);
-    }
-
-    #[test]
-    fn a_reply_finished_before_any_tick_shows_whole_at_finalize() {
-        let mut controller = StreamController::new(None);
-        for chunk in [
-            "```rust\n",
-            "fn synthetic() {}\n",
-            "```\n",
-            "closing words\n",
-        ] {
-            controller.push(chunk);
-        }
-        let shown = plain(controller.finalize().0);
-        let mut rendered = Vec::new();
-        crate::markdown::append_markdown(
-            "```rust\nfn synthetic() {}\n```\nclosing words\n",
-            None,
-            &mut rendered,
-        );
-        let expected: Vec<String> = lines_to_plain_strings(&rendered);
-        assert_eq!(
-            shown.iter().map(|line| line.trim_end()).collect::<Vec<_>>(),
-            expected
-                .iter()
-                .map(|line| line.trim_end())
-                .collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
-    fn a_tick_inside_a_code_fence_still_shows_every_line_once() {
-        let source = "```rust\nfn synthetic() {}\nlet value = 7;\n```\nclosing words\n";
-        let mut controller = StreamController::new(None);
-        let mut shown = Vec::new();
-        for chunk in [
-            "```rust\nfn synthetic() {}\n",
-            "let value",
-            " = 7;\n```\n",
-            "closing words\n",
-        ] {
-            controller.push(chunk);
-            shown.extend(plain(controller.on_commit_tick().0));
-        }
-        shown.extend(plain(controller.finalize().0));
-        let mut rendered = Vec::new();
-        crate::markdown::append_markdown(source, None, &mut rendered);
-        assert_eq!(
-            shown.iter().map(|line| line.trim_end()).collect::<Vec<_>>(),
-            lines_to_plain_strings(&rendered)
-                .iter()
-                .map(|line| line.trim_end())
-                .collect::<Vec<_>>()
         );
     }
 

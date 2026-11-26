@@ -1,0 +1,28 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+  〉nori CLI v0.0.0
+
+  System       /tmp/v801/s1-delayed/tidepool
+  Agent        Mock ACP
+
+⚠ Connection is taking longer than expected. Will abort in 30s if still
+  unresponsive.
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config
+to change)
+
+
+〉draft tide low tables
+
+  Enter send · Ctrl+J newline

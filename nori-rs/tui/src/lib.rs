@@ -6,6 +6,7 @@
 use additional_dirs::add_dir_warning_message;
 use app::App;
 pub use app::AppExitInfo;
+pub use app::RESUME_HINT_LEAD;
 pub use app::resume_command_for_conversation;
 use codex_login::AuthManager;
 #[cfg(target_os = "windows")]
@@ -32,7 +33,9 @@ mod app;
 mod app_backtrack;
 mod app_event;
 mod app_event_sender;
-pub use host_client::AttachOptions;
+mod attach;
+pub use attach::AttachOptions;
+pub use attach::run_attach;
 mod bottom_pane;
 mod chatwidget;
 mod cli;
@@ -53,7 +56,6 @@ mod exec_command;
 mod external_cancel;
 mod file_search;
 mod follow_up;
-mod frame_scheduler;
 mod frames;
 mod get_git_diff;
 mod git_marker;
@@ -617,42 +619,6 @@ fn resume_startup_error(tui: &mut Tui, message: String) -> color_eyre::Result<Ap
         conversation_has_activity: false,
         update_action: None,
     })
-}
-
-/// Join a running host in the shared terminal client. Leaving closes only
-/// this terminal's connection; the host's sessions keep running.
-pub async fn run_joined_app(
-    config: NoriConfig,
-    options: AttachOptions,
-) -> color_eyre::Result<AppExitInfo> {
-    let endpoint = host_client::HostEndpoint {
-        endpoint: options.endpoint,
-        token: options.token,
-        local_token: options.local_token,
-        refresh_local_token: options.refresh_local_token,
-    };
-    let initial = endpoint
-        .connect()
-        .await
-        .map_err(|error| color_eyre::eyre::eyre!(error))?;
-    let mut tui = Tui::new(tui::init()?);
-    let auth_manager = AuthManager::shared(
-        config.nori_home.clone(),
-        false,
-        codex_login::AuthCredentialsStoreMode::File,
-    );
-    let result = App::run_joined(
-        &mut tui,
-        auth_manager,
-        config,
-        endpoint,
-        initial,
-        options.session_id,
-        None,
-    )
-    .await;
-    restore(&tui);
-    result
 }
 
 #[expect(

@@ -13,4 +13,4 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 › [DEFAULT_PROMPT]
 
-  / commands · ! shell · @ files · ? help                                                             ⎇ master
+                                                                                                      ⎇ master

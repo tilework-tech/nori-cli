@@ -235,7 +235,7 @@ impl HistoryCell for ContextView {
                     .map(|tokens| format!("~{}", number(tokens)))
                     .unwrap_or_else(|| "Not readable".into());
                 let label_width = inventory_width.saturating_sub(value.len() + 2).max(1);
-                let label = crate::text_formatting::center_truncate_path(path, label_width);
+                let label = crate::text_formatting::truncate_text(path, label_width);
                 inventory.push(Line::from(vec![
                     Span::styled(format!("{label:<label_width$}  "), theme.text),
                     Span::styled(value, theme.muted),
@@ -523,31 +523,6 @@ mod tests {
                 incomplete_history: false,
             },
             ..specimen()
-        }
-    }
-
-    #[test]
-    fn a_long_instruction_path_keeps_its_file_name() {
-        let mut view = specimen();
-        view.instructions = vec![(
-            "~/workbench/harbor/charts/northern/estuary/roots/beta/CLAUDE.md".into(),
-            Some(10),
-        )];
-        for width in [60, 100] {
-            let text = view
-                .display_lines(width)
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join("\n");
-            let row = text
-                .lines()
-                .find(|line| line.contains("~10"))
-                .unwrap_or_else(|| panic!("an instruction row at {width}:\n{text}"));
-            assert!(
-                row.contains("beta/CLAUDE.md") && row.contains('…'),
-                "the row keeps the file name and its folder at {width}: {row}"
-            );
         }
     }
 

@@ -10,7 +10,6 @@
 use std::time::Duration;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TuiSession;
-use tui_pty_e2e::has_composer_row;
 
 /// Longer timeout for live API tests (network latency, model processing)
 const LIVE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -35,7 +34,7 @@ fn test_gemini_acp_live_response() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn with gemini-acp");
 
     session
-        .wait_for(has_composer_row, LIVE_TIMEOUT)
+        .wait_for_text("›", LIVE_TIMEOUT)
         .expect("TUI should start successfully");
 
     // Send a simple prompt
@@ -79,7 +78,7 @@ fn test_claude_acp_live_response() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn with claude-acp");
 
     session
-        .wait_for(has_composer_row, LIVE_TIMEOUT)
+        .wait_for_text("›", LIVE_TIMEOUT)
         .expect("TUI should start successfully");
 
     // Send a simple prompt

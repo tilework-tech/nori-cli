@@ -113,8 +113,6 @@ pub struct PickerItem<K> {
     pub current: bool,
     pub default: bool,
     pub read_only: bool,
-    /// The row is the session on screen, which is not a chosen value.
-    pub on_screen: bool,
     pub pinned: bool,
 }
 
@@ -138,7 +136,6 @@ impl<K> PickerItem<K> {
             current: false,
             default: false,
             read_only: false,
-            on_screen: false,
             pinned: false,
         }
     }
@@ -228,11 +225,6 @@ impl<K> PickerItem<K> {
 
     pub fn read_only(mut self, read_only: bool) -> Self {
         self.read_only = read_only;
-        self
-    }
-
-    pub fn on_screen(mut self, on_screen: bool) -> Self {
-        self.on_screen = on_screen;
         self
     }
 

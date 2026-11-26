@@ -27,7 +27,6 @@ mod chat_composer_history;
 mod command_popup;
 mod component_overlay_menu_view;
 mod component_picker_view;
-pub(crate) mod composer_hints;
 mod file_search_popup;
 mod footer;
 mod history_search_popup;
@@ -43,7 +42,7 @@ pub(crate) mod picker_keys;
 pub mod popup_consts;
 mod queued_user_messages;
 mod scroll_state;
-pub(crate) mod session_list_view;
+mod session_list_view;
 pub(crate) use session_list_view::SessionRow;
 #[cfg(test)]
 mod request_key_tests;
@@ -358,20 +357,6 @@ impl BottomPane {
     }
 
     /// Move editing state out before replacing the widget.
-    /// Take the open views (pickers, popups) so a replacement pane can show them.
-    pub(crate) fn take_views(&mut self) -> Vec<Box<dyn BottomPaneView>> {
-        std::mem::take(&mut self.view_stack)
-    }
-
-    /// Show views taken from the pane this one replaces, above any of its own.
-    pub(crate) fn restore_views(&mut self, views: Vec<Box<dyn BottomPaneView>>) {
-        if views.is_empty() {
-            return;
-        }
-        self.view_stack.extend(views);
-        self.request_redraw();
-    }
-
     pub(crate) fn take_composer_draft(&mut self) -> ComposerDraft {
         self.composer.take_draft()
     }
@@ -776,16 +761,6 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    /// What the session allows, for the hint row under the composer.
-    pub(crate) fn set_composer_hints(&self, hints: composer_hints::ComposerHints) {
-        self.composer.set_composer_hints(hints);
-    }
-
-    pub(crate) fn set_host_status(&mut self, status: Option<ratatui::text::Line<'static>>) {
-        self.composer.set_host_status(status);
-        self.request_redraw();
-    }
-
     /// Update the cloud session id displayed in the footer (None hides it).
     pub(crate) fn set_cloud_session(&mut self, cloud_session: Option<String>) {
         self.composer.set_cloud_session(cloud_session);
@@ -817,17 +792,6 @@ impl BottomPane {
     /// for the `/status` card.
     pub(crate) fn status_footer_values(&self) -> crate::nori::session_header::StatusFooterValues {
         self.composer.status_footer_values()
-    }
-
-    pub(crate) fn session_cost(
-        &self,
-    ) -> Option<&crate::presentation::session_runtime::SessionCost> {
-        self.composer.session_cost()
-    }
-
-    /// Whether the agent has reported usage for the session shown.
-    pub(crate) fn has_session_usage(&self) -> bool {
-        self.composer.has_session_usage()
     }
 
     pub(crate) fn context_usage_snapshot(
@@ -961,10 +925,6 @@ impl BottomPane {
 
     pub(crate) fn set_history_metadata(&mut self, log_id: u64, entry_count: usize) {
         self.composer.set_history_metadata(log_id, entry_count);
-    }
-
-    pub(crate) fn refresh_history_metadata(&mut self, log_id: u64, entry_count: usize) {
-        self.composer.refresh_history_metadata(log_id, entry_count);
     }
 
     pub(crate) fn record_local_history_submission(&mut self, text: &str) {
@@ -1303,15 +1263,6 @@ mod tests {
         assert!(model_render.contains("Other"), "{model_render}");
         assert_selected_row_has_symmetric_rails(&model_render, "Stable");
         assert_snapshot!("shared_model_picker", model_render);
-
-        assert!(model_render.contains("/ search"), "{model_render}");
-        pane.handle_key_event(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
-        for character in "prev".chars() {
-            pane.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
-        }
-        let filtered = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
-        assert!(filtered.contains("Preview"), "{filtered}");
-        assert!(!filtered.contains("Stable"), "{filtered}");
     }
 
     #[test]

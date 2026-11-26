@@ -1,6 +1,0 @@
----
-source: tui/src/app/joined_sessions_tests.rs
-assertion_line: 234
-expression: text
----
-• No session selected. Use /new to start one on this host. Alt+S picks one; Ctrl+D detaches

@@ -1,0 +1,4 @@
+[s1-delayed] PASS typed+edited draft before readiness
+[s1-delayed] PASS holding open-eyed, no wink/wordmark/config before ready
+[s1-delayed] wordmark count in history: 1; Agent rows: 1; face rows: 0
+〉draft tide low tables

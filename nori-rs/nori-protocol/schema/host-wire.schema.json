@@ -946,19 +946,6 @@
       ],
       "type": "object"
     },
-    "CompactParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/session/compact`.",
-      "properties": {
-        "sessionId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId"
-      ],
-      "type": "object"
-    },
     "CompleteElicitationNotification": {
       "description": "**UNSTABLE**\n\nThis capability is not part of the spec yet, and may be removed or changed at any point.\n\nNotification sent by the agent when a URL-based elicitation is complete.",
       "properties": {
@@ -1162,33 +1149,6 @@
       ],
       "type": "object"
     },
-    "ContextCheckpoint": {
-      "description": "The latest known usage when a prompt boundary was observed.",
-      "properties": {
-        "epoch": {
-          "format": "int64",
-          "type": "integer"
-        },
-        "observation": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ContextObservation"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "recordedAt": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "recordedAt",
-        "epoch"
-      ],
-      "type": "object"
-    },
     "ContextCompactedEvent": {
       "properties": {
         "summary": {
@@ -1198,203 +1158,6 @@
           ]
         }
       },
-      "type": "object"
-    },
-    "ContextInstruction": {
-      "description": "An instruction file the session's agent loads, with its path as the host\nshows it (`~` is the host's home) and its token count when known.",
-      "properties": {
-        "path": {
-          "type": "string"
-        },
-        "tokens": {
-          "format": "int64",
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "type": "object"
-    },
-    "ContextObservation": {
-      "description": "An original ACP usage payload with stable observation metadata.",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "observedAt": {
-          "type": "string"
-        },
-        "usage": {
-          "$ref": "#/$defs/UsageUpdate"
-        }
-      },
-      "required": [
-        "id",
-        "observedAt",
-        "usage"
-      ],
-      "type": "object"
-    },
-    "ContextParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/session/context`.",
-      "properties": {
-        "sessionId": {
-          "type": "string"
-        },
-        "skipInstructions": {
-          "description": "Leave `instructions` empty, for a caller that wants only the usage.",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "sessionId"
-      ],
-      "type": "object"
-    },
-    "ContextReport": {
-      "description": "Result of `_nori/session/context`.",
-      "properties": {
-        "instructions": {
-          "description": "The active instruction files in the session's folder on the host.",
-          "items": {
-            "$ref": "#/$defs/ContextInstruction"
-          },
-          "type": "array"
-        },
-        "timeline": {
-          "$ref": "#/$defs/ContextTimeline"
-        },
-        "usage": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ContextUsage"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "The latest usage, kept after its update leaves the replay window."
-        }
-      },
-      "required": [
-        "timeline",
-        "instructions"
-      ],
-      "type": "object"
-    },
-    "ContextSegment": {
-      "description": "Observed growth attributed to a turn, or an unattributed baseline.",
-      "properties": {
-        "tokens": {
-          "format": "int64",
-          "type": "integer"
-        },
-        "turn": {
-          "format": "int64",
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "tokens"
-      ],
-      "type": "object"
-    },
-    "ContextTimeline": {
-      "description": "Context history derived from raw ACP and Harness lifecycle events.",
-      "properties": {
-        "current": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ContextObservation"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "epoch": {
-          "format": "int64",
-          "type": "integer"
-        },
-        "incompleteHistory": {
-          "type": "boolean"
-        },
-        "segments": {
-          "items": {
-            "$ref": "#/$defs/ContextSegment"
-          },
-          "type": "array"
-        },
-        "turns": {
-          "items": {
-            "$ref": "#/$defs/ContextTurn"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "turns",
-        "segments",
-        "incompleteHistory",
-        "epoch"
-      ],
-      "type": "object"
-    },
-    "ContextTurn": {
-      "description": "One admitted prompt, with immutable boundary observations.",
-      "properties": {
-        "end": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ContextCheckpoint"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "number": {
-          "format": "int64",
-          "type": "integer"
-        },
-        "requestId": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "start": {
-          "$ref": "#/$defs/ContextCheckpoint"
-        }
-      },
-      "required": [
-        "number",
-        "requestId",
-        "start"
-      ],
-      "type": "object"
-    },
-    "ContextUsage": {
-      "description": "The latest usage the agent reported for the session.",
-      "properties": {
-        "size": {
-          "format": "int64",
-          "type": "integer"
-        },
-        "used": {
-          "format": "int64",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "used",
-        "size"
-      ],
       "type": "object"
     },
     "ControlChanged": {
@@ -2487,214 +2250,6 @@
       "x-method": "session/fork",
       "x-side": "agent"
     },
-    "GoalGetParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/session/goal/get`.",
-      "properties": {
-        "sessionId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId"
-      ],
-      "type": "object"
-    },
-    "GoalOp": {
-      "description": "One change to a session's goal.",
-      "oneOf": [
-        {
-          "enum": [
-            "pause",
-            "resume",
-            "clear"
-          ],
-          "type": "string"
-        },
-        {
-          "additionalProperties": false,
-          "description": "Replace the goal with an active one.",
-          "properties": {
-            "set": {
-              "properties": {
-                "objective": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "objective"
-              ],
-              "type": "object"
-            }
-          },
-          "required": [
-            "set"
-          ],
-          "type": "object"
-        }
-      ]
-    },
-    "GoalResult": {
-      "description": "Result of `_nori/session/goal/get` and `_nori/session/goal/set`: the\nsession's goal afterwards, null when it has none.",
-      "properties": {
-        "goal": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ThreadGoal"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "type": "object"
-    },
-    "GoalSetParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/session/goal/set`.",
-      "properties": {
-        "op": {
-          "$ref": "#/$defs/GoalOp"
-        },
-        "sessionId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId",
-        "op"
-      ],
-      "type": "object"
-    },
-    "HistoryAddParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/host/history/add`.",
-      "properties": {
-        "sessionId": {
-          "description": "The session the prompt was sent to.",
-          "type": "string"
-        },
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId",
-        "text"
-      ],
-      "type": "object"
-    },
-    "HistoryEntryParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/host/history/entry`.",
-      "properties": {
-        "logId": {
-          "description": "[`HistoryMetadata::log_id`] of the history the client counted in.",
-          "format": "int64",
-          "type": "integer"
-        },
-        "offset": {
-          "description": "Zero-based, oldest first.",
-          "format": "int64",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "logId",
-        "offset"
-      ],
-      "type": "object"
-    },
-    "HistoryEntryResult": {
-      "description": "Result of `_nori/host/history/entry`.",
-      "properties": {
-        "entry": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HistoryRecord"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Null when `offset` is past the end, or `logId` names a history the\nhost no longer keeps."
-        }
-      },
-      "type": "object"
-    },
-    "HistoryMetadata": {
-      "description": "Result of `_nori/host/history/metadata`: what a client counts in when it\nrecalls prompts with `_nori/host/history/entry`.",
-      "properties": {
-        "entryCount": {
-          "format": "int64",
-          "type": "integer"
-        },
-        "logId": {
-          "description": "Identifies the history file; it changes when the file is replaced.",
-          "format": "int64",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "logId",
-        "entryCount"
-      ],
-      "type": "object"
-    },
-    "HistoryRecord": {
-      "description": "One prompt in the host's history.",
-      "properties": {
-        "sessionId": {
-          "type": "string"
-        },
-        "text": {
-          "type": "string"
-        },
-        "ts": {
-          "description": "Seconds since the Unix epoch.",
-          "format": "int64",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "sessionId",
-        "ts",
-        "text"
-      ],
-      "type": "object"
-    },
-    "HistorySearchParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/host/history/search`.",
-      "properties": {
-        "maxResults": {
-          "description": "At most this many distinct prompts, newest first.",
-          "format": "int32",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "maxResults"
-      ],
-      "type": "object"
-    },
-    "HistorySearchResult": {
-      "description": "Result of `_nori/host/history/search`.",
-      "properties": {
-        "entries": {
-          "description": "Distinct prompts, newest first; the client filters them as the user\ntypes.",
-          "items": {
-            "$ref": "#/$defs/HistoryRecord"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "entries"
-      ],
-      "type": "object"
-    },
     "HookOutput": {
       "properties": {
         "level": {
@@ -2759,75 +2314,6 @@
         "startedBy"
       ],
       "type": "object"
-    },
-    "HostPrompt": {
-      "description": "One custom prompt from the host's `$NORI_HOME/commands`.",
-      "properties": {
-        "argumentHint": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "content": {
-          "description": "The prompt's body without its frontmatter; empty for a script.",
-          "type": "string"
-        },
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "kind": {
-          "$ref": "#/$defs/HostPromptKind"
-        },
-        "name": {
-          "description": "Invoked as `/prompts:<name>`.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "kind",
-        "content"
-      ],
-      "type": "object"
-    },
-    "HostPromptKind": {
-      "description": "How a custom prompt is used.",
-      "oneOf": [
-        {
-          "description": "`content` is sent as the prompt once the client fills in its\narguments.",
-          "properties": {
-            "type": {
-              "const": "markdown",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "type": "object"
-        },
-        {
-          "description": "Run on the host with `_nori/session/prompts/run`; its output is sent\nas the prompt.",
-          "properties": {
-            "interpreter": {
-              "type": "string"
-            },
-            "type": {
-              "const": "script",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "interpreter"
-          ],
-          "type": "object"
-        }
-      ]
     },
     "HostStopResult": {
       "description": "Result of `_nori/host/stop`.",
@@ -5649,45 +5135,6 @@
       "x-method": "session/prompt",
       "x-side": "agent"
     },
-    "PromptRunParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/session/prompts/run`.",
-      "properties": {
-        "args": {
-          "description": "Positional arguments passed to the script.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "name": {
-          "description": "A script prompt's name from `_nori/host/prompts`.",
-          "type": "string"
-        },
-        "sessionId": {
-          "description": "The session whose folder the script runs in.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId",
-        "name",
-        "args"
-      ],
-      "type": "object"
-    },
-    "PromptRunResult": {
-      "description": "Result of `_nori/session/prompts/run`: a script that exited zero.",
-      "properties": {
-        "stdout": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "stdout"
-      ],
-      "type": "object"
-    },
     "PromptSummary": {
       "properties": {
         "summary": {
@@ -5696,36 +5143,6 @@
       },
       "required": [
         "summary"
-      ],
-      "type": "object"
-    },
-    "PromptsListParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/host/prompts`.",
-      "properties": {
-        "sessionId": {
-          "description": "The session the list is for. The list is the host's either way.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "type": "object"
-    },
-    "PromptsListResult": {
-      "description": "Result of `_nori/host/prompts`.",
-      "properties": {
-        "prompts": {
-          "description": "Sorted by name.",
-          "items": {
-            "$ref": "#/$defs/HostPrompt"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "prompts"
       ],
       "type": "object"
     },
@@ -5823,20 +5240,6 @@
       },
       "type": "object"
     },
-    "QueueDiscardResult": {
-      "description": "Result of `_nori/session/queue/discard`.",
-      "properties": {
-        "discarded": {
-          "description": "How many queued prompts were dropped before being sent.",
-          "format": "int32",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "discarded"
-      ],
-      "type": "object"
-    },
     "QueueEntry": {
       "description": "One queued user prompt, in delivery order.",
       "properties": {
@@ -5856,19 +5259,6 @@
       "required": [
         "id",
         "text"
-      ],
-      "type": "object"
-    },
-    "QueueParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/session/queue/resume` and `_nori/session/queue/discard`.",
-      "properties": {
-        "sessionId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId"
       ],
       "type": "object"
     },
@@ -5918,42 +5308,6 @@
       "required": [
         "prompts"
       ],
-      "type": "object"
-    },
-    "QueueTakeParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/session/queue/take`.",
-      "properties": {
-        "entryId": {
-          "description": "A [`crate::QueueEntry`] ID from the session's latest queue snapshot.",
-          "type": "string"
-        },
-        "requestKey": {
-          "description": "Chosen by the caller for this take. Asking again with the same key\nreturns the same answer, so a reply lost to a disconnect can be\nfetched again; a different key gets null once the prompt is taken.",
-          "type": "string"
-        },
-        "sessionId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId",
-        "entryId",
-        "requestKey"
-      ],
-      "type": "object"
-    },
-    "QueueTakeResult": {
-      "description": "Result of `_nori/session/queue/take`.",
-      "properties": {
-        "text": {
-          "description": "The text the user queued, returned to exactly one caller. Null when\nthe prompt already started, was already taken, or cannot return to a\ncomposer without losing content.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
       "type": "object"
     },
     "Range": {
@@ -7721,23 +7075,6 @@
       "x-method": "session/set_mode",
       "x-side": "agent"
     },
-    "ShellParams": {
-      "additionalProperties": false,
-      "description": "Params of `_nori/session/shell`: a `!` command for the host to run in\nthat session's folder.",
-      "properties": {
-        "command": {
-          "type": "string"
-        },
-        "sessionId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId",
-        "command"
-      ],
-      "type": "object"
-    },
     "StartNesResponse": {
       "description": "Response to `nes/start`.",
       "properties": {
@@ -8964,72 +8301,6 @@
     },
     {
       "$ref": "#/$defs/FindPathsResult"
-    },
-    {
-      "$ref": "#/$defs/QueueParams"
-    },
-    {
-      "$ref": "#/$defs/QueueTakeParams"
-    },
-    {
-      "$ref": "#/$defs/QueueTakeResult"
-    },
-    {
-      "$ref": "#/$defs/QueueDiscardResult"
-    },
-    {
-      "$ref": "#/$defs/QueueSnapshot"
-    },
-    {
-      "$ref": "#/$defs/HistoryAddParams"
-    },
-    {
-      "$ref": "#/$defs/HistoryEntryParams"
-    },
-    {
-      "$ref": "#/$defs/HistoryEntryResult"
-    },
-    {
-      "$ref": "#/$defs/HistorySearchParams"
-    },
-    {
-      "$ref": "#/$defs/HistorySearchResult"
-    },
-    {
-      "$ref": "#/$defs/HistoryMetadata"
-    },
-    {
-      "$ref": "#/$defs/PromptsListParams"
-    },
-    {
-      "$ref": "#/$defs/PromptsListResult"
-    },
-    {
-      "$ref": "#/$defs/PromptRunParams"
-    },
-    {
-      "$ref": "#/$defs/PromptRunResult"
-    },
-    {
-      "$ref": "#/$defs/GoalGetParams"
-    },
-    {
-      "$ref": "#/$defs/GoalSetParams"
-    },
-    {
-      "$ref": "#/$defs/GoalResult"
-    },
-    {
-      "$ref": "#/$defs/ContextParams"
-    },
-    {
-      "$ref": "#/$defs/ContextReport"
-    },
-    {
-      "$ref": "#/$defs/CompactParams"
-    },
-    {
-      "$ref": "#/$defs/ShellParams"
     }
   ],
   "description": "Types exchanged with `nori host` on /sessions: the ACP v1 messages it serves, its `nori/agent` _meta key, its host.json discovery file, and the `_nori/*` extension. Generated from nori-protocol; do not edit.",

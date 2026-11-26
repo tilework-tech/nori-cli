@@ -55,7 +55,6 @@ async fn replacement_failure(
     let options = HostEndpoint {
         endpoint,
         token: "old".into(),
-        local_token: None,
         refresh_local_token: local.then(|| {
             Box::new(move || {
                 counter.fetch_add(1, Ordering::SeqCst);
@@ -140,51 +139,5 @@ async fn reconnect_stops_when_local_token_cannot_be_read() {
     assert!(
         reason.contains("Authentication failed") && reason.contains("nori attach"),
         "{reason}"
-    );
-}
-
-/// A host that offers `!` commands to every client it is asked about.
-struct ShellHost;
-impl ManagedAgent for ShellHost {
-    async fn request(&self, request: Value) -> ManagedReply {
-        ManagedReply {
-            delivery_guard: None,
-            response: json!({"jsonrpc":"2.0", "id":request["id"],
-                "result":{"capabilities":{"nori_sessions":{"shell":true}}}}),
-            subscription: None,
-        }
-    }
-}
-
-async fn offered_shell(local_token: Option<&str>) -> Value {
-    let host = RemoteAcpServer::bind_host_with_limit(
-        "127.0.0.1:0".parse().unwrap(),
-        Arc::new(ShellHost),
-        "bearer".into(),
-        Some("on-this-machine".into()),
-        4,
-    )
-    .await
-    .unwrap();
-    let endpoint = HostEndpoint {
-        endpoint: format!("ws://{}/sessions", host.local_addr()),
-        token: "bearer".into(),
-        local_token: local_token.map(str::to_owned),
-        refresh_local_token: None,
-    };
-    let mut client = endpoint.connect().await.unwrap();
-    let result = client.request("initialize", json!({})).await.unwrap();
-    host.shutdown().await;
-    result["capabilities"]["nori_sessions"]["shell"].clone()
-}
-
-#[tokio::test]
-async fn an_endpoint_presents_its_local_token_to_the_host() {
-    assert_eq!(
-        (
-            offered_shell(Some("on-this-machine")).await,
-            offered_shell(None).await,
-        ),
-        (json!(true), json!(false)),
     );
 }

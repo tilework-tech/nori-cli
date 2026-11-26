@@ -72,7 +72,7 @@ pub(crate) async fn drive(
                 _ = events.closed() => return,
                 _ = tokio::time::sleep(std::time::Duration::from_millis(750)) => {}
             }
-            let attempt = options.connect().await;
+            let attempt = ManagedClient::connect(&options.endpoint, &options.token).await;
             let attempt = match attempt {
                 Err(error) if ManagedClient::is_authentication_error(&error) => {
                     let refreshed = options
@@ -88,7 +88,7 @@ pub(crate) async fn drive(
                     };
                     options.token = token;
                     // One attempt with freshly read credentials, never an endless auth loop.
-                    match options.connect().await {
+                    match ManagedClient::connect(&options.endpoint, &options.token).await {
                         Ok(connected) => Ok(connected),
                         Err(_) => {
                             let _ = events.send(ConnectionEvent::Stopped(

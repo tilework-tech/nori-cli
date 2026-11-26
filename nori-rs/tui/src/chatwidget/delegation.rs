@@ -21,14 +21,7 @@ impl ChatWidget {
             self.add_error_message("Start a session before delegating a task.".into());
             return true;
         };
-        if self.session_manager.is_none() && self.host_connection.is_some() {
-            self.delegate_on_host(parent, agent, task);
-            return true;
-        }
-        let Some(manager) = self.session_manager.clone() else {
-            self.add_error_message(NEEDS_OWN_HOST_MESSAGE.to_string());
-            return true;
-        };
+        let manager = self.session_manager.clone();
         let tx = self.app_event_tx.clone();
         tokio::spawn(async move {
             if let Err(error) = manager.delegate(&parent, agent, task).await {
@@ -38,23 +31,6 @@ impl ChatWidget {
             }
         });
         true
-    }
-
-    /// A joined host starts the child itself; it appears in the host's list.
-    fn delegate_on_host(&self, parent: ConversationId, agent: String, task: String) {
-        let tx = self.app_event_tx.clone();
-        let reply = tx.host_receipt(crate::host_client::HostCall::Delegate {
-            session_id: parent.to_string(),
-            agent,
-            task,
-        });
-        tokio::spawn(async move {
-            if let Err(error) = reply.await {
-                tx.send(AppEvent::InsertHistoryCell(Box::new(
-                    history_cell::new_error_event(format!("Delegation failed: {error}")),
-                )));
-            }
-        });
     }
 
     pub(super) fn handle_delegation_changed(&mut self, delegation: Delegation) {

@@ -16,8 +16,7 @@ impl ChatWidget {
         let analytics = common.analytics.clone();
         let delegated_child = common
             .session_manager
-            .as_ref()
-            .and_then(|manager| manager.get(&session.conversation_id))
+            .get(&session.conversation_id)
             .is_some_and(|record| {
                 record.source == nori_harness::session_manager::SessionSource::Session
             });
@@ -82,24 +81,6 @@ impl ChatWidget {
         widget
     }
 
-    /// Show conversation `id` of a joined host. Its history and live events
-    /// arrive from the host's feed and its prompts go to the host; no agent
-    /// runs in this process. `common.config` names the session's folder and
-    /// agent.
-    pub(crate) fn from_host_feed(
-        mut common: ChatWidgetInit,
-        id: ConversationId,
-        title: Option<String>,
-    ) -> Self {
-        common.deferred_spawn = true;
-        common.prepared_agent = None;
-        let mut widget = Self::new_inner(common);
-        widget.managed_conversation_id = Some(id);
-        widget.cloud_session_title = title;
-        widget.suppress_welcome_card();
-        widget
-    }
-
     fn new_inner(common: ChatWidgetInit) -> Self {
         let ChatWidgetInit {
             config,
@@ -129,7 +110,7 @@ impl ChatWidget {
         let app_event_tx = app_event_tx.for_session(session_generation);
         let spawn_result = if let Some(agent) = prepared_agent {
             super::agent::launch_prepared_agent(
-                session_manager.as_ref(),
+                &session_manager,
                 agent,
                 nori_harness::runtime::SessionStart::New,
                 app_event_tx.clone(),
@@ -143,7 +124,7 @@ impl ChatWidget {
             }
         } else {
             spawn_agent(
-                session_manager.as_ref(),
+                &session_manager,
                 config.clone(),
                 app_event_tx.clone(),
                 session_generation,
@@ -192,7 +173,6 @@ impl ChatWidget {
             external_turn: None,
             unpaired_prompt_error_ids: HashSet::new(),
             completed_client_tool_calls: HashSet::new(),
-            user_shell_runs: Default::default(),
             client_event_normalizer: Default::default(),
             replay_source: None,
             replay_message: None,
@@ -218,8 +198,6 @@ impl ChatWidget {
             session_manager,
             managed_conversation_id: spawn_result.conversation_id,
             approval_mode: None,
-            host_connection: None,
-            host_session_status: None,
             available_approval_modes: None,
             session_close_in_flight: false,
             close_refusal: Default::default(),
@@ -242,9 +220,7 @@ impl ChatWidget {
             active_resume_picker_generation: None,
             first_prompt_text,
             current_goal: None,
-            live_goal_seen: false,
             session_agent_capabilities: crate::presentation::AgentCapabilitiesView::default(),
-            session_steering: false,
             cloud_mode,
             session_agent_info: None,
             follow_only_attachment: false,
@@ -323,7 +299,7 @@ impl ChatWidget {
         let app_event_tx = app_event_tx.for_session(session_generation);
         let spawn_result = if let Some(agent) = prepared_agent {
             super::agent::launch_prepared_agent(
-                session_manager.as_ref(),
+                &session_manager,
                 agent,
                 nori_harness::runtime::SessionStart::Resume(nori_harness::runtime::SessionResume {
                     acp_session_id: acp_session_id.clone(),
@@ -335,7 +311,7 @@ impl ChatWidget {
             )
         } else {
             spawn_acp_agent_resume(
-                session_manager.as_ref(),
+                &session_manager,
                 config.clone(),
                 acp_session_id.clone(),
                 transcript,
@@ -385,7 +361,6 @@ impl ChatWidget {
             external_turn: None,
             unpaired_prompt_error_ids: HashSet::new(),
             completed_client_tool_calls: HashSet::new(),
-            user_shell_runs: Default::default(),
             client_event_normalizer: Default::default(),
             replay_source: None,
             replay_message: None,
@@ -411,8 +386,6 @@ impl ChatWidget {
             session_manager,
             managed_conversation_id: spawn_result.conversation_id,
             approval_mode: None,
-            host_connection: None,
-            host_session_status: None,
             available_approval_modes: None,
             session_close_in_flight: false,
             close_refusal: Default::default(),
@@ -435,9 +408,7 @@ impl ChatWidget {
             active_resume_picker_generation: None,
             first_prompt_text,
             current_goal: None,
-            live_goal_seen: false,
             session_agent_capabilities: crate::presentation::AgentCapabilitiesView::default(),
-            session_steering: false,
             cloud_mode,
             session_agent_info: None,
             follow_only_attachment: false,

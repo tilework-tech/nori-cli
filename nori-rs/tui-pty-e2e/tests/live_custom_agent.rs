@@ -13,7 +13,6 @@
 use std::time::Duration;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TuiSession;
-use tui_pty_e2e::has_composer_row;
 
 /// Longer timeout for live agent tests (subprocess spawn + init)
 const LIVE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -69,7 +68,7 @@ fn test_elizacp_custom_agent_startup_and_response() {
 
     // Wait for the TUI to start and show the prompt
     session
-        .wait_for(has_composer_row, LIVE_TIMEOUT)
+        .wait_for_text("›", LIVE_TIMEOUT)
         .expect("TUI should start successfully with elizacp agent");
 
     // Send a simple message
@@ -119,7 +118,7 @@ fn test_elizacp_custom_agent_display_name() {
 
     // Wait for startup
     session
-        .wait_for(has_composer_row, LIVE_TIMEOUT)
+        .wait_for_text("›", LIVE_TIMEOUT)
         .expect("TUI should start successfully");
 
     let contents = session.screen_contents();

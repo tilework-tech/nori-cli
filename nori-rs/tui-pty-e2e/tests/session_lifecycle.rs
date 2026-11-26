@@ -8,7 +8,6 @@ use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
-use tui_pty_e2e::has_composer_row;
 
 const ANSWER: &str = "alpha agent answer";
 const STREAM: &str = "streaming work mock:stream-until-cancel";
@@ -22,7 +21,9 @@ fn config(extra_toml: &str) -> SessionConfig {
 
 fn spawn_with(config: SessionConfig) -> TuiSession {
     let mut session = TuiSession::spawn_with_config(40, 110, config).expect("spawn");
-    session.wait_until_ready().expect("TUI should start");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
     session
 }
@@ -47,7 +48,7 @@ fn start_new_session(session: &mut TuiSession, sessions_after: &str) {
     session.submit_input("/new").unwrap();
     session
         .wait_for(
-            |screen| screen.contains(sessions_after) && has_composer_row(screen),
+            |screen| screen.contains(sessions_after) && screen.contains("›"),
             TIMEOUT,
         )
         .expect("a new session should start");
@@ -123,15 +124,7 @@ fn ctrl_d_in_the_list_closes_a_session_and_frees_its_slot() {
             Duration::from_secs(8),
         )
         .expect("the closed session stays listed as closed");
-    session
-        .press(
-            Key::Escape,
-            |screen| !screen.contains("Sessions 2"),
-            "the session list closes",
-        )
-        .unwrap();
-    // The open list's own header reads "Sessions 2 · 1 ready", so the status
-    // line is only checked once the list has closed.
+    session.send_key(Key::Escape).unwrap();
     session
         .wait_for(
             |screen| screen.contains("1 ready") && !screen.contains("2 ready"),
@@ -258,13 +251,7 @@ fn a_loop_in_the_background_stays_in_its_own_row() {
         1,
         "iterations replace each other:\n{screen}"
     );
-    session
-        .press(
-            Key::Escape,
-            |screen| !screen.contains("Sessions 2"),
-            "the session list closes",
-        )
-        .unwrap();
+    session.send_key(Key::Escape).unwrap();
     session.send_key(Key::Alt('.')).unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     while !session.history_contents().contains("Loop iteration 3 of 3")
@@ -359,7 +346,9 @@ fn a_long_title_keeps_the_request_line_on_one_row() {
             .with_agent_env("MOCK_AGENT_PERMISSION_DELAY_MS", "1500"),
     )
     .expect("spawn");
-    session.wait_until_ready().expect("TUI should start");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
     ask(&mut session, "home", ANSWER);
     start_new_session(&mut session, "2 ready");
@@ -447,13 +436,10 @@ fn restarting_a_failed_parent_keeps_its_child_under_the_replacement() {
             .any(|line| line.contains("└─") && line.contains("child question")),
         "{screen}"
     );
+    session.send_key(Key::Escape).unwrap();
     session
-        .press(
-            Key::Escape,
-            |screen| !screen.contains("Sessions 2"),
-            "the session list closes before typing into the composer",
-        )
-        .unwrap();
+        .wait_for(|screen| !screen.contains("Sessions 2"), TIMEOUT)
+        .expect("the session list closes before typing into the composer");
     ask(&mut session, "restarted parent usable", ANSWER);
 }
 
@@ -483,36 +469,4 @@ fn a_same_process_head_fork_is_allowed_at_the_cap_but_a_transcript_fork_is_not()
         .wait_for_text("1 sessions are open", TIMEOUT)
         .expect("a transcript fork still needs another process slot");
     ask(&mut session, "still here after refused fork", ANSWER);
-}
-
-/// An open session list keeps its "Ns ago" labels current while nothing else
-/// changes, redrawing once a second rather than continuously.
-#[test]
-#[cfg(target_os = "linux")]
-fn an_idle_open_session_list_ticks_its_ages_without_redrawing_continuously() {
-    let mut session = spawn_with(config("[tui]\nmax_sessions = 2\n"));
-    ask(&mut session, "first question", ANSWER);
-    start_new_session(&mut session, "2 ready");
-    ask(&mut session, "second question", ANSWER);
-    open_list(&mut session, "Sessions 2");
-    session.settle(Duration::from_millis(300));
-
-    let before = session.raw_output().len();
-    session
-        .wait_for(
-            |screen| (3..=9).any(|age| screen.contains(&format!("{age}s ago"))),
-            Duration::from_secs(8),
-        )
-        .expect("the ages advance while the list stays open");
-    let start = std::time::Instant::now();
-    let written_before = session.raw_output().len();
-    session.settle(Duration::from_secs(2));
-    let written = session.raw_output().len() - written_before;
-
-    assert!(session.raw_output().len() > before);
-    assert!(
-        written < 16 * 1024,
-        "an idle session list wrote {written} bytes in {:?}",
-        start.elapsed()
-    );
 }

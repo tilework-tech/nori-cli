@@ -57,11 +57,5 @@ fn events_from_a_replaced_session_do_not_change_the_status() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
     let stale = chat.session_generation.wrapping_sub(1);
     chat.handle_session_event(stale, prompting(1));
-    assert_eq!(
-        chat.program_status.status(),
-        ProgramStatus {
-            state: ProgramState::Idle,
-            approval_title: None,
-        }
-    );
+    assert_eq!(chat.program_status.status(), ProgramStatus::IDLE);
 }

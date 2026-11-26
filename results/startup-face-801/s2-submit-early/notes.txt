@@ -1,0 +1,4 @@
+[s2-submit-early] prompt log before release: 0 lines
+[s2-submit-early] prompt log after release: 1 line(s): "count the tide pools"|
+[s2-submit-early] prompt shown in history: 1; responses: 1; wordmarks: 1
+[s2-submit-early] prompt log after 3 s more: 1

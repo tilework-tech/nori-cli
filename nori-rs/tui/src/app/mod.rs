@@ -35,10 +35,13 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
+use tokio::select;
 use tokio::sync::mpsc::unbounded_channel;
 
 #[cfg(not(debug_assertions))]
 use crate::history_cell::UpdateAvailableHistoryCell;
+
+pub const RESUME_HINT_LEAD: &str = "To continue this session, run:";
 
 #[derive(Debug, Clone)]
 pub struct AppExitInfo {
@@ -58,13 +61,9 @@ pub(crate) struct App {
     pub(crate) auth_manager: Arc<AuthManager>,
     /// Registry of every session this process runs. The active widget's
     /// session and a hidden `/agent` switch candidate are both entries.
-    session_manager: Option<nori_harness::session_manager::SessionManager>,
+    session_manager: nori_harness::session_manager::SessionManager,
     /// Where the host this terminal owns reads the terminal's current config.
-    /// A joined host has none.
-    foreground_config: Option<nori_host_runtime::ForegroundConfig>,
-    /// The sessions of a joined host this terminal shows. None for a host
-    /// this terminal owns.
-    joined: Option<joined_sessions::JoinedSessions>,
+    foreground_config: nori_host_runtime::ForegroundConfig,
     /// While `/new` waits for the host, the session to bring back if the
     /// host refuses.
     new_session_return: Option<crate::app_event::SessionGeneration>,
@@ -249,21 +248,9 @@ mod file_mentions;
 mod full_screen_frame;
 mod host_candidate;
 mod host_link;
-pub(crate) use host_link::ConnectionLost;
-#[cfg(test)]
-mod host_link_tests;
-mod host_updates;
-mod joined_feed;
-#[cfg(test)]
-mod joined_feed_tests;
-mod joined_pager;
-mod joined_sessions;
-#[cfg(test)]
-mod joined_sessions_tests;
 mod new_session_folder;
 mod program_status;
 mod resize_reflow;
-mod run_loop;
 mod screen_mode;
 mod session_deck;
 mod session_keys;
@@ -297,28 +284,23 @@ impl App {
     ) -> Result<AppExitInfo> {
         // Sessions belong to the host the CLI built for this run.
         let (session_manager, foreground_config, mut host) = host_link::HostLink::start(host);
-        let ran = match host.initialize() {
-            Ok(()) => {
-                Self::run_on_host(
-                    tui,
-                    auth_manager,
-                    config,
-                    initial_prompt,
-                    initial_images,
-                    resume_selection,
-                    vertical_footer,
-                    cloud_mode,
-                    cloud_onboard,
-                    analytics,
-                    session_manager,
-                    foreground_config,
-                    &mut host,
-                )
-                .await
-            }
-            Err(error) => Err(color_eyre::eyre::eyre!(error)),
-        };
-        let stopped = host.stop_or_leave().await;
+        let ran = Self::run_on_host(
+            tui,
+            auth_manager,
+            config,
+            initial_prompt,
+            initial_images,
+            resume_selection,
+            vertical_footer,
+            cloud_mode,
+            cloud_onboard,
+            analytics,
+            session_manager,
+            foreground_config,
+            &mut host,
+        )
+        .await;
+        let stopped = host.stop().await;
         let exit = ran?;
         stopped.map_err(|error| color_eyre::eyre::eyre!(error))?;
         Ok(exit)
@@ -340,7 +322,11 @@ impl App {
         foreground_config: nori_host_runtime::ForegroundConfig,
         host: &mut host_link::HostLink,
     ) -> Result<AppExitInfo> {
-        let (app_event_tx, app_event_rx) = unbounded_channel();
+        use tokio_stream::StreamExt;
+
+        host.initialize()
+            .map_err(|error| color_eyre::eyre::eyre!(error))?;
+        let (app_event_tx, mut app_event_rx) = unbounded_channel();
         let app_event_tx = AppEventSender::new(app_event_tx);
 
         let enhanced_keys_supported = tui.enhanced_keys_supported();
@@ -366,7 +352,7 @@ impl App {
                 fork_context: None,
                 prepared_agent: None,
                 analytics: analytics.clone(),
-                session_manager: Some(session_manager.clone()),
+                session_manager: session_manager.clone(),
                 clock: crate::answer_guard::Clock::system(),
             };
             match resume_selection {
@@ -389,23 +375,94 @@ impl App {
 
         chat_widget.maybe_prompt_windows_sandbox_enable();
 
+        let file_search = FileSearchManager::new(config.cwd.clone(), app_event_tx.clone());
         #[cfg(not(debug_assertions))]
         let upgrade_version = crate::updates::get_upgrade_version(&config);
+
+        let (system_info_tx, system_info_rx) = mpsc::channel();
+        let _system_info_worker =
+            Self::spawn_system_info_worker(system_info_rx, app_event_tx.clone());
+        let footer_segment_config = config.footer_segment_config.clone();
+        let footer_layout_config = config.footer_layout_config.clone();
         let skillset_per_session = !cloud_mode && config.skillset_per_session;
-        let mut app = Self::assemble(
-            tui.enhanced_keys_supported(),
+        let program_status = crate::program_status::ProgramStatusReporter::from_config(&config);
+
+        let mut app = Self {
             app_event_tx,
             chat_widget,
-            auth_manager,
+            auth_manager: auth_manager.clone(),
+            session_manager,
+            foreground_config,
+            new_session_return: None,
             config,
-            Some(session_manager),
-            Some(foreground_config),
             vertical_footer,
             cloud_mode,
             analytics,
-        );
-        app.pending_session_activation = pending_session_activation;
-        app.deferred_spawn_pending = skillset_per_session;
+            file_search,
+            file_mentions: Default::default(),
+            enhanced_keys_supported,
+            transcript_cells: Default::default(),
+            session_deck: Default::default(),
+            adopted_delegations: Default::default(),
+            retiring_transcript: None,
+            session_reprint_pending: false,
+            unseen_finishes: Default::default(),
+            session_previews: Default::default(),
+            agent_display_names: Default::default(),
+            overlay: None,
+            screen: Default::default(),
+            has_emitted_history_lines: false,
+            transcript_reflow: Default::default(),
+            commit_anim_running: Arc::new(AtomicBool::new(false)),
+            backtrack: BacktrackState::default(),
+            pending_update_action: None,
+            skip_world_writable_scan_once: false,
+            prepared_agent: None,
+            prepared_agent_initial_context: None,
+            primary_agent_preparation: None,
+            pending_session_activation,
+            candidate_agent: None,
+            welcome_card_written: false,
+            loop_count_override: None,
+            hotkey_config: nori_config::HotkeyConfig::default(),
+            vim_mode: nori_config::VimEnterBehavior::Off,
+            footer_segment_config,
+            program_status,
+            footer_layout_config,
+            plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
+            system_info_tx,
+            worktree_warning_shown: false,
+            deferred_spawn_pending: skillset_per_session,
+            mcp_oauth_cancel_tx: None,
+        };
+
+        app.session_deck.add(app.chat_widget.session_generation());
+
+        // Propagate NoriConfig settings to the textarea.
+        app.hotkey_config = app.config.hotkeys.clone();
+        app.vim_mode = app.config.vim_mode;
+
+        // Propagate initial hotkey config to the textarea so editing bindings
+        // (ctrl+a, ctrl+e, etc.) respect user overrides from config.toml.
+        app.chat_widget.set_hotkey_config(app.hotkey_config.clone());
+        app.chat_widget.update_approval_mode_label();
+        // Propagate initial vim mode setting.
+        app.chat_widget.set_vim_mode(app.vim_mode);
+        // Propagate initial pinned plan drawer setting.
+        let plan_mode = if app.config.pinned_plan_drawer {
+            crate::chatwidget::PlanDrawerMode::Expanded
+        } else {
+            crate::chatwidget::PlanDrawerMode::Off
+        };
+        app.plan_drawer_mode = plan_mode;
+        app.chat_widget.set_plan_drawer_mode(plan_mode);
+
+        // Fill the footer with the git facts we can read in a few milliseconds.
+        // The background refresh below replaces this with the full snapshot,
+        // but it spawns Node for the skillset version and walks the filesystem
+        // for transcripts, so without a seed every footer segment stays blank
+        // for as long as that takes.
+        app.chat_widget.seed_system_info();
 
         // Write the welcome card before the agent session exists, so a session
         // that has not been prompted yet still says where it is running and
@@ -485,109 +542,57 @@ impl App {
             .await?;
         }
 
-        app.drive(tui, app_event_rx, host).await
-    }
+        let tui_events = tui.event_stream();
+        tokio::pin!(tui_events);
 
-    /// The App before it runs, with the settings every entry shares.
-    #[allow(clippy::too_many_arguments)]
-    fn assemble(
-        enhanced_keys_supported: bool,
-        app_event_tx: AppEventSender,
-        chat_widget: ChatWidget,
-        auth_manager: Arc<AuthManager>,
-        config: NoriConfig,
-        session_manager: Option<nori_harness::session_manager::SessionManager>,
-        foreground_config: Option<nori_host_runtime::ForegroundConfig>,
-        vertical_footer: bool,
-        cloud_mode: bool,
-        analytics: Option<nori_installed::AnalyticsReporter>,
-    ) -> Self {
-        let file_search = FileSearchManager::new(config.cwd.clone(), app_event_tx.clone());
-        let (system_info_tx, system_info_rx) = mpsc::channel();
-        let _system_info_worker =
-            Self::spawn_system_info_worker(system_info_rx, app_event_tx.clone());
-        let footer_segment_config = config.footer_segment_config.clone();
-        let footer_layout_config = config.footer_layout_config.clone();
-        let program_status = crate::program_status::ProgramStatusReporter::from_config(&config);
+        app.request_system_info_refresh(
+            app.config.cwd.clone(),
+            Some(app.config.active_agent.clone()),
+            app.chat_widget.first_prompt_text(),
+        );
 
-        let mut app = Self {
-            app_event_tx,
-            chat_widget,
-            auth_manager,
-            session_manager,
-            foreground_config,
-            joined: None,
-            new_session_return: None,
-            config,
-            vertical_footer,
-            cloud_mode,
-            analytics,
-            file_search,
-            file_mentions: Default::default(),
-            enhanced_keys_supported,
-            transcript_cells: Default::default(),
-            session_deck: Default::default(),
-            adopted_delegations: Default::default(),
-            retiring_transcript: None,
-            session_reprint_pending: false,
-            unseen_finishes: Default::default(),
-            session_previews: Default::default(),
-            agent_display_names: Default::default(),
-            overlay: None,
-            screen: Default::default(),
-            has_emitted_history_lines: false,
-            transcript_reflow: Default::default(),
-            commit_anim_running: Arc::new(AtomicBool::new(false)),
-            backtrack: BacktrackState::default(),
-            pending_update_action: None,
-            skip_world_writable_scan_once: false,
-            prepared_agent: None,
-            prepared_agent_initial_context: None,
-            primary_agent_preparation: None,
-            pending_session_activation: None,
-            candidate_agent: None,
-            welcome_card_written: false,
-            loop_count_override: None,
-            hotkey_config: nori_config::HotkeyConfig::default(),
-            vim_mode: nori_config::VimEnterBehavior::Off,
-            footer_segment_config,
-            program_status,
-            footer_layout_config,
-            plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
-            system_info_tx,
-            worktree_warning_shown: false,
-            deferred_spawn_pending: false,
-            mcp_oauth_cancel_tx: None,
-        };
+        tui.frame_requester().schedule_frame();
 
-        app.session_deck.add(app.chat_widget.session_generation());
+        let ran = async {
+            while select! {
+                Some(event) = app_event_rx.recv() => {
+                    app.handle_event(tui, event, host).await?
+                }
+                Some(event) = tui_events.next() => {
+                    app.handle_tui_event(tui, event).await?
+                }
+                Some(event) = host.next() => {
+                    host.handle(event).map_err(|error| color_eyre::eyre::eyre!(error))?;
+                    true
+                }
+            } {
+                app.report_program_status();
+            }
+            Ok::<(), color_eyre::eyre::Report>(())
+        }
+        .await;
 
-        // Propagate NoriConfig settings to the textarea.
-        app.hotkey_config = app.config.hotkeys.clone();
-        app.vim_mode = app.config.vim_mode;
+        app.clear_program_status();
+        if let Err(error) = app.return_inline_for_exit(tui) {
+            tracing::warn!(%error, "could not return to the inline view on exit");
+        }
+        app.cancel_primary_agent_preparation();
+        if let Some(agent) = app.prepared_agent.take() {
+            agent.shutdown().await;
+        }
+        app.prepared_agent_initial_context = None;
+        app.discard_candidate();
+        ran?;
 
-        // Propagate initial hotkey config to the textarea so editing bindings
-        // (ctrl+a, ctrl+e, etc.) respect user overrides from config.toml.
-        app.chat_widget.set_hotkey_config(app.hotkey_config.clone());
-        app.chat_widget.update_approval_mode_label();
-        // Propagate initial vim mode setting.
-        app.chat_widget.set_vim_mode(app.vim_mode);
-        // Propagate initial pinned plan drawer setting.
-        let plan_mode = if app.config.pinned_plan_drawer {
-            crate::chatwidget::PlanDrawerMode::Expanded
-        } else {
-            crate::chatwidget::PlanDrawerMode::Off
-        };
-        app.plan_drawer_mode = plan_mode;
-        app.chat_widget.set_plan_drawer_mode(plan_mode);
+        // Don't clear terminal to allow exit message to remain visible
+        // tui.terminal.clear()?;
 
-        // Fill the footer with the git facts we can read in a few milliseconds.
-        // The background refresh below replaces this with the full snapshot,
-        // but it spawns Node for the skillset version and walks the filesystem
-        // for transcripts, so without a seed every footer segment stays blank
-        // for as long as that takes.
-        app.chat_widget.seed_system_info();
-        app
+        Ok(AppExitInfo {
+            token_usage: app.token_usage(),
+            conversation_id: app.chat_widget.conversation_id(),
+            conversation_has_activity: app.chat_widget.session_stats().has_activity(),
+            update_action: app.pending_update_action,
+        })
     }
 
     pub(super) fn chat_widget_init(

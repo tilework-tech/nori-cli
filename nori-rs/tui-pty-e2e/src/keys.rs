@@ -1,5 +1,4 @@
 /// Key input types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
     Enter,
     Escape,
@@ -23,7 +22,6 @@ pub enum Key {
     FocusIn,
     /// The terminal window lost focus.
     FocusOut,
-    PageUp,
 }
 
 impl Key {
@@ -49,7 +47,6 @@ impl Key {
             Key::BackTab => b"\x1b[Z".to_vec(),
             Key::FocusIn => b"\x1b[I".to_vec(),
             Key::FocusOut => b"\x1b[O".to_vec(),
-            Key::PageUp => b"\x1b[5~".to_vec(),
         }
     }
 }

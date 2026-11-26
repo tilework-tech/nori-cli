@@ -176,7 +176,13 @@ fn main() -> Result<()> {
             );
             match page {
                 Page::Picker => {
-                    frame.render_widget(Picker::new(&state).theme(theme).density(density), content);
+                    frame.render_widget(
+                        Picker::new(&state)
+                            .theme(theme)
+                            .density(density)
+                            .fullscreen_selection_rails(true),
+                        content,
+                    );
                     render_storybook_footer(content, frame.buffer_mut(), density, &notice, theme);
                 }
                 Page::Markdown => render_markdown(content, frame.buffer_mut(), theme),

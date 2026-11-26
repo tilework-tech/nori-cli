@@ -95,12 +95,11 @@ nori [OPTIONS] [PROMPT]
 ```
 
 Opens the TUI on a private host that lives as long as the process. On exit
-it leaves the exit card in scrollback: the session ID, title, and agent;
-message, tool, skill, and subagent counts; and the context, token totals, and
-cost the agent reported. When the session had activity, the last line of
-output is the command to resume it, on its own so a triple-click selects it:
+it prints the token usage when it is not zero, and the command to resume the
+session when the session had activity:
 
 ```text
+To continue this session, run:
 nori resume <conversation-id>
 ```
 

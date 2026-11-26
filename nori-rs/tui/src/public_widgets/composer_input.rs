@@ -29,6 +29,8 @@ pub struct ComposerInput {
     inner: ChatComposer,
     _tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
     rx: tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    /// The newest `@` query the composer asked results for, not yet taken.
+    file_search: Option<String>,
 }
 
 impl ComposerInput {
@@ -50,12 +52,29 @@ impl ComposerInput {
         let sender = AppEventSender::new(tx.clone());
         // `enhanced_keys_supported=true` enables Shift+Enter newline hint/behavior.
         let inner = ChatComposer::new(true, sender, true, placeholder.to_string(), false);
-        Self { inner, _tx: tx, rx }
+        Self {
+            inner,
+            _tx: tx,
+            rx,
+            file_search: None,
+        }
     }
 
     /// Returns true if the input is empty.
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
+    }
+
+    /// Take the whole edit (text, pastes, attachments, cursor), leaving the
+    /// input empty.
+    pub(crate) fn take_draft(&mut self) -> crate::bottom_pane::ComposerDraft {
+        self.inner.take_draft()
+    }
+
+    /// Put back an edit taken with [`Self::take_draft`].
+    pub(crate) fn restore_draft(&mut self, draft: crate::bottom_pane::ComposerDraft) {
+        self.inner.restore_draft(draft);
+        self.drain_app_events();
     }
 
     /// The input text.
@@ -82,6 +101,33 @@ impl ComposerInput {
         };
         self.drain_app_events();
         action
+    }
+
+    pub(crate) fn attachment_input(&mut self, key: KeyEvent, has_active_turn: bool) -> InputResult {
+        let result = self
+            .inner
+            .handle_key_event_with_queue(key, has_active_turn)
+            .0;
+        self.drain_app_events();
+        result
+    }
+
+    /// Grey exactly these builtins in the `/` menu, each with its reason.
+    pub(crate) fn set_disabled_builtin_commands(
+        &mut self,
+        disabled: impl IntoIterator<Item = (crate::slash_command::SlashCommand, String)>,
+    ) {
+        self.inner.set_disabled_builtin_commands(
+            disabled
+                .into_iter()
+                .map(|(command, reason)| (command, ratatui::text::Line::from(reason)))
+                .collect(),
+        );
+    }
+
+    /// Whether a completion menu (`/`, `@`, …) is open and should get Esc.
+    pub(crate) fn popup_open(&self) -> bool {
+        self.inner.popup_active()
     }
 
     pub fn handle_paste(&mut self, pasted: String) -> bool {
@@ -139,8 +185,28 @@ impl ComposerInput {
         crate::bottom_pane::ChatComposer::recommended_paste_flush_delay()
     }
 
+    /// The newest `@` query typed since the last call, whose matches go to
+    /// [`Self::on_file_search_result`].
+    pub(crate) fn take_file_search(&mut self) -> Option<String> {
+        self.drain_app_events();
+        self.file_search.take()
+    }
+
+    /// Show `matches` for `query` if its `@` token is still being edited.
+    pub(crate) fn on_file_search_result(
+        &mut self,
+        query: String,
+        matches: Vec<codex_file_search::FileMatch>,
+    ) {
+        self.inner.on_file_search_result(query, matches);
+    }
+
     fn drain_app_events(&mut self) {
-        while self.rx.try_recv().is_ok() {}
+        while let Ok(event) = self.rx.try_recv() {
+            if let AppEvent::StartFileSearch(query) = event {
+                self.file_search = Some(query);
+            }
+        }
     }
 }
 

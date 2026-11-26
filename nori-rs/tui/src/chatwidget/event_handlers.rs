@@ -45,17 +45,6 @@ impl ChatWidget {
     }
 
     fn handle_acp_event(&mut self, event: nori_protocol::AcpEvent) {
-        // Every prompt's reported usage counts toward the session totals,
-        // including prompts this widget did not send (queued, goal, steering).
-        if let nori_protocol::AcpEvent::Response {
-            response: Ok(nori_protocol::acp::v1::AgentResponse::PromptResponse(response)),
-            ..
-        } = &event
-            && self.replay_source.is_none()
-            && let Some(usage) = &response.usage
-        {
-            self.session_stats.record_prompt_usage(usage);
-        }
         match event {
             nori_protocol::AcpEvent::Notification(
                 nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
@@ -96,8 +85,6 @@ impl ChatWidget {
                 response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(response)),
                 ..
             } => {
-                self.session_steering = serde_json::to_value(&response)
-                    .is_ok_and(|value| nori_harness::follow_up::supports_guarded_steering(&value));
                 self.follow_only_attachment = response
                     .meta
                     .as_ref()
@@ -288,13 +275,6 @@ impl ChatWidget {
                     self.bottom_pane.hide_status_indicator();
                 }
                 match ended.reason {
-                    // A joined host's session ending leaves this terminal
-                    // on the host, like a closed one.
-                    nori_protocol::SessionEndReason::Shutdown if self.host_connection.is_some() => {
-                        self.app_event_tx.send(AppEvent::SessionClosed {
-                            generation: self.session_generation,
-                        });
-                    }
                     nori_protocol::SessionEndReason::Shutdown => {
                         if !self.closed_by_user && !self.delegated_child {
                             self.app_event_tx.send(AppEvent::ExitRequest);
@@ -322,13 +302,9 @@ impl ChatWidget {
                 self.on_context_compacted(compacted.summary);
             }
             nori_protocol::NoriEvent::GoalChanged(Some(goal)) => {
-                self.live_goal_seen = true;
                 self.handle_thread_goal_updated(goal);
             }
-            nori_protocol::NoriEvent::GoalChanged(None) => {
-                self.live_goal_seen = true;
-                self.handle_thread_goal_cleared();
-            }
+            nori_protocol::NoriEvent::GoalChanged(None) => self.handle_thread_goal_cleared(),
             nori_protocol::NoriEvent::CapabilitiesChanged(capabilities) => {
                 self.handle_session_capabilities_changed(
                     crate::presentation::SessionCapabilitiesView {
@@ -392,17 +368,7 @@ impl ChatWidget {
                 self.flush_thought_block();
                 self.replay_source = None;
             }
-            nori_protocol::NoriEvent::Undo(_) => {}
-            nori_protocol::NoriEvent::UserShell(event) => {
-                if let Some(snapshot) = self.user_shell_runs.apply(event) {
-                    let event = crate::presentation::ClientEvent::ToolSnapshot(snapshot);
-                    if self.replay_source.is_some() {
-                        self.handle_replay_client_event(event);
-                    } else {
-                        self.handle_client_event(event);
-                    }
-                }
-            }
+            nori_protocol::NoriEvent::Undo(_) | nori_protocol::NoriEvent::UserShell(_) => {}
             // A request another client answered stops waiting here too.
             nori_protocol::NoriEvent::RequestResolved(resolved) => {
                 if self.bottom_pane.dismiss_request(&resolved.request_id) {
@@ -426,7 +392,7 @@ impl ChatWidget {
             if self.delegated_child {
                 self.harness_handle = self
                     .conversation_id
-                    .and_then(|id| self.session_manager.as_ref()?.handle(&id));
+                    .and_then(|id| self.session_manager.handle(&id));
             }
         }
         self.forked_from =
@@ -450,12 +416,10 @@ impl ChatWidget {
             && self.harness_handle.is_none()
             && self
                 .managed_conversation_id
-                .and_then(|id| self.session_manager.as_ref()?.get(&id))
+                .and_then(|id| self.session_manager.get(&id))
                 .is_some_and(|record| record.status.is_closed());
         if !historical_child {
             self.submit_harness_action(crate::app_event::HarnessAction::LoadCustomPrompts);
-            self.load_host_goal_quietly();
-            self.request_host_context(false);
         }
         self.bottom_pane.hide_status_indicator();
         self.update_approval_mode_label();
@@ -463,7 +427,6 @@ impl ChatWidget {
             u64::try_from(event.history_log_id).unwrap_or_default(),
             usize::try_from(event.history_entry_count).unwrap_or_default(),
         );
-        self.refresh_host_history();
         self.conversation_id = event
             .transcript_id
             .as_deref()
@@ -891,9 +854,6 @@ impl ChatWidget {
         if self.exiting {
             return;
         }
-        if self.joined_ctrl_c() {
-            return;
-        }
         if self.bottom_pane.on_ctrl_c() == CancellationEvent::Handled {
             return;
         }
@@ -1129,7 +1089,6 @@ impl ChatWidget {
         if completed.failure == Some(crate::presentation::TurnFailure::Fatal) {
             self.cancel_loop();
         }
-        self.refresh_host_history();
         // A failure already surfaces its own error cell; only a clean user
         // cancellation shows the generic "interrupted" notice.
         let interrupted = completed.stop_reason == nori_protocol::acp::v1::StopReason::Cancelled

@@ -1,0 +1,19 @@
+---
+source: tui/src/nori/exit_message.rs
+expression: rendered
+---
+╭────────────────────────────────────────────────╮
+│ Goodbye! Thanks for using Nori.                │
+│                                                │
+│ Session: sess_abc123def456                     │
+│                                                │
+│ Messages      User: 5  Assistant: 8  Total: 13 │
+│ Tool Calls    Bash: 12  Edit: 7  Read: 25      │
+│                                                │
+│ Skills Used                                    │
+│   commit                                       │
+│   review-pr                                    │
+│                                                │
+│ Subagents Used                                 │
+│   nori-codebase-locator                        │
+╰────────────────────────────────────────────────╯

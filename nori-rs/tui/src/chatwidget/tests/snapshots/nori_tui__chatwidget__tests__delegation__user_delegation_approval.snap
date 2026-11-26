@@ -1,6 +1,5 @@
 ---
 source: tui/src/chatwidget/tests/delegation.rs
-assertion_line: 163
 expression: rendered
 ---
   Would you like to start a session with mock-model-alt for your task?
@@ -9,7 +8,7 @@ expression: rendered
   runs on   mock-model-alt · a different agent from this session
   task      Review the parser
 
-  ▏› 1. Yes, start it                                                                            ▕
-     2. No, decline
+› 1. Yes, start it
+  2. No, decline
 
   Press enter to confirm or esc to decline

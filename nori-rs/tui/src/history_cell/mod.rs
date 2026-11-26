@@ -309,6 +309,16 @@ impl HistoryCell for PrefixedWrappedHistoryCell {
     }
 }
 
+pub(crate) fn card_inner_width(width: u16, max_inner_width: usize) -> Option<usize> {
+    if width < 4 {
+        return None;
+    }
+    Some(std::cmp::min(
+        width.saturating_sub(4) as usize,
+        max_inner_width,
+    ))
+}
+
 /// Render `lines` inside a border sized to the widest span in the content.
 pub(crate) fn with_border(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
     with_border_internal(lines, None)
@@ -492,12 +502,6 @@ pub(crate) fn new_info_event(message: String, hint: Option<String>) -> PlainHist
         line.push(hint.dark_gray());
     }
     let lines: Vec<Line<'static>> = vec![line.into()];
-    PlainHistoryCell { lines }
-}
-
-/// A brief gray note, for something the user tried that is not available here.
-pub(crate) fn new_hint_event(message: String) -> PlainHistoryCell {
-    let lines: Vec<Line<'static>> = vec![vec!["• ".dark_gray(), message.dark_gray()].into()];
     PlainHistoryCell { lines }
 }
 

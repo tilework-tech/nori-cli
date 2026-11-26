@@ -1608,9 +1608,6 @@ pub enum FooterSegment {
     /// Cloud session identity: "☁ nori-fast-kazunoko-aac8". Only rendered when
     /// attached to a cloud-mode session; self-hides otherwise.
     CloudSession,
-    /// Keys that work in the composer right now: "/ commands · ? help" on an
-    /// empty prompt, "Enter send · Shift+Enter newline" once text is typed.
-    ComposerHints,
 }
 
 impl FooterSegment {
@@ -1635,7 +1632,6 @@ impl FooterSegment {
             Self::TokenUsage => "Token Usage",
             Self::ModeIndicator => "Mode Indicator",
             Self::CloudSession => "Cloud Session",
-            Self::ComposerHints => "Composer Hints",
         }
     }
 
@@ -1660,7 +1656,6 @@ impl FooterSegment {
             Self::TokenUsage => "token_usage",
             Self::ModeIndicator => "mode_indicator",
             Self::CloudSession => "cloud_session",
-            Self::ComposerHints => "composer_hints",
         }
     }
 
@@ -1685,7 +1680,6 @@ impl FooterSegment {
             Self::TokenUsage,
             Self::ModeIndicator,
             Self::CloudSession,
-            Self::ComposerHints,
         ]
     }
 
@@ -1749,8 +1743,6 @@ pub struct FooterSegmentConfigToml {
     pub mode_indicator: Option<bool>,
     /// Enable/disable cloud session identity segment.
     pub cloud_session: Option<bool>,
-    /// Enable/disable the composer key hints.
-    pub composer_hints: Option<bool>,
 }
 
 /// Resolved footer segment configuration with defaults applied.
@@ -1792,8 +1784,6 @@ pub struct FooterSegmentConfig {
     pub mode_indicator: bool,
     /// Enable/disable cloud session identity segment.
     pub cloud_session: bool,
-    /// Enable/disable the composer key hints.
-    pub composer_hints: bool,
 }
 
 impl Default for FooterSegmentConfig {
@@ -1824,7 +1814,6 @@ impl Default for FooterSegmentConfig {
             token_usage: false,
             mode_indicator: true,
             cloud_session: true,
-            composer_hints: true,
         }
     }
 }
@@ -1862,7 +1851,6 @@ impl FooterSegmentConfig {
             token_usage: toml.token_usage.unwrap_or(defaults.token_usage),
             mode_indicator: toml.mode_indicator.unwrap_or(defaults.mode_indicator),
             cloud_session: toml.cloud_session.unwrap_or(defaults.cloud_session),
-            composer_hints: toml.composer_hints.unwrap_or(defaults.composer_hints),
         }
     }
 
@@ -1887,7 +1875,6 @@ impl FooterSegmentConfig {
             FooterSegment::TokenUsage => self.token_usage,
             FooterSegment::ModeIndicator => self.mode_indicator,
             FooterSegment::CloudSession => self.cloud_session,
-            FooterSegment::ComposerHints => self.composer_hints,
         }
     }
 
@@ -1912,7 +1899,6 @@ impl FooterSegmentConfig {
             FooterSegment::TokenUsage => self.token_usage = enabled,
             FooterSegment::ModeIndicator => self.mode_indicator = enabled,
             FooterSegment::CloudSession => self.cloud_session = enabled,
-            FooterSegment::ComposerHints => self.composer_hints = enabled,
         }
     }
 
@@ -2078,16 +2064,14 @@ pub struct FooterLayoutConfig {
 impl Default for FooterLayoutConfig {
     fn default() -> Self {
         Self {
-            // The composer's key hints lead the row, directly under the
-            // prompt. Otherwise only self-hiding state lands on the left by
-            // default: `CloudSession` renders when attached to a cloud session and
+            // Only self-hiding state lands on the left by default:
+            // `CloudSession` renders when attached to a cloud session and
             // `VimMode` when vim mode is on, so an ordinary local shell leaves
             // this group empty. The remaining entries are all disabled in
             // `FooterSegmentConfig::default`; they stay listed so that turning
             // one on through `[tui.footer_segments]` alone still has somewhere
             // to render, without the user also writing a `[tui.footer_layout]`.
             footer_left: vec![
-                FooterSegment::ComposerHints.into(),
                 FooterSegment::CloudSession.into(),
                 FooterSegment::PromptSummary.into(),
                 FooterSegment::SessionTitle.into(),

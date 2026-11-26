@@ -10,6 +10,7 @@ use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
+use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -23,10 +24,12 @@ fn test_acp_mode_startup_with_mock_agent() {
 
     // Wait for the main prompt to appear (indicated by the chevron character)
     session
-        .wait_until_ready()
+        .wait_for_text("›", TIMEOUT)
         .expect("ACP mode TUI should start successfully with mock agent");
 
-    let contents = session.settled_screen();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    let contents = session.screen_contents();
 
     // Verify we're in the TUI and not stuck at an error screen
     assert!(
@@ -55,7 +58,9 @@ fn test_acp_mode_prompt_response_flow() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session.wait_until_ready().expect("ACP mode should start");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -91,7 +96,9 @@ fn test_acp_approval_request_displayed_in_tui() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session.wait_until_ready().expect("ACP mode should start");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -146,7 +153,9 @@ fn test_acp_approval_full_flow() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session.wait_until_ready().expect("ACP mode should start");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -177,7 +186,7 @@ fn test_acp_approval_full_flow() {
 
     // Verify TUI is back in input state (prompt visible)
     session
-        .wait_for_composer()
+        .wait_for_text("›", Duration::from_secs(5))
         .expect("TUI should return to input state");
 
     // Verify TUI is still functional - can type a new message
@@ -213,7 +222,9 @@ fn test_acp_write_text_file() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session.wait_until_ready().expect("ACP mode should start");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -273,10 +284,13 @@ fn test_acp_mode_startup_snapshot() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
-    session.wait_until_ready().expect("ACP mode should start");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("ACP mode should start");
 
+    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     insta::assert_snapshot!(
         "acp_mode_startup",
-        normalize_for_input_snapshot(session.settled_screen())
+        normalize_for_input_snapshot(session.screen_contents())
     );
 }

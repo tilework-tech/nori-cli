@@ -5,10 +5,8 @@
 //! j/k (or Down/Up) move between editable messages; Up stops at the oldest,
 //! and Down from the newest returns to the composer. Enter or e takes the
 //! selected one back into the composer, and Delete or x discards it. Both go
-//! through a reclaim by stable ID, so a message that already started
-//! is reported instead of being sent twice. A session on the host is resumed
-//! and reclaimed through the host (`queue_host`), so every terminal attached
-//! to that host acts on the same queue; other widgets use their harness. Esc leaves the list; any other
+//! through a harness reclaim by stable ID, so a message that already started
+//! is reported instead of being sent twice. Esc leaves the list; any other
 //! key leaves it and reaches the composer.
 //!
 //! Enter on an empty composer resumes a paused queue. A non-empty composer
@@ -60,10 +58,6 @@ impl ChatWidget {
         let Some(event_id) = self.bottom_pane.start_selected_queued_message_reclaim() else {
             return false;
         };
-        if let Some(session) = self.host_queue_session() {
-            self.take_queued_on_host(session, event_id, action);
-            return true;
-        }
         self.app_event_tx.send(AppEvent::HarnessAction(
             HarnessAction::ReclaimQueuedPrompt { event_id, action },
         ));
@@ -82,12 +76,8 @@ impl ChatWidget {
         if self.follow_only_attachment || !self.bottom_pane.queued_messages_paused() {
             return false;
         }
-        match self.host_queue_session() {
-            Some(session) => self.resume_queue_on_host(session),
-            None => self
-                .app_event_tx
-                .send(AppEvent::HarnessAction(HarnessAction::ResumeQueue)),
-        }
+        self.app_event_tx
+            .send(AppEvent::HarnessAction(HarnessAction::ResumeQueue));
         true
     }
 }

@@ -15,8 +15,6 @@ async fn started_session(
 ) -> (ManagedSession, SessionEvent) {
     let mut session = chat
         .session_manager
-        .as_ref()
-        .expect("test widgets have a session manager")
         .start(StartSession {
             agent: SessionAgent::Prepare(nori_harness::runtime::AgentPrepareSpec {
                 config: Arc::new(nori_config::NoriConfig {
@@ -75,8 +73,6 @@ async fn completed_child_replay(keep_handle: bool) {
     close_session(&mut session).await;
     assert!(
         chat.session_manager
-            .as_ref()
-            .expect("test widgets have a session manager")
             .handle(&session.conversation_id)
             .is_none()
     );

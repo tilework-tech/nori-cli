@@ -28,14 +28,13 @@ owned by [`docs/turns.md`](../../docs/turns.md); transcript files by
 | `normalized/` (private) | session phase | Private reduction of ACP updates |
 | `session_event_fanout.rs` | | One unbounded primary consumer plus bounded subscribers |
 | `session_manager/` | `SessionManager`, `SessionRecord`, `StartSession`, `ManagedSession`, `SessionSource` | Registry, capacity, envelopes, replay, recovery, delegation |
-| `managed_remote.rs`, `managed_remote/`, `remote_agent.rs` | `ManagedRemoteHost` | Implements `nori_acp_host::remote::ManagedAgent` over the manager, including `_nori/session/queue/*` (`managed_remote/queue.rs`), `_nori/session/goal/*` (`managed_remote/goal.rs`), `_nori/session/context` (`managed_remote/context.rs`), `_nori/session/compact` (`managed_remote/compact.rs`) and `_nori/session/shell` (`managed_remote/shell.rs`); re-exports the transport types |
+| `managed_remote.rs`, `remote_agent.rs` | `ManagedRemoteHost` | Implements `nori_acp_host::remote::ManagedAgent` over the manager; re-exports the transport types |
 | `managed_launch.rs`, `managed_launch/` | `ManagedLaunches`, `LaunchRefusal`, `session_folder` | Launch admission for a managed host |
 | `managed_acp.rs`, `managed_acp/` | | Relay for one admitted binding and generation; side sessions |
 | `follow_up.rs`, `follow_up_rpc.rs` | `FollowUpReceipt`, `FollowUpStatus`, `supports_guarded_steering` | Follow-up delivery and steering gate |
 | `permission_mode.rs` | | The three permission modes and their `approval_policy` |
 | `transcript/`, `transcript_discovery.rs` | `TranscriptRecorder`, `TranscriptLoader`, `SCHEMA_VERSION` (3) | Nori transcripts; provider transcript lookup for token counts |
-| `context_timeline/` | | Context usage readings at prompt boundaries; the timeline types are the wire types in `nori-protocol` |
-| `instruction_files/` | | The instruction files an agent loads from a folder, with token counts; read on the host for `_nori/session/context` and by the TUI for local sessions |
+| `context_timeline/` | | Context usage readings at prompt boundaries |
 | `hooks.rs`, `undo.rs`, `auto_worktree.rs`, `message_history.rs`, `custom_prompts.rs` | | Session hooks, git ghost snapshots, worktrees, `history.jsonl`, prompt files |
 
 ```text
@@ -92,10 +91,6 @@ The session runtime must not depend on `nori-host-runtime`, `nori-tui`,
   dropped clients that only paused briefly.
 - Remote and local mutations go through the same typed handle methods, so
   hooks, transcripts, goals, and permission policy always apply.
-- `managed_remote/shell.rs` runs every `_nori/session/shell` it receives. The
-  transport (`nori-rs/acp-host/docs.md`) refuses it first for watchers and
-  for clients not on the host's machine, so only a local controller's call
-  arrives here.
 - Goal completion is proven only by `update_goal` on the `nori-client` MCP
   server (`backend/nori_client_mcp.rs`), never by a similarly named agent tool.
 - Steering is gated by an adapter capability (`_meta.steering.supported`) plus

@@ -140,9 +140,9 @@ fn make_chatwidget_manual_for_mode(
         prepared_agent: None,
         cloud_mode,
         analytics: None,
-        session_manager: Some(nori_harness::session_manager::SessionManager::new(
+        session_manager: nori_harness::session_manager::SessionManager::new(
             nori_harness::session_manager::SessionManagerConfig::default(),
-        )),
+        ),
         clock,
     });
     // Every widget tags its history with its session; these tests read the
@@ -157,28 +157,16 @@ mod agent_status;
 mod api_key;
 mod approvals;
 mod close_refusal;
-mod compact_host;
-mod composer_hints;
 mod context;
-mod context_host;
 mod delegation;
-mod exit_card;
 mod explore_details;
-mod goal_host;
-mod history_host;
-mod host_feed;
-mod host_keys;
-mod host_role;
 mod new_session_folder;
 mod part10;
 mod part8;
 mod program_status;
-mod prompts_host;
-mod queue_host;
 mod queue_list;
 mod queue_recall;
 mod session_title_envelope;
-mod shell_host;
 mod skillsets_v2;
 mod terminal_title;
 mod thought_history;

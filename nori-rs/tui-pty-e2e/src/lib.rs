@@ -1,21 +1,3 @@
-//! PTY end-to-end harness: runs the real `nori` binaries in a pseudo-terminal
-//! against `mock-acp-agent` and reads the screen through a vt100 emulator.
-//!
-//! Each test step is one action that waits for its own observable effect:
-//!
-//! - [`TuiSession::wait_until_ready`] before the first prompt or command; a
-//!   bare `›` is not readiness (see the `readiness` module).
-//!   [`TuiSession::wait_for_composer`] only for tests that type while the
-//!   agent is still starting.
-//! - [`TuiSession::type_input`] / [`TuiSession::submit_input`] for composer
-//!   text.
-//! - [`TuiSession::press`] for a key that more input follows. Never write
-//!   Escape and then more input without waiting for the Escape's effect:
-//!   crossterm reads the pair as an Alt chord when it arrives in one read.
-//! - [`TuiSession::settled_screen`] for the screen a snapshot or assertion
-//!   reads. A `std::thread::sleep` reads nothing from the PTY, so the screen
-//!   after it is stale (see the `settling` module).
-
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use owo_colors::Style;
@@ -115,9 +97,6 @@ fn set_nonblocking(fd: std::os::unix::io::RawFd) -> Result<()> {
 pub use keys::Key;
 mod input;
 mod keys;
-mod readiness;
-mod settling;
-pub use readiness::has_composer_row;
 mod terminal_queries;
 
 /// PTY session for driving the codex TUI
@@ -139,7 +118,6 @@ pub struct TuiSession {
 pub use emulator::Emulator;
 pub use emulator::SCROLLBACK_ROWS;
 mod emulator;
-mod synchronized_update;
 
 impl Drop for TuiSession {
     fn drop(&mut self) {
@@ -529,7 +507,6 @@ trust_level = "trusted"
         // The PTY reader is in non-blocking mode and will return immediately if no data is available
         // We rely on the polling loop in wait_for() to handle timing
         let read_result = self.reader.read(&mut buf);
-        self.emulator.release_stale_frame();
         let read_duration = read_start.elapsed();
 
         if debug {
@@ -756,23 +733,10 @@ trust_level = "trusted"
         self.writer.flush()
     }
 
-    /// Send a key event.
-    ///
-    /// Prefer [`TuiSession::press`] when more input follows: it waits for the
-    /// key's effect, so the next write cannot reach the TUI in the same read.
-    ///
-    /// Escape is followed by [`ESCAPE_GAP`] before this returns. crossterm
-    /// reads ESC followed by more bytes in one read as an Alt chord or an
-    /// escape sequence, so `Esc` then `/new` written back to back can arrive
-    /// as Alt+`/` and lose the Escape. The gap is a backstop only: a busy TUI
-    /// may not read within it, so tests still wait for the Escape's effect.
+    /// Send a key event
     pub fn send_key(&mut self, key: Key) -> std::io::Result<()> {
         self.writer.write_all(&key.to_escape_sequence())?;
-        self.writer.flush()?;
-        if matches!(key, Key::Escape) {
-            self.settle(ESCAPE_GAP);
-        }
-        Ok(())
+        self.writer.flush()
     }
 
     /// Get the path to the ACP log file (if temp directory exists)
@@ -1034,9 +998,7 @@ fn binary_path(name: &str) -> String {
 
 pub const TIMEOUT: Duration = Duration::from_secs(10);
 pub const TIMEOUT_INPUT: Duration = Duration::from_millis(100);
-/// Pause after writing Escape so it is read apart from the next write; see
-/// [`TuiSession::send_key`].
-pub const ESCAPE_GAP: Duration = Duration::from_millis(100);
+pub const TIMEOUT_PRESNAPSHOT: Duration = Duration::from_millis(1000);
 
 /// Replace a dynamic value after a marker, preserving box alignment
 fn replace_after_marker(line: &str, marker: &str, replacement: &str) -> Option<String> {
@@ -1261,20 +1223,6 @@ pub fn normalize_for_snapshot(contents: String) -> String {
                 line = result;
             }
 
-            // Exit card row: "  Session      019bb411-..." -> "  Session      [SESSION_ID]"
-            if line.trim_start().starts_with("Session ")
-                && line.split_whitespace().nth(1).is_some_and(|value| {
-                    value.len() == 36
-                        && value.char_indices().all(|(index, ch)| match index {
-                            8 | 13 | 18 | 23 => ch == '-',
-                            _ => ch.is_ascii_hexdigit(),
-                        })
-                })
-                && let Some(result) = replace_after_marker(&line, "Session ", "[SESSION_ID]")
-            {
-                line = result;
-            }
-
             // Resume hint: "nori resume 019bb411-..." -> "nori resume [SESSION_ID]"
             if let Some(result) = replace_after_marker(&line, "nori resume", "[SESSION_ID]") {
                 line = result;
@@ -1333,10 +1281,7 @@ pub fn normalize_for_snapshot(contents: String) -> String {
     let lines: Vec<String> = normalized
         .lines()
         .map(|line| {
-            if line.trim() == "›" {
-                // An empty prompt whose tips moved to the hint row below it.
-                "› [DEFAULT_PROMPT]".to_string()
-            } else if line.trim_start().starts_with("› ")
+            if line.trim_start().starts_with("› ")
                 && (line.trim_start().starts_with("› ? for shortcuts")
                     || line.trim_start().starts_with("› / for slash command menu")
                     || line.trim_start().starts_with("› $ for skill listing")
@@ -1640,14 +1585,6 @@ mod tests {
             let input = format!("› {placeholder}\n");
             assert_eq!(normalize_for_input_snapshot(input), "› [DEFAULT_PROMPT]\n");
         }
-    }
-
-    #[test]
-    fn test_normalize_empty_prompt_shown_with_hints() {
-        assert_eq!(
-            normalize_for_input_snapshot("›\n  / commands · ? help\n".to_string()),
-            "› [DEFAULT_PROMPT]\n  / commands · ? help\n"
-        );
     }
 
     #[test]

@@ -6,7 +6,6 @@ use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
-use tui_pty_e2e::has_composer_row;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
 const ALPHA_ANSWER: &str = "alpha agent answer";
@@ -22,7 +21,9 @@ fn config() -> SessionConfig {
 
 fn spawn() -> TuiSession {
     let mut session = TuiSession::spawn_with_config(40, 110, config()).expect("spawn");
-    session.wait_until_ready().expect("TUI should start");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
     session
 }
@@ -72,7 +73,7 @@ fn start_new_session(session: &mut TuiSession) {
     session.submit_input("/new").unwrap();
     session
         .wait_for(
-            |screen| screen.contains("Mock Default Model") && has_composer_row(screen),
+            |screen| screen.contains("Mock Default Model") && screen.contains("›"),
             TIMEOUT,
         )
         .expect("a new session should start");
@@ -111,7 +112,7 @@ fn left_on_an_empty_prompt_lists_sessions_with_status_and_reply() {
         "alpha question",
         "waiting on you",
         "gamma question",
-        "(on screen)",
+        "(current)",
     ] {
         assert!(screen.contains(expected), "{expected:?} missing:\n{screen}");
     }
@@ -165,20 +166,17 @@ fn tab_shows_only_sessions_waiting_on_you_and_typing_filters() {
         )
         .expect("after /, typing filters by title");
 
+    session.send_key(Key::Escape).unwrap();
     session
-        .press(
-            Key::Escape,
-            |screen| screen.contains("○ alpha question"),
-            "Esc clears the filter",
-        )
-        .unwrap();
+        .wait_for_text("○ alpha question", Duration::from_secs(3))
+        .expect("Esc clears the filter");
+    session.send_key(Key::Escape).unwrap();
     session
-        .press(
-            Key::Escape,
+        .wait_for(
             |screen| !screen.contains("Sessions 3"),
-            "a second Esc closes the list",
+            Duration::from_secs(3),
         )
-        .unwrap();
+        .expect("a second Esc closes the list");
 }
 
 #[test]
@@ -342,7 +340,7 @@ fn a_fork_is_listed_under_its_parent_and_its_request_marks_the_parent() {
     let screen = session.screen_contents();
     let parent_row = screen
         .lines()
-        .find(|line| line.contains("parent question (on screen)"))
+        .find(|line| line.contains("parent question (current)"))
         .unwrap_or_else(|| panic!("parent row missing:\n{screen}"));
     assert!(
         parent_row.contains("waiting on you"),

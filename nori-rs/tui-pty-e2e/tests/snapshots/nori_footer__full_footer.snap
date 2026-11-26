@@ -1,5 +1,6 @@
 ---
 source: tui-pty-e2e/tests/nori_footer.rs
+assertion_line: 171
 expression: normalize_for_input_snapshot(contents)
 ---
   › Nori CLI v0.0.0
@@ -11,4 +12,4 @@ expression: normalize_for_input_snapshot(contents)
 
 › [DEFAULT_PROMPT]
 
-  / commands · ! shell · @ files · ? help · ! · Skillset: [SKILLSET] · Skillsets v0.9.99                     ⎇ master
+  ! · Skillset: [SKILLSET] · Skillsets v0.9.99                                                               ⎇ master

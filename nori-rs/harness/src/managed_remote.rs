@@ -18,12 +18,6 @@ use crate::remote_agent::HostClientOrigin;
 use crate::remote_agent::REMOTE_CONTROL_RESPONDER;
 use crate::session_manager::SessionManager;
 
-mod compact;
-mod context;
-mod goal;
-mod queue;
-mod shell;
-
 /// A transport-independent view of a manager. Disconnection does not stop sessions.
 pub struct ManagedRemoteHost {
     manager: SessionManager,
@@ -158,13 +152,10 @@ impl ManagedRemoteHost {
         }))
     }
 
-    /// `composed` follow-ups were typed by the sending terminal's own user,
-    /// so that terminal may take them back from the queue; others stay
-    /// queued when taken.
     fn start_follow_up(
         &self,
         params: Value,
-        composed: bool,
+        origin: HostClientOrigin,
     ) -> Result<BoxFuture<'static, Result<Value, RemoteError>>, RemoteError> {
         let params = crate::follow_up_rpc::FollowUpParams::parse(params)
             .map_err(|error| RemoteError::new(-32602, error))?;
@@ -173,21 +164,20 @@ impl ManagedRemoteHost {
             .manager
             .handle(&id)
             .ok_or_else(|| RemoteError::new(-32002, "session is not running"))?;
-        let receipt = if composed {
-            futures::future::Either::Left(handle.local_follow_up(
+        let receipt = match origin {
+            HostClientOrigin::Foreground => futures::future::Either::Left(handle.local_follow_up(
                 params.message_id,
                 params.expected_turn,
                 params.intent,
                 params.prompt,
-            ))
-        } else {
-            futures::future::Either::Right(handle.follow_up(
+            )),
+            HostClientOrigin::Independent => futures::future::Either::Right(handle.follow_up(
                 params.message_id,
                 params.expected_turn,
                 params.intent,
                 params.prompt,
                 "host-controller".to_owned(),
-            ))
+            )),
         };
         Ok(Box::pin(async move {
             Ok(json!(
@@ -204,22 +194,11 @@ impl ManagedRemoteHost {
         request: &Value,
         origin: HostClientOrigin,
     ) -> Option<BoxFuture<'static, Value>> {
-        self.admit(request, origin == HostClientOrigin::Foreground)
-    }
-
-    /// [`Self::admit_input`] for an independent terminal that declared
-    /// `capabilities.nori_sessions.composer`: its follow-ups were typed by
-    /// its own user, so it may take them back from the queue.
-    pub fn admit_composed_input(&self, request: &Value) -> Option<BoxFuture<'static, Value>> {
-        self.admit(request, true)
-    }
-
-    fn admit(&self, request: &Value, composed: bool) -> Option<BoxFuture<'static, Value>> {
         let params = || request.get("params").cloned().unwrap_or_else(|| json!({}));
         let submitted = match request["method"].as_str()? {
             "_nori/session/prompt" => self.start_prompt(params()),
             crate::follow_up_rpc::METHOD if self.authenticated_controller => {
-                self.start_follow_up(params(), composed)
+                self.start_follow_up(params(), origin)
             }
             _ => return None,
         };
@@ -290,8 +269,6 @@ impl ManagedRemoteHost {
                         "context_used":replay.as_ref().and_then(|info| info.context).map(|(used, _)| used),
                         "context_size":replay.as_ref().and_then(|info| info.context).map(|(_, size)| size),
                         "model":record.model_name,
-                        "queue":replay.as_ref().and_then(|info| info.queue.clone()),
-                        "goal":replay.as_ref().and_then(|info| info.goal.clone()),
                     })
                 }).collect::<Vec<_>>();
                 Ok((
@@ -384,22 +361,6 @@ impl ManagedRemoteHost {
                     .await
                     .map_err(|error| RemoteError::new(-32000, error))?;
                 Ok((json!({"session_id":id.to_string(),"answered":true}), None))
-            }
-            queue::RESUME | queue::TAKE | queue::DISCARD if self.authenticated_controller => self
-                .queue(method, params)
-                .await
-                .map(|result| (result, None)),
-            context::CONTEXT if self.authenticated_controller => {
-                self.context(params).await.map(|result| (result, None))
-            }
-            compact::COMPACT if self.authenticated_controller => {
-                self.compact(params).await.map(|result| (result, None))
-            }
-            shell::SHELL if self.authenticated_controller => {
-                self.shell(params).await.map(|result| (result, None))
-            }
-            goal::GET | goal::SET if self.authenticated_controller => {
-                self.goal(method, params).await.map(|result| (result, None))
             }
             _ => Err(RemoteError::new(-32601, "method not found")),
         }

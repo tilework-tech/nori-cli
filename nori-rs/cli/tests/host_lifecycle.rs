@@ -98,29 +98,7 @@ impl Host {
         self.connect(serde_json::json!({"observe": true}))
     }
 
-    /// A client that proves it runs on the host's machine with the host's
-    /// private local token, as a local `nori attach` does.
-    fn local_client(&self) -> nori_harness::remote_agent::ManagedClient {
-        self.connect_as(serde_json::json!({}), Some(&self.local_token()))
-    }
-
-    fn local_token(&self) -> String {
-        std::fs::read_to_string(self.0.path().join("host/local-token"))
-            .unwrap()
-            .trim()
-            .to_owned()
-    }
-
     fn connect(&self, initialize: serde_json::Value) -> nori_harness::remote_agent::ManagedClient {
-        self.connect_as(initialize, None)
-    }
-
-    /// Initialize a client; one without `local_token` is remote.
-    fn connect_as(
-        &self,
-        initialize: serde_json::Value,
-        local_token: Option<&str>,
-    ) -> nori_harness::remote_agent::ManagedClient {
         let state: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(self.0.path().join("host/state.json")).unwrap(),
         )
@@ -128,20 +106,11 @@ impl Host {
         let token = std::fs::read_to_string(self.0.path().join("host/token")).unwrap();
         let runtime = tokio::runtime::Handle::current();
         runtime.block_on(async {
-            let endpoint = state["endpoint"].as_str().unwrap();
-            let mut client = match local_token {
-                Some(local) => {
-                    nori_harness::remote_agent::ManagedClient::connect_local(
-                        endpoint,
-                        token.trim(),
-                        local,
-                    )
-                    .await
-                }
-                None => {
-                    nori_harness::remote_agent::ManagedClient::connect(endpoint, token.trim()).await
-                }
-            }
+            let mut client = nori_harness::remote_agent::ManagedClient::connect(
+                state["endpoint"].as_str().unwrap(),
+                token.trim(),
+            )
+            .await
             .unwrap();
             client.request("initialize", initialize).await.unwrap();
             client
@@ -258,21 +227,11 @@ fn starting_beside_a_host_whose_contract_cannot_be_read_fails() {
     success(host.run(&["host", "stop"]));
 }
 
-/// A contract newer than this build's that this build still serves: the
-/// next minor of [`nori_protocol::HOST_CONTRACT`].
-fn newer_compatible_contract() -> String {
-    let mut parts = nori_protocol::HOST_CONTRACT
-        .split('.')
-        .map(|part| part.parse::<i32>().unwrap());
-    let (major, minor) = (parts.next().unwrap(), parts.next().unwrap());
-    format!("{major}.{}.0", minor + 1)
-}
-
 #[test]
 fn starting_beside_a_host_of_a_compatible_contract_reuses_it() {
     let host = Host::new();
     success(host.run(&["host", "--port", "0"]));
-    advertise_contract(&host, &newer_compatible_contract());
+    advertise_contract(&host, "1.7.0");
     let before = discovery(&host);
 
     let again = success(host.run(&["host", "--port", "0"]));
@@ -676,26 +635,6 @@ mod remote_transport;
 
 #[path = "host_lifecycle/explicit_close.rs"]
 mod explicit_close;
-
-#[path = "host_lifecycle/queue.rs"]
-mod queue;
-
-#[path = "host_lifecycle/history.rs"]
-mod history;
-
-#[path = "host_lifecycle/prompts.rs"]
-mod prompts;
-
-#[path = "host_lifecycle/context.rs"]
-mod context;
-#[path = "host_lifecycle/goal.rs"]
-mod goal;
-
-#[path = "host_lifecycle/compact.rs"]
-mod compact;
-
-#[path = "host_lifecycle/shell.rs"]
-mod shell;
 
 #[path = "host_lifecycle/find_paths.rs"]
 mod find_paths;

@@ -1314,8 +1314,6 @@ async fn session_shutdown_reaches_the_live_session_before_it_reports_a_conversat
     };
     let mut session = chat
         .session_manager
-        .as_ref()
-        .expect("test widgets have a session manager")
         .start(nori_harness::session_manager::StartSession {
             agent: nori_harness::session_manager::SessionAgent::Prepare(
                 nori_harness::runtime::AgentPrepareSpec {
@@ -1367,8 +1365,6 @@ async fn a_session_on_an_agent_prepared_for_a_fork_is_registered_as_a_fork_of_it
     };
     let parent = chat
         .session_manager
-        .as_ref()
-        .expect("test widgets have a session manager")
         .start(nori_harness::session_manager::StartSession {
             agent: nori_harness::session_manager::SessionAgent::Prepare(spec()),
             start: nori_harness::runtime::SessionStart::New,
@@ -1382,7 +1378,7 @@ async fn a_session_on_an_agent_prepared_for_a_fork_is_registered_as_a_fork_of_it
         .with_fork_parent(parent.conversation_id);
 
     let fork = crate::chatwidget::agent::launch_prepared_agent(
-        chat.session_manager.as_ref(),
+        &chat.session_manager,
         agent,
         nori_harness::runtime::SessionStart::New,
         chat.app_event_tx.clone(),
@@ -1392,12 +1388,7 @@ async fn a_session_on_an_agent_prepared_for_a_fork_is_registered_as_a_fork_of_it
 
     let record = fork
         .conversation_id
-        .and_then(|id| {
-            chat.session_manager
-                .as_ref()
-                .expect("test widgets have a session manager")
-                .get(&id)
-        })
+        .and_then(|id| chat.session_manager.get(&id))
         .map(|record| (record.parent, record.source));
     assert_eq!(
         record,
@@ -1407,8 +1398,6 @@ async fn a_session_on_an_agent_prepared_for_a_fork_is_registered_as_a_fork_of_it
         ))
     );
     chat.session_manager
-        .as_ref()
-        .expect("test widgets have a session manager")
         .shutdown(std::time::Duration::ZERO)
         .await;
 }

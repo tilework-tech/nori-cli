@@ -30,11 +30,6 @@ pub struct CustomPrompt {
     pub kind: CustomPromptKind,
 }
 
-/// The custom prompts directory of a home: `{nori_home}/commands`.
-pub fn commands_dir(nori_home: &Path) -> PathBuf {
-    nori_home.join("commands")
-}
-
 /// Discover prompt files in the given directory, returning entries sorted by name.
 /// Non-files are ignored. If the directory does not exist or cannot be read, returns empty.
 pub async fn discover_prompts_in(dir: &Path) -> Vec<CustomPrompt> {
@@ -187,13 +182,11 @@ fn parse_frontmatter(content: &str) -> (Option<String>, Option<String>, String) 
 /// The script is run via the interpreter specified in `prompt.kind` (e.g.
 /// `bash`, `python3`, `node`). Positional arguments are passed through.
 /// Returns `Ok(stdout)` on zero exit, or `Err(message)` on non-zero exit
-/// or timeout. The script runs in `cwd` when given, else in this process's
-/// working directory.
+/// or timeout.
 pub async fn execute_script(
     prompt: &CustomPrompt,
     args: &[String],
     timeout: Duration,
-    cwd: Option<&Path>,
 ) -> Result<String, String> {
     let CustomPromptKind::Script { ref interpreter } = prompt.kind else {
         return Err("not a script prompt".to_string());
@@ -202,9 +195,6 @@ pub async fn execute_script(
     let mut cmd = tokio::process::Command::new(interpreter);
     cmd.arg(&prompt.path);
     cmd.args(args);
-    if let Some(cwd) = cwd {
-        cmd.current_dir(cwd);
-    }
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
     cmd.stdin(std::process::Stdio::null());
@@ -417,7 +407,7 @@ mod tests {
             },
         };
 
-        let result = execute_script(&prompt, &[], Duration::from_secs(5), None).await;
+        let result = execute_script(&prompt, &[], Duration::from_secs(5)).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().trim(), "hello world");
     }
@@ -442,7 +432,7 @@ mod tests {
             },
         };
 
-        let result = execute_script(&prompt, &[], Duration::from_secs(5), None).await;
+        let result = execute_script(&prompt, &[], Duration::from_secs(5)).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.contains("oops"));
@@ -473,7 +463,6 @@ mod tests {
             &prompt,
             &["foo".to_string(), "bar".to_string()],
             Duration::from_secs(5),
-            None,
         )
         .await;
         assert!(result.is_ok());
@@ -500,7 +489,7 @@ mod tests {
             },
         };
 
-        let result = execute_script(&prompt, &[], Duration::from_secs(5), None).await;
+        let result = execute_script(&prompt, &[], Duration::from_secs(5)).await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
     }
@@ -525,7 +514,7 @@ mod tests {
             },
         };
 
-        let result = execute_script(&prompt, &[], Duration::from_millis(100), None).await;
+        let result = execute_script(&prompt, &[], Duration::from_millis(100)).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_lowercase().contains("timed out"));

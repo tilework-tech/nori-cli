@@ -45,9 +45,6 @@ pub(crate) enum SessionRuntimeInput {
         event_id: String,
         response_tx: tokio::sync::oneshot::Sender<Option<String>>,
     },
-    DiscardQueue {
-        response_tx: tokio::sync::oneshot::Sender<i32>,
-    },
     PermissionRequest {
         pending_request: Box<PendingApprovalRequest>,
         current_policy: AskForApproval,
@@ -240,10 +237,6 @@ impl SessionDriver {
     pub(crate) fn reclaim_queued(&mut self, event_id: &str) -> Option<session_reducer::Reclaimed> {
         session_reducer::reclaim_queued(&mut self.runtime, event_id)
     }
-
-    pub(crate) fn discard_queued(&mut self) -> session_reducer::Discarded {
-        session_reducer::discard_queued(&mut self.runtime)
-    }
 }
 
 impl Default for SessionDriver {
@@ -308,9 +301,6 @@ impl AcpBackend {
                 response_tx,
             } => {
                 let _ = response_tx.send(self.apply_queue_reclaim(&event_id).await);
-            }
-            SessionRuntimeInput::DiscardQueue { response_tx } => {
-                let _ = response_tx.send(self.apply_queue_discard().await);
             }
             SessionRuntimeInput::PermissionRequest {
                 pending_request,

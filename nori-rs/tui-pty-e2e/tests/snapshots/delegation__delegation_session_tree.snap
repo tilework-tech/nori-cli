@@ -1,16 +1,15 @@
 ---
 source: tui-pty-e2e/tests/delegation.rs
-assertion_line: 275
 expression: normalize_for_input_snapshot(list)
 ---
 Sessions 2 · 1 ready  tab: waiting only · / search
 
 All  waiting on you
 
-   Session                                                                              Agent         Status
-▏› ○ parent task identity (on screen)                                                   mock-model    ready                      ▕
-▏    Delegation continuation received: [Nori delegation result] from mock-model-alt ·…  Mock D…Model  N ago                     ▕
-   └─ · mock:request-permission:write-child-file                                        mock-model-…  done
-        Permission granted with option: allow                                           Mock D…Model  N ago
+  Session                                                                                Agent         Status
+› ○ parent task identity (current)                                                       mock-model    ready
+    Delegation continuation received: [Nori delegation result] from mock-model-alt · m…  Mock D…Model  N ago
+  └─ · mock:request-permission:write-child-file                                          mock-model-…  done
+       Permission granted with option: allow                                             Mock D…Model  N ago
 
 ↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close

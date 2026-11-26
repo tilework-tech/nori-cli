@@ -339,18 +339,6 @@ impl ManagedAgent for HostService {
             };
         }
         if self.launches.is_none()
-            && method == "_nori/session/follow_up"
-            && let Ok(connection) = self.acp.connection(client)
-            && connection.composer
-            && let Some(receipt) = self.managed.admit_composed_input(&request)
-        {
-            return ManagedReply {
-                delivery_guard: None,
-                response: receipt.await,
-                subscription: None,
-            };
-        }
-        if self.launches.is_none()
             && method == "_nori/session/respond"
             && let Ok(connection) = self.acp.connection(client)
         {
@@ -443,13 +431,6 @@ impl ManagedAgent for HostService {
             {
                 sessions["session_cwd"] = json!(true);
                 sessions["find_paths"] = json!(true);
-                sessions["queue"] = json!(true);
-                sessions["history"] = json!(true);
-                sessions["prompts"] = json!(true);
-                sessions["goal"] = json!(true);
-                sessions["compact"] = json!(true);
-                sessions["shell"] = json!(true);
-                sessions["context"] = json!(true);
                 sessions["follow_up"] = json!(1);
             }
             if initialize && let Some(result) = reply.response.get_mut("result") {

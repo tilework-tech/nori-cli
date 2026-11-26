@@ -33,14 +33,13 @@ impl FileSearch {
 pub(crate) struct HostFileSearch {
     in_flight: bool,
     waiting: Option<FileSearch>,
-    /// The search in flight or waiting, so repeating it sends nothing. Once
-    /// it lands, the same search asked again is sent again.
+    /// The search last sent or waiting, so a repeated report sends nothing.
     latest: Option<FileSearch>,
 }
 
 impl HostFileSearch {
     /// The search to send now for `search`; none while another is in
-    /// flight (it waits) or when it repeats the one not yet answered.
+    /// flight (it waits) or when it repeats the latest one.
     pub fn query(&mut self, search: FileSearch) -> Option<FileSearch> {
         if search.query.is_empty() || self.latest.as_ref() == Some(&search) {
             return None;
@@ -59,10 +58,13 @@ impl HostFileSearch {
     pub fn finished(&mut self) -> Option<FileSearch> {
         let next = self.waiting.take();
         self.in_flight = next.is_some();
-        if next.is_none() {
-            self.latest = None;
-        }
         next
+    }
+
+    /// The connection dropped: nothing is in flight and a repeated query
+    /// is searched again.
+    pub fn reset(&mut self) {
+        *self = Self::default();
     }
 }
 
@@ -114,19 +116,19 @@ mod tests {
     }
 
     #[test]
-    fn a_query_repeated_before_its_answer_is_sent_once_and_after_it_again() {
+    fn a_repeated_query_is_not_searched_again_but_another_session_is() {
         let mut searches = HostFileSearch::default();
         assert_eq!(
             searches.query(search("one", "ma")),
             Some(search("one", "ma"))
         );
+        assert_eq!(searches.finished(), None);
         assert_eq!(searches.query(search("one", "ma")), None);
-        assert_eq!(searches.finished(), None);
         assert_eq!(
-            searches.query(search("one", "ma")),
-            Some(search("one", "ma"))
+            searches.query(search("two", "ma")),
+            Some(search("two", "ma"))
         );
-        assert_eq!(searches.finished(), None);
+        searches.reset();
         assert_eq!(
             searches.query(search("two", "ma")),
             Some(search("two", "ma"))

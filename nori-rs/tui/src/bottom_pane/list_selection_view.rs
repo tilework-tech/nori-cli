@@ -7,8 +7,6 @@ use nori_tui_components::MenuDensity;
 use nori_tui_components::MenuItemTone;
 use nori_tui_components::MenuPlacement;
 use nori_tui_components::MenuRowPattern;
-use nori_tui_components::PickerAction;
-use nori_tui_components::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -27,7 +25,7 @@ use crate::render::Insets;
 use crate::render::RectExt as _;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
-use crate::style::user_message_style_for;
+use crate::style::user_message_style;
 
 use super::CancellationEvent;
 use super::bottom_pane_view::BottomPaneView;
@@ -35,7 +33,7 @@ use super::popup_consts::MAX_POPUP_ROWS;
 use super::scroll_state::ScrollState;
 use super::selection_popup_common::GenericDisplayRow;
 use super::selection_popup_common::measure_rows_height;
-use super::selection_popup_common::render_focused_rows;
+use super::selection_popup_common::render_rows;
 
 /// One selectable item in the generic selection list.
 pub(crate) type SelectionAction = Box<dyn Fn(&AppEventSender) + Send + Sync>;
@@ -456,7 +454,7 @@ impl ListSelectionView {
         }
         if self.search_active {
             Some(Line::from(vec![
-                "type to filter, ↑↓ move, ".into(),
+                "type to filter, ↑/↓ navigate, ".into(),
                 key_hint::plain(KeyCode::Enter).into(),
                 " confirm, ".into(),
                 key_hint::plain(KeyCode::Esc).into(),
@@ -464,7 +462,7 @@ impl ListSelectionView {
             ]))
         } else {
             Some(Line::from(vec![
-                "↑↓/j/k move, ".into(),
+                "↑/k ↓/j navigate, ".into(),
                 "/ search, ".into(),
                 key_hint::plain(KeyCode::Enter).into(),
                 " confirm, ".into(),
@@ -474,10 +472,8 @@ impl ListSelectionView {
         }
     }
 
-    /// Width of the row text: the list keeps two cells of padding at each
-    /// side, and the focus rails take one more cell at each side.
     fn rows_width(total_width: u16) -> u16 {
-        total_width.saturating_sub(6)
+        total_width.saturating_sub(2)
     }
 }
 
@@ -504,6 +500,20 @@ impl BottomPaneView for ListSelectionView {
         }
         match key_event {
             KeyEvent {
+                code: KeyCode::Up, ..
+            } => self.move_up(),
+            KeyEvent {
+                code: KeyCode::Down,
+                ..
+            } => self.move_down(),
+            KeyEvent {
+                code: KeyCode::Backspace,
+                ..
+            } if self.is_searchable && self.search_active => {
+                self.search_query.pop();
+                self.apply_filter();
+            }
+            KeyEvent {
                 code: KeyCode::Esc, ..
             } if self.search_active => {
                 self.search_active = false;
@@ -529,57 +539,82 @@ impl BottomPaneView for ListSelectionView {
                 }
             }
             KeyEvent {
+                code: KeyCode::Char(c),
+                modifiers,
+                ..
+            } if self.is_searchable
+                && self.search_active
+                && !modifiers.contains(KeyModifiers::CONTROL)
+                && !modifiers.contains(KeyModifiers::ALT) =>
+            {
+                self.search_query.push(c);
+                self.apply_filter();
+            }
+            KeyEvent {
+                code: KeyCode::Char('f'),
+                modifiers,
+                ..
+            } if self.is_searchable
+                && !self.search_active
+                && modifiers == KeyModifiers::CONTROL =>
+            {
+                self.search_active = true;
+            }
+            KeyEvent {
+                code: KeyCode::Char(c),
+                modifiers,
+                ..
+            } if self.is_searchable
+                && !self.search_active
+                && !modifiers.contains(KeyModifiers::CONTROL)
+                && !modifiers.contains(KeyModifiers::ALT) =>
+            {
+                match c {
+                    'f' | '/' => self.search_active = true,
+                    'k' => self.move_up(),
+                    'j' => self.move_down(),
+                    _ => {
+                        if let Some(idx) = c
+                            .to_digit(10)
+                            .map(|d| d as usize)
+                            .and_then(|n| self.nth_selectable_visible_idx(n))
+                        {
+                            self.state.selected_idx = Some(idx);
+                            self.accept();
+                        }
+                    }
+                }
+            }
+            // Non-searchable lists keep their direct navigation and selection shortcuts.
+            KeyEvent {
+                code: KeyCode::Char(c),
+                modifiers,
+                ..
+            } if !self.is_searchable
+                && !modifiers.contains(KeyModifiers::CONTROL)
+                && !modifiers.contains(KeyModifiers::ALT) =>
+            {
+                match c {
+                    'k' => self.move_up(),
+                    'j' => self.move_down(),
+                    _ => {
+                        if let Some(idx) = c
+                            .to_digit(10)
+                            .map(|d| d as usize)
+                            .and_then(|n| self.nth_selectable_visible_idx(n))
+                        {
+                            self.state.selected_idx = Some(idx);
+                            self.accept();
+                        }
+                    }
+                }
+            }
+            KeyEvent {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
                 ..
             } => self.accept(),
-            KeyEvent {
-                code: KeyCode::Char(c @ '1'..='9'),
-                modifiers: KeyModifiers::NONE,
-                ..
-            } if !self.search_active => {
-                if let Some(idx) = c
-                    .to_digit(10)
-                    .map(|d| d as usize)
-                    .and_then(|n| self.nth_selectable_visible_idx(n))
-                {
-                    self.state.selected_idx = Some(idx);
-                    self.accept();
-                }
-            }
-            key_event => {
-                let search_active = self.is_searchable && self.search_active;
-                match super::picker_keys::navigation_action(&key_event, search_active) {
-                    Some(PickerAction::MoveUp) => self.move_up(),
-                    Some(PickerAction::MoveDown) => self.move_down(),
-                    Some(PickerAction::ActivateSearch) if self.is_searchable => {
-                        self.search_active = true;
-                    }
-                    Some(PickerAction::Backspace) => {
-                        self.search_query.pop();
-                        self.apply_filter();
-                    }
-                    Some(PickerAction::AppendQuery(c)) => {
-                        self.search_query.push(c);
-                        self.apply_filter();
-                    }
-                    Some(
-                        PickerAction::ActivateSearch
-                        | PickerAction::DeactivateSearch
-                        | PickerAction::PageUp
-                        | PickerAction::PageDown
-                        | PickerAction::First
-                        | PickerAction::Last
-                        | PickerAction::Submit
-                        | PickerAction::Toggle
-                        | PickerAction::Cancel
-                        | PickerAction::NextCategory
-                        | PickerAction::PreviousCategory
-                        | PickerAction::ClearQuery,
-                    )
-                    | None => {}
-                }
-            }
+            _ => {}
         }
     }
 
@@ -648,22 +683,10 @@ impl Renderable for ListSelectionView {
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        self.render_for_background(area, buf, crate::style::relative_terminal_background());
-    }
-}
-
-impl ListSelectionView {
-    /// Render for a terminal whose background is `terminal_bg`, or `None`
-    /// when the terminal does not report one.
-    pub(crate) fn render_for_background(
-        &self,
-        area: Rect,
-        buf: &mut Buffer,
-        terminal_bg: Option<(u8, u8, u8)>,
-    ) {
         if area.height == 0 || area.width == 0 {
             return;
         }
+
         let effective_hint = self.effective_footer_hint();
         let [content_area, footer_area] = Layout::vertical([
             Constraint::Fill(1),
@@ -672,7 +695,7 @@ impl ListSelectionView {
         .areas(area);
 
         Block::default()
-            .style(user_message_style_for(terminal_bg))
+            .style(user_message_style())
             .render(content_area, buf);
 
         let header_height = self
@@ -716,20 +739,19 @@ impl ListSelectionView {
         }
 
         if list_area.height > 0 {
-            render_focused_rows(
-                list_area,
+            let render_area = Rect {
+                x: list_area.x.saturating_sub(2),
+                y: list_area.y,
+                width: rows_width.max(1),
+                height: list_area.height,
+            };
+            render_rows(
+                render_area,
                 buf,
                 &rows,
                 &self.state,
-                list_area.height as usize,
+                render_area.height as usize,
                 "no matches",
-                {
-                    let theme = Theme::for_terminal_background(terminal_bg);
-                    Theme {
-                        selected: theme.selected_on_panel,
-                        ..theme
-                    }
-                },
             );
         }
 
@@ -1794,7 +1816,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "list_selection_view_focus_tests.rs"]
-mod focus_tests;

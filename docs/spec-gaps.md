@@ -33,7 +33,7 @@ question in the item.
   (`harness/src/managed_remote.rs`, `host-runtime/src/host/service.rs`).
   `agentCapabilities._meta["nori/preparedAgent"]` already uses `_meta`
   (`host-runtime/src/host/acp/handshake.rs`).
-  Readers: `tui/src/host_client/mod.rs` (`HostFeatures`), `cli/src/host/mod.rs` (`session_cwd`
+  Readers: `tui/src/attach/runtime.rs`, `cli/src/host/mod.rs` (`session_cwd`
   check), and nori-sessions `native/src/main/host/probe.ts`.
 - **Done when:** the host sends both forms and reads both; every cli reader
   uses the `_meta` form; `HOST_CONTRACT` gets a minor bump; schema
@@ -69,18 +69,14 @@ question in the item.
 - **Rule:** the ACP face is the contract. `_nori/*` exists only for
   follow-ups, delegation, subscribing to every session, control, and stop.
   (Host contract: The ACP face, Nori additions.)
-- **Today:** `tui/src/host_client/mod.rs` uses
+- **Today:** `tui/src/attach/` and `tui/src/host_client/mod.rs` use
   `_nori/session/{list,new,prompt,respond}`; `nori host ls` and `nori host new`
   (`cli/src/host/mod.rs`) use `_nori/session/{list,new}`. The host serves them
   in `harness/src/managed_remote.rs` and `host-runtime/src/host/service.rs`.
   The TUI host client already uses ACP `session/new`, `session/list`,
   `session/set_mode`, `session/close`, and `session/resume` (with a `cwd`).
-  It also calls `_nori/host/prepare_agent`, `_nori/host/discard_agent`,
-  `_nori/session/find_paths`, `_nori/session/queue/{resume,take,discard}`, and
-  `_nori/host/history/{add,entry,search,metadata}`, `_nori/host/prompts`,
-  `_nori/session/prompts/run`, `_nori/session/goal/{get,set}`,
-  `_nori/session/context`, `_nori/session/compact`, and
-  `_nori/session/shell`, which the rule's list does not name yet.
+  It also calls `_nori/host/prepare_agent`, `_nori/host/discard_agent`, and
+  `_nori/session/find_paths`, which the rule's list does not name yet.
 - **Done when:** no cli client calls those four methods; the host still serves
   them, marked deprecated in the registry, until the next major.
 - **Depends on:** G03.
@@ -179,7 +175,7 @@ question in the item.
   resumed. (Product spec: Next; Glossary: Close; `docs/tui.md`.)
 - **Today:** Ctrl+D removes a closed row, and Ctrl+R resumes only failed
   sessions (`tui/src/bottom_pane/session_list_view.rs`,
-  `tui/src/app/session_resume.rs`).
+  `tui/src/attach/input.rs`).
 - **Done when:** closed rows stay until deleted; Ctrl+R resumes closed and
   failed sessions; PTY test covers it.
 

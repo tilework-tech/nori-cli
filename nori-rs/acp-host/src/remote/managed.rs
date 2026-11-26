@@ -49,9 +49,6 @@ pub enum HostClientOrigin {
 pub struct HostConnection {
     pub client: i64,
     pub origin: HostClientOrigin,
-    /// The client declared `capabilities.nori_sessions.composer`: its
-    /// follow-ups are typed by its own user, so it may take them back.
-    pub composer: bool,
     pub outbound: mpsc::Sender<Value>,
     pub close: tokio_util::sync::CancellationToken,
     /// `"controller"` or `"watcher"`; changes when control moves.

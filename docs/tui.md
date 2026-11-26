@@ -124,8 +124,7 @@ From the shell:
 different agent is an error. Aliases of the same agent are accepted.
 
 Picker keys: Enter resumes, Esc starts a fresh session, Ctrl+C exits,
-Up/Down or j/k move, PgUp/PgDn page, Home/End jump, `/`, `f`, or Ctrl+F
-searches.
+Up/Down or j/k move, PgUp/PgDn page, `/` or `f` searches.
 
 From inside the TUI:
 
@@ -188,8 +187,7 @@ it.
 ## Attach from a second terminal
 
 `nori host` runs a background host. It owns its sessions, so they survive
-when a terminal closes. `nori attach` opens the same TUI as plain `nori`,
-joined to that host instead of owning one.
+when a terminal closes. `nori attach` is a terminal client of that host.
 
 ```bash
 nori host                         # start the host (or report the running one)
@@ -204,15 +202,8 @@ Rules:
 
 - There is at most one background host per `NORI_HOME`.
 - Detaching never stops the host or its sessions.
-- `nori attach` starts on the alternate screen. `/screen` or Ctrl+L switches
-  to the inline view, printing the history once, and back. Leaving from the
-  alternate screen prints no transcript and no exit summary. It skips the
-  welcome, trust, update, and worktree steps.
-- Without a session ID, the session list opens, even when the host has no
-  sessions. If it closes with nothing open, the screen says "No session
-  selected. Use /new…".
-- When a session on the host ends, the terminal stays: it shows the next
-  session, or "Session ended. Use /new…".
+- The attach screen uses the alternate screen. It skips the welcome, trust,
+  update, and worktree steps.
 - `nori attach --host <ws-url> --token-file <path>` attaches to a host that is
   not the local one. Both flags are required together.
 
@@ -227,10 +218,10 @@ Each client of a host is a **controller** or a **watcher**.
 - `alt+t` takes control. The previous controller becomes a watcher.
 - When the controller disconnects, no client is promoted. Work keeps running.
 
-One hint row above the footer shows this terminal's standing (`controlling`,
-`watching · read-only`, `RECONNECTING`, or `DISCONNECTED`), the session's
-folder, agent, and host status, `Approvals: <mode>`, and the keys that apply
-(`ctrl+d detach`, `alt+t take control`).
+The header shows the role: `CONTROLLING`, or
+`WATCHING · read-only · alt+t take control`. While the connection is down it
+shows `RECONNECTING · sessions continue on the host`, and after a fatal error
+`DISCONNECTED · ctrl+d to detach`.
 
 ### Attach keys and commands
 
@@ -238,35 +229,30 @@ folder, agent, and host status, `Approvals: <mode>`, and the keys that apply
 |---|---|
 | Enter | Send. During a turn, steer. |
 | Tab | During a turn, queue. In `/new`, complete a folder name. |
-| Ctrl+C | As the controller, cancel the running turn, also one another terminal started; the draft is kept. Once that cancel is pending, Ctrl+C is not resent: it keeps a typed draft and on an empty prompt detaches. A watcher or a reconnecting terminal never cancels, with Ctrl+C or Esc: during a turn it prints why and keeps the draft. On a stopped host, or when nothing runs, clear the draft; on an empty prompt, detach. |
-| Ctrl+D, `/quit`, `/exit`, `/detach` | Detach. In the session list, Ctrl+D closes the selected session; in an empty list it detaches. |
+| Ctrl+C | Clear the draft. With an empty draft, cancel the turn. |
+| Ctrl+D, `/quit`, `/exit`, `/detach` | Detach. |
 | `alt+t` | Take control. |
 | `alt+s`, Left on an empty prompt, `/sessions` | Open the session list. |
 | `alt+down` | Next session that waits on you. |
 | `alt+up` | Go to the parent session. |
 | Ctrl+R (in the list) | Resume a failed session. |
-| PgUp, Ctrl+T | Open the transcript (PgUp: in the full-screen view, a page above the screen); Esc or q closes it. |
-| `/new [folder] [agent]` | Start a session. Without a folder, it uses the folder of the session on screen. With no session, a local host uses the terminal's folder and a `--host` host uses its own folder. A host that lists paths resolves the folder and completes it on Tab. The new session comes on screen once the host lists it. |
+| PgUp / PgDn | Scroll 10 lines. |
+| `/new [folder] [agent]` | Start a session. Without a folder, it uses the folder of the session on screen. With no session, a local host uses the terminal's folder and a `--host` host uses its own folder. |
 | `/delegate <agent> <task>` | Delegate a task from the session on screen. |
 | `/close` | Close the session on screen. |
-| `/approvals ask\|agent\|approve-all` | Set the permission mode of the session on screen. `approve-all` asks first. An unknown mode keeps the typed command. |
-| `/cancel` | Cancel the turn on screen. |
+| `/resume` | Resume the session on screen. |
+| `/cancel` | Cancel the turn. |
 
-Esc does not edit an earlier prompt in `nori attach`. Other commands are
-greyed with "not available in nori attach yet" or "not available on this
-host yet"; a typed one is refused as `/<command>: <reason>` and stays in the
-prompt. A command this terminal does not know, such as an agent's `/review`,
-is sent to the agent as a prompt.
-
-Permission and delegation requests open the same overlays as in plain `nori`
-(see [Approval overlay](#approval-overlay)); only the controller can answer.
+A permission request takes the keyboard: Up/Down and Enter choose, 1-9 choose
+by number, Esc rejects, Ctrl+C cancels. A delegation request: 1 or Enter
+approves; 2, Esc, or Ctrl+C declines.
 
 ### When the connection drops
 
 - The client reconnects every 750 ms. Requests that were in flight are not
   sent again.
-- If the host restarted, the terminal shows "Host restarted; sessions were
-  lost." and stays `DISCONNECTED`. Detach and run `nori attach` again.
+- If the host restarted, attach stops with "Host restarted; sessions were
+  lost." Run `nori attach` again.
 - On a 401 or 403 from the local host, attach rereads the token once.
 
 Host troubleshooting: [runbooks/debugging.md](runbooks/debugging.md#host).
@@ -348,7 +334,7 @@ Columns:
 | `/approvals` | no | all | Choose what Nori can do without approval, for this session. See [permissions.md](permissions.md). |
 | `/settings` | no | all | Open the Nori settings, including hotkeys and footer segments. |
 | `/vim` | no | all | Choose Vim mode and what Enter does. |
-| `/screen` | yes | all | Switch between the inline and the full-screen view. |
+| `/screen` | yes | all | Switch between the inline and the full-screen view. Greyed in `nori attach`, which is always full-screen. |
 | `/goal [text\|pause\|resume\|clear\|edit]` | yes | all | Show, set, replace, pause, resume, clear, or edit the session goal. See [turns.md](turns.md). |
 | `/new` | beside | all | Start a session. |
 | `/sessions` | yes | all | Open the session list. |
@@ -363,7 +349,7 @@ Columns:
 | `/diff` | yes | local only | Show `git diff`, including untracked files. |
 | `/mention` | yes | all | Insert `@` to mention a file. |
 | `/status` | yes | all | Show the session configuration and context use. |
-| `/context` | yes | all | Show context use and the instruction files the agent loads. For a session on a host, both come from the host, so the files are the ones in the session's folder on that machine. Does not prompt the agent. |
+| `/context` | yes | all | Show context use and the local instruction files. Does not prompt the agent. |
 | `/memory` | yes | all | Show the contents of the active instruction files. |
 | `/first-prompt` | yes | all | Show the first prompt of the session. |
 | `/mcp` | no | all | Manage MCP servers. Changes apply to new sessions. See [mcp.md](mcp.md). |
@@ -379,11 +365,7 @@ Other popup entries:
 
 - `/prompts:<name>`: a custom prompt from `$NORI_HOME/commands/`. A prompt is a
   Markdown template (`.md`) or a script (`.sh`, `.py`, `.js`). Templates fill
-  `$1` to `$9`, `$ARGUMENTS`, and named `$NAME` placeholders. For a session on
-  a host, the list comes from the host's own `$NORI_HOME/commands/`, so every
-  terminal on that host, attached ones included, offers the same prompts.
-  Templates are filled in by the terminal. Scripts run on the host, in the
-  session's folder, and only the controller may run one.
+  `$1` to `$9`, `$ARGUMENTS`, and named `$NAME` placeholders.
 - `/<prefix>:<name>`: a command the agent advertises. Nori sends it without the
   prefix.
 - An agent command whose name matches a built-in is not shown.
@@ -424,7 +406,8 @@ already bound swaps the two.
 | `parent_session` | `alt+up` |
 | `toggle_screen` | `ctrl+l` |
 
-`nori attach` uses the same keys.
+`nori attach` uses `next_waiting_session`, `parent_session`, and
+`open_session_list` too.
 
 ### Fixed keys
 
@@ -443,26 +426,15 @@ already bound swaps the two.
 | Enter on an empty prompt | Resume a paused queue. |
 | Left on an empty prompt | Open the session list. |
 | `?` on an empty prompt | Show the shortcut overlay. |
-| `!` at the start | Shell mode: run the line as a shell command on the session's host, in the session's folder. The command and its output show in the transcript, for every terminal following the session. Only a local controller can run one. A watcher, or a terminal on another machine, gets the line back in its prompt. |
+| `!` at the start | Shell mode: run the line as a shell command. |
 | `@` | Mention a file (fuzzy search). |
 | `$` | Pick an agent skill or command. |
 | Ctrl+Z | Suspend Nori. |
 
-A dim row under the prompt shows the keys that work now: `/ commands · ! shell
-· @ files · ? help` on an empty prompt (`!` and `@` only where they work, and
-`Enter resume queue` first when the queue is paused), `Enter send ·
-Shift+Enter newline` once text is typed, `Enter steer · Tab queue` or
-`Enter queue` during a turn you started, and `Enter run` for a slash command
-or `!` line. Turn it off with the `composer_hints` footer segment
-([configuration](configuration.md#tuifooter_segments)).
-
 In the transcript overlay, `q`, Ctrl+C, Ctrl+T, or Ctrl+O closes it.
 
-In every picker: Up/Down or j/k move, PgUp/PgDn and Home/End page, and
-typing filters only during a search. Lists with search (`/settings`,
-`/sessions`, `/resume`, `/model`, skillsets) start one with `/`, `f`, or Ctrl+F,
-show `/ search` in their footer, and Esc ends the search. Short lists such as
-`/agent` and `/config` have no search.
+In every picker: Up/Down or j/k move, PgUp/PgDn and Home/End page, `/`, `f`,
+or Ctrl+F searches, and Esc ends the search.
 
 ### Approval overlay
 
@@ -484,40 +456,10 @@ prompt does not answer it. When several requests wait, the newest shows first.
 ### Composer features
 
 - **`@` file mention:** fuzzy search in the session's folder, on the host
-  that runs it, following the session on screen. Without a host session, Nori
-  searches the launch folder; in `nori attach`, a host that lists paths
-  searches its own folder. Tab or Enter inserts
+  that runs it. Without a host session, Nori searches the launch folder. Tab or Enter inserts
   the path, quoted if it contains spaces. An image file is attached.
 - **History search:** Ctrl+R searches up to 500 earlier prompts from
-  `$NORI_HOME/history.jsonl`. For a session on a host, that is the host's
-  file, so Up and Ctrl+R also find prompts sent from another terminal on the
-  same host. Up sees those after the next turn ends.
-- **`!` shell commands:** `!cmd` runs `$SHELL -lc cmd` on the host that
-  runs the session, in the session's folder, as the host's user, with no
-  sandbox and no approval (see [permissions](permissions.md)). Only a
-  *local* client may run one: plain `nori` (its in-process host), or
-  `nori attach` that found the host through local discovery and so sends the
-  host's private local token (see [storage](storage.md#host-files)). Every
-  other client is remote: `nori attach --host URL --token-file F`, and every
-  stdio client (`nori host --stdio`, `nori exec --acp`, the join relay),
-  which may be relayed from anywhere. A remote `!cmd` runs on neither
-  machine; the TUI shows the gray hint "Remote shell commands are not yet
-  supported." and puts `!cmd` back in the prompt.
-- **`_nori/session/shell`** {sessionId, command} is the host method. It
-  replies once the command starts. A watcher gets `-32016`; a remote
-  controller then gets `-32018` with the message above, before the session
-  is looked up; an empty command gets `-32602`, and an unknown session
-  `-32002`. The command, its output and its exit code arrive as that
-  session's `user_shell` events, so every terminal following the session
-  shows a `Ran` cell, also on replay. A failed command's bullet is red.
-  Output is shown once the command finishes. `initialize` advertises
-  `capabilities.nori_sessions.shell` (host contract 1.9.0) per connection:
-  `true` only for a local client. Without a host session the command runs in
-  process, the same way. When a joined host does not offer `shell`, `nori
-  attach` does not send `!cmd`: with `--host` it shows the gray hint above,
-  and on a local host too old for `!` it says "not available on this host
-  yet". Either way the line goes back to the prompt and never reaches the
-  agent.
+  `$NORI_HOME/history.jsonl`.
 - **Paste:** a paste over 1000 characters shows as
   `[Pasted Content N chars]` and expands on send. A pasted image path becomes
   an attachment.

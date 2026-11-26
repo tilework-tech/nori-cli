@@ -112,10 +112,6 @@ enum HarnessCommand {
         event_id: String,
         response_tx: oneshot::Sender<anyhow::Result<Option<String>>>,
     },
-    /// Drop every queued user prompt before it is sent.
-    DiscardQueue {
-        response_tx: oneshot::Sender<anyhow::Result<i32>>,
-    },
     AddHistory {
         text: String,
         response_tx: oneshot::Sender<anyhow::Result<()>>,
@@ -600,14 +596,6 @@ impl HarnessHandle {
             response_tx,
         })
         .await
-    }
-
-    /// Drop every queued user prompt before it is sent, editable or not,
-    /// and clear a pause. Returns how many were dropped; each pending
-    /// `prompt` call fails with [`crate::backend::PromptWithdrawn`].
-    pub async fn discard_queue(&self) -> anyhow::Result<i32> {
-        self.request(|response_tx| HarnessCommand::DiscardQueue { response_tx })
-            .await
     }
 
     pub async fn add_history(&self, text: String) -> anyhow::Result<()> {
@@ -1346,9 +1334,6 @@ pub(crate) fn launch_session_from(
                     } => {
                         let _ = response_tx
                             .send(backend_for_agent.reclaim_queued_prompt(event_id).await);
-                    }
-                    HarnessCommand::DiscardQueue { response_tx } => {
-                        let _ = response_tx.send(backend_for_agent.discard_queue().await);
                     }
                     HarnessCommand::AddHistory { text, response_tx } => {
                         let _ = response_tx.send(backend_for_agent.add_history(text).await);

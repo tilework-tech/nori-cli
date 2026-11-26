@@ -24,9 +24,6 @@ fn local_image_content(
     ))
 }
 
-/// A joined host with no session on screen has nothing to prompt.
-const NO_HOST_SESSION: &str = "No session is open on this host. Pick one with /sessions.";
-
 impl ChatWidget {
     pub(super) fn flush_active_cell(&mut self) {
         self.active_user_message_id = None;
@@ -103,9 +100,6 @@ impl ChatWidget {
             return;
         }
 
-        if image_paths.is_empty() && self.handle_approvals_with_mode(&text) {
-            return;
-        }
         if image_paths.is_empty() && self.handle_new_in_folder(&text) {
             return;
         }
@@ -149,7 +143,7 @@ impl ChatWidget {
         if self.delegated_child
             && self
                 .managed_conversation_id
-                .and_then(|id| self.session_manager.as_ref()?.get(&id))
+                .and_then(|id| self.session_manager.get(&id))
                 .is_some_and(|record| {
                     record.status.is_closed()
                         || record.status == nori_protocol::SessionStatus::Failed
@@ -165,12 +159,7 @@ impl ChatWidget {
             return;
         }
 
-        if self.host_connection.is_some() && self.managed_conversation_id.is_none() {
-            self.add_error_message(NO_HOST_SESSION.to_string());
-            return;
-        }
-
-        if !self.has_harness_session() {
+        if self.harness_handle.is_none() {
             if text.starts_with('/') {
                 self.add_error_message(
                     "No active session - pick one with /resume or start one with /new.".to_string(),
@@ -240,13 +229,6 @@ impl ChatWidget {
             }
         }
 
-        // A joined session has no harness to prompt; the host starts the turn.
-        let delivery = match delivery {
-            crate::follow_up::Delivery::Default if self.follows_host_session() => {
-                crate::follow_up::Delivery::IfIdle
-            }
-            delivery => delivery,
-        };
         match delivery {
             crate::follow_up::Delivery::FollowUp { turn, intent } => {
                 let Some(session) = self.managed_conversation_id else {
@@ -283,11 +265,12 @@ impl ChatWidget {
                 });
             }
             crate::follow_up::Delivery::IfIdle => {
-                let Some(session) = self.managed_conversation_id else {
+                let (Some(session), Some(handle)) =
+                    (self.managed_conversation_id, self.harness_handle.clone())
+                else {
                     self.add_error_message("No active host session".into());
                     return;
                 };
-                let handle = self.harness_handle.clone();
                 let interrupt = crate::host_client::PromptInterrupt::new(session.to_string());
                 crate::host_client::PromptInterrupt::track_first(
                     &mut self.submitted_prompt,
@@ -303,9 +286,7 @@ impl ChatWidget {
                 tokio::spawn(async move {
                     match admitted.await {
                         Ok(receipt) => {
-                            if let Some(handle) = handle {
-                                handle.record_host_prompt_started();
-                            }
+                            handle.record_host_prompt_started();
                             if let Some(call) = interrupt.admitted(&receipt) {
                                 tx.send(AppEvent::HostRequest {
                                     call,
@@ -341,33 +322,19 @@ impl ChatWidget {
         ));
     }
 
-    /// Create the exit card summarising the session.
+    /// Create an exit message cell with session statistics.
     /// Called by app.rs before exiting to display final session summary.
     pub(crate) fn create_exit_message_cell(&self) -> Box<dyn HistoryCell> {
-        use crate::nori::exit_card::ExitAgent;
-        use crate::nori::exit_card::ExitCardCell;
-        use crate::nori::exit_card::ExitCardModel;
-        use crate::nori::exit_card::ExitContext;
+        use crate::nori::exit_message::ExitMessageCell;
 
-        let agent_name = self.bottom_pane.agent_display_name();
-        let agent = (!agent_name.is_empty()).then(|| ExitAgent {
-            name: agent_name.to_string(),
-            kind: nori_harness::AgentKind::from_slug(&self.config.active_agent),
-        });
-        let (context, _) = self.bottom_pane.context_usage_snapshot();
-        let context = context
-            .tokens
-            .zip(context.window_tokens)
-            .map(|(used, size)| ExitContext { used, size });
+        let session_id = self
+            .conversation_id()
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "(no session)".to_string());
 
-        Box::new(ExitCardCell::new(ExitCardModel {
-            session_id: self.conversation_id().map(|id| id.to_string()),
-            title: self.bottom_pane.status_footer_values().session_title,
-            agent,
-            stats: self.session_stats().clone(),
-            context,
-            cost: self.bottom_pane.session_cost().cloned(),
-        }))
+        let stats = self.session_stats().clone();
+
+        Box::new(ExitMessageCell::new(session_id, stats))
     }
 
     pub(super) fn request_redraw(&mut self) {

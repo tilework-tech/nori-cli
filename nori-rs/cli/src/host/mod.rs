@@ -171,7 +171,6 @@ pub(crate) struct AttachCommand {
 
 pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow::Result<()> {
     let mut refresh_local_token = None;
-    let mut local_token = None;
     let (endpoint, token) = if let Some(endpoint) = command.host {
         let path = command.token_file.context("--token-file is required")?;
         (endpoint, state::read_token(&path)?)
@@ -179,7 +178,6 @@ pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow
         let files = HostFiles::new(&config.nori_home)?;
         let (host, token) = files.read()?;
         let token_path = files.directory.join("token");
-        local_token = files.read_local_token();
         refresh_local_token = Some(Box::new(move || state::read_token(&token_path))
             as Box<dyn Fn() -> anyhow::Result<String> + Send + Sync>);
         (host.endpoint, token)
@@ -206,19 +204,16 @@ pub(crate) async fn attach(command: AttachCommand, config: NoriConfig) -> anyhow
         }
         None => None,
     };
-    nori_tui::run_joined_app(
+    nori_tui::run_attach(
         config,
         nori_tui::AttachOptions {
             endpoint,
             token,
             session_id,
-            local_token,
             refresh_local_token,
         },
     )
     .await
-    .map_err(|e| anyhow::anyhow!("{e}"))?;
-    Ok(())
 }
 
 pub(crate) async fn run(
@@ -346,7 +341,7 @@ async fn serve(
     };
     let lock = start::lifetime_lock(files).await?;
     // A previous local host may have crashed before a managed host reused its home.
-    for name in ["state.json", "host.json", "local-token"] {
+    for name in ["state.json", "host.json"] {
         match std::fs::remove_file(files.directory.join(name)) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -365,7 +360,6 @@ async fn serve(
         None
     };
     let max_clients = config.host.max_clients.max(1);
-    let unmanaged = launches.is_none();
     let host = HostService::new(
         config,
         overrides,
@@ -375,8 +369,6 @@ async fn serve(
         format!("127.0.0.1:{port}").parse()?,
         host.clone(),
         token.clone(),
-        // A managed host serves no `!` commands, so it has no local clients.
-        unmanaged.then(|| files.new_local_token()).transpose()?,
         max_clients,
     )
     .await?;

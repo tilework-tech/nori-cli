@@ -2,24 +2,6 @@ use super::*;
 
 impl ChatWidget {
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
-        // Ctrl+D leaves a joined host whatever the composer holds; a popup
-        // such as the session list keeps its own Ctrl+D.
-        if self.host_connection.is_some()
-            && key_event.code == KeyCode::Char('d')
-            && key_event.modifiers == KeyModifiers::CONTROL
-            && key_event.kind == KeyEventKind::Press
-            && !self.bottom_pane.has_active_view()
-        {
-            self.begin_exit();
-            return;
-        }
-        if key_event.code == KeyCode::Char('t')
-            && key_event.modifiers == KeyModifiers::ALT
-            && key_event.kind == KeyEventKind::Press
-            && self.take_host_control()
-        {
-            return;
-        }
         // Alt+Up is reserved for moving to a parent session, which the app
         // does before the widget sees the key. Whatever reaches the widget
         // has no parent to move to, so it changes nothing: not the queue, its
@@ -47,16 +29,11 @@ impl ChatWidget {
             && !self.exiting
             && self.bottom_pane.can_interrupt_with_escape(key_event)
         {
-            // Only a joined host's controller interrupts; others are told why.
-            if let Some(refusal) = self.host_input_refusal() {
-                if self.external_turn.is_some() || self.bottom_pane.is_task_running() {
-                    self.add_error_message(refusal);
-                    return;
-                }
-            } else if self.can_control_external_turn() {
+            if self.can_control_external_turn() {
                 self.request_external_cancel();
                 return;
-            } else if self.interrupt_host_prompt() {
+            }
+            if self.interrupt_host_prompt() {
                 return;
             }
         }
@@ -151,7 +128,11 @@ impl ChatWidget {
         use crate::follow_up::Delivery;
         use crate::presentation::session_runtime::SessionPhaseView;
         use nori_harness::FollowUpIntent;
-        let active_turn = self.active_turn().cloned();
+        let active_turn = self.owned_prompt_request_id.as_ref().filter(|_| {
+            !self.cloud_mode
+                && !self.follow_only_attachment
+                && self.acp_session_phase == Some(SessionPhaseView::Prompt)
+        });
         let (text, intent) = match self
             .bottom_pane
             .handle_key_event_with_queue(key_event, active_turn.is_some())
@@ -161,30 +142,6 @@ impl ChatWidget {
                     || self.follow_only_attachment =>
             {
                 self.bottom_pane.restore_composer_submission(text);
-                return;
-            }
-            // Leaving a joined host is always allowed, even while watching
-            // or reconnecting.
-            InputResult::Submitted(text)
-                if self.host_connection.is_some() && text.trim() == host_role::DETACH_COMMAND =>
-            {
-                self.begin_exit();
-                return;
-            }
-            InputResult::Submitted(text)
-                if self.host_connection.is_some() && text.trim() == host_role::CANCEL_COMMAND =>
-            {
-                self.cancel_host_turn();
-                return;
-            }
-            InputResult::Submitted(text) | InputResult::Queued(text)
-                if self.host_input_refusal().is_some()
-                    && !host_role::refuses_with_its_own_reason(&text) =>
-            {
-                self.bottom_pane.restore_composer_submission(text);
-                if let Some(refusal) = self.host_input_refusal() {
-                    self.add_error_message(refusal);
-                }
                 return;
             }
             InputResult::Submitted(text) => (text, FollowUpIntent::Steer),
@@ -200,7 +157,10 @@ impl ChatWidget {
             image_paths: self.bottom_pane.take_recent_submission_images(),
         };
         let delivery = match active_turn {
-            Some(turn) => Delivery::FollowUp { turn, intent },
+            Some(turn) => Delivery::FollowUp {
+                turn: turn.clone(),
+                intent,
+            },
             None if !self.cloud_mode
                 && matches!(self.acp_session_phase, None | Some(SessionPhaseView::Idle)) =>
             {
@@ -293,9 +253,6 @@ impl ChatWidget {
             return;
         }
         match cmd {
-            SlashCommand::New if self.host_connection.is_some() => {
-                self.start_host_session("");
-            }
             SlashCommand::New => self.app_event_tx.send(match folder {
                 Some(folder) => AppEvent::NewSessionIn(folder),
                 None => AppEvent::NewSession,

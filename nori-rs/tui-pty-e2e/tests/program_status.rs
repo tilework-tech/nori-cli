@@ -10,7 +10,6 @@ use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
-use tui_pty_e2e::has_composer_row;
 use tui_pty_e2e::program_status_reports;
 use tui_pty_e2e::wait_for_program_status;
 
@@ -26,7 +25,9 @@ const BLOCKED: &str = "state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbm
 
 fn spawn(config: SessionConfig) -> TuiSession {
     let mut session = TuiSession::spawn_with_config(30, 100, config).expect("spawn");
-    session.wait_until_ready().expect("TUI should start");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
     session
 }
@@ -173,13 +174,10 @@ fn a_cancelled_turn_reports_idle() {
     session
         .wait_for_text("esc to interrupt", TIMEOUT)
         .expect("turn starts");
+    session.send_key(Key::Escape).unwrap();
     session
-        .press(
-            Key::Escape,
-            |screen| screen.contains("Conversation interrupted"),
-            "turn cancelled",
-        )
-        .unwrap();
+        .wait_for_text("Conversation interrupted", TIMEOUT)
+        .expect("turn cancelled");
     session.settle(Duration::from_millis(300));
     assert_eq!(reports(&session), vec![IDLE, WORKING, IDLE]);
 }
@@ -209,7 +207,7 @@ fn foreground_switches_report_the_shown_session_and_background_sessions_stay_sil
     session.submit_input("/new").unwrap();
     session
         .wait_for(
-            |screen| screen.contains("Mock Default Model") && has_composer_row(screen),
+            |screen| screen.contains("Mock Default Model") && screen.contains("›"),
             TIMEOUT,
         )
         .expect("a new session should start");

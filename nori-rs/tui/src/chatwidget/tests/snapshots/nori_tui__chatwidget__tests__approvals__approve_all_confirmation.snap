@@ -1,14 +1,14 @@
 ---
 source: tui/src/chatwidget/tests/approvals.rs
-assertion_line: 138
+assertion_line: 129
 expression: confirmation
 ---
   Approve every request in this session?
   Nori will say yes to every edit, command and tool call the agent asks about. The sandbox setting
   still applies; nothing else stops a harmful request.
 
-  ▏› 1. Approve all                           Only for this session                              ▕
-     2. Approve all, and stop asking me this  Skip this question next time
-     3. Go back                               Keep the current mode
+› 1. Approve all                           Only for this session
+  2. Approve all, and stop asking me this  Skip this question next time
+  3. Go back                               Keep the current mode
 
-  ↑↓/j/k move, enter confirm, esc go back
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

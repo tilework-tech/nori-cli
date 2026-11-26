@@ -69,15 +69,6 @@ impl App {
             kind: KeyEventKind::Press | KeyEventKind::Repeat,
             ..
         }) = event
-            && self.is_joined()
-        {
-            self.close_transcript_overlay(tui);
-            Ok(true)
-        } else if let TuiEvent::Key(KeyEvent {
-            code: KeyCode::Esc,
-            kind: KeyEventKind::Press | KeyEventKind::Repeat,
-            ..
-        }) = event
         {
             // First Esc in transcript overlay: begin backtrack preview at latest user message.
             self.begin_overlay_backtrack_preview(tui);
@@ -126,12 +117,7 @@ impl App {
     /// Open transcript overlay (enters alternate screen and shows full transcript).
     pub(crate) fn open_transcript_overlay(&mut self, tui: &mut tui::Tui) {
         let _ = tui.enter_alt_screen();
-        // A joined host's sessions run elsewhere; their messages cannot be
-        // edited from here.
-        self.overlay = Some(Overlay::new_transcript(
-            self.transcript_cells.clone(),
-            !self.is_joined(),
-        ));
+        self.overlay = Some(Overlay::new_transcript(self.transcript_cells.clone()));
         tui.frame_requester().schedule_frame();
     }
 

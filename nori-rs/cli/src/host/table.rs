@@ -174,13 +174,7 @@ fn terminal_table(
     color: bool,
     shade: Option<(u8, u8, u8)>,
 ) -> String {
-    // Rows line up with the session lists, whose focus rails take a cell
-    // at each side.
-    let layout = session_table::session_widths(
-        i32::try_from(width)
-            .unwrap_or(i32::MAX)
-            .saturating_sub(session_table::RAIL_CELLS),
-    );
+    let layout = session_table::session_widths(i32::try_from(width).unwrap_or(i32::MAX));
     let cells = |value: i32| usize::try_from(value).unwrap_or(0);
     // The Session column holds the status icon and a space before the title.
     let session_cells = cells(layout.session) + 2;
@@ -188,7 +182,7 @@ fn terminal_table(
     let status_cells = cells(layout.status);
     let context_cells = layout.context.map(cells);
     let mut header = vec![
-        segment("   ", ""),
+        segment("  ", ""),
         segment(pad("Session", session_cells), ""),
     ];
     if let Some(agent_cells) = agent_cells {
@@ -249,7 +243,7 @@ fn terminal_table(
             None => (String::new(), cell),
         };
         let mut first = vec![
-            segment("   ", ""),
+            segment("  ", ""),
             segment(guide.clone(), ""),
             segment(icon.clone(), status_codes(status_key)),
             segment(pad(&title, room.saturating_sub(icon.width())), ""),
@@ -266,7 +260,7 @@ fn terminal_table(
         );
         let reply_room = session_cells.saturating_sub(continuation.width() + 2);
         let mut second = vec![
-            segment("   ", ""),
+            segment("  ", ""),
             segment(continuation.clone(), ""),
             segment(
                 format!("  {}", pad(&truncate(&reply, reply_room), reply_room)),
@@ -479,7 +473,7 @@ mod tests {
 
     #[test]
     fn a_terminal_gets_two_rows_per_session_at_each_layout_width() {
-        for width in [60, 80, 89, 120] {
+        for width in [58, 80, 87, 120] {
             insta::assert_snapshot!(
                 format!("host_ls_two_rows_{width}"),
                 format_table(&sessions(), Some(width), false, None)
@@ -532,7 +526,7 @@ mod tests {
     /// The Session cell of a table row: from the icon to the gap before the
     /// next column.
     fn session_cell(row: &str) -> String {
-        let cell = from_column(row, 3);
+        let cell = from_column(row, 2);
         cell.split("  ").next().unwrap_or_default().to_string()
     }
 
@@ -600,7 +594,7 @@ mod tests {
             {"session_id":"one","agent":"mock-model","status":"ready","title":"Full",
              "context_used":1_050_000,"context_size":1_050_000}
         ]});
-        for width in [89, 120] {
+        for width in [87, 120] {
             let rendered = format_table(&listing, Some(width), false, None);
             let row = rendered.lines().nth(1).unwrap_or_default();
             assert!(row.trim_end().ends_with("100% / 1.1M"), "{rendered}");
@@ -611,16 +605,16 @@ mod tests {
     fn terminal_columns_sit_at_the_session_list_offsets() {
         // Terminal width, then where Agent, Status and the context value start.
         for (width, agent, status, context) in [
-            (59, None, 44, None),
-            (60, Some(31), 45, None),
-            (80, Some(51), 65, None),
-            (88, Some(59), 73, None),
-            (89, Some(47), 61, Some(77)),
-            (120, Some(78), 92, Some(108)),
+            (57, None, 43, None),
+            (58, Some(30), 44, None),
+            (80, Some(52), 66, None),
+            (86, Some(58), 72, None),
+            (87, Some(46), 60, Some(76)),
+            (120, Some(79), 93, Some(109)),
         ] {
             let rendered = format_table(&sessions(), Some(width), false, None);
             let header = rendered.lines().next().unwrap_or_default();
-            assert_eq!(cell_of(header, "Session"), Some(3), "{rendered}");
+            assert_eq!(cell_of(header, "Session"), Some(2), "{rendered}");
             assert_eq!(cell_of(header, "Agent"), agent, "{rendered}");
             assert_eq!(cell_of(header, "Status"), Some(status), "{rendered}");
             let root = rendered.lines().nth(1).unwrap_or_default();

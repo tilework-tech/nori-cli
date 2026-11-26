@@ -1,5 +1,4 @@
-//! Taking a queued prompt back, or dropping every queued prompt, before it
-//! is sent.
+//! Taking a queued prompt back before it is sent.
 //!
 //! A reclaim returns the one-shot hook context and compact summary the
 //! prompt consumed when it was queued, so the next prompt still carries them.
@@ -40,40 +39,10 @@ impl AcpBackend {
             .map_err(|_| anyhow::anyhow!("ACP session runtime closed before queue resume"))
     }
 
-    /// Drop every queued user prompt. Returns how many were dropped.
-    pub(crate) async fn discard_queue(&self) -> anyhow::Result<i32> {
-        let (response_tx, response_rx) = tokio::sync::oneshot::channel();
-        self.session_event_tx
-            .send(SessionRuntimeInput::DiscardQueue { response_tx })
-            .await
-            .map_err(|_| anyhow::anyhow!("ACP session runtime closed before queue discard"))?;
-        response_rx
-            .await
-            .map_err(|_| anyhow::anyhow!("ACP session runtime closed during queue discard"))
-    }
-
     /// Runs on the serialized session runtime task.
     pub(super) async fn apply_queue_reclaim(&self, event_id: &str) -> Option<String> {
         let reclaimed = self.session_driver.lock().await.reclaim_queued(event_id)?;
-        self.release_withdrawn(&reclaimed.prompt).await;
-        self.publish_queue(reclaimed.queue_changed).await;
-        Some(reclaimed.text)
-    }
-
-    /// Runs on the serialized session runtime task.
-    pub(super) async fn apply_queue_discard(&self) -> i32 {
-        let discarded = self.session_driver.lock().await.discard_queued();
-        for prompt in &discarded.prompts {
-            self.release_withdrawn(prompt).await;
-        }
-        self.publish_queue(discarded.queue_changed).await;
-        i32::try_from(discarded.prompts.len()).unwrap_or(i32::MAX)
-    }
-
-    /// Hand back what a withdrawn prompt consumed when it was queued, and
-    /// fail its pending `prompt` call.
-    async fn release_withdrawn(&self, prompt: &crate::normalized::session_runtime::QueuedPrompt) {
-        if let Some(restore) = prompt.reclaim.as_deref().cloned() {
+        if let Some(restore) = reclaimed.prompt.reclaim.as_deref().cloned() {
             if let Some(context) = restore.hook_context {
                 let mut pending = self.pending_hook_context.lock().await;
                 *pending = Some(match pending.take() {
@@ -92,18 +61,16 @@ impl AcpBackend {
             .pending_prompt_submissions
             .lock()
             .await
-            .remove(&prompt.event_id)
+            .remove(&reclaimed.prompt.event_id)
         {
             let _ = response_tx.send(Err(PromptWithdrawn.into()));
         }
-    }
-
-    async fn publish_queue(&self, queue_changed: crate::normalized::ClientEvent) {
         self.dispatch_reducer_actions(ReducerActions {
-            events: vec![queue_changed],
+            events: vec![reclaimed.queue_changed],
             side_effects: Vec::new(),
             completed_turn: None,
         })
         .await;
+        Some(reclaimed.text)
     }
 }

@@ -23,26 +23,15 @@ pub struct ManagedClient {
 impl ManagedClient {
     /// Authenticate the WebSocket upgrade. The caller sends initialization.
     pub async fn connect(url: &str, token: &str) -> anyhow::Result<Self> {
-        Self::upgrade(url, token, false, None).await
-    }
-
-    /// Authenticate the WebSocket upgrade as a client on the host's own
-    /// machine, proven by the host's private local token.
-    pub async fn connect_local(url: &str, token: &str, local_token: &str) -> anyhow::Result<Self> {
-        Self::upgrade(url, token, false, Some(local_token)).await
+        Self::upgrade(url, token, false).await
     }
 
     /// Short-lived observer connection reserved for host readiness and shutdown.
     pub async fn connect_lifecycle(url: &str, token: &str) -> anyhow::Result<Self> {
-        Self::upgrade(url, token, true, None).await
+        Self::upgrade(url, token, true).await
     }
 
-    async fn upgrade(
-        url: &str,
-        token: &str,
-        lifecycle: bool,
-        local_token: Option<&str>,
-    ) -> anyhow::Result<Self> {
+    async fn upgrade(url: &str, token: &str, lifecycle: bool) -> anyhow::Result<Self> {
         anyhow::ensure!(!token.trim().is_empty(), "host token must not be empty");
         let mut request = url.into_client_request()?;
         if lifecycle {
@@ -54,14 +43,6 @@ impl ManagedClient {
             .parse::<tokio_tungstenite::tungstenite::http::HeaderValue>()?;
         authorization.set_sensitive(true);
         request.headers_mut().insert("Authorization", authorization);
-        if let Some(local_token) = local_token {
-            let mut local =
-                local_token.parse::<tokio_tungstenite::tungstenite::http::HeaderValue>()?;
-            local.set_sensitive(true);
-            request
-                .headers_mut()
-                .insert(nori_protocol::LOCAL_TOKEN_HEADER, local);
-        }
         let (socket, response) =
             match tokio::time::timeout(Duration::from_secs(10), connect_async(request))
                 .await

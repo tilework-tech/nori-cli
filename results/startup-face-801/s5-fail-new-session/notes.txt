@@ -1,0 +1,2 @@
+[s5-fail-new-session] wordmark present: 0; wink frames on screen: 0; open face rows: 1
+[s5-fail-new-session] composer after failure: 〉still typing more

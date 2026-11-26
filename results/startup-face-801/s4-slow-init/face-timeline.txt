@@ -1,0 +1,29 @@
+   0.272  row13 - _ ▁                -:00cd00 _:00cd00 ▁:00cd00
+   0.667  row13 › _ ▗                ›:00cd00 _:00cd00 ▗:00cd00
+   0.746  row13 〉_ ▐                 〉:00cd00 _:00cd00 ▐:00cd00
+   1.147  row13 › _ ▗                ›:00cd00 _:00cd00 ▗:00cd00
+   1.226  row13 - _ ▁                -:00cd00 _:00cd00 ▁:00cd00
+   1.306  row13 › _ ▗                ›:00cd00 _:00cd00 ▗:00cd00
+   1.386  row13 〉_ ▐                 〉:00cd00 _:00cd00 ▐:00cd00
+   1.787  row13 › _ ▗                ›:00cd00 _:00cd00 ▗:00cd00
+   1.866  row13 - _ ▁                -:00cd00 _:00cd00 ▁:00cd00
+   1.946  row13 › _ ▗                ›:00cd00 _:00cd00 ▗:00cd00
+   2.026  row13 〉_ ▐                 〉:00cd00 _:00cd00 ▐:00cd00
+   3.409  row12 〉_ -                 〉:00cd00 _:00cd00 -:00cd00
+   3.650  row12 〉_ ▐                 〉:00cd00 _:00cd00 ▐:00cd00
+   3.850  row12 〉n_ ▐                〉:00cd00 n:default+bold _:00cd00 ▐:00cd00
+   3.880  row12 〉no_ ▐               〉:00cd00 n:default+bold o:default+bold _:00cd00 ▐:00cd00
+   3.910  row12 〉nor_ ▐              〉:00cd00 n:default+bold o:default+bold r:default+bold _:00cd00 ▐:00cd00
+   3.939  row12 〉nori_ ▐             〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold _:00cd00 ▐:00cd00
+   3.969  row12 〉nori _ ▐            〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold _:00cd00 ▐:00cd00
+   4.000  row12 〉nori C_ ▐           〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold _:00cd00 ▐:00cd00
+   4.029  row12 〉nori CL_ ▐          〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold _:00cd00 ▐:00cd00
+   4.059  row12 〉nori CLI_ ▐         〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold I:default+bold _:00cd00 ▐:00cd00
+   4.089  row12 〉nori CLI _ ▐        〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold I:default+bold _:00cd00 ▐:00cd00
+   4.119  row12 〉nori CLI v_ ▐       〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold I:default+bold v:default _:00cd00 ▐:00cd00
+   4.149  row12 〉nori CLI v0_ ▐      〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold I:default+bold v:default 0:default _:00cd00 ▐:00cd00
+   4.179  row12 〉nori CLI v0._ ▐     〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold I:default+bold v:default 0:default .:default _:00cd00 ▐:00cd00
+   4.210  row12 〉nori CLI v0.0_ ▐    〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold I:default+bold v:default 0:default .:default 0:default _:00cd00 ▐:00cd00
+   4.239  row12 〉nori CLI v0.0._ ▐   〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold I:default+bold v:default 0:default .:default 0:default .:default _:00cd00 ▐:00cd00
+   4.269  row12 〉nori CLI v0.0.0_ ▐  〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold I:default+bold v:default 0:default .:default 0:default .:default 0:default _:00cd00 ▐:00cd00
+   4.540  row12 〉nori CLI v0.0.0     〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold I:default+bold v:default 0:default .:default 0:default .:default 0:default

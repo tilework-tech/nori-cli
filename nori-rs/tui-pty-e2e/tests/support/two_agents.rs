@@ -60,16 +60,8 @@ args = [{script:?}, "{slug}", {folder:?}]
     for arg in args {
         config = config.with_arg(*arg);
     }
-    // Two rows taller than the transcript needs, so the welcome card stays
-    // on screen above the composer and its hint row.
-    let mut tui = TuiSession::spawn_with_config(32, 110, config).unwrap();
-    // A gated agent holds or refuses its session, and the tests type into the
-    // startup placeholder meanwhile.
-    if gates.is_empty() {
-        tui.wait_until_ready().unwrap();
-    } else {
-        tui.wait_for_composer().unwrap();
-    }
+    let mut tui = TuiSession::spawn_with_config(30, 110, config).unwrap();
+    tui.wait_for_text("›", TIMEOUT).unwrap();
     (home, tui)
 }
 

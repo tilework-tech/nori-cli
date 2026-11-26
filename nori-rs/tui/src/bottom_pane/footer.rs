@@ -1,6 +1,3 @@
-use crate::bottom_pane::composer_hints::ComposerHints;
-#[cfg(test)]
-use crate::bottom_pane::composer_hints::HintDraft;
 use crate::bottom_pane::textarea::VimModeState;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
@@ -80,12 +77,6 @@ pub(crate) struct FooterProps {
     /// Cloud session identifier (e.g. `nori-fast-kazunoko-aac8`) when attached
     /// through cloud mode. Renders the `CloudSession` segment.
     pub(crate) cloud_session: Option<String>,
-    /// This terminal's standing on a joined host. It leads the footer and is
-    /// never hidden by the segment configuration.
-    pub(crate) host_status: Option<Line<'static>>,
-    /// The keys that work in the composer right now, when the composer
-    /// has been told what its session allows.
-    pub(crate) composer_hints: Option<ComposerHints>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -158,10 +149,7 @@ fn footer_lines(props: &FooterProps) -> Vec<Line<'static>> {
 
 #[derive(Clone, Debug, Default)]
 struct FooterRow {
-    left: Vec<Line<'static>>,
-    /// Which of `left` are composer hints. A narrow row drops these from the
-    /// end, whole, before the rest of the left group is cut.
-    hints: std::ops::Range<usize>,
+    left: Line<'static>,
     /// Right-aligned segments, kept separate rather than pre-joined so a narrow
     /// terminal can drop trailing ones instead of painting over the left group.
     right: Vec<Line<'static>>,
@@ -170,33 +158,19 @@ struct FooterRow {
 impl FooterRow {
     fn left(left: Line<'static>) -> Self {
         Self {
-            left: vec![left],
-            hints: 0..0,
+            left,
             right: Vec::new(),
         }
     }
 
-    /// The left group with only the first `keep` hints.
-    fn left_line(&self, keep: usize) -> Line<'static> {
-        let kept: Vec<Line<'static>> = self
-            .left
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| !self.hints.contains(idx) || *idx < self.hints.start + keep)
-            .map(|(_, line)| line.clone())
-            .collect();
-        join_footer_segments(&kept)
-    }
-
     fn joined(self) -> Line<'static> {
         let right = join_footer_segments(&self.right);
-        let left = self.left_line(self.hints.len());
         if right.spans.is_empty() {
-            left
-        } else if left.spans.is_empty() {
+            self.left
+        } else if self.left.spans.is_empty() {
             right
         } else {
-            let mut line = left;
+            let mut line = self.left;
             line.push_span(" · ".dim());
             line.extend(right.spans);
             line
@@ -216,26 +190,8 @@ fn render_footer_row(area: Rect, buf: &mut Buffer, row: FooterRow) {
         width: area.width.saturating_sub(footer_indent),
         height: 1,
     };
-    // Hints are the first to go: keep as many as still leave room for the
-    // whole right group, then let the right group shed as before.
-    let right_cols = line_cols(&join_footer_segments(&row.right));
-    let left = (0..=row.hints.len())
-        .rev()
-        .map(|keep| row.left_line(keep))
-        .find(|line| {
-            let left_cols = line_cols(line);
-            let needed = match (left_cols, right_cols) {
-                (_, 0) => left_cols,
-                (0, _) => right_cols,
-                _ => left_cols
-                    .saturating_add(FOOTER_GROUP_MIN_GAP_COLS)
-                    .saturating_add(right_cols),
-            };
-            needed <= left_area.width
-        })
-        .unwrap_or_else(|| row.left_line(0));
-    let left_width = line_cols(&left);
-    left.render(left_area, buf);
+    let left_width = line_cols(&row.left);
+    row.left.render(left_area, buf);
 
     // The right group shares the row with the left one, so it only gets the
     // columns the indent and the left group leave behind. Shed trailing
@@ -285,7 +241,12 @@ fn footer_rows(props: &FooterProps) -> Vec<FooterRow> {
         FooterMode::ShortcutSummary => {
             let footer_segments = footer_segment_groups(props);
             if props.vertical_footer {
-                vertical_footer_rows(footer_segments)
+                footer_segments
+                    .left
+                    .into_iter()
+                    .chain(footer_segments.right)
+                    .map(FooterRow::left)
+                    .collect()
             } else {
                 footer_row_for_segment_groups(footer_segments)
             }
@@ -301,7 +262,16 @@ fn footer_rows(props: &FooterProps) -> Vec<FooterRow> {
         FooterMode::ContextOnly => {
             let footer_segments = footer_segment_groups(props);
             if props.vertical_footer {
-                vertical_footer_rows(footer_segments)
+                let segments = footer_segments
+                    .left
+                    .into_iter()
+                    .chain(footer_segments.right)
+                    .collect::<Vec<_>>();
+                if segments.is_empty() {
+                    Vec::new()
+                } else {
+                    segments.into_iter().map(FooterRow::left).collect()
+                }
             } else {
                 footer_row_for_segment_groups(footer_segments)
             }
@@ -309,33 +279,12 @@ fn footer_rows(props: &FooterProps) -> Vec<FooterRow> {
     }
 }
 
-/// One row per segment, with the composer hints sharing the first.
-fn vertical_footer_rows(footer_segments: FooterSegmentGroups) -> Vec<FooterRow> {
-    let FooterSegmentGroups { left, hints, right } = footer_segments;
-    let hint_row = FooterRow {
-        left: left[hints.clone()].to_vec(),
-        hints: 0..hints.len(),
-        right: Vec::new(),
-    };
-    (!hints.is_empty())
-        .then_some(hint_row)
-        .into_iter()
-        .chain(
-            left.into_iter()
-                .skip(hints.end)
-                .chain(right)
-                .map(FooterRow::left),
-        )
-        .collect()
-}
-
 fn footer_row_for_segment_groups(footer_segments: FooterSegmentGroups) -> Vec<FooterRow> {
     let row = FooterRow {
-        left: footer_segments.left,
-        hints: footer_segments.hints,
+        left: join_footer_segments(&footer_segments.left),
         right: footer_segments.right,
     };
-    if row.left.is_empty() && row.right.is_empty() {
+    if row.left.spans.is_empty() && row.right.is_empty() {
         Vec::new()
     } else {
         vec![row]
@@ -385,8 +334,6 @@ fn shortcut_overlay_lines(state: ShortcutsState) -> Vec<Line<'static>> {
     let mut commands = Line::from("");
     let mut newline = Line::from("");
     let mut file_paths = Line::from("");
-    let mut skills = Line::from("");
-    let mut shell_command = Line::from("");
     let mut paste_image = Line::from("");
     let mut edit_previous = Line::from("");
     let mut open_editor = Line::from("");
@@ -401,8 +348,6 @@ fn shortcut_overlay_lines(state: ShortcutsState) -> Vec<Line<'static>> {
                 ShortcutId::Commands => commands = text,
                 ShortcutId::InsertNewline => newline = text,
                 ShortcutId::FilePaths => file_paths = text,
-                ShortcutId::Skills => skills = text,
-                ShortcutId::ShellCommand => shell_command = text,
                 ShortcutId::PasteImage => paste_image = text,
                 ShortcutId::EditPrevious => edit_previous = text,
                 ShortcutId::OpenEditor => open_editor = text,
@@ -418,8 +363,6 @@ fn shortcut_overlay_lines(state: ShortcutsState) -> Vec<Line<'static>> {
         commands,
         newline,
         file_paths,
-        skills,
-        shell_command,
         paste_image,
         edit_previous,
         open_editor,
@@ -511,44 +454,14 @@ pub(crate) fn textarea_corner_segments(props: &FooterProps) -> TextareaCornerSeg
 #[derive(Clone, Debug, Default)]
 struct FooterSegmentGroups {
     left: Vec<Line<'static>>,
-    /// Which of `left` are composer hints.
-    hints: std::ops::Range<usize>,
     right: Vec<Line<'static>>,
 }
 
 fn footer_segment_groups(props: &FooterProps) -> FooterSegmentGroups {
-    let layout = &props.footer_layout_config.footer_left;
-    // Hints that open the layout sit directly under the prompt, ahead of the
-    // host status; anywhere else they are an ordinary segment.
-    let (hints, rest) = match layout.split_first() {
-        Some((FooterLayoutItem::Builtin(FooterSegment::ComposerHints), rest)) => {
-            (composer_hint_items(props), rest)
-        }
-        _ => (Vec::new(), layout.as_slice()),
-    };
-    let hint_count = hints.len();
     FooterSegmentGroups {
-        left: hints
-            .into_iter()
-            .chain(props.host_status.iter().cloned())
-            .chain(segments_for(props, rest))
-            .collect(),
-        hints: 0..hint_count,
+        left: segments_for(props, &props.footer_layout_config.footer_left),
         right: segments_for(props, &props.footer_layout_config.footer_right),
     }
-}
-
-fn composer_hint_items(props: &FooterProps) -> Vec<Line<'static>> {
-    if !props
-        .footer_segment_config
-        .is_enabled(FooterSegment::ComposerHints)
-    {
-        return Vec::new();
-    }
-    props
-        .composer_hints
-        .map(|hints| hints.items(props.use_shift_enter_hint))
-        .unwrap_or_default()
 }
 
 fn segments_for(props: &FooterProps, segment_order: &[FooterLayoutItem]) -> Vec<Line<'static>> {
@@ -678,10 +591,6 @@ fn builtin_footer_segment(props: &FooterProps, segment: FooterSegment) -> Option
             .cloud_session
             .as_ref()
             .map(|id| Line::from(vec![Span::from("☁ ").cyan(), Span::from(id.clone()).cyan()])),
-        FooterSegment::ComposerHints => {
-            let items = composer_hint_items(props);
-            (!items.is_empty()).then(|| join_footer_segments(&items))
-        }
     }
 }
 
@@ -827,8 +736,6 @@ enum ShortcutId {
     Commands,
     InsertNewline,
     FilePaths,
-    Skills,
-    ShellCommand,
     PasteImage,
     EditPrevious,
     OpenEditor,
@@ -935,24 +842,6 @@ const SHORTCUTS: &[ShortcutDescriptor] = &[
         label: " for file paths",
     },
     ShortcutDescriptor {
-        id: ShortcutId::Skills,
-        bindings: &[ShortcutBinding {
-            key: key_hint::plain(KeyCode::Char('$')),
-            condition: DisplayCondition::Always,
-        }],
-        prefix: "",
-        label: " for skills",
-    },
-    ShortcutDescriptor {
-        id: ShortcutId::ShellCommand,
-        bindings: &[ShortcutBinding {
-            key: key_hint::plain(KeyCode::Char('!')),
-            condition: DisplayCondition::Always,
-        }],
-        prefix: "",
-        label: " for shell commands",
-    },
-    ShortcutDescriptor {
         id: ShortcutId::PasteImage,
         bindings: &[ShortcutBinding {
             key: key_hint::ctrl(KeyCode::Char('v')),
@@ -1024,7 +913,6 @@ mod tests {
     use pretty_assertions::assert_eq;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
-    use ratatui::style::Modifier;
 
     /// Test baseline for established status segments. Atomic context variants
     /// stay off here because their dedicated integration test covers them
@@ -1049,7 +937,6 @@ mod tests {
             token_usage: true,
             mode_indicator: true,
             cloud_session: true,
-            composer_hints: true,
         }
     }
 
@@ -1083,8 +970,6 @@ mod tests {
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             acp_mode_label: None,
             cloud_session: None,
-            host_status: None,
-            composer_hints: None,
         }
     }
 
@@ -2050,7 +1935,6 @@ footer_right = []
             token_usage: false,
             mode_indicator: false,
             cloud_session: false,
-            composer_hints: false,
         };
 
         snapshot_footer(
@@ -2139,280 +2023,5 @@ footer_right = []
                 ..default_props()
             },
         );
-    }
-
-    fn hint_props(hints: ComposerHints) -> FooterProps {
-        FooterProps {
-            composer_hints: Some(hints),
-            footer_segment_config: FooterSegmentConfig::default(),
-            ..default_props()
-        }
-    }
-
-    fn idle_controller() -> ComposerHints {
-        ComposerHints {
-            draft: HintDraft::Empty,
-            can_submit: true,
-            own_turn: false,
-            steering: false,
-            queue_paused: false,
-            shell: true,
-            files: true,
-        }
-    }
-
-    fn hint_text(props: &FooterProps, width: u16) -> String {
-        render_footer_row_text(props, width).trim_end().to_string()
-    }
-
-    #[test]
-    fn empty_prompt_shows_discovery_hints() {
-        assert_eq!(
-            hint_text(&hint_props(idle_controller()), 80),
-            "  / commands · ! shell · @ files · ? help"
-        );
-    }
-
-    #[test]
-    fn typed_text_shows_send_and_newline_keys() {
-        let typed = ComposerHints {
-            draft: HintDraft::Message,
-            ..idle_controller()
-        };
-        assert_eq!(
-            hint_text(&hint_props(typed), 80),
-            "  Enter send · Ctrl+J newline"
-        );
-        let enhanced = FooterProps {
-            use_shift_enter_hint: true,
-            ..hint_props(typed)
-        };
-        assert_eq!(
-            hint_text(&enhanced, 80),
-            "  Enter send · Shift+Enter newline"
-        );
-    }
-
-    #[test]
-    fn own_turn_advertises_steering_and_queue_only_when_valid() {
-        let steering = ComposerHints {
-            draft: HintDraft::Message,
-            own_turn: true,
-            steering: true,
-            ..idle_controller()
-        };
-        assert_eq!(
-            hint_text(&hint_props(steering), 80),
-            "  Enter steer · Tab queue · Ctrl+J newline"
-        );
-        let command = ComposerHints {
-            draft: HintDraft::Command,
-            ..steering
-        };
-        assert_eq!(hint_text(&hint_props(command), 80), "  Enter run");
-        let no_steering = ComposerHints {
-            steering: false,
-            ..steering
-        };
-        assert_eq!(
-            hint_text(&hint_props(no_steering), 80),
-            "  Enter queue · Ctrl+J newline"
-        );
-    }
-
-    #[test]
-    fn paused_queue_leads_with_resume() {
-        let paused = ComposerHints {
-            queue_paused: true,
-            ..idle_controller()
-        };
-        assert_eq!(
-            hint_text(&hint_props(paused), 80),
-            "  Enter resume queue · / commands · ! shell · @ files · ? help"
-        );
-    }
-
-    #[test]
-    fn watcher_hints_never_offer_sending() {
-        let watcher = ComposerHints {
-            can_submit: false,
-            queue_paused: true,
-            ..idle_controller()
-        };
-        assert_eq!(
-            hint_text(&hint_props(watcher), 80),
-            "  / commands · @ files · ? help"
-        );
-        let watcher_typing = ComposerHints {
-            draft: HintDraft::Message,
-            own_turn: true,
-            ..watcher
-        };
-        assert_eq!(
-            hint_text(&hint_props(watcher_typing), 80),
-            "  Ctrl+J newline"
-        );
-        let watcher_command = ComposerHints {
-            draft: HintDraft::Command,
-            ..watcher
-        };
-        assert_eq!(hint_text(&hint_props(watcher_command), 80), "  Enter run");
-    }
-
-    #[test]
-    fn unavailable_shell_and_files_are_not_advertised() {
-        let remote = ComposerHints {
-            shell: false,
-            files: false,
-            ..idle_controller()
-        };
-        assert_eq!(hint_text(&hint_props(remote), 80), "  / commands · ? help");
-        let shell_draft = ComposerHints {
-            draft: HintDraft::Shell { empty: false },
-            ..idle_controller()
-        };
-        assert_eq!(hint_text(&hint_props(shell_draft), 80), "  Enter run");
-        let no_shell = ComposerHints {
-            shell: false,
-            ..shell_draft
-        };
-        assert_eq!(hint_text(&hint_props(no_shell), 80), "");
-        let shell_mode_empty = ComposerHints {
-            draft: HintDraft::Shell { empty: true },
-            ..idle_controller()
-        };
-        assert_eq!(hint_text(&hint_props(shell_mode_empty), 80), "");
-    }
-
-    #[test]
-    fn hint_keys_are_bold_and_labels_dim() {
-        let props = hint_props(idle_controller());
-        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
-        terminal
-            .draw(|f| render_footer(Rect::new(0, 0, 60, 1), f.buffer_mut(), &props))
-            .unwrap();
-        let buffer = terminal.backend().buffer();
-        let cell_of = |symbol: &str| {
-            (0..60)
-                .map(|x| &buffer[(x, 0)])
-                .find(|cell| cell.symbol() == symbol)
-                .unwrap_or_else(|| panic!("{symbol} is drawn"))
-        };
-        for key in ["/", "?"] {
-            assert!(cell_of(key).modifier.contains(Modifier::BOLD), "{key}");
-        }
-        let label = cell_of("h");
-        assert!(label.modifier.contains(Modifier::DIM));
-        assert!(!label.modifier.contains(Modifier::BOLD));
-    }
-
-    #[test]
-    fn word_keys_are_bold_and_dim_while_glyph_keys_keep_full_color() {
-        let typed = ComposerHints {
-            draft: HintDraft::Message,
-            ..idle_controller()
-        };
-        for (hints, key, glyph) in [(idle_controller(), "/", true), (typed, "E", false)] {
-            let props = hint_props(hints);
-            let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
-            terminal
-                .draw(|f| render_footer(Rect::new(0, 0, 60, 1), f.buffer_mut(), &props))
-                .unwrap();
-            let buffer = terminal.backend().buffer();
-            let cell = (0..60)
-                .map(|x| buffer[(x, 0)].clone())
-                .find(|cell| cell.symbol() == key)
-                .unwrap_or_else(|| panic!("{key} is drawn"));
-            assert!(cell.modifier.contains(Modifier::BOLD), "{key}");
-            assert_eq!(cell.modifier.contains(Modifier::DIM), !glyph, "{key}");
-        }
-    }
-
-    fn cols(text: &str) -> u16 {
-        u16::try_from(unicode_width::UnicodeWidthStr::width(text)).unwrap()
-    }
-
-    #[test]
-    fn narrow_terminal_drops_whole_hints_from_the_end() {
-        let props = FooterProps {
-            git_branch: Some("main".to_string()),
-            ..hint_props(idle_controller())
-        };
-        assert_eq!(
-            hint_text(&props, 80).split_whitespace().last(),
-            Some("main")
-        );
-        // Footer metadata outlasts the hints.
-        let with_branch = "  / commands · ! shell  ⎇ main";
-        assert_eq!(hint_text(&props, cols(with_branch)), with_branch);
-        let narrower = cols(with_branch) - 1;
-        let gap = usize::from(narrower - cols("  / commands") - cols("⎇ main"));
-        assert_eq!(
-            hint_text(&props, narrower),
-            format!("  / commands{}⎇ main", " ".repeat(gap))
-        );
-        let props = hint_props(idle_controller());
-        let three = "  / commands · ! shell · @ files";
-        assert_eq!(hint_text(&props, cols(three)), three);
-        assert_eq!(hint_text(&props, cols(three) - 1), "  / commands · ! shell");
-        let one = "  / commands";
-        assert_eq!(hint_text(&props, cols(one)), one);
-        assert_eq!(hint_text(&props, cols(one) - 1), "");
-    }
-
-    #[test]
-    fn a_draft_outranks_a_paused_queue() {
-        let props = hint_props(ComposerHints {
-            draft: HintDraft::Message,
-            queue_paused: true,
-            ..idle_controller()
-        });
-        assert_eq!(hint_text(&props, 80), "  Enter send · Ctrl+J newline");
-    }
-
-    #[test]
-    fn hints_lead_the_host_status() {
-        let props = FooterProps {
-            host_status: Some(Line::from("watching · read-only")),
-            ..hint_props(ComposerHints {
-                can_submit: false,
-                ..idle_controller()
-            })
-        };
-        assert_eq!(
-            hint_text(&props, 80),
-            "  / commands · @ files · ? help · watching · read-only"
-        );
-        let one = "  / commands · watching · read-only";
-        assert_eq!(hint_text(&props, cols(one)), one);
-        assert_eq!(hint_text(&props, cols(one) - 1), "  watching · read-only");
-    }
-
-    #[test]
-    fn turning_hints_off_or_an_explicit_layout_hides_them() {
-        let mut off = hint_props(idle_controller());
-        off.footer_segment_config
-            .set_enabled(FooterSegment::ComposerHints, false);
-        assert_eq!(hint_text(&off, 80), "");
-        let explicit = FooterProps {
-            footer_layout_config: layout_from_toml(
-                r#"
-[tui.footer_layout]
-footer_left = ["git_branch"]
-"#,
-            ),
-            git_branch: Some("main".to_string()),
-            ..hint_props(idle_controller())
-        };
-        assert_eq!(hint_text(&explicit, 80), "  ⎇ main");
-    }
-
-    #[test]
-    fn temporary_messages_replace_hints() {
-        let props = FooterProps {
-            mode: FooterMode::CtrlCReminder,
-            ..hint_props(idle_controller())
-        };
-        assert_eq!(hint_text(&props, 80), "  ctrl + c again to quit");
     }
 }

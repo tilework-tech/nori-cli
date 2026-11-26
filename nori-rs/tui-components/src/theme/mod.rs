@@ -25,9 +25,6 @@ pub struct Theme {
     pub row_stripe: Style,
     pub detail_surface: Style,
     pub selected: Style,
-    /// The focused row of a list drawn on a raised panel, such as a short
-    /// prompt. It sits one step above the panel so it still stands out.
-    pub selected_on_panel: Style,
     pub disabled: Style,
     pub border: Style,
     pub separator: Style,
@@ -64,7 +61,6 @@ impl Default for Theme {
             row_stripe: Style::new(),
             detail_surface: Style::new(),
             selected: Style::new(),
-            selected_on_panel: Style::new(),
             disabled: Style::new().fg(Color::DarkGray),
             border: Style::new().fg(Color::DarkGray),
             separator: Style::new().fg(Color::DarkGray),
@@ -114,7 +110,6 @@ impl Theme {
         theme.input = theme.input.bg(relative_surface(background, 8));
         theme.detail_surface = theme.detail_surface.bg(relative_surface(background, 8));
         theme.selected = theme.selected.bg(relative_surface(background, 10));
-        theme.selected_on_panel = theme.selected_on_panel.bg(relative_surface(background, 20));
         theme
     }
 }

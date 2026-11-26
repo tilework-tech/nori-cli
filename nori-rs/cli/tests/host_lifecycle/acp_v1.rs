@@ -10,7 +10,7 @@ use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
 
-pub(super) fn mock_agent_binary() -> String {
+fn mock_agent_binary() -> String {
     std::env::var("MOCK_ACP_AGENT_BIN").unwrap_or_else(|_| {
         std::path::Path::new(env!("CARGO_BIN_EXE_nori"))
             .with_file_name("mock_acp_agent")

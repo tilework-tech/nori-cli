@@ -1,6 +1,5 @@
 ---
 source: tui/src/bottom_pane/list_selection_view.rs
-assertion_line: 1689
 expression: "render_lines_with_width(&view, 90)"
 ---
                                                                                           
@@ -8,6 +7,6 @@ expression: "render_lines_with_width(&view, 90)"
   Toggle TUI settings (changes saved to config.toml)                                      
                                                                                           
   native desktop                                                                          
-  ▏› OS Notifications (on)  Send native desktop notifications on events                ▕  
+› OS Notifications (on) (current)  Send native desktop notifications on events            
                                                                                           
-  type to filter, ↑↓ move, enter confirm, esc stop search
+  type to filter, ↑/↓ navigate, enter confirm, esc stop search

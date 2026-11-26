@@ -61,29 +61,20 @@ use self::agent::spawn_agent;
 mod approvals;
 mod constructors;
 mod context;
-mod context_host;
 mod delegation;
 pub(crate) use context::ContextSnapshot;
-mod compact_host;
 mod event_handlers;
 mod external_cancel;
 mod goal;
-mod goal_host;
 mod helpers;
-mod host_role;
-pub(crate) use host_role::JOINED_COMMANDS;
-mod history_host;
 mod key_handling;
 mod login;
 mod new_session_folder;
 mod pickers;
-mod prompts_host;
-mod queue_host;
 mod queue_list;
 mod queue_recall;
 mod session_close;
 mod session_config_mode;
-mod shell_host;
 mod skillsets_v2;
 mod user_input;
 use crate::nori::session_header::CloudSessionInfo;
@@ -103,9 +94,6 @@ use nori_config::SandboxPolicy;
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const DEFAULT_PROJECT_DOC_FILENAME: &str = "AGENTS.md";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
-/// Shown when an action needs the in-process session registry this terminal lacks.
-pub(crate) const NEEDS_OWN_HOST_MESSAGE: &str =
-    "This needs a session running in this terminal's own host.";
 
 /// Common initialization parameters shared by all `ChatWidget` constructors.
 pub(crate) struct ChatWidgetInit {
@@ -132,7 +120,7 @@ pub(crate) struct ChatWidgetInit {
     /// Emits one authenticated activity after this session's first prompt reaches ACP.
     pub(crate) analytics: Option<nori_installed::AnalyticsReporter>,
     /// The app's session registry; this widget's session starts through it.
-    pub(crate) session_manager: Option<nori_harness::session_manager::SessionManager>,
+    pub(crate) session_manager: nori_harness::session_manager::SessionManager,
     /// The time source for request answer grace periods.
     pub(crate) clock: crate::answer_guard::Clock,
 }
@@ -165,8 +153,6 @@ pub(crate) struct ChatWidget {
     external_turn: Option<nori_protocol::ExternalTurn>,
     unpaired_prompt_error_ids: HashSet<nori_protocol::acp::v1::RequestId>,
     completed_client_tool_calls: HashSet<String>,
-    /// `!` commands that have started and not yet finished.
-    user_shell_runs: shell_host::UserShellRuns,
     client_event_normalizer: crate::presentation::ClientEventNormalizer,
     replay_source: Option<nori_protocol::ReplaySource>,
     replay_message: Option<ReplayMessage>,
@@ -206,17 +192,12 @@ pub(crate) struct ChatWidget {
     session_configured_received: bool,
     // Typed handle for the active harness session.
     harness_handle: Option<HarnessHandle>,
-    session_manager: Option<nori_harness::session_manager::SessionManager>,
+    session_manager: nori_harness::session_manager::SessionManager,
     /// This widget's session in the session manager. Follows branch-at-head
     /// forks, which move the agent process to the child conversation.
     managed_conversation_id: Option<nori_harness::ConversationId>,
     /// The permission mode the host last announced for this session.
     approval_mode: Option<nori_protocol::ApprovalMode>,
-    /// This terminal's standing on a host it joined; `None` when it owns
-    /// its host.
-    host_connection: Option<crate::host_client::HostConnection>,
-    /// The joined host's status for the session on screen, from its list.
-    host_session_status: Option<nori_protocol::SessionStatus>,
     /// The modes the host says this session accepts; unknown until announced.
     available_approval_modes: Option<Vec<nori_protocol::ApprovalMode>>,
     // True while /close awaits the agent's session/close response. Blocks
@@ -260,13 +241,8 @@ pub(crate) struct ChatWidget {
     first_prompt_text: Option<String>,
     // Latest ACP-owned goal snapshot for this session.
     current_goal: Option<nori_protocol::ThreadGoal>,
-    /// A live goal change reached this widget, so a quiet goal read that
-    /// lands afterwards is older and must not replace it.
-    live_goal_seen: bool,
     // Latest ACP capability snapshot projected into Nori client concepts.
     session_agent_capabilities: crate::presentation::AgentCapabilitiesView,
-    /// The agent accepts prompts into a running turn.
-    session_steering: bool,
     /// Whether the top-level CLI launched the handroll-backed cloud mode.
     cloud_mode: bool,
     // Identity reported by the active agent during ACP initialization.
@@ -370,13 +346,11 @@ impl Drop for ChatWidget {
 
 impl Renderable for ChatWidget {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        self.bottom_pane.set_composer_hints(self.composer_hints());
         self.as_renderable().render(area, buf);
         self.last_rendered_width.set(Some(area.width as usize));
     }
 
     fn desired_height(&self, width: u16) -> u16 {
-        self.bottom_pane.set_composer_hints(self.composer_hints());
         self.as_renderable().desired_height(width)
     }
 

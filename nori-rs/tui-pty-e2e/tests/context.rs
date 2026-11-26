@@ -19,7 +19,7 @@ fn context_command_renders_agent_reported_usage() {
             .with_mock_response("Context fixture ready."),
     )
     .expect("start Nori");
-    session.wait_until_ready().expect("composer");
+    session.wait_for_text("›", TIMEOUT).expect("composer");
     session.submit_input("hello").expect("submit prompt");
     session
         .wait_for_text("Context fixture ready.", TIMEOUT)
@@ -59,7 +59,7 @@ fn context_grid_alternates_turn_segments_without_adding_a_prompt() {
             ),
     )
     .expect("start Nori");
-    session.wait_until_ready().expect("composer");
+    session.wait_for_text("›", TIMEOUT).expect("composer");
     for marker in ["ALPHA", "BETA", "GAMMA"] {
         session.submit_input(marker).expect("submit prompt");
         session
@@ -100,7 +100,7 @@ fn context_can_inspect_an_unfinished_turn_without_interrupting_it() {
             .with_mock_response("Completed after inspection."),
     )
     .expect("start Nori");
-    session.wait_until_ready().expect("composer");
+    session.wait_for_text("›", TIMEOUT).expect("composer");
     session.submit_input("hello").expect("start prompt");
     session
         .wait_for_text("34%", TIMEOUT)

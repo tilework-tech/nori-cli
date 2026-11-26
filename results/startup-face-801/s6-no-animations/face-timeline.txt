@@ -1,0 +1,1 @@
+   0.305  row13 〉nori CLI v0.0.0     〉:00cd00 n:default+bold o:default+bold r:default+bold i:default+bold C:default+bold L:default+bold I:default+bold v:default 0:default .:default 0:default .:default 0:default

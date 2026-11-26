@@ -33,27 +33,8 @@ pub enum AcpEvent {
     },
     Response {
         request_id: RequestId,
-        #[serde(deserialize_with = "deserialize_agent_response")]
         response: Result<acp::v1::AgentResponse, acp::v1::Error>,
     },
-}
-
-/// ACP's untagged `AgentResponse` lets the all-optional
-/// `AuthenticateResponse` absorb any payload, so a prompt response read back
-/// from the wire is recognised by its required `stopReason`.
-fn deserialize_agent_response<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Result<acp::v1::AgentResponse, acp::v1::Error>, D::Error> {
-    use serde::de::Error as _;
-    match Result::<serde_json::Value, acp::v1::Error>::deserialize(deserializer)? {
-        Err(error) => Ok(Err(error)),
-        Ok(payload) if payload.get("stopReason").is_some() => serde_json::from_value(payload)
-            .map(|response| Ok(acp::v1::AgentResponse::PromptResponse(response)))
-            .map_err(D::Error::custom),
-        Ok(payload) => serde_json::from_value(payload)
-            .map(Ok)
-            .map_err(D::Error::custom),
-    }
 }
 
 /// Notifications owned by the Nori harness rather than ACP.
@@ -409,49 +390,4 @@ pub enum DelegationStatus {
     Completed,
     Failed,
     Cancelled,
-}
-
-#[cfg(test)]
-mod response_wire_tests {
-    use super::*;
-
-    fn round_trip(event: &AcpEvent) -> AcpEvent {
-        serde_json::from_value(serde_json::to_value(event).unwrap()).unwrap()
-    }
-
-    #[test]
-    fn a_prompt_response_stays_a_prompt_response_across_the_wire() {
-        let sent = AcpEvent::Response {
-            request_id: RequestId::Str("synthetic-turn".into()),
-            response: Ok(acp::v1::AgentResponse::PromptResponse(
-                acp::v1::PromptResponse::new(acp::v1::StopReason::EndTurn),
-            )),
-        };
-        let received = round_trip(&sent);
-        assert!(
-            matches!(
-                &received,
-                AcpEvent::Response {
-                    response: Ok(acp::v1::AgentResponse::PromptResponse(response)),
-                    ..
-                } if response.stop_reason == acp::v1::StopReason::EndTurn
-            ),
-            "{received:?}"
-        );
-    }
-
-    #[test]
-    fn an_error_response_stays_an_error_across_the_wire() {
-        let sent = AcpEvent::Response {
-            request_id: RequestId::Str("synthetic-turn".into()),
-            response: Err(acp::v1::Error::internal_error()),
-        };
-        assert!(matches!(
-            round_trip(&sent),
-            AcpEvent::Response {
-                response: Err(_),
-                ..
-            }
-        ));
-    }
 }
