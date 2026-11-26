@@ -720,6 +720,11 @@ impl App {
                                 self.chat_widget.loop_state(),
                             )
                         });
+                        // The startup placeholder never ran a session, so
+                        // anything open on it (a picker opened while the agent
+                        // started) belongs to the user, not to a session.
+                        let carried_views = (purpose == host_candidate::PickerPurpose::Startup)
+                            .then(|| self.chat_widget.take_bottom_pane_views());
                         self.shutdown_current_conversation();
                         if resumes {
                             self.begin_replacing_session_transcript(tui)?;
@@ -727,6 +732,9 @@ impl App {
                         self.install_active_widget(*widget);
                         self.deferred_spawn_pending = false;
                         self.new_session_return = None;
+                        if let Some(views) = carried_views {
+                            self.chat_widget.restore_bottom_pane_views(views);
+                        }
                         if let Some((composer_draft, loop_state)) = carried {
                             self.chat_widget.restore_composer_draft(composer_draft);
                             if let Some((remaining, total)) = loop_state {

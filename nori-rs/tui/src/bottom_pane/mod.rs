@@ -358,6 +358,20 @@ impl BottomPane {
     }
 
     /// Move editing state out before replacing the widget.
+    /// Take the open views (pickers, popups) so a replacement pane can show them.
+    pub(crate) fn take_views(&mut self) -> Vec<Box<dyn BottomPaneView>> {
+        std::mem::take(&mut self.view_stack)
+    }
+
+    /// Show views taken from the pane this one replaces, above any of its own.
+    pub(crate) fn restore_views(&mut self, views: Vec<Box<dyn BottomPaneView>>) {
+        if views.is_empty() {
+            return;
+        }
+        self.view_stack.extend(views);
+        self.request_redraw();
+    }
+
     pub(crate) fn take_composer_draft(&mut self) -> ComposerDraft {
         self.composer.take_draft()
     }

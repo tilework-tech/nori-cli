@@ -210,6 +210,19 @@ impl ChatWidget {
     }
 
     /// Move the full edit, including buffered input, before replacing this widget.
+    pub(crate) fn take_bottom_pane_views(
+        &mut self,
+    ) -> Vec<Box<dyn crate::bottom_pane::BottomPaneView>> {
+        self.bottom_pane.take_views()
+    }
+
+    pub(crate) fn restore_bottom_pane_views(
+        &mut self,
+        views: Vec<Box<dyn crate::bottom_pane::BottomPaneView>>,
+    ) {
+        self.bottom_pane.restore_views(views);
+    }
+
     pub(crate) fn take_composer_draft(&mut self) -> crate::bottom_pane::ComposerDraft {
         self.bottom_pane.take_composer_draft()
     }

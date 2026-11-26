@@ -1013,3 +1013,31 @@ fn test_connecting_status_during_slow_agent_startup() {
         .wait_for_text("Start a new session", Duration::from_secs(15))
         .expect("TUI should eventually show the candidate session picker");
 }
+
+/// A picker opened while the first agent is still starting stays open once
+/// the session finishes starting.
+#[test]
+#[cfg(target_os = "linux")]
+fn a_picker_opened_while_the_agent_starts_stays_open_after_it_starts() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS", "1500");
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("spawn TUI");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("composer accepts input during startup");
+
+    session.submit_input("/agent").unwrap();
+    session
+        .wait_for_text("Select agent", TIMEOUT)
+        .expect("agent picker");
+    session
+        .wait_for_text("Mock Default Model", TIMEOUT)
+        .expect("the session finishes starting");
+
+    assert!(
+        session.screen_contents().contains("Select agent"),
+        "the picker must survive the session starting:\n{}",
+        session.screen_contents()
+    );
+}
