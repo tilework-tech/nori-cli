@@ -33,7 +33,7 @@ use super::popup_consts::MAX_POPUP_ROWS;
 use super::scroll_state::ScrollState;
 use super::selection_popup_common::GenericDisplayRow;
 use super::selection_popup_common::measure_rows_height;
-use super::selection_popup_common::render_rows;
+use super::selection_popup_common::render_focused_rows;
 
 /// One selectable item in the generic selection list.
 pub(crate) type SelectionAction = Box<dyn Fn(&AppEventSender) + Send + Sync>;
@@ -472,8 +472,10 @@ impl ListSelectionView {
         }
     }
 
+    /// Width of the row text: the list keeps two cells of padding at each
+    /// side, and the focus rails take one more cell at each side.
     fn rows_width(total_width: u16) -> u16 {
-        total_width.saturating_sub(2)
+        total_width.saturating_sub(6)
     }
 }
 
@@ -739,19 +741,14 @@ impl Renderable for ListSelectionView {
         }
 
         if list_area.height > 0 {
-            let render_area = Rect {
-                x: list_area.x.saturating_sub(2),
-                y: list_area.y,
-                width: rows_width.max(1),
-                height: list_area.height,
-            };
-            render_rows(
-                render_area,
+            render_focused_rows(
+                list_area,
                 buf,
                 &rows,
                 &self.state,
-                render_area.height as usize,
+                list_area.height as usize,
                 "no matches",
+                crate::style::component_theme(),
             );
         }
 
@@ -1816,3 +1813,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "list_selection_view_focus_tests.rs"]
+mod focus_tests;

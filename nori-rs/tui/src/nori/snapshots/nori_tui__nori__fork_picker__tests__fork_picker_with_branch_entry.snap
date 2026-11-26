@@ -1,12 +1,13 @@
 ---
 source: tui/src/nori/fork_picker.rs
+assertion_line: 281
 expression: "render_lines(&view, 60)"
 ---
                                                             
   Fork conversation                                         
   Branch at the current point, or select a message to rewi  
                                                             
-› 1. ⎇ Branch from current point                            
-  2. an earlier message                                     
+  ▏› 1. ⎇ Branch from current point                      ▕  
+     2. an earlier message                                  
                                                             
   ↑/k ↓/j to navigate, enter to confirm, esc to go back

@@ -717,10 +717,14 @@ trust_level = "trusted"
     }
 
     /// Wait until the composer's `›` prompt is on screen and no list is
-    /// open. A list's focused row also shows `›`, after its `▏` rail.
+    /// open. The composer's `›` starts its line; the header's is indented,
+    /// and a list's focused row shows `›` after its `▏` rail.
     pub fn wait_for_composer(&mut self, timeout: Duration) -> Result<(), String> {
-        self.wait_for(|s| s.contains('›') && !s.contains("▏›"), timeout)
-            .map_err(|error| format!("waiting for the composer: {error}"))
+        self.wait_for(
+            |s| s.lines().any(|line| line.starts_with('›')) && !s.contains("▏›"),
+            timeout,
+        )
+        .map_err(|error| format!("waiting for the composer: {error}"))
     }
 
     /// Get current screen contents as string
