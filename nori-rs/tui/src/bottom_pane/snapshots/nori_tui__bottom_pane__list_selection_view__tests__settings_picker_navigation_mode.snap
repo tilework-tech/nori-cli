@@ -1,6 +1,6 @@
 ---
 source: tui/src/bottom_pane/list_selection_view.rs
-assertion_line: 1718
+assertion_line: 1680
 expression: "render_lines_with_width(&view, 90)"
 ---
                                                                                           
@@ -23,4 +23,4 @@ expression: "render_lines_with_width(&view, 90)"
      8. Vim Mode (off)                  Enable vim-style navigation in the textarea       
                                         (Escape enters normal mode)                       
                                                                                           
-  ↑/k ↓/j navigate, / search, enter confirm, esc go back
+  ↑↓/j/k move, / search, enter confirm, esc go back

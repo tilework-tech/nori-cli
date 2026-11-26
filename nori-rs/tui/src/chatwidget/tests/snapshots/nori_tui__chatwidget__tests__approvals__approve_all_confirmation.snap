@@ -11,4 +11,4 @@ expression: confirmation
      2. Approve all, and stop asking me this  Skip this question next time
      3. Go back                               Keep the current mode
 
-  ↑/k ↓/j to navigate, enter to confirm, esc to go back
+  ↑↓/j/k move, enter confirm, esc go back

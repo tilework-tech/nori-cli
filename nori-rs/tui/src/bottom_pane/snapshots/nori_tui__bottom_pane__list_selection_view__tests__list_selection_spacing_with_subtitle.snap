@@ -1,6 +1,6 @@
 ---
 source: tui/src/bottom_pane/list_selection_view.rs
-assertion_line: 865
+assertion_line: 827
 expression: render_lines(&view)
 ---
                                                 
@@ -12,4 +12,4 @@ expression: render_lines(&view)
      2. Full Access          Nori can edit      
                              files              
                                                 
-  ↑/k ↓/j to navigate, enter to confirm, esc to
+  ↑↓/j/k move, enter confirm, esc go back

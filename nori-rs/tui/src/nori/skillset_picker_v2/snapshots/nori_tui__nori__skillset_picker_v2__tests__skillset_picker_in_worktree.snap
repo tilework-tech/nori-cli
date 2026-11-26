@@ -11,4 +11,4 @@ expression: "render(params, 80)"
      3. rust-dev        v0.3.0
      4. web-frontend    v2.0.0-rc.1
 
-  ↑/k ↓/j navigate, / search, enter confirm, esc go back
+  ↑↓/j/k move, / search, enter confirm, esc go back

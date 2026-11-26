@@ -1,4 +1,5 @@
 use super::*;
+use nori_tui_components::picker::PickerAction;
 
 impl PickerState {
     pub(super) fn new(
@@ -31,94 +32,71 @@ impl PickerState {
     }
 
     pub(super) async fn handle_key(&mut self, key: KeyEvent) -> Result<Option<ResumeSelection>> {
-        let has_control = key
-            .modifiers
-            .contains(crossterm::event::KeyModifiers::CONTROL);
-        let has_alt = key.modifiers.contains(crossterm::event::KeyModifiers::ALT);
-
         match key.code {
             KeyCode::Esc if self.search_active => {
                 self.search_active = false;
                 self.set_query(String::new());
                 self.request_frame();
+                return Ok(None);
             }
             KeyCode::Esc => return Ok(Some(ResumeSelection::StartFresh)),
-            KeyCode::Char('c') if has_control => {
-                return Ok(Some(ResumeSelection::Exit));
-            }
-            KeyCode::Enter => {
-                if let Some(row) = self.filtered_rows.get(self.selected) {
-                    return Ok(Some(ResumeSelection::Resume(row.target.clone())));
-                }
-            }
-            KeyCode::Up => {
-                if self.selected > 0 {
-                    self.selected -= 1;
-                    self.ensure_selected_visible();
-                }
-                self.request_frame();
-            }
-            KeyCode::Down => {
-                if self.selected + 1 < self.filtered_rows.len() {
-                    self.selected += 1;
-                    self.ensure_selected_visible();
-                }
-                self.request_frame();
-            }
-            KeyCode::PageUp => {
-                let step = self.view_rows.unwrap_or(10).max(1);
-                if self.selected > 0 {
-                    self.selected = self.selected.saturating_sub(step);
-                    self.ensure_selected_visible();
-                    self.request_frame();
-                }
-            }
-            KeyCode::PageDown => {
-                if !self.filtered_rows.is_empty() {
-                    let step = self.view_rows.unwrap_or(10).max(1);
-                    let max_index = self.filtered_rows.len().saturating_sub(1);
-                    self.selected = (self.selected + step).min(max_index);
-                    self.ensure_selected_visible();
-                    self.request_frame();
-                }
-            }
-            KeyCode::Backspace if self.search_active => {
-                let mut new_query = self.query.clone();
-                new_query.pop();
-                self.set_query(new_query);
-            }
-            KeyCode::Char('f')
-                if !self.search_active
-                    && key.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+            KeyCode::Char('c')
+                if key
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::CONTROL) =>
             {
-                self.search_active = true;
-                self.request_frame();
-            }
-            KeyCode::Char('f' | '/') if !self.search_active && !has_control && !has_alt => {
-                self.search_active = true;
-                self.request_frame();
-            }
-            KeyCode::Char('k') if !self.search_active && !has_control && !has_alt => {
-                if self.selected > 0 {
-                    self.selected -= 1;
-                    self.ensure_selected_visible();
-                }
-                self.request_frame();
-            }
-            KeyCode::Char('j') if !self.search_active && !has_control && !has_alt => {
-                if self.selected + 1 < self.filtered_rows.len() {
-                    self.selected += 1;
-                    self.ensure_selected_visible();
-                }
-                self.request_frame();
-            }
-            KeyCode::Char(c) if self.search_active && !has_control && !has_alt => {
-                let mut new_query = self.query.clone();
-                new_query.push(c);
-                self.set_query(new_query);
+                return Ok(Some(ResumeSelection::Exit));
             }
             _ => {}
         }
+        let last = self.filtered_rows.len().saturating_sub(1);
+        let page = self.view_rows.unwrap_or(10).max(1);
+        let target =
+            match crate::bottom_pane::picker_keys::navigation_action(&key, self.search_active) {
+                Some(PickerAction::Submit) => {
+                    if let Some(row) = self.filtered_rows.get(self.selected) {
+                        return Ok(Some(ResumeSelection::Resume(row.target.clone())));
+                    }
+                    return Ok(None);
+                }
+                Some(PickerAction::MoveUp) => self.selected.saturating_sub(1),
+                Some(PickerAction::MoveDown) => (self.selected + 1).min(last),
+                Some(PickerAction::PageUp) => self.selected.saturating_sub(page),
+                Some(PickerAction::PageDown) => (self.selected + page).min(last),
+                Some(PickerAction::First) => 0,
+                Some(PickerAction::Last) => last,
+                Some(PickerAction::ActivateSearch) => {
+                    self.search_active = true;
+                    self.request_frame();
+                    return Ok(None);
+                }
+                Some(PickerAction::Backspace) => {
+                    let mut query = self.query.clone();
+                    query.pop();
+                    self.set_query(query);
+                    return Ok(None);
+                }
+                Some(PickerAction::AppendQuery(c)) => {
+                    let mut query = self.query.clone();
+                    query.push(c);
+                    self.set_query(query);
+                    return Ok(None);
+                }
+                Some(
+                    PickerAction::DeactivateSearch
+                    | PickerAction::Toggle
+                    | PickerAction::Cancel
+                    | PickerAction::ClearQuery
+                    | PickerAction::NextCategory
+                    | PickerAction::PreviousCategory,
+                )
+                | None => return Ok(None),
+            };
+        if target != self.selected {
+            self.selected = target;
+            self.ensure_selected_visible();
+        }
+        self.request_frame();
         Ok(None)
     }
 

@@ -362,3 +362,32 @@ fn resume_table_snapshot() {
         .join("\n");
     assert_snapshot!("resume_picker_table", snapshot);
 }
+
+#[test]
+fn home_and_end_jump_to_the_first_and_last_session() {
+    let mut state = state_with_rows(
+        vec![
+            row("session-alpha", None),
+            row("session-beta", None),
+            row("session-gamma", None),
+        ],
+        true,
+        None,
+    );
+
+    block_on_future(async {
+        state
+            .handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE))
+            .await
+            .unwrap();
+    });
+    assert_eq!(state.selected, 2);
+
+    block_on_future(async {
+        state
+            .handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE))
+            .await
+            .unwrap();
+    });
+    assert_eq!(state.selected, 0);
+}
