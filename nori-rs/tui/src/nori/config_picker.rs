@@ -192,7 +192,6 @@ pub fn config_picker_params(
                     "Enable vim-style navigation in the textarea (Escape enters normal mode)"
                         .to_string(),
                 ),
-                is_current: current_mode.is_enabled(),
                 actions,
                 dismiss_on_select: true,
                 ..Default::default()
@@ -240,7 +239,6 @@ pub fn config_picker_params(
             SelectionItem {
                 name: display_name,
                 description: Some("Use unique skillsets for each session".to_string()),
-                is_current: skillset_per_session,
                 actions,
                 dismiss_on_select: true,
                 ..Default::default()
@@ -451,7 +449,6 @@ where
     SelectionItem {
         name: display_name,
         description: Some(description.to_string()),
-        is_current: is_enabled,
         actions,
         dismiss_on_select: true,
         ..Default::default()
@@ -704,7 +701,6 @@ pub fn footer_segments_picker_params(
             SelectionItem {
                 name,
                 description: None,
-                is_current: is_enabled,
                 actions,
                 dismiss_on_select: false, // Keep picker open for toggling multiple segments
                 ..Default::default()

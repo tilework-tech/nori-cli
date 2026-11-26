@@ -211,7 +211,7 @@ fn items(rows: &[SessionRow]) -> Vec<PickerItem<SessionGeneration>> {
             )
             .search_text(format!("{} {}", row.title, row.agent))
             .depth(row.depth)
-            .current(row.on_screen);
+            .on_screen(row.on_screen);
             if let Some(provider) = row.provider {
                 item = item.cell_tone(AGENT, provider);
             }
@@ -501,7 +501,7 @@ mod tests {
             );
             assert!(parent_line.matches('…').count() <= 1, "{parent_line}");
             assert!(child_line.contains("└─"), "{child_line}");
-            assert!(parent_line.contains("(current)"), "{parent_line}");
+            assert!(parent_line.contains("(on screen)"), "{parent_line}");
         }
     }
 

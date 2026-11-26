@@ -439,6 +439,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 item.current.then_some("current"),
                 item.default.then_some("default"),
                 item.read_only.then_some("read only"),
+                item.on_screen.then_some("on screen"),
             ]
             .into_iter()
             .flatten()
