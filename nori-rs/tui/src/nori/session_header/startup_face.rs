@@ -1,12 +1,13 @@
 //! Jiro's face on the interactive welcome header.
 //!
 //! The face `〉_ ▐` stands in for the title while the default agent session
-//! starts. It opens with its eyes closed, opens them, blinks a few times
-//! (design B3: both eyes squash together at 80 ms per frame), then holds still
-//! with its eyes open for as long as the session takes. When the session is
-//! ready it winks once (W1: the right eye becomes a dash for 240 ms) and the
-//! mouth types the wordmark `〉nori CLI`, pushing the right eye along (R1:
-//! 60 ms per letter) until the dim version appears.
+//! starts. The whole face is green. It opens with its eyes closed, opens
+//! them, blinks a few times in quick succession (design B3: both eyes squash
+//! together at 80 ms per frame), then holds still with its eyes open for as
+//! long as the session takes. When the session is ready it winks once (W1: the
+//! right eye becomes a dash for 240 ms) and the mouth types the wordmark
+//! `〉nori CLI` and then the dim version, pushing the right eye along (R1, at
+//! 30 ms per letter).
 //!
 //! The timeline is a pure function of the time elapsed and of when readiness
 //! arrived, so every frame can be checked with a fixed clock. Readiness never
@@ -29,13 +30,12 @@ use ratatui::text::Span;
 const WORD: &str = "nori CLI";
 const CLOSED_AT_START: Duration = Duration::from_millis(400);
 const BLINK_FRAME: Duration = Duration::from_millis(80);
-const OPEN_BETWEEN_BLINKS: Duration = Duration::from_millis(900);
+const OPEN_BETWEEN_BLINKS: Duration = Duration::from_millis(400);
 const OPEN_BEFORE_WINK: Duration = Duration::from_millis(120);
 const WINK: Duration = Duration::from_millis(240);
 const OPEN_BEFORE_TYPING: Duration = Duration::from_millis(200);
-const LETTER: Duration = Duration::from_millis(60);
+const LETTER: Duration = Duration::from_millis(30);
 const TYPED_HOLD: Duration = Duration::from_millis(240);
-const CURSOR_GONE: Duration = Duration::from_millis(120);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Frame {
@@ -43,15 +43,17 @@ enum Frame {
     Squashed,
     Closed,
     Wink,
-    /// The first `n` letters of the wordmark, with the mouth as the cursor.
+    /// The first `n` letters of the wordmark and version, with the mouth as
+    /// the cursor.
     Typing(usize),
-    Typed,
     Wordmark,
 }
 
 #[derive(Debug)]
 struct Timeline {
     start: Instant,
+    /// The name, then the version: everything the mouth types.
+    typed: String,
     blinks: i32,
     /// When the finale starts, measured from `start`.
     finale_at: Option<Duration>,
@@ -118,22 +120,22 @@ impl Timeline {
     }
 
     /// The finale `since` after it started, and how long that frame lasts.
-    fn finale_frame(since: Duration) -> (Frame, Option<Duration>) {
+    fn finale_frame(&self, since: Duration) -> (Frame, Option<Duration>) {
         let mut at = Duration::ZERO;
         let mut steps = vec![
             (Frame::Open, OPEN_BEFORE_WINK),
             (Frame::Wink, WINK),
             (Frame::Open, OPEN_BEFORE_TYPING),
         ];
-        for letters in 1..=WORD.len() {
-            let hold = if letters == WORD.len() {
+        let letters_total = self.typed.chars().count();
+        for letters in 1..=letters_total {
+            let hold = if letters == letters_total {
                 LETTER + TYPED_HOLD
             } else {
                 LETTER
             };
             steps.push((Frame::Typing(letters), hold));
         }
-        steps.push((Frame::Typed, CURSOR_GONE));
         for (frame, length) in steps {
             if since < at + length {
                 return (frame, Some(at + length - since));
@@ -167,7 +169,7 @@ impl Timeline {
         }
         if let Some(finale_at) = self.finale_at {
             if elapsed >= finale_at {
-                return Self::finale_frame(elapsed - finale_at);
+                return self.finale_frame(elapsed - finale_at);
             }
             let until_finale = finale_at - elapsed;
             let change = self
@@ -185,10 +187,12 @@ impl Timeline {
 pub(crate) struct StartupFace(Arc<Mutex<Timeline>>);
 
 impl StartupFace {
-    /// A face that starts closed at `start` and blinks `blinks` times.
-    pub(crate) fn new(start: Instant, blinks: i32) -> Self {
+    /// A face that starts closed at `start`, blinks `blinks` times, and types
+    /// `version` after the name.
+    pub(crate) fn new(start: Instant, blinks: i32, version: &str) -> Self {
         Self(Arc::new(Mutex::new(Timeline {
             start,
+            typed: format!("{WORD} v{version}"),
             blinks,
             finale_at: None,
             frozen: None,
@@ -197,8 +201,8 @@ impl StartupFace {
     }
 
     /// The static wordmark, for when animations are off.
-    pub(crate) fn settled() -> Self {
-        let face = Self::new(Instant::now(), 0);
+    pub(crate) fn settled(version: &str) -> Self {
+        let face = Self::new(Instant::now(), 0, version);
         face.with(|timeline| {
             timeline.frozen = Some(Frame::Wordmark);
             timeline.current = Frame::Wordmark;
@@ -253,10 +257,17 @@ impl StartupFace {
     }
 
     /// The title line for the frame last shown.
-    pub(crate) fn title_line(&self, version: &str) -> Line<'static> {
-        let frame = self.with(|timeline| timeline.current);
+    pub(crate) fn title_line(&self) -> Line<'static> {
+        let (frame, typed) = self.with(|timeline| (timeline.current, timeline.typed.clone()));
         let face = |left: &'static str, right: &'static str| -> Vec<Span<'static>> {
-            vec![left.green(), "_".into(), " ".into(), right.green()]
+            vec![left.green(), "_".green(), " ".into(), right.green()]
+        };
+        // The name is bold and the version after it dim.
+        let wordmark = |letters: usize| -> Vec<Span<'static>> {
+            let shown: String = typed.chars().take(letters).collect();
+            let split = shown.len().min(WORD.len());
+            let (name, version) = shown.split_at(split);
+            vec![name.to_string().bold(), version.to_string().dim()]
         };
         let mut spans: Vec<Span<'static>> = vec!["  ".into()];
         match frame {
@@ -266,14 +277,15 @@ impl StartupFace {
             Frame::Wink => spans.extend(face("〉", "-")),
             Frame::Typing(letters) => {
                 spans.push("〉".green());
-                spans.push(WORD[..letters].to_string().bold());
-                spans.extend(["_".into(), " ".into(), "▐".green()]);
+                spans.extend(wordmark(letters));
+                spans.extend(["_".green(), " ".into(), "▐".green()]);
             }
-            Frame::Typed => spans.extend(["〉".green(), WORD.bold()]),
             Frame::Wordmark => {
-                spans.extend(["〉".green(), WORD.bold(), format!(" v{version}").dim()])
+                spans.push("〉".green());
+                spans.extend(wordmark(typed.chars().count()));
             }
         }
+        spans.retain(|span| !span.content.is_empty());
         spans.into()
     }
 }

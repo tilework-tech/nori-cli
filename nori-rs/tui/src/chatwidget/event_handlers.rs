@@ -492,7 +492,7 @@ impl ChatWidget {
             self.config.active_agent.clone(),
             show_welcome_banner,
             self.live_status_view_model(),
-            crate::nori::session_header::StartupFace::settled(),
+            crate::nori::session_header::StartupFace::settled(crate::version::CODEX_CLI_VERSION),
         ));
         if let Some(user_message) = self.initial_user_message.take() {
             self.bottom_pane

@@ -11,7 +11,7 @@ fn composer_line_contains(screen: &str, expected: &str) -> bool {
     screen
         .lines()
         .rev()
-        .find(|line| line.contains('›'))
+        .find(|line| line.starts_with('〉'))
         .is_some_and(|line| line.contains(expected))
 }
 
@@ -125,21 +125,21 @@ fn test_history_navigation_up_down() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Verify "first message" is loaded back into input
-    session.wait_for_text("› first message", TIMEOUT).unwrap();
+    session.wait_for_text("〉first message", TIMEOUT).unwrap();
 
     // Press Down arrow to clear history navigation (should return to placeholder)
     session.send_key(Key::Down).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Verify we're back to the placeholder (input cleared from history navigation)
-    // Check that the LAST line starting with › does NOT contain "first message"
+    // Check that the composer row (starting with 〉) does NOT contain "first message"
     // (earlier lines may contain it from conversation history)
     session
         .wait_for(
             |s| {
                 let lines: Vec<&str> = s.lines().collect();
-                // Find the last line that contains ›
-                if let Some(last_prompt) = lines.iter().rev().find(|line| line.contains("›")) {
+                // Find the composer row
+                if let Some(last_prompt) = lines.iter().rev().find(|line| line.starts_with('〉')) {
                     // Verify it doesn't contain our history text
                     !last_prompt.contains("first message")
                 } else {
@@ -196,29 +196,29 @@ fn test_history_navigation_multiple_messages() {
         .unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
-    // Press Up once - should show "› second message"
+    // Press Up once - should show "〉second message"
     session.send_key(Key::Up).unwrap();
     session
         .wait_for(
-            |screen| composer_line_contains(screen, "› second message"),
+            |screen| composer_line_contains(screen, "〉second message"),
             TIMEOUT,
         )
         .unwrap();
 
-    // Press Up again - should show "› first message"
+    // Press Up again - should show "〉first message"
     session.send_key(Key::Up).unwrap();
     session
         .wait_for(
-            |screen| composer_line_contains(screen, "› first message"),
+            |screen| composer_line_contains(screen, "〉first message"),
             TIMEOUT,
         )
         .unwrap();
 
-    // Press Up again - should be a no-op (stay at "› first message")
+    // Press Up again - should be a no-op (stay at "〉first message")
     session.send_key(Key::Up).unwrap();
     session
         .wait_for(
-            |screen| composer_line_contains(screen, "› first message"),
+            |screen| composer_line_contains(screen, "〉first message"),
             TIMEOUT,
         )
         .unwrap();

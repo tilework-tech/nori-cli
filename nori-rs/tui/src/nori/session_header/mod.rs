@@ -124,7 +124,7 @@ impl HistoryCell for NoriSessionHeaderCell {
         // The prompt marker is the sole Nori accent. The title and version use
         // ordinary text hierarchy and the block deliberately has no surface or border.
         let title = match &self.face {
-            Some(face) => face.title_line(self.model.version),
+            Some(face) => face.title_line(),
             None => Line::from(vec![
                 Span::from("  › ").green(),
                 Span::from("Nori CLI").bold(),

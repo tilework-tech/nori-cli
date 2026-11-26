@@ -93,7 +93,7 @@ fn hints_switch_from_discovery_to_editing_as_soon_as_text_is_typed() {
 fn prompt_line(chat: &ChatWidget) -> String {
     screen(chat)
         .lines()
-        .find(|line| line.trim_start().starts_with('›'))
+        .find(|line| line.trim_start().starts_with('〉'))
         .expect("the prompt is drawn")
         .trim()
         .to_string()
@@ -102,7 +102,7 @@ fn prompt_line(chat: &ChatWidget) -> String {
 #[test]
 fn the_placeholder_steps_aside_while_hints_are_shown() {
     let (chat, _rx, _op_rx) = make_chatwidget_manual();
-    assert_eq!(prompt_line(&chat), "›");
+    assert_eq!(prompt_line(&chat), "〉");
 
     let mut segments = nori_config::FooterSegmentConfig::default();
     segments.set_enabled(nori_config::FooterSegment::ComposerHints, false);

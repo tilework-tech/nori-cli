@@ -35,7 +35,7 @@ fn handles_input_while_palette_replies_are_pending() {
     }
     session.send_key(Key::Char('λ')).unwrap();
     session
-        .wait_for_text("› λ", Duration::from_millis(1500))
+        .wait_for_text("〉λ", Duration::from_millis(1500))
         .unwrap();
     assert!(
         session
@@ -55,7 +55,7 @@ fn handles_input_while_palette_replies_are_pending() {
         ))
         .unwrap();
     session
-        .wait_for_text("› λ café]10;rgb:aa/bb/cc!", TIMEOUT)
+        .wait_for_text("〉λ café]10;rgb:aa/bb/cc!", TIMEOUT)
         .unwrap();
     session
         .wait_for_text("Mock Default Model", TIMEOUT)

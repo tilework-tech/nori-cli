@@ -20,7 +20,7 @@ fn text(line: &Line<'_>) -> String {
 
 fn title_at(face: &StartupFace, now: Instant) -> String {
     face.tick(now);
-    text(&face.title_line(VERSION))
+    text(&face.title_line())
 }
 
 /// The distinct titles shown from `from` to `to`, each with how long it stayed
@@ -58,25 +58,20 @@ fn closed_frames(shown: &[(String, i64)]) -> usize {
     shown.iter().filter(|(title, _)| title == "  - _ ▁").count()
 }
 
-fn finale(last_letter_ms: i64) -> Vec<(String, i64)> {
+fn finale() -> Vec<(String, i64)> {
     let mut expected = vec![("  〉_ -".to_string(), 240), ("  〉_ ▐".to_string(), 200)];
-    let word = "nori CLI";
-    for end in 1..=word.len() {
-        let ms = if end == word.len() {
-            last_letter_ms
-        } else {
-            60
-        };
-        expected.push((format!("  〉{}_ ▐", &word[..end]), ms));
+    let typed = "nori CLI v0.42.0";
+    for end in 1..=typed.len() {
+        let ms = if end == typed.len() { 30 + 240 } else { 30 };
+        expected.push((format!("  〉{}_ ▐", &typed[..end]), ms));
     }
-    expected.push(("  〉nori CLI".to_string(), 120));
     expected
 }
 
 #[test]
 fn starts_closed_then_opens_both_eyes_together() {
     let start = Instant::now();
-    let face = StartupFace::new(start, 1);
+    let face = StartupFace::new(start, 1, VERSION);
 
     let shown = timeline(&face, start, 0, 600, None);
 
@@ -94,7 +89,7 @@ fn starts_closed_then_opens_both_eyes_together() {
 fn blinks_the_chosen_number_of_times_at_80ms_per_frame_then_holds_open_quietly() {
     for blinks in 1..=3 {
         let start = Instant::now();
-        let face = StartupFace::new(start, blinks);
+        let face = StartupFace::new(start, blinks, VERSION);
 
         let shown = timeline(&face, start, 0, 30_000, None);
 
@@ -122,13 +117,13 @@ fn blinks_the_chosen_number_of_times_at_80ms_per_frame_then_holds_open_quietly()
 #[test]
 fn readiness_while_holding_winks_then_retypes_into_the_versioned_wordmark() {
     let start = Instant::now();
-    let face = StartupFace::new(start, 1);
+    let face = StartupFace::new(start, 1, VERSION);
 
     let shown = timeline(&face, start, 10_000, 13_000, Some(10_000));
 
     let mut expected = vec![("  〉_ ▐".to_string(), 120)];
-    expected.extend(finale(300));
-    expected.push(("  〉nori CLI v0.42.0".to_string(), 1_600));
+    expected.extend(finale());
+    expected.push(("  〉nori CLI v0.42.0".to_string(), 1_720));
     assert_eq!(shown, expected);
     assert!(face.is_finished());
     assert_eq!(face.tick(start + Duration::from_secs(13)), None);
@@ -137,8 +132,8 @@ fn readiness_while_holding_winks_then_retypes_into_the_versioned_wordmark() {
 #[test]
 fn readiness_mid_blink_finishes_that_blink_and_drops_the_rest() {
     let start = Instant::now();
-    let face = StartupFace::new(start, 3);
-    let full = timeline(&StartupFace::new(start, 3), start, 0, 10_000, None);
+    let face = StartupFace::new(start, 3, VERSION);
+    let full = timeline(&StartupFace::new(start, 3, VERSION), start, 0, 10_000, None);
     let first_blink_ms: i64 = full.iter().take(3).map(|(_, ms)| ms).sum();
 
     // Ready 40 ms into the first blink.
@@ -162,7 +157,7 @@ fn readiness_mid_blink_finishes_that_blink_and_drops_the_rest() {
 #[test]
 fn readiness_before_the_eyes_open_opens_them_first() {
     let start = Instant::now();
-    let face = StartupFace::new(start, 2);
+    let face = StartupFace::new(start, 2, VERSION);
 
     let shown = timeline(&face, start, 0, 3_000, Some(50));
 
@@ -174,15 +169,15 @@ fn readiness_before_the_eyes_open_opens_them_first() {
             ("  〉_ ▐".to_string(), 120),
         ]
     );
-    assert_eq!(shown[3..3 + finale(300).len()].to_vec(), finale(300));
+    assert_eq!(shown[3..3 + finale().len()].to_vec(), finale());
     assert_eq!(closed_frames(&shown), 1);
 }
 
 #[test]
 fn a_second_readiness_changes_nothing() {
     let start = Instant::now();
-    let once = StartupFace::new(start, 1);
-    let twice = StartupFace::new(start, 1);
+    let once = StartupFace::new(start, 1, VERSION);
+    let twice = StartupFace::new(start, 1, VERSION);
 
     let expected = timeline(&once, start, 3_000, 6_000, Some(3_000));
     let mut shown = timeline(&twice, start, 3_000, 3_500, Some(3_000));
@@ -204,7 +199,7 @@ fn a_second_readiness_changes_nothing() {
 #[test]
 fn freezing_before_readiness_keeps_the_open_face_and_never_winks() {
     let start = Instant::now();
-    let face = StartupFace::new(start, 2);
+    let face = StartupFace::new(start, 2, VERSION);
 
     face.freeze();
     let shown = timeline(&face, start, 1_500, 5_000, Some(2_000));
@@ -217,7 +212,7 @@ fn freezing_before_readiness_keeps_the_open_face_and_never_winks() {
 #[test]
 fn freezing_during_the_finale_settles_on_the_wordmark() {
     let start = Instant::now();
-    let face = StartupFace::new(start, 1);
+    let face = StartupFace::new(start, 1, VERSION);
     face.ready(start + Duration::from_secs(5));
 
     face.tick(start + Duration::from_millis(5_300));
@@ -233,7 +228,7 @@ fn freezing_during_the_finale_settles_on_the_wordmark() {
 #[test]
 fn the_static_wordmark_needs_no_frames() {
     let start = Instant::now();
-    let face = StartupFace::settled();
+    let face = StartupFace::settled(VERSION);
 
     assert_eq!(title_at(&face, start), "  〉nori CLI v0.42.0");
     assert_eq!(face.tick(start), None);
@@ -241,9 +236,9 @@ fn the_static_wordmark_needs_no_frames() {
 }
 
 #[test]
-fn every_face_frame_is_five_cells_with_green_eyes_and_a_plain_mouth() {
+fn every_face_frame_is_five_green_cells() {
     let start = Instant::now();
-    let face = StartupFace::new(start, 1);
+    let face = StartupFace::new(start, 1, VERSION);
     face.ready(start + Duration::from_secs(3));
     let mut faces = Vec::new();
     let mut at = 0;
@@ -251,20 +246,14 @@ fn every_face_frame_is_five_cells_with_green_eyes_and_a_plain_mouth() {
     while at < 3_560 {
         let now = start + Duration::from_millis(at);
         face.tick(now);
-        let line = face.title_line(VERSION);
+        let line = face.title_line();
         let title = text(&line);
         if faces.last() != Some(&title) {
             assert_eq!(UnicodeWidthStr::width(title.as_str()), 2 + 5, "{title}");
             for span in &line.spans {
                 let content = span.content.trim();
-                if content == "_" {
-                    assert_eq!(span.style.fg, None, "mouth in {title}");
-                } else if !content.is_empty() {
-                    assert_eq!(
-                        span.style.fg,
-                        Some(Color::Green),
-                        "eye {content} in {title}"
-                    );
+                if !content.is_empty() {
+                    assert_eq!(span.style.fg, Some(Color::Green), "{content} in {title}");
                 }
             }
             faces.push(title);
@@ -289,8 +278,8 @@ fn every_face_frame_is_five_cells_with_green_eyes_and_a_plain_mouth() {
 
 #[test]
 fn the_wordmark_is_a_green_bracket_bold_name_and_dim_version() {
-    let face = StartupFace::settled();
-    let line = face.title_line(VERSION);
+    let face = StartupFace::settled(VERSION);
+    let line = face.title_line();
 
     let styled: Vec<(String, Option<Color>, bool, bool)> = line
         .spans
@@ -318,12 +307,12 @@ fn the_wordmark_is_a_green_bracket_bold_name_and_dim_version() {
 #[test]
 fn frame_sheet_snapshot() {
     let start = Instant::now();
-    let face = StartupFace::new(start, 1);
+    let face = StartupFace::new(start, 1, VERSION);
     face.ready(start + Duration::from_secs(3));
     let sheet = timeline(&face, start, 0, 6_000, None)
         .into_iter()
         .map(|(title, ms)| {
-            let pad = 22 - UnicodeWidthStr::width(title.as_str());
+            let pad = 26 - UnicodeWidthStr::width(title.as_str());
             format!("{title}{:pad$}{ms:>5} ms", "")
         })
         .collect::<Vec<_>>()
@@ -334,7 +323,7 @@ fn frame_sheet_snapshot() {
 #[test]
 fn three_blinks_frame_sheet_snapshot() {
     let start = Instant::now();
-    let face = StartupFace::new(start, 3);
+    let face = StartupFace::new(start, 3, VERSION);
     let sheet = timeline(&face, start, 0, 6_000, None)
         .into_iter()
         .map(|(title, ms)| format!("{title}  {ms} ms"))
@@ -346,9 +335,9 @@ fn three_blinks_frame_sheet_snapshot() {
 #[test]
 fn readiness_mid_blink_still_wakes_for_every_remaining_blink_frame() {
     let start = Instant::now();
-    let face = StartupFace::new(start, 1);
-    // The only blink starts at 1380 ms; readiness lands 10 ms into it.
-    let ready = start + Duration::from_millis(1_390);
+    let face = StartupFace::new(start, 1, VERSION);
+    // The only blink starts at 880 ms; readiness lands 10 ms into it.
+    let ready = start + Duration::from_millis(890);
     face.ready(ready);
 
     let mut now = ready;

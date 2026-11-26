@@ -1,6 +1,6 @@
 ---
 source: tui-pty-e2e/tests/transcript_persistence.rs
-expression: "tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())"
+expression: "tui_pty_e2e::normalize_for_input_snapshot(session.settled_screen())"
 ---
 • Session from [TIMESTAMP] ([SESSION_ID]) transcript
 
@@ -16,6 +16,6 @@ expression: "tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents()
 
   2 ready
 
-› [DEFAULT_PROMPT]
+〉[DEFAULT_PROMPT]
 
   / commands · ! shell · @ files · ? help                                                   ⎇ master

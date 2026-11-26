@@ -149,7 +149,7 @@ fn test_trust_screen_is_skipped_with_default_config() {
 
     // Should show the main prompt directly (skipping onboarding)
     assert!(
-        contents.contains("›") && has_prompt_ready_marker(&contents),
+        contents.contains("〉") && has_prompt_ready_marker(&contents),
         "Should show main prompt with its placeholder or hint row, got: {}",
         contents
     );

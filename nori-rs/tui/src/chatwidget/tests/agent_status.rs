@@ -255,7 +255,9 @@ fn the_welcome_card_is_written_before_any_session_starts() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
     let card = chat
-        .take_welcome_card(crate::nori::session_header::StartupFace::settled())
+        .take_welcome_card(crate::nori::session_header::StartupFace::settled(
+            crate::version::CODEX_CLI_VERSION,
+        ))
         .expect("welcome card");
 
     let card = lines_to_single_string(&card.display_lines(80));
@@ -270,8 +272,10 @@ fn the_welcome_card_is_written_before_any_session_starts() {
 fn a_session_start_after_the_early_card_announces_the_configuration_instead() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     let generation = chat.session_generation;
-    chat.take_welcome_card(crate::nori::session_header::StartupFace::settled())
-        .expect("welcome card");
+    chat.take_welcome_card(crate::nori::session_header::StartupFace::settled(
+        crate::version::CODEX_CLI_VERSION,
+    ))
+    .expect("welcome card");
     while rx.try_recv().is_ok() {}
 
     chat.handle_session_event(generation, session_started(claude_options("opus-5")));

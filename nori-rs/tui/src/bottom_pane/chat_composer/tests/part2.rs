@@ -236,13 +236,13 @@ fn textarea_corner_hides_when_it_cannot_fit_the_composer_width() {
     // Comfortably wide: the mode indicator sits above the prompt.
     let wide = render_composer_rows(40, 3, "Plan");
     assert!(wide[0].trim_end().ends_with("[ Plan ]"), "{wide:?}");
-    assert!(wide[1].starts_with("› Ask Nori"), "{wide:?}");
+    assert!(wide[1].starts_with("〉 Ask Nori"), "{wide:?}");
 
     // Too narrow for the indicator: it disappears rather than being clipped
     // across the row or pushed off the composer's left edge.
     let narrow = render_composer_rows(6, 3, "Plan");
     assert_eq!(narrow[0].trim(), "", "{narrow:?}");
-    assert!(narrow[1].starts_with('›'), "{narrow:?}");
+    assert!(narrow[1].starts_with('〉'), "{narrow:?}");
 }
 
 #[test]

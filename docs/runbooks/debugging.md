@@ -216,9 +216,9 @@ Write each step as one action that waits for its own observable effect:
 
 - Start with `wait_until_ready()`: it waits for the composer and the first
   session's options banner (or, in `nori cloud`, the model on the header's
-  agent row). Do not wait for a bare `›`; the session header draws one before
+  agent row). Do not wait for a bare `〉`; the welcome header draws one before
   the composer and the session exist. The harness's own tests fail if
-  `wait_for_text("›", ..)` appears in `tests/`.
+  `wait_for_text("〉", ..)` appears in `tests/`.
 - Use `wait_for_composer()` only when the test means to type while the agent is
   still starting, for example with `MOCK_AGENT_STARTUP_DELAY_MS`.
 - Type with `type_input` / `submit_input`, which wait for the composer to render

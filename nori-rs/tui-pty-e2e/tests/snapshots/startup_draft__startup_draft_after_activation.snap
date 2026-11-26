@@ -2,4 +2,4 @@
 source: tui-pty-e2e/tests/startup_draft.rs
 expression: composer
 ---
-› draft message
+〉draft message

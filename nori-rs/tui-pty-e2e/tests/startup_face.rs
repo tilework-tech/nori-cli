@@ -22,10 +22,41 @@ fn composer(screen: &str) -> String {
     screen
         .lines()
         .rev()
-        .find(|line| line.trim_start().starts_with('›'))
+        .find(|line| line.starts_with('〉'))
         .unwrap_or_default()
         .trim()
         .to_string()
+}
+
+/// `output` with its escape sequences removed, so text drawn in one write
+/// reads as one run.
+fn without_escapes(output: &str) -> String {
+    let mut text = String::new();
+    let mut chars = output.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\u{1b}' {
+            text.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('[') => {
+                for c in chars.by_ref() {
+                    if ('@'..='~').contains(&c) {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                while let Some(c) = chars.next() {
+                    if c == '\u{7}' || (c == '\u{1b}' && chars.next_if_eq(&'\\').is_some()) {
+                        break;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    text
 }
 
 fn count(haystack: &str, needle: &str) -> usize {
@@ -48,7 +79,7 @@ fn a_slow_session_holds_the_open_face_while_typing_then_winks_and_retypes_once_r
     session.wait_for_composer().unwrap();
     session.type_input("draft before ready").unwrap();
     session
-        .wait_for_text("› draft before ready", TIMEOUT)
+        .wait_for_text("〉draft before ready", TIMEOUT)
         .unwrap();
     session
         .wait_for_text(HOLDING, Duration::from_secs(15))
@@ -76,7 +107,7 @@ fn a_slow_session_holds_the_open_face_while_typing_then_winks_and_retypes_once_r
     assert_eq!(count(&history, AGENT_ROW), 1, "{history}");
     assert!(!history.contains(HOLDING), "{history}");
     let screen = session.screen_contents();
-    assert_eq!(composer(&screen), "› draft before ready");
+    assert_eq!(composer(&screen), "〉draft before ready");
     insta::assert_snapshot!(
         "startup_face_after_slow_readiness",
         normalize_for_snapshot(screen)
@@ -96,11 +127,14 @@ fn the_config_row_is_drawn_before_the_retype_finishes() {
     session.wait_for_text(WORDMARK, TIMEOUT).unwrap();
 
     // Order in the terminal output, not timing: the row is written before
-    // the version that ends the retype.
-    let raw = String::from_utf8_lossy(session.raw_output()).to_string();
-    let config = raw.find("options:").expect("config row drawn");
-    let version = raw.find("v0.0.0").expect("version drawn");
-    assert!(config < version, "the config row waited for the retype");
+    // the retype types its first letter.
+    let text = without_escapes(&String::from_utf8_lossy(session.raw_output()));
+    let config = text.find("options:").expect("config row drawn");
+    let first_letter = text.find("n_ ▐").expect("retype drawn");
+    assert!(
+        config < first_letter,
+        "the config row waited for the retype"
+    );
 }
 
 #[test]
@@ -194,7 +228,7 @@ fn a_failed_initialize_keeps_the_open_face_and_a_usable_composer() {
     session.settle(Duration::from_secs(2));
     session.send_key(tui_pty_e2e::Key::Escape).unwrap();
     session.type_input("still typing").unwrap();
-    session.wait_for_text("› still typing", TIMEOUT).unwrap();
+    session.wait_for_text("〉still typing", TIMEOUT).unwrap();
 
     let history = session.history_contents();
     assert!(history.contains(HOLDING), "{history}");
@@ -218,7 +252,7 @@ fn a_failed_new_session_keeps_the_open_face_and_a_usable_composer() {
         .unwrap();
     session.settle(Duration::from_secs(2));
     session.type_input("still typing").unwrap();
-    session.wait_for_text("› still typing", TIMEOUT).unwrap();
+    session.wait_for_text("〉still typing", TIMEOUT).unwrap();
 
     let history = session.history_contents();
     assert!(history.contains(HOLDING), "{history}");

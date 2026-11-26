@@ -161,7 +161,7 @@ fn the_hint_row_shows_this_terminals_standing_on_the_host() {
         // The composer's placeholder rotates; only the footer row is checked.
         let footer = render_bottom_pane(&chat)
             .lines()
-            .filter(|line| !line.trim().is_empty() && !line.starts_with('›'))
+            .filter(|line| !line.trim().is_empty() && !line.starts_with('〉'))
             .collect::<Vec<_>>()
             .join("\n");
         rows.push(format!("{label}:\n{footer}"));

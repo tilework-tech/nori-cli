@@ -30,10 +30,11 @@ nori -C ../other-repo      # work in another folder
 The first launch shows a welcome screen. Nori then asks whether you trust the
 folder. Nori saves the answer per project in `config.toml`.
 
-At startup the welcome card's title is Jiro's face, `〉_ ▐`. It blinks while
-the agent session starts, then winks and types the wordmark `〉nori CLI` once
-the session is ready. You can type from the first frame; nothing waits for the
-animation. Set `[tui] animations = false` to show the wordmark at once. On a
+At startup the welcome card's title is Jiro's face, `〉_ ▐`, all in green. It
+blinks while the agent session starts, then winks and types the wordmark
+`〉nori CLI` and its version once the session is ready. You can type from the
+first frame; nothing waits for the animation. The composer prompt is the same
+`〉`. Set `[tui] animations = false` to show the wordmark at once. On a
 terminal that draws ambiguous-width characters wide, the closed-eye frame can
 shift by a cell.
 

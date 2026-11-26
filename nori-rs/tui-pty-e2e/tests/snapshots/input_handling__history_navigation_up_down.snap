@@ -1,6 +1,6 @@
 ---
 source: tui-pty-e2e/tests/input_handling.rs
-expression: normalize_for_input_snapshot(session.screen_contents())
+expression: normalize_for_input_snapshot(session.settled_screen())
 ---
 • Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config
 to change)
@@ -9,6 +9,6 @@ to change)
 
 • Mock response
 
-› [DEFAULT_PROMPT]
+〉[DEFAULT_PROMPT]
 
   / commands · ! shell · @ files · ? help                               ⎇ master

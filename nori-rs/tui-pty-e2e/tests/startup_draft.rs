@@ -40,7 +40,7 @@ args = ["-c", 'while [ ! -f "$1" ]; do sleep 0.01; done; exec "$2"', "gated-mock
     .unwrap();
     session.wait_for_composer().unwrap();
     session.send_key(Key::Char('d')).unwrap();
-    session.wait_for_text("› d", TIMEOUT).unwrap();
+    session.wait_for_text("〉d", TIMEOUT).unwrap();
     // The agent cannot prepare until the first character has rendered.
     std::fs::write(&gate, "ready").unwrap();
     session
@@ -51,10 +51,10 @@ args = ["-c", 'while [ ! -f "$1" ]; do sleep 0.01; done; exec "$2"', "gated-mock
     let composer = screen
         .lines()
         .rev()
-        .find(|line| line.contains('›'))
+        .find(|line| line.starts_with('〉'))
         .unwrap()
         .trim();
-    assert_eq!(composer, "› draft message");
+    assert_eq!(composer, "〉draft message");
     insta::assert_snapshot!("startup_draft_after_activation", composer);
 
     session.send_key(Key::Ctrl('c')).unwrap();

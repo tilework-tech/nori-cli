@@ -1329,25 +1329,27 @@ pub fn normalize_for_snapshot(contents: String) -> String {
         .collect();
     normalized = lines.join("\n");
 
-    // Replace dynamic prompt text on lines starting with ›
+    // Replace the composer's rotating placeholder. The prompt is `〉` in the
+    // first column, with the placeholder or input right after it.
     let lines: Vec<String> = normalized
         .lines()
-        .map(|line| {
-            if line.trim() == "›" {
-                // An empty prompt whose tips moved to the hint row below it.
-                "› [DEFAULT_PROMPT]".to_string()
-            } else if line.trim_start().starts_with("› ")
-                && (line.trim_start().starts_with("› ? for shortcuts")
-                    || line.trim_start().starts_with("› / for slash command menu")
-                    || line.trim_start().starts_with("› $ for skill listing")
-                    || line.trim_start().starts_with("› ! for shell commands")
-                    || line.trim_start().starts_with("› @ for file mentions")
-                    || line.contains("@filename"))
+        .map(|line| match line.strip_prefix('〉') {
+            Some(rest)
+                if rest.trim().is_empty()
+                    || [
+                        "? for shortcuts",
+                        "/ for slash command menu",
+                        "$ for skill listing",
+                        "! for shell commands",
+                        "@ for file mentions",
+                    ]
+                    .iter()
+                    .any(|tip| rest.starts_with(tip))
+                    || rest.contains("@filename") =>
             {
-                "› [DEFAULT_PROMPT]".to_string()
-            } else {
-                line.to_string()
+                "〉[DEFAULT_PROMPT]".to_string()
             }
+            _ => line.to_string(),
         })
         .collect();
 
@@ -1637,16 +1639,16 @@ mod tests {
             "! for shell commands",
             "@ for file mentions",
         ] {
-            let input = format!("› {placeholder}\n");
-            assert_eq!(normalize_for_input_snapshot(input), "› [DEFAULT_PROMPT]\n");
+            let input = format!("〉{placeholder}\n");
+            assert_eq!(normalize_for_input_snapshot(input), "〉[DEFAULT_PROMPT]\n");
         }
     }
 
     #[test]
     fn test_normalize_empty_prompt_shown_with_hints() {
         assert_eq!(
-            normalize_for_input_snapshot("›\n  / commands · ? help\n".to_string()),
-            "› [DEFAULT_PROMPT]\n  / commands · ? help\n"
+            normalize_for_input_snapshot("〉\n  / commands · ? help\n".to_string()),
+            "〉[DEFAULT_PROMPT]\n  / commands · ? help\n"
         );
     }
 
@@ -1660,13 +1662,13 @@ mod tests {
   Run 'npx nori-skillsets init' to set up Nori AI
 enhancements
 
-› @ for file mentions
+〉@ for file mentions
 
   ⎇ master
   Approvals: Read Only
 ";
         let expected = "\
-› [DEFAULT_PROMPT]
+〉[DEFAULT_PROMPT]
 
   ⎇ master
   Approvals: Read Only

@@ -105,7 +105,7 @@ fn the_selected_duplicate_is_edited_and_delivered_once() {
     key(&mut session, Key::Enter);
     session
         .wait_for(
-            |screen| queued_rows(screen) == ["alpha", "dup"] && screen.contains("› dup"),
+            |screen| queued_rows(screen) == ["alpha", "dup"] && screen.contains("〉dup"),
             TIMEOUT,
         )
         .expect("only the selected duplicate leaves the queue");
@@ -144,7 +144,7 @@ fn the_selected_message_is_removed_and_never_delivered() {
     session.type_input("draft kept").unwrap();
     session
         .wait_for(
-            |screen| queued_rows(screen) == ["dup", "dup"] && screen.contains("› draft kept"),
+            |screen| queued_rows(screen) == ["dup", "dup"] && screen.contains("〉draft kept"),
             TIMEOUT,
         )
         .expect("the composer holds only what the user typed");

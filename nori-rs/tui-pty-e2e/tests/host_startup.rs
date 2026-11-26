@@ -158,7 +158,7 @@ fn a_positional_prompt_whose_session_is_refused_returns_to_the_composer_unsent()
     tui.wait_for_text("new session unavailable", TIMEOUT)
         .unwrap();
     tui.wait_for(
-        |screen| screen.lines().any(|line| line.trim() == "› whoami"),
+        |screen| screen.lines().any(|line| line.trim() == "〉whoami"),
         TIMEOUT,
     )
     .unwrap();

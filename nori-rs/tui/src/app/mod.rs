@@ -422,9 +422,10 @@ impl App {
                 crate::nori::session_header::StartupFace::new(
                     std::time::Instant::now(),
                     rand::rng().random_range(1..=3),
+                    crate::version::CODEX_CLI_VERSION,
                 )
             } else {
-                crate::nori::session_header::StartupFace::settled()
+                crate::nori::session_header::StartupFace::settled(crate::version::CODEX_CLI_VERSION)
             };
             if let Some(card) = app.chat_widget.take_welcome_card(face.clone()) {
                 app.startup_header = Some(startup_header::StartupHeader::new(Arc::new(card), face));

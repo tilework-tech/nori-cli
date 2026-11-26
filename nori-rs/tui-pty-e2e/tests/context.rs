@@ -150,5 +150,8 @@ fn context_command_renders_unknown_usage_without_prompting_the_agent() {
         screen.contains("0 user turns"),
         "slash command must not become a user turn: {screen}"
     );
-    assert!(screen.contains("›"), "composer remains available: {screen}");
+    assert!(
+        screen.contains("〉"),
+        "composer remains available: {screen}"
+    );
 }
