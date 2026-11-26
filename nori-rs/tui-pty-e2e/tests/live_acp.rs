@@ -34,7 +34,7 @@ fn test_gemini_acp_live_response() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn with gemini-acp");
 
     session
-        .wait_for_text("›", LIVE_TIMEOUT)
+        .wait_for_composer(LIVE_TIMEOUT)
         .expect("TUI should start successfully");
 
     // Send a simple prompt
@@ -78,7 +78,7 @@ fn test_claude_acp_live_response() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn with claude-acp");
 
     session
-        .wait_for_text("›", LIVE_TIMEOUT)
+        .wait_for_composer(LIVE_TIMEOUT)
         .expect("TUI should start successfully");
 
     // Send a simple prompt

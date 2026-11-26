@@ -14,7 +14,7 @@ fn test_submit_text() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -40,7 +40,7 @@ fn test_escape_cancels_streaming() {
 
     // Wait for the prompt to appear (indicated by the chevron character)
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -83,7 +83,7 @@ fn test_ctrl_c_cancels_streaming() {
 
     // Wait for the prompt to appear (indicated by the chevron character)
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -124,7 +124,7 @@ fn test_prompt_submitted_during_cancelling_is_not_lost() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -158,7 +158,7 @@ fn test_prompt_still_streams_after_interrupt() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -175,7 +175,7 @@ fn test_prompt_still_streams_after_interrupt() {
         )
         .expect("First prompt should report interrupt");
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Prompt should return after first interrupt");
 
     session.submit_input("second try").unwrap();
@@ -196,7 +196,7 @@ fn test_prompt_still_streams_after_interrupt() {
 #[cfg(target_os = "linux")]
 fn direct_busy_enter_reports_fallback_and_tab_explicitly_queues() {
     let mut session = TuiSession::spawn_with_config(32, 110, SessionConfig::new()).unwrap();
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
     session.submit_input("mock:stream-until-cancel").unwrap();
     session.wait_for_text("esc to interrupt", TIMEOUT).unwrap();
     session.submit_input("Chart the orchard first").unwrap();
@@ -218,6 +218,6 @@ mod steering;
 fn direct_enter_delivers_to_the_original_turn_then_tab_drains_once() {
     let config = SessionConfig::new().with_agent_env("MOCK_AGENT_STEERING", "1");
     let mut session = TuiSession::spawn_with_config(34, 110, config).unwrap();
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
     steering::exercise(&mut session);
 }

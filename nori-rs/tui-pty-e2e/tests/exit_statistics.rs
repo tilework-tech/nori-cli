@@ -55,7 +55,7 @@ fn test_exit_message_displays_on_ctrl_d() {
 
     // Wait for the prompt to appear
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -97,7 +97,7 @@ fn test_exit_message_displays_on_slash_exit() {
 
     // Wait for the prompt to appear
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 

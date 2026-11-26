@@ -167,7 +167,7 @@ pub(super) fn render(area: Rect, buf: &mut Buffer, theme: Theme, state: &mut Men
         } else {
             MenuRowPattern::Plain
         })
-        .fullscreen_selection_rails(!matches!(state.story, MenuStory::Narrow))
+        .selection_rails(!matches!(state.story, MenuStory::Narrow))
         .key_hints(fixtures::footer_hints(state.story));
     if let Some(subtitle) = state.notice.as_deref().or(presentation.subtitle) {
         menu = menu.subtitle(subtitle);

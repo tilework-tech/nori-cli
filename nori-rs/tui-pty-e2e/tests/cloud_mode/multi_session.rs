@@ -73,7 +73,7 @@ fn test_cloud_close_beside_another_session_lists_it_as_closed() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("create-new should start a session");
     std::thread::sleep(TIMEOUT_INPUT);
     session.submit_input("first cloud question").unwrap();

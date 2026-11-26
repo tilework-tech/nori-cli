@@ -449,7 +449,7 @@ fn enabled_items_stay_darker_than_disabled_items_on_light_backgrounds() {
 
 #[test]
 #[allow(clippy::disallowed_methods)]
-fn default_selection_uses_a_surface_and_pointer_without_edge_rails() {
+fn focused_item_has_a_surface_a_pointer_and_rails() {
     let theme = Theme::for_terminal_background(Some((20, 20, 20)));
     let mut state = consequence_state();
     let buffer = rendered_buffer(
@@ -469,39 +469,16 @@ fn default_selection_uses_a_surface_and_pointer_without_edge_rails() {
     let description =
         find_ascii_text(&buffer, "Supporting copy for Keep session").expect("description");
     assert_eq!(buffer[description].fg, Color::DarkGray);
-    for row in selected.1..=description.1 {
-        assert_eq!(find_symbol_on_row(&buffer, row, "▏"), None);
-        assert_eq!(find_symbol_on_row(&buffer, row, "▕"), None);
-    }
-    for cell in [pointer, selected, description] {
-        assert_eq!(buffer[cell].bg, Color::Rgb(43, 43, 43));
-    }
-}
-
-#[test]
-#[allow(clippy::disallowed_methods)]
-fn fullscreen_selection_rails_are_explicit_and_replace_the_pointer() {
-    let theme = Theme::for_terminal_background(Some((20, 20, 20)));
-    let mut state = consequence_state();
-    let buffer = rendered_buffer_with_selection_rails(
-        &mut state,
-        80,
-        24,
-        "Remove local session?",
-        None,
-        theme,
-        Color::Blue,
-    );
-
-    let selected = find_ascii_text(&buffer, "Keep session").expect("selected label");
-    let description =
-        find_ascii_text(&buffer, "Supporting copy for Keep session").expect("description");
+    assert_eq!(find_symbol_on_row(&buffer, description.1, "›"), None);
     for row in selected.1..=description.1 {
         let left = find_symbol_on_row(&buffer, row, "▏").expect("left selection rail");
         let right = find_symbol_on_row(&buffer, row, "▕").expect("right selection rail");
         assert_eq!(buffer[left].fg, Color::Green);
         assert_eq!(buffer[right].fg, Color::Green);
-        assert_eq!(find_symbol_on_row(&buffer, row, "›"), None);
+        assert!(left.0 < pointer.0);
+    }
+    for cell in [pointer, selected, description] {
+        assert_eq!(buffer[cell].bg, Color::Rgb(43, 43, 43));
     }
 }
 
@@ -710,11 +687,11 @@ fn dense_menu_keeps_item_anatomy_without_inter_item_rows_and_tightens_padding() 
     );
     assert_eq!(
         selected_surface_bounds(&normal, normal_first.1, Color::Magenta),
-        Some((normal_first.0 - 2, normal_first.0 + 51))
+        Some((normal_first.0 - 3, normal_first.0 + 50))
     );
     assert_eq!(
         selected_surface_bounds(&dense, dense_first.1, Color::Magenta),
-        Some((dense_first.0 - 2, dense_first.0 + 53))
+        Some((dense_first.0 - 3, dense_first.0 + 52))
     );
     let normal_title = find_ascii_text(&normal, "Choose how to continue").expect("normal title");
     let dense_title = find_ascii_text(&dense, "Choose how to continue").expect("dense title");
@@ -907,8 +884,8 @@ fn empty_disabled_and_descriptionless_menus_render_without_fake_selection() {
     let plain_render = snapshot(&mut descriptionless, 40, 12, "Actions", None);
     assert!(plain_render.contains("No description"));
     assert!(plain_render.contains('›'));
-    assert!(!plain_render.contains('▏'));
-    assert!(!plain_render.contains('▕'));
+    assert!(plain_render.contains('▏'));
+    assert!(plain_render.contains('▕'));
 }
 
 #[test]
@@ -1010,27 +987,6 @@ fn rendered_buffer(
         subtitle,
         theme,
         host_background,
-        false,
-    )
-}
-
-fn rendered_buffer_with_selection_rails(
-    state: &mut MenuState<&'static str>,
-    width: u16,
-    height: u16,
-    title: &'static str,
-    subtitle: Option<&'static str>,
-    theme: Theme,
-    host_background: Color,
-) -> Buffer {
-    rendered_buffer_with_options(
-        state,
-        width,
-        height,
-        title,
-        subtitle,
-        theme,
-        host_background,
         true,
     )
 }
@@ -1044,7 +1000,7 @@ fn rendered_buffer_with_options(
     subtitle: Option<&'static str>,
     theme: Theme,
     host_background: Color,
-    fullscreen_selection_rails: bool,
+    selection_rails: bool,
 ) -> Buffer {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).expect("test terminal");
@@ -1056,7 +1012,7 @@ fn rendered_buffer_with_options(
             let mut menu = OverlayMenu::new(title)
                 .key_hints(default_hints())
                 .theme(theme)
-                .fullscreen_selection_rails(fullscreen_selection_rails);
+                .selection_rails(selection_rails);
             if let Some(subtitle) = subtitle {
                 menu = menu.subtitle(subtitle);
             }

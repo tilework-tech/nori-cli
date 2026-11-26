@@ -97,7 +97,6 @@ fn styled_menu<'a, K>(
         .max_width(76)
         .density(MenuDensity::Dense)
         .row_pattern(MenuRowPattern::Zebra)
-        .fullscreen_selection_rails(true)
         .key_hints(hints)
 }
 

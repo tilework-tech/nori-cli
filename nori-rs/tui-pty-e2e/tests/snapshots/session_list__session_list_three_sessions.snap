@@ -12,12 +12,12 @@ Sessions 3 · 1 waiting on you · 2 ready  tab: waiting only · / search
 
 All  waiting on you
 
-  Session                                                            Agent         Status
-  ○ alpha question                                                   mock-model    ready
-    alpha agent answer                                               Mock D…Model  N ago
-  ● mock:request-permission:rm -rf target/debug                      mock-model-…  waiting on you
-    approve: rm -rf target/debug                                     Mock D…Model  N ago
-› ○ gamma question (current)                                         mock-model    ready
-    alpha agent answer                                               Mock D…Model  N ago
+   Session                                                          Agent         Status
+   ○ alpha question                                                 mock-model    ready
+     alpha agent answer                                             Mock D…Model  N ago
+   ● mock:request-permission:rm -rf target/debug                    mock-model-…  waiting on you
+     approve: rm -rf target/debug                                   Mock D…Model  N ago
+▏› ○ gamma question (current)                                       mock-model    ready                      ▕
+▏    alpha agent answer                                             Mock D…Model  N ago                     ▕
 
 ↑↓/j/k move  enter open  ctrl+d close  tab waiting on you  esc close

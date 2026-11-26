@@ -193,6 +193,12 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   reply arrives. Release the input reader before exposing the shell or editor.
 - Shared pickers get their styles from `nori-tui-components` through
   `component_theme` in `style.rs`.
+- Every large list marks its focused row the same way: green `▏ ▕` rails at
+  both edges, a green `›` pointer in its own column, and a shaded background
+  when the terminal reports its background and true color. Without shading,
+  the pointer and rails are bold. Row numbers and the `○`/`●` multiple-choice
+  dots sit in their own columns after the pointer and never replace it. The
+  shared `Picker` and `OverlayMenu` draw this; see `tui-components/src/focus.rs`.
 
 ## Tests
 

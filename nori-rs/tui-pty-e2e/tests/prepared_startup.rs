@@ -195,7 +195,7 @@ fn remote_adapter_activates_a_session_on_startup() {
     let mut session = TuiSession::spawn_with_config(24, 90, config).expect("spawn nori");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("composer should remain usable while the agent is prepared");
     let stderr = fake.wait_for_stderr("Mock agent: new_session id=", TIMEOUT);
 
@@ -218,7 +218,7 @@ fn agent_without_session_list_activates_a_session_on_startup() {
     let config = fake.config();
     let mut session = TuiSession::spawn_with_config(24, 90, config).expect("spawn nori");
 
-    session.wait_for_text("›", TIMEOUT).expect("composer");
+    session.wait_for_composer(TIMEOUT).expect("composer");
     let stderr = fake.wait_for_stderr("Mock agent: new_session id=", TIMEOUT);
 
     assert_eq!(fake.pid_count(), 1);
@@ -248,7 +248,7 @@ fn first_prompt_waits_for_preparation_then_activates_once() {
     let mut session = TuiSession::spawn_with_config(24, 90, config).expect("spawn nori");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("the composer should remain usable during preparation");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
     session.submit_input("one deferred prompt").unwrap();
@@ -286,7 +286,7 @@ fn slash_new_reuses_in_flight_preparation() {
     let mut session = TuiSession::spawn_with_config(24, 90, config).expect("spawn nori");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("the composer should remain usable during preparation");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
     session.submit_input("/new").unwrap();
@@ -315,7 +315,7 @@ fn slash_resume_reuses_in_flight_preparation_catalog() {
     let mut session = TuiSession::spawn_with_config(24, 100, config).expect("spawn nori");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("the composer should remain usable during preparation");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
     session.submit_input("/resume").unwrap();
@@ -349,7 +349,7 @@ fn slash_resume_uses_resume_capability_on_the_prepared_connection() {
         .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS", "1200");
     let mut session = TuiSession::spawn_with_config(24, 100, config).expect("spawn nori");
 
-    session.wait_for_text("›", TIMEOUT).expect("composer");
+    session.wait_for_composer(TIMEOUT).expect("composer");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
     session.submit_input("/resume").unwrap();
     session
@@ -408,7 +408,7 @@ fn startup_activates_and_local_status_renders() {
         .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
     let mut session = TuiSession::spawn_with_config(24, 90, config).expect("spawn nori");
 
-    session.wait_for_text("›", TIMEOUT).expect("composer");
+    session.wait_for_composer(TIMEOUT).expect("composer");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
     // Startup activates the session on its own.
     let stderr = fake.wait_for_stderr("Mock agent: new_session id=", TIMEOUT);
@@ -441,7 +441,7 @@ approval_mode = true
         .with_agent_env("MOCK_AGENT_REQUEST_PERMISSION", "1");
     let mut session = TuiSession::spawn_with_config(24, 100, config).expect("spawn nori");
 
-    session.wait_for_text("›", TIMEOUT).expect("composer");
+    session.wait_for_composer(TIMEOUT).expect("composer");
     let _ = fake.wait_for_stderr("Mock agent: new_session id=", TIMEOUT);
     session.submit_input("/approvals").unwrap();
     session
@@ -485,7 +485,7 @@ fn exit_reaps_in_flight_preparation() {
     let mut session = TuiSession::spawn_with_config(24, 90, config).expect("spawn nori");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("the composer should remain usable during preparation");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
     let pid = fake.first_pid();
@@ -547,7 +547,7 @@ fn primary_preparation_timeout_reaps_the_child_without_activating() {
         );
     let mut session = TuiSession::spawn_with_config(24, 90, config).expect("spawn nori");
 
-    session.wait_for_text("›", TIMEOUT).expect("composer");
+    session.wait_for_composer(TIMEOUT).expect("composer");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
     let pid = fake.first_pid();
     let descendant_pid = fake.wait_for_recorded_pid("descendant_pid", TIMEOUT);

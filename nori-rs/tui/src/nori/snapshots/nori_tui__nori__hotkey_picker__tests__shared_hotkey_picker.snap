@@ -6,7 +6,7 @@ expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
   Configure keyboard shortcuts
 
      Action                          Binding
-  ▏  Open Transcript                 ctrl + t            ▕
+  ▏› Open Transcript                 ctrl + t            ▕
      Open Editor                     ctrl + g
      Move Backward Char              ctrl + b
      Move Forward Char               ctrl + f

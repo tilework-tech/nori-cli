@@ -16,7 +16,7 @@ const MENU_ROW: &str = "/approvals";
 #[test]
 fn the_first_escape_closes_the_menu_and_the_second_interrupts_the_turn() {
     let mut session = TuiSession::spawn_with_config(40, 110, SessionConfig::new()).expect("spawn");
-    session.wait_for_text("›", TIMEOUT).expect("TUI starts");
+    session.wait_for_composer(TIMEOUT).expect("TUI starts");
     std::thread::sleep(TIMEOUT_INPUT);
     session.submit_input(STREAM).unwrap();
     session

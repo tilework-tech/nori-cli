@@ -65,7 +65,7 @@ fn spawn_busy_session_with(log: &Path, config: SessionConfig) -> TuiSession {
         .with_agent_env("MOCK_AGENT_DELAY_MS", TURN_DELAY_MS)
         .with_agent_env("MOCK_AGENT_PROMPT_LOG", log.display().to_string());
     let mut session = TuiSession::spawn_with_config(30, 90, config).expect("spawn nori");
-    session.wait_for_text("›", TIMEOUT).expect("composer ready");
+    session.wait_for_composer(TIMEOUT).expect("composer ready");
     std::thread::sleep(TIMEOUT_INPUT);
     session
 }

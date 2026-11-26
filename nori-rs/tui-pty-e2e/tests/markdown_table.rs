@@ -32,7 +32,7 @@ fn test_streamed_markdown_table_renders_as_a_grid() {
     let config = SessionConfig::new().with_mock_response_streamed(TABLE_RESPONSE, 8);
     let mut session = TuiSession::spawn_with_config(24, 100, config).expect("Failed to spawn");
 
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
 
     session.submit_input("show me a table").unwrap();
 

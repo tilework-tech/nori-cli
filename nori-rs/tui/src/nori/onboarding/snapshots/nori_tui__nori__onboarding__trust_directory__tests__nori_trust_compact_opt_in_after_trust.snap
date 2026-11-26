@@ -6,9 +6,9 @@ expression: "render_widget(&widget, 70, 16)"
   Compact shows one line per tool call. Ctrl+O opens the full
   transcript either way.
 
-  ▏ Full tool output                                               ▕
-  ▏ Keep every command with all of its output                      ▕
-    Compact tool output
-    One line per tool call with its last output line
+  ▏› Full tool output                                              ▕
+  ▏  Keep every command with all of its output                     ▕
+     Compact tool output
+     One line per tool call with its last output line
 
   ↑↓/j/k move  enter select  esc skip

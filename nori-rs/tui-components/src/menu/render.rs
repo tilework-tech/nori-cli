@@ -25,6 +25,7 @@ use super::layout::wrap_lines;
 use crate::KeyHint;
 use crate::KeyHints;
 use crate::Theme;
+use crate::focus;
 
 /// Configurable presentation for a bounded action menu.
 ///
@@ -41,7 +42,7 @@ pub struct OverlayMenu<'a, K> {
     max_width: u16,
     placement: MenuPlacement,
     backdrop: bool,
-    fullscreen_selection_rails: bool,
+    selection_rails: bool,
     density: MenuDensity,
     row_pattern: MenuRowPattern,
     key_hints: Vec<KeyHint<'a>>,
@@ -52,7 +53,7 @@ pub struct OverlayMenu<'a, K> {
 struct MenuRenderPolicy {
     theme: Theme,
     has_numbers: bool,
-    fullscreen_selection_rails: bool,
+    selection_rails: bool,
     item_gap: u16,
     row_pattern: MenuRowPattern,
 }
@@ -67,7 +68,7 @@ impl<'a, K> OverlayMenu<'a, K> {
             max_width: 58,
             placement: MenuPlacement::default(),
             backdrop: true,
-            fullscreen_selection_rails: false,
+            selection_rails: true,
             density: MenuDensity::default(),
             row_pattern: MenuRowPattern::default(),
             key_hints: Vec::new(),
@@ -106,10 +107,10 @@ impl<'a, K> OverlayMenu<'a, K> {
         self
     }
 
-    /// Enables symmetric selected-row rails for a caller-owned full-screen
-    /// overlay layer. Embedded and copyable content should keep this disabled.
-    pub fn fullscreen_selection_rails(mut self, enabled: bool) -> Self {
-        self.fullscreen_selection_rails = enabled;
+    /// Draws green rails at both edges of the focused item. On by default;
+    /// copyable content can turn them off.
+    pub fn selection_rails(mut self, enabled: bool) -> Self {
+        self.selection_rails = enabled;
         self
     }
 
@@ -253,7 +254,7 @@ impl<K> StatefulWidget for OverlayMenu<'_, K> {
         let render_policy = MenuRenderPolicy {
             theme: self.theme,
             has_numbers,
-            fullscreen_selection_rails: self.fullscreen_selection_rails,
+            selection_rails: self.selection_rails,
             item_gap,
             row_pattern: self.row_pattern,
         };
@@ -272,6 +273,11 @@ impl<K> StatefulWidget for OverlayMenu<'_, K> {
         }
     }
 }
+
+/// Cells before an item's number and label: a rail, the pointer, and a space.
+const ITEM_LEAD: u16 = 1 + focus::POINTER_WIDTH;
+/// Cells after an item's label: a space and a rail.
+const ITEM_RIGHT_PADDING: u16 = 2;
 
 fn render_items<K>(
     area: Rect,
@@ -382,27 +388,25 @@ fn render_item<K>(
     if !item.disabled {
         buf.set_style(area, row_surface);
     }
+    let (lead, right_padding) = if area.width >= ITEM_LEAD + ITEM_RIGHT_PADDING {
+        (ITEM_LEAD, ITEM_RIGHT_PADDING)
+    } else {
+        (0, 0)
+    };
     if selected {
         buf.set_style(area, selected_style);
-        let pointer_style = selected_style.patch(policy.theme.pointer);
-        if policy.fullscreen_selection_rails {
-            for y in area.y..area.bottom() {
-                buf.set_string(area.x, y, "▏", pointer_style);
-                if area.width > 1 {
-                    buf.set_string(area.right().saturating_sub(1), y, "▕", pointer_style);
-                }
+        if lead > 0 {
+            let mark_style = focus::mark_style(selected_style, policy.theme);
+            if policy.selection_rails {
+                focus::render_rails(area, buf, mark_style);
             }
-        } else {
-            Paragraph::new("›")
-                .style(pointer_style)
-                .render(Rect::new(area.x, area.y, 1, 1), buf);
+            buf.set_string(area.x.saturating_add(1), area.y, focus::POINTER, mark_style);
         }
     }
 
-    let inner_x = area.x.saturating_add(u16::from(area.width >= 3) * 2);
+    let inner_x = area.x.saturating_add(lead);
     let number_width = u16::from(policy.has_numbers) * 3;
     let label_x = inner_x.saturating_add(number_width);
-    let right_padding = if area.width >= 3 { 2 } else { 0 };
     let label_width = area
         .right()
         .saturating_sub(label_x)
@@ -534,7 +538,7 @@ fn mnemonic_line<'a>(
 
 fn item_heights<K>(items: &[MenuItem<K>], content_width: u16, has_numbers: bool) -> Vec<u16> {
     let label_width = content_width
-        .saturating_sub(4)
+        .saturating_sub(ITEM_LEAD + ITEM_RIGHT_PADDING)
         .saturating_sub(u16::from(has_numbers) * 3);
     items
         .iter()

@@ -26,7 +26,7 @@ const BLOCKED: &str = "state=blocked:app=nori:kind=permission:msg=QXBwcm92YWwgbm
 fn spawn(config: SessionConfig) -> TuiSession {
     let mut session = TuiSession::spawn_with_config(30, 100, config).expect("spawn");
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
     session

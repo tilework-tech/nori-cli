@@ -55,7 +55,7 @@ fn test_acp_create_new_file() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -109,7 +109,7 @@ fn test_acp_edit_existing_file() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -160,7 +160,7 @@ fn test_acp_create_file_with_parent_dirs() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -211,7 +211,7 @@ fn test_acp_write_outside_workspace_denied() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -259,7 +259,7 @@ fn test_acp_write_system_path_denied() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -307,7 +307,7 @@ fn test_acp_write_to_tmp_allowed() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -356,7 +356,7 @@ fn test_acp_multiple_file_writes() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -370,7 +370,7 @@ fn test_acp_multiple_file_writes() {
 
     // Wait for prompt to return
     session
-        .wait_for_text("›", Duration::from_secs(5))
+        .wait_for_composer(Duration::from_secs(5))
         .expect("Prompt should return after first write");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -419,7 +419,7 @@ fn test_acp_file_write_snapshot() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);

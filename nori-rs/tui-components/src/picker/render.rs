@@ -32,6 +32,7 @@ use crate::SemanticMessage;
 use crate::Theme;
 use crate::detail::provider_tone_style;
 use crate::detail::tone_style;
+use crate::focus;
 
 /// Stateless renderer for a caller-owned [`PickerState`].
 pub struct Picker<'a, K> {
@@ -40,7 +41,7 @@ pub struct Picker<'a, K> {
     density: PickerDensity,
     show_title: bool,
     show_details: bool,
-    fullscreen_selection_rails: bool,
+    selection_rails: bool,
     compact_descriptions: bool,
     selection_keeps_tones: bool,
     horizontal_margin: u16,
@@ -56,7 +57,7 @@ impl<'a, K> Picker<'a, K> {
             density: PickerDensity::default(),
             show_title: true,
             show_details: true,
-            fullscreen_selection_rails: false,
+            selection_rails: true,
             compact_descriptions: false,
             selection_keeps_tones: false,
             horizontal_margin: 2,
@@ -96,10 +97,10 @@ impl<'a, K> Picker<'a, K> {
         self
     }
 
-    /// Enables symmetric selected-row rails for a caller-owned full-screen
-    /// overlay layer. Embedded and copyable content should keep this disabled.
-    pub fn fullscreen_selection_rails(mut self, enabled: bool) -> Self {
-        self.fullscreen_selection_rails = enabled;
+    /// Draws green rails at both edges of the focused row. On by default;
+    /// copyable content can turn them off.
+    pub fn selection_rails(mut self, enabled: bool) -> Self {
+        self.selection_rails = enabled;
         self
     }
 
@@ -321,7 +322,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
             return;
         }
 
-        let row_content_area = if self.fullscreen_selection_rails {
+        let row_content_area = if self.selection_rails {
             area.inner(Margin {
                 horizontal: 1,
                 vertical: 0,
@@ -360,6 +361,20 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 .collect::<Vec<_>>(),
         );
         let simple_list = columns.len() == 1 && self.state.mode == PickerMode::Single;
+        let number_width = if simple_list
+            && visible.iter().any(|index| {
+                let item = &self.state.items[*index];
+                !item.disabled && !item.section_heading
+            }) {
+            3
+        } else {
+            0
+        };
+        let dot_width = match self.state.mode {
+            PickerMode::Single => 0,
+            PickerMode::Toggle | PickerMode::Multi => 2,
+        };
+        let marker_width = focus::POINTER_WIDTH + number_width + dot_width;
         let header_height = u16::from(!simple_list && area.height > row_height);
         if header_height > 0 {
             self.render_row(
@@ -370,9 +385,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 columns
                     .iter()
                     .map(|column| (column.header.as_str(), self.theme.table_header)),
-                self.theme.table_header,
-                " ",
-                2,
+                &[(" ", self.theme.table_header, marker_width)],
             );
         }
 
@@ -407,34 +420,6 @@ impl<K: Clone + Eq> Picker<'_, K> {
                         .count()
                 })
                 .filter(|position| (1..=9).contains(position));
-            let marker = if let Some(position) = numbered_position {
-                format!("{position}.")
-            } else {
-                match (self.fullscreen_selection_rails, self.state.mode) {
-                    (true, PickerMode::Single) => " ".to_string(),
-                    (true, PickerMode::Toggle | PickerMode::Multi) => {
-                        if checked {
-                            "●".to_string()
-                        } else {
-                            "○".to_string()
-                        }
-                    }
-                    (false, PickerMode::Single) => {
-                        if selected {
-                            "›".to_string()
-                        } else {
-                            " ".to_string()
-                        }
-                    }
-                    (false, PickerMode::Toggle | PickerMode::Multi) => match (selected, checked) {
-                        (true, true) => "◉".to_string(),
-                        (true, false) => "›".to_string(),
-                        (false, true) => "●".to_string(),
-                        (false, false) => "○".to_string(),
-                    },
-                }
-            };
-            let marker_width = if numbered_position.is_some() { 3 } else { 2 };
             let surface = match self.density {
                 PickerDensity::Compact if striped => self.theme.row_stripe,
                 PickerDensity::Compact if (start + row_offset).is_multiple_of(2) => self.theme.row,
@@ -521,15 +506,22 @@ impl<K: Clone + Eq> Picker<'_, K> {
             } else {
                 buf.set_style(row_area, style);
             }
-            if selected && self.fullscreen_selection_rails {
-                let rail_style = style.patch(self.theme.pointer);
-                for y in row_area.y..row_area.bottom() {
-                    buf.set_string(row_area.x, y, "▏", rail_style);
-                    if row_area.width > 1 {
-                        buf.set_string(row_area.right().saturating_sub(1), y, "▕", rail_style);
-                    }
-                }
+            let pointer_style = focus::mark_style(style, self.theme);
+            if selected && self.selection_rails {
+                focus::render_rails(row_area, buf, pointer_style);
             }
+            let number =
+                numbered_position.map_or_else(String::new, |position| format!("{position}."));
+            let dot = match (self.state.mode, checked) {
+                (PickerMode::Single, _) => "",
+                (PickerMode::Toggle | PickerMode::Multi, true) => "●",
+                (PickerMode::Toggle | PickerMode::Multi, false) => "○",
+            };
+            let dot_style = if checked && !item.disabled {
+                style.patch(self.theme.pointer)
+            } else {
+                style
+            };
             self.render_row(
                 Rect::new(row_content_area.x, row_area.y, row_content_area.width, 1),
                 buf,
@@ -555,15 +547,15 @@ impl<K: Clone + Eq> Picker<'_, K> {
                     };
                     (value.as_str(), cell_style)
                 }),
-                if item.disabled {
-                    style
-                } else if selected || checked {
-                    style.patch(self.theme.pointer)
-                } else {
-                    style
-                },
-                &marker,
-                marker_width,
+                &[
+                    (
+                        if selected { focus::POINTER } else { "" },
+                        pointer_style,
+                        focus::POINTER_WIDTH,
+                    ),
+                    (number.as_str(), style, number_width),
+                    (dot, dot_style, dot_width),
+                ],
             );
             let second_row_style = if selected {
                 style.patch(self.theme.muted)
@@ -631,7 +623,6 @@ impl<K: Clone + Eq> Picker<'_, K> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn render_row<'a>(
         &self,
         area: Rect,
@@ -639,13 +630,13 @@ impl<K: Clone + Eq> Picker<'_, K> {
         columns: &[&PickerColumn],
         widths: &[u16],
         values: impl IntoIterator<Item = (&'a str, Style)>,
-        marker_style: Style,
-        marker: &str,
-        marker_width: u16,
+        markers: &[(&str, Style, u16)],
     ) {
         let mut x = area.x;
-        buf.set_string(x, area.y, marker, marker_style);
-        x = x.saturating_add(marker_width);
+        for (marker, marker_style, width) in markers {
+            buf.set_string(x, area.y, marker, *marker_style);
+            x = x.saturating_add(*width);
+        }
         for ((column, width), (value, value_style)) in columns.iter().zip(widths).zip(values) {
             let value = if column.cut_middle {
                 crate::text::truncate_middle(value, *width as usize)

@@ -111,7 +111,7 @@ fn browser_command_agent_modifies_page() {
 
     // 1. Confirm the nori session loads
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("nori should start and show prompt");
 
     std::thread::sleep(TIMEOUT_INPUT);

@@ -197,7 +197,7 @@ fn test_runaway_search_transcript_preserves_the_raw_acp_tool_stream() {
         TuiSession::spawn_with_config(24, 80, config).expect("failed to spawn runaway search TUI");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start in ACP mode");
     std::thread::sleep(TIMEOUT_INPUT);
 
