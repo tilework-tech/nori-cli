@@ -1,5 +1,6 @@
 ---
 source: tui/src/bottom_pane/mod.rs
+assertion_line: 1180
 expression: rendered
 ---
                                                                                                     
@@ -8,17 +9,17 @@ expression: rendered
                                                                                                     
   ▏› 1. Pinned Plan Drawer (off)                                                                 ▕  
   ▏     Pin plan updates to a drawer in the viewport instead of history                          ▕  
-     2. Thoughts in History (on) (current)                                                          
+     2. Thoughts in History (on)                                                                    
         Show agent thoughts in history, not only in the working indicator                           
-     3. Resize Reflow (on) (current)                                                                
+     3. Resize Reflow (on)                                                                          
         Reflow transcript history when the terminal width changes                                   
-     4. Custom Working Messages (on) (current)                                                      
+     4. Custom Working Messages (on)                                                                
         Rotate playful status messages while the agent is working                                   
      5. Vertical Footer (off)                                                                       
         Stack footer segments vertically instead of horizontally                                    
-     6. Terminal Notifications (on) (current)                                                       
+     6. Terminal Notifications (on)                                                                 
         Send OSC 9 escape sequences to notify the terminal on events                                
-     7. OS Notifications (on) (current)                                                             
+     7. OS Notifications (on)                                                                       
         Send native desktop notifications on events                                                 
      8. Vim Mode (off)                                                                              
         Enable vim-style navigation in the textarea (Escape enters normal mode)                     

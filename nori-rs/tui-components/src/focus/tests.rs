@@ -289,3 +289,38 @@ fn focused_menu_descriptions_that_fit_two_lines_are_never_cut() {
         assert!(!text.contains('…'), "{words} words were cut:\n{text}");
     }
 }
+
+#[test]
+fn a_menus_current_item_says_current_in_parentheses_even_when_narrow() {
+    for width in [40, 22] {
+        let mut state = MenuState::try_new([
+            MenuItem::new("keep", "Keep the synthetic session").current(true),
+            MenuItem::new("drop", "Drop it"),
+        ])
+        .expect("valid menu");
+        let area = Rect::new(0, 0, width, 10);
+        let mut buffer = Buffer::empty(area);
+        OverlayMenu::new("Pick")
+            .backdrop(false)
+            .render(area, &mut buffer, &mut state);
+        let row = line(&buffer, row_of(&buffer, "(current)"));
+        assert!(row.contains("› K"), "width {width}: {row}");
+    }
+}
+
+#[test]
+fn an_on_screen_picker_row_says_on_screen_not_current() {
+    let state = PickerState::new(
+        "Sessions",
+        [PickerColumn::flexible("title", "Session")],
+        [
+            PickerItem::new("a", "title", "Synthetic parser fix").on_screen(true),
+            PickerItem::new("b", "title", "Synthetic docs pass"),
+        ],
+    );
+    let buffer = render_picker(&state, Theme::default(), 10);
+    let row = line(&buffer, row_of(&buffer, "Synthetic parser fix"));
+
+    assert!(row.contains("(on screen)"), "{row}");
+    assert!(!row.contains("current"), "{row}");
+}

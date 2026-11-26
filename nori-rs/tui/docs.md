@@ -228,6 +228,9 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   approval and API key confirmations) use the same marks through
   `render_focused_rows`. Completion popups (`/`, `@`, `$`) keep their own
   highlight.
+- `(current)` marks the chosen value in a list and is the only spelling.
+  `/sessions` and the attach list mark the session on screen with
+  `(on screen)`. On/off settings show only `(on)` or `(off)`.
 
 ## Tests
 

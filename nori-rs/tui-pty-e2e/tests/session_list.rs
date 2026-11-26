@@ -112,7 +112,7 @@ fn left_on_an_empty_prompt_lists_sessions_with_status_and_reply() {
         "alpha question",
         "waiting on you",
         "gamma question",
-        "(current)",
+        "(on screen)",
     ] {
         assert!(screen.contains(expected), "{expected:?} missing:\n{screen}");
     }
@@ -340,7 +340,7 @@ fn a_fork_is_listed_under_its_parent_and_its_request_marks_the_parent() {
     let screen = session.screen_contents();
     let parent_row = screen
         .lines()
-        .find(|line| line.contains("parent question (current)"))
+        .find(|line| line.contains("parent question (on screen)"))
         .unwrap_or_else(|| panic!("parent row missing:\n{screen}"));
     assert!(
         parent_row.contains("waiting on you"),

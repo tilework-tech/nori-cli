@@ -7,21 +7,20 @@ expression: "render_lines_with_width(&view, 90)"
   Configuration                                                                           
   Toggle TUI settings (changes saved to config.toml)                                      
                                                                                           
-  ▏› 1. Pinned Plan Drawer (off)                Pin plan updates to a drawer in the    ▕  
-  ▏                                             viewport instead of history            ▕  
-     2. Thoughts in History (on) (current)      Show agent thoughts in history, not       
-                                                only in the working indicator             
-     3. Resize Reflow (on) (current)            Reflow transcript history when the        
-                                                terminal width changes                    
-     4. Custom Working Messages (on) (current)  Rotate playful status messages while      
-                                                the agent is working                      
-     5. Vertical Footer (off)                   Stack footer segments vertically          
-                                                instead of horizontally                   
-     6. Terminal Notifications (on) (current)   Send OSC 9 escape sequences to notify     
-                                                the terminal on events                    
-     7. OS Notifications (on) (current)         Send native desktop notifications on      
-                                                events                                    
-     8. Vim Mode (off)                          Enable vim-style navigation in the        
-                                                textarea (Escape enters normal mode)      
+  ▏› 1. Pinned Plan Drawer (off)        Pin plan updates to a drawer in the viewport   ▕  
+  ▏                                     instead of history                             ▕  
+     2. Thoughts in History (on)        Show agent thoughts in history, not only in the   
+                                        working indicator                                 
+     3. Resize Reflow (on)              Reflow transcript history when the terminal       
+                                        width changes                                     
+     4. Custom Working Messages (on)    Rotate playful status messages while the agent    
+                                        is working                                        
+     5. Vertical Footer (off)           Stack footer segments vertically instead of       
+                                        horizontally                                      
+     6. Terminal Notifications (on)     Send OSC 9 escape sequences to notify the         
+                                        terminal on events                                
+     7. OS Notifications (on)           Send native desktop notifications on events       
+     8. Vim Mode (off)                  Enable vim-style navigation in the textarea       
+                                        (Escape enters normal mode)                       
                                                                                           
   ↑/k ↓/j navigate, / search, enter confirm, esc go back

@@ -435,8 +435,9 @@ fn render_item<K>(
             .render(Rect::new(inner_x, area.y, number_width, 1), buf);
     }
 
-    let current_suffix = if item.current && label_width >= 18 {
-        "  current"
+    // Cut the label, not the marker, while at least three label cells fit.
+    let current_suffix = if item.current && label_width >= 13 {
+        " (current)"
     } else {
         ""
     };
