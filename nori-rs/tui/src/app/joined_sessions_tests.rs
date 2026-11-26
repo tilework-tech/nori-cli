@@ -401,3 +401,58 @@ async fn at_mentions_search_the_host_and_follow_the_session_on_screen() {
         )
     );
 }
+
+#[tokio::test]
+async fn an_at_mention_typed_again_after_its_answer_asks_the_host_again() {
+    let home = tempfile::tempdir().unwrap();
+    let finding = HostConnection {
+        features: HostFeatures {
+            find_paths: true,
+            ..HostFeatures::default()
+        },
+        ..connection()
+    };
+    let (mut app, mut events) = joined_app_on(&home, None, finding.clone());
+    app.on_joined_sessions(
+        list(&[row(AMBER, "synthetic amber")]),
+        FrameRequester::test_dummy(),
+        &finding,
+    );
+    let amber = app
+        .session_rows()
+        .into_iter()
+        .find(|row| row.title.contains("synthetic amber"))
+        .map(|row| row.generation)
+        .unwrap();
+    app.show_session(amber);
+    let _ = searched_in(&mut events);
+
+    let mut asked = Vec::new();
+    for _ in 0..2 {
+        app.start_file_search("harbor".to_string());
+        while let Ok(event) = events.try_recv() {
+            if let crate::app_event::AppEvent::HostRequest {
+                call:
+                    crate::host_client::HostCall::FindPaths {
+                        session_id, query, ..
+                    },
+                ..
+            } = event
+            {
+                asked.push((session_id, query));
+            }
+        }
+        app.on_host_file_search_landed(
+            crate::host_client::FileSearch {
+                session_id: Some(AMBER.to_string()),
+                query: "harbor".to_string(),
+            },
+            Ok(json!({"root": "/srv", "matches": [{"path": "harbor.md"}]})),
+        );
+    }
+
+    assert_eq!(
+        asked,
+        vec![(Some(AMBER.to_string()), "harbor".to_string()); 2]
+    );
+}

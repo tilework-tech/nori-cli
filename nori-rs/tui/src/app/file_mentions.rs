@@ -1,8 +1,9 @@
 //! `@` file mentions in the plain terminal. A session on the host this
 //! terminal owns is searched by the host in that session's folder, so
-//! switching sessions switches where matches come from. A widget without a
-//! host session (cloud mode, or before the first session starts) searches
-//! the launch folder locally.
+//! switching sessions switches where matches come from. With no session on
+//! screen, a joined host that serves `find_paths` searches its own folder;
+//! otherwise (cloud mode, or before the first session starts) the launch
+//! folder is searched locally.
 
 use codex_file_search::FileMatch;
 use nori_harness::ConversationId;

@@ -457,7 +457,12 @@ impl ChatComposer {
             return;
         }
 
-        if !query.is_empty() {
+        // A popup showing the answer to this query needs no new search; a new
+        // popup, new text, or a popup still waiting asks (the searchers drop a
+        // repeat of a search still in flight).
+        let answered =
+            matches!(&self.active_popup, ActivePopup::File(popup) if popup.has_answer_for(&query));
+        if !query.is_empty() && !answered {
             self.app_event_tx
                 .send(AppEvent::StartFileSearch(query.clone()));
         }
