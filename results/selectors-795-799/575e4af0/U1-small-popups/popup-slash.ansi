@@ -1,0 +1,31 @@
+shell$ nori --agent mock-model
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/vsel/runs/575e4af0-U1-small-popups/orchard
+[2m  Agent        [0m[39m[49mMock ACP
+
+
+[2m  Run '[0m[38;5;6m[49mnpx nori-skillsets init[2m[39m' to set up Nori AI enhancements
+
+• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+[0m[39m[48;2;43;43;43m
+[38;5;2m/[39m se
+
+[49m  [1m[38;5;2m/sessions         list sessions and move between them
+[0m[39m[49m  /[1mse[0m[39m[49mttings         [2mconfigure Nori CLI settings (theme, hotkeys, layout, …)
+[0m[39m[49m  /[1ms[0m[39m[49mcr[1me[0m[39m[49men           [2mswitch between the inline and the full-screen view
+[0m[39m[49m  /[1ms[0m[39m[49mwitch-skills[1me[0m[39m[49mt  [2mswitch between available skillsets
+[0m[39m[49m  /brow[1mse[0m[39m[49m           [2mopen a file manager to browse and edit files
+[0m[39m[49m  /brow[1mse[0m[39m[49mr          [2mopen a Chrome browser the agent can control via CDP
+[0m[39m[49m  /clo[1mse[0m[39m[49m            [2mclose (release) the current session and start a fresh chat
+[0m[39m[49m  /re[1ms[0m[39m[49mum[1me[0m[39m[49m           [2mresume a previous session
+[0m[39m[49m  /re[1ms[0m[39m[49mum[1me[0m[39m[49m-viewonly  [2mview a previous session transcript (read-only)
+
+
+
+
+
+
+
+

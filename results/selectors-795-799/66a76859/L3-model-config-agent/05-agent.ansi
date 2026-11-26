@@ -1,0 +1,31 @@
+shell$ nori --agent mock-model
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/vsel/runs/66a76859-L3-model-config-agent/orchard
+[2m  Agent        [0m[39m[49mMock ACP
+
+
+[2m  Run '[0m[38;5;6m[49mnpx nori-skillsets init[2m[39m' to set up Nori AI enhancements
+
+• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[0m[39m[49m  [1mSelect agent
+[0m[39m[49m  [38;5;8mCreates new conversation with selected agent (history not preserved)
+
+[39m  [38;5;2m[48;2;43;43;43m▏1.[39m Mock ACP (current)                                                                                             [38;5;2m▕
+[39m[49m  [38;5;2m[48;2;43;43;43m▏[39m   [38;5;8mMock agent for testing                                                                                         [38;5;2m▕
+[39m[49m   2. Mock ACP Alt
+      [38;5;8mAlternate mock agent for testing
+[39m   3. Claude Code
+      [38;5;8mAnthropic
+[39m   4. Codex
+      [38;5;8mOpenAI
+[39m   5. Antigravity
+      [38;5;8mGoogle
+[39m   6. Grok Build
+      [38;5;8mxAI
+[39m  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mselect  [38;5;2mshift-tab[39m [38;5;8mrec on  [38;5;2mesc[39m [38;5;8mclose
+
+
+

@@ -1,0 +1,30 @@
+
+› Plum row cleanup
+
+
+• Test message 1Test message 2
+
+Sessions 18 · 18 ready  tab: waiting onl
+
+All  waiting on you
+
+   Session                     Status
+   ○ Synthetic parser fix      ready
+     orchard · Test message …  12s ago
+   ○ Pear ledger audit         ready
+     orchard · Test message …  12s ago
+▏› ○ Plum r…cleanup (current)  ready   ▕
+▏    orchard · Test message …  3s ago  ▕
+   ○ Cedar count report        ready
+     orchard · Test message …  12s ago
+   ○ Orchard map refresh       ready
+     orchard · Test message …  12s ago
+   ○ Apple grade sorter        ready
+     orchard · Test message …  12s ago
+   ○ Quince inventory sync     ready
+     orchard · Test message …  12s ago
+   ○ Fig tree pruning plan     ready
+     orchard · Test message …  12s ago
+
+↑↓/j/k move  enter open  ctrl+d close
+

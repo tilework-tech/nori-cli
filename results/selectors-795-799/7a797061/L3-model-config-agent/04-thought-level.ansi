@@ -1,0 +1,31 @@
+shell$ nori --agent mock-model
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/vsel/runs/7a797061-L3-model-config-agent/orchard
+[2m  Agent        [0m[39m[49mMock ACP
+
+
+[2m  Run '[0m[38;5;6m[49mnpx nori-skillsets init[2m[39m' to set up Nori AI enhancements
+
+• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[0m[39m[49m  [1mThought Level
+[0m[39m[49m  [38;5;8mReasoning depth for the active model
+
+[39m  [48;2;29;29;29m   1. Low
+[49m  [38;5;2m[48;2;43;43;43m▏›[39m 2. Medium (current)                                                                                             [38;5;2m▕
+[39m[49m  [48;2;29;29;29m   3. High
+[49m  [38;5;2m↑↓/j/k[39m [38;5;8mmove  [38;5;2menter[39m [38;5;8mselect  [38;5;2mesc[39m [38;5;8mclose
+
+
+
+
+
+
+
+
+
+
+
+

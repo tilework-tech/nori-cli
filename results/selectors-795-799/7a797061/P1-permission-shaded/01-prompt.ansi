@@ -1,0 +1,31 @@
+shell$ nori --agent mock-model
+[38;5;2m  › [1m[39mNori CLI[0;2m[39m[49m v0.0.0
+
+  System       [0m[39m[49m/tmp/vsel/runs/7a797061-P1-permission-shaded/orchard
+[2m  Agent        [0m[39m[49mMock ACP
+
+
+[2m  Run '[0m[38;5;6m[49mnpx nori-skillsets init[2m[39m' to set up Nori AI enhancements
+
+• [0m[39m[49mMock ACP options: Model=[1m[38;5;6mMock Default Model[0m[39m[49m, Thought Level=[1m[38;5;6mMedium[0;2m[39m[49m (/config to change)
+
+
+[1m[48;2;43;43;43m› [0m[39m[48;2;43;43;43mtidy the orchard
+
+
+[2m[49m• [0m[39m[49mTest message 1Test message 2
+
+[48;2;43;43;43m
+  [1mWould you like to allow execute: Execute shell command?[0m[39m[48;2;43;43;43m
+
+  Execute shell command
+  Command: rm -rf ./synthetic-build
+  rm -rf ./synthetic-build
+
+  [38;5;2m▏›[39m 1. Allow ([2my[0m[39m[48;2;43;43;43m)                                                                                                    [38;5;2m▕[39m
+     2. Reject ([2mesc[0m[39m[48;2;43;43;43m)
+
+[49m  [2mPress enter to confirm or esc to reject
+
+
+

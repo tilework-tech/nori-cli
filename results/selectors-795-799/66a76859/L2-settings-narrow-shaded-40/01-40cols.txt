@@ -1,0 +1,32 @@
+
+
+
+
+
+
+  Configuration
+  Toggle TUI settings (changes saved t
+
+  ▏1. Pinned Plan Drawer (off)       ▕
+  ▏   Pin plan updates to a drawer i…▕
+   2. Thoughts in History (… (current)
+      Show agent thoughts in history…
+   3. Resize Reflow (on) (current)
+      Reflow transcript history when…
+   4. Custom Working Messag… (current)
+      Rotate playful status messages…
+   5. Vertical Footer (off)
+      Stack footer segments vertical…
+   6. Terminal Notification… (current)
+      Send OSC 9 escape sequences to…
+  ↑↓/j/k move  / search  enter select
+
+
+
+
+
+
+
+
+
+

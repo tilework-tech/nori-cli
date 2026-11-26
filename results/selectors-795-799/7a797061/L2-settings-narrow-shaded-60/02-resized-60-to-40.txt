@@ -1,0 +1,32 @@
+
+
+  Configuration
+  Toggle TUI settings (changes saved to
+config.toml)
+
+  ▏› 1. Pinned Plan Drawer (off)
+                 ▕
+  ▏     Pin plan updates to a drawer in
+
+
+  Configuration
+  Toggle TUI settings (changes saved t
+
+  ▏› 1. Pinned Plan Drawer (off)     ▕
+  ▏     Pin plan updates to a drawer…▕
+     2. Thoughts in History (on)
+        Show agent thoughts in histo…
+     3. Resize Reflow (on)
+        Reflow transcript history wh…
+     4. Custom Working Messages (on)
+        Rotate playful status messag…
+     5. Vertical Footer (off)
+        Stack footer segments vertic…
+     6. Terminal Notifications (on)
+        Send OSC 9 escape sequences …
+  ↑↓/j/k move  / search  enter select
+
+
+
+
+

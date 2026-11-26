@@ -1,0 +1,157 @@
+PASS [575e4af0] L1-settings-shaded/settings.rails_and_pointer "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] L1-settings-shaded/settings.shaded_bg_differs_from_unfocused_rows "focus_bg=['2b2b2b'] other_bg=['default']"
+PASS [575e4af0] L1-settings-shaded/settings.shaded_marks_not_bold "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] L1-settings-shaded/pointer_beside_number '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕'
+PASS [575e4af0] L1-settings-shaded/no_legacy_bullet ''
+PASS [575e4af0] L1-settings-shaded/j_moves_down '  ▏› 3. Resize Reflow (on)                                                                                           ▕'
+PASS [575e4af0] L1-settings-shaded/k_moves_up '  ▏› 2. Thoughts in History (on)                                                                                     ▕'
+PASS [575e4af0] L1-settings-shaded/footer_words [info: build predates #799] "observed=True ['  ↑↓/j/k move  / search  enter select  esc close']"
+PASS [575e4af0] L1-settings-shaded/stray_letter_does_not_filter '  ▏› 2. Thoughts in History (on)                                                                                     ▕'
+PASS [575e4af0] L1-settings-shaded/search_f_filters "['     2. Terminal Notifications (on)', '        Send OSC 9 escape sequences to notify the terminal on events', '     3. File Manager (not set)', '        Terminal file manager for the /browse command', '  ↑↓ move  type "
+PASS [575e4af0] L1-settings-shaded/search_result.rails_and_pointer "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on)                                                                                           ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] L1-settings-shaded/search_result.shaded_bg_differs_from_unfocused_rows "focus_bg=['2b2b2b'] other_bg=['default']"
+PASS [575e4af0] L1-settings-shaded/search_result.shaded_marks_not_bold "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on)                                                                                           ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] L1-settings-shaded/search_f_esc_ends_search ''
+PASS [575e4af0] L1-settings-shaded/search_ctrl_f_filters "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+PASS [575e4af0] L1-settings-shaded/search_ctrl_f_esc_ends_search ''
+PASS [575e4af0] L1-settings-shaded/search_slash_filters "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+PASS [575e4af0] L1-settings-shaded/search_slash_esc_ends_search ''
+PASS [575e4af0] L1-settings-unshaded/settings.rails_and_pointer "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] L1-settings-unshaded/settings.unshaded_no_bg "['default']"
+PASS [575e4af0] L1-settings-unshaded/settings.unshaded_marks_bold "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] L1-settings-unshaded/pointer_beside_number '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕'
+PASS [575e4af0] L1-settings-unshaded/no_legacy_bullet ''
+PASS [575e4af0] L1-settings-unshaded/j_moves_down '  ▏› 3. Resize Reflow (on)                                                                                           ▕'
+PASS [575e4af0] L1-settings-unshaded/k_moves_up '  ▏› 2. Thoughts in History (on)                                                                                     ▕'
+PASS [575e4af0] L1-settings-unshaded/footer_words [info: build predates #799] "observed=True ['  ↑↓/j/k move  / search  enter select  esc close']"
+PASS [575e4af0] L1-settings-unshaded/stray_letter_does_not_filter '  ▏› 2. Thoughts in History (on)                                                                                     ▕'
+PASS [575e4af0] L1-settings-unshaded/search_f_filters "['     2. Terminal Notifications (on)', '        Send OSC 9 escape sequences to notify the terminal on events', '     3. File Manager (not set)', '        Terminal file manager for the /browse command', '  ↑↓ move  type "
+PASS [575e4af0] L1-settings-unshaded/search_result.rails_and_pointer "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on)                                                                                           ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] L1-settings-unshaded/search_result.unshaded_no_bg "['default']"
+PASS [575e4af0] L1-settings-unshaded/search_result.unshaded_marks_bold "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on)                                                                                           ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] L1-settings-unshaded/search_f_esc_ends_search ''
+PASS [575e4af0] L1-settings-unshaded/search_ctrl_f_filters "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+PASS [575e4af0] L1-settings-unshaded/search_ctrl_f_esc_ends_search ''
+PASS [575e4af0] L1-settings-unshaded/search_slash_filters "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+PASS [575e4af0] L1-settings-unshaded/search_slash_esc_ends_search ''
+PASS [575e4af0] L2-settings-narrow-shaded/60.right_rail_on_every_focused_line "['  ▏› 1. Pinned Plan Drawer (off)                         ▕', '  ▏     Pin plan updates to a drawer in the viewport ins…▕']"
+PASS [575e4af0] L2-settings-narrow-shaded/60.rails_and_pointer "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default"
+PASS [575e4af0] L2-settings-narrow-shaded/60.shaded_bg_differs_from_unfocused_rows "focus_bg=['2b2b2b'] other_bg=['default']"
+PASS [575e4af0] L2-settings-narrow-shaded/60.shaded_marks_not_bold "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default"
+PASS [575e4af0] L2-settings-narrow-shaded/resize_60_to_40_rail_lines [observation] "['  ▏› 1. Pinned Plan Drawer (off)', '  ▏     Pin plan updates to a drawer in', '  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+PASS [575e4af0] L2-settings-narrow-shaded/40.right_rail_on_every_focused_line "['  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+PASS [575e4af0] L2-settings-narrow-shaded/40.rails_and_pointer "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': Fal"
+PASS [575e4af0] L2-settings-narrow-shaded/40.shaded_bg_differs_from_unfocused_rows "focus_bg=['2b2b2b'] other_bg=['default']"
+PASS [575e4af0] L2-settings-narrow-shaded/40.shaded_marks_not_bold "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': Fal"
+PASS [575e4af0] L2-settings-narrow-unshaded/60.right_rail_on_every_focused_line "['  ▏› 1. Pinned Plan Drawer (off)                         ▕', '  ▏     Pin plan updates to a drawer in the viewport ins…▕']"
+PASS [575e4af0] L2-settings-narrow-unshaded/60.rails_and_pointer "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default']"
+PASS [575e4af0] L2-settings-narrow-unshaded/60.unshaded_no_bg "['default']"
+PASS [575e4af0] L2-settings-narrow-unshaded/60.unshaded_marks_bold "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default']"
+PASS [575e4af0] L2-settings-narrow-unshaded/resize_60_to_40_rail_lines [observation] "['  ▏› 1. Pinned Plan Drawer (off)', '  ▏     Pin plan updates to a drawer in', '  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+PASS [575e4af0] L2-settings-narrow-unshaded/40.right_rail_on_every_focused_line "['  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+PASS [575e4af0] L2-settings-narrow-unshaded/40.rails_and_pointer "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False"
+PASS [575e4af0] L2-settings-narrow-unshaded/40.unshaded_no_bg "['default']"
+PASS [575e4af0] L2-settings-narrow-unshaded/40.unshaded_marks_bold "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False"
+PASS [575e4af0] L3-model-config-agent/model.current_marker '  ▏› 1. Mock Default Model (current)                                                                                 ▕'
+PASS [575e4af0] L3-model-config-agent/model.rails_and_pointer "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Mock Default Model (current)                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] L3-model-config-agent/model.shaded_bg_differs_from_unfocused_rows "focus_bg=['2b2b2b'] other_bg=['default']"
+PASS [575e4af0] L3-model-config-agent/model.shaded_marks_not_bold "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Mock Default Model (current)                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] L3-model-config-agent/model.footer_offers_search [info: build predates #799] "observed=False ['  ↑↓/j/k move  enter select  esc close']"
+PASS [575e4af0] L3-model-config-agent/model.j_moves '  ▏› 2. Mock Fast Model                                                                                              ▕'
+PASS [575e4af0] L3-model-config-agent/model.f_search_with_two_values [info: build predates #799] "observed=False ['     1. Mock Default Model (current)', '  ▏› 2. Mock Fast Model                                                                                              ▕', '     3. Use custom model...']"
+PASS [575e4af0] L3-model-config-agent/config.no_search_in_footer [info: build predates #799] "observed=True ['  ↑↓/j/k move  enter select  esc close']"
+PASS [575e4af0] L3-model-config-agent/config.f_does_not_search ''
+PASS [575e4af0] L3-model-config-agent/thought.current_marker_on_focus '  ▏› 2. Medium (current)                                                                                             ▕'
+PASS [575e4af0] L3-model-config-agent/thought.no_bare_current ''
+PASS [575e4af0] L3-model-config-agent/thought.three_values_no_search [info: build predates #799] 'observed=True '
+PASS [575e4af0] L3-model-config-agent/agent.current_marker "['  ▏› 1. Mock ACP (current)                                                                                           ▕']"
+PASS [575e4af0] L3-model-config-agent/agent.recording_toggle_hint [observation] "['  ↑↓/j/k move  enter select  shift-tab rec on  esc close']"
+PASS [575e4af0] L3-model-config-agent/agent.no_search ''
+PASS [575e4af0] P1-permission-shaded/grace.early_enter_ignored ' Execute shell command?\n\n  Execute shell command\n  Command: rm -rf ./synthetic-build\n  rm -rf ./synthetic-build\n\n  ▏› 1. Allow (y)                                                                                          '
+PASS [575e4af0] P1-permission-shaded/header.command_shown ''
+PASS [575e4af0] P1-permission-shaded/prompt.rails_and_pointer "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+FAIL [575e4af0] P1-permission-shaded/prompt.shaded_bg_differs_from_unfocused_rows "focus_bg=['2b2b2b'] other_bg=['2b2b2b']"
+PASS [575e4af0] P1-permission-shaded/prompt.shaded_marks_not_bold "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] P1-permission-shaded/label_not_green_or_bold "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] P1-permission-shaded/j_moves '  ▏› 2. Reject (esc)                                                                                                 ▕'
+PASS [575e4af0] P1-permission-shaded/k_moves '  ▏› 1. Allow (y)                                                                                                    ▕'
+PASS [575e4af0] P1-permission-shaded/f_no_search ''
+PASS [575e4af0] P1-permission-shaded/late_enter_accepted 'ori AI enhancements\n\n• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\n› tidy the orchard\n\n\n• Test message 1Test message 2\n\n• Permission: Allow Execute shell command\n\n• Permission g'
+PASS [575e4af0] P1-permission-unshaded/grace.early_enter_ignored ' Execute shell command?\n\n  Execute shell command\n  Command: rm -rf ./synthetic-build\n  rm -rf ./synthetic-build\n\n  ▏› 1. Allow (y)                                                                                          '
+PASS [575e4af0] P1-permission-unshaded/header.command_shown ''
+PASS [575e4af0] P1-permission-unshaded/prompt.rails_and_pointer "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] P1-permission-unshaded/prompt.unshaded_no_bg "['default']"
+PASS [575e4af0] P1-permission-unshaded/prompt.unshaded_marks_bold "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] P1-permission-unshaded/label_not_green_or_bold "{'y': 23, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Allow (y)                                                                                                    ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] P1-permission-unshaded/j_moves '  ▏› 2. Reject (esc)                                                                                                 ▕'
+PASS [575e4af0] P1-permission-unshaded/k_moves '  ▏› 1. Allow (y)                                                                                                    ▕'
+PASS [575e4af0] P1-permission-unshaded/f_no_search ''
+PASS [575e4af0] P1-permission-unshaded/late_enter_accepted 'ori AI enhancements\n\n• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\n› tidy the orchard\n\n\n• Test message 1Test message 2\n\n• Permission: Allow Execute shell command\n\n• Permission g'
+PASS [575e4af0] P2-approve-all-shaded/approvals.rails_and_pointer "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] P2-approve-all-shaded/approvals.shaded_bg_differs_from_unfocused_rows "focus_bg=['2b2b2b'] other_bg=['default']"
+PASS [575e4af0] P2-approve-all-shaded/approvals.shaded_marks_not_bold "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] P2-approve-all-shaded/red_warning_kept "['  Nori will say yes to every edit, command and tool call the agent asks about. The sandbox setting still applies;', '  nothing else stops a harmful request.']"
+PASS [575e4af0] P2-approve-all-shaded/confirm.rails_and_pointer "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+FAIL [575e4af0] P2-approve-all-shaded/confirm.shaded_bg_differs_from_unfocused_rows "focus_bg=['2b2b2b'] other_bg=['2b2b2b']"
+PASS [575e4af0] P2-approve-all-shaded/confirm.shaded_marks_not_bold "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] P2-approve-all-shaded/label_not_green_or_bold "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, "
+PASS [575e4af0] P2-approve-all-shaded/footer_words [info: build predates #799] 'observed=False []'
+PASS [575e4af0] P2-approve-all-shaded/end_key_in_short_prompt [observation] '  ▏› 1. Approve all                           Only for this session                                                  ▕'
+PASS [575e4af0] P2-approve-all-unshaded/approvals.rails_and_pointer "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] P2-approve-all-unshaded/approvals.unshaded_no_bg "['default']"
+PASS [575e4af0] P2-approve-all-unshaded/approvals.unshaded_marks_bold "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] P2-approve-all-unshaded/red_warning_kept "['  Nori will say yes to every edit, command and tool call the agent asks about. The sandbox setting still applies;', '  nothing else stops a harmful request.']"
+PASS [575e4af0] P2-approve-all-unshaded/confirm.rails_and_pointer "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] P2-approve-all-unshaded/confirm.unshaded_no_bg "['default']"
+PASS [575e4af0] P2-approve-all-unshaded/confirm.unshaded_marks_bold "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] P2-approve-all-unshaded/label_not_green_or_bold "{'y': 15, 'x': 2, 'rows': 1, 'text': '  ▏› 1. Approve all                           Only for this session                                                  ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, '"
+PASS [575e4af0] P2-approve-all-unshaded/footer_words [info: build predates #799] 'observed=False []'
+PASS [575e4af0] P2-approve-all-unshaded/end_key_in_short_prompt [observation] '  ▏› 1. Approve all                           Only for this session                                                  ▕'
+PASS [575e4af0] U1-small-popups/slash.no_rails "['  /switch-skillset  switch between available skillsets', '  /browse           open a file manager to browse and edit files', '  /browser          open a Chrome browser the agent can control via CDP', '  /close         "
+PASS [575e4af0] U1-small-popups/at.no_rails '[\'  Agent        Mock ACP\', "  Run \'npx nori-skillsets init\' to set up Nori AI enhancements", \'• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\', \'› @pl\', \'  src/plum_rows.rs\', \'  sr'
+PASS [575e4af0] U1-small-popups/dollar.no_rails '[\'  System       /tmp/vsel/runs/575e4af0-U1-small-popups/orchard\', \'  Agent        Mock ACP\', "  Run \'npx nori-skillsets init\' to set up Nori AI enhancements", \'• Mock ACP options: Model=Mock Default Model, Thought Level'
+PASS [575e4af0] L4-sessions-shaded/attach_list.rails_and_pointer "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True"
+PASS [575e4af0] L4-sessions-shaded/attach_list.shaded_bg_differs_from_unfocused_rows "focus_bg=['2b2b2b'] other_bg=['1d1d1d', 'default']"
+PASS [575e4af0] L4-sessions-shaded/attach_list.shaded_marks_not_bold "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True"
+PASS [575e4af0] L4-sessions-shaded/j_moves '▏› ○ Cedar count report                                                       mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-shaded/k_moves '▏› ○ Plum row cleanup                                                         mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-shaded/end_scrolls_to_last '▏› ○ Chestnut roast timer                                                     mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-shaded/search_f '▏› ○ Walnut shell tally                                                       mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-shaded/search_ctrl_f '▏› ○ Fig tree pruning plan                                                    mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-shaded/search_slash '▏› ○ Olive press checklist                                                    mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-shaded/stray_letter_does_not_filter ''
+PASS [575e4af0] L4-sessions-shaded/on_screen_marker "['› Plum row cleanup', '▏› ○ Plum row cleanup (on screen)                                             mock-model    ready                      ▕']"
+PASS [575e4af0] L4-sessions-shaded/no_current_for_session '[]'
+PASS [575e4af0] L4-sessions-shaded/60.right_rail_visible "['▏› ○ Plum…leanup (on screen)   mock-model    ready         ▕', '▏    orchard · Test message …  Mock D…Model  2s ago        ▕']"
+PASS [575e4af0] L4-sessions-shaded/40.right_rail_visible "['▏› ○ Plum…leanup (on screen)   ready   ▕', '▏    orchard · Test message …  3s ago  ▕']"
+PASS [575e4af0] L4-sessions-shaded/32.table_wider_than_terminal [observation] "['', '', '• Test message 1Test message 2', '']"
+PASS [575e4af0] L4-sessions-shaded/40.on_screen_kept_narrow '▏› ○ Plum…leanup (on screen)   ready   ▕'
+PASS [575e4af0] L4-sessions-unshaded/attach_list.rails_and_pointer "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True,"
+PASS [575e4af0] L4-sessions-unshaded/attach_list.unshaded_no_bg "['default']"
+PASS [575e4af0] L4-sessions-unshaded/attach_list.unshaded_marks_bold "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True,"
+PASS [575e4af0] L4-sessions-unshaded/j_moves '▏› ○ Cedar count report                                                       mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-unshaded/k_moves '▏› ○ Plum row cleanup                                                         mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-unshaded/end_scrolls_to_last '▏› ○ Chestnut roast timer                                                     mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-unshaded/search_f '▏› ○ Walnut shell tally                                                       mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-unshaded/search_ctrl_f '▏› ○ Fig tree pruning plan                                                    mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-unshaded/search_slash '▏› ○ Olive press checklist                                                    mock-model    ready                      ▕'
+PASS [575e4af0] L4-sessions-unshaded/stray_letter_does_not_filter ''
+PASS [575e4af0] L4-sessions-unshaded/on_screen_marker "['› Plum row cleanup', '▏› ○ Plum row cleanup (on screen)                                             mock-model    ready                      ▕']"
+PASS [575e4af0] L4-sessions-unshaded/no_current_for_session '[]'
+PASS [575e4af0] L4-sessions-unshaded/60.right_rail_visible "['▏› ○ Plum…leanup (on screen)   mock-model    ready         ▕', '▏    orchard · Test message …  Mock D…Model  2s ago        ▕']"
+PASS [575e4af0] L4-sessions-unshaded/40.right_rail_visible "['▏› ○ Plum…leanup (on screen)   ready   ▕', '▏    orchard · Test message …  3s ago  ▕']"
+PASS [575e4af0] L4-sessions-unshaded/32.table_wider_than_terminal [observation] "['', '', '• Test message 1Test message 2', '']"
+PASS [575e4af0] L4-sessions-unshaded/40.on_screen_kept_narrow '▏› ○ Plum…leanup (on screen)   ready   ▕'
+PASS [575e4af0] L5-resume-picker/resume.rails_and_pointer "{'y': 4, 'x': 2, 'rows': 1, 'text': '  ▏› ca29643b-52e5-44d3-8094-da26b45552b0     0 seconds ago     Not reported▕     Session         ca29643b-52e5-44…', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr"
+PASS [575e4af0] L5-resume-picker/resume.shaded_bg_differs_from_unfocused_rows "focus_bg=['2b2b2b'] other_bg=['242424', 'default']"
+PASS [575e4af0] L5-resume-picker/resume.shaded_marks_not_bold "{'y': 4, 'x': 2, 'rows': 1, 'text': '  ▏› ca29643b-52e5-44d3-8094-da26b45552b0     0 seconds ago     Not reported▕     Session         ca29643b-52e5-44…', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr"
+PASS [575e4af0] L5-resume-picker/lists_all_18 '18'
+PASS [575e4af0] L5-resume-picker/j_moves '  ▏› dfd74b4a-b610-4a30-906d-14738b806c6c     1 second ago      Not reported▕     Agent           mock-model'
+PASS [575e4af0] L5-resume-picker/k_moves '  ▏› dfce7d4d-efcc-420b-88bc-a41a06bac61b     1 second ago      Not reported▕     Project         95f3b4e2e30141a6'
+PASS [575e4af0] L5-resume-picker/end_jumps_to_last [info: build predates #799] 'observed=False   ▏› dfce7d4d-efcc-420b-88bc-a41a06bac61b     1 second ago      Not reported▕     Project         95f3b4e2e30141a6'
+PASS [575e4af0] L5-resume-picker/home_jumps_to_first [info: build predates #799] 'observed=False   ▏› dfce7d4d-efcc-420b-88bc-a41a06bac61b     1 second ago      Not reported▕     Project         95f3b4e2e30141a6'
+PASS [575e4af0] L5-resume-picker/search_f '  ▏› 620b76ff-8afe-408a-8638-664e98d5131e     3 seconds ago     Not reported▕     Project         95f3b4e2e30141a6'
+PASS [575e4af0] L5-resume-picker/search_ctrl_f [info: build predates #799] 'observed=True   ▏› 5af49e78-64d8-4db1-ae7c-f1da882fcfc7     5 seconds ago     Not reported▕     Project         95f3b4e2e30141a6'
+PASS [575e4af0] L5-resume-picker/search_slash '  ▏› 5257a9a5-fd02-456e-b4da-0550e22a3f5f     7 seconds ago     Not reported▕     Project         95f3b4e2e30141a6'
+PASS [575e4af0] L5-resume-picker/stray_letter_does_not_filter ''
+575e4af0: 154/156 passed

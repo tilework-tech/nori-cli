@@ -1,0 +1,1186 @@
+[
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "settings.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "settings.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "settings.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "pointer_beside_number",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "no_legacy_bullet",
+    "pr": 795,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "j_moves_down",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 3. Resize Reflow (on) (current)                                                                                 ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "k_moves_up",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 2. Thoughts in History (on) (current)                                                                           ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "footer_words [info: build predates #799]",
+    "pr": 799,
+    "passed": true,
+    "detail": "observed=True ['  ↑↓/j/k move  / search  enter select  esc close']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "stray_letter_does_not_filter",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 2. Thoughts in History (on) (current)                                                                           ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "search_f_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['     2. Terminal Notifications (on) (current)', '        Send OSC 9 escape sequences to notify the terminal on events', '     3. File Manager (not set)', '        Terminal file manager for the /browse command', '  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "search_result.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on) (current)                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "search_result.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "search_result.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on) (current)                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "search_f_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "search_ctrl_f_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "search_ctrl_f_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "search_slash_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-shaded",
+    "check": "search_slash_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "settings.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "settings.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "settings.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "pointer_beside_number",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 1. Pinned Plan Drawer (off)                                                                                     ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "no_legacy_bullet",
+    "pr": 795,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "j_moves_down",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 3. Resize Reflow (on) (current)                                                                                 ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "k_moves_up",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 2. Thoughts in History (on) (current)                                                                           ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "footer_words [info: build predates #799]",
+    "pr": 799,
+    "passed": true,
+    "detail": "observed=True ['  ↑↓/j/k move  / search  enter select  esc close']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "stray_letter_does_not_filter",
+    "pr": 795,
+    "passed": true,
+    "detail": "  ▏› 2. Thoughts in History (on) (current)                                                                           ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_f_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['     2. Terminal Notifications (on) (current)', '        Send OSC 9 escape sequences to notify the terminal on events', '     3. File Manager (not set)', '        Terminal file manager for the /browse command', '  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_result.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on) (current)                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_result.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_result.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 15, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Resize Reflow (on) (current)                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_f_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_ctrl_f_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_ctrl_f_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_slash_filters",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ↑↓ move  type filter  enter select  esc stop search', '', '', '', '', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L1-settings-unshaded",
+    "check": "search_slash_esc_ends_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "60.right_rail_on_every_focused_line",
+    "pr": 795,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)                         ▕', '  ▏     Pin plan updates to a drawer in the viewport ins…▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "60.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "60.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "60.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "resize_60_to_40_rail_lines [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)', '  ▏     Pin plan updates to a drawer in', '  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "40.right_rail_on_every_focused_line",
+    "pr": 795,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "40.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "40.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-shaded",
+    "check": "40.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "60.right_rail_on_every_focused_line",
+    "pr": 795,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)                         ▕', '  ▏     Pin plan updates to a drawer in the viewport ins…▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "60.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "60.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "60.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 13, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)                         ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "resize_60_to_40_rail_lines [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)', '  ▏     Pin plan updates to a drawer in', '  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "40.right_rail_on_every_focused_line",
+    "pr": 795,
+    "passed": true,
+    "detail": "['  ▏› 1. Pinned Plan Drawer (off)     ▕', '  ▏     Pin plan updates to a drawer…▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "40.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "40.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L2-settings-narrow-unshaded",
+    "check": "40.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 8, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Pinned Plan Drawer (off)     ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "model.current_marker [info: build predates #798]",
+    "pr": 798,
+    "passed": true,
+    "detail": "observed=True   ▏› 1. Mock Default Model (current)                                                                                 ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "model.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Mock Default Model (current)                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "model.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "model.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 14, 'x': 2, 'rows': 2, 'text': '  ▏› 1. Mock Default Model (current)                                                                                 ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "model.footer_offers_search [info: build predates #799]",
+    "pr": 799,
+    "passed": true,
+    "detail": "observed=False ['  ↑↓/j/k move  enter select  esc close']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "model.j_moves",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› 2. Mock Fast Model                                                                                              ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "model.f_search_with_two_values [info: build predates #799]",
+    "pr": 799,
+    "passed": true,
+    "detail": "observed=False ['     1. Mock Default Model (current)', '  ▏› 2. Mock Fast Model                                                                                              ▕', '     3. Use custom model...']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "config.no_search_in_footer [info: build predates #799]",
+    "pr": 799,
+    "passed": true,
+    "detail": "observed=True ['  ↑↓/j/k move  enter select  esc close']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "config.f_does_not_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "thought.current_marker_on_focus [info: build predates #798]",
+    "pr": 798,
+    "passed": true,
+    "detail": "observed=True   ▏› 2. Medium (current)                                                                                             ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "thought.no_bare_current",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "thought.three_values_no_search [info: build predates #799]",
+    "pr": 799,
+    "passed": true,
+    "detail": "observed=True "
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "agent.current_marker [info: build predates #798]",
+    "pr": 798,
+    "passed": true,
+    "detail": "observed=True ['  ▏› 1. Mock ACP (current)                                                                                           ▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "agent.recording_toggle_hint [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "['  ↑↓/j/k move  enter select  shift-tab rec on  esc close']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L3-model-config-agent",
+    "check": "agent.no_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-shaded",
+    "check": "grace.early_enter_ignored",
+    "pr": null,
+    "passed": true,
+    "detail": "onfig to change)\n\n\n› tidy the orchard\n\n\n• Test message 1Test message 2\n\n\n  Would you like to allow execute: Execute shell command?\n\n  Execute shell command\n  Command: rm -rf ./synthetic-build\n  rm -rf ./synthetic-build\n\n› 1. Allow (y)\n  2. Reject (esc)\n\n  Press enter to confirm or esc to reject\n\n\n\n\n"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-shaded",
+    "check": "header.command_shown",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-shaded",
+    "check": "prompt.rails_and_pointer [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False None"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-shaded",
+    "check": "label_not_green_or_bold [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False None"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-shaded",
+    "check": "j_moves [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False "
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-shaded",
+    "check": "k_moves [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False "
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-shaded",
+    "check": "f_no_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-shaded",
+    "check": "late_enter_accepted",
+    "pr": null,
+    "passed": true,
+    "detail": "ori AI enhancements\n\n• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\n› tidy the orchard\n\n\n• Test message 1Test message 2\n\n• Permission: Allow Execute shell command\n\n• Permission granted with option: allow\n\n\n›\n\n  / commands · ! shell · @ files · ? help\n\n\n\n\n\n\n\n"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-unshaded",
+    "check": "grace.early_enter_ignored",
+    "pr": null,
+    "passed": true,
+    "detail": "onfig to change)\n\n\n› tidy the orchard\n\n\n• Test message 1Test message 2\n\n\n  Would you like to allow execute: Execute shell command?\n\n  Execute shell command\n  Command: rm -rf ./synthetic-build\n  rm -rf ./synthetic-build\n\n› 1. Allow (y)\n  2. Reject (esc)\n\n  Press enter to confirm or esc to reject\n\n\n\n\n"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-unshaded",
+    "check": "header.command_shown",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-unshaded",
+    "check": "prompt.rails_and_pointer [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False None"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-unshaded",
+    "check": "label_not_green_or_bold [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False None"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-unshaded",
+    "check": "j_moves [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False "
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-unshaded",
+    "check": "k_moves [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False "
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-unshaded",
+    "check": "f_no_search",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P1-permission-unshaded",
+    "check": "late_enter_accepted",
+    "pr": null,
+    "passed": true,
+    "detail": "ori AI enhancements\n\n• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)\n\n\n› tidy the orchard\n\n\n• Test message 1Test message 2\n\n• Permission: Allow Execute shell command\n\n• Permission granted with option: allow\n\n\n›\n\n  / commands · ! shell · @ files · ? help\n\n\n\n\n\n\n\n"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-shaded",
+    "check": "approvals.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-shaded",
+    "check": "approvals.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-shaded",
+    "check": "approvals.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-shaded",
+    "check": "red_warning_kept",
+    "pr": null,
+    "passed": true,
+    "detail": "['  Nori will say yes to every edit, command and tool call the agent asks about. The sandbox setting still applies;', '  nothing else stops a harmful request.']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-shaded",
+    "check": "confirm.rails_and_pointer [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False None"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-shaded",
+    "check": "label_not_green_or_bold [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False None"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-shaded",
+    "check": "footer_words [info: build predates #799]",
+    "pr": 799,
+    "passed": true,
+    "detail": "observed=False []"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-shaded",
+    "check": "end_key_in_short_prompt [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "approvals.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "approvals.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "approvals.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 16, 'x': 2, 'rows': 2, 'text': '  ▏› 2. Agent (current)                                                                                              ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "red_warning_kept",
+    "pr": null,
+    "passed": true,
+    "detail": "['  Nori will say yes to every edit, command and tool call the agent asks about. The sandbox setting still applies;', '  nothing else stops a harmful request.']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "confirm.rails_and_pointer [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False None"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "label_not_green_or_bold [info: build predates #797]",
+    "pr": 797,
+    "passed": true,
+    "detail": "observed=False None"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "footer_words [info: build predates #799]",
+    "pr": 799,
+    "passed": true,
+    "detail": "observed=False []"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "P2-approve-all-unshaded",
+    "check": "end_key_in_short_prompt [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "U1-small-popups",
+    "check": "slash.no_rails",
+    "pr": null,
+    "passed": true,
+    "detail": "['  /switch-skillset  switch between available skillsets', '  /browse           open a file manager to browse and edit files', '  /browser          open a Chrome browser the agent can control via CDP', '  /close            close (release) the current session and start a fresh chat', '  /resume           resume a previous session', '  /resume-viewonly  view a previous session transcript (read-only)']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "U1-small-popups",
+    "check": "at.no_rails",
+    "pr": null,
+    "passed": true,
+    "detail": "['  Agent        Mock ACP', \"  Run 'npx nori-skillsets init' to set up Nori AI enhancements\", '• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)', '› @pl', '  src/plum_rows.rs', '  src/pear_ledger.rs']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "U1-small-popups",
+    "check": "dollar.no_rails",
+    "pr": null,
+    "passed": true,
+    "detail": "['  System       /tmp/vsel/runs/27ccdfda-U1-small-popups/orchard', '  Agent        Mock ACP', \"  Run 'npx nori-skillsets init' to set up Nori AI enhancements\", '• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)', '› $', '  Enter send · Ctrl+J newline']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "attach_list.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['00cd00', 'default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['1d1d1d', 'default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "attach_list.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['1d1d1d', 'default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "attach_list.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['00cd00', 'default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['1d1d1d', 'default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "j_moves",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Cedar count report                                                       mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "k_moves",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Plum row cleanup                                                         mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "end_scrolls_to_last",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Chestnut roast timer                                                     mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "search_f",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Walnut shell tally                                                       mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "search_ctrl_f",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Fig tree pruning plan                                                    mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "search_slash",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Olive press checklist                                                    mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "stray_letter_does_not_filter",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "on_screen_marker [info: build predates #798]",
+    "pr": 798,
+    "passed": true,
+    "detail": "observed=False ['› Plum row cleanup', '▏› ○ Plum row cleanup (current)                                               mock-model    ready                      ▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "no_current_for_session [info: build predates #798]",
+    "pr": 798,
+    "passed": true,
+    "detail": "observed=False ['▏› ○ Plum row cleanup (current)                                               mock-model    ready                      ▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "60.right_rail_visible",
+    "pr": 795,
+    "passed": true,
+    "detail": "['▏› ○ Plum r…cleanup (current)  mock-model    ready         ▕', '▏    orchard · Test message …  Mock D…Model  2s ago        ▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "40.right_rail_visible",
+    "pr": 795,
+    "passed": true,
+    "detail": "['▏› ○ Plum r…cleanup (current)  ready   ▕', '▏    orchard · Test message …  3s ago  ▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "32.table_wider_than_terminal [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "['', '', '• Test message 1Test message 2', '']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-shaded",
+    "check": "40.on_screen_kept_narrow [info: build predates #798]",
+    "pr": 798,
+    "passed": true,
+    "detail": "observed=False ▏› ○ Plum r…cleanup (current)  ready   ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "attach_list.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['00cd00', 'default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "attach_list.unshaded_no_bg",
+    "pr": 795,
+    "passed": true,
+    "detail": "['default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "attach_list.unshaded_marks_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 10, 'x': 0, 'rows': 2, 'text': '▏› ○ Synthetic parser fix                                                     mock-model    ready                      ▕', 'rail_fg': '00cd00', 'rail_bold': True, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': True, 'label_fg': ['00cd00', 'default'], 'label_bold': False, 'focus_bg': ['default'], 'other_bg': ['default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "j_moves",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Cedar count report                                                       mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "k_moves",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Plum row cleanup                                                         mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "end_scrolls_to_last",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Chestnut roast timer                                                     mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "search_f",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Walnut shell tally                                                       mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "search_ctrl_f",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Fig tree pruning plan                                                    mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "search_slash",
+    "pr": 795,
+    "passed": true,
+    "detail": "▏› ○ Olive press checklist                                                    mock-model    ready                      ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "stray_letter_does_not_filter",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "on_screen_marker [info: build predates #798]",
+    "pr": 798,
+    "passed": true,
+    "detail": "observed=False ['› Plum row cleanup', '▏› ○ Plum row cleanup (current)                                               mock-model    ready                      ▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "no_current_for_session [info: build predates #798]",
+    "pr": 798,
+    "passed": true,
+    "detail": "observed=False ['▏› ○ Plum row cleanup (current)                                               mock-model    ready                      ▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "60.right_rail_visible",
+    "pr": 795,
+    "passed": true,
+    "detail": "['▏› ○ Plum r…cleanup (current)  mock-model    ready         ▕', '▏    orchard · Test message …  Mock D…Model  2s ago        ▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "40.right_rail_visible",
+    "pr": 795,
+    "passed": true,
+    "detail": "['▏› ○ Plum r…cleanup (current)  ready   ▕', '▏    orchard · Test message …  3s ago  ▕']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "32.table_wider_than_terminal [observation]",
+    "pr": null,
+    "passed": true,
+    "detail": "['', '', '• Test message 1Test message 2', '']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L4-sessions-unshaded",
+    "check": "40.on_screen_kept_narrow [info: build predates #798]",
+    "pr": 798,
+    "passed": true,
+    "detail": "observed=False ▏› ○ Plum r…cleanup (current)  ready   ▕"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "resume.rails_and_pointer",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 4, 'x': 2, 'rows': 1, 'text': '  ▏› 2cc61fdb-17ce-4615-8147-7779ba4dee20     0 seconds ago     Not reported▕     Session         2cc61fdb-17ce-46…', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['242424', 'default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "resume.shaded_bg_differs_from_unfocused_rows",
+    "pr": 795,
+    "passed": true,
+    "detail": "focus_bg=['2b2b2b'] other_bg=['242424', 'default']"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "resume.shaded_marks_not_bold",
+    "pr": 795,
+    "passed": true,
+    "detail": "{'y': 4, 'x': 2, 'rows': 1, 'text': '  ▏› 2cc61fdb-17ce-4615-8147-7779ba4dee20     0 seconds ago     Not reported▕     Session         2cc61fdb-17ce-46…', 'rail_fg': '00cd00', 'rail_bold': False, 'right_rail': True, 'ptr_fg': '00cd00', 'ptr_bold': False, 'label_fg': ['default'], 'label_bold': False, 'focus_bg': ['2b2b2b'], 'other_bg': ['242424', 'default']}"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "lists_all_18",
+    "pr": null,
+    "passed": true,
+    "detail": "18"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "j_moves",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› ca914deb-ade9-4cfd-aac1-95b383dbddf4     1 second ago      Not reported▕     Agent           mock-model"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "k_moves",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› 0ac64e69-2081-47ef-8b5f-185747bef517     1 second ago      Not reported▕     Project         5a5efa5b9884747c"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "end_jumps_to_last [info: build predates #799]",
+    "pr": 799,
+    "passed": true,
+    "detail": "observed=False   ▏› 0ac64e69-2081-47ef-8b5f-185747bef517     1 second ago      Not reported▕     Project         5a5efa5b9884747c"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "home_jumps_to_first [info: build predates #799]",
+    "pr": 799,
+    "passed": true,
+    "detail": "observed=False   ▏› 0ac64e69-2081-47ef-8b5f-185747bef517     1 second ago      Not reported▕     Project         5a5efa5b9884747c"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "search_f",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› 491705e4-f05c-43e2-9913-70be1cafe2c8     3 seconds ago     Not reported▕     Project         5a5efa5b9884747c"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "search_ctrl_f [info: build predates #799]",
+    "pr": 799,
+    "passed": true,
+    "detail": "observed=True   ▏› d6973b9b-3a10-4500-8f12-bf85680b49a2     5 seconds ago     Not reported▕     Project         5a5efa5b9884747c"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "search_slash",
+    "pr": null,
+    "passed": true,
+    "detail": "  ▏› d0969ee2-ec28-4de9-886e-f28bf04ca2de     7 seconds ago     Not reported▕     Project         5a5efa5b9884747c"
+  },
+  {
+    "build": "27ccdfda",
+    "scenario": "L5-resume-picker",
+    "check": "stray_letter_does_not_filter",
+    "pr": null,
+    "passed": true,
+    "detail": ""
+  }
+]

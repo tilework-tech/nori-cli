@@ -1,0 +1,30 @@
+
+  Resume a previous session
+  Saved sessions for this working directory
+  ⌕  a6e269                                                                       Details
+
+     Conversation                             Updated           Branch            Session         a6e2698a-d35f-45…
+  ▏› a6e2698a-d35f-45cf-8fb4-8573b89e2d55     3 seconds ago     Not reported▕     Project         ec9b14825bc8dfb6
+                                                                                  Agent           mock-model
+                                                                                  Working direc…  /tmp/vsel/runs/7…
+                                                                                  Branch          Not reported
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ browse  type filter  enter resume  esc stop search  ctrl+c quit
+

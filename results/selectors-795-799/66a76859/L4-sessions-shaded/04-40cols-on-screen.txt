@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default
+Model, Thought Level=Medium (/config
+to change)
+
+
+› Plum row cleanup
+
+
+• Test message 1Test message 2
+
+Sessions 18 · 18 ready  tab: waiting onl
+
+All  waiting on you
+⌕  plum
+
+  Session                     Status
+› ○ Plum r…cleanup (current)  ready
+    orchard · Test message …  6s ago
+
+↑↓/j/k move  enter open  ctrl+d close
+

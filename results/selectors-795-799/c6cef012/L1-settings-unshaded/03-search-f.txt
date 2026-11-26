@@ -1,0 +1,32 @@
+shell$ nori --agent mock-model
+  › Nori CLI v0.0.0
+
+  System       /tmp/vsel/runs/c6cef012-L1-settings-unshaded/orchard
+  Agent        Mock ACP
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+  Configuration
+  Toggle TUI settings (changes saved to config.toml)
+  ⌕  term
+
+  ▏› 1. Resize Reflow (on) (current)                                                                                 ▕
+  ▏     Reflow transcript history when the terminal width changes                                                    ▕
+     2. Terminal Notifications (on) (current)
+        Send OSC 9 escape sequences to notify the terminal on events
+     3. File Manager (not set)
+        Terminal file manager for the /browse command
+  ↑↓ move  type filter  enter select  esc stop search
+
+
+
+
+
+
+
+
+

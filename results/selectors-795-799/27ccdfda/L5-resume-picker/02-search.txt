@@ -1,0 +1,30 @@
+
+  Resume a previous session
+  Saved sessions for this working directory
+  ⌕  491705                                                                       Details
+
+     Conversation                             Updated           Branch            Session         491705e4-f05c-43…
+  ▏› 491705e4-f05c-43e2-9913-70be1cafe2c8     3 seconds ago     Not reported▕     Project         5a5efa5b9884747c
+                                                                                  Agent           mock-model
+                                                                                  Working direc…  /tmp/vsel/runs/2…
+                                                                                  Branch          Not reported
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ browse  type filter  enter resume  esc stop search  ctrl+c quit
+

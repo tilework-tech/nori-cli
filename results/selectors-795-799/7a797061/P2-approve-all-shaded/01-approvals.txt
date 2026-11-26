@@ -1,0 +1,32 @@
+shell$ nori --agent mock-model
+  › Nori CLI v0.0.0
+
+  System       /tmp/vsel/runs/7a797061-P2-approve-all-shaded/orchard
+  Agent        Mock ACP
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+  Approvals for this session
+  New sessions start in the host default. The sandbox is set separately.
+
+     1. Ask (not available)
+        Mock ACP has no mode that asks before every edit and command.
+  ▏› 2. Agent (current)                                                                                              ▕
+  ▏     The agent asks when it judges it needs to.                                                                   ▕
+     3. Approve all
+        Nori approves every permission request.
+  ↑↓/j/k move  enter select  esc close
+
+
+
+
+
+
+
+
+
+

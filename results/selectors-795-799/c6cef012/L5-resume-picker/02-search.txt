@@ -1,0 +1,30 @@
+
+  Resume a previous session
+  Saved sessions for this working directory
+  ⌕  bde947                                                                       Details
+
+     Conversation                             Updated           Branch            Session         bde947e1-bfdb-47…
+  ▏› bde947e1-bfdb-47df-a9c3-60e19f43496e     4 seconds ago     Not reported▕     Project         28106a8280b34973
+                                                                                  Agent           mock-model
+                                                                                  Working direc…  /tmp/vsel/runs/c…
+                                                                                  Branch          Not reported
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ browse  type filter  enter resume  esc stop search  ctrl+c quit
+

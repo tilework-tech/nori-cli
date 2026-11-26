@@ -1,0 +1,32 @@
+shell$ nori --agent mock-model
+  › Nori CLI v0.0.0
+
+  System       /tmp/vsel/runs/7a797061-L3-model-config-agent/orchard
+  Agent        Mock ACP
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+  Model
+  Select a value for this ACP session setting
+  ⌕  fast
+
+  ▏› 1. Mock Fast Model                                                                                              ▕
+  ▏     A faster mock model variant                                                                                  ▕
+  ↑↓ move  type filter  enter select  esc stop search
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,32 @@
+shell$ nori --agent mock-model
+  › Nori CLI v0.0.0
+
+  System       /tmp/vsel/runs/27ccdfda-L3-model-config-agent/orchard
+  Agent        Mock ACP
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+  Select agent
+  Creates new conversation with selected agent (history not preserved)
+
+  ▏› 1. Mock ACP (current)                                                                                           ▕
+  ▏     Mock agent for testing                                                                                       ▕
+     2. Mock ACP Alt
+        Alternate mock agent for testing
+     3. Claude Code
+        Anthropic
+     4. Codex
+        OpenAI
+     5. Antigravity
+        Google
+     6. Grok Build
+        xAI
+  ↑↓/j/k move  enter select  shift-tab rec on  esc close
+
+
+
+

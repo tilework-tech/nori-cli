@@ -1,0 +1,32 @@
+shell$ nori --agent mock-model
+  › Nori CLI v0.0.0
+
+  System       /tmp/vsel/runs/d4239329-L1-settings-shaded/orchard
+  Agent        Mock ACP
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+  Configuration
+  Toggle TUI settings (changes saved to config.toml)
+
+     1. Pinned Plan Drawer (off)
+        Pin plan updates to a drawer in the viewport instead of history
+  ▏› 2. Thoughts in History (on) (current)                                                                           ▕
+  ▏     Show agent thoughts in history, not only in the working indicator                                            ▕
+     3. Resize Reflow (on) (current)
+        Reflow transcript history when the terminal width changes
+     4. Custom Working Messages (on) (current)
+        Rotate playful status messages while the agent is working
+     5. Vertical Footer (off)
+        Stack footer segments vertically instead of horizontally
+     6. Terminal Notifications (on) (current)
+        Send OSC 9 escape sequences to notify the terminal on events
+  ↑↓/j/k move  / search  enter select  esc close
+
+
+
+
