@@ -268,11 +268,15 @@ impl App {
         source: String,
         cwd: std::path::PathBuf,
     ) {
-        let consolidation = crate::transcript_reflow::consolidate_agent_message_cells(
-            self.transcript_cells.edit(),
+        let consolidation = crate::transcript_reflow::agent_message_consolidation(
+            &self.transcript_cells,
             source,
             &cwd,
         );
+        if let Some((range, replacement)) = &consolidation {
+            self.transcript_cells
+                .replace_tail(range.clone(), replacement.clone());
+        }
         if let Some((range, replacement)) = consolidation
             && let Some(Overlay::Transcript(transcript)) = &mut self.overlay
         {

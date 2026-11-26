@@ -56,13 +56,16 @@ struct RenderedFor {
 
 /// The transcript rows for the full-screen view, wrapped to the screen width.
 ///
-/// Each cell is rendered once: appending renders only the new cells, and the
-/// whole tail is rendered again only when the width changes or an edit moves
-/// the transcript's generation. Unlike the inline reprint, the view never
+/// Each cell is rendered once: appending renders only the new cells, a tail
+/// replacement (a finished reply becoming one Markdown cell) renders only the
+/// replaced cells, and the whole tail is rendered again only when the width
+/// changes or another edit moves the transcript's generation. Unlike the inline reprint, the view never
 /// shows a truncation notice: it only shows the newest screenful.
 #[derive(Default)]
 pub(crate) struct TranscriptRows {
     rendered_for: Option<RenderedFor>,
+    /// The tail replacements already in `cells`.
+    tail_edits_seen: i64,
     /// The rows of each transcript cell, including the blank row that
     /// separates it from the cell before. Cells older than the rendered
     /// tail have no rows.
@@ -81,7 +84,11 @@ impl TranscriptRows {
             self.cells = vec![Vec::new(); skipped];
             self.has_emitted = false;
             self.rendered_for = Some(rendered_for);
+        } else if let Some(changed) = cells.changed_since(self.tail_edits_seen) {
+            self.cells.truncate(changed);
+            self.has_emitted = self.cells.iter().any(|rows| !rows.is_empty());
         }
+        self.tail_edits_seen = cells.tail_edits();
         for cell in &cells[self.cells.len()..] {
             let mut lines = cell.display_lines(width);
             if !lines.is_empty() && !cell.is_stream_continuation() {
@@ -240,6 +247,33 @@ mod tests {
         cells.edit()[0] = counted("after").0;
         rows.update(&cells, 40);
         assert_eq!(texts(&rows), ["after", "", "last"]);
+    }
+
+    #[test]
+    fn replacing_the_tail_renders_only_the_replaced_cells() {
+        let (first, first_renders) = counted("first");
+        let (second, second_renders) = counted("second");
+        let mut cells = TranscriptCells::from(vec![first, second, counted("partial").0]);
+        let mut rows = TranscriptRows::default();
+        rows.update(&cells, 40);
+
+        cells.replace_tail(2..3, counted("whole").0);
+        rows.update(&cells, 40);
+        cells.push(counted("next").0);
+        cells.replace_tail(3..4, counted("next whole").0);
+        rows.update(&cells, 40);
+
+        assert_eq!(
+            [
+                first_renders.load(Ordering::Relaxed),
+                second_renders.load(Ordering::Relaxed)
+            ],
+            [1, 1]
+        );
+        assert_eq!(
+            texts(&rows),
+            ["first", "", "second", "", "whole", "", "next whole"]
+        );
     }
 
     #[test]

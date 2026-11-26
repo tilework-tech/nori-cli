@@ -39,6 +39,17 @@ fn joined_app_with_events(
     App,
     tokio::sync::mpsc::UnboundedReceiver<crate::app_event::AppEvent>,
 ) {
+    joined_app_on(home, open_session, connection())
+}
+
+fn joined_app_on(
+    home: &tempfile::TempDir,
+    open_session: Option<&str>,
+    connection: HostConnection,
+) -> (
+    App,
+    tokio::sync::mpsc::UnboundedReceiver<crate::app_event::AppEvent>,
+) {
     let config = NoriConfig {
         cwd: home.path().to_path_buf(),
         nori_home: home.path().to_path_buf(),
@@ -54,7 +65,7 @@ fn joined_app_with_events(
         false,
         Arc::clone(&auth_manager),
         config,
-        connection(),
+        connection,
         open_session.map(str::to_owned),
         None,
     )
@@ -313,4 +324,80 @@ async fn each_listed_row_names_the_folder_its_session_works_in() {
         .collect::<Vec<_>>()
         .join("\n");
     insta::assert_snapshot!(screen);
+}
+
+/// The sessions `@` asked the host to search in, oldest first; `None` is the
+/// host's own folder.
+fn searched_in(
+    events: &mut tokio::sync::mpsc::UnboundedReceiver<crate::app_event::AppEvent>,
+) -> Vec<Option<String>> {
+    let mut sessions = Vec::new();
+    while let Ok(event) = events.try_recv() {
+        if let crate::app_event::AppEvent::HostRequest {
+            call: crate::host_client::HostCall::FindPaths { session_id, .. },
+            ..
+        } = event
+        {
+            sessions.push(session_id);
+        }
+    }
+    sessions
+}
+
+#[tokio::test]
+async fn at_mentions_search_the_host_and_follow_the_session_on_screen() {
+    let home = tempfile::tempdir().unwrap();
+    let finding = HostConnection {
+        features: HostFeatures {
+            find_paths: true,
+            ..HostFeatures::default()
+        },
+        ..connection()
+    };
+    let (mut app, mut events) = joined_app_on(&home, None, finding.clone());
+    app.on_joined_sessions(
+        list(&[row(AMBER, "synthetic amber"), row(BIRCH, "synthetic birch")]),
+        FrameRequester::test_dummy(),
+        &finding,
+    );
+    let generation_of = |app: &App, title: &str| {
+        app.session_rows()
+            .into_iter()
+            .find(|row| row.title.contains(title))
+            .map(|row| row.generation)
+            .unwrap()
+    };
+    let _ = searched_in(&mut events);
+
+    app.start_file_search("harbor".to_string());
+    let with_no_session = searched_in(&mut events);
+    app.on_host_file_search_landed(
+        crate::host_client::FileSearch {
+            session_id: None,
+            query: "harbor".to_string(),
+        },
+        Ok(json!({"root": "/srv", "matches": []})),
+    );
+    app.show_session(generation_of(&app, "synthetic amber"));
+    app.start_file_search("harbor".to_string());
+    let on_amber = searched_in(&mut events);
+    app.on_host_file_search_landed(
+        crate::host_client::FileSearch {
+            session_id: Some(AMBER.to_string()),
+            query: "harbor".to_string(),
+        },
+        Ok(json!({"root": "/srv", "matches": []})),
+    );
+    app.show_session(generation_of(&app, "synthetic birch"));
+    app.start_file_search("harbor".to_string());
+    let on_birch = searched_in(&mut events);
+
+    assert_eq!(
+        (with_no_session, on_amber, on_birch),
+        (
+            vec![None],
+            vec![Some(AMBER.to_string())],
+            vec![Some(BIRCH.to_string())]
+        )
+    );
 }
