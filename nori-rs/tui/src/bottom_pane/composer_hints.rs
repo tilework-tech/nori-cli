@@ -101,6 +101,13 @@ impl ComposerHints {
     }
 }
 
+/// Single-glyph keys stay at full color so they stand out; word keys such as
+/// `Enter` are dimmed too, so they do not outweigh their labels.
 fn hint(key: &'static str, label: &'static str) -> Line<'static> {
-    Line::from(vec![Span::from(key).bold(), format!(" {label}").dim()])
+    let key = if key.chars().count() == 1 {
+        Span::from(key).bold()
+    } else {
+        Span::from(key).bold().dim()
+    };
+    Line::from(vec![key, format!(" {label}").dim()])
 }

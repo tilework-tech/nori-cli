@@ -2306,6 +2306,28 @@ footer_right = []
         assert!(!label.modifier.contains(Modifier::BOLD));
     }
 
+    #[test]
+    fn word_keys_are_bold_and_dim_while_glyph_keys_keep_full_color() {
+        let typed = ComposerHints {
+            draft: HintDraft::Message,
+            ..idle_controller()
+        };
+        for (hints, key, glyph) in [(idle_controller(), "/", true), (typed, "E", false)] {
+            let props = hint_props(hints);
+            let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
+            terminal
+                .draw(|f| render_footer(Rect::new(0, 0, 60, 1), f.buffer_mut(), &props))
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            let cell = (0..60)
+                .map(|x| buffer[(x, 0)].clone())
+                .find(|cell| cell.symbol() == key)
+                .unwrap_or_else(|| panic!("{key} is drawn"));
+            assert!(cell.modifier.contains(Modifier::BOLD), "{key}");
+            assert_eq!(cell.modifier.contains(Modifier::DIM), !glyph, "{key}");
+        }
+    }
+
     fn cols(text: &str) -> u16 {
         u16::try_from(unicode_width::UnicodeWidthStr::width(text)).unwrap()
     }
