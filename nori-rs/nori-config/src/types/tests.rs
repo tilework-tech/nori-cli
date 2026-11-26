@@ -916,6 +916,10 @@ fn test_footer_segment_display_name() {
         "Mode Indicator"
     );
     assert_eq!(FooterSegment::CloudSession.display_name(), "Cloud Session");
+    assert_eq!(
+        FooterSegment::ComposerHints.display_name(),
+        "Composer Hints"
+    );
 }
 
 #[test]
@@ -942,6 +946,7 @@ fn test_footer_segment_all_variants() {
             FooterSegment::TokenUsage,
             FooterSegment::ModeIndicator,
             FooterSegment::CloudSession,
+            FooterSegment::ComposerHints,
         ]
     );
 }
@@ -966,6 +971,7 @@ fn test_footer_segment_config_default_is_lean_subset() {
         FooterSegment::ModeIndicator,
         FooterSegment::WorktreeName,
         FooterSegment::CloudSession,
+        FooterSegment::ComposerHints,
     ];
     // Segments disabled by default: static, restated by the transcript, or
     // otherwise only meaningful after opting into the related workflow. Each
@@ -1101,7 +1107,11 @@ fn test_footer_layout_default_left_group_is_self_hiding_state_plus_opt_ins() {
         .collect();
     assert_eq!(
         enabled_on_the_left,
-        vec![FooterSegment::CloudSession, FooterSegment::VimMode]
+        vec![
+            FooterSegment::ComposerHints,
+            FooterSegment::CloudSession,
+            FooterSegment::VimMode
+        ]
     );
 
     // The default-off segments still list a placement, so enabling one through
@@ -1657,4 +1667,11 @@ toggle_screen = "none"
     .unwrap();
     let hotkeys = HotkeyConfig::from_toml(&config.tui.hotkeys);
     assert!(hotkeys.binding_for(HotkeyAction::ToggleScreen).is_none());
+}
+
+#[test]
+fn composer_hints_can_be_turned_off() {
+    let toml: FooterSegmentConfigToml = toml::from_str("composer_hints = false").unwrap();
+    let config = FooterSegmentConfig::from_toml(&toml);
+    assert!(!config.is_enabled(FooterSegment::ComposerHints));
 }

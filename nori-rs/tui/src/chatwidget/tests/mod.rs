@@ -158,6 +158,7 @@ mod api_key;
 mod approvals;
 mod close_refusal;
 mod compact_host;
+mod composer_hints;
 mod context;
 mod context_host;
 mod delegation;

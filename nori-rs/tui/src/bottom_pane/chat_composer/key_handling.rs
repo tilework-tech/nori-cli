@@ -748,10 +748,7 @@ impl ChatComposer {
         {
             let draft = self.expand_pending_pastes(self.textarea.text().to_owned());
             let text = draft.trim();
-            let is_command = text.starts_with('!')
-                || parse_slash_name(text).is_some_and(|(name, _)| !name.contains('/'))
-                || (!draft.starts_with(' ') && matches!(text, "exit" | "quit"));
-            if text.is_empty() || is_command {
+            if text.is_empty() || draft_runs_here(&draft) {
                 if draft != self.textarea.text() {
                     self.textarea.set_text(&draft);
                 }

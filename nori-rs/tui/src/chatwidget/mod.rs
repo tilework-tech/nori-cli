@@ -265,6 +265,8 @@ pub(crate) struct ChatWidget {
     live_goal_seen: bool,
     // Latest ACP capability snapshot projected into Nori client concepts.
     session_agent_capabilities: crate::presentation::AgentCapabilitiesView,
+    /// The agent accepts prompts into a running turn.
+    session_steering: bool,
     /// Whether the top-level CLI launched the handroll-backed cloud mode.
     cloud_mode: bool,
     // Identity reported by the active agent during ACP initialization.
@@ -368,11 +370,13 @@ impl Drop for ChatWidget {
 
 impl Renderable for ChatWidget {
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        self.bottom_pane.set_composer_hints(self.composer_hints());
         self.as_renderable().render(area, buf);
         self.last_rendered_width.set(Some(area.width as usize));
     }
 
     fn desired_height(&self, width: u16) -> u16 {
+        self.bottom_pane.set_composer_hints(self.composer_hints());
         self.as_renderable().desired_height(width)
     }
 

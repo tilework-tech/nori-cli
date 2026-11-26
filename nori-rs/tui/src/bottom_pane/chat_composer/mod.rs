@@ -22,6 +22,8 @@ use ratatui::widgets::WidgetRef;
 use super::chat_composer_history::ChatComposerHistory;
 use super::command_popup::CommandItem;
 use super::command_popup::CommandPopup;
+use super::composer_hints::ComposerHints;
+use super::composer_hints::HintDraft;
 use super::file_search_popup::FileSearchPopup;
 use super::footer::FooterMode;
 use super::footer::FooterProps;
@@ -63,6 +65,7 @@ use crate::clipboard_paste::pasted_image_format;
 use crate::history_cell;
 use crate::ui_consts::LIVE_PREFIX_COLS;
 use codex_file_search::FileMatch;
+use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
@@ -165,6 +168,17 @@ pub(crate) struct ChatComposer {
     session_title: Option<String>,
     footer_segment_config: nori_config::FooterSegmentConfig,
     footer_layout_config: nori_config::FooterLayoutConfig,
+    /// What the session allows, refreshed by the chat widget each frame.
+    composer_hints: Cell<Option<ComposerHints>>,
+}
+
+/// Enter runs `text` in this terminal rather than sending it to the agent:
+/// a `!` command, a slash command, or a bare `exit` or `quit`.
+pub(super) fn draft_runs_here(draft: &str) -> bool {
+    let text = draft.trim();
+    text.starts_with('!')
+        || parse_slash_name(text).is_some_and(|(name, _)| !name.contains('/'))
+        || (!draft.starts_with(' ') && matches!(text, "exit" | "quit"))
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -242,6 +256,7 @@ impl ChatComposer {
             session_title: None,
             footer_segment_config: nori_config::FooterSegmentConfig::default(),
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
+            composer_hints: Cell::new(None),
         };
         // Apply configuration via the setter to keep side-effects centralized.
         this.set_disable_paste_burst(disable_paste_burst);
@@ -536,6 +551,58 @@ impl ChatComposer {
         self.host_status = status;
     }
 
+    /// What the session around the composer allows. The draft part is the
+    /// composer's own and is ignored here.
+    pub(crate) fn set_composer_hints(&self, hints: ComposerHints) {
+        self.composer_hints.set(Some(hints));
+    }
+
+    fn current_composer_hints(&self) -> Option<ComposerHints> {
+        let mut hints = self.composer_hints.get()?;
+        hints.draft = self.hint_draft();
+        Some(hints)
+    }
+
+    fn hint_draft(&self) -> HintDraft {
+        let text = self.textarea.text();
+        if self.is_shell_mode {
+            HintDraft::Shell {
+                empty: text.trim().is_empty(),
+            }
+        } else if let Some(command) = text.trim_start().strip_prefix('!') {
+            HintDraft::Shell {
+                empty: command.trim().is_empty(),
+            }
+        } else if text.trim().is_empty() {
+            HintDraft::Empty
+        } else if draft_runs_here(text) {
+            HintDraft::Command
+        } else {
+            HintDraft::Message
+        }
+    }
+
+    /// Whether the hint row is on screen in place of the placeholder's tips.
+    fn composer_hints_shown(&self) -> bool {
+        let hints =
+            nori_config::FooterLayoutItem::Builtin(nori_config::FooterSegment::ComposerHints);
+        let layout = &self.footer_layout_config;
+        self.composer_hints.get().is_some()
+            && self
+                .footer_segment_config
+                .is_enabled(nori_config::FooterSegment::ComposerHints)
+            && [
+                &layout.footer_left,
+                &layout.footer_right,
+                &layout.textarea_top_left,
+                &layout.textarea_top_right,
+                &layout.textarea_bottom_left,
+                &layout.textarea_bottom_right,
+            ]
+            .iter()
+            .any(|placement| placement.contains(&hints))
+    }
+
     pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
         self.prompt_summary = summary;
     }
@@ -739,7 +806,7 @@ impl Renderable for ChatComposer {
                 user_message_style(),
             );
         }
-        if !self.is_shell_mode && self.textarea.text().is_empty() {
+        if !self.is_shell_mode && self.textarea.text().is_empty() && !self.composer_hints_shown() {
             let placeholder_text = if matches!(prompt_indicator, PromptIndicator::Shortcut) {
                 self.placeholder_text
                     .strip_prefix("? ")

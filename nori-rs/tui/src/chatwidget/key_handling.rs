@@ -151,11 +151,7 @@ impl ChatWidget {
         use crate::follow_up::Delivery;
         use crate::presentation::session_runtime::SessionPhaseView;
         use nori_harness::FollowUpIntent;
-        let active_turn = self.owned_prompt_request_id.as_ref().filter(|_| {
-            !self.cloud_mode
-                && !self.follow_only_attachment
-                && self.acp_session_phase == Some(SessionPhaseView::Prompt)
-        });
+        let active_turn = self.active_turn().cloned();
         let (text, intent) = match self
             .bottom_pane
             .handle_key_event_with_queue(key_event, active_turn.is_some())
@@ -204,10 +200,7 @@ impl ChatWidget {
             image_paths: self.bottom_pane.take_recent_submission_images(),
         };
         let delivery = match active_turn {
-            Some(turn) => Delivery::FollowUp {
-                turn: turn.clone(),
-                intent,
-            },
+            Some(turn) => Delivery::FollowUp { turn, intent },
             None if !self.cloud_mode
                 && matches!(self.acp_session_phase, None | Some(SessionPhaseView::Idle)) =>
             {

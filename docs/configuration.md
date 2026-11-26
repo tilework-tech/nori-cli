@@ -230,6 +230,7 @@ Each key is a boolean that shows or hides one segment.
 | `token_usage` | `false` | Total tokens used |
 | `mode_indicator` | `true` | Agent mode, such as `[ Plan ]` |
 | `cloud_session` | `true` | Cloud session name, only in `nori cloud` |
+| `composer_hints` | `true` | Keys that work in the composer now, such as `/ commands · ? help` |
 
 ### `[tui.footer_layout]`
 
@@ -241,7 +242,7 @@ placement removes it from the others.
 
 | Key | Default |
 |---|---|
-| `footer_left` | `cloud_session`, `prompt_summary`, `session_title`, `vim_mode`, `git_stats`, `context_used_percent`, `context_remaining_percent`, `context_used_tokens`, `context_remaining_tokens`, `context_window_tokens`, `approval_mode`, `skillset`, `nori_version`, `token_usage` |
+| `footer_left` | `composer_hints`, `cloud_session`, `prompt_summary`, `session_title`, `vim_mode`, `git_stats`, `context_used_percent`, `context_remaining_percent`, `context_used_tokens`, `context_remaining_tokens`, `context_window_tokens`, `approval_mode`, `skillset`, `nori_version`, `token_usage` |
 | `footer_right` | `git_branch`, `worktree_name`, `context` |
 | `textarea_top_left` | empty |
 | `textarea_top_right` | `mode_indicator` |
@@ -250,6 +251,12 @@ placement removes it from the others.
 
 A segment renders only when `[tui.footer_segments]` enables it. The one
 exception is `approval_mode`, which always shows Ask and Approve all.
+
+When `composer_hints` is first in `footer_left`, the hints render directly
+under the prompt, before the attach status line; in any other position it is
+an ordinary segment. On a narrow row, hints drop first, from the end. While
+hints show, the prompt shows no placeholder tip. To turn them off, set
+`composer_hints = false` or give a `footer_left` that leaves it out.
 
 ## `[projects."<path>"]`
 
