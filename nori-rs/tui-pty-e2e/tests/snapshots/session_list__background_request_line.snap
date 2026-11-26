@@ -11,6 +11,6 @@ expression: normalize_for_input_snapshot(session.screen_contents())
   ● mock:request-permi…m -rf target/debug is waiting on you · approve: rm -rf… (+1 more) · alt + down to jump
   2 waiting on you · 1 ready
 
-› [DEFAULT_PROMPT]
+〉[DEFAULT_PROMPT]
 
   / commands · ! shell · @ files · ? help                                                             ⎇ master

@@ -5,7 +5,7 @@ expression: normalize_for_input_snapshot(contents)
 • Mock ACP options: Model=Mock Default Model, Thought
 Level=Medium (/config to change)
 
-› [DEFAULT_PROMPT]
+〉[DEFAULT_PROMPT]
 
   / commands · ! shell · @ files · ? help
   Approvals: Agent

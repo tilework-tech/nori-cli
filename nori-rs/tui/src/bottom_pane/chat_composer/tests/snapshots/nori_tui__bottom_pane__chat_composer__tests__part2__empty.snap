@@ -3,7 +3,7 @@ source: tui/src/bottom_pane/chat_composer/tests/part2.rs
 expression: terminal.backend()
 ---
 "                                                                                                    "
-"› Ask Nori to do anything                                                                           "
+"〉Ask Nori to do anything                                                                           " Hidden by multi-width symbols: [(1, " ")]
 "                                                                                                    "
 "                                                                                                    "
 "                                                                                                    "

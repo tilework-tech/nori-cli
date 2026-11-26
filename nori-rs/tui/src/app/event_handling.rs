@@ -139,14 +139,21 @@ impl App {
                         return Ok(true);
                     }
                     if self.screen.is_full_screen() {
+                        self.commit_startup_header(tui);
                         self.draw_full_screen(tui)?;
                         return Ok(true);
                     }
+                    let header = self.advance_startup_header(tui)?;
                     tui.draw(
-                        self.chat_widget.desired_height(tui.terminal.size()?.width),
+                        self.chat_widget
+                            .desired_height(tui.terminal.size()?.width)
+                            .saturating_add(header),
                         |frame| {
-                            self.chat_widget.render(frame.area(), frame.buffer);
-                            if let Some((x, y)) = self.chat_widget.cursor_pos(frame.area()) {
+                            let (top, chat) =
+                                super::startup_header::split_viewport(frame.area(), header);
+                            self.render_startup_header(top, frame.buffer);
+                            self.chat_widget.render(chat, frame.buffer);
+                            if let Some((x, y)) = self.chat_widget.cursor_pos(chat) {
                                 frame.set_cursor_position((x, y));
                             }
                         },
@@ -717,6 +724,9 @@ impl App {
                         else {
                             unreachable!("candidate generation checked above")
                         };
+                        if purpose == host_candidate::PickerPurpose::Startup {
+                            self.startup_header_ready(tui);
+                        }
                         let (initial_prompt, initial_images) =
                             self.chat_widget.take_initial_input();
                         let carried = purpose.starts_new().then(|| {
@@ -809,6 +819,7 @@ impl App {
                     tui.terminal.clear()?;
                     return Ok(false);
                 }
+                self.commit_startup_header(tui);
                 // Create and insert exit message cell before exiting
                 let exit_cell = self.chat_widget.create_exit_message_cell();
 

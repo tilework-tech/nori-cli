@@ -281,7 +281,7 @@ approval_mode = false
     // The card is written at startup, before any session exists, so it names
     // the agent without the configuration only a live session can report.
     assert!(
-        contents.contains("Nori CLI v"),
+        contents.contains("〉nori CLI v"),
         "Startup should render the session header. Contents: {}",
         contents
     );

@@ -403,9 +403,10 @@ pub(crate) fn new_session_info(
     agent: String,
     is_first_event: bool,
     status: crate::nori::session_header::StatusViewModel,
+    face: crate::nori::session_header::StartupFace,
 ) -> SessionInfoCell {
     // Use the Nori-branded session header
-    crate::nori::session_header::new_nori_session_info(config, agent, is_first_event, status)
+    crate::nori::session_header::new_nori_session_info(config, agent, is_first_event, status, face)
 }
 
 pub(crate) fn new_user_prompt(message: String) -> UserHistoryCell {

@@ -708,7 +708,7 @@ impl Renderable for ChatComposer {
                 .style(user_message_style())
                 .render(composer_rect, buf);
             if !textarea_rect.is_empty() {
-                let prompt = "›".dim();
+                let prompt = "〉".dim();
                 buf.set_span(
                     textarea_rect.x - LIVE_PREFIX_COLS,
                     textarea_rect.y,
@@ -781,7 +781,7 @@ impl Renderable for ChatComposer {
         let prompt_indicator = self.prompt_indicator();
         if !textarea_rect.is_empty() {
             let prompt = match prompt_indicator {
-                PromptIndicator::Normal => "›".bold(),
+                PromptIndicator::Normal => "〉".bold(),
                 PromptIndicator::Shortcut => {
                     Span::styled("?", Style::default().fg(Color::DarkGray))
                 }

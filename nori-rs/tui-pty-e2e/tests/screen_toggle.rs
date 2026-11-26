@@ -283,12 +283,12 @@ fn moving_between_sessions_while_full_screen_shows_each_session_and_reprints_on_
     );
 }
 
-/// The text on the composer's prompt line, without the `›` marker.
+/// The text on the composer's prompt line, without the `〉` marker.
 fn composer_line(screen: &str) -> String {
     screen
         .lines()
         .rev()
-        .find_map(|line| line.trim_start().strip_prefix('›'))
+        .find_map(|line| line.trim_start().strip_prefix('〉'))
         .map(|rest| rest.trim().to_string())
         .unwrap_or_default()
 }

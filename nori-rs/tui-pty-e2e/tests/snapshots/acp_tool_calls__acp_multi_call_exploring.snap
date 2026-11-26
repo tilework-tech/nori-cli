@@ -21,6 +21,6 @@ expression: normalize_for_input_snapshot(contents)
 
 • Multi-call exploring done.
 
-› [DEFAULT_PROMPT]
+〉[DEFAULT_PROMPT]
 
   / commands · ! shell · @ files · ? help                               ⎇ master

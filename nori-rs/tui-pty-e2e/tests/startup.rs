@@ -31,7 +31,7 @@ fn activate_new_session(session: &mut TuiSession) {
         .expect("Startup session did not start");
     session.submit_input("/new").expect("Failed to enter /new");
     // Startup already wrote a card and announced its session's model, so
-    // neither "Nori CLI" nor the model name alone shows that /new finished.
+    // neither "〉nori CLI" nor the model name alone shows that /new finished.
     // Only the card /new writes carries the model on its agent row.
     session
         .wait_for_text("Agent        Mock ACP · Mock Default Model", TIMEOUT)
@@ -149,7 +149,7 @@ fn test_trust_screen_is_skipped_with_default_config() {
 
     // Should show the main prompt directly (skipping onboarding)
     assert!(
-        contents.contains("›") && has_prompt_ready_marker(&contents),
+        contents.contains("〉") && has_prompt_ready_marker(&contents),
         "Should show main prompt with its placeholder or hint row, got: {}",
         contents
     );
@@ -178,7 +178,7 @@ fn test_startup_shows_nori_banner() {
 
     // Verify Nori branding elements are present
     assert!(
-        contents.contains("Nori CLI v0"),
+        contents.contains("〉nori CLI v0"),
         "Expected NORI header, but got: {}",
         contents
     );
@@ -188,7 +188,7 @@ fn test_startup_shows_nori_banner() {
     let lines: Vec<&str> = contents.lines().collect();
     let header_start = lines
         .iter()
-        .position(|line| line.contains("› Nori CLI"))
+        .position(|line| line.contains("〉nori CLI"))
         .expect("Should find status block heading");
     let header_end = lines[header_start..]
         .iter()
@@ -238,8 +238,8 @@ fn test_startup_hides_install_hint_when_nori_installed() {
 
     // Verify Nori branding is present
     assert!(
-        contents.contains("Nori CLI"),
-        "Expected 'Nori CLI' text, but got: {}",
+        contents.contains("〉nori CLI"),
+        "Expected the '〉nori CLI' wordmark, but got: {}",
         contents
     );
 

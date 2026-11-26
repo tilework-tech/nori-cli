@@ -1,0 +1,19 @@
+---
+source: tui/src/nori/session_header/startup_face/tests.rs
+expression: sheet
+---
+  - _ ▁  400 ms
+  › _ ▗  80 ms
+  〉_ ▐  400 ms
+  › _ ▗  80 ms
+  - _ ▁  80 ms
+  › _ ▗  80 ms
+  〉_ ▐  400 ms
+  › _ ▗  80 ms
+  - _ ▁  80 ms
+  › _ ▗  80 ms
+  〉_ ▐  400 ms
+  › _ ▗  80 ms
+  - _ ▁  80 ms
+  › _ ▗  80 ms
+  〉_ ▐  3600 ms

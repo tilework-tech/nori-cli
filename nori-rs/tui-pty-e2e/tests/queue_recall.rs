@@ -47,7 +47,7 @@ fn queued_rows(screen: &str) -> Vec<String> {
 fn composer_line(screen: &str) -> String {
     screen
         .lines()
-        .rfind(|line| line.starts_with("› "))
+        .rfind(|line| line.starts_with('〉'))
         .unwrap_or_default()
         .trim_end()
         .to_string()
@@ -101,7 +101,7 @@ fn up_then_enter_reclaims_newest_queued_message_and_edited_resubmission_is_deliv
     session.send_key(Key::Enter).unwrap();
     session
         .wait_for(
-            |screen| queued_rows(screen) == ["alpha", "dup"] && screen.contains("› dup"),
+            |screen| queued_rows(screen) == ["alpha", "dup"] && screen.contains("〉dup"),
             TIMEOUT,
         )
         .expect("the newest duplicate leaves the queue and enters the composer");
@@ -146,7 +146,7 @@ fn alt_up_at_the_root_keeps_queue_and_draft(config: SessionConfig) {
     session.send_key(Key::AltUp).unwrap();
     session.type_input("half typed").unwrap();
     session
-        .wait_for(|screen| composer_line(screen) == "› half typed", TIMEOUT)
+        .wait_for(|screen| composer_line(screen) == "〉half typed", TIMEOUT)
         .expect("Alt+Up on an empty composer recalls nothing");
     assert_eq!(
         queued_rows(&session.screen_contents()),
@@ -158,7 +158,7 @@ fn alt_up_at_the_root_keeps_queue_and_draft(config: SessionConfig) {
     session.send_key(Key::AltUp).unwrap();
     session.type_input("!").unwrap();
     session
-        .wait_for(|screen| composer_line(screen) == "› half typed!", TIMEOUT)
+        .wait_for(|screen| composer_line(screen) == "〉half typed!", TIMEOUT)
         .expect("Alt+Up keeps the draft");
     assert_eq!(
         queued_rows(&session.screen_contents()),
@@ -175,7 +175,7 @@ fn alt_up_at_the_root_keeps_queue_and_draft(config: SessionConfig) {
     let screen = session.screen_contents();
     assert_eq!(
         composer_line(&screen),
-        "› half typed!",
+        "〉half typed!",
         "the draft survives:\n{screen}"
     );
 }
@@ -219,7 +219,7 @@ fn down_from_the_newest_queued_message_returns_to_the_composer() {
         .expect("Down leaves the queue");
     session.type_input("x").unwrap();
     session
-        .wait_for(|screen| screen.contains("› x"), TIMEOUT)
+        .wait_for(|screen| screen.contains("〉x"), TIMEOUT)
         .expect("typing reaches the composer instead of removing the message");
     assert_eq!(
         wait_for_deliveries(&log, 2, Duration::from_secs(30)),
@@ -249,7 +249,7 @@ fn enter_steers_with_the_edited_draft_after_up_withdraws_it() {
     session.send_key(Key::Enter).unwrap();
     session
         .wait_for(
-            |screen| queued_rows(screen).is_empty() && screen.contains("› check the north row"),
+            |screen| queued_rows(screen).is_empty() && screen.contains("〉check the north row"),
             TIMEOUT,
         )
         .unwrap();

@@ -3,7 +3,7 @@ source: tui/src/bottom_pane/chat_composer/tests/part2.rs
 expression: terminal.backend()
 ---
 "                                                                                                    "
-"› [Pasted Content 1005 chars]                                                                       "
+"〉[Pasted Content 1005 chars]                                                                       " Hidden by multi-width symbols: [(1, " ")]
 "                                                                                                    "
 "                                                                                                    "
 "                                                                                                    "

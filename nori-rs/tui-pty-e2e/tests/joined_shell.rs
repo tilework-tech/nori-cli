@@ -33,7 +33,7 @@ fn an_attached_terminal_runs_bang_commands_in_the_host_sessions_folder() {
     let terminal = &mut controller.terminal;
     terminal.send_str("!pwd").unwrap();
     terminal
-        .wait_for_text("› !pwd", TIMEOUT)
+        .wait_for_text("〉!pwd", TIMEOUT)
         .expect("the composer holds the command");
     terminal.send_str("\r").unwrap();
     terminal
@@ -60,7 +60,7 @@ fn an_attached_terminal_runs_bang_commands_in_the_host_sessions_folder() {
     watcher.terminal.send_str("!pwd").unwrap();
     watcher
         .terminal
-        .wait_for_text("› !pwd", TIMEOUT)
+        .wait_for_text("〉!pwd", TIMEOUT)
         .expect("the watcher's composer holds the command");
     watcher.terminal.send_str("\r").unwrap();
     watcher
@@ -68,7 +68,7 @@ fn an_attached_terminal_runs_bang_commands_in_the_host_sessions_folder() {
         .wait_for_text("Watching: another terminal controls this host", TIMEOUT)
         .expect("a watcher cannot run commands");
     assert!(
-        watcher.terminal.screen_contents().contains("› !pwd"),
+        watcher.terminal.screen_contents().contains("〉!pwd"),
         "the watcher's draft is kept:\n{}",
         watcher.terminal.screen_contents()
     );
@@ -92,7 +92,7 @@ fn a_remote_controller_gets_a_hint_and_its_bang_command_runs_nowhere() {
     let terminal = &mut remote.terminal;
     terminal.send_str(&command).unwrap();
     terminal
-        .wait_for_text(&format!("› {command}"), TIMEOUT)
+        .wait_for_text(&format!("〉{command}"), TIMEOUT)
         .expect("the composer holds the command");
     terminal.send_str("\r").unwrap();
     terminal

@@ -1,28 +1,25 @@
 //! Startup readiness waits for the PTY end-to-end tests.
 //!
-//! `›` alone is not a readiness signal: the session header (`› Nori CLI`) is
+//! `〉` alone is not a readiness signal: the welcome header (`〉nori CLI`) is
 //! drawn with it before the composer exists and long before the first session
-//! has started. A test that types once it sees `›` races agent startup, and
+//! has started. A test that types once it sees `〉` races agent startup, and
 //! under load its input lands in the startup placeholder instead of a session.
 //! Wait with [`TuiSession::wait_until_ready`] instead, or with
 //! [`TuiSession::wait_for_composer`] when the test means to type while the
 //! agent is still starting. The `bare_prompt_waits_are_not_readiness` test
-//! below rejects `wait_for_text("›", ..)` anywhere in `tests/`.
+//! below rejects `wait_for_text("〉", ..)` anywhere in `tests/`.
 
 use crate::TIMEOUT;
 use crate::TuiSession;
 
 /// Whether `screen` shows the composer's prompt row.
 ///
-/// The composer prompt is `›` in the first column, followed by the input or a
-/// placeholder; the session header draws its `›` indented. A list's focused
-/// row also shows `›`, after its `▏` rail, and while a list is open it takes
-/// the composer's place.
+/// The composer prompt is `〉` in the first column, followed by the input or a
+/// placeholder; the welcome header draws its `〉` indented. A list's focused
+/// row shows `›` after its `▏` rail, and while a list is open it takes the
+/// composer's place.
 pub fn has_composer_row(screen: &str) -> bool {
-    screen
-        .lines()
-        .any(|line| line == "›" || line.starts_with("› "))
-        && !screen.contains("▏›")
+    screen.lines().any(|line| line.starts_with('〉')) && !screen.contains("▏›")
 }
 
 /// Whether `screen` shows that a session has started.
@@ -71,20 +68,20 @@ mod tests {
     use super::has_composer_row;
     use super::has_started_session;
 
-    const STARTING: &str = "  › Nori CLI v0.0.0\n\n  System       /tmp/x\n  Agent        Mock ACP\n\n  Preparing Mock ACP…\n\n› ? for shortcuts\n";
-    const STARTED: &str = "  › Nori CLI v0.0.0\n\n  Agent        Mock ACP\n\n• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config\nto change)\n\n› / for slash command menu\n";
+    const STARTING: &str = "  〉nori CLI v0.0.0\n\n  System       /tmp/x\n  Agent        Mock ACP\n\n  Preparing Mock ACP…\n\n〉? for shortcuts\n";
+    const STARTED: &str = "  〉nori CLI v0.0.0\n\n  Agent        Mock ACP\n\n• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config\nto change)\n\n〉/ for slash command menu\n";
 
     #[test]
-    fn the_session_header_is_not_a_composer_row() {
+    fn the_welcome_header_is_not_a_composer_row() {
         assert!(!has_composer_row(
-            "  › Nori CLI v0.0.0\n\n  Agent        Mock ACP\n"
+            "  〉nori CLI v0.0.0\n\n  Agent        Mock ACP\n"
         ));
     }
 
     #[test]
     fn an_open_list_hides_the_composer() {
         assert!(!has_composer_row(
-            "  Select agent\n\n  ▏› 1. Mock ACP  ▕\n     2. Claude\n\n› ? for shortcuts\n"
+            "  Select agent\n\n  ▏› 1. Mock ACP  ▕\n     2. Claude\n\n〉? for shortcuts\n"
         ));
     }
 
@@ -97,10 +94,10 @@ mod tests {
     #[test]
     fn a_connected_cloud_session_shows_its_model_in_the_header() {
         assert!(!has_started_session(
-            "  Agent        Nori Cloud\n\n› ? for shortcuts\n"
+            "  Agent        Nori Cloud\n\n〉? for shortcuts\n"
         ));
         assert!(has_started_session(
-            "  Agent        Nori Cloud · Mock Default Model · Medium\n\n› ? for shortcuts\n"
+            "  Agent        Nori Cloud · Mock Default Model · Medium\n\n〉? for shortcuts\n"
         ));
     }
 
@@ -110,11 +107,11 @@ mod tests {
         assert!(has_started_session(STARTED));
     }
 
-    /// Readiness waits on a bare `›` race agent startup; see the module docs.
+    /// Readiness waits on a bare `〉` race agent startup; see the module docs.
     #[test]
     fn bare_prompt_waits_are_not_readiness() {
         let tests_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
-        let pattern = concat!("wait_for_text(", "\"›\"");
+        let pattern = concat!("wait_for_text(", "\"〉\"");
         let mut offenders = Vec::new();
         let mut dirs = vec![tests_dir];
         while let Some(dir) = dirs.pop() {
@@ -135,7 +132,7 @@ mod tests {
         offenders.sort();
         assert!(
             offenders.is_empty(),
-            "use wait_until_ready() or wait_for_composer() instead of waiting for a bare \"›\": {offenders:?}"
+            "use wait_until_ready() or wait_for_composer() instead of waiting for a bare \"〉\": {offenders:?}"
         );
     }
 }

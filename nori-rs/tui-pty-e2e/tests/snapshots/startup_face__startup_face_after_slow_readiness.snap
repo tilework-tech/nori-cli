@@ -1,0 +1,19 @@
+---
+source: tui-pty-e2e/tests/startup_face.rs
+expression: normalize_for_snapshot(screen)
+---
+  〉nori CLI v0.0.0
+
+  System       [TMP_DIR]
+  Agent        Mock ACP
+
+
+  Run 'npx nori-skillsets init' to set up Nori AI enhancements
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config
+to change)
+
+
+〉draft before ready
+
+  Enter send · Ctrl+J newline                                           ⎇ master

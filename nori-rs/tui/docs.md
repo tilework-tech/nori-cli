@@ -154,6 +154,23 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   delegated children.
 - History from a widget reaches `App` through its session-scoped sender. Do not
   print a parked session's history directly.
+- The startup welcome card (`ChatWidget::take_welcome_card`) is not written
+  to history at once. `StartupHeader` (`app/startup_header.rs`) holds it at
+  the top of the inline viewport, outside `transcript_cells`, while
+  `StartupFace` (`nori/session_header/startup_face.rs`, a pure timeline)
+  animates its title. Readiness is the `SessionStarted` branch for
+  `PickerPurpose::Startup` in `app/event_handling.rs`; the composer, config,
+  and input never wait for the face. The card is written through
+  `append_history_cell` in the same draw that shrinks the viewport, so rows do
+  not move. Other history before readiness freezes the face open and writes
+  the card first, so a failed start never winks. History during the finale
+  is shown under the card and written with it, unless it does not fit. A
+  consolidated stream, the full-screen view, exit, or a header taller than the
+  free rows settle it at once; an overlay only pauses it.
+- Only that startup card has the face. Cards written at `SessionStarted`
+  (resume, agent switch, cloud) and `tui.animations = false` show the static
+  wordmark `〉nori CLI vX`; `/status` and the post-compaction header keep
+  `› Nori CLI vX`.
 - `ProgramStatusTracker` is a pure fold over one session's `SessionEvent`s.
   It settles a turn from the prompt's own response, matched by request ID.
   Every `ChatWidget`, parked ones included, folds its events, so a session

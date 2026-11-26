@@ -1,0 +1,30 @@
+---
+source: tui/src/nori/session_header/startup_face/tests.rs
+expression: sheet
+---
+  - _ ▁                     400 ms
+  › _ ▗                      80 ms
+  〉_ ▐                     400 ms
+  › _ ▗                      80 ms
+  - _ ▁                      80 ms
+  › _ ▗                      80 ms
+  〉_ ▐                    2000 ms
+  〉_ -                     240 ms
+  〉_ ▐                     200 ms
+  〉n_ ▐                     30 ms
+  〉no_ ▐                    30 ms
+  〉nor_ ▐                   30 ms
+  〉nori_ ▐                  30 ms
+  〉nori _ ▐                 30 ms
+  〉nori C_ ▐                30 ms
+  〉nori CL_ ▐               30 ms
+  〉nori CLI_ ▐              30 ms
+  〉nori CLI _ ▐             30 ms
+  〉nori CLI v_ ▐            30 ms
+  〉nori CLI v0_ ▐           30 ms
+  〉nori CLI v0._ ▐          30 ms
+  〉nori CLI v0.4_ ▐         30 ms
+  〉nori CLI v0.42_ ▐        30 ms
+  〉nori CLI v0.42._ ▐       30 ms
+  〉nori CLI v0.42.0_ ▐     270 ms
+  〉nori CLI v0.42.0       1720 ms

@@ -100,7 +100,7 @@ fn a_reattached_terminal_takes_one_prompt_back_and_resumes_the_other_once() {
         .expect("the taken prompt leaves the queue");
     let screen = terminal.screen_contents();
     assert!(
-        screen.contains("› plant the cedar row"),
+        screen.contains("〉plant the cedar row"),
         "the taken prompt is back in the composer:\n{screen}"
     );
     assert!(
@@ -172,7 +172,7 @@ fn a_terminal_that_takes_control_edits_another_terminals_queued_prompt() {
     other.send_key(Key::Enter).unwrap();
     other
         .wait_for(
-            |screen| screen.contains("› plant the cedar row") && !screen.contains("queued"),
+            |screen| screen.contains("〉plant the cedar row") && !screen.contains("queued"),
             TIMEOUT,
         )
         .expect("the controlling terminal holds the prompt to edit");
