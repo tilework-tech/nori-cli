@@ -2,6 +2,8 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 // Note: Table-based layout previously used Constraint; the manual renderer
 // below no longer requires it.
+use nori_tui_components::Theme;
+use nori_tui_components::focus;
 use ratatui::style::Color;
 use ratatui::style::Style;
 use ratatui::style::Stylize;
@@ -269,6 +271,52 @@ pub(crate) fn render_rows(
     max_results: usize,
     empty_message: &str,
 ) {
+    render_rows_with(area, buf, rows_all, state, max_results, empty_message, None);
+}
+
+/// Render rows the way the large lists mark focus: rails at both edges, a
+/// green pointer, and the shaded background when `theme` has one. Each row's
+/// text starts with its pointer cell. `area` includes the rail cells.
+pub(crate) fn render_focused_rows(
+    area: Rect,
+    buf: &mut Buffer,
+    rows_all: &[GenericDisplayRow],
+    state: &ScrollState,
+    max_results: usize,
+    empty_message: &str,
+    theme: Theme,
+) {
+    render_rows_with(
+        area,
+        buf,
+        rows_all,
+        state,
+        max_results,
+        empty_message,
+        Some(theme),
+    );
+}
+
+fn render_rows_with(
+    area: Rect,
+    buf: &mut Buffer,
+    rows_all: &[GenericDisplayRow],
+    state: &ScrollState,
+    max_results: usize,
+    empty_message: &str,
+    focus: Option<Theme>,
+) {
+    let rail_area = area;
+    let area = if focus.is_some() {
+        Rect::new(
+            area.x.saturating_add(1),
+            area.y,
+            area.width.saturating_sub(2),
+            area.height,
+        )
+    } else {
+        area
+    };
     if rows_all.is_empty() {
         if area.height > 0 {
             Line::from(empty_message.dim().italic()).render(area, buf);
@@ -354,6 +402,25 @@ pub(crate) fn render_rows(
                     span.style = span.style.dim();
                 });
             }
+        } else if Some(i) == state.selected_idx
+            && let Some(theme) = focus
+        {
+            let height = u16::try_from(wrapped.len())
+                .unwrap_or(u16::MAX)
+                .min(area.bottom().saturating_sub(cur_y));
+            let row = Rect::new(rail_area.x, cur_y, rail_area.width, height);
+            let mark_style = focus::mark_style(theme.selected, theme);
+            for line in wrapped {
+                line.render(Rect::new(area.x, cur_y, area.width, 1), buf);
+                cur_y = cur_y.saturating_add(1);
+                if cur_y >= area.bottom() {
+                    break;
+                }
+            }
+            buf.set_style(row, theme.selected);
+            focus::render_rails(row, buf, mark_style);
+            buf.set_style(Rect::new(area.x, row.y, 1, 1), mark_style);
+            continue;
         } else if Some(i) == state.selected_idx {
             for line in &mut wrapped {
                 line.spans.iter_mut().for_each(|span| {

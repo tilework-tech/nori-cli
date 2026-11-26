@@ -14,15 +14,15 @@ use ratatui::style::Style;
 
 use crate::Theme;
 
-pub(crate) const POINTER: &str = "›";
+pub const POINTER: &str = "›";
 const LEFT_RAIL: &str = "▏";
 const RIGHT_RAIL: &str = "▕";
 
 /// Cells taken by the pointer and the space after it.
-pub(crate) const POINTER_WIDTH: u16 = 2;
+pub const POINTER_WIDTH: u16 = 2;
 
 /// Style for the pointer and rails, patched over the row's own style.
-pub(crate) fn mark_style(row_style: Style, theme: Theme) -> Style {
+pub fn mark_style(row_style: Style, theme: Theme) -> Style {
     let style = row_style.patch(theme.pointer);
     if theme.selected.bg.is_some() {
         style.remove_modifier(Modifier::BOLD)
@@ -32,7 +32,7 @@ pub(crate) fn mark_style(row_style: Style, theme: Theme) -> Style {
 }
 
 /// Draws the rails on every line of a focused row.
-pub(crate) fn render_rails(area: Rect, buf: &mut Buffer, style: Style) {
+pub fn render_rails(area: Rect, buf: &mut Buffer, style: Style) {
     for y in area.y..area.bottom() {
         buf.set_string(area.x, y, LEFT_RAIL, style);
         if area.width > 1 {

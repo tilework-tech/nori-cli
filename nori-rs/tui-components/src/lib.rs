@@ -6,7 +6,7 @@
 
 pub mod block_meter;
 pub mod detail;
-mod focus;
+pub mod focus;
 pub mod markdown;
 pub mod menu;
 pub mod picker;

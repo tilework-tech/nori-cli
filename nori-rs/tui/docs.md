@@ -224,6 +224,10 @@ nori-cli --> nori-tui --> nori-host-runtime --> nori-harness --> nori-acp-host
   the pointer and rails are bold. Row numbers and the `○`/`●` multiple-choice
   dots sit in their own columns after the pointer and never replace it. The
   shared `Picker` and `OverlayMenu` draw this; see `tui-components/src/focus.rs`.
+  Short prompts in `ListSelectionView` (tool permission, delegation,
+  approval and API key confirmations) use the same marks through
+  `render_focused_rows`. Completion popups (`/`, `@`, `$`) keep their own
+  highlight.
 
 ## Tests
 

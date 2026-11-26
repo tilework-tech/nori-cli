@@ -1,11 +1,12 @@
 ---
 source: tui/src/nori/skillset_picker_v2/tests.rs
+assertion_line: 191
 expression: "render(params, 80)"
 ---
   Select skillset
   No session worktree - layering machine-wide into /home/user
 
-› 1. No Skillset  Start without a skillset
-  2. rust-dev     v0.3.0
+  ▏› 1. No Skillset  Start without a skillset                                ▕
+     2. rust-dev     v0.3.0
 
   ↑/k ↓/j navigate, / search, enter confirm, esc go back

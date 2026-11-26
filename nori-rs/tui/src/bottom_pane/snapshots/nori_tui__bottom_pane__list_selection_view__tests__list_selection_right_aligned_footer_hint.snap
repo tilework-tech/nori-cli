@@ -1,10 +1,11 @@
 ---
 source: tui/src/bottom_pane/list_selection_view.rs
+assertion_line: 906
 expression: "render_lines_with_width(&view, 80)"
 ---
                                                                                 
   Select agent                                                                  
                                                                                 
-› 1. ElizACP (current)  Local test ACP agent                                    
+  ▏› 1. ElizACP (current)  Local test ACP agent                              ▕  
                                                                                 
   Press esc to dismiss.                    Recording: ○ off  Shift-Tab to enable

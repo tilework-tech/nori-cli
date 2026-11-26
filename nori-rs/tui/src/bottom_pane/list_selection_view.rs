@@ -7,6 +7,7 @@ use nori_tui_components::MenuDensity;
 use nori_tui_components::MenuItemTone;
 use nori_tui_components::MenuPlacement;
 use nori_tui_components::MenuRowPattern;
+use nori_tui_components::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -25,7 +26,7 @@ use crate::render::Insets;
 use crate::render::RectExt as _;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
-use crate::style::user_message_style;
+use crate::style::user_message_style_for;
 
 use super::CancellationEvent;
 use super::bottom_pane_view::BottomPaneView;
@@ -33,7 +34,7 @@ use super::popup_consts::MAX_POPUP_ROWS;
 use super::scroll_state::ScrollState;
 use super::selection_popup_common::GenericDisplayRow;
 use super::selection_popup_common::measure_rows_height;
-use super::selection_popup_common::render_rows;
+use super::selection_popup_common::render_focused_rows;
 
 /// One selectable item in the generic selection list.
 pub(crate) type SelectionAction = Box<dyn Fn(&AppEventSender) + Send + Sync>;
@@ -472,8 +473,10 @@ impl ListSelectionView {
         }
     }
 
+    /// Width of the row text: the list keeps two cells of padding at each
+    /// side, and the focus rails take one more cell at each side.
     fn rows_width(total_width: u16) -> u16 {
-        total_width.saturating_sub(2)
+        total_width.saturating_sub(6)
     }
 }
 
@@ -683,10 +686,22 @@ impl Renderable for ListSelectionView {
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        self.render_for_background(area, buf, crate::style::relative_terminal_background());
+    }
+}
+
+impl ListSelectionView {
+    /// Render for a terminal whose background is `terminal_bg`, or `None`
+    /// when the terminal does not report one.
+    pub(crate) fn render_for_background(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        terminal_bg: Option<(u8, u8, u8)>,
+    ) {
         if area.height == 0 || area.width == 0 {
             return;
         }
-
         let effective_hint = self.effective_footer_hint();
         let [content_area, footer_area] = Layout::vertical([
             Constraint::Fill(1),
@@ -695,7 +710,7 @@ impl Renderable for ListSelectionView {
         .areas(area);
 
         Block::default()
-            .style(user_message_style())
+            .style(user_message_style_for(terminal_bg))
             .render(content_area, buf);
 
         let header_height = self
@@ -739,19 +754,20 @@ impl Renderable for ListSelectionView {
         }
 
         if list_area.height > 0 {
-            let render_area = Rect {
-                x: list_area.x.saturating_sub(2),
-                y: list_area.y,
-                width: rows_width.max(1),
-                height: list_area.height,
-            };
-            render_rows(
-                render_area,
+            render_focused_rows(
+                list_area,
                 buf,
                 &rows,
                 &self.state,
-                render_area.height as usize,
+                list_area.height as usize,
                 "no matches",
+                {
+                    let theme = Theme::for_terminal_background(terminal_bg);
+                    Theme {
+                        selected: theme.selected_on_panel,
+                        ..theme
+                    }
+                },
             );
         }
 
@@ -1816,3 +1832,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "list_selection_view_focus_tests.rs"]
+mod focus_tests;
