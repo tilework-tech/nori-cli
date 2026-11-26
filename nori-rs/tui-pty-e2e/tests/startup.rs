@@ -25,7 +25,7 @@ fn has_prompt_ready_marker(contents: &str) -> bool {
 #[cfg(target_os = "linux")]
 fn activate_new_session(session: &mut TuiSession) {
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Sessionless composer did not appear");
     session.submit_input("/new").expect("Failed to enter /new");
     // Startup already wrote a card, so "Nori CLI" is no longer a readiness
@@ -103,7 +103,7 @@ fn test_startup_with_dimensions() {
 
     // Wait for prompt - in a 10-row terminal, the header may scroll off.
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
@@ -356,7 +356,7 @@ fn test_poll_does_not_block_when_no_data() {
 
     // Wait for initial startup to complete
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Initial startup failed");
 
     // Wait for screen to stabilize - keep polling until contents don't change
@@ -397,7 +397,7 @@ fn startup_activates_session_without_input() {
         TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("composer did not appear");
     session
         .wait_for_text("Mock Default Model", TIMEOUT)
@@ -414,7 +414,7 @@ fn model_command_works_before_first_prompt() {
         TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("composer did not appear");
     session
         .wait_for_text("Mock Default Model", TIMEOUT)

@@ -1,6 +1,5 @@
 ---
 source: tui-pty-e2e/tests/delegation.rs
-assertion_line: 275
 expression: normalize_for_input_snapshot(list)
 ---
 Sessions 2 · 1 ready  tab: waiting only · / search

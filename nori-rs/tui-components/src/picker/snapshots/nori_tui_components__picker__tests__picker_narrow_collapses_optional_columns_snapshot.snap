@@ -1,6 +1,5 @@
 ---
 source: tui-components/src/picker/tests.rs
-assertion_line: 118
 expression: "snapshot(&session_picker(), 48, 13)"
 ---
 "                                                "

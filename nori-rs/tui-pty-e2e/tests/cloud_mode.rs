@@ -225,7 +225,7 @@ fn test_cloud_mode_round_trips_prompt_through_handroll() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("nori cloud should start the TUI against the fake handroll");
 
     assert!(
@@ -261,7 +261,7 @@ fn test_cloud_mode_sends_eof_detach_to_handroll_on_exit() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("nori cloud should start");
     std::thread::sleep(TIMEOUT_INPUT);
     // Prove the prepared child was activated and is live.
@@ -475,7 +475,7 @@ fn test_plain_nori_does_not_boot_into_the_agent_session_picker() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("plain nori should boot straight to the composer");
     let contents = session.screen_contents();
     assert!(
@@ -514,7 +514,7 @@ fn test_cloud_entry_picker_resume_row_reattaches_live() {
         .wait_for_text("Reattaching to mock-session-1", TIMEOUT)
         .expect("reattach must identify the selected cloud session");
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("the composer should be ready after reattach");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -551,7 +551,7 @@ fn test_cloud_entry_picker_create_new_starts_fresh_session() {
     session.send_key(Key::Enter).unwrap();
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("picking create-new should start a fresh session");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -692,7 +692,7 @@ fn test_cloud_close_returns_to_the_picker() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("create-new should start a session");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -748,7 +748,7 @@ fn test_cloud_quit_exits_fast_even_if_child_ignores_eof() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("nori cloud should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -775,7 +775,7 @@ fn test_cloud_mode_child_death_mid_session_surfaces_error() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("nori cloud should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -816,7 +816,7 @@ fn test_cloud_mode_writes_local_transcript() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("nori cloud should start");
     let nori_home = session.nori_home_path().expect("nori home");
     std::thread::sleep(TIMEOUT_INPUT);
@@ -880,7 +880,7 @@ fn test_cloud_mode_overrides_agent_flag() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("cloud mode should start with the handroll adapter despite --agent");
     assert!(
         fake.wait_for_marker("argv", TIMEOUT),
@@ -900,7 +900,7 @@ fn test_cloud_mode_passes_broker_url_from_config() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("nori cloud should start");
     assert!(
         fake.wait_for_marker_text("broker_url", "http://broker.test:19400", TIMEOUT),

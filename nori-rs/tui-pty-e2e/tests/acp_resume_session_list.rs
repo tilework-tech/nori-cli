@@ -26,7 +26,7 @@ fn resume_picker_lists_agent_sessions_when_session_list_supported() {
         TuiSession::spawn_with_config(30, 100, config).expect("Failed to spawn session");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
     // Let the session-capability projection arrive before opening the picker.
     std::thread::sleep(TIMEOUT_INPUT);

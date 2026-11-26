@@ -72,7 +72,7 @@ fn test_local_quit_does_not_wait_one_second_for_eof_ignoring_agent() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -112,7 +112,7 @@ fn test_acp_agent_cleanup_on_exit_command() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -190,7 +190,7 @@ fn test_acp_agent_cleanup_on_ctrl_c() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -247,7 +247,7 @@ fn test_acp_agent_cleanup_on_quit_command() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -292,7 +292,7 @@ fn quitting_during_a_turn_ends_the_owned_hosts_session() {
         .with_agent_env("MOCK_AGENT_STREAM_UNTIL_CANCEL", "1");
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
     session.submit_input("tidy the parser module").unwrap();

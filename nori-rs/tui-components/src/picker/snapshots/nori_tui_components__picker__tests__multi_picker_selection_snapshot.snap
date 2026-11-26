@@ -1,6 +1,5 @@
 ---
 source: tui-components/src/picker/tests.rs
-assertion_line: 419
 expression: "snapshot(&state, 86, 13)"
 ---
 "                                                                                      "

@@ -648,7 +648,7 @@ fn buffer_lines(buffer: &Buffer) -> Vec<String> {
 #[test]
 fn two_row_sessions_snapshots_at_each_layout_width() {
     let state = two_row_sessions();
-    for width in [58, 80, 87, 120] {
+    for width in [60, 80, 89, 120] {
         let lines = buffer_lines(&render_sessions(&state, Theme::default(), width));
         insta::assert_snapshot!(
             format!("two_row_sessions_{width}"),

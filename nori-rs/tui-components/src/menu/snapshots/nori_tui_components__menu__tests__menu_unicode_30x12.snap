@@ -1,6 +1,5 @@
 ---
 source: tui-components/src/menu/tests.rs
-assertion_line: 902
 expression: "snapshot(&mut unicode, 30, 12, \"続ける action\", Some(\"Unicode width\"))"
 ---
 "                              "
@@ -10,8 +9,8 @@ expression: "snapshot(&mut unicode, 30, 12, \"続ける action\", Some(\"Unicode
 "  ▏  review with wrapped…  ▕  "
 "                              "
 "     新しい session           " Hidden by multi-width symbols: [(6, " "), (8, " "), (10, " ")]
-"     Create a clean…          "
+"     Create a clean           "
+"     session                  "
 "  ↑↓/jk move  enter select    "
 "  q close                     "
-"                              "
 "                              "

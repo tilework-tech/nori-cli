@@ -43,7 +43,7 @@ fn picking_pi_prepares_its_native_server_and_completes_a_turn() {
         .with_agent_env("MOCK_AGENT_ECHO_ENV", "EXAMPLE_NATIVE_SETTING")
         .with_agent_env("EXAMPLE_NATIVE_SETTING", "synthetic-native-pi");
     let mut session = TuiSession::spawn_with_config(40, 120, config).unwrap();
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
     session.submit_input("/agent").unwrap();
     session.wait_for_text("Select agent", TIMEOUT).unwrap();
     session.send_str("\x1b[F").unwrap();

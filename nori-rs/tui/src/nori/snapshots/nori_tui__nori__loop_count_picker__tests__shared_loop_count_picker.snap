@@ -1,6 +1,5 @@
 ---
 source: tui/src/nori/loop_count_picker.rs
-assertion_line: 665
 expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
 ---
   Loop count

@@ -1,6 +1,5 @@
 ---
 source: tui-pty-e2e/tests/session_list.rs
-assertion_line: 129
 expression: normalize_for_input_snapshot(screen)
 ---
 › gamma question

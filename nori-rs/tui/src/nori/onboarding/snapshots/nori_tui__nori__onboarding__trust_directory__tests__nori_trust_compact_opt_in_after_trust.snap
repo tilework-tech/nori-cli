@@ -1,6 +1,5 @@
 ---
 source: tui/src/nori/onboarding/trust_directory.rs
-assertion_line: 345
 expression: "render_widget(&widget, 70, 16)"
 ---
   Use compact tool output in this project?

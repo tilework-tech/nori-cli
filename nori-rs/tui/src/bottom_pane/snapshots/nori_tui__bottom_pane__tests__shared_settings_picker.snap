@@ -1,6 +1,5 @@
 ---
 source: tui/src/bottom_pane/mod.rs
-assertion_line: 1180
 expression: rendered
 ---
                                                                                                     

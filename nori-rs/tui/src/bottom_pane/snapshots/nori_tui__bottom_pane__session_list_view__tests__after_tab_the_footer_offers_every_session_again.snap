@@ -1,6 +1,5 @@
 ---
 source: tui/src/bottom_pane/session_list_view.rs
-assertion_line: 569
 expression: screen
 ---
 "Sessions 2 · 1 waiting on you · 1 ready  tab: all sessions · / search           "

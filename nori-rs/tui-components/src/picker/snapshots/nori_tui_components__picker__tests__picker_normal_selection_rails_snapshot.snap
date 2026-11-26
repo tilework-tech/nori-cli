@@ -1,6 +1,5 @@
 ---
 source: tui-components/src/picker/tests.rs
-assertion_line: 225
 expression: "snapshot_with_options(&session_picker(), 86, 13, PickerDensity::Normal, true,)"
 ---
 "                                                                                      "

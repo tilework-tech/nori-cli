@@ -132,7 +132,7 @@ fn interactive_prompt_reports_authenticated_agent_session() {
         .with_agent_env("NORI_ANALYTICS_URL", analytics_url);
     let mut session = TuiSession::spawn_with_config(18, 80, config).expect("spawn Nori TUI");
 
-    session.wait_for_text("›", TIMEOUT).expect("prompt ready");
+    session.wait_for_composer(TIMEOUT).expect("prompt ready");
     assert!(requests.recv_timeout(Duration::from_millis(300)).is_err());
     session
         .submit_input("meaningful work")
@@ -175,7 +175,7 @@ fn cloud_prompt_reports_cloud_mode_after_the_agent_connects() {
     let mut session = TuiSession::spawn_with_config(18, 80, config).expect("spawn Nori cloud");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("cloud prompt ready");
     assert!(requests.recv_timeout(Duration::from_millis(300)).is_err());
     session

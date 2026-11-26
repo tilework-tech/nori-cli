@@ -23,7 +23,7 @@ fn resume_after_new_shows_each_turn_once() {
     let config = SessionConfig::new().with_mock_response("The walrus is remembered");
     let mut session = TuiSession::spawn_with_config(30, 100, config).expect("spawn");
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 

@@ -1,6 +1,5 @@
 ---
 source: tui/src/bottom_pane/session_list_view.rs
-assertion_line: 712
 expression: "render(&list, width)"
 ---
 "Sessions 3 · 2 working · 1 starting  tab: waiting only · / search                                                       "

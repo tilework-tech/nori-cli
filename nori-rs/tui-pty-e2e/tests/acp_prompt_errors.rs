@@ -36,7 +36,7 @@ fn test_acp_prompt_failure_shows_error_to_user() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -105,7 +105,7 @@ fn test_acp_prompt_failure_tui_remains_responsive() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);

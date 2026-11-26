@@ -1,6 +1,5 @@
 ---
 source: tui-components/src/menu/tests.rs
-assertion_line: 293
 expression: "snapshot(&mut shortcut_narrow, 40, 12, \"Choose a session action\",\nSome(\"Shortcuts activate immediately\"))"
 ---
 "    Choose a session action             "

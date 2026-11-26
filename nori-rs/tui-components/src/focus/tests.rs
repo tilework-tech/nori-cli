@@ -34,14 +34,6 @@ fn model_picker() -> PickerState<&'static str> {
     )
 }
 
-fn ten_item_picker() -> PickerState<&'static str> {
-    const LABELS: [&str; 10] = [
-        "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India", "Juliet",
-    ];
-    let items = LABELS.map(|label| PickerItem::new(label, "title", label));
-    PickerState::new("Pick one", [PickerColumn::flexible("title", "Name")], items)
-}
-
 fn render_picker(state: &PickerState<&'static str>, theme: Theme, height: u16) -> Buffer {
     let area = Rect::new(0, 0, 40, height);
     let mut buffer = Buffer::empty(area);
@@ -52,18 +44,14 @@ fn render_picker(state: &PickerState<&'static str>, theme: Theme, height: u16) -
     buffer
 }
 
-fn menu_state() -> MenuState<&'static str> {
-    MenuState::try_new([
-        MenuItem::new("yes", "Trust this folder").number_shortcut(1),
-        MenuItem::new("no", "Quit").number_shortcut(2),
-    ])
-    .expect("valid menu")
-}
-
 fn render_menu(theme: Theme) -> Buffer {
     let area = Rect::new(0, 0, 40, 10);
     let mut buffer = Buffer::empty(area);
-    let mut state = menu_state();
+    let mut state = MenuState::try_new([
+        MenuItem::new("yes", "Trust this folder").number_shortcut(1),
+        MenuItem::new("no", "Quit").number_shortcut(2),
+    ])
+    .expect("valid menu");
     OverlayMenu::new("Trust folder?")
         .theme(theme)
         .backdrop(false)
@@ -97,12 +85,14 @@ fn marks(buffer: &Buffer, y: u16) -> Vec<(&'static str, Color, bool)> {
     found
 }
 
-fn column_of(buffer: &Buffer, y: u16, text: &str) -> usize {
-    line(buffer, y)
-        .chars()
-        .collect::<String>()
-        .find(text)
-        .map(|byte| line(buffer, y)[..byte].chars().count())
+fn column_of(buffer: &Buffer, y: u16, text: &str) -> u16 {
+    (0..buffer.area.width)
+        .find(|x| {
+            text.chars().enumerate().all(|(offset, ch)| {
+                let x = x + offset as u16;
+                x < buffer.area.width && buffer[(x, y)].symbol() == ch.to_string()
+            })
+        })
         .unwrap_or_else(|| panic!("{text:?} missing from row {y}"))
 }
 
@@ -145,7 +135,7 @@ fn shaded_picker_focus_fills_the_row_background() {
     let theme = Theme::for_terminal_background(DARK_TERMINAL);
     let buffer = render_picker(&model_picker(), theme, 12);
     let focused = row_of(&buffer, "Quick draft");
-    let label = column_of(&buffer, focused, "Quick") as u16;
+    let label = column_of(&buffer, focused, "Quick");
 
     assert_eq!(
         buffer[(label, focused)].bg,
@@ -187,7 +177,11 @@ fn moving_focus_moves_the_pointer_and_rails_together() {
 
 #[test]
 fn rows_past_nine_keep_the_label_column_of_numbered_rows() {
-    let mut state = ten_item_picker();
+    const LABELS: [&str; 10] = [
+        "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India", "Juliet",
+    ];
+    let items = LABELS.map(|label| PickerItem::new(label, "title", label));
+    let mut state = PickerState::new("Pick one", [PickerColumn::flexible("title", "Name")], items);
     for _ in 0..9 {
         state.handle(PickerAction::MoveDown);
     }
@@ -274,9 +268,24 @@ fn numbered_picker_focus_snapshot() {
 }
 
 #[test]
-fn multi_choice_picker_focus_snapshot() {
-    let mut state = model_picker().mode(PickerMode::Multi);
-    state.handle(PickerAction::Toggle);
-    state.handle(PickerAction::MoveDown);
-    assert_snapshot!(snapshot_picker(&state, 40, 12));
+fn focused_menu_descriptions_that_fit_two_lines_are_never_cut() {
+    // Labels here have room for two of these words per line.
+    for words in 1..=4 {
+        let description = vec!["abcde"; words].join(" ");
+        let mut state = MenuState::try_new([
+            MenuItem::new("first", "First").description(description.clone()),
+            MenuItem::new("second", "Second"),
+        ])
+        .expect("valid menu");
+        let area = Rect::new(0, 0, 25, 14);
+        let mut buffer = Buffer::empty(area);
+        OverlayMenu::new("Pick")
+            .backdrop(false)
+            .render(area, &mut buffer, &mut state);
+        let text = (0..area.height)
+            .map(|y| line(&buffer, y))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(!text.contains('…'), "{words} words were cut:\n{text}");
+    }
 }

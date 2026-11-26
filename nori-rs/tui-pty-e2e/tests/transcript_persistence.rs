@@ -92,7 +92,7 @@ fn test_transcript_created_on_session() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -177,7 +177,7 @@ fn test_transcript_contains_assistant_message() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn session");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -261,7 +261,7 @@ fn test_multiple_sessions_same_project() {
         TuiSession::spawn_with_config(24, 80, config1).expect("Failed to spawn session 1");
 
     session1
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Session 1 should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -296,7 +296,7 @@ fn test_multiple_sessions_same_project() {
         TuiSession::spawn_with_config(24, 80, config2).expect("Failed to spawn session 2");
 
     session2
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("Session 2 should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -354,7 +354,7 @@ fn test_project_metadata_created() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn session");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -425,7 +425,7 @@ fn test_session_meta_fields() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn session");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -507,7 +507,7 @@ fn test_resume_viewonly_shows_transcript() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -533,7 +533,7 @@ fn test_resume_viewonly_shows_transcript() {
     session.submit_input("/new").unwrap();
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("New session should start");
     std::thread::sleep(TIMEOUT_INPUT);
 

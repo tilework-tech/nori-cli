@@ -24,7 +24,7 @@ fn test_acp_mode_startup_with_mock_agent() {
 
     // Wait for the main prompt to appear (indicated by the chevron character)
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode TUI should start successfully with mock agent");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -59,7 +59,7 @@ fn test_acp_mode_prompt_response_flow() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -97,7 +97,7 @@ fn test_acp_approval_request_displayed_in_tui() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -154,7 +154,7 @@ fn test_acp_approval_full_flow() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -186,7 +186,7 @@ fn test_acp_approval_full_flow() {
 
     // Verify TUI is back in input state (prompt visible)
     session
-        .wait_for_text("›", Duration::from_secs(5))
+        .wait_for_composer(Duration::from_secs(5))
         .expect("TUI should return to input state");
 
     // Verify TUI is still functional - can type a new message
@@ -223,7 +223,7 @@ fn test_acp_write_text_file() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -285,7 +285,7 @@ fn test_acp_mode_startup_snapshot() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);

@@ -30,7 +30,7 @@ fn test_single_prompt_response_appears_immediately() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -68,7 +68,7 @@ fn test_two_prompts_responses_not_off_by_one() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -100,7 +100,7 @@ fn test_two_prompts_responses_not_off_by_one() {
 
     // Wait for input to be ready again
     session
-        .wait_for_text("›", Duration::from_secs(5))
+        .wait_for_composer(Duration::from_secs(5))
         .expect("Should return to input state");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -111,7 +111,7 @@ fn test_two_prompts_responses_not_off_by_one() {
     // Second response should appear
     // Since it's the same text, we just verify the prompt cycle completes
     session
-        .wait_for_text("›", Duration::from_secs(10))
+        .wait_for_composer(Duration::from_secs(10))
         .expect("Should complete second prompt cycle");
 
     eprintln!(
@@ -144,7 +144,7 @@ fn test_long_response_appears_immediately() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -189,7 +189,7 @@ fn test_delayed_streaming_response() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -223,7 +223,7 @@ fn test_tool_call_response_draining() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -259,7 +259,7 @@ fn test_interactive_debug_draining() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     eprintln!("=== Initial state ===");

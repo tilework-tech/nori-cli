@@ -17,6 +17,8 @@ pub const MIN_SESSION_CELLS: i32 = 24;
 pub const AGENT_CELLS: i32 = 12;
 pub const STATUS_CELLS: i32 = 14;
 pub const CONTEXT_CELLS: i32 = 11;
+/// Cells the focus rails take, one at each side of a session list row.
+pub const RAIL_CELLS: i32 = 2;
 /// Narrowest row that still shows the Agent column. In a picker, the
 /// focus rails make the terminal two cells wider than the row.
 pub const AGENT_FROM: i32 = 58;

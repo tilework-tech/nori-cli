@@ -24,7 +24,7 @@ args = ["hello"]
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -59,7 +59,7 @@ fn test_mcp_command_no_servers_opens_picker() {
 
     // Wait for startup
     session
-        .wait_for_text("›", TIMEOUT)
+        .wait_for_composer(TIMEOUT)
         .expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);

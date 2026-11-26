@@ -1,6 +1,5 @@
 ---
 source: tui-components/src/menu/tests.rs
-assertion_line: 354
 expression: "snapshot_with_presentation(&mut action, 80, 24, \"Choose how to continue\",\nSome(\"Dense spacing with alternating item surfaces\"), MenuDensity::Dense,\nMenuRowPattern::Zebra,)"
 ---
 "                                                                                "

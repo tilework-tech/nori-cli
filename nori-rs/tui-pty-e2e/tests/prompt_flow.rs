@@ -11,7 +11,7 @@ use tui_pty_e2e::normalize_for_input_snapshot;
 fn test_submit_prompt_default_response() {
     let mut session = TuiSession::spawn(18, 80).expect("Failed to spawn");
 
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
 
     // Type and submit prompt
     session.submit_input("Hello").unwrap();
@@ -41,7 +41,7 @@ fn test_submit_prompt_custom_response() {
 
     let mut session = TuiSession::spawn_with_config(18, 80, config).expect("Failed to spawn");
 
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
 
     session.submit_input("test prompt").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
@@ -60,7 +60,7 @@ fn test_submit_prompt_custom_response() {
 #[test]
 fn test_multiline_input() {
     let mut session = TuiSession::spawn(30, 80).unwrap();
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
 
     // Type multiline prompt
     session.type_input("Line 1\nLine 2\nLine 3").unwrap();

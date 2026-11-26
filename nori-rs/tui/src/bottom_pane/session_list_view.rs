@@ -708,7 +708,7 @@ mod tests {
     #[test]
     fn every_session_takes_two_rows_at_each_layout_width() {
         let list = view(rich_rows());
-        for width in [58, 80, 87, 120] {
+        for width in [60, 80, 89, 120] {
             assert_snapshot!(format!("two_row_sessions_{width}"), render(&list, width));
         }
     }

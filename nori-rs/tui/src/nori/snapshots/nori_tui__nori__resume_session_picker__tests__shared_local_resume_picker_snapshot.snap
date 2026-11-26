@@ -1,6 +1,5 @@
 ---
 source: tui/src/nori/resume_session_picker.rs
-assertion_line: 563
 expression: "component_picker_snapshot(&params, 104, 14)"
 ---
 "                                                                                                        "

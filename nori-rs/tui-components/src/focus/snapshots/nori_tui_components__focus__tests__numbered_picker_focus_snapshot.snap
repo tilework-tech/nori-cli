@@ -1,6 +1,5 @@
 ---
 source: tui-components/src/focus/tests.rs
-assertion_line: 267
 expression: "snapshot_picker(&model_picker(), 40, 12)"
 ---
 "                                        "

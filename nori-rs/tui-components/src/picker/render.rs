@@ -33,7 +33,6 @@ use crate::Theme;
 use crate::detail::provider_tone_style;
 use crate::detail::tone_style;
 use crate::focus;
-use crate::focus::POINTER_WIDTH;
 
 /// Stateless renderer for a caller-owned [`PickerState`].
 pub struct Picker<'a, K> {
@@ -375,7 +374,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
             PickerMode::Single => 0,
             PickerMode::Toggle | PickerMode::Multi => 2,
         };
-        let marker_width = POINTER_WIDTH + number_width + dot_width;
+        let marker_width = focus::POINTER_WIDTH + number_width + dot_width;
         let header_height = u16::from(!simple_list && area.height > row_height);
         if header_height > 0 {
             self.render_row(
@@ -507,9 +506,9 @@ impl<K: Clone + Eq> Picker<'_, K> {
             } else {
                 buf.set_style(row_area, style);
             }
-            let focus_style = focus::mark_style(style, self.theme);
+            let pointer_style = focus::mark_style(style, self.theme);
             if selected && self.selection_rails {
-                focus::render_rails(row_area, buf, focus_style);
+                focus::render_rails(row_area, buf, pointer_style);
             }
             let number =
                 numbered_position.map_or_else(String::new, |position| format!("{position}."));
@@ -551,8 +550,8 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 &[
                     (
                         if selected { focus::POINTER } else { "" },
-                        focus_style,
-                        POINTER_WIDTH,
+                        pointer_style,
+                        focus::POINTER_WIDTH,
                     ),
                     (number.as_str(), style, number_width),
                     (dot, dot_style, dot_width),
@@ -624,7 +623,6 @@ impl<K: Clone + Eq> Picker<'_, K> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn render_row<'a>(
         &self,
         area: Rect,

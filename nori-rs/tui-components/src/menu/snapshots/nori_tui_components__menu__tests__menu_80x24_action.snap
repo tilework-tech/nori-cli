@@ -1,6 +1,5 @@
 ---
 source: tui-components/src/menu/tests.rs
-assertion_line: 324
 expression: "snapshot(&mut action, 80, 24, \"Choose how to continue\",\nSome(\"Select one action\"))"
 ---
 "                                                                                "

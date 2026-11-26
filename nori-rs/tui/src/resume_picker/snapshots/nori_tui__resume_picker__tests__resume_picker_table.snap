@@ -1,6 +1,5 @@
 ---
 source: tui/src/resume_picker/tests.rs
-assertion_line: 363
 expression: snapshot
 ---
   Resume a previous session

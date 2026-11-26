@@ -1,6 +1,5 @@
 ---
 source: tui/src/nori/mcp_server_picker.rs
-assertion_line: 1628
 expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
 ---
   Add MCP server

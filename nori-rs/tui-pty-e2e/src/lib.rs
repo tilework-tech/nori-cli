@@ -716,6 +716,13 @@ trust_level = "trusted"
             .map_err(|error| format!("waiting for {needle:?}: {error}"))
     }
 
+    /// Wait until the composer's `›` prompt is on screen and no list is
+    /// open. A list's focused row also shows `›`, after its `▏` rail.
+    pub fn wait_for_composer(&mut self, timeout: Duration) -> Result<(), String> {
+        self.wait_for(|s| s.contains('›') && !s.contains("▏›"), timeout)
+            .map_err(|error| format!("waiting for the composer: {error}"))
+    }
+
     /// Get current screen contents as string
     pub fn screen_contents(&self) -> String {
         self.emulator.screen_contents()

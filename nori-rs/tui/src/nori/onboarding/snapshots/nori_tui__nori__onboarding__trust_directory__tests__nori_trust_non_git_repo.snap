@@ -1,6 +1,5 @@
 ---
 source: tui/src/nori/onboarding/trust_directory.rs
-assertion_line: 479
 expression: output
 ---
   You are running Nori in /workspace/project

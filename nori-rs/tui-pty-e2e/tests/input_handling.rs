@@ -21,7 +21,7 @@ fn composer_line_contains(screen: &str, expected: &str) -> bool {
 #[cfg(target_os = "linux")]
 fn test_ctrl_c_clears_input() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
 
     // Type some text
     session.type_input("draft message").unwrap();
@@ -45,7 +45,7 @@ fn test_ctrl_c_clears_input() {
 #[cfg(target_os = "linux")]
 fn test_backspace() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
     // Startup activates the session; wait for the model announcement so the
     // snapshot is deterministic.
     session.wait_for_text("Mock ACP options", TIMEOUT).unwrap();
@@ -71,7 +71,7 @@ fn test_backspace() {
 #[cfg(target_os = "linux")]
 fn test_arrows() {
     let mut session = TuiSession::spawn(40, 80).unwrap();
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
     // Startup activates the session; wait for the model announcement so the
     // snapshot is deterministic.
     session.wait_for_text("Mock ACP options", TIMEOUT).unwrap();
@@ -98,7 +98,7 @@ fn test_history_navigation_up_down() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
     // Wait for TUI to be ready
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
 
     // Submit first message
     session.submit_input("first message").unwrap();
@@ -159,7 +159,7 @@ fn test_history_navigation_multiple_messages() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
     // Wait for TUI to be ready
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session.wait_for_composer(TIMEOUT).unwrap();
 
     // Submit first message
     session.submit_input("first message").unwrap();
