@@ -29,9 +29,7 @@
 
 use std::time::Duration;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -54,9 +52,7 @@ fn test_acp_create_new_file() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -108,9 +104,7 @@ fn test_acp_edit_existing_file() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -159,9 +153,7 @@ fn test_acp_create_file_with_parent_dirs() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -210,9 +202,7 @@ fn test_acp_write_outside_workspace_denied() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -258,9 +248,7 @@ fn test_acp_write_system_path_denied() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -306,9 +294,7 @@ fn test_acp_write_to_tmp_allowed() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -355,9 +341,7 @@ fn test_acp_multiple_file_writes() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -370,7 +354,7 @@ fn test_acp_multiple_file_writes() {
 
     // Wait for prompt to return
     session
-        .wait_for_composer(Duration::from_secs(5))
+        .wait_for_composer()
         .expect("Prompt should return after first write");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -418,9 +402,7 @@ fn test_acp_file_write_snapshot() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -432,10 +414,8 @@ fn test_acp_file_write_snapshot() {
         .wait_for_text("File written successfully", Duration::from_secs(10))
         .expect("File write should complete");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
     insta::assert_snapshot!(
         "acp_file_write_success",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.settled_screen())
     );
 }

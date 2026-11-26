@@ -8,7 +8,6 @@
 use insta::assert_snapshot;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -32,7 +31,7 @@ fn test_streamed_markdown_table_renders_as_a_grid() {
     let config = SessionConfig::new().with_mock_response_streamed(TABLE_RESPONSE, 8);
     let mut session = TuiSession::spawn_with_config(24, 100, config).expect("Failed to spawn");
 
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_until_ready().unwrap();
 
     session.submit_input("show me a table").unwrap();
 
@@ -45,9 +44,7 @@ fn test_streamed_markdown_table_renders_as_a_grid() {
     session
         .wait_for_text("⎇", TIMEOUT)
         .expect("Composer did not return to idle");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let screen = session.screen_contents();
+    let screen = session.settled_screen();
     assert!(
         !screen.contains("| Situation |"),
         "raw markdown table header survived streaming:\n{screen}"

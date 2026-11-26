@@ -11,7 +11,6 @@
 use std::time::Duration;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
 
@@ -29,9 +28,7 @@ fn test_single_prompt_response_appears_immediately() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -67,9 +64,7 @@ fn test_two_prompts_responses_not_off_by_one() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -100,7 +95,7 @@ fn test_two_prompts_responses_not_off_by_one() {
 
     // Wait for input to be ready again
     session
-        .wait_for_composer(Duration::from_secs(5))
+        .wait_for_composer()
         .expect("Should return to input state");
 
     std::thread::sleep(TIMEOUT_INPUT);
@@ -108,11 +103,22 @@ fn test_two_prompts_responses_not_off_by_one() {
     // Send second prompt (note: mock agent will send same response)
     session.submit_input("Second prompt").unwrap();
 
-    // Second response should appear
-    // Since it's the same text, we just verify the prompt cycle completes
-    session
-        .wait_for_composer(Duration::from_secs(10))
-        .expect("Should complete second prompt cycle");
+    // The mock agent answers every prompt with the same text, so the second
+    // response is a second copy of it in the history.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while session
+        .history_contents()
+        .matches("FIRST_RESPONSE_MARKER")
+        .count()
+        < 2
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the second response should arrive:\n{}",
+            session.screen_contents()
+        );
+        session.settle(Duration::from_millis(50));
+    }
 
     eprintln!(
         "Two prompts test completed. Screen:\n{}",
@@ -143,9 +149,7 @@ fn test_long_response_appears_immediately() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -188,9 +192,7 @@ fn test_delayed_streaming_response() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -222,9 +224,7 @@ fn test_tool_call_response_draining() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -258,9 +258,7 @@ fn test_interactive_debug_draining() {
         TuiSession::spawn_with_config(40, 120, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     eprintln!("=== Initial state ===");
     eprintln!("{}", session.screen_contents());

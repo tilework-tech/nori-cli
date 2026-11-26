@@ -1,3 +1,21 @@
+//! PTY end-to-end harness: runs the real `nori` binaries in a pseudo-terminal
+//! against `mock-acp-agent` and reads the screen through a vt100 emulator.
+//!
+//! Each test step is one action that waits for its own observable effect:
+//!
+//! - [`TuiSession::wait_until_ready`] before the first prompt or command; a
+//!   bare `›` is not readiness (see the `readiness` module).
+//!   [`TuiSession::wait_for_composer`] only for tests that type while the
+//!   agent is still starting.
+//! - [`TuiSession::type_input`] / [`TuiSession::submit_input`] for composer
+//!   text.
+//! - [`TuiSession::press`] for a key that more input follows. Never write
+//!   Escape and then more input without waiting for the Escape's effect:
+//!   crossterm reads the pair as an Alt chord when it arrives in one read.
+//! - [`TuiSession::settled_screen`] for the screen a snapshot or assertion
+//!   reads. A `std::thread::sleep` reads nothing from the PTY, so the screen
+//!   after it is stale (see the `settling` module).
+
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use owo_colors::Style;
@@ -97,6 +115,9 @@ fn set_nonblocking(fd: std::os::unix::io::RawFd) -> Result<()> {
 pub use keys::Key;
 mod input;
 mod keys;
+mod readiness;
+mod settling;
+pub use readiness::has_composer_row;
 mod terminal_queries;
 
 /// PTY session for driving the codex TUI
@@ -118,6 +139,7 @@ pub struct TuiSession {
 pub use emulator::Emulator;
 pub use emulator::SCROLLBACK_ROWS;
 mod emulator;
+mod synchronized_update;
 
 impl Drop for TuiSession {
     fn drop(&mut self) {
@@ -507,6 +529,7 @@ trust_level = "trusted"
         // The PTY reader is in non-blocking mode and will return immediately if no data is available
         // We rely on the polling loop in wait_for() to handle timing
         let read_result = self.reader.read(&mut buf);
+        self.emulator.release_stale_frame();
         let read_duration = read_start.elapsed();
 
         if debug {
@@ -716,17 +739,6 @@ trust_level = "trusted"
             .map_err(|error| format!("waiting for {needle:?}: {error}"))
     }
 
-    /// Wait until the composer's `›` prompt is on screen and no list is
-    /// open. The composer's `›` starts its line; the header's is indented,
-    /// and a list's focused row shows `›` after its `▏` rail.
-    pub fn wait_for_composer(&mut self, timeout: Duration) -> Result<(), String> {
-        self.wait_for(
-            |s| s.lines().any(|line| line.starts_with('›')) && !s.contains("▏›"),
-            timeout,
-        )
-        .map_err(|error| format!("waiting for the composer: {error}"))
-    }
-
     /// Get current screen contents as string
     pub fn screen_contents(&self) -> String {
         self.emulator.screen_contents()
@@ -744,10 +756,23 @@ trust_level = "trusted"
         self.writer.flush()
     }
 
-    /// Send a key event
+    /// Send a key event.
+    ///
+    /// Prefer [`TuiSession::press`] when more input follows: it waits for the
+    /// key's effect, so the next write cannot reach the TUI in the same read.
+    ///
+    /// Escape is followed by [`ESCAPE_GAP`] before this returns. crossterm
+    /// reads ESC followed by more bytes in one read as an Alt chord or an
+    /// escape sequence, so `Esc` then `/new` written back to back can arrive
+    /// as Alt+`/` and lose the Escape. The gap is a backstop only: a busy TUI
+    /// may not read within it, so tests still wait for the Escape's effect.
     pub fn send_key(&mut self, key: Key) -> std::io::Result<()> {
         self.writer.write_all(&key.to_escape_sequence())?;
-        self.writer.flush()
+        self.writer.flush()?;
+        if matches!(key, Key::Escape) {
+            self.settle(ESCAPE_GAP);
+        }
+        Ok(())
     }
 
     /// Get the path to the ACP log file (if temp directory exists)
@@ -1009,7 +1034,9 @@ fn binary_path(name: &str) -> String {
 
 pub const TIMEOUT: Duration = Duration::from_secs(10);
 pub const TIMEOUT_INPUT: Duration = Duration::from_millis(100);
-pub const TIMEOUT_PRESNAPSHOT: Duration = Duration::from_millis(1000);
+/// Pause after writing Escape so it is read apart from the next write; see
+/// [`TuiSession::send_key`].
+pub const ESCAPE_GAP: Duration = Duration::from_millis(100);
 
 /// Replace a dynamic value after a marker, preserving box alignment
 fn replace_after_marker(line: &str, marker: &str, replacement: &str) -> Option<String> {

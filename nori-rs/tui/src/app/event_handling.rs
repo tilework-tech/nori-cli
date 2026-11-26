@@ -123,6 +123,11 @@ impl App {
                 TuiEvent::Draw => {
                     self.adopt_delegated_sessions(tui);
                     self.refresh_session_overview(tui.terminal.size()?.width);
+                    if self.chat_widget.session_list_in_front() {
+                        // The list's "Ns ago" ages advance with the clock alone.
+                        tui.frame_requester()
+                            .schedule_frame_in(std::time::Duration::from_secs(1));
+                    }
                     self.refresh_joined_session_status();
                     self.chat_widget.pre_draw_tick();
                     self.chat_widget.maybe_post_pending_notification(tui);
@@ -720,6 +725,11 @@ impl App {
                                 self.chat_widget.loop_state(),
                             )
                         });
+                        // The startup placeholder never ran a session, so
+                        // anything open on it (a picker opened while the agent
+                        // started) belongs to the user, not to a session.
+                        let carried_views = (purpose == host_candidate::PickerPurpose::Startup)
+                            .then(|| self.chat_widget.take_bottom_pane_views());
                         self.shutdown_current_conversation();
                         if resumes {
                             self.begin_replacing_session_transcript(tui)?;
@@ -727,6 +737,9 @@ impl App {
                         self.install_active_widget(*widget);
                         self.deferred_spawn_pending = false;
                         self.new_session_return = None;
+                        if let Some(views) = carried_views {
+                            self.chat_widget.restore_bottom_pane_views(views);
+                        }
                         if let Some((composer_draft, loop_state)) = carried {
                             self.chat_widget.restore_composer_draft(composer_draft);
                             if let Some((remaining, total)) = loop_state {

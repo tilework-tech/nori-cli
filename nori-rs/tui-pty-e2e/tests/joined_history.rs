@@ -10,7 +10,6 @@ use joined_host::ANSWER;
 use joined_host::JoinedHost;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::TIMEOUT;
-use tui_pty_e2e::TIMEOUT_INPUT;
 
 const PROMPT: &str = "count the walnut trees by the north gate";
 
@@ -32,10 +31,9 @@ fn another_terminal_recalls_and_searches_a_prompt_from_the_hosts_history() {
     let mut second = host.attach_first();
     let terminal = &mut second.terminal;
     terminal.wait_for_text(ANSWER, TIMEOUT).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
     // The replayed transcript already shows the prompt once; the composer
     // adds a second copy only when it recalls it.
-    let shown = terminal.screen_contents().matches(PROMPT).count();
+    let shown = terminal.settled_screen().matches(PROMPT).count();
     terminal.send_key(Key::Up).unwrap();
     terminal
         .wait_for(

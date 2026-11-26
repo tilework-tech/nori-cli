@@ -11,7 +11,6 @@
 
 use std::time::Duration;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
 
@@ -111,7 +110,7 @@ fn browser_command_agent_modifies_page() {
 
     // 1. Confirm the nori session loads
     session
-        .wait_for_composer(TIMEOUT)
+        .wait_until_ready()
         .expect("nori should start and show prompt");
 
     std::thread::sleep(TIMEOUT_INPUT);

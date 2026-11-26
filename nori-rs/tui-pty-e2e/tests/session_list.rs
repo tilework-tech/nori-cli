@@ -6,6 +6,7 @@ use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
+use tui_pty_e2e::has_composer_row;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
 const ALPHA_ANSWER: &str = "alpha agent answer";
@@ -21,9 +22,7 @@ fn config() -> SessionConfig {
 
 fn spawn() -> TuiSession {
     let mut session = TuiSession::spawn_with_config(40, 110, config()).expect("spawn");
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
     session
 }
@@ -73,7 +72,7 @@ fn start_new_session(session: &mut TuiSession) {
     session.submit_input("/new").unwrap();
     session
         .wait_for(
-            |screen| screen.contains("Mock Default Model") && screen.contains("›"),
+            |screen| screen.contains("Mock Default Model") && has_composer_row(screen),
             TIMEOUT,
         )
         .expect("a new session should start");
@@ -166,17 +165,20 @@ fn tab_shows_only_sessions_waiting_on_you_and_typing_filters() {
         )
         .expect("after /, typing filters by title");
 
-    session.send_key(Key::Escape).unwrap();
     session
-        .wait_for_text("○ alpha question", Duration::from_secs(3))
-        .expect("Esc clears the filter");
-    session.send_key(Key::Escape).unwrap();
-    session
-        .wait_for(
-            |screen| !screen.contains("Sessions 3"),
-            Duration::from_secs(3),
+        .press(
+            Key::Escape,
+            |screen| screen.contains("○ alpha question"),
+            "Esc clears the filter",
         )
-        .expect("a second Esc closes the list");
+        .unwrap();
+    session
+        .press(
+            Key::Escape,
+            |screen| !screen.contains("Sessions 3"),
+            "a second Esc closes the list",
+        )
+        .unwrap();
 }
 
 #[test]

@@ -62,10 +62,13 @@ fn a_reattached_terminal_takes_one_prompt_back_and_resumes_the_other_once() {
     terminal
         .wait_for_text("water the orchard", TIMEOUT)
         .unwrap();
-    terminal.send_key(Key::Escape).unwrap();
     terminal
-        .wait_for_text("2 queued · paused (interrupted)", TIMEOUT)
-        .expect("the interrupted turn holds the queue");
+        .press(
+            Key::Escape,
+            |screen| screen.contains("2 queued · paused (interrupted)"),
+            "the interrupted turn holds the queue",
+        )
+        .unwrap();
     terminal.send_key(Key::Ctrl('d')).unwrap();
     assert!(terminal.wait_for_process_exit(TIMEOUT), "Ctrl+D detaches");
     drop(first);

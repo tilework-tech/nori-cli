@@ -3,7 +3,6 @@ use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -13,9 +12,7 @@ fn test_submit_text() {
     let config = SessionConfig::new().with_stream_until_cancel();
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("Prompt did not appear");
+    session.wait_until_ready().expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit prompt
@@ -39,9 +36,7 @@ fn test_escape_cancels_streaming() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
     // Wait for the prompt to appear (indicated by the chevron character)
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("Prompt did not appear");
+    session.wait_until_ready().expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit prompt
@@ -55,7 +50,6 @@ fn test_escape_cancels_streaming() {
 
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Escape).unwrap();
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Verify cancellation completed
     // (exact behavior depends on TUI implementation)
@@ -82,9 +76,7 @@ fn test_ctrl_c_cancels_streaming() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
     // Wait for the prompt to appear (indicated by the chevron character)
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("Prompt did not appear");
+    session.wait_until_ready().expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit prompt
@@ -98,7 +90,6 @@ fn test_ctrl_c_cancels_streaming() {
 
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Ctrl('c')).unwrap();
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Verify cancellation completed
     // (exact behavior depends on TUI implementation)
@@ -123,9 +114,7 @@ fn test_prompt_submitted_during_cancelling_is_not_lost() {
     let config = SessionConfig::new().with_stream_until_cancel();
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("Prompt did not appear");
+    session.wait_until_ready().expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
     session.submit_input("first try").unwrap();
@@ -157,9 +146,7 @@ fn test_prompt_still_streams_after_interrupt() {
     let config = SessionConfig::new().with_stream_until_cancel();
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("Prompt did not appear");
+    session.wait_until_ready().expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
     session.submit_input("first try").unwrap();
@@ -167,15 +154,17 @@ fn test_prompt_still_streams_after_interrupt() {
         .wait_for_text("esc to interrupt", TIMEOUT)
         .expect("First prompt should become interruptible");
 
-    session.send_key(Key::Escape).unwrap();
     session
-        .wait_for_text(
-            "Conversation interrupted - tell the model what to do differently",
-            TIMEOUT,
+        .press(
+            Key::Escape,
+            |screen| {
+                screen.contains("Conversation interrupted - tell the model what to do differently")
+            },
+            "First prompt should report interrupt",
         )
-        .expect("First prompt should report interrupt");
+        .unwrap();
     session
-        .wait_for_composer(TIMEOUT)
+        .wait_for_composer()
         .expect("Prompt should return after first interrupt");
 
     session.submit_input("second try").unwrap();
@@ -183,20 +172,22 @@ fn test_prompt_still_streams_after_interrupt() {
         .wait_for_text("esc to interrupt", TIMEOUT)
         .expect("Second prompt should also become interruptible after the first cancel");
 
-    session.send_key(Key::Escape).unwrap();
     session
-        .wait_for_text(
-            "Conversation interrupted - tell the model what to do differently",
-            TIMEOUT,
+        .press(
+            Key::Escape,
+            |screen| {
+                screen.contains("Conversation interrupted - tell the model what to do differently")
+            },
+            "Second prompt should also be interruptible",
         )
-        .expect("Second prompt should also be interruptible");
+        .unwrap();
 }
 
 #[test]
 #[cfg(target_os = "linux")]
 fn direct_busy_enter_reports_fallback_and_tab_explicitly_queues() {
     let mut session = TuiSession::spawn_with_config(32, 110, SessionConfig::new()).unwrap();
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_until_ready().unwrap();
     session.submit_input("mock:stream-until-cancel").unwrap();
     session.wait_for_text("esc to interrupt", TIMEOUT).unwrap();
     session.submit_input("Chart the orchard first").unwrap();
@@ -218,6 +209,6 @@ mod steering;
 fn direct_enter_delivers_to_the_original_turn_then_tab_drains_once() {
     let config = SessionConfig::new().with_agent_env("MOCK_AGENT_STEERING", "1");
     let mut session = TuiSession::spawn_with_config(34, 110, config).unwrap();
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_until_ready().unwrap();
     steering::exercise(&mut session);
 }

@@ -9,7 +9,6 @@ use std::path::Path;
 use std::time::Duration;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
 
@@ -71,9 +70,7 @@ fn test_local_quit_does_not_wait_one_second_for_eof_ignoring_agent() {
         .with_agent_env("MOCK_AGENT_IGNORE_EOF", "1");
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     session.type_input("/quit").unwrap();
@@ -111,9 +108,7 @@ fn test_acp_agent_cleanup_on_exit_command() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Get the agent PID from the log
@@ -189,9 +184,7 @@ fn test_acp_agent_cleanup_on_ctrl_c() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Get the agent PID from the log
@@ -246,9 +239,7 @@ fn test_acp_agent_cleanup_on_quit_command() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Get the agent PID from the log
@@ -291,9 +282,7 @@ fn quitting_during_a_turn_ends_the_owned_hosts_session() {
         .with_agent("mock-model".to_string())
         .with_agent_env("MOCK_AGENT_STREAM_UNTIL_CANCEL", "1");
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
     session.submit_input("tidy the parser module").unwrap();
     std::thread::sleep(Duration::from_secs(1));

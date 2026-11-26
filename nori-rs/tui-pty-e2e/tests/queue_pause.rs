@@ -57,7 +57,7 @@ fn spawn_session(log: &Path, delay_ms: &str) -> TuiSession {
         .with_agent_env("MOCK_AGENT_DELAY_MS", delay_ms)
         .with_agent_env("MOCK_AGENT_PROMPT_LOG", log.display().to_string());
     let mut session = TuiSession::spawn_with_config(30, 90, config).expect("spawn nori");
-    session.wait_for_composer(TIMEOUT).expect("composer ready");
+    session.wait_until_ready().expect("composer ready");
     std::thread::sleep(TIMEOUT_INPUT);
     session
 }
@@ -134,7 +134,13 @@ fn the_selected_message_is_removed_and_never_delivered() {
     session
         .wait_for(|screen| queued_rows(screen) == ["> dup", "dup"], TIMEOUT)
         .expect("alpha leaves the queue and the selection moves to its neighbour");
-    key(&mut session, Key::Escape);
+    session
+        .press(
+            Key::Escape,
+            |screen| queued_rows(screen) == ["dup", "dup"],
+            "the queue selection ends",
+        )
+        .unwrap();
     session.type_input("draft kept").unwrap();
     session
         .wait_for(
@@ -257,7 +263,7 @@ fn delete_after_the_selected_message_starts_spares_its_identical_neighbour() {
     select_head_and_let_it_start(&mut session, &log);
 
     key(&mut session, Key::Char('x'));
-    std::thread::sleep(Duration::from_secs(1));
+    session.settle(Duration::from_secs(1));
     assert_eq!(
         queued_rows(&session.screen_contents()),
         ["dup", "tail"],
@@ -279,7 +285,7 @@ fn edit_after_the_selected_message_starts_spares_its_identical_neighbour() {
     select_head_and_let_it_start(&mut session, &log);
 
     key(&mut session, Key::Enter);
-    std::thread::sleep(Duration::from_secs(1));
+    session.settle(Duration::from_secs(1));
     let screen = session.screen_contents();
     assert_eq!(queued_rows(&screen), ["dup", "tail"], "{screen}");
 

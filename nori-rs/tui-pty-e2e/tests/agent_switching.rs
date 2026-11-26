@@ -14,8 +14,8 @@ use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
+use tui_pty_e2e::has_composer_row;
 
 // ============================================================================
 // Helper Functions for Subprocess Tracking
@@ -103,9 +103,7 @@ fn test_acp_agent_subprocess_spawned() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -143,9 +141,7 @@ fn test_startup_activation_reuses_prepared_subprocess() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
 
     // Startup activates the session on its own, consuming the connection that
     // preparation opened rather than spawning a second child.
@@ -187,9 +183,7 @@ fn test_acp_cleanup_outside_prompt_turn() {
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
@@ -238,9 +232,7 @@ fn test_different_agents_different_subprocesses() {
     let mut session1 =
         TuiSession::spawn_with_config(24, 80, config1).expect("Failed to spawn first TUI");
 
-    session1
-        .wait_for_composer(TIMEOUT)
-        .expect("First TUI should start");
+    session1.wait_until_ready().expect("First TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path1 = session1.acp_log_path().expect("Should have log path");
@@ -254,7 +246,7 @@ fn test_different_agents_different_subprocesses() {
         TuiSession::spawn_with_config(24, 80, config2).expect("Failed to spawn second TUI");
 
     session2
-        .wait_for_composer(TIMEOUT)
+        .wait_until_ready()
         .expect("Second TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -282,9 +274,7 @@ fn test_acp_agent_switch_via_model_picker() {
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
@@ -350,9 +340,7 @@ fn test_agent_command_shows_available_agents() {
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Open agent picker with /agent command
@@ -369,10 +357,8 @@ fn test_agent_command_shows_available_agents() {
             Duration::from_secs(8),
         )
         .expect("Agent picker should appear");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
     // Verify both mock agents are visible
-    let screen = session.screen_contents();
+    let screen = session.settled_screen();
     assert!(
         screen.contains("mock-model") || screen.contains("Mock"),
         "Agent picker should show mock-model agent, got: {}",
@@ -395,9 +381,7 @@ fn test_agent_switch_activates_prepared_candidate() {
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
@@ -439,11 +423,20 @@ fn test_agent_switch_activates_prepared_candidate() {
         "the current agent must remain alive until candidate activation"
     );
 
-    // Row 0 explicitly starts a new session on the prepared connection.
-    session.send_key(Key::Enter).unwrap();
+    // Row 0 explicitly starts a new session on the prepared connection. The
+    // picker closes before activation finishes, so wait for the new session's
+    // notice rather than the composer alone.
     session
-        .wait_for_composer(Duration::from_secs(10))
-        .expect("candidate activation should return to the composer");
+        .press(
+            Key::Enter,
+            |screen| {
+                !screen.contains("Start a new session")
+                    && has_composer_row(screen)
+                    && screen.contains("Started new conversation with agent: Mock ACP Alt")
+            },
+            "candidate activation should start the new session",
+        )
+        .unwrap();
     assert_ne!(
         initial_pid, new_pid,
         "the prepared candidate must be a distinct process"
@@ -478,9 +471,7 @@ fn test_agent_candidate_cancel_keeps_current_session_promptable() {
         .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     let log_path = session.acp_log_path().expect("log path");
     let current_pid = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT)[0];
 
@@ -496,10 +487,13 @@ fn test_agent_candidate_cancel_keeps_current_session_promptable() {
     let pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 2, Duration::from_secs(10));
     let candidate_pid = *pids.last().unwrap();
 
-    session.send_key(Key::Escape).unwrap();
     session
-        .wait_for_composer(Duration::from_secs(10))
-        .expect("cancelling should restore the current composer");
+        .press(
+            Key::Escape,
+            |screen| !screen.contains("Start a new session") && has_composer_row(screen),
+            "cancelling should restore the current composer",
+        )
+        .unwrap();
     session
         .wait_for(|_| !process_exists(candidate_pid), Duration::from_secs(10))
         .expect("cancelled candidate should be reaped");
@@ -525,9 +519,7 @@ fn test_agent_candidate_activation_failure_keeps_current_session_promptable() {
         .with_agent_env("MOCK_AGENT_FAIL_NEW_SESSION_MODEL", "mock-model-alt");
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     let log_path = session.acp_log_path().expect("log path");
     let current_pid = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT)[0];
 
@@ -581,9 +573,7 @@ fn test_agent_candidate_preparation_timeout_keeps_current_session_promptable() {
         .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT", "60000");
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     let log_path = session.acp_log_path().expect("log path");
     let current_pid = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT)[0];
 
@@ -634,9 +624,7 @@ fn test_agent_picker_no_switch_during_streaming() {
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
@@ -686,9 +674,7 @@ fn test_model_command_shows_disabled_in_acp_mode() {
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Open model picker with /model command
@@ -702,11 +688,9 @@ fn test_model_command_shows_disabled_in_acp_mode() {
             Duration::from_secs(8),
         )
         .expect("Model picker should appear");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
     // In ACP mode, model options should show as disabled or indicate
     // they're not available
-    let screen = session.screen_contents();
+    let screen = session.settled_screen();
     assert!(
         screen.contains("disabled")
             || screen.contains("Not available")
@@ -744,9 +728,7 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // First, verify the initial agent works.
@@ -807,9 +789,7 @@ fn test_agent_picker_shows_all_providers_in_debug_build() {
 
     let mut session = TuiSession::spawn_with_config(40, 100, config).expect("Failed to spawn TUI");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Open agent picker with /agent command
@@ -881,9 +861,7 @@ fn test_slash_popup_shows_current_agent_in_description() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Type '/a' to open the slash command popup (NOT '/agent' + Enter which
@@ -896,9 +874,7 @@ fn test_slash_popup_shows_current_agent_in_description() {
     session
         .wait_for(|screen| screen.contains("/agent"), Duration::from_secs(5))
         .expect("Slash popup should show /agent command");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let screen = session.screen_contents();
+    let screen = session.settled_screen();
 
     // The description for /agent should include the current agent name
     // in parentheses. mock-model has display name "Mock ACP".
@@ -927,9 +903,7 @@ fn test_slash_popup_shows_current_approval_mode_in_description() {
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("TUI should start");
+    session.wait_until_ready().expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Type '/ap' to open the slash command popup filtered to show /approvals
@@ -943,9 +917,7 @@ fn test_slash_popup_shows_current_approval_mode_in_description() {
             Duration::from_secs(5),
         )
         .expect("Slash popup should show /approvals command");
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let screen = session.screen_contents();
+    let screen = session.settled_screen();
 
     // A trusted folder's session starts in Agent.
     assert!(
@@ -980,7 +952,7 @@ fn test_connecting_status_during_slow_agent_startup() {
 
     // Wait for TUI to fully start with mock-model
     session
-        .wait_for_composer(TIMEOUT)
+        .wait_until_ready()
         .expect("TUI should start with mock-model");
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -1012,4 +984,32 @@ fn test_connecting_status_during_slow_agent_startup() {
     session
         .wait_for_text("Start a new session", Duration::from_secs(15))
         .expect("TUI should eventually show the candidate session picker");
+}
+
+/// A picker opened while the first agent is still starting stays open once
+/// the session finishes starting.
+#[test]
+#[cfg(target_os = "linux")]
+fn a_picker_opened_while_the_agent_starts_stays_open_after_it_starts() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS", "1500");
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("spawn TUI");
+    session
+        .wait_for_composer()
+        .expect("composer accepts input during startup");
+
+    session.submit_input("/agent").unwrap();
+    session
+        .wait_for_text("Select agent", TIMEOUT)
+        .expect("agent picker");
+    session
+        .wait_for_text("Mock Default Model", TIMEOUT)
+        .expect("the session finishes starting");
+
+    assert!(
+        session.screen_contents().contains("Select agent"),
+        "the picker must survive the session starting:\n{}",
+        session.screen_contents()
+    );
 }

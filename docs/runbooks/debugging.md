@@ -212,6 +212,37 @@ Terminals do not render OSC 7501 status reports. `program_status_reports(raw)`
 in `tui-pty-e2e` returns the body of each report in `raw_output()` in order
 (for example `state=working:app=nori`).
 
+Write each step as one action that waits for its own observable effect:
+
+- Start with `wait_until_ready()`: it waits for the composer and the first
+  session's options banner (or, in `nori cloud`, the model on the header's
+  agent row). Do not wait for a bare `›`; the session header draws one before
+  the composer and the session exist. The harness's own tests fail if
+  `wait_for_text("›", ..)` appears in `tests/`.
+- Use `wait_for_composer()` only when the test means to type while the agent is
+  still starting, for example with `MOCK_AGENT_STARTUP_DELAY_MS`.
+- Type with `type_input` / `submit_input`, which wait for the composer to render
+  the text.
+- Send a key that more input follows with `press(key, until, what)`. `until`
+  must be false before the key, for example "the list header is gone" rather
+  than a status the open list also shows. An Escape written right before more
+  bytes can be read as an Alt chord; `send_key(Key::Escape)` pauses 100 ms
+  (`ESCAPE_GAP`) as a backstop, but only waiting for the effect is reliable.
+- Read the screen for a snapshot or assertion with `settled_screen()`: it keeps
+  reading until the screen has not changed for 300 ms and no synchronized
+  frame is open. The screen only changes while the harness reads the PTY, so a
+  `std::thread::sleep` before `screen_contents()` reads a stale screen. Use
+  `settle(duration)` when a test checks that nothing happens for a while. The
+  harness's own tests fail if a sleep directly precedes a screen read or
+  snapshot in `tests/`.
+- Wait for text only the expected state shows. A needle the previous state
+  already contains, or the first line of a notice that wraps, matches early.
+
+The harness emulator applies each synchronized-output frame
+(`ESC[?2026h` … `ESC[?2026l`) at once, as a real terminal does, so a read never
+sees a half-drawn frame. A frame left open for 1 s or past 4 MiB is applied
+anyway.
+
 Tests that need real agents and credentials are marked `#[ignore]`. Run them
 with:
 

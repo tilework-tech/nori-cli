@@ -220,11 +220,11 @@ impl JoinedHost {
 
     fn open_new(&self, mut attached: Attached) -> Attached {
         let terminal = &mut attached.terminal;
-        terminal.send_key(Key::Escape).unwrap();
         terminal
-            .wait_for(
+            .press(
+                Key::Escape,
                 |screen| screen.contains("No session selected. Use"),
-                TIMEOUT,
+                "the session picker closes",
             )
             .unwrap();
         let project = self.project();

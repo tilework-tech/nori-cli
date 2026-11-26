@@ -214,19 +214,21 @@ impl Host {
             Some(id) => self.terminal(&["attach", id]),
             None => self.terminal(&["attach"]),
         };
-        client
-            .wait_for_text(if id.is_some() { "›" } else { "Sessions" }, TIMEOUT)
-            .unwrap();
+        if id.is_some() {
+            client.wait_for_composer().unwrap();
+        } else {
+            client.wait_for_text("Sessions", TIMEOUT).unwrap();
+        }
         client
     }
 
     fn create_session(&self) -> Client {
         let mut client = self.attach(None);
-        client.send_key(Key::Escape).unwrap();
         client
-            .wait_for(
+            .press(
+                Key::Escape,
                 |screen| screen.contains("No session selected. Use"),
-                TIMEOUT,
+                "the session picker closes",
             )
             .unwrap();
         client.submit_input("/new").unwrap();
@@ -1058,11 +1060,11 @@ fn new_sessions_start_in_the_attaching_folder_or_a_tab_completed_one() {
     std::fs::create_dir(&third).unwrap();
     let mut client = host.terminal_in(&elsewhere, &["attach"]);
     client.wait_for_text("Sessions", TIMEOUT).unwrap();
-    client.send_key(Key::Escape).unwrap();
     client
-        .wait_for(
+        .press(
+            Key::Escape,
             |screen| screen.contains("No session selected. Use"),
-            TIMEOUT,
+            "the session picker closes",
         )
         .unwrap();
 
@@ -1105,11 +1107,11 @@ fn mentions_and_new_folder_completion_come_from_the_sessions_folder_on_the_host(
     std::fs::write(workdir.join("session-only-notes.md"), "notes").unwrap();
     let mut client = host.terminal_in(&terminal_folder, &["attach"]);
     client.wait_for_text("Sessions", TIMEOUT).unwrap();
-    client.send_key(Key::Escape).unwrap();
     client
-        .wait_for(
+        .press(
+            Key::Escape,
             |screen| screen.contains("No session selected. Use"),
-            TIMEOUT,
+            "the session picker closes",
         )
         .unwrap();
     client
@@ -1174,11 +1176,11 @@ fn a_named_host_names_and_completes_folders_from_its_own_home_and_folder() {
         &[("HOME", client_home.path())],
     );
     client.wait_for_text("Sessions", TIMEOUT).unwrap();
-    client.send_key(Key::Escape).unwrap();
     client
-        .wait_for(
+        .press(
+            Key::Escape,
             |screen| screen.contains("No session selected. Use"),
-            TIMEOUT,
+            "the session picker closes",
         )
         .unwrap();
     let hint_row_names = |client: &mut Client, folder: &str| {
@@ -1274,13 +1276,13 @@ fn attached_escape_closes_the_menu_first_and_then_interrupts_the_turn() {
         .wait_for_text("not available in nori attach yet", TIMEOUT)
         .expect("the menu opens");
     client.settle(Duration::from_millis(500));
-    client.send_key(Key::Escape).unwrap();
     client
-        .wait_for(
+        .press(
+            Key::Escape,
             |screen| !screen.contains("not available in nori attach yet"),
-            TIMEOUT,
+            "the first Escape closes the menu",
         )
-        .expect("the first Escape closes the menu");
+        .unwrap();
     client.settle(Duration::from_millis(1000));
     assert!(
         !client

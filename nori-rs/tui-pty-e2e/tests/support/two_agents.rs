@@ -61,15 +61,15 @@ args = [{script:?}, "{slug}", {folder:?}]
         config = config.with_arg(*arg);
     }
     // Two rows taller than the transcript needs, so the welcome card stays
-    // on screen above the composer and its hint row. A positional prompt
-    // can reach the composer before its first frame, so the row may already
-    // show the editing keys.
+    // on screen above the composer and its hint row.
     let mut tui = TuiSession::spawn_with_config(32, 110, config).unwrap();
-    tui.wait_for(
-        |screen| screen.contains("/ commands · ") || screen.contains("Enter send · "),
-        TIMEOUT,
-    )
-    .unwrap();
+    // A gated agent holds or refuses its session, and the tests type into the
+    // startup placeholder meanwhile.
+    if gates.is_empty() {
+        tui.wait_until_ready().unwrap();
+    } else {
+        tui.wait_for_composer().unwrap();
+    }
     (home, tui)
 }
 

@@ -48,7 +48,7 @@ fn launch(folder: &Path) -> TuiSession {
         .with_cwd(folder)
         .with_nori_home(folder);
     let mut tui = TuiSession::spawn_with_config(30, 110, config).unwrap();
-    tui.wait_for_composer(TIMEOUT).unwrap();
+    tui.wait_until_ready().unwrap();
     tui
 }
 

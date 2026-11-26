@@ -27,9 +27,7 @@
 
 use std::time::Duration;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
-use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
@@ -58,9 +56,7 @@ fn test_acp_tool_call_rendered_in_tui() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -120,9 +116,7 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -135,9 +129,7 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
         .wait_for_text("Tool call completed successfully", Duration::from_secs(10))
         .expect("Should receive completion response");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // After completion, should show "Called" or "Reading" (from title "Reading configuration file")
     // The format is: "✓ Called server.tool_name(...) (Xs)" or the title display
@@ -178,9 +170,7 @@ fn test_acp_tool_call_no_duplicate_messages() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -192,9 +182,7 @@ fn test_acp_tool_call_no_duplicate_messages() {
         .wait_for_text("Interleaved test done", Duration::from_secs(10))
         .expect("Should receive completion response");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // The Execute tool renders using the command from Invocation::Command
     // (extracted from raw_input). The command is "test", so the TUI shows
@@ -250,9 +238,7 @@ fn test_acp_tool_call_snapshot() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -264,10 +250,9 @@ fn test_acp_tool_call_snapshot() {
         .wait_for_text("Tool call completed successfully", Duration::from_secs(10))
         .expect("Should receive response");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     insta::assert_snapshot!(
         "acp_tool_call_read",
-        normalize_for_input_snapshot(session.screen_contents())
+        normalize_for_input_snapshot(session.settled_screen())
     );
 }
 
@@ -291,9 +276,7 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -310,9 +293,7 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
         .wait_for_text("Multi-call exploring done", Duration::from_secs(10))
         .expect("Should receive completion response");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // Verify that all 3 Read operations appear in the output
     assert!(
@@ -385,9 +366,7 @@ fn test_exploring_cell_flushed_immediately_without_agent_text() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -459,9 +438,7 @@ fn test_tool_calls_during_final_stream_not_shown_after() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -476,9 +453,7 @@ fn test_tool_calls_during_final_stream_not_shown_after() {
         )
         .expect("Should receive final assistant message");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // The first batch (file1.rs, file2.rs) should appear ABOVE the agent text
     // since they completed before streaming started.
@@ -550,9 +525,7 @@ fn test_no_orphan_tool_cells_from_cascade_deferral() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn codex in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -564,9 +537,7 @@ fn test_no_orphan_tool_cells_from_cascade_deferral() {
         .wait_for_text("final analysis result", Duration::from_secs(10))
         .expect("Should receive final assistant message");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // CRITICAL ASSERTION: The raw call_id "orphan-tool-b" must NOT appear
     // in the rendered output. If it does, an orphan ExecCell was created
@@ -628,9 +599,7 @@ fn test_stuck_tool_calls_dont_block_agent_message() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -650,9 +619,7 @@ fn test_stuck_tool_calls_dont_block_agent_message() {
              If this times out, ExecCells are blocking the viewport.",
         );
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // The agent's response must be visible
     assert!(
@@ -697,9 +664,7 @@ fn test_acp_generic_tool_call_shows_resolved_name() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -711,9 +676,7 @@ fn test_acp_generic_tool_call_shows_resolved_name() {
         .wait_for_text("Generic tool call done", Duration::from_secs(10))
         .expect("Should receive completion response");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // CRITICAL ASSERTION: The raw tool call ID must NOT appear in the output.
     // If it does, the TUI is using ev.call_id instead of ev.command.

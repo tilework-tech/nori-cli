@@ -38,7 +38,7 @@ args = ["-c", 'while [ ! -f "$1" ]; do sleep 0.01; done; exec "$2"', "gated-mock
             .with_config_toml(config),
     )
     .unwrap();
-    session.wait_for_composer(TIMEOUT).unwrap();
+    session.wait_for_composer().unwrap();
     session.send_key(Key::Char('d')).unwrap();
     session.wait_for_text("› d", TIMEOUT).unwrap();
     // The agent cannot prepare until the first character has rendered.

@@ -6,7 +6,6 @@
 
 use std::time::Duration;
 use tui_pty_e2e::SessionConfig;
-use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
 
@@ -35,9 +34,7 @@ fn test_acp_prompt_failure_shows_error_to_user() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 
@@ -46,9 +43,7 @@ fn test_acp_prompt_failure_shows_error_to_user() {
 
     // Wait for some response - we should see either an error message or
     // at minimum the prompt should become active again
-    std::thread::sleep(Duration::from_secs(3));
-
-    let contents = session.screen_contents();
+    let contents = session.settled_screen();
 
     // Debug: Print what we see
     eprintln!("=== Screen contents after prompt failure ===");
@@ -104,9 +99,7 @@ fn test_acp_prompt_failure_tui_remains_responsive() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
 
     // Wait for startup
-    session
-        .wait_for_composer(TIMEOUT)
-        .expect("ACP mode should start");
+    session.wait_until_ready().expect("ACP mode should start");
 
     std::thread::sleep(TIMEOUT_INPUT);
 

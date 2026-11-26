@@ -1,10 +1,18 @@
 ---
 source: tui-pty-e2e/tests/input_handling.rs
-expression: normalize_for_input_snapshot(session.screen_contents())
+assertion_line: 94
+expression: normalize_for_input_snapshot(session.settled_screen())
 ---
 • Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config
 to change)
 
-/ model
+  Model
+  Select a value for this ACP session setting
 
-  /model  choose what model and reasoning effort to use (current: Mock ACP)
+     1. Mock Default Model (current)
+        The default mock model
+     2. Mock Fast Model
+        A faster mock model variant
+  ▏› 3. Use custom model...                                                  ▕
+  ▏     Enter any model ID                                                   ▕
+  ↑↓/j/k move  / search  enter select  esc close
