@@ -93,26 +93,38 @@ pub(crate) fn consolidate_agent_message_cells(
     source: String,
     cwd: &Path,
 ) -> Option<(std::ops::Range<usize>, Arc<dyn HistoryCell>)> {
+    let (range, replacement) = agent_message_consolidation(transcript_cells, source, cwd)?;
+    transcript_cells.splice(range.clone(), std::iter::once(replacement.clone()));
+    Some((range, replacement))
+}
+
+/// The trailing cells of a just-finished agent message, and the one Markdown
+/// cell that replaces them.
+pub(crate) fn agent_message_consolidation(
+    transcript_cells: &[Arc<dyn HistoryCell>],
+    source: String,
+    cwd: &Path,
+) -> Option<(std::ops::Range<usize>, Arc<dyn HistoryCell>)> {
+    // The message's cells run from its first cell to the end. When another
+    // cell cut into the stream, the first cell is not among the trailing
+    // ones, and the whole source would repeat what is already above the cut.
     let end = transcript_cells.len();
     let mut start = end;
-    while start > 0 {
+    let mut reached_first = false;
+    while start > 0 && !reached_first {
         let cell = &transcript_cells[start - 1];
         if !cell.as_any().is::<AgentMessageCell>() {
             break;
         }
         start -= 1;
-        if !cell.is_stream_continuation() {
-            break;
-        }
+        reached_first = !cell.is_stream_continuation();
     }
-    if start == end {
+    if !reached_first {
         return None;
     }
 
-    let range = start..end;
     let replacement = Arc::new(AgentMarkdownCell::new(source, cwd)) as Arc<dyn HistoryCell>;
-    transcript_cells.splice(range.clone(), std::iter::once(replacement.clone()));
-    Some((range, replacement))
+    Some((start..end, replacement))
 }
 
 pub(crate) fn has_unconsolidated_agent_message(transcript_cells: &[Arc<dyn HistoryCell>]) -> bool {
@@ -229,6 +241,58 @@ mod tests {
 
     fn line_text(lines: &[Line<'_>]) -> Vec<String> {
         lines.iter().map(Line::to_string).collect()
+    }
+
+    fn agent(text: &str, continuation: bool) -> Arc<dyn HistoryCell> {
+        Arc::new(AgentMessageCell::new(
+            vec![Line::from(text.to_string())],
+            !continuation,
+        ))
+    }
+
+    #[test]
+    fn a_reply_cut_by_another_cell_keeps_each_row_once() {
+        let mut cells = vec![
+            agent("## Synthetic heading", false),
+            agent("first half", true),
+            plain(&["Updated plan"]),
+            agent("second half", true),
+        ];
+        let before: Vec<String> = cells
+            .iter()
+            .flat_map(|cell| line_text(&cell.display_lines(80)))
+            .collect();
+
+        let consolidated = consolidate_agent_message_cells(
+            &mut cells,
+            "## Synthetic heading\nfirst half\nsecond half\n".to_string(),
+            Path::new("/"),
+        );
+
+        let after: Vec<String> = cells
+            .iter()
+            .flat_map(|cell| line_text(&cell.display_lines(80)))
+            .collect();
+        assert!(consolidated.is_none());
+        assert_eq!(after, before);
+    }
+
+    #[test]
+    fn an_uninterrupted_reply_becomes_one_cell() {
+        let mut cells = vec![
+            plain(&["Updated plan"]),
+            agent("## Synthetic heading", false),
+            agent("body", true),
+        ];
+
+        let consolidated = consolidate_agent_message_cells(
+            &mut cells,
+            "## Synthetic heading\nbody\n".to_string(),
+            Path::new("/"),
+        );
+
+        assert_eq!(consolidated.map(|(range, _)| range), Some(1..3));
+        assert_eq!(cells.len(), 2);
     }
 
     #[test]

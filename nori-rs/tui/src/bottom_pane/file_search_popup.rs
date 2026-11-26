@@ -57,6 +57,12 @@ impl FileSearchPopup {
         }
     }
 
+    /// Whether the popup shows the answer to `query`, so asking again is
+    /// not needed.
+    pub(crate) fn has_answer_for(&self, query: &str) -> bool {
+        !self.waiting && self.display_query == query
+    }
+
     /// Put the popup into an "idle" state used for an empty query (just "@").
     /// Shows a hint instead of matches until the user types more characters.
     pub(crate) fn set_empty_prompt(&mut self) {
